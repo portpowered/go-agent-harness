@@ -149,7 +149,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 	if roomRunCommand == nil {
 		roomRunCommand = NewRoomRunCommand(r.Flags)
 	}
-	roomGroup.AddCommand(NewPath("run [--config <file>] [--out <dir>] [--stream <addr>]", roomRunCommand.Generate()))
+	roomGroup.AddCommand(NewPath("run [--config <file>] [--replay <bundle>] [--out <dir>] [--stream <addr>]", roomRunCommand.Generate()))
 	root.AddCommand(roomGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())

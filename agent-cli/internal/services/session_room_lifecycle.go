@@ -33,6 +33,8 @@ type roomParticipantPlan struct {
 	manifest              room.Participant
 	options               SessionRunOptions
 	inferencer            messages.SessionInferencer
+	replay                bool
+	replayLoop            sessionLoopOptions
 	secret                string
 	tracker               *roomConnectTrackingInferencer
 	participant           *roomParticipantRuntime
@@ -673,6 +675,10 @@ type roomCoordinator struct {
 	results  map[string]RoomParticipantResult
 	maxTurns int
 	progress chan struct{}
+	// completeWhenEmpty lets a finite replay room finish cleanly when every
+	// captured provider session reaches its own terminal boundary. Live rooms
+	// retain the historical failure-on-unexpected-empty behavior.
+	completeWhenEmpty bool
 
 	onParticipant RoomParticipantObserver
 }
@@ -964,7 +970,11 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		runtime.markObserverDone()
 	}
 	if shouldFailEmpty {
-		c.fail(fmt.Errorf("all room participants terminated"))
+		if c.completeWhenEmpty {
+			c.stop(RoomTerminationStopped, nil)
+		} else {
+			c.fail(fmt.Errorf("all room participants terminated"))
+		}
 	}
 	return result
 }

@@ -126,6 +126,15 @@ type RoomObserver func(RoomResult)
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
 	Manifest room.Manifest
+	// ReplayPath selects a finalized room evidence directory (or its
+	// run-manifest.json) as the sole source of participant runtime settings.
+	// Replay admission never resolves credentials, live config, host devices,
+	// browser capabilities, or default provider dialers.
+	ReplayPath string
+	// ReplayPlan is the already-admitted form of ReplayPath. The CLI supplies
+	// both values so startup can pass a validated, immutable plan through the
+	// service boundary without reopening the source bundle.
+	ReplayPlan *RoomReplayPlan
 	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
 	// The CLI supplies it for bare launches so command/service composition tests
 	// can observe the selected devices and credential provenance without

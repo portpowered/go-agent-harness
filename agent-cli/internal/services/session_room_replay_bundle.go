@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -31,6 +33,9 @@ var (
 	// ErrRoomReplayBundleIncomplete identifies a missing or truncated part of
 	// an otherwise recognizable replay bundle.
 	ErrRoomReplayBundleIncomplete = errors.New("room replay bundle incomplete")
+	// ErrRoomReplaySourceConflict identifies a room command that mixes a
+	// finalized replay bundle with a live/configured room source.
+	ErrRoomReplaySourceConflict = errors.New("room replay bundle cannot be combined with room config or manifest")
 )
 
 // RoomReplayBundleErrorKind is the stable classification of an admission
@@ -214,6 +219,39 @@ func (p RoomReplayPlan) Participant(id string) (RoomReplayParticipant, bool) {
 	return RoomReplayParticipant{}, false
 }
 
+// Manifest projects the validated replay metadata into the room runtime's
+// credential-free participant shape. Provider handshake details remain owned
+// by each participant's capture and are loaded by the existing session replay
+// planner; this projection supplies only the stable room identity and bundle
+// prompts needed by room orchestration.
+func (p RoomReplayPlan) Manifest() room.Manifest {
+	manifest := room.Manifest{
+		SchemaVersion: room.SchemaVersion,
+		Room:          room.Room{Interactive: true},
+		Participants:  make([]room.Participant, 0, len(p.Participants)),
+	}
+	for _, participant := range p.Participants {
+		kind := room.NormalizeParticipantKind(participant.Kind)
+		provider := participant.Provider
+		model := participant.Model
+		if kind == room.ParticipantKindHuman {
+			provider = ""
+			model = ""
+		}
+		manifest.Participants = append(manifest.Participants, room.Participant{
+			Kind:          kind,
+			ID:            participant.ID,
+			SystemPrompt:  participant.SystemPrompt,
+			OpeningPrompt: participant.OpeningPrompt,
+			Provider:      provider,
+			Model:         model,
+			Voice:         participant.Voice,
+			Tools:         []string{},
+		})
+	}
+	return manifest
+}
+
 func cloneRoomReplayArtifact(artifact RoomReplayArtifact) RoomReplayArtifact {
 	return artifact
 }
@@ -242,4 +280,54 @@ func LoadRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
 func ValidateRoomReplayBundle(bundle string) error {
 	_, err := LoadRoomReplayPlan(bundle)
 	return err
+}
+
+// ValidateRoomReplayOutput rejects an evidence destination inside the source
+// bundle. The replay source is immutable for the whole run; even creating a
+// new output child would change the bundle's directory tree while it is being
+// consumed.
+func ValidateRoomReplayOutput(plan RoomReplayPlan, destination string) error {
+	raw := strings.TrimSpace(destination)
+	if raw == "" {
+		return errors.New("room replay output directory is required")
+	}
+	root, err := filepath.Abs(filepath.Clean(plan.BundlePath))
+	if err != nil {
+		return fmt.Errorf("resolve room replay bundle path: %w", err)
+	}
+	output, err := filepath.Abs(filepath.Clean(raw))
+	if err != nil {
+		return fmt.Errorf("resolve room replay output path: %w", err)
+	}
+	relative, err := filepath.Rel(root, output)
+	if err != nil {
+		return fmt.Errorf("compare room replay source and output paths: %w", err)
+	}
+	if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+		return fmt.Errorf("room replay output directory %q must be outside source bundle %q", destination, plan.BundlePath)
+	}
+	return nil
+}
+
+func resolveRoomReplayPlan(opts RoomRunOptions) (RoomReplayPlan, bool, error) {
+	if opts.ReplayPlan != nil {
+		plan := *opts.ReplayPlan
+		if !plan.Finalized || len(plan.Participants) < 2 {
+			return RoomReplayPlan{}, true, newRoomReplayBundleError(
+				RoomReplayBundleIncomplete,
+				"replay_plan",
+				"",
+				"admitted finalized plan with at least two participants",
+				"incomplete",
+				ErrRoomReplayBundleIncomplete,
+			)
+		}
+		return plan, true, nil
+	}
+	path := strings.TrimSpace(opts.ReplayPath)
+	if path == "" {
+		return RoomReplayPlan{}, false, nil
+	}
+	plan, err := LoadRoomReplayPlan(path)
+	return plan, true, err
 }

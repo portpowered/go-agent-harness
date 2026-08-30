@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -176,6 +177,43 @@ func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	}
 	if calls.Load() != 0 {
 		t.Fatalf("runner calls = %d, want zero", calls.Load())
+	}
+}
+
+func TestRoomRunCommandReplayAdmissionBypassesLiveLaunchSeams(t *testing.T) {
+	registry := newBareRoomCLIRegistry(t)
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), registry)
+	var runnerCalls atomic.Int32
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		runnerCalls.Add(1)
+		return services.RoomResult{}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--replay", filepath.Join(t.TempDir(), "missing-room-bundle")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !errors.Is(err, services.ErrRoomReplayBundleIncomplete) {
+		t.Fatalf("replay admission error = %v, want incomplete bundle error", err)
+	}
+	if runnerCalls.Load() != 0 || registry.defaultCalls != 0 || registry.openCalls != 0 {
+		t.Fatalf("replay admission caused live startup work: runner=%d defaults=%d opens=%d", runnerCalls.Load(), registry.defaultCalls, registry.openCalls)
+	}
+}
+
+func TestRoomRunCommandRejectsReplaySourceCompetition(t *testing.T) {
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), newBareRoomCLIRegistry(t))
+	var runnerCalls atomic.Int32
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		runnerCalls.Add(1)
+		return services.RoomResult{}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--replay", filepath.Join(t.TempDir(), "bundle"), "--config", filepath.Join(t.TempDir(), "room.json")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !errors.Is(err, services.ErrRoomReplaySourceConflict) {
+		t.Fatalf("source competition error = %v, want replay source conflict", err)
+	}
+	if runnerCalls.Load() != 0 {
+		t.Fatalf("runner calls = %d, want zero", runnerCalls.Load())
 	}
 }
 

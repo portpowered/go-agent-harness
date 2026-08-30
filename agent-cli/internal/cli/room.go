@@ -120,51 +120,82 @@ func (c *RoomCommand) Generate() *cobra.Command {
 func (c *RoomRunCommand) Generate() *cobra.Command {
 	var configPath string
 	var manifestPath string
+	var replayPath string
 	var outputDir string
 	var streamAddress string
 
 	cmd := &cobra.Command{
-		Use:   "run [--config <file>]",
+		Use:   "run [--config <file>] [--replay <bundle>]",
 		Short: "Run a room, or start the bare customer-plus-agent room",
 		Long: "Run an N-participant room from --config (or the legacy --manifest spelling). " +
 			"With neither flag, start the interactive room with one human customer on the host default microphone and speakers and one OpenAI realtime agent. " +
 			"An explicit --config is authoritative and overrides bare defaults. Validate a complete room manifest, start one isolated live session per participant, " +
-			"and write redacted evidence to an empty output directory; bare rooms choose a fresh child of the effective config directory when --out is omitted. An optional HTTP " +
+			"and write redacted evidence to an empty output directory; bare rooms choose a fresh child of the effective config directory when --out is omitted. " +
+			"With --replay <bundle>, admit a finalized room evidence directory and run every provider participant offline from its recorded session capture; the bundle is authoritative and cannot be combined with --config or --manifest. An optional HTTP " +
 			"listener exposes forward-only JSON events at /events.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return c.execute(cmd, configPath, manifestPath, outputDir, streamAddress)
+			return c.execute(cmd, configPath, manifestPath, replayPath, outputDir, streamAddress)
 		},
 	}
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to the authoritative schema-version-1 JSON or YAML room config; omit for bare defaults")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "Path to the schema-version-1 JSON or YAML room manifest")
+	cmd.Flags().StringVar(&replayPath, "replay", "", "Replay a finalized room evidence bundle offline without credentials, host audio devices, or live provider connections")
 	cmd.Flags().StringVar(&outputDir, "out", DefaultRoomOutputDir, "Empty directory for redacted room evidence (bare default: fresh child under the effective config directory)")
 	cmd.Flags().StringVar(&streamAddress, "stream", "", "Optional TCP listen address for GET /events (for example 127.0.0.1:8080)")
 	return cmd
 }
 
-func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, outputDir, streamAddress string) error {
+func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, replayPath, outputDir, streamAddress string) error {
 	parent := cmd.Context()
 	if parent == nil {
 		parent = context.Background()
 	}
-	launchPlan, err := services.ResolveRoomLaunchPlan(services.RoomLaunchOptions{
-		ConfigPath:     configPath,
-		ManifestPath:   manifestPath,
-		ConfigDir:      roomConfigDir(roomRunGlobalFlags(c)),
-		DeviceRegistry: roomRunDeviceRegistry(c),
-	})
-	if err != nil {
-		return err
+	replayPath = strings.TrimSpace(replayPath)
+	var launchPlan services.RoomLaunchPlan
+	var replayPlan services.RoomReplayPlan
+	var replayMode bool
+	var err error
+	if replayPath != "" {
+		if strings.TrimSpace(configPath) != "" || strings.TrimSpace(manifestPath) != "" {
+			return fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", services.ErrRoomReplaySourceConflict)
+		}
+		replayPlan, err = services.LoadRoomReplayPlan(replayPath)
+		if err != nil {
+			return err
+		}
+		replayMode = true
+	} else {
+		launchPlan, err = services.ResolveRoomLaunchPlan(services.RoomLaunchOptions{
+			ConfigPath:     configPath,
+			ManifestPath:   manifestPath,
+			ConfigDir:      roomConfigDir(roomRunGlobalFlags(c)),
+			DeviceRegistry: roomRunDeviceRegistry(c),
+		})
+		if err != nil {
+			return err
+		}
 	}
-	manifest := launchPlan.Manifest
+	roomManifest := replayPlan.Manifest()
+	if !replayMode {
+		roomManifest = launchPlan.Manifest
+	}
 
 	outputExplicit := cmd.Flags().Changed("out")
-	outputDir, err = resolveRoomCommandOutputDir(launchPlan, outputDir, outputExplicit)
-	if err != nil {
-		return err
+	if replayMode {
+		outputDir = resolveRoomReplayCommandOutputDir(outputDir)
+	} else {
+		outputDir, err = resolveRoomCommandOutputDir(launchPlan, outputDir, outputExplicit)
+		if err != nil {
+			return err
+		}
 	}
 	if outputDir != "" {
+		if replayMode {
+			if err := services.ValidateRoomReplayOutput(replayPlan, outputDir); err != nil {
+				return fmt.Errorf("validate --out %q: %w", outputDir, err)
+			}
+		}
 		if err := services.ValidateRoomEvidenceOutput(outputDir); err != nil {
 			return fmt.Errorf("validate --out %q: %w", outputDir, err)
 		}
@@ -175,14 +206,14 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 		outputLabel = "disabled"
 	}
 	output := &roomCommandOutput{writer: cmd.OutOrStdout()}
-	output.printf("room starting: participants=%d output=%s\n", len(manifest.Participants), outputLabel)
+	output.printf("room starting: participants=%d output=%s\n", len(roomManifest.Participants), outputLabel)
 	if err := output.err(); err != nil {
 		return err
 	}
 	readyParticipants := 0
 
-	participantIDs := make([]string, 0, len(manifest.Participants))
-	for _, participant := range manifest.Participants {
+	participantIDs := make([]string, 0, len(roomManifest.Participants))
+	for _, participant := range roomManifest.Participants {
 		participantIDs = append(participantIDs, participant.ID)
 	}
 
@@ -226,26 +257,34 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
-		Manifest:                   manifest,
-		LaunchPlan:                 &launchPlan,
-		OutputDir:                  outputDir,
-		ConfigDir:                  roomConfigDir(roomRunGlobalFlags(c)),
-		BrowserCapabilitiesFactory: NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c))),
-		DeviceRegistry:             roomRunDeviceRegistry(c),
-		Stream:                     broker,
+		Manifest:   roomManifest,
+		ReplayPath: replayPath,
+		OutputDir:  outputDir,
+		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
+		ReplayPlan: nil,
+		LaunchPlan: nil,
+		Stream:     broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},
 		OnParticipantReady: func(ready services.RoomParticipantReady) {
 			output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
 			readyParticipants++
-			if readyParticipants == len(manifest.Participants) {
-				output.printf("room running: participants=%d\n", len(manifest.Participants))
+			if readyParticipants == len(roomManifest.Participants) {
+				output.printf("room running: participants=%d\n", len(roomManifest.Participants))
 			}
 		},
 		OnParticipantTerminated: func(result services.RoomParticipantResult) {
 			output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
 		},
+	}
+	if replayMode {
+		options.ReplayPlan = &replayPlan
+		options.ConfigDir = ""
+	} else {
+		options.LaunchPlan = &launchPlan
+		options.BrowserCapabilitiesFactory = NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c)))
+		options.DeviceRegistry = roomRunDeviceRegistry(c)
 	}
 
 	var result services.RoomResult
@@ -263,6 +302,14 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 
 	writeRoomResult(output, result)
 	return errors.Join(runErr, streamErr, output.err())
+}
+
+func resolveRoomReplayCommandOutputDir(requested string) string {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return DefaultRoomOutputDir
+	}
+	return requested
 }
 
 func resolveRoomCommandOutputDir(plan services.RoomLaunchPlan, requested string, explicit bool) (string, error) {

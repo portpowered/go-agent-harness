@@ -27,6 +27,9 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			planErr = errors.Join(planErr, closeRoomParticipantPlanCapabilities(plans))
 		}
 	}()
+	if opts.ReplayPlan != nil {
+		return buildRoomReplayParticipantPlans(ctx, *opts.ReplayPlan)
+	}
 	lookup := validation.LookupCredential
 	if lookup == nil {
 		lookup = os.LookupEnv
@@ -164,6 +167,69 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		}
 	}
 	return plans, secrets, nil
+}
+
+// buildRoomReplayParticipantPlans composes each provider participant through
+// the existing session replay planner. It deliberately does not consult the
+// live room manifest, credential lookup, capability factories, or injected
+// live session factories: the validated bundle is the complete source of
+// replay runtime configuration.
+func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan) ([]*roomParticipantPlan, []string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	manifest := replay.Manifest()
+	plans := make([]*roomParticipantPlan, 0, len(replay.Participants))
+	for index, recorded := range replay.Participants {
+		if err := ctx.Err(); err != nil {
+			return plans, nil, err
+		}
+		if index >= len(manifest.Participants) {
+			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay participant projection is incomplete"), nil)
+		}
+		participant := manifest.Participants[index]
+		plan := &roomParticipantPlan{
+			manifest: participant,
+			replay:   true,
+		}
+		if room.NormalizeParticipantKind(recorded.Kind) == room.ParticipantKindHuman {
+			plans = append(plans, plan)
+			continue
+		}
+		if recorded.CapturePath == "" {
+			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay provider capture path is empty"), nil)
+		}
+		sessionOptions := SessionRunOptions{
+			Provider:       recorded.Provider,
+			Model:          recorded.Model,
+			ModelProvided:  true,
+			ReplayPath:     recorded.CapturePath,
+			Prompt:         recorded.OpeningPrompt,
+			PromptProvided: recorded.OpeningPrompt != "",
+			Voice:          recorded.Voice,
+			// Replay planning reads provider configuration from the captured
+			// session.update. Keep ConfigDir and APIKey empty so no live config
+			// or credential path can be consulted accidentally.
+			ConfigDir:    "",
+			WaitForClose: false,
+		}
+		runtimePlan, err := planSessionRuntime(sessionOptions)
+		if err != nil {
+			return plans, nil, roomParticipantFailure(recorded.ID, fmt.Errorf("plan replay session: %w", err), nil)
+		}
+		if nilInterface(runtimePlan.inferencer) {
+			return plans, nil, roomParticipantFailure(recorded.ID, errors.New("replay session planner returned a nil inferencer"), nil)
+		}
+		plan.options = sessionOptions
+		plan.inferencer = runtimePlan.inferencer
+		plan.replayLoop = runtimePlan.loop
+		// Room replay is bounded by the admitted capture's terminal boundary,
+		// not by the ordinary live-session safety timeout.
+		plan.replayLoop.MaxDuration = 0
+		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
+		plans = append(plans, plan)
+	}
+	return plans, nil, nil
 }
 
 func awaitRoomParticipantConnections(

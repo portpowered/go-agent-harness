@@ -153,6 +153,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			WaitForClose:             opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
 			MaxDuration:              3 * time.Second,
 			CloseAfterScheduledAudio: scheduledAudio,
+			Done:                     replayDialer.Done(),
+			DoneErr:                  replayDialer.Err,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
 			if err := replayDialer.Err(); err != nil {

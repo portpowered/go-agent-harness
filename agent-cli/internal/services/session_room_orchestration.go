@@ -47,21 +47,17 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	if opts.CredentialLookup != nil {
 		validation.LookupCredential = opts.CredentialLookup
 	}
-	if err := opts.Manifest.Validate(validation); err != nil {
+	var replayMode bool
+	opts, validation, replayMode, err = prepareRoomReplayOptions(opts, validation)
+	if err != nil {
 		result := roomFailureResult(err, nil)
 		publishStreamTermination(result)
 		return result, err
 	}
-	if opts.Stream != nil {
-		participantIDs := make([]string, 0, len(opts.Manifest.Participants))
-		for _, participant := range opts.Manifest.Participants {
-			participantIDs = append(participantIDs, participant.ID)
-		}
-		if err := opts.Stream.ValidateParticipants(participantIDs); err != nil {
-			result := roomFailureResult(err, nil)
-			publishStreamTermination(result)
-			return result, err
-		}
+	if err = validateRoomRunAdmission(opts, validation, replayMode); err != nil {
+		result := roomFailureResult(err, nil)
+		publishStreamTermination(result)
+		return result, err
 	}
 	opts, err = normalizeRoomRecordingOptions(opts)
 	if err != nil {
@@ -81,7 +77,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return result, outputErr
 		}
 		opts.OutputDir = outputDir
-		evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
+		if !replayMode {
+			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
+		}
 		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt)
 		if err != nil {
 			result := roomFailureResult(err, evidenceSecrets)
@@ -157,6 +155,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
+	coordinator.completeWhenEmpty = replayMode
 	runtimes := make([]*roomParticipantRuntime, 0, len(plans))
 	cleanupSetup := func() error {
 		meshCloseClaimed = true
@@ -208,13 +207,17 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				return finalizeEvidence(result, roomErr)
 			}
 		}
-		if roomParticipantIsHuman(plan) {
+		if roomParticipantIsHuman(plan) && !replayMode {
 			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceRegistry); deviceErr != nil {
 				coordinator.fail(roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan)))
 				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 				result := roomFailureResult(roomErr, secrets)
 				return finalizeEvidence(result, roomErr)
 			}
+		} else if roomParticipantIsHuman(plan) {
+			// A replayed human is represented by recorded artifacts only. Mark
+			// the logical participant admitted without touching host audio.
+			runtime.lifecycle.markDeviceReady()
 		}
 		coordinator.addParticipant(runtime)
 	}
@@ -286,24 +289,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result.Error = sanitizeRoomError(roomErr, secrets)
 	}
 	result, roomErr = finalizeEvidence(result, roomErr)
-	if opts.OnRoomTerminated != nil {
-		// The room observer is an external ownership boundary too. Keep a
-		// blocked callback from turning an otherwise bounded room teardown into
-		// an unbounded caller wait, while still giving it the complete result.
-		observerResult := result
-		observerCleanup := &roomCleanupWaiter{}
-		observerCleanup.start()
-		observerErr := boundedRoomObserver(observerCleanup, "room observer", func() {
-			opts.OnRoomTerminated(observerResult)
-		}, nil)
-		observerCleanup.stop()
-		if observerErr != nil {
-			roomErr = errors.Join(roomErr, observerErr)
-			result.TerminationReason = RoomTerminationFailed
-			result.Reason = RoomTerminationFailed
-			result.Error = sanitizeRoomError(roomErr, secrets)
-		}
-	}
+	result, roomErr = notifyRoomTerminated(opts.OnRoomTerminated, result, roomErr, secrets)
 	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d active=%d\n", result.Reason, len(result.Participants), len(result.ActiveParticipants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
 	}
@@ -330,6 +316,60 @@ func publishRoomParticipantsReady(plans []*roomParticipantPlan, opts RoomRunOpti
 			opts.OnParticipantReady(ready)
 		}
 	}
+}
+
+func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr error, secrets []string) (RoomResult, error) {
+	if observer == nil {
+		return result, roomErr
+	}
+	// The room observer is an external ownership boundary too. Keep a blocked
+	// callback from turning an otherwise bounded room teardown into an unbounded
+	// caller wait, while still giving it the complete result.
+	observerCleanup := &roomCleanupWaiter{}
+	observerCleanup.start()
+	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(result) }, nil)
+	observerCleanup.stop()
+	if observerErr == nil {
+		return result, roomErr
+	}
+	roomErr = errors.Join(roomErr, observerErr)
+	result.TerminationReason = RoomTerminationFailed
+	result.Reason = RoomTerminationFailed
+	result.Error = sanitizeRoomError(roomErr, secrets)
+	return result, roomErr
+}
+
+func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOptions) (RoomRunOptions, room.ValidationOptions, bool, error) {
+	replayPlan, replayMode, err := resolveRoomReplayPlan(opts)
+	if err != nil || !replayMode {
+		return opts, validation, replayMode, err
+	}
+	// The admitted bundle is the only configuration authority for replay. In
+	// particular, do not retain any live launch/device/credential seams while
+	// composing participants.
+	opts.ReplayPlan = &replayPlan
+	opts.ReplayPath = replayPlan.BundlePath
+	opts.Manifest = replayPlan.Manifest()
+	opts.LaunchPlan = nil
+	opts.DeviceRegistry = nil
+	opts.CredentialLookup = nil
+	return opts, room.ValidationOptions{}, true, nil
+}
+
+func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) error {
+	if !replayMode {
+		if err := opts.Manifest.Validate(validation); err != nil {
+			return err
+		}
+	}
+	if opts.Stream == nil {
+		return nil
+	}
+	participantIDs := make([]string, 0, len(opts.Manifest.Participants))
+	for _, participant := range opts.Manifest.Participants {
+		participantIDs = append(participantIDs, participant.ID)
+	}
+	return opts.Stream.ValidateParticipants(participantIDs)
 }
 
 func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
