@@ -45,6 +45,43 @@ func (r *RecordingSessionInferencer) Recorder() *SessionRecorder {
 	return r.recorder
 }
 
+// SendMessage forwards complete rich messages to the wrapped provider session.
+// Recording must preserve optional multimodal capabilities so a recorded
+// image session behaves like its unwrapped session while the provider capture
+// remains owned by this wrapper.
+func (r *SessionRecorder) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := r.inner.(interface {
+		SendMessage(context.Context, messages.Message) bool
+	})
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+// SendMessageWithoutResponse forwards a complete message without requesting a
+// response. This is required for image turns whose following scheduled audio
+// owns the response boundary.
+func (r *SessionRecorder) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := r.inner.(interface {
+		SendMessageWithoutResponse(context.Context, messages.Message) bool
+	})
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+// SupportsCompleteMessages preserves the wrapped session's optional
+// multimodal capability declaration through the recording decorator.
+func (r *SessionRecorder) SupportsCompleteMessages() bool {
+	capabilities, ok := r.inner.(interface{ SupportsCompleteMessages() bool })
+	return ok && capabilities.SupportsCompleteMessages()
+}
+
+// SupportsCompleteMessagesWithoutResponse preserves the wrapped session's
+// deferred multimodal capability declaration through the recording decorator.
+func (r *SessionRecorder) SupportsCompleteMessagesWithoutResponse() bool {
+	capabilities, ok := r.inner.(interface {
+		SupportsCompleteMessagesWithoutResponse() bool
+	})
+	return ok && capabilities.SupportsCompleteMessagesWithoutResponse()
+}
+
 // ReplaySessionInferencer implements messages.SessionInferencer by returning a
 // SessionReplayer instead of connecting to a live provider.
 type ReplaySessionInferencer struct {

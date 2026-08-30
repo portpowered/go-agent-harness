@@ -133,6 +133,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
@@ -180,6 +186,12 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	audioSource, err := openSessionAudioInput(input)
 	if err != nil {
 		return err
@@ -223,6 +235,28 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
 	}
+	return attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+}
+
+// planSessionImageRuntimeForDirectory keeps directory recording independent
+// from the optional provider capture file. In particular, --record-dir alone
+// needs the live provider runtime without giving its capture finalizer an
+// empty path to flush. The directory planner owns that distinction and still
+// preserves explicit --record and --replay behavior.
+func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
+	if err != nil {
+		return sessionRuntimePlan{}, "", func() {}, err
+	}
+	plan, wirePrompt, err := attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+	if err != nil {
+		cleanup()
+		return sessionRuntimePlan{}, "", func() {}, err
+	}
+	return plan, wirePrompt, cleanup, nil
+}
+
+func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePart, seed SessionTextSeed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
@@ -239,7 +273,7 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		plan.loop.Prompt = wirePrompt
 		return plan, wirePrompt, nil
 	}
-	if opts.Prompt == "" {
+	if prompt == "" {
 		plan.loop.Prompt = sessionImageOnlyPrompt
 	}
 	return plan, "", nil

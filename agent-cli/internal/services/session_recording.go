@@ -231,6 +231,12 @@ func runSessionWithImagesAndRecordingDirectory(
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	destination, err := prepareSessionRecordingDestination(directory)
 	if err != nil {
 		return err
@@ -251,11 +257,11 @@ func runSessionWithImagesAndRecordingDirectory(
 		}()
 		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
-	plan, wirePrompt, cleanupRuntime, err := planSessionImageForDirectoryRecording(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
+	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
-	defer cleanupRuntime()
+	defer cleanup()
 	if audioSource != nil {
 		audioSource.bindRuntime(plan.runtime)
 		plan.loop.CloseAfterOpen = false
@@ -279,35 +285,6 @@ func runSessionWithImagesAndRecordingDirectory(
 	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
-
-func planSessionImageForDirectoryRecording(
-	opts SessionRunOptions,
-	parts []messages.ImagePart,
-	seed SessionTextSeed,
-	systemPrompt string,
-	deferResponse bool,
-) (sessionRuntimePlan, string, func(), error) {
-	planOpts := opts
-	cleanup := func() {}
-	if opts.RecordPath == "" && opts.ReplayPath == "" && opts.SessionInferencer == nil {
-		// The image runtime planner uses RecordPath to select a live provider.
-		// A directory recording must still keep its provider capture private, so
-		// give that planner a throwaway path without exposing a fixture artifact.
-		tempDir, err := os.MkdirTemp("", "agent-session-image-record-dir-")
-		if err != nil {
-			return sessionRuntimePlan{}, "", cleanup, fmt.Errorf("prepare image session recording runtime: %w", err)
-		}
-		cleanup = func() { _ = os.RemoveAll(tempDir) }
-		planOpts.RecordPath = filepath.Join(tempDir, "fixture.json")
-	}
-	plan, wirePrompt, err := planSessionImageRuntime(planOpts, parts, seed, systemPrompt, deferResponse)
-	if err != nil {
-		cleanup()
-		return sessionRuntimePlan{}, "", func() {}, err
-	}
-	return plan, wirePrompt, cleanup, nil
-}
-
 func runSessionWithRecordingDirectory(
 	ctx context.Context,
 	out io.Writer,
