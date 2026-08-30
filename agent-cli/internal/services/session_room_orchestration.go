@@ -66,8 +66,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		publishStreamTermination(result)
 		return result, err
 	}
-	roomClock := platformclock.Ensure(opts.Clock)
-	opts.Clock = roomClock
+	opts, roomClock := normalizeRoomClockOptions(opts)
 
 	var evidence *roomEvidence
 	var evidenceSecrets []string
@@ -433,6 +432,12 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 		participantIDs = append(participantIDs, participant.ID)
 	}
 	return opts.Stream.ValidateParticipants(participantIDs)
+}
+
+func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source) {
+	roomClock := platformclock.Ensure(opts.Clock)
+	opts.Clock = roomClock
+	return opts, roomClock
 }
 
 func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
