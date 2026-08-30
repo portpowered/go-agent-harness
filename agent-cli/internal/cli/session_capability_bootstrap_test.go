@@ -65,9 +65,57 @@ func TestSessionCapabilityBootstrapStillFailsClosedForNonCatalogSelectionErrors(
 	}
 }
 
+func TestSessionCapabilityBootstrapKeepsReachableAmbiguityConnectedAndUnselected(t *testing.T) {
+	selectionErr := &discovery.DiscoveryError{
+		Code:      discovery.CodeAmbiguousTab,
+		Message:   "multiple browser tabs matched",
+		Retryable: true,
+		Details: map[string]any{
+			"browser_id":           "browser-a",
+			"candidate_target_ids": []string{"target-a", "target-b"},
+		},
+	}
+	base := &capabilityBroker{}
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	browser.Connection.CDPURL = "http://127.0.0.1:9222"
+	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
+	discoveryService := ambiguousBootstrapSelectionDiscovery{
+		bootstrapSelectionDiscovery: bootstrapSelectionDiscovery{},
+		err:                         selectionErr,
+	}
+	var state webmcp.BrowserCapabilityState
+	bootstrap := sessionCapabilityBootstrapWithState(browser, discoveryService, base, func(got webmcp.BrowserCapabilityState) {
+		state = got
+	})
+
+	if err := bootstrap(context.Background()); err != nil {
+		t.Fatalf("reachable ambiguous bootstrap: %v", err)
+	}
+	if state != webmcp.BrowserCapabilityConnectedUnselected {
+		t.Fatalf("browser capability state = %q, want connected_unselected", state)
+	}
+	if base.selectCalls != 0 {
+		t.Fatalf("ambiguous bootstrap selected a page %d times", base.selectCalls)
+	}
+}
+
 type bootstrapSelectionDiscovery struct {
 	sessionBrokerDiscovery
 	selected discovery.Selection
+}
+
+type ambiguousBootstrapSelectionDiscovery struct {
+	bootstrapSelectionDiscovery
+	err error
+}
+
+func (d ambiguousBootstrapSelectionDiscovery) LoadPersistedSelection(context.Context) (discovery.PersistedSelection, bool, error) {
+	return discovery.PersistedSelection{}, false, nil
+}
+
+func (d ambiguousBootstrapSelectionDiscovery) Reconnect(context.Context, discovery.ConnectionInputs, ...discovery.ReconnectOptions) (discovery.Selection, error) {
+	return discovery.Selection{}, d.err
 }
 
 func (d bootstrapSelectionDiscovery) Reconnect(context.Context, discovery.ConnectionInputs, ...discovery.ReconnectOptions) (discovery.Selection, error) {

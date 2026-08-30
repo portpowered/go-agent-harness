@@ -552,6 +552,9 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 	if calls != 0 {
 		t.Fatalf("disabled browser constructed broker %d times", calls)
 	}
+	if capabilities.BrowserCapabilityState != webmcp.BrowserCapabilityDisabled {
+		t.Fatalf("disabled browser capability state = %q, want disabled", capabilities.BrowserCapabilityState)
+	}
 	for _, definition := range capabilities.Definitions {
 		if isBrokerToolName(definition.Name) {
 			t.Fatalf("disabled definitions include broker tool %q", definition.Name)
@@ -682,6 +685,7 @@ func isBrokerToolName(name string) bool {
 
 type capabilityBroker struct {
 	selected    webmcp.PageContext
+	discoverErr error
 	selectErr   error
 	selectCalls int
 	catalog     []webmcp.ToolDescriptor
@@ -690,7 +694,7 @@ type capabilityBroker struct {
 }
 
 func (b *capabilityBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	return nil, nil
+	return nil, b.discoverErr
 }
 
 func (b *capabilityBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {

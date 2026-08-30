@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -345,18 +346,35 @@ const sessionToolGroundingPolicy = `Tool-grounding requirements:
 - Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.
 - Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.`
 
+const sessionConnectedUnselectedBrowserGrounding = `WebMCP browser selection:
+- A browser endpoint is connected, but no page is selected.
+- Before any page work, call webmcp_list_tabs.
+- If multiple eligible tabs are returned, ask the customer which page to use; do not guess.
+- After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.
+- Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.`
+
 // composeSessionInstructions preserves the selected customer instructions and
 // adds the provider-neutral grounding contract exactly once for tool-enabled
 // sessions. The no-tools path remains byte-for-byte unchanged, and callers
 // that already supplied the policy do not receive a duplicate copy.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
-	if len(opts.ToolDefinitions) == 0 || strings.Contains(instructions, sessionToolGroundingPolicy) {
+	if len(opts.ToolDefinitions) == 0 {
 		return instructions
 	}
-	if instructions == "" {
-		return sessionToolGroundingPolicy
+	blocks := []string{instructions}
+	if opts.BrowserCapabilityState == webmcp.BrowserCapabilityConnectedUnselected && !strings.Contains(instructions, sessionConnectedUnselectedBrowserGrounding) {
+		blocks = append(blocks, sessionConnectedUnselectedBrowserGrounding)
 	}
-	return instructions + "\n\n" + sessionToolGroundingPolicy
+	if !strings.Contains(instructions, sessionToolGroundingPolicy) {
+		blocks = append(blocks, sessionToolGroundingPolicy)
+	}
+	filtered := blocks[:0]
+	for _, block := range blocks {
+		if block != "" {
+			filtered = append(filtered, block)
+		}
+	}
+	return strings.Join(filtered, "\n\n")
 }
 
 // sessionInstructionsInferencer decorates caller-owned session seams without

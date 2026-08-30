@@ -29,8 +29,24 @@ type sessionPersistedSelectionLoader interface {
 // no persisted selection, while a present record always takes the strict
 // browser/target/origin/continuity reconnect path.
 func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDiscoveryService, broker webmcp.Broker) func(context.Context) error {
+	return sessionCapabilityBootstrapWithState(browser, service, broker, nil)
+}
+
+func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service WebMCPDiscoveryService, broker webmcp.Broker, setState func(webmcp.BrowserCapabilityState)) func(context.Context) error {
 	reconnector, _ := service.(sessionSelectionReconnector)
 	loader, _ := service.(sessionPersistedSelectionLoader)
+	mark := func(state webmcp.BrowserCapabilityState) {
+		if setState != nil {
+			setState(state)
+		}
+	}
+	adoptSelection := func(ctx context.Context, selected discovery.Selection, activate bool) error {
+		err := sessionAdoptSelection(ctx, broker, selected, activate)
+		if err == nil {
+			mark(webmcp.BrowserCapabilitySelected)
+		}
+		return err
+	}
 
 	return func(ctx context.Context) error {
 		if ctx == nil {
@@ -72,7 +88,7 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 			if err != nil {
 				return sessionCapabilityError(err)
 			}
-			return sessionAdoptSelection(ctx, broker, selected, selection.ActivateTab)
+			return adoptSelection(ctx, selected, selection.ActivateTab)
 		}
 
 		// A configured browser/origin without a target only admits automatic
@@ -85,9 +101,9 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 				Reason:     "session_bootstrap",
 			})
 			if err != nil {
-				return sessionCapabilityError(err)
+				return sessionRecoverConnectedUnselected(ctx, browser, broker, err, mark)
 			}
-			return sessionAdoptSelection(ctx, broker, selected, selection.ActivateTab)
+			return adoptSelection(ctx, selected, selection.ActivateTab)
 		}
 
 		if !hasExplicitSelection {
@@ -107,7 +123,7 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 					if err != nil {
 						return sessionCapabilityError(err)
 					}
-					return sessionAdoptSelection(ctx, broker, selected, selection.ActivateTab)
+					return adoptSelection(ctx, selected, selection.ActivateTab)
 				}
 			} else if selection.Persist && reconnector != nil {
 				// Compatibility fakes may expose Reconnect without the optional
@@ -118,7 +134,7 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 					Reason:     "session_bootstrap",
 				})
 				if err == nil {
-					return sessionAdoptSelection(ctx, broker, selected, selection.ActivateTab)
+					return adoptSelection(ctx, selected, selection.ActivateTab)
 				}
 				if !sessionNoSelectionError(err) {
 					return sessionCapabilityError(err)
@@ -139,14 +155,78 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 					Reason:     "session_bootstrap",
 				})
 				if err != nil {
-					return sessionCapabilityError(err)
+					return sessionRecoverConnectedUnselected(ctx, browser, broker, err, mark)
 				}
-				return sessionAdoptSelection(ctx, broker, selected, selection.ActivateTab)
+				return adoptSelection(ctx, selected, selection.ActivateTab)
 			}
 		}
 
-		return sessionVerifyEndpoint(ctx, browser, broker)
+		if err := sessionVerifyEndpoint(ctx, browser, broker); err != nil {
+			return err
+		}
+		mark(webmcp.BrowserCapabilityConnectedUnselected)
+		return nil
 	}
+}
+
+func sessionRecoverConnectedUnselected(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker, selectionErr error, mark func(webmcp.BrowserCapabilityState)) error {
+	if !sessionRecoverableSelectionError(selectionErr) {
+		return sessionCapabilityError(selectionErr)
+	}
+	if err := sessionVerifyEndpoint(ctx, browser, broker); err != nil {
+		return err
+	}
+	if mark != nil {
+		mark(webmcp.BrowserCapabilityConnectedUnselected)
+	}
+	return nil
+}
+
+func sessionRecoverableSelectionError(err error) bool {
+	var discoveryErr *discovery.DiscoveryError
+	if errors.As(err, &discoveryErr) && discoveryErr != nil {
+		switch discoveryErr.Code {
+		case discovery.CodeNoEligibleTab, discovery.CodeAmbiguousBrowser, discovery.CodeAmbiguousTab:
+			return true
+		}
+	}
+	var classified *webmcp.ClassifiedError
+	if errors.As(err, &classified) && classified != nil {
+		switch classified.Code {
+		case webmcp.ErrorNoEligibleTab, webmcp.ErrorAmbiguousBrowser, webmcp.ErrorAmbiguousTab:
+			return true
+		}
+	}
+	return false
+}
+
+func sessionInitialBrowserCapabilityState(broker webmcp.Broker) webmcp.BrowserCapabilityState {
+	if broker == nil {
+		return webmcp.BrowserCapabilityUnavailable
+	}
+	if _, initializer := broker.(SessionCapabilityInitializer); initializer {
+		return webmcp.BrowserCapabilityInitializing
+	}
+	selected, err := broker.Selected(context.Background())
+	if err == nil && selected.Connected && selected.Key.BrowserID != "" && selected.Key.TargetID != "" {
+		return webmcp.BrowserCapabilitySelected
+	}
+	if err != nil {
+		return sessionBrowserCapabilityStateForError(err)
+	}
+	return webmcp.BrowserCapabilityConnectedUnselected
+}
+
+func sessionBrowserCapabilityStateForError(err error) webmcp.BrowserCapabilityState {
+	var classified *webmcp.ClassifiedError
+	if errors.As(err, &classified) && classified != nil && classified.Code == webmcp.ErrorBrowserDisconnected {
+		return webmcp.BrowserCapabilityDisconnected
+	}
+	var discoveryErr *discovery.DiscoveryError
+	if errors.As(err, &discoveryErr) && discoveryErr != nil && discoveryErr.Code == discovery.CodeBrowserDisconnected {
+		return webmcp.BrowserCapabilityDisconnected
+	}
+	return webmcp.BrowserCapabilityUnavailable
 }
 
 func sessionVerifyEndpoint(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker) error {
@@ -318,16 +398,33 @@ func (b *sessionBrowserBroker) InitializeSession(ctx context.Context) error {
 	return b.ensureInitialized(ctx)
 }
 
+func (b *sessionBrowserBroker) setBrowserCapabilityState(state webmcp.BrowserCapabilityState) {
+	if b == nil || state == "" {
+		return
+	}
+	b.initMu.Lock()
+	b.browserState = state
+	b.initMu.Unlock()
+}
+
 func (b *sessionBrowserBroker) SessionCapabilityStatus() SessionCapabilityStatus {
 	if b == nil {
-		return SessionCapabilityStatus{State: SessionCapabilityFailed, Err: webmcp.ErrClosed}
+		return SessionCapabilityStatus{
+			State:                  SessionCapabilityFailed,
+			Err:                    webmcp.ErrClosed,
+			BrowserCapabilityState: webmcp.BrowserCapabilityDisconnected,
+		}
 	}
 	b.initMu.Lock()
 	defer b.initMu.Unlock()
 	if b.initState == "" {
 		b.initState = SessionCapabilityInitializing
 	}
-	return SessionCapabilityStatus{State: b.initState, Err: b.initErr}
+	return SessionCapabilityStatus{
+		State:                  b.initState,
+		Err:                    b.initErr,
+		BrowserCapabilityState: b.browserState,
+	}
 }
 
 func (b *sessionBrowserBroker) ensureInitialized(ctx context.Context) error {
@@ -405,6 +502,15 @@ func (b *sessionBrowserBroker) runInitialization(ctx context.Context, cancel con
 		err = webmcp.ErrClosed
 	}
 	b.initErr = err
+	if b.closed {
+		b.browserState = webmcp.BrowserCapabilityDisconnected
+	} else if b.browserState == "" || b.browserState == webmcp.BrowserCapabilityInitializing {
+		if err == nil {
+			b.browserState = sessionInitialBrowserCapabilityState(b.Broker)
+		} else {
+			b.browserState = sessionBrowserCapabilityStateForError(err)
+		}
+	}
 	if err == nil {
 		b.initState = SessionCapabilityReady
 	} else {

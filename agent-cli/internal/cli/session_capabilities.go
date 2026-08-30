@@ -106,9 +106,10 @@ func newSessionToolCapabilitiesFactory(
 
 		if cfg == nil || !cfg.Browser.BrowserBackendEnabled() {
 			return SessionToolCapabilities{
-				Executor:          resolvedStaticExecutor,
-				Definitions:       staticDefinitions,
-				DisplayCapability: displayCapability,
+				Executor:               resolvedStaticExecutor,
+				Definitions:            staticDefinitions,
+				BrowserCapabilityState: webmcp.BrowserCapabilityDisabled,
+				DisplayCapability:      displayCapability,
 			}, nil
 		}
 
@@ -153,15 +154,25 @@ func newSessionToolCapabilitiesFactory(
 		refreshDefinitions := func(ctx context.Context) ([]messages.ToolDefinition, error) {
 			pageDefinitions, refreshErr := brokerSet.PageToolDefinitionsWithError(ctx)
 			if refreshErr != nil {
+				// Connected-but-unselected is an intentional session state: the
+				// broker controls are ready, but there is no page catalog to
+				// publish yet. Keep the provider on the stable surface until an
+				// exact selection emits a broker event. Other catalog failures
+				// remain explicit so a stale page surface can never be presented
+				// as a successful refresh.
+				if sessionPageCatalogIsUnselected(broker, refreshErr) {
+					return append([]messages.ToolDefinition(nil), surface.Definitions...), nil
+				}
 				return nil, fmt.Errorf("refresh WebMCP page tools: %w", refreshErr)
 			}
 			refreshed := append([]messages.ToolDefinition(nil), surface.Definitions...)
 			return append(refreshed, pageDefinitions...), nil
 		}
 		capabilities := SessionToolCapabilities{
-			Executor:          surface.Executor,
-			Definitions:       surface.Definitions,
-			DisplayCapability: displayCapability,
+			Executor:               surface.Executor,
+			Definitions:            surface.Definitions,
+			BrowserCapabilityState: sessionInitialBrowserCapabilityState(broker),
+			DisplayCapability:      displayCapability,
 			// After the capability bootstrap has connected the broker, the
 			// connected page catalog is advertised as first-class session
 			// tools alongside the composed surface. Page-tool calls resolve
@@ -187,6 +198,28 @@ func newSessionToolCapabilitiesFactory(
 		}
 		return capabilities, nil
 	}
+}
+
+func sessionPageCatalogIsUnselected(broker webmcp.Broker, err error) bool {
+	if broker == nil || err == nil {
+		return false
+	}
+	initializer, ok := broker.(SessionCapabilityInitializer)
+	if !ok {
+		return false
+	}
+	status := initializer.SessionCapabilityStatus()
+	if status.BrowserCapabilityState != webmcp.BrowserCapabilityConnectedUnselected {
+		return false
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified == nil || classified.Code != webmcp.ErrorStaleSelection {
+		return false
+	}
+	return classified.Details != nil &&
+		classified.Details["reason"] == "selection_not_connected" &&
+		classified.Details["browser_id"] == "" &&
+		classified.Details["target_id"] == ""
 }
 
 func resolveSessionDisplayCapability(cfg *config.Config, probe cliTools.DisplayCapabilityProbe) cliTools.DisplayCapability {
@@ -291,8 +324,9 @@ func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, fact
 		closeRuntime: runtime.Close,
 		initDone:     make(chan struct{}),
 		initState:    SessionCapabilityInitializing,
+		browserState: webmcp.BrowserCapabilityInitializing,
 	}
-	broker.bootstrap = sessionCapabilityBootstrap(browser, runtime.Discovery, runtime.Broker)
+	broker.bootstrap = sessionCapabilityBootstrapWithState(browser, runtime.Discovery, runtime.Broker, broker.setBrowserCapabilityState)
 	return broker, nil
 }
 
@@ -302,15 +336,16 @@ type sessionBrowserBroker struct {
 	closeOnce    sync.Once
 	closeErr     error
 
-	bootstrap   func(context.Context) error
-	initOnce    sync.Once
-	initDone    chan struct{}
-	initMu      sync.Mutex
-	initStarted bool
-	initState   SessionCapabilityState
-	initErr     error
-	initCancel  context.CancelFunc
-	closed      bool
+	bootstrap    func(context.Context) error
+	initOnce     sync.Once
+	initDone     chan struct{}
+	initMu       sync.Mutex
+	initStarted  bool
+	initState    SessionCapabilityState
+	initErr      error
+	initCancel   context.CancelFunc
+	browserState webmcp.BrowserCapabilityState
+	closed       bool
 }
 
 func (b *sessionBrowserBroker) Close() error {
@@ -331,6 +366,7 @@ func (b *sessionBrowserBroker) Close() error {
 			b.initStarted = true
 			b.initErr = webmcp.ErrClosed
 			b.initState = SessionCapabilityFailed
+			b.browserState = webmcp.BrowserCapabilityDisconnected
 			close(done)
 		}
 		b.initMu.Unlock()
