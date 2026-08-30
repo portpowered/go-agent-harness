@@ -781,6 +781,53 @@ func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T)
 	}
 }
 
+func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		events []messages.StreamMessage
+		want   string
+	}{
+		{
+			name: "assistant completion while user line is active",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard")},
+				// The assistant has no deltas, so its completion must be
+				// rendered without disturbing the role attribution.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("reply")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard")},
+			},
+			want: "User: heard\nAssistant: reply\n",
+		},
+		{
+			name: "user completion while assistant line is active",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("draft")},
+				// The user has no deltas, so its completion must be rendered
+				// as a separate line while the assistant remains distinct.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("draft")},
+			},
+			want: "Assistant: draft\nUser: heard\n",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out bytes.Buffer
+			renderer := newSessionReplayRenderer(&out)
+			for _, event := range testCase.events {
+				if err := writeSessionReplayMessage(renderer, event); err != nil {
+					t.Fatalf("write transcript event: %v", err)
+				}
+			}
+
+			if got := out.String(); got != testCase.want {
+				t.Fatalf("completion-only transcript output = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
 	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
 		Type: messages.StreamTypeError,

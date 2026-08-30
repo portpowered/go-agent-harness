@@ -113,10 +113,33 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		// completion. The delta already rendered that previous line, so its
 		// completion must not close or replace the currently active role's line.
 		if r.transcriptOpen && r.transcriptRole != role {
-			if state.deltaRendered {
-				state.completed = true
-				r.transcriptStates[role] = state
+			if state.deltaRendered || state.completed {
+				if state.deltaRendered {
+					state.completed = true
+					r.transcriptStates[role] = state
+				}
+				return nil
 			}
+			// A provider may complete an inactive role without sending any
+			// deltas. Preserve the active line, then render this completion as
+			// its own line exactly once when it contains usable text.
+			if value == nil || value.FullText == "" || strings.TrimSpace(value.FullText) == "" {
+				return nil
+			}
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+			if err := r.startTranscript(role); err != nil {
+				return err
+			}
+			if err := writeSessionReplayString(r.out, value.FullText); err != nil {
+				return err
+			}
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+			state.completed = true
+			r.transcriptStates[role] = state
 			return nil
 		}
 		if !r.transcriptOpen && (state.deltaRendered || state.completed) {
