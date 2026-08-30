@@ -155,6 +155,11 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 					Reason:     "session_bootstrap",
 				})
 				if err != nil {
+					// #312's recovery already subsumes the endpoint-usability
+					// concern: it verifies the endpoint and marks the session
+					// connected-but-unselected, so an exact model selector can
+					// still resolve the target deterministically, and the model
+					// never reads the browser as absent.
 					return sessionRecoverConnectedUnselected(ctx, browser, broker, err, mark)
 				}
 				return adoptSelection(ctx, selected, selection.ActivateTab)
@@ -292,6 +297,20 @@ func sessionRetryableCatalogDeadline(err error) bool {
 		return false
 	}
 	return classified.Details["reason_code"] == "page_tools_unverified" && classified.Details["reason"] == "deadline_exceeded"
+}
+
+func sessionRecoverableAutomaticSelectionError(err error) bool {
+	normalized := sessionCapabilityError(err)
+	var classified *webmcp.ClassifiedError
+	if !errors.As(normalized, &classified) || classified == nil || !classified.Retryable {
+		return false
+	}
+	switch classified.Code {
+	case webmcp.ErrorAmbiguousBrowser, webmcp.ErrorAmbiguousTab:
+		return true
+	default:
+		return false
+	}
 }
 
 func sessionNoSelectionError(err error) bool {
