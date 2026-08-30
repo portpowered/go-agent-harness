@@ -90,10 +90,6 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, proces
 	return nil
 }
 
-func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
-	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
-}
-
 // screenCaptureDisplayWithContextAndProcess uses scrot to capture the given
 // screen region. Linux currently has one geometry surface, so display is
 // intentionally ignored while the index remains part of the seam.

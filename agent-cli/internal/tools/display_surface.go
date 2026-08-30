@@ -425,15 +425,11 @@ func (s *hostDisplaySurface) CaptureDisplay(ctx context.Context, display int, bo
 	return screenCaptureDisplayWithContextAndProcess(ctx, display, bounds, s.process)
 }
 
-// The legacy helper names remain available to platform tests and direct tool
-// callers. They retain their old fallback shape for compatibility, while the
-// session-facing boundary above returns typed failures instead of inventing a
-// display or image.
+// The display discovery helper names remain available to platform tests and
+// direct tool callers. They fail closed when discovery cannot produce a
+// positive result; session-facing callers use the typed boundary above.
 func screenDisplayCount() int {
-	count, err := screenDisplayCountWithContext(context.Background())
-	if err != nil || count <= 0 {
-		return 1
-	}
+	count, _ := screenDisplayCountWithContext(context.Background())
 	return count
 }
 
@@ -442,23 +438,12 @@ func screenDisplayCountWithContext(ctx context.Context) (int, error) {
 }
 
 func screenDisplayBounds(idx int) image.Rectangle {
-	bounds, err := screenDisplayBoundsWithContext(context.Background(), idx)
-	if err != nil || bounds.Empty() {
-		return image.Rect(0, 0, 1920, 1080)
-	}
+	bounds, _ := screenDisplayBoundsWithContext(context.Background(), idx)
 	return bounds
 }
 
 func screenDisplayBoundsWithContext(ctx context.Context, idx int) (image.Rectangle, error) {
 	return screenDisplayBoundsWithContextAndProcess(ctx, idx, defaultDisplayProcess())
-}
-
-func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
-	return screenCaptureWithContext(context.Background(), bounds)
-}
-
-func screenCaptureWithContext(ctx context.Context, bounds image.Rectangle) (*image.RGBA, error) {
-	return screenCaptureWithContextAndProcess(ctx, bounds, defaultDisplayProcess())
 }
 
 func normalizeDisplayProcess(process DisplayProcess) DisplayProcess {
@@ -555,17 +540,6 @@ func screenRecordingPermissionText(text string) bool {
 		}
 	}
 	return false
-}
-
-func isScreenRecordingPermissionDenied(output []byte, err error) bool {
-	if errors.Is(err, ErrScreenRecordingPermissionDenied) {
-		return true
-	}
-	text := strings.TrimSpace(string(output))
-	if err != nil {
-		text = strings.TrimSpace(strings.Join([]string{text, err.Error()}, " "))
-	}
-	return screenRecordingPermissionText(text)
 }
 
 const screenScreenshotBound = 5 * time.Second

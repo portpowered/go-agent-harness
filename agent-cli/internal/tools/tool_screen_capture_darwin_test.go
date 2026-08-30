@@ -12,12 +12,6 @@ import (
 	"testing"
 )
 
-// Keep the legacy helper chain covered on Darwin as well as Linux. Direct
-// platform tests use these helpers to exercise the native command seam.
-var (
-	_ = screenCapture
-)
-
 func TestDarwinDisplayBoundsUseDiscoveryWithoutCapturing(t *testing.T) {
 	var calls []string
 	process := DisplayProcessAdapter{

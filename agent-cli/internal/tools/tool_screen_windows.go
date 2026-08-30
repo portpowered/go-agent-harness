@@ -104,10 +104,6 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ Disp
 	return nil
 }
 
-func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
-	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
-}
-
 // screenCaptureDisplayWithContextAndProcess uses the Windows GDI API to copy
 // the requested screen region into an image.RGBA.
 func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {

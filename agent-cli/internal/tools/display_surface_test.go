@@ -271,6 +271,11 @@ func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
 				return []byte("Resolution: 16 x 10\n"), nil
 			case "xrandr":
 				return []byte("Monitors: 1\n"), nil
+			case "xdotool":
+				if runtime.GOOS == "linux" {
+					return []byte("8 6\n"), nil
+				}
+				return nil, errors.New("unexpected process")
 			default:
 				return nil, errors.New("unexpected process")
 			}

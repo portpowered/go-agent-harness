@@ -98,13 +98,13 @@ func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("screenshot result shape = %#v", msgs)
 	}
-	assertScreenResult(t, msgs[0], "image/jpeg", 8, 6)
+	assertScreenResult(t, msgs[0], "image/jpeg", 2, 2)
 
 	msgs, err = tool.Execute(context.Background(), map[string]any{"action": "record", "display": float64(1), "duration": float64(1), "fps": float64(2)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	recording := assertScreenResult(t, msgs[0], "image/gif", 8, 6)
+	recording := assertScreenResult(t, msgs[0], "image/gif", 2, 2)
 	if recording.MediaType != "image/gif" || len(recording.Bytes) == 0 {
 		t.Fatalf("recording image = %#v", recording)
 	}

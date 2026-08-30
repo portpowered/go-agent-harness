@@ -99,11 +99,15 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, proces
 	return nil
 }
 
-// screenCaptureWithContextAndProcess retains the direct helper's primary
-// display behavior. ScreenTool uses the indexed variant so macOS captures the
-// requested display with -D rather than guessing a region from a frame.
-func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
-	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
+func isScreenRecordingPermissionDenied(output []byte, err error) bool {
+	if errors.Is(err, ErrScreenRecordingPermissionDenied) {
+		return true
+	}
+	text := strings.TrimSpace(string(output))
+	if err != nil {
+		text = strings.TrimSpace(strings.Join([]string{text, err.Error()}, " "))
+	}
+	return screenRecordingPermissionText(text)
 }
 
 func screenCaptureDisplayWithContextAndProcess(ctx context.Context, display int, _ image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
