@@ -1,0 +1,4 @@
+{"event":"turn_started","participant_id":"agent-a","timestamp_ms":200,"turn_id":"agent-a-turn-1"}
+{"event":"turn_ended","participant_id":"agent-a","timestamp_ms":1000,"turn_id":"agent-a-turn-1"}
+{"event":"turn_started","participant_id":"agent-a","timestamp_ms":2200,"turn_id":"agent-a-turn-2"}
+{"event":"turn_ended","participant_id":"agent-a","timestamp_ms":3000,"turn_id":"agent-a-turn-2"}
