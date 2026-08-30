@@ -2,7 +2,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +20,8 @@ const (
 	sessionUpdateEventType          = "session.update"
 	conversationItemCreateEventType = "conversation.item.create"
 	responseCreateEventType         = "response.create"
+	inputAudioBufferAppendEventType = "input_audio_buffer.append"
+	inputAudioBufferCommitEventType = "input_audio_buffer.commit"
 )
 
 // replaySessionConfiguration is the provider-facing configuration captured in
@@ -187,6 +191,132 @@ func loadReplaySessionPrompt(path string) (*replayCapturedPrompt, error) {
 		return nil, err
 	}
 	return prompt, nil
+}
+
+// loadReplaySessionAudioTurns finds the recorded scheduled-audio-turn shape
+// used by --audio-in-turn/--record-dir captures: one or more recorded
+// input_audio_buffer.append events, an input_audio_buffer.commit, and a
+// response.create, repeated once per spoken turn. It reconstructs each turn's
+// raw PCM directly from the capture so a bare replay never needs the caller
+// to re-supply the original audio files: the recorded client frames alone
+// fully drive the replay, per the same reuse-recorded-frames principle
+// loadReplaySessionPrompt already applies to the single-text-prompt shape.
+//
+// It is intentionally called only for a bare replay with no user-supplied
+// audio turns. An explicit --audio-in-turn re-supply continues to reach the
+// strict replay dialer for its own outbound validation instead of this
+// reconstruction.
+func loadReplaySessionAudioTurns(path string) ([]ScheduledAudioInput, error) {
+	capture, err := gwtesting.LoadSessionCapture(path)
+	if err != nil {
+		return nil, fmt.Errorf("load replay session capture %s: %w", path, err)
+	}
+
+	clientActions := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
+	for _, record := range capture.Records {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type == sessionUpdateEventType {
+			continue
+		}
+		clientActions = append(clientActions, record)
+	}
+	if len(clientActions) == 0 || clientActions[0].Type != inputAudioBufferAppendEventType {
+		// Not the scheduled-audio-turn shape; let the caller fall back to the
+		// text-prompt shape or explicit replay validation.
+		return nil, nil
+	}
+
+	var turns []ScheduledAudioInput
+	position := 0
+	for position < len(clientActions) {
+		turnIndex := len(turns) + 1
+		record := clientActions[position]
+		if record.Type != inputAudioBufferAppendEventType {
+			return nil, fmt.Errorf(
+				"replay session capture %s has an ambiguous recorded client action at sequence %d: expected %s to begin audio turn %d",
+				path, record.Sequence, inputAudioBufferAppendEventType, turnIndex,
+			)
+		}
+		var pcm bytes.Buffer
+		for position < len(clientActions) && clientActions[position].Type == inputAudioBufferAppendEventType {
+			chunk, chunkErr := parseReplayAudioAppendPCM(path, clientActions[position])
+			if chunkErr != nil {
+				return nil, chunkErr
+			}
+			pcm.Write(chunk)
+			position++
+		}
+		if position >= len(clientActions) {
+			return nil, fmt.Errorf(
+				"replay session capture %s has an incomplete recorded audio turn %d: expected %s after its recorded %s event(s)",
+				path, turnIndex, inputAudioBufferCommitEventType, inputAudioBufferAppendEventType,
+			)
+		}
+		if err := validateReplayEventPayload(path, clientActions[position], inputAudioBufferCommitEventType); err != nil {
+			return nil, err
+		}
+		position++
+		if position >= len(clientActions) {
+			return nil, fmt.Errorf(
+				"replay session capture %s has an incomplete recorded audio turn %d: expected %s after its recorded %s",
+				path, turnIndex, responseCreateEventType, inputAudioBufferCommitEventType,
+			)
+		}
+		if err := validateReplayEventPayload(path, clientActions[position], responseCreateEventType); err != nil {
+			return nil, err
+		}
+		position++
+		if pcm.Len() == 0 {
+			return nil, fmt.Errorf("replay session capture %s has an empty recorded audio turn %d", path, turnIndex)
+		}
+		turns = append(turns, ScheduledAudioInput{
+			AfterCompletedTurns: len(turns),
+			PCM:                 pcm.Bytes(),
+			EndOfTurn:           true,
+		})
+	}
+	return turns, nil
+}
+
+// parseReplayAudioAppendPCM decodes the raw PCM carried by one recorded
+// input_audio_buffer.append event.
+func parseReplayAudioAppendPCM(path string, record gwtesting.CapturedSessionEvent) ([]byte, error) {
+	payload := replayCaptureRecordPayload(record)
+	if len(payload) == 0 {
+		return nil, fmt.Errorf(
+			"replay session capture %s: recorded %s at sequence %d has no payload",
+			path, inputAudioBufferAppendEventType, record.Sequence,
+		)
+	}
+	var envelope struct {
+		Type  string `json:"type"`
+		Audio string `json:"audio"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return nil, fmt.Errorf(
+			"replay session capture %s: decode recorded %s at sequence %d: %w",
+			path, inputAudioBufferAppendEventType, record.Sequence, err,
+		)
+	}
+	if envelope.Type != inputAudioBufferAppendEventType {
+		return nil, fmt.Errorf(
+			"replay session capture %s: recorded %s at sequence %d has payload type %q",
+			path, inputAudioBufferAppendEventType, record.Sequence, envelope.Type,
+		)
+	}
+	if envelope.Audio == "" {
+		return nil, fmt.Errorf(
+			"replay session capture %s: recorded %s at sequence %d is missing its audio payload",
+			path, inputAudioBufferAppendEventType, record.Sequence,
+		)
+	}
+	pcm, err := base64.StdEncoding.DecodeString(envelope.Audio)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"replay session capture %s: decode base64 audio at sequence %d: %w",
+			path, record.Sequence, err,
+		)
+	}
+	return pcm, nil
 }
 
 func parseReplayTextPrompt(path string, record gwtesting.CapturedSessionEvent) (string, bool, error) {

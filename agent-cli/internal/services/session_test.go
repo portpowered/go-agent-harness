@@ -3,8 +3,10 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -591,6 +593,157 @@ func replayResponseCreateRecord(sequence int) gwtesting.CapturedSessionEvent {
 		Type:        responseCreateEventType,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"response.create"}`),
+	}
+}
+
+func TestLoadReplaySessionAudioTurnsExtractsScheduledTurnsFromRecordedFrames(t *testing.T) {
+	turn1 := []byte{1, 2, 3, 4}
+	turn2 := []byte{5, 6, 7, 8, 9}
+	path := filepath.Join(t.TempDir(), "openai-audio-turn-replay.session.json")
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version:  gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+		Records: []gwtesting.CapturedSessionEvent{
+			{
+				Sequence:    1,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+			},
+			{
+				Sequence:    2,
+				Direction:   gwtesting.DirectionServerToClient,
+				Type:        "session.created",
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.created"}`),
+			},
+			replayAudioAppendRecord(3, turn1),
+			replayAudioCommitRecord(4),
+			replayResponseCreateRecord(5),
+			replayAudioAppendRecord(6, turn2),
+			replayAudioCommitRecord(7),
+			replayResponseCreateRecord(8),
+		},
+	})
+
+	got, err := loadReplaySessionAudioTurns(path)
+	if err != nil {
+		t.Fatalf("loadReplaySessionAudioTurns: %v", err)
+	}
+	want := []ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: turn1, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: turn2, EndOfTurn: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loadReplaySessionAudioTurns = %#v, want %#v", got, want)
+	}
+}
+
+func TestLoadReplaySessionAudioTurnsReturnsNilForNonAudioShape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "openai-prompt-replay.session.json")
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version:  gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+		Records: []gwtesting.CapturedSessionEvent{
+			{
+				Sequence:    1,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+			},
+			replayPromptRecord(3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"captured bare prompt"}]}}`),
+			replayResponseCreateRecord(4),
+		},
+	})
+
+	got, err := loadReplaySessionAudioTurns(path)
+	if err != nil {
+		t.Fatalf("loadReplaySessionAudioTurns: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("loadReplaySessionAudioTurns = %#v, want nil for the text-prompt shape", got)
+	}
+}
+
+func TestLoadReplaySessionAudioTurnsRejectsIncompleteOrAmbiguousTurns(t *testing.T) {
+	cases := []struct {
+		name       string
+		records    []gwtesting.CapturedSessionEvent
+		wantReason string
+	}{
+		{
+			name: "missing commit",
+			records: []gwtesting.CapturedSessionEvent{
+				replayAudioAppendRecord(3, []byte{1, 2}),
+			},
+			wantReason: "incomplete recorded audio turn 1",
+		},
+		{
+			name: "missing response.create",
+			records: []gwtesting.CapturedSessionEvent{
+				replayAudioAppendRecord(3, []byte{1, 2}),
+				replayAudioCommitRecord(4),
+			},
+			wantReason: "incomplete recorded audio turn 1",
+		},
+		{
+			name: "second turn does not begin with append",
+			records: []gwtesting.CapturedSessionEvent{
+				replayAudioAppendRecord(3, []byte{1, 2}),
+				replayAudioCommitRecord(4),
+				replayResponseCreateRecord(5),
+				replayPromptRecord(6, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"unexpected"}]}}`),
+			},
+			wantReason: "ambiguous recorded client action at sequence 6",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "openai-audio-turn-replay.session.json")
+			records := append([]gwtesting.CapturedSessionEvent{
+				{
+					Sequence:    1,
+					Direction:   gwtesting.DirectionClientToServer,
+					Type:        sessionUpdateEventType,
+					PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+					Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+				},
+			}, tc.records...)
+			writeSessionCapture(t, path, gwtesting.SessionCapture{
+				Version:  gwtesting.SessionCaptureVersion,
+				Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+				Records:  records,
+			})
+
+			_, err := loadReplaySessionAudioTurns(path)
+			if err == nil || !strings.Contains(err.Error(), tc.wantReason) || !strings.Contains(err.Error(), path) {
+				t.Fatalf("loadReplaySessionAudioTurns error = %v, want path and %q", err, tc.wantReason)
+			}
+		})
+	}
+}
+
+func replayAudioAppendRecord(sequence int, pcm []byte) gwtesting.CapturedSessionEvent {
+	payload := fmt.Sprintf(`{"type":"input_audio_buffer.append","audio":%q}`, base64.StdEncoding.EncodeToString(pcm))
+	return gwtesting.CapturedSessionEvent{
+		Sequence:    sequence,
+		Direction:   gwtesting.DirectionClientToServer,
+		Type:        inputAudioBufferAppendEventType,
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(payload),
+	}
+}
+
+func replayAudioCommitRecord(sequence int) gwtesting.CapturedSessionEvent {
+	return gwtesting.CapturedSessionEvent{
+		Sequence:    sequence,
+		Direction:   gwtesting.DirectionClientToServer,
+		Type:        inputAudioBufferCommitEventType,
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
 	}
 }
 
