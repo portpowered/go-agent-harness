@@ -159,8 +159,8 @@ func TestRunRoomPublishesParticipantLocalBrowserDefinitions(t *testing.T) {
 	if roomDefinitionNamesContain(alphaUpdate, "get_beta_state_v2") {
 		t.Fatalf("alpha refresh advertised beta page tool: %v", alphaUpdate)
 	}
-	if got := sessions["beta"].sentCountSnapshot(); got != 0 {
-		t.Fatalf("beta received %d outbound messages after alpha-only refresh, want none", got)
+	if got := sentSessionUpdateCountSnapshot(sessions["beta"]); got != 0 {
+		t.Fatalf("beta received %d session.update publications after alpha-only refresh, want none", got)
 	}
 
 	setRoomBrowserPublicationCurrent(fixtures["beta"], append(append([]messages.ToolDefinition(nil), stable...), updatedPages["beta"]...))
@@ -170,8 +170,8 @@ func TestRunRoomPublishesParticipantLocalBrowserDefinitions(t *testing.T) {
 	if roomDefinitionNamesContain(betaUpdate, "get_alpha_state_v2") {
 		t.Fatalf("beta refresh advertised alpha page tool: %v", betaUpdate)
 	}
-	if got := sessions["alpha"].sentCountSnapshot(); got != 1 {
-		t.Fatalf("alpha received %d outbound messages after beta-only refresh, want one", got)
+	if got := sentSessionUpdateCountSnapshot(sessions["alpha"]); got != 1 {
+		t.Fatalf("alpha received %d session.update publications after beta-only refresh, want one", got)
 	}
 
 	cancel()
@@ -202,20 +202,46 @@ func setRoomBrowserPublicationCurrent(fixture *roomBrowserPublicationFixture, de
 	fixture.mu.Unlock()
 }
 
+// readRoomBrowserSessionUpdate waits for the next SESSION.UPDATE sent to the
+// participant's provider session, skipping interleaved duplex traffic (the
+// room mixer forwards a real audio frame - silence when nobody is speaking -
+// to every connected participant every MixerConfig.FrameDuration, here 10ms,
+// independent of and concurrent with catalog publication). That ambient
+// traffic is expected system behavior, not a protocol violation, so it must
+// not be mistaken for the specific update this test is waiting on.
 func readRoomBrowserSessionUpdate(t *testing.T, ctx context.Context, session *roomTestSession) []messages.ToolDefinition {
 	t.Helper()
-	msg, ok := session.nextSent(ctx)
-	if !ok {
-		t.Fatalf("timed out waiting for participant browser definition update: %v", ctx.Err())
+	for {
+		msg, ok := session.nextSent(ctx)
+		if !ok {
+			t.Fatalf("timed out waiting for participant browser definition update: %v", ctx.Err())
+		}
+		if msg.Type != messages.StreamTypeSessionUpdate {
+			continue
+		}
+		value, ok := msg.Value.(*messages.SessionUpdateValue)
+		if !ok || value == nil {
+			t.Fatalf("provider message value = %T, want *messages.SessionUpdateValue", msg.Value)
+		}
+		return value.Tools
 	}
-	if msg.Type != messages.StreamTypeSessionUpdate {
-		t.Fatalf("provider message type = %s, want %s", msg.Type, messages.StreamTypeSessionUpdate)
+}
+
+// sentSessionUpdateCountSnapshot counts only SESSION.UPDATE messages sent to
+// the participant's provider session. Publication isolation is about which
+// participant's catalog changes reach which session.update - not about the
+// participant's session.Send traffic overall, which also carries ambient
+// duplex audio (see readRoomBrowserSessionUpdate) unrelated to publication.
+func sentSessionUpdateCountSnapshot(session *roomTestSession) int {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	count := 0
+	for _, msg := range session.sent {
+		if msg.Type == messages.StreamTypeSessionUpdate {
+			count++
+		}
 	}
-	value, ok := msg.Value.(*messages.SessionUpdateValue)
-	if !ok || value == nil {
-		t.Fatalf("provider message value = %T, want *messages.SessionUpdateValue", msg.Value)
-	}
-	return value.Tools
+	return count
 }
 
 func assertRoomBrowserDefinitionNames(t *testing.T, definitions []messages.ToolDefinition, names ...string) {
