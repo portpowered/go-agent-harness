@@ -5,7 +5,9 @@ import (
 	"errors"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"net/http"
 	"strings"
 	"sync"
 )
@@ -13,15 +15,25 @@ import (
 type productionWebMCPComposition struct {
 	mu sync.Mutex
 
-	browser        config.BrowserConfig
-	inputs         discovery.ConnectionInputs
-	discovery      WebMCPDiscoveryService
-	runtime        webmcp.BrowserRuntime
-	catalog        webmcp.DevToolsCatalog
-	activePort     discovery.ActivePortReader
-	idMapper       discovery.IDMapper
-	targetIDMapper discovery.TargetIDMapper
-	clock          discovery.Clock
+	browser         config.BrowserConfig
+	configDir       string
+	inputs          discovery.ConnectionInputs
+	discovery       WebMCPDiscoveryService
+	runtime         webmcp.BrowserRuntime
+	catalog         webmcp.DevToolsCatalog
+	httpClient      *http.Client
+	managedManager  *chrome.ManagedBrowserManager
+	managedBrowser  *chrome.ManagedBrowser
+	managedStart    chan struct{}
+	managedStarting bool
+	managedErr      error
+	closed          bool
+	closeOnce       sync.Once
+	closeErr        error
+	activePort      discovery.ActivePortReader
+	idMapper        discovery.IDMapper
+	targetIDMapper  discovery.TargetIDMapper
+	clock           discovery.Clock
 
 	coreCandidates map[string]webmcp.BrowserCandidate
 	laneCandidates map[string]discovery.BrowserCandidate
@@ -37,6 +49,11 @@ func (p *productionWebMCPComposition) Discover(ctx context.Context, options webm
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
 	}
 	inputs := p.inputs
+	var err error
+	inputs, err = p.managedDiscoveryInputs(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
 	if options.ExplicitOnly {
 		inputs.UserDataDir = ""
 		inputs.ConfiguredSources = nil
@@ -65,6 +82,9 @@ func (p *productionWebMCPComposition) Discover(ctx context.Context, options webm
 func (p *productionWebMCPComposition) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
 	if p == nil || p.runtime == nil {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
+	}
+	if _, err := p.ensureManagedBrowser(ctx); err != nil {
+		return nil, err
 	}
 	enriched, err := p.enrichCoreCandidate(ctx, candidate)
 	if err != nil {
@@ -145,6 +165,18 @@ func (p *productionWebMCPComposition) enrichCoreCandidate(ctx context.Context, c
 }
 
 func (p *productionWebMCPComposition) endpointForLane(ctx context.Context, laneCandidate discovery.BrowserCandidate) (discovery.Endpoint, error) {
+	if p != nil && p.browser.UsesManagedBrowser() && p.browser.BrowserBackendEnabled() {
+		browser, err := p.ensureManagedBrowser(ctx)
+		if err != nil {
+			return discovery.Endpoint{}, err
+		}
+		if browser == nil {
+			return discovery.Endpoint{}, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
+		}
+		endpoint := discovery.Endpoint{CDPURL: browser.Endpoint().CDPURL}
+		p.rememberEndpoint(laneCandidate.ID, endpoint)
+		return endpoint, nil
+	}
 	p.mu.Lock()
 	if endpoint, ok := p.endpoints[laneCandidate.ID]; ok {
 		p.mu.Unlock()
@@ -184,6 +216,132 @@ func (p *productionWebMCPComposition) endpointForLane(ctx context.Context, laneC
 		})
 	}
 	return endpoint, nil
+}
+
+func (p *productionWebMCPComposition) managedDiscoveryInputs(ctx context.Context, inputs discovery.ConnectionInputs) (discovery.ConnectionInputs, error) {
+	if p == nil || !p.browser.UsesManagedBrowser() || !p.browser.BrowserBackendEnabled() {
+		return inputs, nil
+	}
+	browser, err := p.ensureManagedBrowser(ctx)
+	if err != nil {
+		return discovery.ConnectionInputs{}, err
+	}
+	if browser == nil {
+		return discovery.ConnectionInputs{}, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
+	}
+	inputs.CDPURL = browser.Endpoint().CDPURL
+	inputs.BrowserWSEndpoint = ""
+	inputs.UserDataDir = ""
+	inputs.ConfiguredSources = nil
+	inputs.AllowProcessScan = false
+	return inputs, nil
+}
+
+// ensureManagedBrowser is the one lazy launch boundary for the production
+// composition. Concurrent commands wait for the first acquisition and then
+// share the exact persisted browser instead of starting overlapping Chrome
+// processes.
+func (p *productionWebMCPComposition) ensureManagedBrowser(ctx context.Context) (*chrome.ManagedBrowser, error) {
+	if p == nil || !p.browser.UsesManagedBrowser() || !p.browser.BrowserBackendEnabled() {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			return nil, webmcp.ErrClosed
+		}
+		if p.managedBrowser != nil {
+			browser := p.managedBrowser
+			p.mu.Unlock()
+			return browser, nil
+		}
+		if p.managedErr != nil {
+			err := p.managedErr
+			p.mu.Unlock()
+			return nil, err
+		}
+		if p.managedStarting {
+			done := p.managedStart
+			p.mu.Unlock()
+			select {
+			case <-done:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		p.managedStarting = true
+		p.managedStart = make(chan struct{})
+		done := p.managedStart
+		manager := p.managedManager
+		configDir := p.configDir
+		startupURL := p.browser.ManagedStartupURL()
+		headless := p.browser.Managed.Headless
+		httpClient := p.httpClient
+		p.mu.Unlock()
+
+		var browser *chrome.ManagedBrowser
+		var err error
+		if manager == nil {
+			err = errors.New("managed browser lifecycle manager is unavailable")
+		} else {
+			err = nil
+			browser, err = manager.Acquire(ctx, chrome.ManagedBrowserLaunchOptions{
+				ConfigDir:  configDir,
+				StartupURL: startupURL,
+				Headless:   headless,
+				HTTPClient: httpClient,
+			})
+		}
+		p.mu.Lock()
+		p.managedStarting = false
+		if err != nil {
+			p.managedErr = err
+		} else {
+			p.managedBrowser = browser
+		}
+		close(done)
+		p.mu.Unlock()
+		return browser, err
+	}
+}
+
+// Close releases the selected target through discovery and, only when the
+// managed close-on-exit policy is enabled, closes the exact managed browser.
+// The default policy leaves process, profile, and state warm for the next
+// session. External browser configurations never enter this branch.
+func (p *productionWebMCPComposition) Close() error {
+	if p == nil {
+		return nil
+	}
+	p.closeOnce.Do(func() {
+		p.mu.Lock()
+		p.closed = true
+		start := p.managedStart
+		p.mu.Unlock()
+		if start != nil {
+			<-start
+		}
+		p.mu.Lock()
+		service := p.discovery
+		browser := p.managedBrowser
+		closeOnExit := p.browser.Managed.CloseOnExit
+		p.mu.Unlock()
+		var serviceErr error
+		if closer, ok := service.(interface{ Close() error }); ok {
+			serviceErr = closer.Close()
+		}
+		var browserErr error
+		if closeOnExit && browser != nil {
+			browserErr = browser.Close()
+		}
+		p.closeErr = errors.Join(serviceErr, browserErr)
+	})
+	return p.closeErr
 }
 
 func (p *productionWebMCPComposition) endpointFromActivePort(ctx context.Context, userDataDir string) discovery.Endpoint {

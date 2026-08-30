@@ -266,6 +266,10 @@ type ManagedBrowser struct {
 	pid        int
 	process    *managedBrowserProcessState
 	shutdown   time.Duration
+	// closeHook is installed by ManagedBrowserManager. The launcher itself
+	// owns only the process; the manager also owns the persisted identity
+	// record and must serialize close against a later session's reuse.
+	closeHook func() error
 
 	closeOnce sync.Once
 	closeErr  error
@@ -343,6 +347,10 @@ func (b *ManagedBrowser) Close() error {
 		return nil
 	}
 	b.closeOnce.Do(func() {
+		if b.closeHook != nil {
+			b.closeErr = b.closeHook()
+			return
+		}
 		b.closeErr = b.process.stop(b.shutdown)
 	})
 	return b.closeErr

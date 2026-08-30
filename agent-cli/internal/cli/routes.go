@@ -76,6 +76,7 @@ func NewRouter(
 		deviceRegistry = sessionCommand.deviceRegistry
 	}
 	productionWebMCPFactory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionConfigDir(configDirForGlobalFlags(flags)),
 		WithWebMCPProductionSelectionStoreFactory(func() any {
 			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(flags))
 		}),

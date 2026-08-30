@@ -116,10 +116,13 @@ func (c BrowserConfig) BrowserBackendEnabled() bool {
 }
 
 // ConnectionMode returns the ownership mode selected by endpoint precedence.
-// An explicit CDP or WebSocket endpoint always belongs to the caller; an
-// empty endpoint requests an agent-managed browser.
+// An explicit CDP or WebSocket endpoint always belongs to the caller. A
+// configured profile or process scan is also an external discovery request;
+// only a completely endpoint-free connection selects the agent-managed
+// browser.
 func (c BrowserConfig) ConnectionMode() BrowserConnectionMode {
-	if strings.TrimSpace(c.Connection.CDPURL) != "" || strings.TrimSpace(c.Connection.WSEndpoint) != "" {
+	if strings.TrimSpace(c.Connection.CDPURL) != "" || strings.TrimSpace(c.Connection.WSEndpoint) != "" ||
+		strings.TrimSpace(c.Connection.UserDataDir) != "" || c.Connection.AllowProcessScan {
 		return BrowserConnectionModeExternal
 	}
 	return BrowserConnectionModeManaged
