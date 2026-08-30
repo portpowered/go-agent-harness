@@ -74,6 +74,58 @@ func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	}
 }
 
+func TestRunSessionWithMaxDuration_BareLiveReportsListeningAfterSessionCreated(t *testing.T) {
+	clock := &durationTestClock{}
+	writer := newDurationTestWriter()
+	inferencer := &durationTestInferencer{
+		connectedCh: make(chan struct{}),
+	}
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- runAgentLoopSessionWithDurationClock(
+			context.Background(),
+			writer,
+			inferencer,
+			sessionLoopOptions{
+				BareLive:        true,
+				ListeningBanner: "Listening: provider=openai model=gpt-realtime-2.1-mini input-device=virtual:mic output-device=virtual:speaker",
+			},
+			time.Minute,
+			clock,
+		)
+	}()
+
+	select {
+	case <-inferencer.connectedCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare duration session did not connect")
+	}
+	if strings.Contains(writer.String(), "Listening:") {
+		t.Fatalf("bare duration session reported listening before session.created: %q", writer.String())
+	}
+	if !inferencer.session.receive.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("bare-duration-session", "gpt-realtime-2.1-mini"),
+	}) {
+		t.Fatal("bare duration session did not accept session.created")
+	}
+	writer.waitFor(t, "Listening:")
+	clock.fire()
+	select {
+	case err := <-runErrCh:
+		if err != nil {
+			t.Fatalf("bare duration session: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare duration session did not finish after deadline")
+	}
+
+	output := writer.String()
+	if strings.Count(output, "Listening:") != 1 {
+		t.Fatalf("bare duration listening banner count = %d, want one: %q", strings.Count(output, "Listening:"), output)
+	}
+}
+
 func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testing.T) {
 	inner := &durationCompleteMessageSession{
 		complete:        true,

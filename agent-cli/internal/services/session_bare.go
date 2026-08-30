@@ -113,7 +113,7 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 		return SessionRunOptions{}, fmt.Errorf("%w: %q (want %q or %q)", ErrInvalidSessionTransport, resolved.Transport, SessionTransportWebSocket, SessionTransportWebRTC)
 	}
 
-	resolved.TurnDetection, err = resolveBareSessionTurnDetection(loadedCfg.Session)
+	resolved.TurnDetection, resolved.TurnDetectionDisabled, err = resolveBareSessionTurnDetection(loadedCfg.Session)
 	if err != nil {
 		return SessionRunOptions{}, err
 	}
@@ -218,17 +218,17 @@ func resolveBareSessionTransport(opts SessionRunOptions, cfg *config.Config) str
 	return transport
 }
 
-func resolveBareSessionTurnDetection(cfg *config.SessionConfig) (*models.TurnDetectionConfig, error) {
+func resolveBareSessionTurnDetection(cfg *config.SessionConfig) (*models.TurnDetectionConfig, bool, error) {
 	turnDetection := &models.TurnDetectionConfig{Type: "server_vad"}
 	if cfg == nil || cfg.VAD == nil {
-		return turnDetection, nil
+		return turnDetection, false, nil
 	}
 	if cfg.VAD.Enabled != nil && !*cfg.VAD.Enabled {
-		return nil, nil
+		return nil, true, nil
 	}
 	if configuredType := strings.TrimSpace(cfg.VAD.Type); configuredType != "" {
 		if !strings.EqualFold(configuredType, "server_vad") {
-			return nil, fmt.Errorf("bare live session VAD type %q is unsupported; want %q", configuredType, "server_vad")
+			return nil, false, fmt.Errorf("bare live session VAD type %q is unsupported; want %q", configuredType, "server_vad")
 		}
 		turnDetection.Type = configuredType
 	}
@@ -239,7 +239,7 @@ func resolveBareSessionTurnDetection(cfg *config.SessionConfig) (*models.TurnDet
 		createResponse := *cfg.VAD.CreateResponse
 		turnDetection.CreateResponse = &createResponse
 	}
-	return turnDetection, nil
+	return turnDetection, false, nil
 }
 
 func resolveBareSessionTranscription(cfg *config.SessionConfig) models.InputAudioTranscriptionConfig {

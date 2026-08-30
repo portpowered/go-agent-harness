@@ -119,6 +119,7 @@ func populatedSessionConfig() SessionConfig {
 		OutputAudioSampleRate: SampleRate16000,
 		Tools:                 []ToolDefinition{populatedToolDefinition()},
 		TurnDetection:         func() *TurnDetectionConfig { v := populatedTurnDetectionConfig(); return &v }(),
+		TurnDetectionDisabled: true,
 		InputAudioTranscription: func() *InputAudioTranscriptionConfig {
 			v := InputAudioTranscriptionConfig{Enabled: true, Model: DefaultInputAudioTranscriptionModel}
 			return &v

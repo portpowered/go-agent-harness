@@ -82,6 +82,10 @@ type SessionConfig struct {
 	Tools []ToolDefinition `json:"tools,omitempty"`
 	// TurnDetection configures voice activity detection.
 	TurnDetection *TurnDetectionConfig `json:"turn_detection,omitempty"`
+	// TurnDetectionDisabled explicitly disables provider-side voice activity
+	// detection. Together with TurnDetection, this preserves three states for
+	// providers: omitted policy, configured policy, and an explicit null policy.
+	TurnDetectionDisabled bool `json:"turn_detection_disabled,omitempty"`
 	// InputAudioTranscription carries the resolved customer-audio transcription
 	// policy. Providers translate it into their own session-update schema.
 	InputAudioTranscription *InputAudioTranscriptionConfig `json:"input_audio_transcription,omitempty"`

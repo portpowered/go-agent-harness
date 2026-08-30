@@ -204,6 +204,10 @@ type SessionRunOptions struct {
 	// TurnDetection is the resolved server-side VAD policy for a bare live
 	// session. Nil preserves existing non-bare behavior.
 	TurnDetection *models.TurnDetectionConfig
+	// TurnDetectionDisabled preserves an explicit bare-session VAD opt-out when
+	// TurnDetection is nil. False with a nil TurnDetection means no policy was
+	// supplied and lets the provider retain its default.
+	TurnDetectionDisabled bool
 	// Signaling is the selected opaque signaling endpoint. It is consumed by
 	// the WebRTC runtime only; it must remain empty for the WebSocket runtime.
 	Signaling string
@@ -661,6 +665,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		config.TurnDetectionDisabled = opts.TurnDetectionDisabled
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []oaiprovider.Option{
@@ -686,6 +691,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		config.TurnDetectionDisabled = opts.TurnDetectionDisabled
 		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
 		if opts.InputAudioTranscription != nil {
 			inputAudioTranscription = *opts.InputAudioTranscription

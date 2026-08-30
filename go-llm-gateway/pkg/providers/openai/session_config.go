@@ -12,8 +12,9 @@ import (
 
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
 	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
+	disableTurnDetection := p.clientOwnsAudioTurnBoundaries || config.TurnDetectionDisabled
 	if p.realtimeLegacySessionUpdate {
-		return buildLegacyRealtimeSessionUpdate(config, model, p.clientOwnsAudioTurnBoundaries)
+		return buildLegacyRealtimeSessionUpdate(config, model, disableTurnDetection)
 	}
 
 	update := map[string]any{
@@ -26,7 +27,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	if config.Instructions != "" {
 		update["instructions"] = config.Instructions
 	}
-	audio := buildRealtimeAudioConfig(config, p.clientOwnsAudioTurnBoundaries)
+	audio := buildRealtimeAudioConfig(config, disableTurnDetection)
 	if len(audio) > 0 {
 		update["audio"] = audio
 	}

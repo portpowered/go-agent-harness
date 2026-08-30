@@ -120,6 +120,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	promptSent := false
 	closeSent := false
 	closeAfterOpenPending := false
+	listeningReported := false
 	durationExpired := false
 	durationTerminalWritten := false
 	artifacts := sessionDurationArtifactsFromContext(ctx)
@@ -279,10 +280,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if !ok {
 				return finish(durationExpired, nil)
 			}
-			result, msgErr := processDurationLoopMessage(runCtx, observedInferencer.Done(), timerCh, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
+			result, msgErr := processDurationLoopMessage(runCtx, observedInferencer.Done(), timerCh, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, listeningReported, durationTerminalWritten, artifacts, terminalState)
 			promptSent = result.promptSent
 			closeSent = result.closeSent
 			closeAfterOpenPending = result.closeAfterOpenPending
+			listeningReported = result.listeningReported
 			durationTerminalWritten = result.durationTerminalWritten
 			if msgErr != nil {
 				return finishDurationLoopMessageError(msgErr, expire, finish)
@@ -321,16 +323,18 @@ type sessionDurationMessageResult struct {
 	promptSent              bool
 	closeSent               bool
 	closeAfterOpenPending   bool
+	listeningReported       bool
 	durationTerminalWritten bool
 	stop                    bool
 	planned                 bool
 }
 
-func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
+func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, closeAfterOpenPending, listeningReported, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
 	result := sessionDurationMessageResult{
 		promptSent:              promptSent,
 		closeSent:               closeSent,
 		closeAfterOpenPending:   closeAfterOpenPending,
+		listeningReported:       listeningReported,
 		durationTerminalWritten: durationTerminalWritten,
 	}
 	if terminalState != nil {
@@ -348,6 +352,12 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 	opts.observer.observe(msg)
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 		return result, err
+	}
+	if msg.Type == messages.StreamTypeSessionCreated && opts.BareLive && opts.ListeningBanner != "" && !result.listeningReported {
+		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
+			return result, err
+		}
+		result.listeningReported = true
 	}
 	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, deadline, loop, opts.observer, msg); err != nil {
 		return result, err

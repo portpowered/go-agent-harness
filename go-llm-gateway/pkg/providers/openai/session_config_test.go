@@ -180,3 +180,49 @@ func TestBuildRealtimeSessionUpdateInputAudioTranscriptionDoesNotChangeOtherFiel
 		t.Fatalf("configured session.update changed fields beyond transcription:\nwithout=%#v\nwith=%#v", withoutEnvelope.Session, withEnvelope.Session)
 	}
 }
+
+func TestBuildRealtimeSessionUpdate_ExplicitTurnDetectionDisableUsesNull(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		legacy bool
+	}{
+		{name: "GA"},
+		{name: "legacy", legacy: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			provider := &OpenAIProvider{realtimeLegacySessionUpdate: testCase.legacy}
+			event, err := provider.buildRealtimeSessionUpdate(models.SessionConfig{
+				InputAudioFormat:      models.AudioFormatPCM16,
+				OutputAudioFormat:     models.AudioFormatPCM16,
+				TurnDetectionDisabled: true,
+			}, "gpt-realtime")
+			if err != nil {
+				t.Fatalf("build realtime session.update: %v", err)
+			}
+
+			var envelope struct {
+				Session map[string]json.RawMessage `json:"session"`
+			}
+			if err := json.Unmarshal(event.Data, &envelope); err != nil {
+				t.Fatalf("decode session.update: %v", err)
+			}
+			var turnDetection json.RawMessage
+			if testCase.legacy {
+				turnDetection = envelope.Session["turn_detection"]
+			} else {
+				var audio map[string]json.RawMessage
+				if err := json.Unmarshal(envelope.Session["audio"], &audio); err != nil {
+					t.Fatalf("decode GA audio: %v", err)
+				}
+				var input map[string]json.RawMessage
+				if err := json.Unmarshal(audio["input"], &input); err != nil {
+					t.Fatalf("decode GA audio.input: %v", err)
+				}
+				turnDetection = input["turn_detection"]
+			}
+			if string(turnDetection) != "null" {
+				t.Fatalf("turn_detection = %s, want explicit null", turnDetection)
+			}
+		})
+	}
+}

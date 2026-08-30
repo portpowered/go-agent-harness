@@ -103,8 +103,33 @@ func TestResolveBareSessionOptionsHonorsPersistedSessionValues(t *testing.T) {
 	if resolved.TurnDetection == nil || resolved.TurnDetection.Threshold != 0.72 || resolved.TurnDetection.PrefixPaddingMs != 120 || resolved.TurnDetection.SilenceDurationMs != 640 || resolved.TurnDetection.CreateResponse == nil || *resolved.TurnDetection.CreateResponse {
 		t.Fatalf("turn detection = %#v, want persisted policy", resolved.TurnDetection)
 	}
+	if resolved.TurnDetectionDisabled {
+		t.Fatal("turn detection disabled = true, want persisted enabled policy")
+	}
 	if resolved.InputAudioTranscription == nil || resolved.InputAudioTranscription.Enabled || resolved.InputAudioTranscription.Model != "custom-transcriber" {
 		t.Fatalf("input transcription = %#v, want persisted policy", resolved.InputAudioTranscription)
+	}
+}
+
+func TestResolveBareSessionOptionsPreservesExplicitVADDisable(t *testing.T) {
+	vadEnabled := false
+	loaded := &config.Config{
+		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+		Model: config.ModelConfig{
+			Provider: config.ProviderOpenAI,
+			OpenAI:   &config.OpenAIConfig{Model: openAIRealtimeModel, APIKey: "persisted-key"},
+		},
+		Session: &config.SessionConfig{
+			VAD: &config.SessionVADConfig{Enabled: &vadEnabled},
+		},
+	}
+
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	if err != nil {
+		t.Fatalf("ResolveBareSessionOptions(): %v", err)
+	}
+	if resolved.TurnDetection != nil || !resolved.TurnDetectionDisabled {
+		t.Fatalf("turn detection policy = (%#v, disabled=%v), want explicit disabled state", resolved.TurnDetection, resolved.TurnDetectionDisabled)
 	}
 }
 
@@ -241,5 +266,28 @@ func TestNewLiveSessionInferencerCarriesBareAudioPolicies(t *testing.T) {
 	}
 	if config.InputAudioFormat != models.AudioFormatPCM16 || config.OutputAudioFormat != models.AudioFormatPCM16 {
 		t.Fatalf("session audio formats = %q/%q, want PCM16", config.InputAudioFormat, config.OutputAudioFormat)
+	}
+}
+
+func TestNewLiveSessionInferencerCarriesExplicitVADDisable(t *testing.T) {
+	inferencer, _, err := NewLiveSessionInferencer(SessionRunOptions{
+		Provider:              sessionProviderOpenAI,
+		Model:                 openAIRealtimeModel,
+		APIKey:                "bare-test-key",
+		ConfigDir:             t.TempDir(),
+		TurnDetectionDisabled: true,
+	}, "")
+	if err != nil {
+		t.Fatalf("NewLiveSessionInferencer(): %v", err)
+	}
+	requested, ok := inferencer.(interface {
+		Request() inference.SessionRequest
+	})
+	if !ok {
+		t.Fatalf("inferencer type %T does not expose its session request", inferencer)
+	}
+	config := requested.Request().Config
+	if config.TurnDetection != nil || !config.TurnDetectionDisabled {
+		t.Fatalf("session turn detection policy = (%#v, disabled=%v), want explicit disabled state", config.TurnDetection, config.TurnDetectionDisabled)
 	}
 }
