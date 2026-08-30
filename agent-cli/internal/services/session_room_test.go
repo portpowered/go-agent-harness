@@ -547,6 +547,7 @@ type roomTestInferencer struct {
 	connectErr   error
 	events       []messages.StreamMessage
 	disconnect   bool
+	terminalErr  error
 	onConnect    func()
 	closeStarted chan struct{}
 	closeRelease <-chan struct{}
@@ -565,6 +566,7 @@ func (i *roomTestInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 	session := newRoomTestSession()
 	session.closeStarted = i.closeStarted
 	session.closeRelease = i.closeRelease
+	session.terminalErr = i.terminalErr
 	i.mu.Lock()
 	i.sessions = append(i.sessions, session)
 	i.mu.Unlock()
@@ -595,6 +597,7 @@ type roomTestSession struct {
 
 	mu             sync.Mutex
 	closeCalls     int
+	terminalErr    error
 	sent           []messages.StreamMessage
 	sentRead       int
 	once           sync.Once
@@ -635,6 +638,12 @@ func (s *roomTestSession) Receive() *messages.TypedBuffer[messages.StreamMessage
 
 func (s *roomTestSession) Done() <-chan struct{} {
 	return s.done
+}
+
+func (s *roomTestSession) TerminalError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.terminalErr
 }
 
 func (s *roomTestSession) Close() error {

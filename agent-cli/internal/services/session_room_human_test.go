@@ -164,6 +164,40 @@ func TestRunRoom_HumanDeviceReadFailureFailsWholeRoom(t *testing.T) {
 	}
 }
 
+func TestRunRoom_HumanProviderFailureCancelsLocalParticipant(t *testing.T) {
+	registry := newRoomHumanTestRegistry(t)
+	providerErr := errors.New("provider transport failed after secret-room-key")
+	inferencer := &roomTestInferencer{
+		events:      []messages.StreamMessage{roomTestSessionOpen("agent")},
+		disconnect:  true,
+		terminalErr: providerErr,
+	}
+	opts := newRoomHumanRunOptions(registry, inferencer)
+
+	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
+	if err == nil || result.Reason != RoomTerminationFailed {
+		t.Fatalf("provider failure result=%+v err=%v, want failed room", result, err)
+	}
+	if stringsContainsAny(result.Error, "secret-room-key") || stringsContainsAny(err.Error(), "secret-room-key") {
+		t.Fatalf("provider failure leaked provider secret: result=%q err=%q", result.Error, err)
+	}
+	if !stringsContainsAny(result.Error, "provider transport failed") || len(result.ActiveParticipants) != 0 {
+		t.Fatalf("provider failure result = %+v, want redacted provider failure and no active participants", result)
+	}
+	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
+		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
+	}
+	sessions := inferencer.sessionsSnapshot()
+	if len(sessions) != 1 || sessions[0].closeCallsSnapshot() != 1 {
+		t.Fatalf("provider sessions=%d close_calls=%d, want one closed session", len(sessions), func() int {
+			if len(sessions) == 0 {
+				return 0
+			}
+			return sessions[0].closeCallsSnapshot()
+		}())
+	}
+}
+
 func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTestInferencer) RoomRunOptions {
 	return RoomRunOptions{
 		Manifest: room.Manifest{

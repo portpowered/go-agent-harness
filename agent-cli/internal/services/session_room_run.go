@@ -325,8 +325,19 @@ func collectRoomParticipantResults(
 				continue
 			}
 			delete(pending, id)
-			if result.connectErr != nil && !coordinator.isStopping() {
-				coordinator.fail(roomParticipantFailure(id, result.connectErr, secretsForPlan(result.plan)))
+			if !coordinator.isStopping() {
+				failure := result.connectErr
+				if failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
+					// A provider can connect successfully and then terminate with a
+					// transport/session error. Treat that runtime failure as a room
+					// failure too, so the coordinator cancels the human/device
+					// participant and every other sibling instead of leaving the room
+					// blocked on local capture or playback.
+					failure = result.err
+				}
+				if failure != nil {
+					coordinator.fail(roomParticipantFailure(id, failure, append(secretsForPlan(result.plan), secrets...)))
+				}
 			}
 			finishRoomParticipant(coordinator, mesh, result, secretsForPlan(result.plan), cleanup)
 			if coordinator.isStopping() {
