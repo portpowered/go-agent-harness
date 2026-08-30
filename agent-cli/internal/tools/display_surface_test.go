@@ -419,7 +419,12 @@ func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
 			return name, nil
 		},
 	}
-	capability, err := NewHostDisplaySurface(process).Probe(context.Background())
+	capability, err := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		Process: process,
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	}).Probe(context.Background())
 	if err != nil || !capability.Usable() {
 		t.Fatalf("display probe = %#v, err = %v", capability, err)
 	}
