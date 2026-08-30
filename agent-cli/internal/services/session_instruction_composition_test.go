@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
@@ -181,6 +182,85 @@ func TestComposeSessionInstructionsIsIdempotentAndLeavesNoToolsUnchanged(t *test
 	withoutTools := composeSessionInstructions(SessionRunOptions{}, "customer instructions")
 	if withoutTools != "customer instructions" {
 		t.Fatalf("no-tools composition = %q, want unchanged customer instructions", withoutTools)
+	}
+}
+
+func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *testing.T) {
+	states := []webmcp.BrowserCapabilityState{
+		webmcp.BrowserCapabilityDisabled,
+		webmcp.BrowserCapabilityUnavailable,
+		webmcp.BrowserCapabilityDisconnected,
+		webmcp.BrowserCapabilitySelected,
+	}
+	for _, state := range states {
+		t.Run(string(state), func(t *testing.T) {
+			got := composeSessionInstructions(SessionRunOptions{
+				BrowserCapabilityState: state,
+				ToolDefinitions:        []messages.ToolDefinition{{Name: webmcp.ListTabsToolName}},
+			}, "customer instructions")
+			if strings.Contains(got, sessionConnectedUnselectedBrowserGrounding) || strings.Contains(got, "browser endpoint is connected") {
+				t.Fatalf("state %q received connected-unselected grounding: %q", state, got)
+			}
+		})
+	}
+
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
+		ToolDefinitions:        []messages.ToolDefinition{{Name: webmcp.ListTabsToolName}, {Name: webmcp.SelectTabToolName}},
+	}, "customer instructions")
+	for _, want := range []string{
+		"browser endpoint is connected",
+		"no page is selected",
+		webmcp.ListTabsToolName,
+		"ask the customer which page to use",
+		"exact browser_id and target_id",
+		"do not invoke page tools",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("connected-unselected instructions = %q, missing %q", got, want)
+		}
+	}
+	if strings.Count(got, "WebMCP browser selection:") != 1 || strings.Count(got, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("connected-unselected grounding is not bounded/idempotent: %q", got)
+	}
+}
+
+func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
+	opts := SessionRunOptions{
+		RecordPath:   filepath.Join(t.TempDir(), "session.json"),
+		Provider:     config.ProviderOpenAI,
+		Model:        openAIRealtimeDefaultModel,
+		APIKey:       "test-key",
+		ConfigDir:    configDir,
+		ToolExecutor: &messages.DefaultToolExecutor{},
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
+	}
+
+	plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
+	if err != nil {
+		t.Fatalf("build planner: %v", err)
+	}
+	request := sessionRequestFromPlanner(t, plan.inferencer)
+	for _, want := range []string{
+		"browser endpoint is connected",
+		"no page is selected",
+		"Before any page work, call webmcp_list_tabs",
+		"ask the customer which page to use",
+		"exact browser_id and target_id",
+		"do not invoke page tools",
+	} {
+		if !strings.Contains(request.Config.Instructions, want) {
+			t.Fatalf("provider instructions = %q, missing %q", request.Config.Instructions, want)
+		}
+	}
+	if !strings.HasPrefix(request.Config.Instructions, "customer instructions\n\n") {
+		t.Fatalf("provider instructions = %q, want customer instructions first", request.Config.Instructions)
 	}
 }
 

@@ -28,6 +28,10 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// BrowserCapabilityState is the session-owned browser state used to
+	// compose model-facing grounding. It is independent from whether the
+	// current definition snapshot happens to contain first-class page tools.
+	BrowserCapabilityState webmcp.BrowserCapabilityState
 	// DisplayCapability is the immutable host-surface admission result used
 	// to derive both display-dependent definitions and executor routes.
 	DisplayCapability SessionDisplayCapability
@@ -61,6 +65,7 @@ type resolvedSessionToolSurface struct {
 	executor        messages.ToolExecutor
 	definitions     []messages.ToolDefinition
 	base            []messages.ToolDefinition
+	browserState    webmcp.BrowserCapabilityState
 	refresh         func(context.Context) ([]messages.ToolDefinition, error)
 	browserWatch    func(context.Context) <-chan webmcp.BrokerEvent
 	capabilityClose func() error
@@ -77,8 +82,15 @@ func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapa
 		executor:     capabilities.Executor,
 		definitions:  append([]messages.ToolDefinition(nil), capabilities.Definitions...),
 		base:         append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		browserState: capabilities.BrowserCapabilityState,
 		refresh:      capabilities.RefreshDefinitionsWithError,
 		browserWatch: capabilities.BrowserWatch,
+	}
+	if capabilities.Status != nil {
+		status := capabilities.Status()
+		if status.BrowserCapabilityState != "" {
+			result.browserState = status.BrowserCapabilityState
+		}
 	}
 	if result.refresh == nil && capabilities.RefreshDefinitions != nil {
 		result.refresh = func(ctx context.Context) ([]messages.ToolDefinition, error) {
@@ -109,8 +121,9 @@ const (
 
 // SessionCapabilityStatus is a read-only snapshot of capability setup.
 type SessionCapabilityStatus struct {
-	State SessionCapabilityState
-	Err   error
+	State                  SessionCapabilityState
+	Err                    error
+	BrowserCapabilityState webmcp.BrowserCapabilityState
 }
 
 // SessionCapabilityInitializer is the optional lifecycle seam exposed by a
@@ -610,6 +623,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			var refreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 			var capabilityClose func() error
 			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
+			browserCapabilityState := webmcp.BrowserCapabilityDisabled
 			if c.sessionToolCapabilities != nil && !bareSession {
 				if loadedConfig == nil {
 					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
@@ -627,6 +641,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				toolDefinitionBase = surface.base
 				refreshDefinitionsWithError = surface.refresh
 				browserWatch = surface.browserWatch
+				if surface.browserState != "" {
+					browserCapabilityState = surface.browserState
+				}
 				capabilityClose = surface.capabilityClose
 			}
 			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)
@@ -658,6 +675,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ToolDefinitionBase:     toolDefinitionBase,
 				RefreshToolDefinitions: refreshDefinitionsWithError,
 				BrowserWatch:           browserWatch,
+				BrowserCapabilityState: browserCapabilityState,
 				AudioInterruptions:     audioInterruptions,
 				CapabilityClose:        capabilityClose,
 				CancellationIntent:     cancellationIntent,

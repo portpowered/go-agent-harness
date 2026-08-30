@@ -243,6 +243,10 @@ type SessionRunOptions struct {
 	// BrowserWatch supplies an independent subscription to semantic broker
 	// selection/catalog/generation events for this session.
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
+	// BrowserCapabilityState is the session-owned browser state used to compose
+	// model-facing selection grounding. It must not be inferred from the
+	// presence or absence of dynamic page definitions.
+	BrowserCapabilityState webmcp.BrowserCapabilityState
 	// BrowserToolsEnabled records the resolved browser capability admission.
 	// It allows an explicitly activated live session to run without requiring
 	// the legacy provider-recording flag while keeping ordinary sessions on

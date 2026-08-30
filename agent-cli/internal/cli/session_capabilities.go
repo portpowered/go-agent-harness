@@ -106,9 +106,10 @@ func newSessionToolCapabilitiesFactory(
 
 		if cfg == nil || !cfg.Browser.BrowserBackendEnabled() {
 			return SessionToolCapabilities{
-				Executor:          resolvedStaticExecutor,
-				Definitions:       staticDefinitions,
-				DisplayCapability: displayCapability,
+				Executor:               resolvedStaticExecutor,
+				Definitions:            staticDefinitions,
+				BrowserCapabilityState: webmcp.BrowserCapabilityDisabled,
+				DisplayCapability:      displayCapability,
 			}, nil
 		}
 
@@ -159,9 +160,10 @@ func newSessionToolCapabilitiesFactory(
 			return append(refreshed, pageDefinitions...), nil
 		}
 		capabilities := SessionToolCapabilities{
-			Executor:          surface.Executor,
-			Definitions:       surface.Definitions,
-			DisplayCapability: displayCapability,
+			Executor:               surface.Executor,
+			Definitions:            surface.Definitions,
+			BrowserCapabilityState: sessionInitialBrowserCapabilityState(broker),
+			DisplayCapability:      displayCapability,
 			// After the capability bootstrap has connected the broker, the
 			// connected page catalog is advertised as first-class session
 			// tools alongside the composed surface. Page-tool calls resolve
@@ -291,8 +293,9 @@ func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, fact
 		closeRuntime: runtime.Close,
 		initDone:     make(chan struct{}),
 		initState:    SessionCapabilityInitializing,
+		browserState: webmcp.BrowserCapabilityInitializing,
 	}
-	broker.bootstrap = sessionCapabilityBootstrap(browser, runtime.Discovery, runtime.Broker)
+	broker.bootstrap = sessionCapabilityBootstrapWithState(browser, runtime.Discovery, runtime.Broker, broker.setBrowserCapabilityState)
 	return broker, nil
 }
 
@@ -302,15 +305,16 @@ type sessionBrowserBroker struct {
 	closeOnce    sync.Once
 	closeErr     error
 
-	bootstrap   func(context.Context) error
-	initOnce    sync.Once
-	initDone    chan struct{}
-	initMu      sync.Mutex
-	initStarted bool
-	initState   SessionCapabilityState
-	initErr     error
-	initCancel  context.CancelFunc
-	closed      bool
+	bootstrap    func(context.Context) error
+	initOnce     sync.Once
+	initDone     chan struct{}
+	initMu       sync.Mutex
+	initStarted  bool
+	initState    SessionCapabilityState
+	initErr      error
+	initCancel   context.CancelFunc
+	browserState webmcp.BrowserCapabilityState
+	closed       bool
 }
 
 func (b *sessionBrowserBroker) Close() error {
@@ -331,6 +335,7 @@ func (b *sessionBrowserBroker) Close() error {
 			b.initStarted = true
 			b.initErr = webmcp.ErrClosed
 			b.initState = SessionCapabilityFailed
+			b.browserState = webmcp.BrowserCapabilityDisconnected
 			close(done)
 		}
 		b.initMu.Unlock()
