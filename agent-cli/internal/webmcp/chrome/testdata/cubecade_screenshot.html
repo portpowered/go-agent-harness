@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cubecade screenshot fixture</title>
+  <style>
+    :root {
+      --ink: #f7f1df;
+      --acid: #c9ff39;
+      --pink: #ff4da6;
+      --orange: #ff7b2f;
+      --blue: #47a7ff;
+      --night: #0b0b19;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(circle at 70% 30%, #252143 0, var(--night) 58%);
+      font-family: Arial, sans-serif;
+    }
+
+    .arcade-shell {
+      width: min(960px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 28px 36px;
+    }
+
+    .topbar, .score-head, .legend, .solved {
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar {
+      justify-content: space-between;
+      border-bottom: 1px solid #403b60;
+      padding-bottom: 18px;
+      letter-spacing: 2px;
+      font-size: 12px;
+    }
+
+    .topbar .solved { margin-top: 0; }
+
+    .brand { font-size: 22px; font-weight: 800; }
+    .brand span span { color: var(--pink); }
+    .status-dot { width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--acid); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 34px;
+      align-items: center;
+      padding: 70px 0 40px;
+    }
+
+    .eyebrow, .score-head, .legend { color: #aaa7b9; font-size: 11px; letter-spacing: 2px; }
+    h1 { margin: 12px 0; font-size: clamp(42px, 7vw, 74px); line-height: .9; }
+    h1 em { color: var(--pink); font-style: normal; }
+    .lede { max-width: 360px; color: #c5bfd5; line-height: 1.5; }
+
+    .stage {
+      display: grid;
+      grid-template-columns: repeat(3, 70px);
+      gap: 8px;
+      justify-content: center;
+      padding: 35px 20px;
+      border: 1px solid #4c4670;
+      background: #15132c;
+      transform: rotate(-4deg);
+      box-shadow: 18px 18px 0 #090812;
+    }
+
+    .stage b { display: block; height: 70px; border: 2px solid #0b0b19; }
+    .u { background: #f7f1df; }
+    .r { background: #ff496c; }
+    .f { background: #39ed82; }
+    .d { background: #ffd83d; }
+    .l { background: #ff8c30; }
+    .back { background: var(--blue); }
+
+    .score-card {
+      grid-column: 1 / -1;
+      padding: 18px 20px;
+      border: 1px solid #403b60;
+      background: rgba(21, 19, 44, .9);
+    }
+
+    .score-head { justify-content: space-between; }
+    .score-head b { color: var(--acid); }
+    .score-row { display: flex; gap: 70px; margin-top: 16px; }
+    .score small { display: block; color: #aaa7b9; font-size: 10px; letter-spacing: 1px; }
+    .score strong { font-size: 34px; }
+    .solved { gap: 9px; margin-top: 17px; color: var(--acid); font-size: 13px; font-weight: 700; }
+    .solved i { width: 18px; height: 18px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 14px var(--acid); }
+
+    .legend { gap: 12px; margin-top: 22px; }
+    .legend strong { color: var(--ink); letter-spacing: 0; }
+
+    @media (max-width: 650px) {
+      .arcade-shell { padding: 20px; }
+      .hero { grid-template-columns: 1fr; padding-top: 42px; }
+      .stage { grid-row: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="arcade-shell">
+    <header class="topbar">
+      <div class="brand"><span>◈ CUBE<span>CADE</span></span></div>
+      <div class="solved yes"><i></i>SOLVED!</div>
+      <div><span class="status-dot"></span> WEBMCP READY</div>
+    </header>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">INSERT CURIOSITY</p>
+        <h1>Twist the<br><em>impossible.</em></h1>
+        <p class="lede">A deterministic neon cube lab used to verify selected-page sight.</p>
+      </div>
+      <div class="stage" aria-label="six color cube faces">
+        <b class="u"></b><b class="r"></b><b class="f"></b>
+        <b class="d"></b><b class="l"></b><b class="back"></b>
+      </div>
+      <aside class="score-card">
+        <div class="score-head"><span>PLAYER 01</span><b>LIVE</b></div>
+        <div class="score-row">
+          <div class="score"><small>MOVES</small><strong>000</strong></div>
+          <div class="score"><small>QUEUE</small><strong>00</strong></div>
+          <div class="solved yes"><i></i>SOLVED!</div>
+        </div>
+        <div class="legend">FIXTURE MARKER <strong>CUBECADE-SOLVED-NEON</strong></div>
+      </aside>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const modelContext = document.modelContext || navigator.modelContext;
+      if (!modelContext || typeof modelContext.registerTool !== "function") return;
+      modelContext.registerTool({
+        name: "read_cube_state",
+        title: "Read cube state",
+        description: "Read the deterministic Cubecade fixture state.",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        execute: async () => ({ solved: true, marker: "CUBECADE-SOLVED-NEON" })
+      }).catch(() => {});
+    })();
+  </script>
+</body>
+</html>

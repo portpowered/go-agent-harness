@@ -55,13 +55,7 @@ func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
 	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("screenshot result shape = %#v", msgs)
 	}
-	if got := msgs[0].TextContent(); got != "Screenshot: display 0 ("+strconv.Itoa(bounds.Dx())+"x"+strconv.Itoa(bounds.Dy())+" px)" {
-		t.Fatalf("screenshot text = %q", got)
-	}
-	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
-	if !ok || part.MediaType != "image/jpeg" || len(part.Bytes) == 0 {
-		t.Fatalf("screenshot image part = %#v", msgs[0].ContentParts[1])
-	}
+	part := assertScreenResult(t, msgs[0], "image/jpeg", bounds.Dx(), bounds.Dy())
 
 	msgs, err = tool.Execute(context.Background(), map[string]any{"action": "record", "duration": float64(1), "fps": float64(1)})
 	if err != nil {

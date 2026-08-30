@@ -173,6 +173,38 @@ func (s *ScriptedTargetSession) EnableWebMCP(ctx context.Context) error {
 	return nil
 }
 
+// CapturePageScreenshot implements the optional page-capture capability for
+// hermetic broker tests. The target identity is always taken from this
+// attached session, so a fixture cannot accidentally return another page's
+// capture.
+func (s *ScriptedTargetSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	if err := contextError(ctx); err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return webmcp.PageScreenshot{}, webmcp.ErrClosed
+	}
+	err := s.options.PageScreenshotError
+	screenshot := clonePageScreenshot(s.options.PageScreenshot)
+	page := s.context
+	target := s.target
+	s.mu.Unlock()
+	if err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	s.runtime.record(Operation{
+		Kind:       OperationCapturePageScreenshot,
+		BrowserID:  target.BrowserID,
+		TargetID:   target.ID,
+		Generation: page.Generation,
+	})
+	screenshot.BrowserID = target.BrowserID
+	screenshot.TargetID = target.ID
+	return screenshot, nil
+}
+
 func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
 	if err := contextError(ctx); err != nil {
 		return "", err

@@ -347,6 +347,27 @@ func (b *sessionBrowserBroker) WaitInvocation(ctx context.Context, id webmcp.Inv
 	return waiter.WaitInvocation(ctx, id)
 }
 
+// CapturePageScreenshot forwards the optional page-capture capability through
+// the session coordinator so initialization and cleanup remain owned by the
+// same browser capability lifetime as the other broker tools.
+func (b *sessionBrowserBroker) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.PageScreenshot{}, errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	capturer, ok := b.Broker.(webmcp.PageScreenshotter)
+	if !ok {
+		return webmcp.PageScreenshot{}, webmcp.NewClassifiedError(
+			webmcp.ErrorUnsupportedWebMCP,
+			"the selected browser page does not support screenshot capture",
+			map[string]any{"capability": webmcp.PageCaptureScreenshotMethod},
+		)
+	}
+	return capturer.CapturePageScreenshot(ctx)
+}
+
 // SelectedWithRefresh preserves the production broker's refresh extension;
 // older injected brokers retain the frozen Selected behavior.
 func (b *sessionBrowserBroker) SelectedWithRefresh(ctx context.Context, refresh bool) (webmcp.PageContext, error) {

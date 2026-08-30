@@ -54,6 +54,26 @@ type TargetSession interface {
 	Close() error
 }
 
+// PageScreenshot is the browser-adapter result for a screenshot of the exact
+// target session that received the request. Bytes stay inside the adapter and
+// tool boundary; callers must validate and project them before exposing any
+// model-facing result.
+type PageScreenshot struct {
+	BrowserID BrowserID
+	TargetID  TargetID
+	MIMEType  string
+	Bytes     []byte
+	Width     int
+	Height    int
+}
+
+// PageScreenshotter is an optional target/broker capability. Keeping page
+// capture outside the frozen interfaces preserves compatibility with browser
+// implementations that only support the original WebMCP operations.
+type PageScreenshotter interface {
+	CapturePageScreenshot(context.Context) (PageScreenshot, error)
+}
+
 type Broker interface {
 	Discover(context.Context, DiscoverOptions) ([]BrowserCandidate, error)
 	ListTargets(context.Context, BrowserSelector) ([]Target, error)

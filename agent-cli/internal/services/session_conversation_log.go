@@ -76,6 +76,24 @@ type sessionConversationToolEvent struct {
 	Arguments  string
 	Status     string
 	Content    string
+	Image      *sessionConversationImageEvidence
+}
+
+// sessionConversationImageEvidence correlates a successful capture's typed
+// projection with the immutable file emitted into the recording bundle.
+// Browser identity is retained only as selected-target metadata; pixels stay
+// in the artifact file and never get copied into session-log.jsonl.
+type sessionConversationImageEvidence struct {
+	Path            string `json:"path"`
+	Source          string `json:"source"`
+	BrowserID       string `json:"browser_id,omitempty"`
+	TargetID        string `json:"target_id,omitempty"`
+	MIMEType        string `json:"mime_type"`
+	ByteLength      int    `json:"byte_length"`
+	Width           int    `json:"width"`
+	Height          int    `json:"height"`
+	SHA256          string `json:"sha256"`
+	TypedProjection string `json:"typed_projection"`
 }
 
 func (e sessionConversationToolEvent) MarshalJSON() ([]byte, error) {
@@ -93,29 +111,31 @@ func (e sessionConversationToolEvent) MarshalJSON() ([]byte, error) {
 		})
 	case sessionToolEventTypeResult:
 		return json.Marshal(struct {
-			Sequence   uint64 `json:"sequence"`
-			Type       string `json:"type"`
-			ToolCallID string `json:"tool_call_id"`
-			ToolName   string `json:"tool_name"`
-			Status     string `json:"status"`
-			Content    string `json:"content"`
+			Sequence   uint64                            `json:"sequence"`
+			Type       string                            `json:"type"`
+			ToolCallID string                            `json:"tool_call_id"`
+			ToolName   string                            `json:"tool_name"`
+			Status     string                            `json:"status"`
+			Content    string                            `json:"content"`
+			Image      *sessionConversationImageEvidence `json:"image,omitempty"`
 		}{
 			Sequence: e.Sequence, Type: e.Type, ToolCallID: e.ToolCallID,
-			ToolName: e.ToolName, Status: e.Status, Content: e.Content,
+			ToolName: e.ToolName, Status: e.Status, Content: e.Content, Image: e.Image,
 		})
 	default:
 		return json.Marshal(struct {
-			Sequence   uint64 `json:"sequence"`
-			Type       string `json:"type"`
-			ToolCallID string `json:"tool_call_id"`
-			ToolName   string `json:"tool_name"`
-			Arguments  string `json:"arguments,omitempty"`
-			Status     string `json:"status,omitempty"`
-			Content    string `json:"content,omitempty"`
+			Sequence   uint64                            `json:"sequence"`
+			Type       string                            `json:"type"`
+			ToolCallID string                            `json:"tool_call_id"`
+			ToolName   string                            `json:"tool_name"`
+			Arguments  string                            `json:"arguments,omitempty"`
+			Status     string                            `json:"status,omitempty"`
+			Content    string                            `json:"content,omitempty"`
+			Image      *sessionConversationImageEvidence `json:"image,omitempty"`
 		}{
 			Sequence: e.Sequence, Type: e.Type, ToolCallID: e.ToolCallID,
 			ToolName: e.ToolName, Arguments: e.Arguments, Status: e.Status,
-			Content: e.Content,
+			Content: e.Content, Image: e.Image,
 		})
 	}
 }
@@ -169,7 +189,7 @@ func (c *sessionConversationCollector) observeToolCall(call messages.ToolCall) {
 	})
 }
 
-func (c *sessionConversationCollector) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
+func (c *sessionConversationCollector) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool, image ...*sessionConversationImageEvidence) {
 	if c == nil {
 		return
 	}
@@ -178,6 +198,10 @@ func (c *sessionConversationCollector) observeToolResult(call messages.ToolCall,
 	if failed {
 		status = sessionToolEventStatusFail
 	}
+	var imageEvidence *sessionConversationImageEvidence
+	if len(image) > 0 {
+		imageEvidence = image[0]
+	}
 	c.current.toolEvents = append(c.current.toolEvents, sessionConversationToolEvent{
 		Sequence:   c.nextToolSequence,
 		Type:       sessionToolEventTypeResult,
@@ -185,6 +209,7 @@ func (c *sessionConversationCollector) observeToolResult(call messages.ToolCall,
 		ToolName:   call.Name,
 		Status:     status,
 		Content:    boundSessionToolEventValue(response.Content),
+		Image:      imageEvidence,
 	})
 }
 

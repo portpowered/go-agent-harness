@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -241,6 +242,13 @@ func sessionToolContextFailure(err error) error {
 func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResponse {
 	if err == nil {
 		err = errors.New("tool execution failed")
+	}
+	if call.Name == cliTools.ScreenToolID {
+		return messages.ToolCallResponse{
+			ToolCallID: call.ID,
+			Name:       call.Name,
+			Content:    cliTools.ScreenToolErrorResult(err),
+		}
 	}
 	message := fmt.Sprintf("tool %q failed", call.Name)
 	if errors.Is(err, ErrSessionToolTimeout) || errors.Is(err, context.DeadlineExceeded) {

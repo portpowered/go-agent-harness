@@ -155,6 +155,51 @@ func TestProductionWebMCPSessionRebasesRawGenerationForPersistedSelection(t *tes
 	}
 }
 
+func TestProductionWebMCPSessionMapsRawScreenshotIdentity(t *testing.T) {
+	raw := &productionScreenshotSession{
+		productionFakeSession: &productionFakeSession{
+			runtime: &productionFakeRuntime{},
+			page: webmcp.PageContext{
+				Key:        webmcp.PageKey{BrowserID: "browser-raw", TargetID: "raw-target"},
+				Generation: 1,
+				Connected:  true,
+			},
+		},
+		screenshot: webmcp.PageScreenshot{
+			BrowserID: "browser-raw",
+			TargetID:  "raw-target",
+			MIMEType:  "image/png",
+			Bytes:     []byte{1, 2, 3},
+			Width:     320,
+			Height:    200,
+		},
+	}
+	session, err := newProductionWebMCPSession(raw, webmcp.Target{
+		BrowserID:  "browser-public",
+		ID:         "target-public",
+		Generation: 4,
+	})
+	if err != nil {
+		t.Fatalf("construct production session: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	capturer, ok := session.(webmcp.PageScreenshotter)
+	if !ok {
+		t.Fatal("production session does not expose page capture")
+	}
+	got, err := capturer.CapturePageScreenshot(context.Background())
+	if err != nil {
+		t.Fatalf("capture production screenshot: %v", err)
+	}
+	if got.BrowserID != "browser-public" || got.TargetID != "target-public" {
+		t.Fatalf("production screenshot identity = %q/%q, want public selection", got.BrowserID, got.TargetID)
+	}
+	if string(got.Bytes) != string([]byte{1, 2, 3}) || got.MIMEType != "image/png" || got.Width != 320 || got.Height != 200 {
+		t.Fatalf("production screenshot payload = %+v, want raw capture preserved", got)
+	}
+}
+
 func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testing.T) {
 	var server *httptest.Server
 	var mu sync.Mutex
@@ -722,6 +767,18 @@ type productionFakeSession struct {
 	once      sync.Once
 	mu        sync.Mutex
 	ready     bool
+}
+
+type productionScreenshotSession struct {
+	*productionFakeSession
+	screenshot webmcp.PageScreenshot
+}
+
+func (s *productionScreenshotSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	if err := ctx.Err(); err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	return s.screenshot, nil
 }
 
 func (s *productionFakeSession) init() {

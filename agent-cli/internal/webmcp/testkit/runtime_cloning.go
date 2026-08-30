@@ -12,8 +12,14 @@ func cloneTarget(target webmcp.Target) webmcp.Target { return target }
 func cloneTargetConfig(config TargetConfig) TargetConfig {
 	config.Session.EnableEvents = cloneEvents(config.Session.EnableEvents)
 	config.Session.InitialCatalog = cloneTools(config.Session.InitialCatalog)
+	config.Session.PageScreenshot = clonePageScreenshot(config.Session.PageScreenshot)
 	config.Session.AutoResponseOutput = cloneBytes(config.Session.AutoResponseOutput)
 	return config
+}
+
+func clonePageScreenshot(screenshot webmcp.PageScreenshot) webmcp.PageScreenshot {
+	screenshot.Bytes = cloneBytes(screenshot.Bytes)
+	return screenshot
 }
 
 func cloneTool(tool webmcp.ToolDescriptor) webmcp.ToolDescriptor {

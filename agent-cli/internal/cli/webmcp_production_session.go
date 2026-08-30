@@ -132,6 +132,31 @@ func (s *productionTargetSession) EnableWebMCP(ctx context.Context) error {
 	return s.flushEvents(ctx)
 }
 
+func (s *productionTargetSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	if s == nil || s.raw == nil {
+		return webmcp.PageScreenshot{}, webmcp.ErrClosed
+	}
+	capturer, ok := s.raw.(webmcp.PageScreenshotter)
+	if !ok {
+		return webmcp.PageScreenshot{}, webmcp.NewClassifiedError(
+			webmcp.ErrorUnsupportedWebMCP,
+			"the selected browser page does not support screenshot capture",
+			map[string]any{"capability": webmcp.PageCaptureScreenshotMethod},
+		)
+	}
+	screenshot, err := capturer.CapturePageScreenshot(ctx)
+	if err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	// The raw Chrome adapter reports the protocol target ID. This bridge owns
+	// the public discovery identity, so remap the successful capture before it
+	// reaches the neutral broker's exact-selection check.
+	screenshot.BrowserID = s.target.BrowserID
+	screenshot.TargetID = s.target.ID
+	screenshot.Bytes = append([]byte(nil), screenshot.Bytes...)
+	return screenshot, nil
+}
+
 func (s *productionTargetSession) Events() <-chan webmcp.BrowserEvent { return s.events }
 
 func (s *productionTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
