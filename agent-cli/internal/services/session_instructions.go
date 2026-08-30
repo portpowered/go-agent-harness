@@ -353,10 +353,19 @@ const sessionConnectedUnselectedBrowserGrounding = `WebMCP browser selection:
 - After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.
 - Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.`
 
+const sessionWebMCPAmbiguityPolicy = `WebMCP ambiguity recovery:
+- A failed WebMCP result with error.code "ambiguous_browser" or error.code "ambiguous_tab" and details.recovery.action "ask_customer" is a pending customer choice, not permission to retry the same call.
+- Ask exactly one concise spoken/text question before any additional browser tool call. For ambiguous_tab, name every candidate in details.candidate_choices with its safe title and origin; if a label is unavailable, name its exact candidate ID. For ambiguous_browser, name every exact ID in details.candidate_browser_ids. Do not claim that a page was selected.
+- Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.
+- After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.`
+
 // composeSessionInstructions preserves the selected customer instructions and
 // adds the provider-neutral grounding contract exactly once for tool-enabled
-// sessions. The no-tools path remains byte-for-byte unchanged, and callers
-// that already supplied the policy do not receive a duplicate copy.
+// sessions. Browser-enabled sessions additionally receive the ambiguity
+// recovery contract, which makes the retryable WebMCP result a customer-input
+// boundary rather than an invitation to repeat a selector-free call. The
+// no-tools path remains byte-for-byte unchanged, and callers that already
+// supplied either policy do not receive a duplicate copy.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
 	if len(opts.ToolDefinitions) == 0 {
 		return instructions
@@ -367,6 +376,9 @@ func composeSessionInstructions(opts SessionRunOptions, instructions string) str
 	}
 	if !strings.Contains(instructions, sessionToolGroundingPolicy) {
 		blocks = append(blocks, sessionToolGroundingPolicy)
+	}
+	if opts.BrowserToolsEnabled && !strings.Contains(instructions, sessionWebMCPAmbiguityPolicy) {
+		blocks = append(blocks, sessionWebMCPAmbiguityPolicy)
 	}
 	filtered := blocks[:0]
 	for _, block := range blocks {

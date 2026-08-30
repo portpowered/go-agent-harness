@@ -586,14 +586,15 @@ type scriptedTurn struct {
 // order, and a final assistant turn that proves the session kept making
 // progress after tool execution instead of terminating.
 type scriptedToolCallInferencer struct {
-	turns        []scriptedTurn
-	followUpText string
-	followUpGate string
-	out          *signalingBuffer
-	runFinished  chan struct{}
-	finishOnce   sync.Once
-	sessionMu    sync.Mutex
-	session      *roundTripSession
+	turns          []scriptedTurn
+	followUpText   string
+	followUpGate   string
+	followUpEvents []messages.StreamMessage
+	out            *signalingBuffer
+	runFinished    chan struct{}
+	finishOnce     sync.Once
+	sessionMu      sync.Mutex
+	session        *roundTripSession
 }
 
 var _ messages.SessionInferencer = (*scriptedToolCallInferencer)(nil)
@@ -639,21 +640,29 @@ func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messag
 		if i.followUpGate != "" && !i.out.waitForOutput(i.followUpGate, 5*time.Second) {
 			return
 		}
-		session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageStart,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageStartValue(),
-		})
-		session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeTextDelta,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewTextDeltaValue(i.followUpText),
-		})
-		session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-		})
+		if len(i.followUpEvents) > 0 {
+			for _, event := range i.followUpEvents {
+				if !session.recv.Write(ctx, event) {
+					return
+				}
+			}
+		} else {
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeMessageStart,
+				Role:  messages.RoleAssistant,
+				Value: messages.NewMessageStartValue(),
+			})
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeTextDelta,
+				Role:  messages.RoleAssistant,
+				Value: messages.NewTextDeltaValue(i.followUpText),
+			})
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeMessageEnd,
+				Role:  messages.RoleAssistant,
+				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+			})
+		}
 		session.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("roundtrip-session", "test complete"),

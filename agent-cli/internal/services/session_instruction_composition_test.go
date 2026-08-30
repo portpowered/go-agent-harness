@@ -264,6 +264,47 @@ func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *t
 	}
 }
 
+func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing.T) {
+	opts := SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: "webmcp_get_context"},
+			{Name: "webmcp_list_tabs"},
+			{Name: "webmcp_select_tab"},
+		},
+	}
+
+	first := composeSessionInstructions(opts, "customer instructions")
+	second := composeSessionInstructions(opts, first)
+	if second != first {
+		t.Fatalf("second browser composition changed instructions:\nfirst=%q\nsecond=%q", first, second)
+	}
+	if strings.Count(first, "WebMCP ambiguity recovery:") != 1 {
+		t.Fatalf("ambiguity policy count = %d, want 1; instructions=%q", strings.Count(first, "WebMCP ambiguity recovery:"), first)
+	}
+	for _, want := range []string{
+		"error.code \"ambiguous_tab\"",
+		"details.recovery.action \"ask_customer\"",
+		"Ask exactly one concise spoken/text question",
+		"name every candidate",
+		"details.candidate_browser_ids",
+		"do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab",
+		"exact browser_id and target_id",
+		"Do not substitute by list order",
+	} {
+		if !strings.Contains(first, want) {
+			t.Fatalf("ambiguity policy = %q, missing %q", first, want)
+		}
+	}
+
+	withoutBrowser := composeSessionInstructions(SessionRunOptions{
+		ToolDefinitions: opts.ToolDefinitions,
+	}, "customer instructions")
+	if strings.Contains(withoutBrowser, "WebMCP ambiguity recovery:") {
+		t.Fatalf("browser ambiguity policy leaked into non-browser session: %q", withoutBrowser)
+	}
+}
+
 func sessionRequestFromPlanner(t *testing.T, inferencer messages.SessionInferencer) inference.SessionRequest {
 	t.Helper()
 	if image, ok := inferencer.(*sessionImageInferencer); ok {
