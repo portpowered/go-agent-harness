@@ -586,6 +586,10 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 // provider has opened a new response. An untagged event cannot replace an
 // identified response because it carries no proof of ownership.
 func (o *sessionProgressObserver) beginObservedResponse(id string) bool {
+	return o.beginObservedResponseForPurpose(id, "")
+}
+
+func (o *sessionProgressObserver) beginObservedResponseForPurpose(id string, purpose messages.ResponsePurpose) bool {
 	if o == nil {
 		return false
 	}
@@ -622,7 +626,7 @@ func (o *sessionProgressObserver) beginObservedResponse(id string) bool {
 	// against. Preserve the response-ID association used by the ordinary
 	// continuation path so their pending calls can still observe the next
 	// provider response.
-	if id != "" && len(o.scheduledResponses) == 0 {
+	if purpose != messages.ResponsePurposeToolAcknowledgement && id != "" && len(o.scheduledResponses) == 0 {
 		o.toolStateMu.Lock()
 		o.ensureToolStateLocked()
 		for _, state := range o.toolContinuations {

@@ -28,6 +28,9 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// DisplayCapability is the immutable host-surface admission result used
+	// to derive both display-dependent definitions and executor routes.
+	DisplayCapability SessionDisplayCapability
 	// RefreshDefinitions returns the final definition list after Initialize
 	// has run: the composed static and stable broker definitions plus any
 	// first-class page tools read from the connected browser catalog. Nil

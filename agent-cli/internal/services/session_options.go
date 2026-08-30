@@ -218,6 +218,11 @@ type SessionRunOptions struct {
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.
 	LoadedConfig *config.Config
+	// InteractiveToolPolicy optionally supplies an already-resolved policy
+	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
+	// existing ConfigDir file, or the documented defaults before provider
+	// construction.
+	InteractiveToolPolicy *InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
 	// session capability factory. The service wraps it in one shared
@@ -232,8 +237,8 @@ type SessionRunOptions struct {
 	CancellationIntent *SessionCancellationIntent
 
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
-	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
-	// production plans never set it, so live behavior is unchanged.
+	// deadline for hermetic tests. Zero selects the class-specific interactive
+	// policy budget.
 	ToolExecutionTimeout time.Duration
 
 	// Clock stamps runtime observations. A nil clock uses the host clock. The

@@ -185,6 +185,21 @@ func NewResponseCreateEvent() SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCreate}
 }
 
+// NewResponseCreateEventWithInstructions creates a response request carrying
+// optional provider instructions. Empty instructions preserve the legacy
+// response.create event shape used for ordinary continuations.
+func NewResponseCreateEventWithInstructions(instructions string) SessionEvent {
+	if instructions == "" {
+		return NewResponseCreateEvent()
+	}
+	data, _ := json.Marshal(map[string]any{
+		"response": map[string]string{
+			"instructions": instructions,
+		},
+	})
+	return SessionEvent{Type: SessionEventResponseCreate, Data: data}
+}
+
 // NewResponseCancelEvent creates an event that cancels an in-progress response.
 func NewResponseCancelEvent() SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCancel}

@@ -3,6 +3,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"syscall"
@@ -33,6 +34,18 @@ const (
 	biRGB        uint32 = 0
 )
 
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+	count, err := screenDisplayCountWithContextAndProcess(ctx, process)
+	if err != nil {
+		return 0, image.Rectangle{}, err
+	}
+	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, 0, process)
+	if err != nil {
+		return 0, image.Rectangle{}, err
+	}
+	return count, bounds, nil
+}
+
 // bitmapInfoHeader mirrors BITMAPINFOHEADER from wingdi.h.
 type bitmapInfoHeader struct {
 	Size          uint32
@@ -54,22 +67,62 @@ type bitmapInfo struct {
 	Colors [1]uint32
 }
 
-// screenDisplayCount returns the number of available displays.
-// Currently limited to 1 (primary) until EnumDisplayMonitors is wired up.
-func screenDisplayCount() int { return 1 }
-
-// screenDisplayBounds returns the bounding rectangle of the given display.
-func screenDisplayBounds(idx int) image.Rectangle {
+// screenDisplayCountWithContextAndProcess returns the primary display only;
+// the process parameter is unused because Windows uses GDI directly.
+func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
 	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
 	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
-	return image.Rect(0, 0, int(w), int(h))
+	if w == 0 || h == 0 {
+		return 0, fmt.Errorf("GetSystemMetrics returned an empty display")
+	}
+	return 1, nil
+}
+
+// screenDisplayBoundsWithContextAndProcess returns the bounding rectangle of
+// the primary display. The process parameter is unused because Windows uses
+// GDI directly.
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ DisplayProcess) (image.Rectangle, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return image.Rectangle{}, err
+		}
+	}
+	if idx != 0 {
+		return image.Rectangle{}, fmt.Errorf("display %d not available (only 1 display(s) found)", idx)
+	}
+	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
+	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	if w == 0 || h == 0 {
+		return image.Rectangle{}, fmt.Errorf("GetSystemMetrics returned an empty display")
+	}
+	return image.Rect(0, 0, int(w), int(h)), nil
+}
+
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ DisplayProcess) error {
+	if ctx != nil {
+		return ctx.Err()
+	}
+	return nil
 }
 
 // screenCapture uses the Windows GDI API to copy the given screen region into
-// an image.RGBA.  No CGO or third-party libraries are required.
-func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
+// an image.RGBA. No CGO or third-party libraries are required.
+func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
 	width := bounds.Dx()
 	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("display bounds are empty")
+	}
 
 	// Obtain the device context for the entire screen.
 	hScreen, _, _ := procGetDC.Call(0)
@@ -126,6 +179,11 @@ func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
 	)
 	if ret == 0 {
 		return nil, fmt.Errorf("GetDIBits failed")
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	// GDI returns pixels in BGRA order; convert to Go's RGBA order.

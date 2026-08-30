@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
@@ -20,6 +21,15 @@ import (
 // side effects and gives tests a neutral fake-broker seam.
 type SessionBrowserBrokerFactory func(config.BrowserConfig) (webmcp.Broker, error)
 
+// system_profiler can take roughly a second even on an otherwise healthy
+// macOS desktop. Keep admission bounded, but allow the single metadata query
+// to finish so a real display is not mistaken for a headless environment.
+const sessionDisplayCapabilityProbeTimeout = 3 * time.Second
+
+// SessionDisplayCapability is the CLI-facing alias for the display admission
+// snapshot carried with a session capability set.
+type SessionDisplayCapability = cliTools.DisplayCapability
+
 // NewSessionToolCapabilitiesFactory returns the production session capability
 // resolver. Static tools remain filtered by the resolved config. When browser
 // tools are enabled, the resolver constructs the real broker tool set and
@@ -34,19 +44,60 @@ func NewSessionToolCapabilitiesFactory(
 	staticExecutor messages.ToolExecutor,
 	brokerFactory SessionBrowserBrokerFactory,
 ) SessionToolCapabilitiesFactory {
+	return NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor, brokerFactory, nil)
+}
+
+// NewSessionToolCapabilitiesFactoryWithDisplaySurface is the hermetic
+// composition seam for display admission. The supplied surface owns both the
+// side-effect-free probe and the later show capture, so tests can model a
+// headless host, capability loss, and cancellation without the real desktop.
+func NewSessionToolCapabilitiesFactoryWithDisplaySurface(
+	staticExecutor messages.ToolExecutor,
+	brokerFactory SessionBrowserBrokerFactory,
+	displaySurface cliTools.DisplaySurface,
+) SessionToolCapabilitiesFactory {
+	if displaySurface == nil {
+		displaySurface = cliTools.NewHostDisplaySurface()
+	}
+	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, displaySurface, displaySurface)
+}
+
+// NewSessionToolCapabilitiesFactoryWithDisplayProbe is useful when admission
+// is supplied by an environment-specific capability service while capture is
+// still owned by the host surface. A failed probe fails closed and simply
+// removes display-dependent tools from this session's snapshot.
+func NewSessionToolCapabilitiesFactoryWithDisplayProbe(
+	staticExecutor messages.ToolExecutor,
+	brokerFactory SessionBrowserBrokerFactory,
+	displayProbe cliTools.DisplayCapabilityProbe,
+) SessionToolCapabilitiesFactory {
+	surface := cliTools.NewHostDisplaySurface()
+	if displayProbe == nil {
+		displayProbe = surface
+	}
+	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe)
+}
+
+func newSessionToolCapabilitiesFactory(
+	staticExecutor messages.ToolExecutor,
+	brokerFactory SessionBrowserBrokerFactory,
+	displaySurface cliTools.DisplaySurface,
+	displayProbe cliTools.DisplayCapabilityProbe,
+) SessionToolCapabilitiesFactory {
 	return func(cfg *config.Config) (SessionToolCapabilities, error) {
 		if cfg != nil {
 			if err := cfg.ValidateBrowser(); err != nil {
 				return SessionToolCapabilities{}, fmt.Errorf("resolve browser config: %w", err)
 			}
 		}
+		displayCapability := resolveSessionDisplayCapability(cfg, displayProbe)
 		_, isRegistryExecutor := staticExecutor.(*cliTools.RegistryExecutor)
 		var (
 			resolvedStaticExecutor messages.ToolExecutor
 			staticDefinitions      []messages.ToolDefinition
 		)
 		if isRegistryExecutor || staticExecutor == nil {
-			registry := cliTools.NewToolRegistryFromConfig(cfg)
+			registry := cliTools.NewToolRegistryFromConfigWithDisplayCapability(cfg, displayCapability, displaySurface)
 			resolvedStaticExecutor = cliTools.NewRegistryExecutor(registry)
 			staticDefinitions = registry.ToAgentLoopDefs()
 		} else {
@@ -55,8 +106,9 @@ func NewSessionToolCapabilitiesFactory(
 
 		if cfg == nil || !cfg.Browser.BrowserBackendEnabled() {
 			return SessionToolCapabilities{
-				Executor:    resolvedStaticExecutor,
-				Definitions: staticDefinitions,
+				Executor:          resolvedStaticExecutor,
+				Definitions:       staticDefinitions,
+				DisplayCapability: displayCapability,
 			}, nil
 		}
 
@@ -99,8 +151,9 @@ func NewSessionToolCapabilitiesFactory(
 		brokerSet.SetReservedToolNames(reservedNames)
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
 		capabilities := SessionToolCapabilities{
-			Executor:    surface.Executor,
-			Definitions: surface.Definitions,
+			Executor:          surface.Executor,
+			Definitions:       surface.Definitions,
+			DisplayCapability: displayCapability,
 			// After the capability bootstrap has connected the broker, the
 			// connected page catalog is advertised as first-class session
 			// tools alongside the composed surface. Page-tool calls resolve
@@ -119,6 +172,54 @@ func NewSessionToolCapabilitiesFactory(
 		}
 		return capabilities, nil
 	}
+}
+
+func resolveSessionDisplayCapability(cfg *config.Config, probe cliTools.DisplayCapabilityProbe) cliTools.DisplayCapability {
+	if !sessionDisplayToolsEnabled(cfg) {
+		return cliTools.UnavailableDisplayCapability("display-dependent tools are disabled by configuration")
+	}
+	if probe == nil {
+		return cliTools.UnavailableDisplayCapability("display capability probe is not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), sessionDisplayCapabilityProbeTimeout)
+	defer cancel()
+	type probeResult struct {
+		capability cliTools.DisplayCapability
+		err        error
+	}
+	resultCh := make(chan probeResult, 1)
+	go func() {
+		capability, err := probe.Probe(ctx)
+		resultCh <- probeResult{capability: capability, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			return cliTools.UnavailableDisplayCapability("display capability probe failed")
+		}
+		if !result.capability.Usable() {
+			if result.capability.Reason == "" {
+				result.capability.Reason = "no usable display or capture surface was proven"
+			}
+			result.capability.State = cliTools.DisplayCapabilityUnavailable
+			result.capability.Available = false
+			return result.capability
+		}
+		result.capability.State = cliTools.DisplayCapabilityUsable
+		result.capability.Available = true
+		return result.capability
+	case <-ctx.Done():
+		return cliTools.UnavailableDisplayCapability("display capability probe timed out")
+	}
+}
+
+func sessionDisplayToolsEnabled(cfg *config.Config) bool {
+	if cfg == nil {
+		return true
+	}
+	return cfg.Tools.ToolEnabled("show") || cfg.Tools.ToolEnabled("mouse")
 }
 
 // NewSessionBrowserBroker creates the production browser broker used by

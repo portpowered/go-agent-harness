@@ -49,6 +49,27 @@ func TestTranslateOutbound_ResponseCancelMapsToProviderEvent(t *testing.T) {
 	}
 }
 
+func TestTranslateOutbound_ToolAcknowledgementCarriesInstructions(t *testing.T) {
+	event, ok := translateOutbound(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+	})
+	if !ok || event.Type != models.SessionEventResponseCreate {
+		t.Fatalf("acknowledgement event = %#v, ok=%t; want response.create", event, ok)
+	}
+	var payload struct {
+		Response struct {
+			Instructions string `json:"instructions"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		t.Fatalf("acknowledgement payload: %v", err)
+	}
+	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
+		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
+	}
+}
+
 func TestTranslateInbound_ResponseDonePreservesRetryMetadata(t *testing.T) {
 	message := "Please try again in 1.668s."
 	raw, err := json.Marshal(map[string]any{

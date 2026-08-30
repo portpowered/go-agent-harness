@@ -146,7 +146,11 @@ type StreamMessage struct {
 	// lets session consumers ignore a late terminal or output event from an
 	// older response after a replacement response has started.
 	ResponseID string `json:"response_id,omitempty"`
-	Value      StreamMessageValue
+	// ResponsePurpose is internal lifecycle metadata attached by the session
+	// runner to provider output. It keeps a short tool acknowledgement out of
+	// final-turn admission and scheduled-response accounting.
+	ResponsePurpose ResponsePurpose `json:"response_purpose,omitempty"`
+	Value           StreamMessageValue
 
 	// Ordering: global consistency for retries and interrupts (see ORDERING.md).
 	GlobalIndex        int           // Global index in the agent loop; assigned by the engine.

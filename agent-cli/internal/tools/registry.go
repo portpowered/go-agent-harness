@@ -99,6 +99,23 @@ func NewEmptyToolRegistry() *ToolRegistry {
 // NewToolRegistryFromConfig creates a registry with only tools that are enabled in config.
 // If cfg is nil or tools.list is empty, all tools are enabled. Use tools.list with enabled: false to disable tools.
 func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
+	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false)
+}
+
+// NewToolRegistryFromConfigWithDisplayCapability creates the session-specific
+// registry after display admission has been resolved. Display-dependent tools
+// are omitted together, so the definitions and executor routes cannot drift.
+// The ordinary constructor above intentionally retains its direct/batch
+// behavior for callers that have not opted into session capability admission.
+func NewToolRegistryFromConfigWithDisplayCapability(
+	cfg *config.Config,
+	capability DisplayCapability,
+	surface DisplaySurface,
+) *ToolRegistry {
+	return newToolRegistryFromConfig(cfg, capability, surface, true)
+}
+
+func newToolRegistryFromConfig(cfg *config.Config, displayCapability DisplayCapability, displaySurface DisplaySurface, gateDisplayTools bool) *ToolRegistry {
 	registry := &ToolRegistry{
 		tools: make(map[string]Tool),
 	}
@@ -141,11 +158,13 @@ func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
 			_ = registry.Register(searchTool)
 		}
 	}
-	if enabled("show") {
-		_ = registry.Register(NewScreenTool())
-	}
-	if enabled("mouse") {
-		_ = registry.Register(NewMouseTool())
+	if !gateDisplayTools || displayCapability.Usable() {
+		if enabled("show") {
+			_ = registry.Register(NewScreenToolWithDisplaySurface(displaySurface))
+		}
+		if enabled("mouse") {
+			_ = registry.Register(NewMouseTool())
+		}
 	}
 	if enabled("load_skill") {
 		_ = registry.Register(NewLoadSkillTool())

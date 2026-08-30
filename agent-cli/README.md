@@ -129,6 +129,10 @@ See [Agent Session Record and Replay](docs/session-record-replay.md) for the
 full workflow, capture format, replay divergence errors, and fixture
 sanitization guidance.
 
+See [Interactive Voice Tool Latency Contract](docs/session-interactive-tool-timeouts.md)
+for the built-in voice tool timeout catalog, display admission rule, timing
+boundaries, and live confirmation procedure.
+
 CLI flags such as `--provider`, `--model`, `--api-key`, and `--config-dir`
 override config-file values for the current command.
 

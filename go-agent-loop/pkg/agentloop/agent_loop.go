@@ -96,6 +96,15 @@ func New(opts ...Option) (*AgentLoop, error) {
 		// no-tools decision, so this runner does not act as a public fallback.
 		toolRunner = participants.NewToolRunner(&messages.DefaultToolExecutor{}, toolCap)
 	}
+	if cfg.SessionInferencer != nil && cfg.ToolAcknowledgement != nil {
+		policy := *cfg.ToolAcknowledgement
+		toolRunner.ConfigureAcknowledgement(policy.Threshold, policy.IsLongRunning, func(ctx context.Context, _ []messages.ToolCall) {
+			_ = modelRunner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeResponseCreate,
+				Value: messages.NewToolAcknowledgementResponseCreateValue(),
+			})
+		})
+	}
 
 	// Set OnDrop callbacks so operators are alerted when buffers are full.
 	if cfg.Logger != nil {

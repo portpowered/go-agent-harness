@@ -138,11 +138,28 @@ func NewResponseCancelValue() *ResponseCancelValue {
 	return &ResponseCancelValue{Type: "response_cancel"}
 }
 
+// ResponsePurpose identifies the reason a session response was requested.
+// Empty is the ordinary provider continuation. The purpose is an internal
+// routing hint; provider adapters translate only the supported fields onto the
+// provider wire.
+type ResponsePurpose string
+
+const (
+	ResponsePurposeToolAcknowledgement ResponsePurpose = "tool_acknowledgement"
+)
+
+// ToolAcknowledgementInstructions is deliberately short and prohibits a
+// fabricated result. It is sent only when a long-running tool has crossed its
+// acknowledgement threshold.
+const ToolAcknowledgementInstructions = "Briefly acknowledge that the requested operation is still in progress. Do not claim success or invent a result."
+
 // ResponseCreateValue is the value for RESPONSE.CREATE (outbound), sent to
 // the inference provider to request the next response without adding another
 // user message or committing a second audio buffer.
 type ResponseCreateValue struct {
-	Type string `json:"type"` // "response_create"
+	Type         string          `json:"type"` // "response_create"
+	Purpose      ResponsePurpose `json:"purpose,omitempty"`
+	Instructions string          `json:"instructions,omitempty"`
 }
 
 func (*ResponseCreateValue) streamMessageValue() {}
@@ -150,4 +167,20 @@ func (*ResponseCreateValue) streamMessageValue() {}
 // NewResponseCreateValue returns a value for RESPONSE.CREATE.
 func NewResponseCreateValue() *ResponseCreateValue {
 	return &ResponseCreateValue{Type: "response_create"}
+}
+
+// NewToolAcknowledgementResponseCreateValue returns a response request that
+// asks the provider for a short progress acknowledgement while a tool runs.
+func NewToolAcknowledgementResponseCreateValue() *ResponseCreateValue {
+	return &ResponseCreateValue{
+		Type:         "response_create",
+		Purpose:      ResponsePurposeToolAcknowledgement,
+		Instructions: ToolAcknowledgementInstructions,
+	}
+}
+
+// IsToolAcknowledgement reports whether this response request is the one-shot
+// acknowledgement for a pending long-running tool batch.
+func (v *ResponseCreateValue) IsToolAcknowledgement() bool {
+	return v != nil && v.Purpose == ResponsePurposeToolAcknowledgement
 }

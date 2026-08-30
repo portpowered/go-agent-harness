@@ -633,7 +633,10 @@ func TestSessionCommand_ReplayGrokWebSocketCaptureFailsOnDivergentOutbound(t *te
 	if !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("expected replay mismatch classification, got: %v", err)
 	}
-	if elapsed >= time.Second {
+	// Session planning now performs a bounded display-capability admission
+	// probe before the replay transport is opened. Allow that one-second probe
+	// budget plus scheduler overhead while still requiring prompt divergence.
+	if elapsed >= 2*time.Second {
 		t.Fatalf("replay divergence should fail before the bounded session timeout; elapsed=%s", elapsed)
 	}
 }

@@ -7,12 +7,28 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // defaultSessionToolExecutionTimeout bounds one tool invocation without
 // changing the lifetime of the enclosing session.
 const defaultSessionToolExecutionTimeout = 60 * time.Second
+
+const (
+	// SessionToolTimeoutClassification is the stable provider-visible marker
+	// for an interactive tool deadline. It is deliberately distinct from a
+	// transport or enclosing-session timeout: the model can recover from this
+	// one failed call and continue the voice turn.
+	SessionToolTimeoutClassification = "interactive_tool_timeout"
+)
+
+var (
+	// ErrSessionToolTimeout is retained behind the correlated tool-result
+	// contract so callers and tests can classify a local deadline without
+	// parsing the human-readable response content.
+	ErrSessionToolTimeout = errors.New("tool execution timed out")
+)
 
 // sessionToolExecutor is the session boundary around the executor composed by
 // the wire graph. It deliberately does not inspect or duplicate tool
@@ -21,14 +37,16 @@ const defaultSessionToolExecutionTimeout = 60 * time.Second
 type sessionToolExecutor struct {
 	inner              messages.ToolExecutor
 	timeout            time.Duration
+	interactivePolicy  *InteractiveToolPolicy
 	observer           sessionToolLifecycleObserver
 	cancellationIntent *SessionCancellationIntent
 }
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
 
-// newSessionToolExecutor adapts the composed session executor for use by a
-// duplex agent loop. A non-positive timeout selects the session default.
+// newSessionToolExecutor retains the legacy single-deadline adapter used by
+// non-policy callers. The duplex session path uses the interactive policy
+// constructor below.
 //
 // The duplex loop construction seam passes the returned executor to
 // agentloop.WithToolExecutor. Keeping the adapter at this boundary makes an
@@ -70,6 +88,33 @@ func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
 	}
 }
 
+func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(
+	inner messages.ToolExecutor,
+	policy *InteractiveToolPolicy,
+	timeoutOverride time.Duration,
+	observer sessionToolLifecycleObserver,
+	cancellationIntent *SessionCancellationIntent,
+) *sessionToolExecutor {
+	if policy == nil {
+		defaultPolicy, err := NewInteractiveToolPolicy(config.DefaultInteractiveToolConfig(), nil)
+		if err == nil {
+			policy = &defaultPolicy
+		}
+	}
+	var policySnapshot *InteractiveToolPolicy
+	if policy != nil {
+		clone := policy.Clone()
+		policySnapshot = &clone
+	}
+	return &sessionToolExecutor{
+		inner:              inner,
+		timeout:            timeoutOverride,
+		interactivePolicy:  policySnapshot,
+		observer:           observer,
+		cancellationIntent: cancellationIntent,
+	}
+}
+
 type sessionToolExecutionResult struct {
 	response messages.ToolCallResponse
 	err      error
@@ -103,7 +148,14 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 		return finish(sessionToolFailure(call, errors.New("session tool executor is not configured")), true)
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, e.timeout)
+	timeout := e.timeout
+	if timeout <= 0 && e.interactivePolicy != nil {
+		timeout = e.interactivePolicy.TimeoutForTool(call.Name)
+	}
+	if timeout <= 0 {
+		timeout = defaultSessionToolExecutionTimeout
+	}
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	resultCh := make(chan sessionToolExecutionResult, 1)
@@ -178,7 +230,7 @@ func invokeSessionTool(ctx context.Context, executor messages.ToolExecutor, call
 func sessionToolContextFailure(err error) error {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return errors.New("tool execution timed out")
+		return ErrSessionToolTimeout
 	case errors.Is(err, context.Canceled):
 		return errors.New("tool execution canceled")
 	default:
@@ -190,9 +242,13 @@ func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResp
 	if err == nil {
 		err = errors.New("tool execution failed")
 	}
+	message := fmt.Sprintf("tool %q failed", call.Name)
+	if errors.Is(err, ErrSessionToolTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		message += fmt.Sprintf(" (classification=%s)", SessionToolTimeoutClassification)
+	}
 	return messages.ToolCallResponse{
 		ToolCallID: call.ID,
 		Name:       call.Name,
-		Content:    fmt.Sprintf("tool %q failed: %s", call.Name, err),
+		Content:    fmt.Sprintf("%s: %s", message, err),
 	}
 }
