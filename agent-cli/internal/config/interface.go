@@ -74,6 +74,7 @@ const (
 type BrowserConfig struct {
 	Tools      BrowserToolsConfig      `koanf:"tools" yaml:"tools"`
 	Connection BrowserConnectionConfig `koanf:"connection" yaml:"connection"`
+	Managed    BrowserManagedConfig    `koanf:"managed" yaml:"managed"`
 	Selection  BrowserSelectionConfig  `koanf:"selection" yaml:"selection"`
 	Policy     BrowserPolicyConfig     `koanf:"policy" yaml:"policy"`
 	Limits     BrowserLimitsConfig     `koanf:"limits" yaml:"limits"`
@@ -96,6 +97,14 @@ type BrowserConnectionConfig struct {
 	UserDataDir      string `koanf:"user_data_dir" yaml:"user_data_dir"`
 	AllowProcessScan bool   `koanf:"allow_process_scan" yaml:"allow_process_scan"`
 	AllowRemoteCDP   bool   `koanf:"allow_remote_cdp" yaml:"allow_remote_cdp"`
+}
+
+// BrowserManagedConfig controls the agent-owned browser path. Managed values
+// are inert unless WebMCP is explicitly enabled for a session.
+type BrowserManagedConfig struct {
+	Headless    bool   `koanf:"headless" yaml:"headless"`
+	Open        string `koanf:"open" yaml:"open"`
+	CloseOnExit bool   `koanf:"close_on_exit" yaml:"close_on_exit"`
 }
 
 // BrowserSelectionConfig controls exact browser/target selection and

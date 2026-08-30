@@ -11,6 +11,9 @@ type BrowserFlags struct {
 	CDPURL             string
 	WSEndpoint         string
 	UserDataDir        string
+	Headless           bool
+	Open               string
+	CloseOnExit        bool
 	AllowProcessScan   bool
 	AllowRemoteCDP     bool
 	Browser            string

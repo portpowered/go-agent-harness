@@ -38,6 +38,9 @@ var sessionBrowserFlagNames = []string{
 	"browser-cdp-url",
 	"browser-ws-endpoint",
 	"browser-user-data-dir",
+	"browser-headless",
+	"browser-open",
+	"browser-close-on-exit",
 	"browser-allow-process-scan",
 	"browser-allow-remote-cdp",
 	"browser-browser",
@@ -102,6 +105,15 @@ func browserOverridesFromFlags(cmd *cobra.Command, values *flags.BrowserFlags) c
 	}
 	if changed("browser-user-data-dir") {
 		overrides.UserDataDir = &values.UserDataDir
+	}
+	if changed("browser-headless") {
+		overrides.ManagedHeadless = &values.Headless
+	}
+	if changed("browser-open") {
+		overrides.ManagedOpen = &values.Open
+	}
+	if changed("browser-close-on-exit") {
+		overrides.ManagedCloseOnExit = &values.CloseOnExit
 	}
 	if changed("browser-allow-process-scan") {
 		overrides.AllowProcessScan = &values.AllowProcessScan
@@ -236,6 +248,32 @@ func bindStrictBrowserBool(flagSet *pflag.FlagSet, target *bool, name, usage str
 	flagSet.Lookup(name).NoOptDefVal = "true"
 }
 
+// singleBrowserOpenValue prevents a repeatable command source from silently
+// replacing the requested startup page with its last value.
+type singleBrowserOpenValue struct {
+	target *string
+	name   string
+	seen   bool
+}
+
+func (v *singleBrowserOpenValue) String() string {
+	if v == nil || v.target == nil {
+		return ""
+	}
+	return *v.target
+}
+
+func (v *singleBrowserOpenValue) Set(raw string) error {
+	if v.seen {
+		return fmt.Errorf("--%s accepts at most one startup URL", v.name)
+	}
+	v.seen = true
+	*v.target = raw
+	return nil
+}
+
+func (*singleBrowserOpenValue) Type() string { return "url" }
+
 // strictBrowserIntValue accepts only non-negative decimal integers. This is
 // stricter than pflag's base-0 integer parser, which would also accept hex.
 type strictBrowserIntValue struct {
@@ -270,10 +308,13 @@ func (v *strictBrowserIntValue) Set(raw string) error {
 func (*strictBrowserIntValue) Type() string { return "int" }
 
 func registerSessionBrowserFlags(cmd *cobra.Command, values *flags.BrowserFlags) {
-	cmd.Flags().StringVar(&values.Tools, "browser-tools", "", "Enable a browser tool capability backend for this session (supported: webmcp)")
+	cmd.Flags().StringVar(&values.Tools, "browser-tools", "", "Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome")
 	cmd.Flags().StringVar(&values.CDPURL, "browser-cdp-url", "", "Browser DevTools HTTP endpoint")
 	cmd.Flags().StringVar(&values.WSEndpoint, "browser-ws-endpoint", "", "Browser DevTools WebSocket endpoint")
 	cmd.Flags().StringVar(&values.UserDataDir, "browser-user-data-dir", "", "Browser profile directory used for DevTools discovery")
+	bindStrictBrowserBool(cmd.Flags(), &values.Headless, "browser-headless", "Use headless mode for an agent-managed browser")
+	cmd.Flags().Var(&singleBrowserOpenValue{target: &values.Open, name: "browser-open"}, "browser-open", "Open exactly one startup URL in an agent-managed browser (default: about:blank)")
+	bindStrictBrowserBool(cmd.Flags(), &values.CloseOnExit, "browser-close-on-exit", "Close the exact agent-managed browser when the session exits; external endpoints are never closed")
 	bindStrictBrowserBool(cmd.Flags(), &values.AllowProcessScan, "browser-allow-process-scan", "Allow process-based browser endpoint discovery")
 	bindStrictBrowserBool(cmd.Flags(), &values.AllowRemoteCDP, "browser-allow-remote-cdp", "Allow non-loopback DevTools endpoints")
 	cmd.Flags().StringVar(&values.Browser, "browser-browser", "", "Exact normalized browser ID")

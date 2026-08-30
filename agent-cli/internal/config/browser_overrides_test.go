@@ -16,6 +16,11 @@ func TestBrowserConfigApplyBrowserOverridesPreservesUnspecifiedValues(t *testing
 			AllowProcessScan: true,
 			AllowRemoteCDP:   true,
 		},
+		Managed: BrowserManagedConfig{
+			Headless:    true,
+			Open:        "https://file.example/start",
+			CloseOnExit: true,
+		},
 		Selection: BrowserSelectionConfig{
 			Browser:     "file-browser",
 			Tab:         "file-tab",
@@ -72,6 +77,24 @@ func TestBrowserConfigApplyBrowserOverridesPreservesUnspecifiedValues(t *testing
 	}
 	if got.Connection.CDPURL != base.Connection.CDPURL || got.Connection.WSEndpoint != base.Connection.WSEndpoint || got.Selection.Tab != base.Selection.Tab || got.Policy.Approval != base.Policy.Approval || got.Replay != base.Replay {
 		t.Fatalf("unspecified values changed: got=%+v base=%+v", got, base)
+	}
+	if got.Managed != base.Managed {
+		t.Fatalf("unspecified managed values changed: got=%+v base=%+v", got.Managed, base.Managed)
+	}
+
+	managedOpen := "https://cli.example/start"
+	managedHeadless := false
+	managedClose := false
+	managed, err := base.ApplyBrowserOverrides(BrowserOverrides{
+		ManagedOpen:        &managedOpen,
+		ManagedHeadless:    &managedHeadless,
+		ManagedCloseOnExit: &managedClose,
+	})
+	if err != nil {
+		t.Fatalf("ApplyBrowserOverrides(managed): %v", err)
+	}
+	if managed.Managed.Open != managedOpen || managed.Managed.Headless || managed.Managed.CloseOnExit {
+		t.Fatalf("managed overrides = %+v", managed.Managed)
 	}
 	if &got.Policy.AllowedOrigins[0] == &base.Policy.AllowedOrigins[0] {
 		t.Fatal("allowed origin slice aliases the base config")
