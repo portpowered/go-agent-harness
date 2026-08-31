@@ -41,6 +41,17 @@ var (
 	ErrMixerInvalidInputID = errors.New("PCM16 mixer input ID is invalid")
 )
 
+// PCM16WriteDisposition describes how a complete PCM16 write entered the
+// mixer. Backpressured means the write waited for bounded queue capacity and
+// was then admitted; a write that cannot be admitted returns an error instead
+// of a disposition.
+type PCM16WriteDisposition string
+
+const (
+	PCM16WriteDelivered     PCM16WriteDisposition = "delivered"
+	PCM16WriteBackpressured PCM16WriteDisposition = "backpressured"
+)
+
 const (
 	// DefaultPCM16SampleRate is the sample rate used by the realtime room
 	// runtime. It matches the existing OpenAI realtime session configuration.
@@ -63,6 +74,17 @@ type PCM16Format struct {
 	SampleRate    int
 	Channels      int
 	FrameDuration time.Duration
+}
+
+// PCM16MixedFrame is one cadence frame and the participant inputs that
+// supplied bytes to it. Sources are sorted by the mixer before they are
+// returned and are present even when an input's samples happen to be silent.
+// The metadata lets a room owner attribute downstream delivery outcomes back
+// to the peer that supplied the frame without changing the legacy ReadFrame
+// byte-only API.
+type PCM16MixedFrame struct {
+	PCM     []byte
+	Sources []string
 }
 
 // DefaultPCM16Format returns the room runtime's explicit audio contract.
@@ -217,6 +239,9 @@ type PCM16Mixer struct {
 	err       error
 	closeOnce sync.Once
 	done      chan struct{}
+
+	outputSourcesMu sync.Mutex
+	outputSources   [][]string
 }
 
 // Mixer is a descriptive alias for PCM16Mixer.
@@ -299,18 +324,11 @@ func (m *PCM16Mixer) Advance(ctx context.Context) error {
 	if err := m.ctx.Err(); err != nil {
 		return m.writeTerminationError()
 	}
-	frame, err := m.mixFrame()
+	frame, sources, err := m.mixFrameWithSources()
 	if err != nil {
 		return err
 	}
-	select {
-	case m.out <- frame:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-m.ctx.Done():
-		return m.writeTerminationError()
-	}
+	return m.enqueueFrame(ctx, frame, sources)
 }
 
 // Format returns the immutable mixer format.
@@ -437,67 +455,97 @@ func (m *PCM16Mixer) Write(inputID string, pcm []byte) error {
 // entire queue is rejected immediately because it can never be accepted
 // atomically without an unbounded or partial write.
 func (m *PCM16Mixer) WriteContext(ctx context.Context, inputID string, pcm []byte) error {
+	_, err := m.WriteContextWithDisposition(ctx, inputID, pcm)
+	return err
+}
+
+// WriteContextWithDisposition is the diagnostics-aware spelling of
+// WriteContext. It preserves the all-or-nothing write contract while exposing
+// whether bounded input capacity caused the caller to wait before admission.
+func (m *PCM16Mixer) WriteContextWithDisposition(ctx context.Context, inputID string, pcm []byte) (PCM16WriteDisposition, error) {
+	return m.writeContextWithDisposition(ctx, inputID, pcm, nil)
+}
+
+// WriteContextWithDispositionAndObserver is the diagnostics-aware write seam
+// for owners that need admission metadata to stay atomic with the mixer
+// queue. observer runs while the mixer holds its input lock, immediately after
+// the complete chunk is appended. It must only record bounded in-memory state
+// and must not block or call back into the mixer.
+func (m *PCM16Mixer) WriteContextWithDispositionAndObserver(ctx context.Context, inputID string, pcm []byte, observer func(PCM16WriteDisposition)) (PCM16WriteDisposition, error) {
+	return m.writeContextWithDisposition(ctx, inputID, pcm, observer)
+}
+
+func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID string, pcm []byte, observer func(PCM16WriteDisposition)) (PCM16WriteDisposition, error) {
 	if m == nil {
-		return ErrMixerClosed
+		return "", ErrMixerClosed
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 	if len(pcm) == 0 {
-		return nil
+		return PCM16WriteDelivered, nil
 	}
 	if len(pcm)%2 != 0 {
-		return fmt.Errorf("%w: PCM16 input has odd byte length %d", ErrMixerInvalidFormat, len(pcm))
+		return "", fmt.Errorf("%w: PCM16 input has odd byte length %d", ErrMixerInvalidFormat, len(pcm))
 	}
 	inputID, err := normalizeMixerInputID(inputID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	backpressured := false
 	for {
 		m.mu.Lock()
 		if m.closed {
 			m.mu.Unlock()
-			return ErrMixerClosed
+			return "", ErrMixerClosed
 		}
 		if m.err != nil {
 			err := m.err
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		if err := m.ctx.Err(); err != nil {
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		input, exists := m.inputs[inputID]
 		if !exists {
 			m.mu.Unlock()
-			return fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
+			return "", fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
 		}
 		if len(pcm) > m.maxInputSize {
 			m.mu.Unlock()
-			return fmt.Errorf("%w: input %q write is %d bytes but queue capacity is %d bytes", ErrMixerInputBufferFull, inputID, len(pcm), m.maxInputSize)
+			return "", fmt.Errorf("%w: input %q write is %d bytes but queue capacity is %d bytes", ErrMixerInputBufferFull, inputID, len(pcm), m.maxInputSize)
 		}
 		if err := ctx.Err(); err != nil {
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		if len(pcm) <= m.maxInputSize-len(input.data) {
 			input.data = append(input.data, pcm...)
+			disposition := PCM16WriteDelivered
+			if backpressured {
+				disposition = PCM16WriteBackpressured
+			}
+			if observer != nil {
+				observer(disposition)
+			}
 			m.mu.Unlock()
-			return nil
+			return disposition, nil
 		}
+		backpressured = true
 		wake := m.writeWake
 		m.mu.Unlock()
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return "", ctx.Err()
 		case <-m.ctx.Done():
-			return m.writeTerminationError()
+			return "", m.writeTerminationError()
 		case <-wake:
 		}
 	}
@@ -545,8 +593,25 @@ func (m *PCM16Mixer) Inputs() []string {
 // ReadFrame waits for the next cadence frame or cancellation. A normal Close
 // returns io.EOF; an internal mixer failure returns that failure.
 func (m *PCM16Mixer) ReadFrame(ctx context.Context) ([]byte, error) {
+	frame, _, err := m.readFrame(ctx)
+	return frame, err
+}
+
+// ReadFrameWithSources reads one cadence frame and its contributing mixer
+// inputs. Callers must use this method consistently for a mixer instead of
+// mixing it with direct reads from Frames or ReadFrame, because the source
+// metadata is consumed alongside each output frame.
+func (m *PCM16Mixer) ReadFrameWithSources(ctx context.Context) (PCM16MixedFrame, error) {
+	frame, sources, err := m.readFrame(ctx)
+	if err != nil {
+		return PCM16MixedFrame{}, err
+	}
+	return PCM16MixedFrame{PCM: frame, Sources: sources}, nil
+}
+
+func (m *PCM16Mixer) readFrame(ctx context.Context) ([]byte, []string, error) {
 	if m == nil {
-		return nil, ErrMixerClosed
+		return nil, nil, ErrMixerClosed
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -555,13 +620,13 @@ func (m *PCM16Mixer) ReadFrame(ctx context.Context) ([]byte, error) {
 	case frame, ok := <-m.out:
 		if !ok {
 			if err := m.Err(); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			return nil, io.EOF
+			return nil, nil, io.EOF
 		}
-		return frame, nil
+		return frame, m.popOutputSources(), nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	}
 }
 
@@ -623,7 +688,7 @@ func (m *PCM16Mixer) run() {
 		case <-m.ctx.Done():
 			return
 		case <-ticks:
-			frame, err := m.mixFrame()
+			frame, sources, err := m.mixFrameWithSources()
 			if err != nil {
 				// Close marks the mixer before cancelling its context. If the
 				// ticker wins that small race, the closed sentinel is an
@@ -635,21 +700,22 @@ func (m *PCM16Mixer) run() {
 				m.cancel()
 				return
 			}
-			select {
-			case m.out <- frame:
-			case <-m.ctx.Done():
+			if err := m.enqueueFrame(m.ctx, frame, sources); err != nil {
+				if errors.Is(err, ErrMixerClosed) && m.ctx.Err() != nil {
+					return
+				}
 				return
 			}
 		}
 	}
 }
 
-func (m *PCM16Mixer) mixFrame() ([]byte, error) {
+func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	frame := make([]byte, m.frameBytes)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
-		return nil, ErrMixerClosed
+		return nil, nil, ErrMixerClosed
 	}
 	ids := make([]string, 0, len(m.inputs))
 	for id := range m.inputs {
@@ -657,6 +723,7 @@ func (m *PCM16Mixer) mixFrame() ([]byte, error) {
 	}
 	sort.Strings(ids)
 	accumulated := make([]int32, m.frameBytes/2)
+	sources := make([]string, 0, len(ids))
 	for _, id := range ids {
 		input := m.inputs[id]
 		take := len(input.data)
@@ -668,6 +735,7 @@ func (m *PCM16Mixer) mixFrame() ([]byte, error) {
 			accumulated[offset/2] += int32(sample)
 		}
 		if take > 0 {
+			sources = append(sources, id)
 			copy(input.data, input.data[take:])
 			input.data = input.data[:len(input.data)-take]
 		}
@@ -683,7 +751,52 @@ func (m *PCM16Mixer) mixFrame() ([]byte, error) {
 		}
 		binary.LittleEndian.PutUint16(frame[index*2:index*2+2], uint16(int16(sample)))
 	}
-	return frame, nil
+	return frame, sources, nil
+}
+
+func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []string) error {
+	if m == nil {
+		return ErrMixerClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.outputSourcesMu.Lock()
+	m.outputSources = append(m.outputSources, append([]string(nil), sources...))
+	m.outputSourcesMu.Unlock()
+	removeSources := func() {
+		m.outputSourcesMu.Lock()
+		if len(m.outputSources) > 0 {
+			m.outputSources = m.outputSources[:len(m.outputSources)-1]
+		}
+		m.outputSourcesMu.Unlock()
+	}
+	select {
+	case m.out <- frame:
+		return nil
+	case <-ctx.Done():
+		removeSources()
+		return ctx.Err()
+	case <-m.ctx.Done():
+		removeSources()
+		return m.writeTerminationError()
+	}
+}
+
+func (m *PCM16Mixer) popOutputSources() []string {
+	if m == nil {
+		return nil
+	}
+	m.outputSourcesMu.Lock()
+	defer m.outputSourcesMu.Unlock()
+	if len(m.outputSources) == 0 {
+		return nil
+	}
+	sources := m.outputSources[0]
+	copy(m.outputSources, m.outputSources[1:])
+	m.outputSources[len(m.outputSources)-1] = nil
+	m.outputSources = m.outputSources[:len(m.outputSources)-1]
+	return sources
 }
 
 func (m *PCM16Mixer) setError(err error) {

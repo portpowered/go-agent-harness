@@ -57,6 +57,7 @@ type roomParticipantRuntime struct {
 	// accepted by the participant session.
 	replayFrameAcks chan struct{}
 	mixer           *room.PCM16Mixer
+	ingress         *roomAudioIngressLedger
 	input           *audio.DeviceSource
 	output          *audio.DeviceSink
 	lifecycle       *roomParticipantLifecycle

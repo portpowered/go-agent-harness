@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -233,6 +234,44 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
+	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  4,
+		OutputQueueFrames: 2,
+		Manual:            true,
+	})
+	if err != nil {
+		t.Fatalf("new mixer: %v", err)
+	}
+	t.Cleanup(func() { _ = mixer.Close() })
+	for _, id := range []string{"beta", "alpha"} {
+		if err := mixer.AddInput(id); err != nil {
+			t.Fatalf("add input %s: %v", id, err)
+		}
+	}
+	if err := mixer.Write("alpha", pcm16(100, 200)); err != nil {
+		t.Fatalf("write alpha: %v", err)
+	}
+	if err := mixer.Write("beta", pcm16(0, 0)); err != nil {
+		t.Fatalf("write beta: %v", err)
+	}
+	if err := mixer.Advance(context.Background()); err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	frame, err := mixer.ReadFrameWithSources(context.Background())
+	if err != nil {
+		t.Fatalf("read frame with sources: %v", err)
+	}
+	if want := pcm16(100, 200); !bytes.Equal(frame.PCM, want) {
+		t.Fatalf("mixed frame = %v, want %v", decodePCM16(frame.PCM), decodePCM16(want))
+	}
+	if want := []string{"alpha", "beta"}; !reflect.DeepEqual(frame.Sources, want) {
+		t.Fatalf("mixed frame sources = %v, want %v", frame.Sources, want)
+	}
+}
+
 func TestPCM16MixerCancellationStopsDeterministicCadence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cadence := newDeterministicPCM16Cadence()
@@ -305,6 +344,58 @@ func TestPCM16MixerWriteContextCancellationPreservesQueuedPCM(t *testing.T) {
 	}
 	if got := mixer.Stats().Inputs["alpha"].Bytes; got != frameBytes {
 		t.Fatalf("queued bytes after cancelled write = %d, want %d", got, frameBytes)
+	}
+}
+
+func TestPCM16MixerWriteContextWithDispositionReportsBoundedBackpressure(t *testing.T) {
+	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: time.Second}
+	cadence := newDeterministicPCM16Cadence()
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+		CadenceFactory: func(time.Duration) PCM16Cadence {
+			return cadence
+		},
+	})
+	if err != nil {
+		t.Fatalf("new mixer: %v", err)
+	}
+	defer mixer.Close()
+	if err := mixer.AddInput("alpha"); err != nil {
+		t.Fatalf("add input: %v", err)
+	}
+	frame := make([]byte, mixer.FrameBytes())
+	frame[0] = 1
+	if _, err := mixer.WriteContextWithDisposition(context.Background(), "alpha", frame); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+
+	type writeResult struct {
+		disposition PCM16WriteDisposition
+		err         error
+	}
+	resultCh := make(chan writeResult, 1)
+	go func() {
+		disposition, writeErr := mixer.WriteContextWithDisposition(context.Background(), "alpha", frame)
+		resultCh <- writeResult{disposition: disposition, err: writeErr}
+	}()
+	select {
+	case result := <-resultCh:
+		t.Fatalf("full-queue write returned before cadence drain: %+v", result)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cadence.Advance()
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("backpressured write: %v", result.err)
+		}
+		if result.disposition != PCM16WriteBackpressured {
+			t.Fatalf("write disposition=%q, want %q", result.disposition, PCM16WriteBackpressured)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("backpressured write did not complete after cadence drain")
 	}
 }
 

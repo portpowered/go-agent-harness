@@ -202,6 +202,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			observerDone:    make(chan struct{}),
 			replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
 			mixer:           mixer,
+			ingress:         newRoomParticipantIngress(plan, opts, evidence),
 			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress},
 		}
 		plan.participant = runtime
@@ -224,6 +225,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				break
 			}
 		}
+		notifyRoomParticipantMixerReady(opts, plan.manifest.ID, mixer)
 		if roomParticipantIsHuman(plan) && !replayMode {
 			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceRegistry); deviceErr != nil {
 				plan.startupErr = roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan))

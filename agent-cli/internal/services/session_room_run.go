@@ -117,12 +117,56 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
-
 	participantEvidence := (*roomParticipantEvidence)(nil)
 	if evidence != nil {
 		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
 	}
-
+	participantStream := RoomParticipantEventSink{}
+	if opts.Stream != nil {
+		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
+	}
+	var observer *sessionProgressObserver
+	if !roomParticipantIsHuman(runtime.plan) {
+		diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
+		observer = newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+		observer.livenessObserver = func(err error) {
+			runtime.lifecycle.markLivenessFailure(err)
+			classification, _, _, _ := sessionLivenessMetadata(err)
+			if classification != "" {
+				participantID := runtime.plan.manifest.ID
+				evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
+				if opts.Stream != nil {
+					opts.Stream.PublishParticipantLivenessFault(participantID, classification)
+				}
+			}
+		}
+		observer.turnAdmission = func(msg messages.StreamMessage) bool {
+			value, ok := msg.Value.(*messages.MessageEndValue)
+			if !ok || value == nil || value.TerminalReason == "" {
+				return true
+			}
+			return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
+				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
+		}
+		observer.streamObserver = func(msg messages.StreamMessage) {
+			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
+		}
+		observer.admittedTurnObserver = func(messages.StreamMessage) {
+			turns := runtime.lifecycle.observeAdmittedTurn()
+			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+			evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
+		}
+	}
+	inputObserver := opts.OnAudioInput
+	if observer != nil {
+		inputObserver = func(participantID string, pcm []byte) error {
+			observer.accountRoomAudioInput(len(pcm))
+			if opts.OnAudioInput != nil {
+				return opts.OnAudioInput(participantID, pcm)
+			}
+			return nil
+		}
+	}
 	go func() {
 		if mixerWG != nil {
 			defer mixerWG.Done()
@@ -136,7 +180,7 @@ func runRoomParticipant(
 			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
 			return
 		}
-		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, participantEvidence, secrets)
+		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.onParticipantAudioInput, inputObserver, participantEvidence, secrets)
 	}()
 
 	if startupErr := runtime.plan.startupErr; startupErr != nil {
@@ -158,10 +202,6 @@ func runRoomParticipant(
 		return
 	}
 
-	participantStream := RoomParticipantEventSink{}
-	if opts.Stream != nil {
-		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
-	}
 	if roomParticipantIsHuman(runtime.plan) {
 		if runtime.plan.replay {
 			select {
@@ -180,35 +220,6 @@ func runRoomParticipant(
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
-	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
-	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
-	observer.livenessObserver = func(err error) {
-		runtime.lifecycle.markLivenessFailure(err)
-		classification, _, _, _ := sessionLivenessMetadata(err)
-		if classification != "" {
-			participantID := runtime.plan.manifest.ID
-			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
-			if opts.Stream != nil {
-				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
-			}
-		}
-	}
-	observer.turnAdmission = func(msg messages.StreamMessage) bool {
-		value, ok := msg.Value.(*messages.MessageEndValue)
-		if !ok || value == nil || value.TerminalReason == "" {
-			return true
-		}
-		return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
-			value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
-	}
-	observer.streamObserver = func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
-	}
-	observer.admittedTurnObserver = func(messages.StreamMessage) {
-		turns := runtime.lifecycle.observeAdmittedTurn()
-		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
 	var latencyRuntime *sessionRuntimeObservationRecorder
 	if evidence != nil && evidence.latency != nil {
@@ -419,7 +430,7 @@ func observeRoomParticipantStream(
 			if target == nil || target.mixer == nil {
 				continue
 			}
-			if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
+			if writeErr := routeRoomPeerPCM(runtime.ctx, plan.manifest.ID, target, pcm); writeErr != nil {
 				if coordinator.isActive(target.plan.manifest.ID) {
 					coordinator.failParticipant(target.plan.manifest.ID, roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr), secretsForPlan(target.plan)))
 				}
@@ -595,6 +606,11 @@ func waitRoomParticipantWork(
 	}()
 	select {
 	case <-done:
+		for _, plan := range plans {
+			if plan != nil && plan.participant != nil && plan.participant.ingress != nil {
+				plan.participant.ingress.finish()
+			}
+		}
 		var closeErr error
 		for _, plan := range plans {
 			if plan == nil || plan.participant == nil || roomParticipantIsHuman(plan) || plan.participant.lifecycle == nil {
@@ -668,6 +684,9 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		if runtime.mixer != nil {
 			cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(runtime.plan.manifest.ID, "mixer"), runtime.mixer.Close))
 		}
+		if runtime.ingress != nil {
+			runtime.ingress.finish()
+		}
 	}
 	if mesh != nil {
 		cleanupErr = errors.Join(cleanupErr, closeRoomMeshBounded(mesh, cleanup))
@@ -703,7 +722,7 @@ func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result
 	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh, cleanup)
 }
 
-func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, observer RoomParticipantAudioObserver, participantEvidence *roomParticipantEvidence, secrets []string) {
+func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, inputHook func(string, []byte) error, observer RoomParticipantAudioObserver, participantEvidence *roomParticipantEvidence, secrets []string) {
 	if runtime == nil || runtime.mixer == nil {
 		return
 	}
@@ -726,8 +745,14 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, errors.New("room session loop did not become ready"), secretsForPlan(runtime.plan)))
 		return
 	}
+	sendAudioInput := loop.SendAudioInput
+	if inputHook != nil {
+		sendAudioInput = func(_ context.Context, pcm []byte) error {
+			return inputHook(runtime.plan.manifest.ID, append([]byte(nil), pcm...))
+		}
+	}
 	for {
-		frame, err := runtime.mixer.ReadFrame(runtime.ctx)
+		mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
@@ -735,18 +760,11 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))
 			return
 		}
-		// Record what this participant actually received before attempting
-		// delivery, so the artifact reflects ground truth even if the send
-		// below fails: received.pcm is the room's own account of what
-		// reached this participant, independent of whether the downstream
-		// session accepted it.
-		if participantEvidence != nil {
-			// received.pcm is an observation of the frame, not part of the
-			// participant's delivery contract. A degraded artifact must not
-			// interrupt the live mixer or session.
-			_ = participantEvidence.observeReceivedAudio(frame)
-		}
-		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
+		frame := mixed.PCM
+		if err := sendAudioInput(runtime.ctx, frame); err != nil {
+			if runtime.ingress != nil {
+				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonProviderInputRejected)
+			}
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
@@ -758,6 +776,18 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 			return
+		}
+		if runtime.ingress != nil {
+			// The mixer admission is provisional until SendAudioInput accepts
+			// this exact mixed frame. resolveFrame retains each peer's source
+			// identity and original delivered/backpressured disposition.
+			runtime.ingress.resolveFrame(mixed.Sources, len(frame), "")
+		}
+		if participantEvidence != nil {
+			// received.pcm is the provider-bound artifact. Record it only after
+			// SendAudioInput succeeds so a downstream rejection cannot create a
+			// false received frame.
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
@@ -833,10 +863,13 @@ func runRoomHumanCapture(
 				}
 				targetPCM = encodeRoomPCM16(targetSamples)
 			}
-			if writeErr := target.mixer.WriteContext(runtime.ctx, participantID, targetPCM); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
-				failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
-				coordinator.failParticipant(target.plan.manifest.ID, failure)
-				return failure
+			if writeErr := routeRoomPeerPCM(runtime.ctx, participantID, target, targetPCM); writeErr != nil {
+				if coordinator.isActive(target.plan.manifest.ID) {
+					failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
+					coordinator.failParticipant(target.plan.manifest.ID, failure)
+					return failure
+				}
+				continue
 			}
 			if opts.onParticipantAudioFanned != nil {
 				opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))
@@ -858,7 +891,7 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 	}
 	output := roomHumanOutputBuffer{}
 	for {
-		frame, err := runtime.mixer.ReadFrame(runtime.ctx)
+		mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
@@ -866,15 +899,22 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
 			return
 		}
-		if participantEvidence != nil {
-			_ = participantEvidence.observeReceivedAudio(frame)
-		}
+		frame := mixed.PCM
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
+			if runtime.ingress != nil {
+				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonParticipantOutputRejected)
+			}
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
 			return
+		}
+		if runtime.ingress != nil {
+			runtime.ingress.resolveFrame(mixed.Sources, len(frame), "")
+		}
+		if participantEvidence != nil {
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 	}
 }
