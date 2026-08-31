@@ -10,12 +10,18 @@ import (
 )
 
 const (
-	commandRouteAsk               = "ask"
-	commandRouteSession           = "session"
-	commandRouteSessionSelfPlay   = "session self-play"
-	commandRouteRoomRun           = "room run"
-	commandRouteMediaProbe        = "media probe"
-	commandRouteInteractionReplay = "interaction replay"
+	commandRouteAsk                     = "ask"
+	commandRouteSession                 = "session"
+	commandRouteSessionSelfPlay         = "session self-play"
+	commandRouteRoomRun                 = "room run"
+	commandRouteMediaProbe              = "media probe"
+	commandRouteInteractionReplay       = "interaction replay"
+	commandRouteProbeRun                = "probe run"
+	commandRouteProbeGate               = "probe gate"
+	commandRouteProbeReport             = "probe report"
+	commandRouteProbeAcceptance         = "probe acceptance"
+	commandRouteProbeFleet              = "probe fleet"
+	commandRouteProbeCustomerSimulation = "probe customer-simulation"
 )
 
 // commandPathFlagNames is the audited CLI-owned filesystem surface for the
@@ -45,6 +51,37 @@ func commandPathFlagNames(route string) []string {
 		return []string{"config", "manifest", "replay", "out"}
 	case commandRouteMediaProbe:
 		return []string{"replay-fixture"}
+	case commandRouteProbeRun:
+		return []string{
+			"scenario",
+			"record",
+			"replay",
+			"out",
+			"summary",
+			"recording-root",
+			"evidence-root",
+			"browser-user-data-dir",
+			"browser-replay",
+		}
+	case commandRouteProbeGate:
+		return []string{"out", "json"}
+	case commandRouteProbeReport:
+		return []string{"out", "json", "summary"}
+	case commandRouteProbeFleet:
+		return []string{"manifest", "replay"}
+	case commandRouteProbeCustomerSimulation:
+		return []string{
+			"scenario",
+			"audio",
+			"audio-dir",
+			"patience-reprompt-audio",
+			"binary",
+			"run-root",
+			"system-prompt",
+			"secret-file",
+			"validator-secret-file",
+			"report",
+		}
 	default:
 		return nil
 	}
@@ -62,6 +99,12 @@ func commandRoute(command *cobra.Command) string {
 	for _, route := range []string{
 		commandRouteSessionSelfPlay,
 		commandRouteInteractionReplay,
+		commandRouteProbeCustomerSimulation,
+		commandRouteProbeAcceptance,
+		commandRouteProbeReport,
+		commandRouteProbeGate,
+		commandRouteProbeFleet,
+		commandRouteProbeRun,
 		commandRouteRoomRun,
 		commandRouteMediaProbe,
 		commandRouteAsk,
@@ -77,11 +120,24 @@ func commandRoute(command *cobra.Command) string {
 		return commandRouteAsk
 	case "session":
 		return commandRouteSession
+	case "customer-simulation":
+		return commandRouteProbeCustomerSimulation
+	case "acceptance", "accept":
+		return commandRouteProbeAcceptance
+	case "gate":
+		return commandRouteProbeGate
+	case "report":
+		return commandRouteProbeReport
+	case "fleet":
+		return commandRouteProbeFleet
 	case "self-play":
 		return commandRouteSessionSelfPlay
 	case "run":
 		if command.Flags().Lookup("config") != nil && command.Flags().Lookup("out") != nil {
 			return commandRouteRoomRun
+		}
+		if command.Flags().Lookup("scenario") != nil && command.Flags().Lookup("replay") != nil {
+			return commandRouteProbeRun
 		}
 	case "probe":
 		if command.Flags().Lookup("replay-fixture") != nil {
@@ -167,6 +223,29 @@ func resolveAskFileArguments(resolver *pathResolver, args []string) ([]string, e
 	return normalized, nil
 }
 
+// resolvePathArguments resolves positional filesystem operands transactionally.
+// Probe run and customer-simulation accept scenario paths as positional
+// operands, while acceptance accepts one executable followed by literal goal
+// text. Callers choose the count so a prompt or other non-path operand remains
+// unchanged.
+func resolvePathArguments(resolver *pathResolver, args []string, count int, label string) ([]string, error) {
+	if count <= 0 || len(args) == 0 {
+		return nil, nil
+	}
+	if count > len(args) {
+		count = len(args)
+	}
+	normalized := append([]string(nil), args...)
+	for index := 0; index < count; index++ {
+		resolved, err := resolver.Resolve(args[index])
+		if err != nil {
+			return nil, fmt.Errorf("resolve %s operand %d: %w", label, index+1, err)
+		}
+		normalized[index] = resolved
+	}
+	return normalized, nil
+}
+
 // resolveCommandPaths performs all route-specific path resolution before a
 // command's PreRunE or RunE. It computes every replacement first, making a
 // failed repeatable value a pure validation failure with no partial command
@@ -197,6 +276,16 @@ func (r *Router) resolveCommandPaths(command *cobra.Command, args []string) erro
 	var err error
 	if route == commandRouteAsk {
 		normalizedArgs, err = resolveAskFileArguments(resolver, args)
+		if err != nil {
+			return err
+		}
+	} else if route == commandRouteProbeRun || route == commandRouteProbeCustomerSimulation {
+		normalizedArgs, err = resolvePathArguments(resolver, args, len(args), "scenario")
+		if err != nil {
+			return err
+		}
+	} else if route == commandRouteProbeAcceptance {
+		normalizedArgs, err = resolvePathArguments(resolver, args, 1, "acceptance executable")
 		if err != nil {
 			return err
 		}
