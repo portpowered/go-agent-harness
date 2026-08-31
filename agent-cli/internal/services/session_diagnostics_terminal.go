@@ -20,6 +20,11 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			o.emitUserCancelledTerminal()
 			return
 		}
+		if o.roomBoundCancellation && o.failure == nil && roomCancellationOnly(runErr) {
+			// A room-owned grace expiry is an intentional terminal path. It has
+			// no session_failure record; room-level evidence owns the cause.
+			return
+		}
 		completedScheduled, dispatchedInputs, scheduledInputs := o.scheduledAudioCounts()
 		scheduleIncomplete := o.scheduledAudioIncomplete()
 		unresolvedIDs := o.unresolvedToolCallIDs()
@@ -204,7 +209,10 @@ func (o *sessionProgressObserver) finish(err error) error {
 		o.clearFailure()
 		err = nil
 	}
-	if !o.userCancelled {
+	if o.roomBoundCancellation && o.failure == nil && roomCancellationOnly(err) {
+		err = nil
+	}
+	if !o.userCancelled && !o.roomBoundCancellation {
 		err = withUnresolvedToolResults(err, o)
 		err = withPendingToolContinuations(err, o)
 		err = withPendingImageContinuations(err, o)

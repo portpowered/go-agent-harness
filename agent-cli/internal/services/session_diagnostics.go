@@ -303,9 +303,20 @@ type sessionProgressObserver struct {
 	// userCancelled is set once by finish after the explicit SIGINT marker has
 	// proved that all observed causes were cancellation-only.
 	userCancelled bool
+	// roomBoundCancellation is set for the deliberate second phase of a room
+	// bound shutdown. It suppresses only cancellation-derived incomplete
+	// lifecycle errors; an independently observed provider failure remains
+	// authoritative.
+	roomBoundCancellation bool
 
 	emitOnce    sync.Once
 	metricsOnce sync.Once
+}
+
+func (o *sessionProgressObserver) markRoomBoundCancellation() {
+	if o != nil {
+		o.roomBoundCancellation = true
+	}
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {

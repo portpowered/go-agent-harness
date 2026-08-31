@@ -163,7 +163,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			}
 		}
 	}
-	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
+	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
 			evidence.recordTimelineEvent(RoomStreamEventParticipantFailed, participantID, map[string]string{"reason": reason})
@@ -183,10 +183,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 	for _, plan := range plans {
 		participantCtx, participantCancel := context.WithCancel(roomCtx)
+		admissionCtx, admissionCancel := context.WithCancel(participantCtx)
 		mixerConfig := roomReplayMixerConfig(opts, replaySchedule != nil)
 		mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)
 		if mixerErr != nil {
 			coordinator.fail(fmt.Errorf("construct room mixer: %w", mixerErr))
+			admissionCancel()
 			participantCancel()
 			roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 			result := roomFailureResult(roomErr, secrets)
@@ -196,6 +198,8 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			plan:            plan,
 			ctx:             participantCtx,
 			cancel:          participantCancel,
+			admissionCtx:    admissionCtx,
+			admissionCancel: admissionCancel,
 			loopReady:       make(chan *agentloop.AgentLoop, 1),
 			participantDone: make(chan struct{}),
 			mixerDone:       make(chan struct{}),
@@ -203,7 +207,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
 			mixer:           mixer,
 			ingress:         newRoomParticipantIngress(plan, opts, evidence),
-			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress},
+			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
 		}
 		plan.participant = runtime
 		if plan.tracker != nil {

@@ -188,6 +188,12 @@ func sessionAudioSendError(operation string, outcome messages.SessionSendOutcome
 // observable stream error. The session lifecycle can then report the still-
 // unresolved obligation instead of allowing a false clean close.
 func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool) {
+	if sessionAdmissionClosed(session) && sessionEventBlockedByAdmission(msg) {
+		// The room has already recorded its bound and is draining an existing
+		// response. Tool results, continuations, and configuration updates that
+		// cross this boundary are not admitted and are not session failures.
+		return messages.StreamMessage{}, false, false
+	}
 	outcome := messages.SendSessionWithOutcome(ctx, session, msg)
 	if outcome.OK() {
 		return messages.StreamMessage{}, false, msg.Type == messages.StreamTypeResponseCreate
@@ -229,6 +235,24 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 	}
 	r.DeltaOutbox.Write(ctx, failure)
 	return messages.StreamMessage{}, false, false
+}
+
+type sessionAdmissionController interface {
+	SessionAdmissionClosed() bool
+}
+
+func sessionAdmissionClosed(session messages.Session) bool {
+	controller, ok := session.(sessionAdmissionController)
+	return ok && controller.SessionAdmissionClosed()
+}
+
+func sessionEventBlockedByAdmission(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeResponseCancel, messages.StreamTypeSessionClose:
+		return false
+	default:
+		return true
+	}
 }
 
 // forwardQueuedSessionEvent applies the session's control-plane ordering
