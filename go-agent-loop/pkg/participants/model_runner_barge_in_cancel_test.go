@@ -263,3 +263,40 @@ func TestSessionModelRunner_EndOfTurnNotDeferredWhenIdle(t *testing.T) {
 		t.Fatalf("deferredSessionEvents = %d, want none -- nothing was active to wait on", len(state.deferredSessionEvents))
 	}
 }
+
+// Requirement 4 (over-triggering direction, coordinator follow-up): a
+// response can be genuinely in flight with no cancel ever sent -- e.g. the
+// provider auto-started a response for the very audio the customer is still
+// finishing, matching how test fixtures and server-side VAD auto-response
+// both behave. The customer's own end-of-turn boundary for that same
+// response must still reach the wire immediately; deferring it here would
+// wait on a RESPONSE.CANCEL acknowledgement that was never sent and will
+// never arrive, hanging the session until its deadline. This reproduces, at
+// the model_runner unit level, the exact shape of
+// TestFamilyDTerminationShapesThroughShippedProcess/natural in
+// agent-cli/test/integration: the fixture starts a response as soon as it
+// sees non-silent audio and only finalizes it once it observes the client's
+// own response.create -- withholding that response.create hangs forever.
+func TestSessionModelRunner_EndOfTurnNotDeferredWhenResponseActiveWithNoCancel(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	state := newInFlightRunState(t, session, runner, "resp-natural")
+
+	if state.responseCancelSent {
+		t.Fatalf("setup: no cancel should have been sent yet: %+v", state)
+	}
+
+	// The customer's own end-of-turn boundary for the response that is
+	// already streaming -- no barge-in, no cancel, just the ordinary close
+	// of the customer's turn.
+	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("sent = %#v, want the end-of-turn boundary forwarded immediately (no cancel is in flight to wait on)", sent)
+	}
+	if len(state.deferredSessionEvents) != 0 {
+		t.Fatalf("deferredSessionEvents = %d, want none -- a response with no outstanding cancel must not block the customer's own end-of-turn boundary", len(state.deferredSessionEvents))
+	}
+}

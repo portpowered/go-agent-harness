@@ -283,20 +283,29 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 		state.pendingSendErrors = nil
 		return
 	}
+	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.acknowledgementOutstanding {
+		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
+		return
+	}
 	// A control-plane event that asks the provider to open a new response
 	// (an ordinary continuation, or MESSAGE.END's commit-then-create
-	// end-of-turn boundary) must never be sent while the current response is
-	// still active locally -- whether that is a tracked acknowledgement or an
-	// ordinary in-flight response. Sending it early races the still-pending
-	// terminal boundary of the response we may have just tried to cancel: the
-	// provider can see a request for a second response before it has
-	// finished (or even acknowledged cancelling) the first, which is the
+	// end-of-turn boundary) must never be sent while a RESPONSE.CANCEL for
+	// the currently active response is still unacknowledged: the provider
+	// can then see a request for a second response before it has finished
+	// (or even acknowledged cancelling) the first, which is the
 	// state/timing mismatch behind the provider's response_cancel_not_active
-	// rejection. Hold the event until that boundary is observed, then replay
-	// it from flushDeferredSessionEvents.
+	// rejection. This is deliberately narrower than "any in-flight
+	// response" -- a response can legitimately still be in flight with no
+	// cancel ever sent (the customer's own end-of-turn boundary for the very
+	// utterance that response is answering, e.g. under server-side VAD
+	// auto-response), and that boundary must still reach the wire
+	// immediately or the session hangs waiting for a terminal event that
+	// will never arrive. Hold the event only when a cancel is actually
+	// outstanding, then replay it from flushDeferredSessionEvents once that
+	// boundary is observed.
 	requestsNewResponse := evt.Type == messages.StreamTypeMessageEnd ||
 		(evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt))
-	if requestsNewResponse && (state.acknowledgementOutstanding || state.responseInFlight) {
+	if requestsNewResponse && state.responseCancelSent && (state.responseInFlight || state.acknowledgementOutstanding) {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return
 	}
