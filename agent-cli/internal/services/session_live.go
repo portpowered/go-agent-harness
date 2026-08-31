@@ -632,6 +632,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// Audio input is an upstream producer owned by this session, but it must
+	// stop before the shared terminal boundary begins waiting for provider
+	// stragglers. Keep its cancellation scope separate from runCtx so the
+	// provider output drain can still run after the producer is quiesced.
+	audioCtx, cancelAudio := context.WithCancel(runCtx)
+	defer cancelAudio()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
@@ -643,7 +649,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 	}
 	if opts.AudioIn != nil {
-		opts.AudioIn.bindContext(runCtx)
+		opts.AudioIn.bindContext(audioCtx)
 	}
 
 	runErrCh := make(chan error, 1)
@@ -665,7 +671,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		audioErrCh := make(chan error, 1)
 		audioCh = audioErrCh
-		go func() { audioErrCh <- streamSessionAudioInput(runCtx, loop, opts.AudioIn) }()
+		go func() { audioErrCh <- streamSessionAudioInput(audioCtx, loop, opts.AudioIn) }()
 	}
 	waitAudio := func() error {
 		if audioCh == nil {
@@ -684,16 +690,33 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 		return runErr
 	}
+	quiesceUpstream := opts.quiesceUpstream
+	// Caller-owned send hooks and stdin readers own their delivery
+	// synchronization. Leave those seams running through the current finite
+	// source so a terminal session signal cannot truncate an already-admitted
+	// embedding or duplex-pipe frame sequence. CLI-owned file audio uses the
+	// loop send path and is quiesced before the provider drain.
+	if opts.AudioIn != nil && opts.AudioIn.send == nil && opts.AudioIn.reader == nil {
+		outerQuiesce := quiesceUpstream
+		quiesceUpstream = func() error {
+			cancelAudio()
+			if outerQuiesce != nil {
+				return outerQuiesce()
+			}
+			return nil
+		}
+	}
 	stopOwnedResources := func() error {
+		cancelAudio()
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
 	termination := sessionTerminationBoundary{
-		quiesceUpstream: opts.quiesceUpstream,
-		waitForStragglers: func(quiet time.Duration) error {
-			return waitForSessionLoopStragglers(out, loop, quiet, opts.observer)
+		quiesceUpstream: quiesceUpstream,
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			return waitForSessionLoopStragglers(out, loop, policy, opts.observer)
 		},
 		stopOwnedResources: stopOwnedResources,
 		flushBuffered: func() error {
@@ -825,6 +848,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		case err := <-runErrCh:
 			runErr = err
 			runDone = true
+			if ctxErr := ctx.Err(); ctxErr != nil && awaitingResponse {
+				return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctxErr))
+			}
 			return sessionRunTerminationError(ctx, terminate(nil))
 		case msg := <-loop.Deltas().Chan():
 			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, observedInferencer.Done(), timeout, out, loop, opts, msg, state, awaitingResponse, startAudio, terminate)
@@ -834,7 +860,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			}
 			if msg.Type == messages.StreamTypeSessionCreated {
 				// ModelRunner sends the initial SESSION.UPDATE while handling
-				// SESSION.CREATED. Release dynamic publication only after that
+				// SESSION.CREATED. Release dynamic publication only after the
 				// provider bootstrap boundary has been processed, so a page
 				// update cannot overtake the initial configuration.
 				publisher.markSessionReady()

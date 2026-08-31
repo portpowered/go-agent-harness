@@ -133,11 +133,14 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		model:      model,
 		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
-			Prompt:                   prompt,
-			PromptProvided:           promptProvided,
-			WaitForClose:             opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:              3 * time.Second,
-			CloseAfterScheduledAudio: scheduledAudio,
+			Prompt:         prompt,
+			PromptProvided: promptProvided,
+			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
+			MaxDuration:    3 * time.Second,
+			// Caller-supplied scheduled audio owns its close request. A bare
+			// replay must follow the capture's provider terminal instead of
+			// synthesizing a loop-authored client_close after the final turn.
+			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 			Done:                     replayDialer.Done(),
 			DoneErr:                  replayDialer.Err,
 		},

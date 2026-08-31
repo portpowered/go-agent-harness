@@ -368,12 +368,13 @@ func sessionTerminalFields(classification string, reason messages.TerminalReason
 	return strings.Join(fields, " ")
 }
 
-// waitForSessionLoopStragglers waits for provider deltas until the supplied
-// quiet period elapses. The terminal boundary is the only caller; terminal
-// code must not silently replace this bounded wait with a buffered-only flush.
-func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, obs *sessionProgressObserver) error {
+// waitForSessionLoopStragglers waits for provider deltas until the required
+// positive policy quiet period elapses. The terminal boundary is the only
+// caller; buffered-only cleanup has its own explicitly named operation.
+func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
+	quiet := policy.quietPeriod
 	if quiet <= 0 {
-		return flushBufferedSessionLoopMessages(out, loop, obs)
+		return errInvalidSessionStragglerDrainPolicy
 	}
 
 	idle := time.NewTimer(quiet)
@@ -404,6 +405,9 @@ func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, quie
 }
 
 func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) bool {
+	if msg.Type == messages.StreamTypeLoopEnd {
+		return true
+	}
 	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
 		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
 			return true

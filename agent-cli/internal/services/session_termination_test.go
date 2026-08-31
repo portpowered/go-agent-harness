@@ -21,9 +21,9 @@ func TestSessionTerminationBoundaryRendersBothDrainPhasesAndPreservesErrors(t *t
 			rendered.WriteString("upstream producers quiesced\n")
 			return quiesceErr
 		},
-		waitForStragglers: func(quiet time.Duration) error {
-			if quiet != sessionStragglerDrainQuietPeriod {
-				t.Fatalf("straggler quiet period = %s, want %s", quiet, sessionStragglerDrainQuietPeriod)
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			if policy.quietPeriod != sessionStragglerDrainQuietPeriod {
+				t.Fatalf("straggler quiet period = %s, want %s", policy.quietPeriod, sessionStragglerDrainQuietPeriod)
 			}
 			rendered.WriteString("delayed accepted provider delta\n")
 			return waitErr
@@ -61,13 +61,51 @@ func TestSessionTerminationBoundaryRendersBothDrainPhasesAndPreservesErrors(t *t
 	}
 }
 
+func TestSessionTerminationBoundaryRunsCleanupOnlyOnce(t *testing.T) {
+	var quiesceCalls, waitCalls, stopCalls, flushCalls int
+	boundary := sessionTerminationBoundary{
+		quiesceUpstream: func() error {
+			quiesceCalls++
+			return nil
+		},
+		waitForStragglers: func(sessionStragglerDrainPolicy) error {
+			waitCalls++
+			return nil
+		},
+		stopOwnedResources: func() error {
+			stopCalls++
+			return nil
+		},
+		flushBuffered: func() error {
+			flushCalls++
+			return nil
+		},
+	}
+
+	if first := boundary.terminate(nil); first != nil {
+		t.Fatalf("first termination error = %v", first)
+	}
+	if second := boundary.terminate(errors.New("ignored second cause")); second != nil {
+		t.Fatalf("second termination error = %v, want cached clean result", second)
+	}
+	if quiesceCalls != 1 || waitCalls != 1 || stopCalls != 1 || flushCalls != 1 {
+		t.Fatalf("cleanup calls = quiesce:%d wait:%d stop:%d flush:%d, want one each", quiesceCalls, waitCalls, stopCalls, flushCalls)
+	}
+}
+
+func TestSessionStragglerDrainRejectsZeroPolicy(t *testing.T) {
+	if err := waitForSessionLoopStragglers(nil, nil, sessionStragglerDrainPolicy{}, nil); !errors.Is(err, errInvalidSessionStragglerDrainPolicy) {
+		t.Fatalf("zero straggler policy error = %v, want %v", err, errInvalidSessionStragglerDrainPolicy)
+	}
+}
+
 func TestSessionTerminationBoundaryWaitRemainsBoundedWhenOutputStops(t *testing.T) {
 	started := time.Now()
 	var rendered bytes.Buffer
 
 	boundary := sessionTerminationBoundary{
-		waitForStragglers: func(quiet time.Duration) error {
-			timer := time.NewTimer(quiet)
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			timer := time.NewTimer(policy.quietPeriod)
 			defer timer.Stop()
 			<-timer.C
 			rendered.WriteString("bounded wait completed\n")

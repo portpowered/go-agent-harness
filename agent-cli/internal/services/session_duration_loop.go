@@ -96,18 +96,90 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
 	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
+	if opts.loopReady != nil {
+		select {
+		case opts.loopReady <- loop:
+		case <-runCtx.Done():
+			return runCtx.Err()
+		}
+	}
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- loop.Run(runCtx)
 	}()
 
+	var durationExpired bool
+	durationTerminalWritten := false
+	artifacts := sessionDurationArtifactsFromContext(ctx)
+	terminalState := newSessionDurationTerminalState(admittedInferencer)
+	var runErr error
+	runDone := false
+	waitRun := func() error {
+		if !runDone {
+			runErr = <-runErrCh
+			runDone = true
+		}
+		return runErr
+	}
+
+	var terminationPlanned bool
+	termination := sessionTerminationBoundary{
+		quiesceUpstream: opts.quiesceUpstream,
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			return waitForDurationSessionLoopStragglers(out, loop, policy, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
+		},
+		stopOwnedResources: func() error {
+			cancel()
+			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
+			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
+			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
+			admittedInferencer.waitForClose()
+			return errors.Join(providerErr, runTerminationErr, bindingErr)
+		},
+		flushBuffered: func() error {
+			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
+			if terminationPlanned && !terminalState.terminalWritten {
+				flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
+			}
+			return flushErr
+		},
+	}
+
+	finish := func(planned bool, preferredErr error) error {
+		terminationPlanned = planned
+		terminationErr := termination.terminate(preferredErr)
+		durationTerminalWritten = terminalState.terminalWritten
+		sessionErr := observedInferencer.sessionFailure()
+		runtimeErr := admittedInferencer.runtimeError()
+		closeErr := admittedInferencer.closeError()
+		lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, nil)
+		transportErr := sessionTransportError(sessionErr)
+		if terminationErr != nil {
+			return errors.Join(terminationErr, lifecycleErr, transportErr)
+		}
+		if lifecycleErr != nil {
+			return lifecycleErr
+		}
+		if sessionErr != nil {
+			return sessionTransportError(sessionErr)
+		}
+		if runErr != nil && !errors.Is(runErr, context.Canceled) {
+			return fmt.Errorf("session error: %w", runErr)
+		}
+		if planned && !terminalState.terminalWritten {
+			if err := writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
+				return err
+			}
+			terminalState.terminalWritten = true
+			durationTerminalWritten = true
+		}
+		return nil
+	}
+
 	timer := durationClock.NewTimer(maxDuration)
 	if timer == nil {
 		admittedInferencer.closeAdmission()
-		cancel()
-		<-runErrCh
-		admittedInferencer.waitForClose()
-		return errors.New("session duration clock returned a nil timer")
+		return finish(false, errors.New("session duration clock returned a nil timer"))
 	}
 	defer timer.Stop()
 	timerCh := timer.C()
@@ -138,10 +210,6 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	promptSent := false
 	closeSent := false
 	closeAfterOpenPending := false
-	durationExpired := false
-	durationTerminalWritten := false
-	artifacts := sessionDurationArtifactsFromContext(ctx)
-	terminalState := newSessionDurationTerminalState(admittedInferencer)
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	var runErr error
 	runDone := false
@@ -153,27 +221,31 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		return runErr
 	}
 
+	var terminationPlanned bool
+	termination := sessionTerminationBoundary{
+		quiesceUpstream: opts.quiesceUpstream,
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			return waitForDurationSessionLoopStragglers(out, loop, policy, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
+		},
+		stopOwnedResources: func() error {
+			cancel()
+			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
+			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
+			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
+			admittedInferencer.waitForClose()
+			return errors.Join(providerErr, runTerminationErr, bindingErr)
+		},
+		flushBuffered: func() error {
+			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
+			if terminationPlanned && !terminalState.terminalWritten {
+				flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
+			}
+			return flushErr
+		},
+	}
+
 	finish := func(planned bool, preferredErr error) error {
-		termination := sessionTerminationBoundary{
-			waitForStragglers: func(quiet time.Duration) error {
-				return waitForDurationSessionLoopStragglers(out, loop, quiet, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-			},
-			stopOwnedResources: func() error {
-				cancel()
-				providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-				bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-				waitRun()
-				admittedInferencer.waitForClose()
-				return errors.Join(providerErr, bindingErr)
-			},
-			flushBuffered: func() error {
-				flushErr := flushBufferedDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-				if planned && !terminalState.terminalWritten {
-					flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
-				}
-				return flushErr
-			},
-		}
+		terminationPlanned = planned
 		terminationErr := termination.terminate(preferredErr)
 		durationTerminalWritten = terminalState.terminalWritten
 		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
@@ -216,6 +288,30 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 		closeSent = true
 		return sendSessionClose(runCtx, loop)
+	}
+	processDelta := func(msg messages.StreamMessage) (sessionDurationMessageResult, error) {
+		result, msgErr := processDurationLoopMessage(runCtx, observedInferencer.Done(), timerCh, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
+		promptSent = result.promptSent
+		closeSent = result.closeSent
+		closeAfterOpenPending = result.closeAfterOpenPending
+		durationTerminalWritten = result.durationTerminalWritten
+		if msgErr != nil {
+			return result, msgErr
+		}
+		if msg.Type == messages.StreamTypeSessionCreated {
+			// ModelRunner sends the initial SESSION.UPDATE while handling
+			// SESSION.CREATED. Release dynamic publication only after that
+			// provider bootstrap boundary has been processed, so a page
+			// update cannot overtake the initial configuration.
+			publisher.markSessionReady()
+		}
+		if msg.Type == messages.StreamTypeSessionOpen {
+			startSessionUpdatedTimer()
+		}
+		if opts.observer != nil && opts.observer.scheduledAudioReady() {
+			stopSessionUpdatedTimer()
+		}
+		return result, nil
 	}
 
 	for {
@@ -272,7 +368,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if opts.DoneErr != nil {
 				doneErr = opts.DoneErr()
 			}
-			return finish(durationExpired && doneErr == nil, doneErr)
+			finishErr := finish(durationExpired && doneErr == nil, doneErr)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return sessionRunTerminationError(ctx, finishErr)
+			}
+			return finishErr
 		case pumpErr := <-rtcPumpErrors:
 			return finish(false, pumpErr)
 		case err := <-runErrCh:
@@ -283,26 +383,9 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if !ok {
 				return finish(durationExpired, nil)
 			}
-			result, msgErr := processDurationLoopMessage(runCtx, observedInferencer.Done(), timerCh, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
-			promptSent = result.promptSent
-			closeSent = result.closeSent
-			closeAfterOpenPending = result.closeAfterOpenPending
-			durationTerminalWritten = result.durationTerminalWritten
+			result, msgErr := processDelta(msg)
 			if msgErr != nil {
 				return finishDurationLoopMessageError(msgErr, expire, finish)
-			}
-			if msg.Type == messages.StreamTypeSessionCreated {
-				// ModelRunner sends the initial SESSION.UPDATE while handling
-				// SESSION.CREATED. Release dynamic publication only after that
-				// provider bootstrap boundary has been processed, so a page
-				// update cannot overtake the initial configuration.
-				publisher.markSessionReady()
-			}
-			if msg.Type == messages.StreamTypeSessionOpen {
-				startSessionUpdatedTimer()
-			}
-			if opts.observer != nil && opts.observer.scheduledAudioReady() {
-				stopSessionUpdatedTimer()
 			}
 			if result.stop {
 				return finish(result.planned, nil)
@@ -454,11 +537,12 @@ func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.Age
 }
 
 // waitForDurationSessionLoopStragglers waits for provider deltas during the
-// shared bounded quiet period. Only the shared termination boundary selects
-// this waiting operation for terminal cleanup.
-func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver, terminalState *sessionDurationTerminalState) error {
+// required positive policy quiet period. Only the shared termination boundary
+// selects this waiting operation for terminal cleanup.
+func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver, terminalState *sessionDurationTerminalState) error {
+	quiet := policy.quietPeriod
 	if quiet <= 0 {
-		return flushBufferedDurationSessionLoopMessages(out, loop, planned, terminalWritten, artifacts, obs, terminalState)
+		return errInvalidSessionStragglerDrainPolicy
 	}
 	timer := time.NewTimer(quiet)
 	defer timer.Stop()
