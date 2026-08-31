@@ -3,6 +3,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -119,7 +120,7 @@ type sessionRuntimePlan struct {
 	announce               string
 	flushCapture           func() error
 	finalize               func(context.Context, io.Writer) error
-	replayCompletion       func(io.Writer) error
+	replayCompletion       func(*sessionTerminalReporter)
 	diagnostics            SessionDiagnosticSink
 	metricsRecorder        metrics.Recorder
 	streamObserver         SessionStreamObserver
@@ -157,12 +158,18 @@ func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, s
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
+	reporter := p.loop.terminalReporter
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		p.loop.terminalReporter = reporter
+	}
 	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
 		runErr = finalizer.finish(ctx, out, runErr)
-		if runErr == nil && p.replayCompletion != nil {
-			runErr = p.replayCompletion(out)
+		if !sessionErrorHasIndependentFailure(runErr) && p.replayCompletion != nil {
+			p.replayCompletion(reporter)
 		}
+		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
 
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
@@ -189,6 +196,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	loop := p.loop
 	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
+		reporter.markRunStarted()
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
 		}

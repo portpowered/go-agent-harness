@@ -25,7 +25,8 @@ type sessionReplayMessageWriter interface {
 // line before starting the next one, so interleaved customer and assistant
 // transcripts can never be rendered as one utterance.
 type sessionReplayRenderer struct {
-	out io.Writer
+	out              io.Writer
+	terminalReporter *sessionTerminalReporter
 
 	transcriptRole        messages.Role
 	pendingTranscriptRole messages.Role
@@ -43,9 +44,14 @@ type sessionReplayTranscriptState struct {
 	completed     bool
 }
 
-func newSessionReplayRenderer(out io.Writer) *sessionReplayRenderer {
+func newSessionReplayRenderer(out io.Writer, reporter ...*sessionTerminalReporter) *sessionReplayRenderer {
+	var terminalReporter *sessionTerminalReporter
+	if len(reporter) > 0 {
+		terminalReporter = reporter[0]
+	}
 	return &sessionReplayRenderer{
 		out:              out,
+		terminalReporter: terminalReporter,
 		transcriptStates: make(map[messages.Role]sessionReplayTranscriptState),
 	}
 }
@@ -65,6 +71,9 @@ func (r *sessionReplayRenderer) Write(data []byte) (int, error) {
 }
 
 func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMessage) error {
+	if r.terminalReporter != nil && msg.Type != messages.StreamTypeSessionClose && msg.Type != messages.StreamTypeError {
+		r.terminalReporter.observeStreamMessage(msg, false)
+	}
 	switch value := msg.Value.(type) {
 	case *messages.TranscriptStartValue:
 		if err := r.finishTranscript(); err != nil {
@@ -174,7 +183,14 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		if value, ok := msg.Value.(*messages.SessionCloseValue); ok {
 			leadingNewline := !r.transcriptJustClosed
 			r.transcriptJustClosed = false
+			if r.terminalReporter != nil {
+				r.terminalReporter.observeStreamMessage(msg, leadingNewline)
+				return nil
+			}
 			return writeSessionReplayClose(r.out, value, leadingNewline)
+		}
+		if r.terminalReporter != nil {
+			r.terminalReporter.observeStreamMessage(msg, !r.transcriptJustClosed)
 		}
 		err := writeSessionReplayMessageUnscoped(r.out, msg)
 		if err == nil {

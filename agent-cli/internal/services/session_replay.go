@@ -511,7 +511,7 @@ func (c *replayInitialSessionUpdateConn) Close() error {
 }
 
 func replaySessionCapture(ctx context.Context, out io.Writer, path string) error {
-	renderer := newSessionReplayRenderer(out)
+	renderer := newSessionReplayRenderer(out, sessionTerminalReporterFromContext(ctx))
 	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false), gwtesting.WithReplayContext(ctx))
 	if err != nil {
 		return fmt.Errorf("replay session capture %s: %w", path, err)

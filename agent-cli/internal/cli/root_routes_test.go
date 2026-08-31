@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/spf13/cobra"
 )
 
@@ -66,12 +67,16 @@ func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
 	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(fleetExecutor...))
 }
 
-func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetCommand) *cobra.Command {
+func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetCommand, sessionInferencer ...messages.SessionInferencer) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	chatFlags := flags.NewChatFlags()
 	testDeviceRegistry := defaultTestDeviceRegistry{}
+	var injectedSessionInferencer messages.SessionInferencer
+	if len(sessionInferencer) > 0 {
+		injectedSessionInferencer = sessionInferencer[0]
+	}
 
 	router := NewRouter(
 		globalFlags,
@@ -86,7 +91,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,
-		NewSessionCommand(askFlags, globalFlags, nil, nil),
+		NewSessionCommand(askFlags, globalFlags, nil, injectedSessionInferencer),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
 		NewSessionDeleteCommand(globalFlags),

@@ -19,21 +19,6 @@ import (
 // after a capture-derived replay consumes the complete ordered event stream.
 const SessionReplayCompleteClassification = "replay_complete"
 
-func writeSessionReplayCompletion(out io.Writer) error {
-	if _, err := fmt.Fprintf(
-		out,
-		"\n[session terminal: classification=%s terminal_reason=%s terminal_provenance=%s output_state=%s]\n",
-		SessionReplayCompleteClassification,
-		messages.TerminalReasonReplayComplete,
-		messages.TerminalProvenanceReplay,
-		messages.TerminalOutputComplete,
-	); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintln(out, "[session replay complete]")
-	return err
-}
-
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
 	if err != nil {
@@ -170,8 +155,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		plan.audioInputs = bareAudioTurns
 	}
 	if barePromptReplay || bareAudioTurnReplay {
-		plan.replayCompletion = func(out io.Writer) error {
-			return writeSessionReplayCompletion(out)
+		plan.replayCompletion = func(reporter *sessionTerminalReporter) {
+			reporter.markReplayComplete()
 		}
 	}
 	return plan, nil
