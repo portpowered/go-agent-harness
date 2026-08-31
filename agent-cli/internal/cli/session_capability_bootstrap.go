@@ -299,20 +299,6 @@ func sessionRetryableCatalogDeadline(err error) bool {
 	return classified.Details["reason_code"] == "page_tools_unverified" && classified.Details["reason"] == "deadline_exceeded"
 }
 
-func sessionRecoverableAutomaticSelectionError(err error) bool {
-	normalized := sessionCapabilityError(err)
-	var classified *webmcp.ClassifiedError
-	if !errors.As(normalized, &classified) || classified == nil || !classified.Retryable {
-		return false
-	}
-	switch classified.Code {
-	case webmcp.ErrorAmbiguousBrowser, webmcp.ErrorAmbiguousTab:
-		return true
-	default:
-		return false
-	}
-}
-
 func sessionNoSelectionError(err error) bool {
 	var discoveryErr *discovery.DiscoveryError
 	if errors.As(err, &discoveryErr) && discoveryErr != nil && discoveryErr.Code == discovery.CodeNoEligibleTab {
