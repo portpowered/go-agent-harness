@@ -316,11 +316,14 @@ and spoken-turn diagnosis.
 If the capture was changed without recomputing its digest, replay fails before
 provider setup with an `integrity_checksum_mismatch` error that names the
 capture path, `algorithm=sha256`, and bounded stored-versus-computed digests.
-Legacy version-1 envelopes and bare event arrays are unprotected and are
-rejected with `integrity_unavailable`; they cannot be silently treated as
-verified. Regenerate a trusted capture with the current recorder (or migrate a
-reviewed fixture explicitly with the gateway package's `SealSessionCapture`)
-before replaying it. The shipped CLI has no integrity bypass.
+Legacy version-1 envelopes and event arrays are unprotected and are accepted
+only through the compatibility loader: they are structurally validated, marked
+unverified, and replay emits one warning that integrity was unavailable. They
+cannot be silently treated as verified. Malformed legacy captures remain
+rejected before replay. Regenerate a trusted capture with the current recorder
+(or migrate a reviewed fixture explicitly with the gateway package's
+`SealSessionCapture`) before relying on the protected guarantee. The shipped
+CLI has no integrity bypass.
 
 ## Sanitize Before Committing
 
