@@ -67,10 +67,16 @@ func looksLikeLocalPath(arg string) bool {
 		// attachment paths.
 		return false
 	}
+	// A quoted leading-tilde path is not expanded by the shell. Recognize it
+	// before the whitespace check so a home-relative filename containing spaces
+	// remains an attachment after the CLI resolves its tilde.
+	if looksLikeLeadingTildePath(arg) {
+		return true
+	}
 	if strings.ContainsAny(arg, " \t\r\n") {
 		return false
 	}
-	if filepath.IsAbs(arg) || arg == "." || arg == ".." || strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") || strings.HasPrefix(arg, "~/") {
+	if filepath.IsAbs(arg) || arg == "." || arg == ".." || strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") {
 		return true
 	}
 	// Check both separators so a Windows-shaped path remains path intent when
@@ -82,4 +88,22 @@ func looksLikeLocalPath(arg string) bool {
 	// such as "photo.png" while ordinary multi-word prompts remain text.
 	ext := filepath.Ext(arg)
 	return ext != "" && ext != "."
+}
+
+func looksLikeLeadingTildePath(arg string) bool {
+	if arg == "~" {
+		return true
+	}
+	if len(arg) < 2 || arg[0] != '~' {
+		return false
+	}
+	if arg[1] == '/' || arg[1] == '\\' {
+		return true
+	}
+	separator := strings.IndexAny(arg[1:], `/\\`)
+	if separator < 0 {
+		return !strings.ContainsAny(arg[1:], " \t\r\n")
+	}
+	username := arg[1 : separator+1]
+	return username != "" && !strings.ContainsAny(username, " \t\r\n")
 }

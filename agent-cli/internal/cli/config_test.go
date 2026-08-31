@@ -31,6 +31,10 @@ type cliResult struct {
 }
 
 func newGeneratedCLIRoot(configDir string) *cobra.Command {
+	return newGeneratedCLIRootWithPathResolver(configDir, nil)
+}
+
+func newGeneratedCLIRootWithPathResolver(configDir string, resolver *pathResolver) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
 	askFlags := flags.NewAskFlags()
@@ -57,6 +61,9 @@ func newGeneratedCLIRoot(configDir string) *cobra.Command {
 		NewConfigCommand(),
 		NewConfigAddLocalCommand(globalFlags),
 	)
+	if resolver != nil {
+		router.pathResolver = resolver
+	}
 	return NewAgentCLI(router).Generate()
 }
 

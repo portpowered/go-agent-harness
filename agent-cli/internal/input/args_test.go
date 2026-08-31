@@ -60,3 +60,13 @@ func TestParseAskArgs_RecognizesExistingPathWithSpaces(t *testing.T) {
 		t.Fatalf("attachment paths = %#v, want %q", paths, path)
 	}
 }
+
+func TestParseAskArgs_RecognizesQuotedLeadingTildePathWithSpaces(t *testing.T) {
+	prompt, paths := ParseAskArgs([]string{"summarize", "~/notes with spaces.txt"})
+	if prompt != "summarize" {
+		t.Fatalf("prompt = %q, want prompt without tilde attachment", prompt)
+	}
+	if !reflect.DeepEqual(paths, []string{"~/notes with spaces.txt"}) {
+		t.Fatalf("attachment paths = %#v, want quoted leading-tilde path", paths)
+	}
+}
