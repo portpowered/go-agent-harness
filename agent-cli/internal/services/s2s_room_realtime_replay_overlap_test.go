@@ -816,9 +816,7 @@ func awaitRoomBidirectionalIDs(t *testing.T, ids <-chan string, wants ...string)
 	for len(pending) > 0 {
 		select {
 		case id := <-ids:
-			if _, ok := pending[id]; ok {
-				delete(pending, id)
-			}
+			delete(pending, id)
 		case <-timer.C:
 			t.Fatalf("bidirectional participant events were not observed for %v", pending)
 		}
