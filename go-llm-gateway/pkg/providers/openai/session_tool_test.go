@@ -66,6 +66,94 @@ func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
 	}
 }
 
+func TestRealtimeSession_RuntimeSessionUpdatesIncludeRealtimeType(t *testing.T) {
+	conn := newMockWebSocketConn()
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	sender, ok := session.(messages.SessionSendOutcomeSender)
+	if !ok {
+		t.Fatal("session does not implement SendWithOutcome")
+	}
+	fullUpdate := messages.StreamMessage{
+		Type: messages.StreamTypeSessionUpdate,
+		Value: &messages.SessionUpdateValue{
+			Model:        "gpt-realtime-2.1-mini",
+			Instructions: "Use the selected page.",
+			Modalities:   []string{"text", "audio"},
+			Tools: []messages.ToolDefinition{{
+				Name:        "lookup_weather",
+				Description: "Look up weather.",
+				Parameters:  []messages.ToolParameter{{Name: "city", Type: "string", Required: true}},
+			}},
+		},
+	}
+	if outcome := sender.SendWithOutcome(ctx, fullUpdate); outcome.Status != messages.SessionSendSucceeded {
+		t.Fatalf("full runtime update status = %#v, want succeeded", outcome)
+	}
+	toolsOnly := messages.StreamMessage{
+		Type: messages.StreamTypeSessionUpdate,
+		Value: &messages.SessionUpdateValue{
+			Tools: []messages.ToolDefinition{{Name: "selected_page_tool"}},
+		},
+	}
+	if outcome := sender.SendWithOutcome(ctx, toolsOnly); outcome.Status != messages.SessionSendSucceeded {
+		t.Fatalf("tools-only runtime update status = %#v, want succeeded", outcome)
+	}
+
+	clientMessages := waitForClientMessages(t, conn, 3)
+	for index, payload := range clientMessages {
+		var envelope struct {
+			Type    string                     `json:"type"`
+			Session map[string]json.RawMessage `json:"session"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("decode client frame %d: %v", index, err)
+		}
+		if envelope.Type != string(models.SessionEventSessionUpdate) {
+			t.Fatalf("client frame %d type = %q, want session.update", index, envelope.Type)
+		}
+		var sessionType string
+		if err := json.Unmarshal(envelope.Session["type"], &sessionType); err != nil {
+			t.Fatalf("decode session.type in client frame %d: %v", index, err)
+		}
+		if sessionType != realtimeSessionType {
+			t.Fatalf("client frame %d session.type = %q, want %q", index, sessionType, realtimeSessionType)
+		}
+	}
+
+	var toolsOnlyEnvelope struct {
+		Session map[string]json.RawMessage `json:"session"`
+	}
+	if err := json.Unmarshal(clientMessages[2], &toolsOnlyEnvelope); err != nil {
+		t.Fatalf("decode tools-only runtime update: %v", err)
+	}
+	if _, ok := toolsOnlyEnvelope.Session["model"]; ok {
+		t.Fatal("tools-only runtime update copied the initial model")
+	}
+	if _, ok := toolsOnlyEnvelope.Session["instructions"]; ok {
+		t.Fatal("tools-only runtime update copied initial instructions")
+	}
+	if _, ok := toolsOnlyEnvelope.Session["output_modalities"]; ok {
+		t.Fatal("tools-only runtime update copied initial modalities")
+	}
+	if _, ok := toolsOnlyEnvelope.Session["tools"]; !ok {
+		t.Fatal("tools-only runtime update omitted tools")
+	}
+}
+
 func TestRealtimeSession_ToolCallEndSendsSingleFunctionCallOutput(t *testing.T) {
 	conn := newMockWebSocketConn()
 	dialer := &mockWebSocketDialer{conn: conn}

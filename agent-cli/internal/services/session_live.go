@@ -173,6 +173,10 @@ type sessionLoopOptions struct {
 	// BrowserWatch is an independent subscription to the broker's semantic
 	// lifecycle observations. It is nil for sessions without browser tools.
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
+	// PublicationTimerFactory controls dynamic catalog settle boundaries. Nil
+	// selects the production wall-clock timer; tests may provide a deterministic
+	// fake-clock implementation.
+	PublicationTimerFactory webmcp.TimerFactory
 
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed

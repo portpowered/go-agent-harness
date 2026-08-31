@@ -506,6 +506,7 @@ func TestConnectSession_LegacyRealtimeSessionUpdateIsExplicit(t *testing.T) {
 	}
 	assertStringField(t, sessionPayload, "input_audio_format", "pcm16")
 	assertStringField(t, sessionPayload, "output_audio_format", "g711_alaw")
+	assertStringField(t, sessionPayload, "type", realtimeSessionType)
 	if _, ok := sessionPayload["audio"]; ok {
 		t.Fatal("legacy OpenAI realtime session.update should not send GA nested audio")
 	}
