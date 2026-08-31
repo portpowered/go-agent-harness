@@ -227,7 +227,7 @@ func runRoomParticipant(
 		return
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
-	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	observer = newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 	observer.livenessObserver = func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
 		classification, _, _, _ := sessionLivenessMetadata(err)

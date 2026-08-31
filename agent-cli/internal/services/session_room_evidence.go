@@ -1300,11 +1300,3 @@ func roomMixerConfigForOptions(opts RoomRunOptions) room.PCM16MixerConfig {
 	}
 	return config
 }
-
-func roomFormatForOptions(opts RoomRunOptions) room.PCM16Format {
-	format := roomMixerConfigForOptions(opts).Format
-	if format == (room.PCM16Format{}) {
-		return room.DefaultPCM16Format()
-	}
-	return format
-}

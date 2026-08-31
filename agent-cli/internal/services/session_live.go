@@ -16,8 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
-const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
-
 var errSessionMaxDurationExpired = errors.New("session max duration expired")
 
 // ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run

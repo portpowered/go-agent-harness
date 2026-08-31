@@ -728,7 +728,6 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		}
 	}
 	if cleanupErr != nil {
-		err = errors.Join(err, roomParticipantFailure(id, cleanupErr, secrets))
 		if runtime.lifecycle != nil {
 			runtime.lifecycle.markParticipantFailure(cleanupErr)
 		}
