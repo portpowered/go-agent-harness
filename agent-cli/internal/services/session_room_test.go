@@ -18,6 +18,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+const (
+	roomFanoutSafetyTimeout = 10 * time.Second
+	// The shared room-test options use a short lifetime for tests that exercise
+	// ordinary participant termination. This fanout test needs a longer
+	// startup allowance so scheduler contention cannot stop the room before
+	// its causal frame assertion observes all participants.
+	roomFanoutMaxDuration = 30 * time.Second
+)
+
 func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -141,8 +150,31 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	inputFrames := make(chan roomAudioFrame, 128)
 	outputIDs := make(chan string, len(ids))
 	opts, factoryCalls := newRoomTestRunOptions(ids, inferencers)
+	opts.Manifest.Room.MaxDuration = roomFanoutMaxDuration
+	audioGate := make(chan struct{})
+	var openedMu sync.Mutex
+	var opened int
+	var audioGateOnce sync.Once
+	for _, inferencer := range inferencers {
+		inferencer.audioGate = audioGate
+	}
+	opts.onParticipantSessionOpen = func(string) {
+		openedMu.Lock()
+		opened++
+		allOpened := opened == len(ids)
+		openedMu.Unlock()
+		if allOpened {
+			audioGateOnce.Do(func() { close(audioGate) })
+		}
+	}
+	var observedMu sync.Mutex
+	observed := make(map[string][][]byte, len(ids))
 	opts.OnAudioInput = func(id string, pcm []byte) error {
-		inputFrames <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
+		copyPCM := append([]byte(nil), pcm...)
+		observedMu.Lock()
+		observed[id] = append(observed[id], copyPCM)
+		observedMu.Unlock()
+		inputFrames <- roomAudioFrame{id: id, pcm: copyPCM}
 		return nil
 	}
 	opts.OnAudioOutput = func(id string, _ []byte) error {
@@ -164,7 +196,7 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 		"c": roomPCM16(3000, 10),
 	}
 	seen := make(map[string]bool, len(ids))
-	deadline := time.NewTimer(2 * time.Second)
+	deadline := time.NewTimer(roomFanoutSafetyTimeout)
 	defer deadline.Stop()
 	for len(seen) < len(ids) {
 		select {
@@ -173,7 +205,18 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 				seen[frame.id] = true
 			}
 		case <-deadline.C:
-			t.Fatalf("timed out waiting for N-1 mixed frames; seen %v", seen)
+			observedMu.Lock()
+			observedSummary := make(map[string][]string, len(observed))
+			for id, frames := range observed {
+				for index, frame := range frames {
+					if index == 8 {
+						break
+					}
+					observedSummary[id] = append(observedSummary[id], fmt.Sprintf("%x", frame))
+				}
+			}
+			observedMu.Unlock()
+			t.Fatalf("timed out after %s waiting for N-1 mixed frames; seen %v; observed=%v", roomFanoutSafetyTimeout, seen, observedSummary)
 		}
 	}
 	cancel()
@@ -181,7 +224,7 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	var got roomTestRunOutcome
 	select {
 	case got = <-outcome:
-	case <-time.After(2 * time.Second):
+	case <-time.After(roomFanoutSafetyTimeout):
 		t.Fatal("room did not terminate after cancellation")
 	}
 	if got.err != nil {
@@ -201,7 +244,7 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	for range ids {
 		select {
 		case <-outputIDs:
-		case <-time.After(time.Second):
+		case <-time.After(roomFanoutSafetyTimeout):
 			t.Fatal("room did not observe every provider audio delta")
 		}
 	}
@@ -997,6 +1040,7 @@ type roomTestInferencer struct {
 	connectErr   error
 	events       []messages.StreamMessage
 	eventWait    func(index int) <-chan struct{}
+	audioGate    <-chan struct{}
 	disconnect   bool
 	terminalErr  error
 	onConnect    func()
@@ -1023,6 +1067,7 @@ func (i *roomTestInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 	i.mu.Unlock()
 	events := append([]messages.StreamMessage(nil), i.events...)
 	go func() {
+		waitedForAudio := false
 		for index, event := range events {
 			if i.eventWait != nil {
 				if wait := i.eventWait(index); wait != nil {
@@ -1032,6 +1077,14 @@ func (i *roomTestInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 						return
 					}
 				}
+			}
+			if !waitedForAudio && event.Type == messages.StreamTypeAudioDelta && i.audioGate != nil {
+				select {
+				case <-i.audioGate:
+				case <-ctx.Done():
+					return
+				}
+				waitedForAudio = true
 			}
 			if !session.receive.Write(ctx, event) {
 				return

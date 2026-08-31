@@ -27,6 +27,7 @@ func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T
 
 	for attempt := 0; attempt < 3; attempt++ {
 		t.Run(fmt.Sprintf("attempt-%d", attempt+1), func(t *testing.T) {
+			t.Parallel()
 			marker := filepath.Join(t.TempDir(), "blocked-child.markers")
 			// Leave enough startup headroom for the parent, child, and grandchild
 			// on cold or contended workers while keeping this test-only budget

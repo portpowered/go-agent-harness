@@ -121,8 +121,15 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	// A bare session is now a live-device admission path. Keep this help smoke
 	// test on an explicit non-session-mode invocation so it never needs a host
 	// credential or audio device.
+	binaryPath := filepath.Join(t.TempDir(), "agent")
+	build := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent")
+	build.Dir = moduleDir
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build agent: %v\n%s", err, output)
+	}
 	for _, args := range [][]string{{"session", "--help"}, {"session", "--prompt="}} {
-		cmd := exec.Command("go", append([]string{"run", "./cmd/agent"}, args...)...)
+		cmd := exec.Command(binaryPath, args...)
 		cmd.Dir = moduleDir
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		output, err := cmd.CombinedOutput()

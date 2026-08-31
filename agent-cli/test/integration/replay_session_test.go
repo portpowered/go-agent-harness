@@ -188,6 +188,12 @@ func readFixtureReplayMessage(t *testing.T, replayer *gwtesting.SessionReplayer)
 	case msg := <-replayer.Receive().Chan():
 		return msg
 	case <-replayer.Done():
+		// Done can become selectable alongside a buffered final message because
+		// the replayer publishes the message before closing its lifecycle signal.
+		// Drain that message before treating completion as an unexpected end.
+		if msg, ok := replayer.Receive().Read(); ok {
+			return msg
+		}
 		t.Fatalf("replayer finished before next fixture event: %v", replayer.Err())
 	case <-time.After(sessionReplaySafetyTimeout):
 		t.Fatalf("timed out waiting for fixture replay message after %s", sessionReplaySafetyTimeout)
