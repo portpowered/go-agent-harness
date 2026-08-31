@@ -190,6 +190,7 @@ room:
 participants:
   - id: alpha-configured
     system_prompt: "Alpha configured persona"
+    opening_prompt: "Start the configured room."
     provider: openai
     model: gpt-realtime-2.1-mini
     api_key_env: ROOM_ALPHA_CONFIGURED_KEY

@@ -970,15 +970,22 @@ func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferen
 			OutputQueueFrames: 8,
 		},
 	}
-	for _, id := range ids {
-		opts.Manifest.Participants = append(opts.Manifest.Participants, room.Participant{
+	for index, id := range ids {
+		participant := room.Participant{
 			ID:           id,
 			SystemPrompt: "room test participant " + id,
 			Provider:     "test-provider",
 			Model:        "test-model",
 			APIKeyEnv:    "ROOM_" + strings.ToUpper(id) + "_KEY",
 			Tools:        []string{},
-		})
+		}
+		if index == 0 {
+			// Designate the first participant as the room's opener so this
+			// shared fixture satisfies the manifest's "someone must speak
+			// first" requirement without changing any other test behavior.
+			participant.OpeningPrompt = "Start the room, " + id + "."
+		}
+		opts.Manifest.Participants = append(opts.Manifest.Participants, participant)
 	}
 	factoryCalls := make(map[string]SessionRunOptions, len(ids))
 	var mu sync.Mutex

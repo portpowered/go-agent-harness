@@ -107,7 +107,7 @@ func TestRoomRunCommandConfigRecordingPolicyIsAuthoritative(t *testing.T) {
   "schema_version": 1,
   "room": {"max_turns": 1, "recording": {"enabled": false}},
   "participants": [
-    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_POLICY_ALICE_KEY", "tools": []},
+    {"id": "alice", "system_prompt": "Alice", "opening_prompt": "Start the room.", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_POLICY_ALICE_KEY", "tools": []},
     {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_POLICY_BOB_KEY", "tools": []}
   ]
 }`)
@@ -139,7 +139,7 @@ func TestRoomRunCommandConfigRecordingDestinationIsAuthoritative(t *testing.T) {
   "schema_version": 1,
   "room": {"max_turns": 1, "recording": {"directory": %q}},
   "participants": [
-    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_DEST_ALICE_KEY", "tools": []},
+    {"id": "alice", "system_prompt": "Alice", "opening_prompt": "Start the room.", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_DEST_ALICE_KEY", "tools": []},
     {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_DEST_BOB_KEY", "tools": []}
   ]
 }`, destination))
@@ -275,6 +275,7 @@ room:
 participants:
   - id: yaml-alpha
     system_prompt: "YAML alpha"
+    opening_prompt: "Start the room."
     provider: openai
     model: gpt-realtime-2.1-mini
     api_key_env: ROOM_YAML_ALPHA_KEY

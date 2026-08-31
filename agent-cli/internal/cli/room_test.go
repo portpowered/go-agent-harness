@@ -198,6 +198,81 @@ func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	}
 }
 
+// TestRoomRunCommandRejectsAllAgentRoomWithNoOpenerAndExitsNonZero is the
+// core regression guard for the silent-all-agent-room defect: a room with
+// only agent participants and no opening_prompt has nobody to speak first,
+// so a live run would idle in silence until max_duration expired and still
+// report success (0 turns, 0 audio, reason=max_duration_reached, exit 0).
+// The command must instead fail loudly before the runner (and therefore
+// before any provider is dialed), and `agent room run`'s process exit code
+// must be non-zero — cmd/agent's main.go calls os.Exit(1) whenever
+// rootCmd.Execute() returns a non-nil error, so asserting a non-nil error
+// here is the exit-code assertion.
+func TestRoomRunCommandRejectsAllAgentRoomWithNoOpenerAndExitsNonZero(t *testing.T) {
+	t.Setenv("ROOM_ALICE_KEY", "alice-secret")
+	t.Setenv("ROOM_BOB_KEY", "bob-secret")
+	path := filepath.Join(t.TempDir(), "no-opener.json")
+	data := []byte(`{
+  "schema_version": 1,
+  "room": {"max_turns": 2},
+  "participants": [
+    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_ALICE_KEY", "tools": []},
+    {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_BOB_KEY", "tools": []}
+  ]
+}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write no-opener manifest: %v", err)
+	}
+	var calls atomic.Int32
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		calls.Add(1)
+		return services.RoomResult{}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--manifest", path, "--out", filepath.Join(t.TempDir(), "out")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("error = <nil>, want a non-nil error (and therefore a non-zero process exit) for an all-agent room with no designated opener")
+	}
+	if !strings.Contains(err.Error(), "opening_prompt") {
+		t.Fatalf("error = %v, want actionable guidance naming opening_prompt", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("runner calls = %d, want zero: a room that can never speak must never reach the runner (and never dial a provider)", calls.Load())
+	}
+}
+
+// TestRoomRunCommandAcceptsRoomWithDesignatedOpener guards against
+// over-triggering the new check: an ordinary two-agent room where one
+// participant sets opening_prompt must still start and succeed normally.
+func TestRoomRunCommandAcceptsRoomWithDesignatedOpener(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	var calls atomic.Int32
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		calls.Add(1)
+		if len(options.Manifest.Participants) == 0 || options.Manifest.Participants[0].OpeningPrompt == "" {
+			t.Fatalf("expected the manifest's opening participant to be preserved: %+v", options.Manifest.Participants)
+		}
+		return services.RoomResult{
+			TerminationReason: services.RoomTerminationMaxTurnsReached,
+			Participants: map[string]services.RoomParticipantResult{
+				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: services.ParticipantTerminationEnded, TurnsCompleted: 2},
+				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: services.ParticipantTerminationEnded, TurnsCompleted: 2},
+			},
+		}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--manifest", manifestPath})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute normal room with a designated opener: %v, want exit 0", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("runner calls = %d, want exactly one", calls.Load())
+	}
+}
+
 func TestRoomRunCommandReplayAdmissionBypassesLiveLaunchSeams(t *testing.T) {
 	registry := newBareRoomCLIRegistry(t)
 	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), registry)
@@ -391,7 +466,7 @@ func writeRoomCLIManifest(t *testing.T) string {
   "schema_version": 1,
   "room": {"max_turns": 2},
   "participants": [
-    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_ALICE_KEY", "tools": []},
+    {"id": "alice", "system_prompt": "Alice", "opening_prompt": "Start the room.", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_ALICE_KEY", "tools": []},
     {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_BOB_KEY", "tools": []}
   ]
 }`)
