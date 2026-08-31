@@ -172,7 +172,6 @@ func TestRunRoom_ParticipantFailurePublishesEventAndPreservesSurvivor(t *testing
 			failureEventCount++
 		case RoomStreamEventRunTerminated:
 			terminalEventCount++
-			break
 		}
 		if terminalEventCount > 0 {
 			break
