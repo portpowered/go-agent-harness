@@ -738,10 +738,17 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if opts.DoneErr != nil {
 				doneErr = opts.DoneErr()
 			}
-			var initialDrainErr error
-			if doneErr == nil {
-				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
-			}
+			// The transport's terminal signal travels out of band and can
+			// overtake provider messages that are still in flight between the
+			// session receive buffer and this consumer. Drain them before
+			// stop() cancels the hot loop, whether or not the transport also
+			// reported an error: after cancellation every message still
+			// upstream of loop.Deltas() is discarded, because the model
+			// runner's outbox write is context-aware and drops on a cancelled
+			// context. Skipping the drain on error would mean the runs that
+			// most need their already-received output are the ones that lose
+			// it. The transport error is still reported below.
+			initialDrainErr := drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
 			stopErr := stop()
 			if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)

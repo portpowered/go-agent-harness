@@ -127,10 +127,16 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 
 	finish := func(planned bool, preferredErr error) error {
-		var preCancelDrainErr error
-		if preferredErr == nil {
-			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-		}
+		// A terminal signal must never skip the straggler drain. Provider
+		// messages travel through the session receive buffer and the loop's
+		// delta buffer, while termination travels out of band, so a terminal
+		// signal routinely overtakes output the session has already accepted.
+		// Once cancel() runs, everything still upstream of loop.Deltas() is
+		// discarded, and the unconditional drain below only collects what is
+		// already buffered. Draining first regardless of preferredErr keeps an
+		// errored run from losing the output it did receive; preferredErr is
+		// still reported as the primary cause below.
+		preCancelDrainErr := drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
