@@ -852,32 +852,6 @@ type roomEvidenceManifest struct {
 	Error             string                      `json:"error,omitempty"`
 }
 
-// roomEvidenceArtifactIntegrity is one entry of roomEvidenceManifest's
-// artifact_integrity map: the declared size and sha256 digest of one
-// artifact file, computed from the file actually written to disk.
-type roomEvidenceArtifactIntegrity struct {
-	Size   int64  `json:"size"`
-	SHA256 string `json:"sha256"`
-}
-
-// roomEvidenceHashArtifact stats and hashes one bundle-relative artifact path
-// and reports whether it could be read. A missing or unreadable file (for
-// example one behind a degraded recording sink) is reported as absent rather
-// than as an integrity entry with a size of zero: an absent entry correctly
-// makes replay admission reject that artifact as incomplete, instead of
-// admitting a zero-byte stand-in as if it were the real, complete artifact.
-func roomEvidenceHashArtifact(destination, relativePath string) (roomEvidenceArtifactIntegrity, bool) {
-	if strings.TrimSpace(relativePath) == "" {
-		return roomEvidenceArtifactIntegrity{}, false
-	}
-	data, err := os.ReadFile(filepath.Join(destination, relativePath))
-	if err != nil {
-		return roomEvidenceArtifactIntegrity{}, false
-	}
-	digest := sha256.Sum256(data)
-	return roomEvidenceArtifactIntegrity{Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])}, true
-}
-
 // roomEvidenceAudioFormat is the full PCM contract the replay reader
 // (parseRoomReplayPCMFormat in session_room_replay_manifest.go) requires:
 // sample_rate/channels/encoding alone are not enough to satisfy it. Every
@@ -987,18 +961,10 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		RecordingStatus:   cloneRoomRecordingStatus(recordingStatus),
 		DegradedArtifacts: cloneRoomStringMap(degradedArtifacts),
 	}
-	hashInto := func(relativePath string) {
-		if relativePath == "" {
-			return
-		}
-		if integrity, ok := roomEvidenceHashArtifact(e.destination, relativePath); ok {
-			manifest.ArtifactIntegrity[relativePath] = integrity
-		}
-	}
 	manifest.Artifacts["room_mix"] = RoomEvidenceMixPath
 	manifest.Artifacts["room_timeline"] = RoomEvidenceTimelinePath
-	hashInto(RoomEvidenceMixPath)
-	hashInto(RoomEvidenceTimelinePath)
+	e.hashArtifactInto(manifest.ArtifactIntegrity, RoomEvidenceMixPath)
+	e.hashArtifactInto(manifest.ArtifactIntegrity, RoomEvidenceTimelinePath)
 	// room-latency.json is diagnostic-only: no replay artifact role ever
 	// claims it, so it is deliberately not added to Artifacts/
 	// ArtifactIntegrity. Declaring it there without any role claiming
@@ -1063,15 +1029,15 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		manifest.Artifacts[participant.ID+".sent_pcm"] = paths.SentPCM
 		manifest.Artifacts[participant.ID+".received_pcm"] = paths.ReceivedPCM
 		manifest.Artifacts[participant.ID+".events"] = paths.Events
-		hashInto(paths.WAV)
-		hashInto(paths.Diagnostics)
-		hashInto(paths.Deltas)
-		hashInto(paths.SentPCM)
-		hashInto(paths.ReceivedPCM)
-		hashInto(paths.Events)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.WAV)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.Diagnostics)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.Deltas)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.SentPCM)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.ReceivedPCM)
+		e.hashArtifactInto(manifest.ArtifactIntegrity, paths.Events)
 		if paths.Capture != "" {
 			manifest.Artifacts[participant.ID+".capture"] = paths.Capture
-			hashInto(paths.Capture)
+			e.hashArtifactInto(manifest.ArtifactIntegrity, paths.Capture)
 		}
 	}
 	return writeRoomEvidenceManifestFile(filepath.Join(e.destination, RoomEvidenceManifestPath), manifest, e.secrets)
