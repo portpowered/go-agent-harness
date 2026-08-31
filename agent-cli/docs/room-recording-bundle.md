@@ -76,8 +76,13 @@ heard what another participant said.
   truth even when delivery downstream fails.
 - Sample rate and channel count for both files are named once, in
   `run-manifest.json`'s top-level `audio_format` object
-  (`{"sample_rate": 24000, "channels": 1, "encoding": "pcm_s16le"}`), rather
-  than being implicit or requiring a WAV header to discover.
+  (`{"sample_rate": 24000, "channels": 1, "encoding": "pcm_s16le",
+  "sample_width_bits": 16, "byte_order": "little"}`), rather than being
+  implicit or requiring a WAV header to discover. `sample_width_bits` and
+  `byte_order` are always `16`/`"little"` (the room runtime only ever
+  records signed 16-bit little-endian PCM), but `agent room run --replay`'s
+  bundle admission requires both fields explicitly, so the writer emits them
+  rather than leaving a reader to assume a default.
 
 ## Wall-clock timestamps
 
