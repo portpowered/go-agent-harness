@@ -99,10 +99,12 @@ func validateAskFlags(cmd *cobra.Command, askFlags *flags.AskFlags, loopFlags *f
 // Generate returns the cobra command for ask.
 func (c *AskCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ask [prompt] [files...]",
-		Short: "Ask the agent a question and get a response",
-		Long:  "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | agent ask",
-		Args:  cobra.ArbitraryArgs,
+		Use:           "ask [prompt] [files...]",
+		Short:         "Ask the agent a question and get a response",
+		Long:          "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | agent ask",
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateAskFlags(cmd, c.askFlags, c.loopFlags); err != nil {
 				return err

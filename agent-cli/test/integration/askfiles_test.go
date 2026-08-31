@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -322,9 +323,9 @@ func TestAskWithConfigDirAndImageFile(t *testing.T) {
 	}
 }
 
-// TestAskNonexistentPathTreatedAsPrompt runs ask with a path that does not exist.
-// Such args are not treated as file paths (ParseAskArgs only adds existing files), so they become prompt text and the command succeeds.
-func TestAskNonexistentPathTreatedAsPrompt(t *testing.T) {
+// TestAskNonexistentPathRejected runs ask with a path that does not exist and
+// verifies the path is not silently reclassified as prompt text.
+func TestAskNonexistentPathRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	nonexistent := filepath.Join(tmpDir, "does-not-exist.jpg")
 
@@ -344,11 +345,16 @@ func TestAskNonexistentPathTreatedAsPrompt(t *testing.T) {
 
 	ctx := context.Background()
 	err = rootCmd.ExecuteContext(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error (nonexistent path is treated as prompt): %v", err)
+	if err == nil {
+		t.Fatal("expected missing attachment error")
 	}
-	// Nonexistent path was included in prompt text, not loaded as file
-	if !rec.containsSystemPrompt("prompt") {
-		t.Error("expected prompt text in request")
+	if !strings.Contains(err.Error(), nonexistent) || !strings.Contains(err.Error(), "missing file") {
+		t.Fatalf("error = %q, want supplied path and missing-file reason", err)
+	}
+	if len(rec.recorded) != 0 {
+		t.Fatalf("inference calls = %d, want zero for missing attachment", len(rec.recorded))
+	}
+	if testWriter.StdoutString() != "" {
+		t.Fatalf("stdout = %q, want empty on rejected attachment", testWriter.StdoutString())
 	}
 }

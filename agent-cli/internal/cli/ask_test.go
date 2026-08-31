@@ -5,12 +5,16 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/spf13/cobra"
@@ -203,6 +207,162 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 				t.Errorf("stream calls = %d, want %d", streams, tc.wantStreams)
 			}
 		})
+	}
+}
+
+func TestAskCommandRejectsInvalidAttachmentsBeforeInference(t *testing.T) {
+	dir := t.TempDir()
+	directory := filepath.Join(dir, "directory")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := filepath.Join(dir, "opaque.bin")
+	if err := os.WriteFile(unsupported, []byte{0, 1, 2, 3}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name   string
+		path   string
+		reason string
+	}{
+		{name: "missing", path: filepath.Join(dir, "missing.txt"), reason: input.AttachmentReasonMissing},
+		{name: "directory", path: directory, reason: input.AttachmentReasonNotRegular},
+		{name: "unsupported content", path: unsupported, reason: input.AttachmentReasonUnsupported},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inf := &askTestInferencer{}
+			stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+			err := runAskTestCommand(t, []string{"describe this", tc.path}, strings.NewReader(""), inf, stdout, stderr)
+			if err == nil {
+				t.Fatal("expected invalid attachment error")
+			}
+			if !strings.Contains(err.Error(), tc.path) || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("error = %q, want supplied path and reason %q", err, tc.reason)
+			}
+			if strings.Count(err.Error(), tc.path) != 1 {
+				t.Errorf("error = %q, want supplied path exactly once", err)
+			}
+			inf.mu.Lock()
+			calls := inf.inferCalls
+			inf.mu.Unlock()
+			if calls != 0 {
+				t.Fatalf("inference calls = %d, want zero for rejected attachment", calls)
+			}
+			if stdout.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("stdout/stderr = %q/%q, want no command output before final rendering", stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestAskCommandValidAttachmentsReachInferenceExactlyOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(path, []byte("notes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inf := &askTestInferencer{}
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	err := runAskTestCommand(t, []string{"summarize this", path}, strings.NewReader(""), inf, stdout, stderr)
+	if err != nil {
+		t.Fatalf("execute ask: %v", err)
+	}
+	inf.mu.Lock()
+	defer inf.mu.Unlock()
+	if inf.inferCalls != 1 || len(inf.requests) != 1 {
+		t.Fatalf("inference calls/requests = %d/%d, want exactly one", inf.inferCalls, len(inf.requests))
+	}
+	var found bool
+	for _, message := range inf.requests[0].Messages {
+		if message.Role != messages.RoleUser {
+			continue
+		}
+		if message.TextContent() != "summarize this" || len(message.ContentParts) != 2 {
+			t.Fatalf("user message = %#v, want prompt plus one attachment", message)
+		}
+		var part messages.FilePart
+		var ok bool
+		for _, contentPart := range message.ContentParts {
+			if candidate, isFile := contentPart.(messages.FilePart); isFile {
+				part, ok = candidate, true
+				break
+			}
+		}
+		if !ok || part.Name != "notes.txt" || part.MediaType != "text/plain" || string(part.Bytes) != "notes" {
+			t.Fatalf("attachment parts = %#v, want one text/plain notes.txt part", message.ContentParts)
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("inference request did not contain the expected user message")
+	}
+}
+
+func TestAskCommandValidThenInvalidAttachmentSendsNoPartialRequest(t *testing.T) {
+	dir := t.TempDir()
+	valid := filepath.Join(dir, "notes.txt")
+	missing := filepath.Join(dir, "later-missing.txt")
+	if err := os.WriteFile(valid, []byte("notes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inf := &askTestInferencer{}
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	err := runAskTestCommand(t, []string{"summarize this", valid, missing}, strings.NewReader(""), inf, stdout, stderr)
+	if err == nil {
+		t.Fatal("expected later invalid attachment error")
+	}
+	if !strings.Contains(err.Error(), missing) || !strings.Contains(err.Error(), input.AttachmentReasonMissing) {
+		t.Fatalf("error = %q, want later path and missing-file reason", err)
+	}
+	inf.mu.Lock()
+	calls := inf.inferCalls
+	requests := len(inf.requests)
+	inf.mu.Unlock()
+	if calls != 0 || requests != 0 {
+		t.Fatalf("inference calls/requests = %d/%d, want zero for atomic attachment rejection", calls, requests)
+	}
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("stdout/stderr = %q/%q, want no command output before final rendering", stdout, stderr)
+	}
+}
+
+func TestAskCommandRejectsUnreadableAttachmentBeforeInference(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("mode-bit unreadability is not portable to Windows")
+	}
+
+	path := filepath.Join(t.TempDir(), "unreadable.txt")
+	if err := os.WriteFile(path, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(path, 0o600)
+
+	inf := &askTestInferencer{}
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	err := runAskTestCommand(t, []string{"describe this", path}, strings.NewReader(""), inf, stdout, stderr)
+	if err == nil {
+		t.Fatal("expected unreadable attachment error")
+	}
+	if !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), input.AttachmentReasonUnreadable) {
+		t.Fatalf("error = %q, want supplied path and unreadable-file reason", err)
+	}
+	if strings.Count(err.Error(), path) != 1 {
+		t.Errorf("error = %q, want supplied path exactly once", err)
+	}
+	inf.mu.Lock()
+	calls := inf.inferCalls
+	inf.mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("inference calls = %d, want zero for rejected attachment", calls)
+	}
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("stdout/stderr = %q/%q, want no command output before final rendering", stdout, stderr)
 	}
 }
 
