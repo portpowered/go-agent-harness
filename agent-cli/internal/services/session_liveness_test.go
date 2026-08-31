@@ -333,7 +333,21 @@ func TestRunRoom_WatchdogOnlyFailsSilentParticipant(t *testing.T) {
 	if !livenessClock.fireLatest() {
 		t.Fatal("room silent participant watchdog did not fire")
 	}
-	viableSessions := inferencers["viable"].sessionsSnapshot()
+	var viableSessions []*roomTestSession
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	for len(viableSessions) == 0 {
+		viableSessions = inferencers["viable"].sessionsSnapshot()
+		if len(viableSessions) > 0 {
+			break
+		}
+		select {
+		case <-deadline.C:
+			t.Fatal("viable session was not recorded after connect")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
 	if len(viableSessions) != 1 {
 		t.Fatalf("viable sessions = %d, want one", len(viableSessions))
 	}
@@ -348,11 +362,11 @@ func TestRunRoom_WatchdogOnlyFailsSilentParticipant(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("room did not terminate after silent participant timeout")
 	}
-	if got.err == nil {
-		t.Fatal("room with a silent participant returned clean success")
+	if got.err != nil {
+		t.Fatalf("room after isolated silent participant returned an error: %v", got.err)
 	}
-	if got.result.Reason != RoomTerminationFailed {
-		t.Fatalf("room reason = %q, want failed", got.result.Reason)
+	if got.result.Reason != RoomTerminationStopped {
+		t.Fatalf("room reason = %q, want stopped after the viable participant ended", got.result.Reason)
 	}
 	silent, ok := got.result.Participants["silent"]
 	if !ok {

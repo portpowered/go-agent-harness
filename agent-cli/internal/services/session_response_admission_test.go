@@ -252,11 +252,11 @@ func TestRunRoom_ExplicitEmptyPartialResponseTerminatesParticipant(t *testing.T)
 		diagnosticMu.Unlock()
 	}
 	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err == nil {
-		t.Fatal("room with an explicit empty partial response returned clean success")
+	if err != nil {
+		t.Fatalf("room after isolated empty participant returned an error: %v", err)
 	}
-	if result.Reason != RoomTerminationFailed {
-		t.Fatalf("room reason = %q, want failed before max duration", result.Reason)
+	if result.Reason != RoomTerminationStopped {
+		t.Fatalf("room reason = %q, want stopped after the viable participant ended", result.Reason)
 	}
 	participant, ok := result.Participants["silent"]
 	if !ok {

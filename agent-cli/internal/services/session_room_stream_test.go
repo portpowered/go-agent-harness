@@ -287,7 +287,7 @@ func TestRunRoom_EmptyLivenessFaultPrecedesParticipantTermination(t *testing.T) 
 	case <-time.After(2 * time.Second):
 		t.Fatal("empty provider room did not terminate promptly")
 	}
-	if got.err == nil || got.result.Reason != RoomTerminationFailed {
+	if got.err != nil || got.result.Reason != RoomTerminationStopped {
 		t.Fatalf("empty provider room outcome = %+v, err=%v", got.result, got.err)
 	}
 	participant, ok := got.result.Participants[participantID]
@@ -499,7 +499,7 @@ func TestRunRoom_SilentProviderFaultReachesPeerFilteredStream(t *testing.T) {
 
 	select {
 	case got := <-outcome:
-		if got.err == nil || got.result.Reason != RoomTerminationFailed {
+		if got.err != nil || got.result.Reason != RoomTerminationStopped {
 			t.Fatalf("silent provider room outcome = %+v, err=%v", got.result, got.err)
 		}
 		if got.result.Participants["silent"].Classification != SessionSilentProviderTimeoutClassification {

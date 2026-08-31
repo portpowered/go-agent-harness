@@ -320,6 +320,7 @@ func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 		l.markTerminalLocked(ParticipantTerminationError, err)
 	}
 	l.signalLocked()
+	l.mu.Unlock()
 }
 
 func (l *roomParticipantLifecycle) markLivenessFailure(err error) {
