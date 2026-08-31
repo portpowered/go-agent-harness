@@ -29,6 +29,10 @@ var (
 	// writers through bounded input backpressure rather than returned as an
 	// error or used to discard a frame.
 	ErrMixerOutputBackpressure = errors.New("PCM16 mixer output queue is full")
+	// ErrMixerManualAdvance identifies an attempt to drive a wall-clock mixer
+	// through the deterministic frame API when that mixer was not configured
+	// for manual advancement.
+	ErrMixerManualAdvance = errors.New("PCM16 mixer is not manually advanced")
 	// ErrMixerInvalidFormat means that a mixer format cannot produce aligned
 	// PCM16 frames.
 	ErrMixerInvalidFormat = errors.New("invalid PCM16 mixer format")
@@ -105,6 +109,9 @@ type PCM16MixerConfig struct {
 	InputQueueFrames  int
 	OutputQueueFrames int
 	CadenceFactory    PCM16CadenceFactory
+	// Manual disables the wall-clock cadence and exposes Advance for a room
+	// owner that must release frames from a recorded logical timeline.
+	Manual bool
 }
 
 // PCM16Cadence is the timer contract used to advance mixer frames. The
@@ -196,12 +203,14 @@ type PCM16Mixer struct {
 	frameBytes   int
 	maxInputSize int
 	cadence      PCM16Cadence
+	manual       bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	out    chan []byte
 
 	mu        sync.Mutex
+	advanceMu sync.Mutex
 	inputs    map[string]*pcm16MixerInput
 	writeWake chan struct{}
 	closed    bool
@@ -241,12 +250,16 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 		ctx = context.Background()
 	}
 	mixerCtx, cancel := context.WithCancel(ctx)
-	cadence := config.CadenceFactory(config.Format.FrameDuration)
+	var cadence PCM16Cadence
+	if !config.Manual {
+		cadence = config.CadenceFactory(config.Format.FrameDuration)
+	}
 	mixer := &PCM16Mixer{
 		format:       config.Format,
 		frameBytes:   frameBytes,
 		maxInputSize: config.InputQueueFrames * frameBytes,
 		cadence:      cadence,
+		manual:       config.Manual,
 		ctx:          mixerCtx,
 		cancel:       cancel,
 		out:          make(chan []byte, config.OutputQueueFrames),
@@ -256,6 +269,48 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 	}
 	go mixer.run()
 	return mixer, nil
+}
+
+// Advance emits exactly one mixer frame synchronously. It is available only
+// for mixers created with PCM16MixerConfig.Manual. The frame is mixed using
+// the same sorted-input, bounded-queue implementation as the live ticker
+// path, then placed on the normal output queue before Advance returns.
+func (m *PCM16Mixer) Advance(ctx context.Context) error {
+	if m == nil {
+		return ErrMixerClosed
+	}
+	if !m.manual {
+		return ErrMixerManualAdvance
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Close waits for this lock before the manual run closes m.out. That keeps
+	// a concurrent cancellation from racing a frame send with channel close.
+	m.advanceMu.Lock()
+	defer m.advanceMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := m.ctx.Err(); err != nil {
+		return m.writeTerminationError()
+	}
+	frame, err := m.mixFrame()
+	if err != nil {
+		return err
+	}
+	select {
+	case m.out <- frame:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-m.ctx.Done():
+		return m.writeTerminationError()
+	}
 }
 
 // Format returns the immutable mixer format.
@@ -548,6 +603,13 @@ func (m *PCM16Mixer) Close() error {
 
 func (m *PCM16Mixer) run() {
 	defer close(m.done)
+	if m.manual {
+		<-m.ctx.Done()
+		m.advanceMu.Lock()
+		close(m.out)
+		m.advanceMu.Unlock()
+		return
+	}
 	defer close(m.out)
 	cadence := m.cadence
 	if cadence == nil {

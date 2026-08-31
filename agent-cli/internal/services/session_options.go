@@ -158,6 +158,11 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 type SessionRunOptions struct {
 	RecordPath string
 	ReplayPath string
+	// roomReplay marks a session that is part of a room-owned replay. Room
+	// orchestration supplies audio frames from the shared timeline, so the
+	// single-session replay planner must not auto-reconstruct client audio
+	// turns from the provider capture.
+	roomReplay bool
 	Provider   string
 	// ProviderProvided distinguishes an explicit provider flag from the
 	// command's empty/default value when resolving persisted bare-session

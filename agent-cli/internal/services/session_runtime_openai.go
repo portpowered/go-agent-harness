@@ -108,7 +108,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			prompt = capturedPrompt.text
 			promptProvided = true
 			barePromptReplay = true
-		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries {
+		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
 			// No recorded text-prompt shape, no caller-supplied audio turns,
 			// and no caller-owned streaming --audio-in source (which drives
 			// its own committed audio independently of ScheduledAudioInput
@@ -153,6 +153,8 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			WaitForClose:             opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
 			MaxDuration:              3 * time.Second,
 			CloseAfterScheduledAudio: scheduledAudio,
+			Done:                     replayDialer.Done(),
+			DoneErr:                  replayDialer.Err,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
 			if err := replayDialer.Err(); err != nil {

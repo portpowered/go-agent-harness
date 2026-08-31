@@ -76,6 +76,13 @@ type roomParticipantRunResult struct {
 }
 
 func defaultRoomSessionFactory(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
+	if options.ReplayPath != "" {
+		plan, err := planSessionRuntime(options)
+		if err != nil {
+			return nil, err
+		}
+		return plan.inferencer, nil
+	}
 	inferencer, _, err := NewLiveSessionInferencer(options, participant.SystemPrompt)
 	return inferencer, err
 }
@@ -137,6 +144,17 @@ func runRoomParticipant(
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
 	}
 	if roomParticipantIsHuman(runtime.plan) {
+		if runtime.plan.replay {
+			select {
+			case <-startGate:
+			case <-runtime.ctx.Done():
+			case <-roomCtx.Done():
+			}
+			runtime.lifecycle.markRunDone(nil)
+			connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
+			results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, connected: connected, connectErr: connectErr}
+			return
+		}
 		runErr := runRoomHumanCapture(roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
 		runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 		runtime.lifecycle.markRunDone(runErr)
@@ -162,7 +180,7 @@ func runRoomParticipant(
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
 		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
-	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
+	loopOptions := sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
 		WaitForClose:           true,
 		Done:                   coordinator.done,
@@ -172,9 +190,16 @@ func runRoomParticipant(
 		ToolDefinitionBase:     cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitionBase),
 		RefreshToolDefinitions: runtime.plan.options.RefreshToolDefinitions,
 		BrowserWatch:           runtime.plan.options.BrowserWatch,
-		observer:               observer,
-		loopReady:              runtime.loopReady,
-	})
+	}
+	if runtime.plan.replay {
+		loopOptions = runtime.plan.replayLoop
+		loopOptions.MaxDuration = 0
+		loopOptions.Done = combineRoomDoneChannels(coordinator.done, loopOptions.Done)
+		loopOptions.DoneErr = combineRoomDoneErrors(coordinator.roomError, loopOptions.DoneErr)
+	}
+	loopOptions.observer = observer
+	loopOptions.loopReady = runtime.loopReady
+	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, loopOptions)
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
 	}
@@ -186,6 +211,36 @@ func runRoomParticipant(
 		connected = connectErr == nil
 	}
 	results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
+}
+
+func combineRoomDoneChannels(primary, secondary <-chan struct{}) <-chan struct{} {
+	if primary == nil {
+		return secondary
+	}
+	if secondary == nil {
+		return primary
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-primary:
+		case <-secondary:
+		}
+		close(done)
+	}()
+	return done
+}
+
+func combineRoomDoneErrors(primary, secondary func() error) func() error {
+	if primary == nil {
+		return secondary
+	}
+	if secondary == nil {
+		return primary
+	}
+	return func() error {
+		return errors.Join(primary(), secondary())
+	}
 }
 
 func roomParticipantDiagnosticSinks(
@@ -261,6 +316,13 @@ func observeRoomParticipantStream(
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
 		}
+	}
+	if plan.replay {
+		// Room replay audio is released by the single room scheduler from the
+		// recorded logical timeline. Provider output remains observable above,
+		// but independently fanning it here would let goroutine timing choose
+		// the cross-participant order and overlap.
+		return
 	}
 	for _, target := range coordinator.activeExcept(plan.manifest.ID) {
 		if target == nil || target.mixer == nil {
@@ -342,7 +404,7 @@ func collectRoomParticipantResults(
 	results <-chan roomParticipantRunResult,
 	cleanup *roomCleanupWaiter,
 ) error {
-	escalateRuntimeErrors := roomPlansHaveHumanParticipant(plans)
+	escalateRuntimeErrors := roomPlansHaveHumanParticipant(plans) || roomPlansHaveReplayParticipant(plans)
 	pending := make(map[string]struct{}, len(plans))
 	for _, plan := range plans {
 		if plan != nil {
@@ -413,6 +475,15 @@ func collectRoomParticipantResults(
 func roomPlansHaveHumanParticipant(plans []*roomParticipantPlan) bool {
 	for _, plan := range plans {
 		if roomParticipantIsHuman(plan) {
+			return true
+		}
+	}
+	return false
+}
+
+func roomPlansHaveReplayParticipant(plans []*roomParticipantPlan) bool {
+	for _, plan := range plans {
+		if plan != nil && plan.replay && !roomParticipantIsHuman(plan) {
 			return true
 		}
 	}
@@ -605,6 +676,15 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
 				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+				return
+			}
+		}
+		if runtime.replayFrameAcks != nil {
+			select {
+			case runtime.replayFrameAcks <- struct{}{}:
+			case <-runtime.ctx.Done():
+				return
+			case <-ctx.Done():
 				return
 			}
 		}

@@ -183,6 +183,56 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
+	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  4,
+		OutputQueueFrames: 2,
+		Manual:            true,
+	})
+	if err != nil {
+		t.Fatalf("new manual mixer: %v", err)
+	}
+	t.Cleanup(func() { _ = mixer.Close() })
+	for _, id := range []string{"alpha", "beta"} {
+		if err := mixer.AddInput(id); err != nil {
+			t.Fatalf("add %s: %v", id, err)
+		}
+	}
+	if err := mixer.Write("alpha", pcm16(100, 200)); err != nil {
+		t.Fatalf("write alpha: %v", err)
+	}
+	if err := mixer.Write("beta", pcm16(10, 20)); err != nil {
+		t.Fatalf("write beta: %v", err)
+	}
+	if err := mixer.Advance(context.Background()); err != nil {
+		t.Fatalf("advance first frame: %v", err)
+	}
+	got := readMixerFrameWithContext(t, mixer)
+	want := pcm16(110, 220)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("manual mixed frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+	}
+	if err := mixer.Advance(context.Background()); err != nil {
+		t.Fatalf("advance silence frame: %v", err)
+	}
+	got = readMixerFrameWithContext(t, mixer)
+	want = pcm16(0, 0)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("manual silence frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+	}
+
+	regular, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{Format: format})
+	if err != nil {
+		t.Fatalf("new regular mixer: %v", err)
+	}
+	defer regular.Close()
+	if err := regular.Advance(context.Background()); !errors.Is(err, ErrMixerManualAdvance) {
+		t.Fatalf("regular mixer advance error = %v, want %v", err, ErrMixerManualAdvance)
+	}
+}
+
 func TestPCM16MixerCancellationStopsDeterministicCadence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cadence := newDeterministicPCM16Cadence()
