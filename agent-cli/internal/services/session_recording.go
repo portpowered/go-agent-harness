@@ -449,16 +449,12 @@ func runSessionWithRecordingDirectory(
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 
-// finalizeSessionDirectoryRecording preserves a provider, cancellation, or
-// runtime failure when finalization cannot validate the captured recording. A
-// clean run still returns any recording validation error, so an incomplete
-// recording can never look successful.
+// finalizeSessionDirectoryRecording joins provider, cancellation, or runtime
+// failures with every recording validation and persistence failure. A caller
+// can therefore distinguish a failed session from a recording that was not
+// published, even when both failures happen during the same shutdown.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
-	recordingErr := recording.Finalize()
-	if runErr != nil && errors.Is(recordingErr, transcript.ErrInvalidRecording) {
-		return runErr
-	}
-	return errors.Join(runErr, recordingErr)
+	return errors.Join(runErr, recording.Finalize())
 }
 
 func validateSessionRecordingOptions(opts SessionRunOptions) error {

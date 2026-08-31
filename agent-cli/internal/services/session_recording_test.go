@@ -376,7 +376,7 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 	}
 }
 
-func TestRunSessionWithRecordingDirectoryPreservesProviderErrorOverEmptyRecording(t *testing.T) {
+func TestRunSessionWithRecordingDirectoryPreservesProviderAndRecordingErrorsOverEmptyRecording(t *testing.T) {
 	authErr := errors.New("openai realtime authentication failed")
 	destination := filepath.Join(t.TempDir(), "auth-failure")
 	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
@@ -389,8 +389,11 @@ func TestRunSessionWithRecordingDirectoryPreservesProviderErrorOverEmptyRecordin
 	if !errors.Is(err, authErr) {
 		t.Fatalf("error = %v, want provider authentication error", err)
 	}
-	if errors.Is(err, transcript.ErrInvalidRecording) || strings.Contains(err.Error(), "at least one segment is required") {
-		t.Fatalf("empty recording validation masked provider error: %v", err)
+	if !errors.Is(err, transcript.ErrInvalidRecording) {
+		t.Fatalf("error = %v, want empty-recording validation error alongside provider error", err)
+	}
+	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+		t.Fatalf("empty recording destination stat error = %v, want not exist", statErr)
 	}
 }
 
@@ -960,6 +963,90 @@ func TestSessionDirectoryRecordingFinalizePreservesWriteFailureAndNoPartialBundl
 	}
 	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
 		t.Fatalf("failed destination stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestFinalizeSessionDirectoryRecordingJoinsRunLatchedAndBundleWriteErrors(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "capture")
+	runErr := errors.New("session provider failed")
+	latchedCause := errors.New("recording sink failed before finalization")
+	latchedRecordErr := recordingDestinationError(transcript.ErrRecordingWrite, "capture transcript", destination, latchedCause)
+	bundleWriteErr := errors.New("recording bundle write failed")
+
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording.client.WriteString("client\n")
+	recording.agent.WriteString("agent\n")
+	recording.fail(latchedRecordErr)
+	recording.writeFile = func(string, []byte, os.FileMode) (int, error) {
+		return 0, bundleWriteErr
+	}
+
+	err := finalizeSessionDirectoryRecording(runErr, recording)
+	for _, want := range []error{runErr, latchedRecordErr, latchedCause, bundleWriteErr, transcript.ErrRecordingWrite} {
+		if !errors.Is(err, want) {
+			t.Fatalf("joined error = %v, want errors.Is(..., %v)", err, want)
+		}
+	}
+	var recordingErr *transcript.RecordingError
+	if !errors.As(err, &recordingErr) || recordingErr != latchedRecordErr {
+		t.Fatalf("joined error recording cause = %#v, want latched recording error %#v", recordingErr, latchedRecordErr)
+	}
+	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+		t.Fatalf("failed destination stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNotPublished(t *testing.T) {
+	writeErr := errors.New("bundle write failed")
+	tests := []struct {
+		name      string
+		prepare   func(*sessionDirectoryRecording)
+		wantError error
+	}{
+		{
+			name:      "empty evidence",
+			wantError: transcript.ErrInvalidRecording,
+		},
+		{
+			name: "one-sided evidence",
+			prepare: func(recording *sessionDirectoryRecording) {
+				recording.client.WriteString("client\n")
+			},
+			wantError: transcript.ErrInvalidRecording,
+		},
+		{
+			name: "bundle write failure",
+			prepare: func(recording *sessionDirectoryRecording) {
+				recording.client.WriteString("client\n")
+				recording.agent.WriteString("agent\n")
+				recording.writeFile = func(string, []byte, os.FileMode) (int, error) {
+					return 0, writeErr
+				}
+			},
+			wantError: transcript.ErrRecordingWrite,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "capture")
+			recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+			if testCase.prepare != nil {
+				testCase.prepare(recording)
+			}
+			runErr := errors.New("session failed while recording")
+
+			err := finalizeSessionDirectoryRecording(runErr, recording)
+			if !errors.Is(err, runErr) {
+				t.Fatalf("error = %v, want session error", err)
+			}
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("error = %v, want recording error identity %v", err, testCase.wantError)
+			}
+			if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+				t.Fatalf("unpublished destination stat error = %v, want not exist", statErr)
+			}
+		})
 	}
 }
 
