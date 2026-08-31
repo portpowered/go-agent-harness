@@ -169,6 +169,7 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 
 	var directResult webmcp.InvokeResult
 	directDataValue, directErr := runWebMCPDirectOperation(context.Background(), func(ctx context.Context, directBroker webmcp.Broker, _ config.BrowserConfig) (any, error) {
+		eventCursor := runtime.EventCursor()
 		directResult, err = directBroker.Invoke(ctx, webmcp.InvokeRequest{ToolRef: resolved.Ref, Input: json.RawMessage(`{}`), Reason: "direct query trace"})
 		if err != nil {
 			return nil, err
@@ -179,6 +180,14 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 		}
 		if directTargetInvocation.ID != directResult.BrowserInvocationID || directTargetInvocation.BrowserID != resolved.BrowserID || directTargetInvocation.TargetID != resolved.TargetID || directTargetInvocation.Generation != resolved.Generation || directTargetInvocation.FrameID != resolved.FrameID || directTargetInvocation.ToolName != resolved.Name || !jsonEqual(directTargetInvocation.Input, []byte(`{}`)) {
 			return nil, &queryTraceMismatchError{label: "direct target invocation", got: directTargetInvocation, want: "exact selected target/frame/name/generation and input"}
+		}
+		if _, waitErr := runtime.WaitForPublishedEvent(ctx, eventCursor, func(event webmcp.BrowserEvent) bool {
+			return event.Type == webmcp.EventToolInvoked && event.InvocationID == directResult.BrowserInvocationID
+		}); waitErr != nil {
+			return nil, waitErr
+		}
+		if _, waitErr := directBroker.Selected(ctx); waitErr != nil {
+			return nil, waitErr
 		}
 		if err := session.ReleaseInvocation(directResult.BrowserInvocationID, freshOutput); err != nil {
 			return nil, err

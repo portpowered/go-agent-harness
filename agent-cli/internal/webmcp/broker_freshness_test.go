@@ -22,12 +22,17 @@ type freshnessFixture struct {
 
 func newFreshnessFixture(t *testing.T) freshnessFixture {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
-	candidate := webmcp.BrowserCandidate{ID: "browser-freshness", Product: "fixture", Loopback: true}
 	readOnly := true
 	tool := pageTool("list_documents", "frame-1", `{"type":"object","additionalProperties":false}`)
 	tool.Annotations.ReadOnly = &readOnly
+	return newFreshnessFixtureWithTool(t, tool)
+}
+
+func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) freshnessFixture {
+	t.Helper()
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-freshness", Product: "fixture", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
 		testkit.RuntimeOptions{Clock: clock, IDs: ids},
 		testkit.BrowserConfig{
@@ -92,7 +97,7 @@ func TestStatefulBrokerFreshnessPreservesFreshNonEmptyAndEmptyResults(t *testing
 			if dispatched.State != webmcp.InvocationDispatched || dispatched.BrowserInvocationID == "" {
 				t.Fatalf("dispatch result = %#v, want a browser-correlated dispatch", dispatched)
 			}
-			invoked, err := waitForFreshnessInvocation(t, fixture.session, dispatched.BrowserInvocationID)
+			invoked, err := waitForFreshnessInvocation(t, fixture, dispatched.BrowserInvocationID)
 			if err != nil {
 				t.Fatalf("wait for target invocation: %v", err)
 			}
@@ -164,8 +169,121 @@ func TestStatefulBrokerRejectsEarlyTerminalWithRetryableFreshnessEnvelope(t *tes
 	if pending := fixture.broker.PendingInvocations(); len(pending) != 0 {
 		t.Fatalf("pending invocations = %#v, want terminal failure", pending)
 	}
-	if invoked, err := waitForFreshnessInvocation(t, fixture.session, staleID); err != nil || invoked.ID != staleID {
+	if invoked, err := waitForFreshnessInvocation(t, fixture, staleID); err != nil || invoked.ID != staleID {
 		t.Fatalf("target invocation = %#v/%v, want the newly dispatched correlated call", invoked, err)
+	}
+}
+
+func TestStatefulBrokerDoesNotRecommendRetryForUnprovenMutation(t *testing.T) {
+	readOnly := false
+	tool := pageTool("update_document", "frame-1", `{"type":"object","additionalProperties":false}`)
+	tool.Annotations.ReadOnly = &readOnly
+	fixture := newFreshnessFixtureWithTool(t, tool)
+	staleID := webmcp.InvocationID("inv-000001")
+	staleOutput := `{"updated":true}`
+	if err := fixture.session.Emit(webmcp.BrowserEvent{
+		Type:         webmcp.EventToolResponded,
+		InvocationID: staleID,
+		Status:       "Completed",
+		Output:       json.RawMessage(staleOutput),
+	}); err != nil {
+		t.Fatalf("inject out-of-order mutation terminal: %v", err)
+	}
+
+	arguments, err := json.Marshal(map[string]string{
+		"tool_ref":   string(fixture.ref),
+		"input_json": `{}`,
+		"reason":     "verify mutation freshness handling",
+	})
+	if err != nil {
+		t.Fatalf("encode mutation invocation arguments: %v", err)
+	}
+	response, err := webmcptools.NewBrokerToolSet(fixture.broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "mutation-freshness-call",
+		Name:      webmcp.InvokeToolName,
+		Arguments: string(arguments),
+	})
+	if err != nil {
+		t.Fatalf("execute mutation broker tool: %v", err)
+	}
+	envelope, err := webmcptools.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode mutation freshness envelope: %v; content=%s", err, response.Content)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvocationFailed) {
+		t.Fatalf("mutation freshness envelope = %#v, want classified failure", envelope)
+	}
+	if envelope.Error.Retryable {
+		t.Fatalf("mutation freshness error = %#v, want non-retryable side-effect uncertainty", envelope.Error)
+	}
+	recovery, _ := envelope.Error.Details["recovery"].(string)
+	if !strings.Contains(strings.ToLower(recovery), "do not retry") || !strings.Contains(strings.ToLower(recovery), "reconcile") {
+		t.Fatalf("mutation recovery = %q, want explicit no-retry reconciliation guidance", recovery)
+	}
+	if envelope.Error.Details["phase"] != "result_freshness" || envelope.Error.Details["freshness_phase"] != "terminal_provenance" || envelope.Error.Details["reason_code"] != "terminal_before_invocation" || envelope.Error.Details["side_effect_unknown"] != true {
+		t.Fatalf("mutation freshness details = %#v, want out-of-order provenance classification", envelope.Error.Details)
+	}
+	if strings.Contains(response.Content, staleOutput) {
+		t.Fatalf("mutation freshness response leaked stale page output: %s", response.Content)
+	}
+	if invoked, err := waitForFreshnessInvocation(t, fixture, staleID); err != nil || invoked.ID != staleID {
+		t.Fatalf("mutation target invocation = %#v/%v, want dispatched invocation", invoked, err)
+	}
+}
+
+func TestStatefulBrokerRejectsOutstandingObservedInvocationIDReuse(t *testing.T) {
+	fixture := newFreshnessFixture(t)
+	watchContext, cancelWatch := context.WithCancel(context.Background())
+	defer cancelWatch()
+	events := fixture.broker.Watch(watchContext)
+	collisionID := webmcp.InvocationID("inv-000001")
+	if err := fixture.session.Emit(webmcp.BrowserEvent{
+		Type:         webmcp.EventToolInvoked,
+		Generation:   1,
+		FrameID:      "frame-1",
+		ToolName:     "list_documents",
+		InvocationID: collisionID,
+		Input:        json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatalf("emit outstanding external invocation: %v", err)
+	}
+	observed := waitForBrokerEvent(t, events, webmcp.BrokerEventInvocationCreated)
+	if observed.InvocationID != collisionID || observed.Reason != "browser_observed" {
+		t.Fatalf("observed invocation event = %#v, want outstanding external invocation", observed)
+	}
+
+	result, err := fixture.broker.Invoke(context.Background(), webmcp.InvokeRequest{
+		ToolRef: fixture.ref,
+		Input:   json.RawMessage(`{}`),
+		Reason:  "verify invocation ID collision fence",
+	})
+	if err == nil {
+		t.Fatal("invoke with outstanding protocol ID succeeded; want correlation failure")
+	}
+	if result.State != webmcp.InvocationError || result.ErrorCode != string(webmcp.ErrorInvocationFailed) || result.BrowserInvocationID != "" {
+		t.Fatalf("collision result = %#v, want terminal correlation failure without owned browser ID", result)
+	}
+	if result.ErrorDetails["phase"] != "correlation" || result.ErrorDetails["side_effect_unknown"] != true {
+		t.Fatalf("collision details = %#v, want side-effect-unknown correlation failure", result.ErrorDetails)
+	}
+
+	if err := fixture.session.Emit(webmcp.BrowserEvent{
+		Type:         webmcp.EventToolResponded,
+		InvocationID: collisionID,
+		Status:       "Completed",
+		Output:       json.RawMessage(`{"poison":true}`),
+	}); err != nil {
+		t.Fatalf("emit delayed external terminal: %v", err)
+	}
+	terminal, err := fixture.broker.WaitInvocation(context.Background(), result.InvocationID)
+	if err != nil {
+		t.Fatalf("wait collision result: %v", err)
+	}
+	if terminal.ErrorCode != string(webmcp.ErrorInvocationFailed) || len(terminal.Output) != 0 || terminal.ErrorDetails["phase"] != "correlation" {
+		t.Fatalf("collision terminal = %#v, want original failure after delayed external terminal", terminal)
+	}
+	if err := fixture.session.ReleaseInvocation(collisionID, json.RawMessage(`{"owned":true}`)); err != nil {
+		t.Fatalf("release rejected owned target record: %v", err)
 	}
 }
 
@@ -177,7 +295,7 @@ func TestStatefulBrokerDoesNotCrossCorrelateUnrelatedOrConsecutiveResults(t *tes
 	if err != nil {
 		t.Fatalf("first invoke: %v", err)
 	}
-	if _, err := waitForFreshnessInvocation(t, fixture.session, first.BrowserInvocationID); err != nil {
+	if _, err := waitForFreshnessInvocation(t, fixture, first.BrowserInvocationID); err != nil {
 		t.Fatalf("wait for first target invocation: %v", err)
 	}
 	if err := fixture.session.Emit(webmcp.BrowserEvent{
@@ -206,7 +324,7 @@ func TestStatefulBrokerDoesNotCrossCorrelateUnrelatedOrConsecutiveResults(t *tes
 	if second.BrowserInvocationID == first.BrowserInvocationID {
 		t.Fatalf("consecutive browser invocation IDs reused: first=%q second=%q", first.BrowserInvocationID, second.BrowserInvocationID)
 	}
-	if _, err := waitForFreshnessInvocation(t, fixture.session, second.BrowserInvocationID); err != nil {
+	if _, err := waitForFreshnessInvocation(t, fixture, second.BrowserInvocationID); err != nil {
 		t.Fatalf("wait for second target invocation: %v", err)
 	}
 	if err := fixture.session.ReleaseInvocation(second.BrowserInvocationID, json.RawMessage(`{"call":2}`)); err != nil {
@@ -224,9 +342,21 @@ func TestStatefulBrokerDoesNotCrossCorrelateUnrelatedOrConsecutiveResults(t *tes
 	}
 }
 
-func waitForFreshnessInvocation(t *testing.T, session *testkit.ScriptedTargetSession, id webmcp.InvocationID) (testkit.InvocationRecord, error) {
+func waitForFreshnessInvocation(t *testing.T, fixture freshnessFixture, id webmcp.InvocationID) (testkit.InvocationRecord, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	return session.WaitForInvocation(ctx)
+	invocation, err := fixture.session.WaitForInvocation(ctx)
+	if err != nil {
+		return testkit.InvocationRecord{}, err
+	}
+	if _, err := fixture.runtime.WaitForPublishedEvent(ctx, 0, func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolInvoked && event.InvocationID == id
+	}); err != nil {
+		return testkit.InvocationRecord{}, err
+	}
+	if _, err := fixture.broker.Selected(ctx); err != nil {
+		return testkit.InvocationRecord{}, err
+	}
+	return invocation, nil
 }

@@ -88,6 +88,10 @@ func freshnessFailureResult(invocation *brokerInvocation, phase, reason string, 
 		return InvokeResult{State: InvocationError, ErrorCode: string(ErrorInvocationFailed)}
 	}
 	descriptor := invocation.invocation.Tool
+	recovery := "Refresh the current page tool catalog and retry with a newly correlated invocation."
+	if invocation.invocation.Operation != OperationReadOnly {
+		recovery = "Do not retry this mutation; reconcile the target state before deciding whether to issue it again."
+	}
 	return invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
 		"invocation_id":         string(invocation.invocation.ID),
 		"browser_invocation_id": string(invocation.browserID),
@@ -101,7 +105,7 @@ func freshnessFailureResult(invocation *brokerInvocation, phase, reason string, 
 		"terminal_observed":     terminalObserved,
 		"side_effect_unknown":   true,
 		"safe_retryable":        invocation.invocation.Operation == OperationReadOnly,
-		"recovery":              "Refresh the current page tool catalog and retry with a newly correlated invocation.",
+		"recovery":              recovery,
 	})
 }
 

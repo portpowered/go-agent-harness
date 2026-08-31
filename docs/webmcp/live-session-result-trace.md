@@ -31,22 +31,32 @@ event order. There is no model, network, or external API in this reproduction.
 The first divergence is broker-side result reconciliation, not catalog
 selection, readiness, or page state. `EventToolResponded` is accepted by
 protocol invocation ID in
-`agent-cli/internal/webmcp/broker_invocations.go:658-676`; if it arrives
+`agent-cli/internal/webmcp/broker_invocations.go:704-725`; if it arrives
 before the matching invocation event, it is retained in the ID-only
 `earlyTerminals` buffer. After the target command returns, the dispatch path
 consumes that buffer at
-`agent-cli/internal/webmcp/broker_invocations.go:494-502`, before the queued
-`EventToolInvoked` has supplied frame/tool/input provenance. The result is then
-serialized unchanged by `agent-cli/internal/webmcp/tools/tools.go:947-986`.
+`agent-cli/internal/webmcp/broker_invocations.go:541-547`, before the queued
+`EventToolInvoked` has supplied frame/tool/input provenance. Before this fix,
+that state transition handed the terminal payload to the caller; the shared
+serialization boundary is
+`agent-cli/internal/webmcp/tools/tools.go:995-1042`.
 
 Chrome broadcasts WebMCP events to attached DevTools clients, so a terminal
 from another direct client can be observed by the live-session broker. A
-reused protocol ID in the same generation therefore lets the other client's
+reused protocol ID in the same generation therefore let the other client's
 empty result become the current live call's successful payload. The fixture
 holds the catalog and page generation constant and has no result cache; the
 only changed boundary is the pre-invocation terminal event. This rules out
 catalog/generation freshness, readiness ordering, and result caching for this
-reproduction.
+reproduction. The corrected owning guard is
+`agent-cli/internal/webmcp/broker_freshness.go:11-37`; it requires the exact
+invocation event before a terminal can be decoded, and the dispatch collision
+fence is at `agent-cli/internal/webmcp/broker_invocations.go:473-508`.
+
+Unproven query terminals now produce a classified `webmcp.tool-result.v1`
+failure with `phase=result_freshness` and retryable read-only guidance. An
+unproven mutation remains side-effect-unknown and explicitly says not to
+retry until target state is reconciled.
 
 ## Query-surface audit for the supplied Margin catalog
 

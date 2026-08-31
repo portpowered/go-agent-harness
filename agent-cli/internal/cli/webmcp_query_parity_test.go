@@ -273,6 +273,7 @@ func (f queryParityFixture) runLiveQueryWithInputAndTerminal(t *testing.T, callI
 	t.Helper()
 	callContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	eventCursor := f.runtime.EventCursor()
 	resultCh := make(chan queryParityLiveResult, 1)
 	executor := f.liveExecutor(t)
 	go func() {
@@ -289,6 +290,7 @@ func (f queryParityFixture) runLiveQueryWithInputAndTerminal(t *testing.T, callI
 		t.Fatalf("wait for live target invocation: %v", err)
 	}
 	f.assertInvocationInput(t, invocation, []byte(input))
+	f.waitForBrokerInvocationEvent(t, callContext, eventCursor, invocation.ID)
 	if releaseTerminal {
 		if err := f.session.ReleaseInvocation(invocation.ID, json.RawMessage(output)); err != nil {
 			t.Fatalf("release live target invocation %q: %v", invocation.ID, err)
@@ -319,6 +321,7 @@ func (f queryParityFixture) runDirectQueryWithInput(t *testing.T, callID, input,
 	configDir := writeDirectConfig(t, "")
 	callContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	eventCursor := f.runtime.EventCursor()
 	resultCh := make(chan directCommandResult, 1)
 	go func() {
 		resultCh <- executeDirectCommandContext(t, callContext, configDir, nil, directFactory(queryParityDirectBroker{StatefulBroker: f.broker}),
@@ -339,6 +342,7 @@ func (f queryParityFixture) runDirectQueryWithInput(t *testing.T, callID, input,
 		t.Fatalf("wait for direct target invocation: %v; command err=%v stdout=%s stderr=%s", err, result.err, result.stdout, result.stderr)
 	}
 	f.assertInvocationInput(t, invocation, []byte(input))
+	f.waitForBrokerInvocationEvent(t, callContext, eventCursor, invocation.ID)
 	if err := f.session.ReleaseInvocation(invocation.ID, json.RawMessage(output)); err != nil {
 		t.Fatalf("release direct target invocation %q: %v", invocation.ID, err)
 	}
@@ -351,6 +355,18 @@ func (f queryParityFixture) runDirectQueryWithInput(t *testing.T, callID, input,
 	case <-callContext.Done():
 		t.Fatalf("direct query %q did not return: %v", callID, callContext.Err())
 		return directCommandResult{}
+	}
+}
+
+func (f queryParityFixture) waitForBrokerInvocationEvent(t *testing.T, ctx context.Context, after uint64, id webmcp.InvocationID) {
+	t.Helper()
+	if _, err := f.runtime.WaitForPublishedEvent(ctx, after, func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolInvoked && event.InvocationID == id
+	}); err != nil {
+		t.Fatalf("wait for published target invocation %q: %v", id, err)
+	}
+	if _, err := f.broker.Selected(ctx); err != nil {
+		t.Fatalf("flush broker after target invocation %q: %v", id, err)
 	}
 }
 

@@ -482,6 +482,18 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		b.mu.Unlock()
 		return
 	}
+	if _, observed := selected.observedInvocations[id]; observed {
+		err = fmt.Errorf("webmcp: target invocation ID %q is still observed by another client", id)
+		result := invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
+			"invocation_id":       string(id),
+			"phase":               "correlation",
+			"side_effect_unknown": true,
+		})
+		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
+		b.mu.Unlock()
+		return
+	}
 	if _, terminal := b.browserTerminalSeen[id]; terminal {
 		err = fmt.Errorf("webmcp: reused terminal target invocation ID %q", id)
 		result := invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
