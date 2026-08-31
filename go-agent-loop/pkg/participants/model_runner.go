@@ -357,7 +357,24 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
-	if (state.responseInFlight || state.acknowledgementOutstanding) && !state.responseCancelSent && hasPCM16Signal(pcm) {
+	//
+	// A response that is itself the requested continuation of an already
+	// accepted tool result (state.awaitingContinuation) is deliberately
+	// excluded. Unlike an ordinary spoken response or a tool acknowledgement,
+	// nothing re-requests a cancelled tool continuation: MESSAGE.END for a
+	// cancelled response is rewritten with TerminalReasonPartialOutput and no
+	// further response.create is ever queued for that call, so the tool's
+	// obligation is left permanently unresolved and the session later fails
+	// closed with an unresolved tool_continuation -- even though the
+	// interrupting audio was ordinary room/peer input, not a deliberate
+	// interrupt of this participant's own turn. A room participant observed
+	// this exactly: it received one peer audio frame with signal 557ms into
+	// its tool continuation response, sent RESPONSE.CANCEL against it,
+	// and died with classification=tool_continuation at t=2.9s having never
+	// produced a single sample of its own audio (sent.pcm was 0 bytes). Held
+	// off, the continuation is free to complete and deliver the tool result;
+	// the participant's next ordinary response remains fully interruptible.
+	if (state.responseInFlight || state.acknowledgementOutstanding) && !state.awaitingContinuation && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
