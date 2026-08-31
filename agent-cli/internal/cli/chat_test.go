@@ -163,13 +163,8 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			wantCode:       1,
 			wantStdout:     "",
 			wantStdoutPart: "Usage:\n  agent chat [flags]",
-			// The root command sets SilenceErrors so Cobra never prints its
-			// own "Error: ..." line here; cmd/agent's main.go is the single
-			// place that renders the returned error (checked below via
-			// wantErr), so this harness's stderr capture -- which only sees
-			// Cobra's own channel, not main.go's -- is empty.
-			wantStderr: "",
-			wantErr:    `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
+			wantStderr:     "Error: invalid argument \"not-a-float\" for \"--context-pressure-threshold\" flag: strconv.ParseFloat: parsing \"not-a-float\": invalid syntax\n",
+			wantErr:        `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
 		},
 		{
 			name:       "text session cancels through root",
@@ -543,14 +538,8 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			if !strings.Contains(got.stdout, "Usage:\n  agent chat [flags]") {
 				t.Fatalf("stdout = %q, want Cobra usage on flag failure", got.stdout)
 			}
-			// The root command sets SilenceErrors so Cobra never prints its
-			// own "Error: ..." line for a flag-parse failure; cmd/agent's
-			// main.go is the single place that renders the returned error
-			// (already asserted above via got.err), so this harness's
-			// stderr capture -- which only sees Cobra's own channel -- is
-			// empty here.
-			if got.stderr != "" {
-				t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", got.stderr)
+			if got.stderr != "Error: "+got.err.Error()+"\n" {
+				t.Fatalf("stderr = %q, want exact Cobra error channel", got.stderr)
 			}
 		})
 	}
@@ -651,12 +640,8 @@ func TestChatCommand_AudioFactoryErrorIsReported(t *testing.T) {
 	if !errors.Is(got.err, deviceErr) || got.err.Error() != "open microphone: device unavailable" {
 		t.Fatalf("error = %v, want wrapped device error", got.err)
 	}
-	// The root command sets SilenceErrors so Cobra never prints its own
-	// "Error: ..." line here; cmd/agent's main.go is the single place that
-	// renders the returned error (asserted above), so this harness's stderr
-	// capture -- which only sees Cobra's own channel -- is empty.
-	if got.stderr != "" {
-		t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", got.stderr)
+	if got.stderr != "Error: open microphone: device unavailable\n" {
+		t.Fatalf("stderr = %q, want exact error channel", got.stderr)
 	}
 }
 

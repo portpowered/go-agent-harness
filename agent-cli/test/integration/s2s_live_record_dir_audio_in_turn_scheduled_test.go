@@ -595,11 +595,6 @@ func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeCo
 	if err == nil {
 		t.Fatal("former server-VAD scheduled configuration unexpectedly completed")
 	}
-	// This in-process Execute() never runs cmd/agent's main.go, and the root
-	// command deliberately silences Cobra's own duplicate "Error: ..." print
-	// (see internal/cli/root.go), so simulate main.go's single render here to
-	// keep this capture faithful to what a real invocation actually prints.
-	writeSimulatedMainError(stderr, err)
 
 	timeline, _, providerErrors, _, serverVADEnabled := server.snapshots()
 	if !serverVADEnabled {

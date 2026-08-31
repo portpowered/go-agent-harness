@@ -58,7 +58,6 @@ func runGateCLI(t *testing.T, args []string, stdin io.Reader) (string, string, e
 	rootCmd.SetIn(stdin)
 	rootCmd.SetArgs(args)
 	execErr := rootCmd.ExecuteContext(context.Background())
-	writeSimulatedMainError(writer.Stderr(), execErr)
 	return writer.StdoutString(), writer.StderrString(), execErr
 }
 

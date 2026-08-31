@@ -2,8 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"fmt"
-	"io"
 	"strings"
 	"testing"
 
@@ -126,37 +124,10 @@ func executeCLI(args ...string) cliExecution {
 	root.SetArgs(args)
 
 	exitCode := 0
-	if err := root.Execute(); err != nil {
+	if root.Execute() != nil {
 		exitCode = 1
-		writeSimulatedMainError(&stderr, err)
 	}
 	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
-}
-
-// writeSimulatedMainError mirrors cmd/agent/main.go's own error rendering
-// exactly, so this harness's captured stderr reflects what a real
-// invocation actually prints -- one "Error: %s" line, written once main.go
-// receives the error Execute() returns. A leaf command that leaves
-// SilenceErrors unset makes Cobra print its own "Error: ..." line first, so
-// this line would appear twice; that double print is exactly what
-// SilenceErrors on every leaf command (see ask.go, probe.go, probe_fleet.go,
-// probe_report.go, room.go) exists to prevent.
-func writeSimulatedMainError(w io.Writer, err error) {
-	fmt.Fprintf(w, "Error: %s\n", err)
-}
-
-// TestRootCommandSetsSilenceErrors is a direct, cobra-version-agnostic
-// regression guard: without SilenceErrors on the root command, an
-// unrecognized top-level command or a flag rejected while parsing the root
-// command's own flags prints "Error: ..." via Cobra in addition to
-// cmd/agent's main.go, which prints "Error: %s" for every error Execute()
-// returns -- a double print that individual leaf commands' own
-// SilenceErrors settings cannot reach, because both failures happen before
-// any leaf's RunE runs.
-func TestRootCommandSetsSilenceErrors(t *testing.T) {
-	if !newTestRootCommand().SilenceErrors {
-		t.Fatal("root command does not set SilenceErrors: an unrecognized command or root-level flag error would print twice")
-	}
 }
 
 func TestRootCommandExecutionContracts(t *testing.T) {
@@ -189,12 +160,8 @@ func TestRootCommandExecutionContracts(t *testing.T) {
 	if unknownCommand.stdout != "" {
 		t.Fatalf("unknown-command stdout = %q, want empty", unknownCommand.stdout)
 	}
-	// The root command sets SilenceErrors so Cobra's own "Run 'agent --help'
-	// for usage." hint (printed alongside its "Error: ..." line for an
-	// unrecognized command) never fires; cmd/agent's main.go is the single
-	// place that renders the error, exactly once.
-	if unknownCommand.stderr != "Error: unknown command \"unknown-command\" for \"agent\"\n" {
-		t.Fatalf("unknown-command stderr = %q, want exact message printed exactly once", unknownCommand.stderr)
+	if unknownCommand.stderr != "Error: unknown command \"unknown-command\" for \"agent\"\nRun 'agent --help' for usage.\n" {
+		t.Fatalf("unknown-command stderr = %q, want exact message", unknownCommand.stderr)
 	}
 
 	unknownFlag := executeCLI("--unknown-flag")

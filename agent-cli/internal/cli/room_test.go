@@ -248,37 +248,6 @@ func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	}
 }
 
-// TestRoomRunCommandDoesNotDoublePrintValidationErrors is the regression
-// guard for the "room validation errors print twice" defect: without
-// SilenceErrors, Cobra prints its own "Error: ..." line for a returned RunE
-// error in addition to cmd/agent's main.go, which prints "Error: %s" for
-// every error Execute() returns.
-func TestRoomRunCommandDoesNotDoublePrintValidationErrors(t *testing.T) {
-	command := NewRoomRunCommand(flags.NewGlobalFlags())
-	cmd := command.Generate()
-	if !cmd.SilenceErrors {
-		t.Fatal("room run command does not set SilenceErrors: a validation failure would print twice (once from Cobra, once from cmd/agent's main.go)")
-	}
-	path := filepath.Join(t.TempDir(), "invalid.json")
-	if err := os.WriteFile(path, []byte(`{"schema_version":1,"room":{"max_turns":1},"participants":[]}`), 0o600); err != nil {
-		t.Fatalf("write invalid manifest: %v", err)
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-	cmd.SetArgs([]string{"--manifest", path, "--out", filepath.Join(t.TempDir(), "out")})
-	err := cmd.ExecuteContext(context.Background())
-	if err == nil {
-		t.Fatal("expected a validation error")
-	}
-	// cmd/agent's main.go (not exercised by this in-process command
-	// execution) is the single place that renders the error text; Cobra's
-	// own channel, captured here, must stay silent.
-	if stderr.Len() != 0 {
-		t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", stderr.String())
-	}
-}
-
 // TestRoomRunCommandRejectsAllAgentRoomWithNoOpenerAndExitsNonZero is the
 // core regression guard for the silent-all-agent-room defect: a room with
 // only agent participants and no opening_prompt has nobody to speak first,

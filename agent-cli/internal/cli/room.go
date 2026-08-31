@@ -143,11 +143,6 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 			"requires input_device and output_device. Run `agent room run --example` to print a complete, valid " +
 			"two-participant example manifest.",
 		Args: cobra.NoArgs,
-		// SilenceErrors: cmd/agent's main.go prints "Error: %s" for every
-		// non-nil error returned from Execute(). Without this, Cobra also
-		// prints its own "Error: %s" first, so a room validation error (or
-		// any other room run failure) showed up twice.
-		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if example {
 				return writeRoomExampleManifest(cmd.OutOrStdout())

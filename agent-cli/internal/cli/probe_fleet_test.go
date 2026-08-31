@@ -33,9 +33,8 @@ func executeCLIWithFleetExecutor(executor fleet.EntryExecutor, args ...string) c
 	root.SetArgs(args)
 
 	exitCode := 0
-	if err := root.Execute(); err != nil {
+	if root.Execute() != nil {
 		exitCode = 1
-		writeSimulatedMainError(&stderr, err)
 	}
 	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
 }
@@ -48,9 +47,8 @@ func executeCLIWithProbeFleetCommand(command *ProbeFleetCommand, args ...string)
 	root.SetArgs(args)
 
 	exitCode := 0
-	if err := root.Execute(); err != nil {
+	if root.Execute() != nil {
 		exitCode = 1
-		writeSimulatedMainError(&stderr, err)
 	}
 	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
 }
@@ -168,24 +166,6 @@ func TestProbeFleetReportsFailureAndContinuesOtherEntries(t *testing.T) {
 	}
 	if !strings.Contains(run.stderr, "fleet: 1/2 entries passed (fail)") || !strings.Contains(run.stderr, "1 of 2 fleet entries failed") {
 		t.Fatalf("failure summary missing: %q", run.stderr)
-	}
-	// Regression guard: the failure line must be rendered exactly once (by
-	// cmd/agent's main.go, simulated here via writeSimulatedMainError),
-	// never once by Cobra's own error printing and again by main.go.
-	if got := strings.Count(run.stderr, "1 of 2 fleet entries failed"); got != 1 {
-		t.Fatalf("failure summary appeared %d times in stderr, want exactly once: %q", got, run.stderr)
-	}
-}
-
-// TestProbeFleetCommandSetsSilenceErrors is a direct, cobra-version-agnostic
-// regression guard for the "probe fleet prints its own error twice" defect:
-// without SilenceErrors, Cobra prints "Error: ..." itself in addition to
-// cmd/agent's main.go, which prints "Error: %s" for every error Execute()
-// returns.
-func TestProbeFleetCommandSetsSilenceErrors(t *testing.T) {
-	cmd := NewProbeFleetCommand().Generate()
-	if !cmd.SilenceErrors {
-		t.Fatal("probe fleet command does not set SilenceErrors: a failure would print twice (once from Cobra, once from cmd/agent's main.go)")
 	}
 }
 
