@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP audio interrupt fixture</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP audio interrupt fixture</h1>
+    <p id="ready">starting</p>
+    <p>State: <strong id="state">initial</strong></p>
+
+    <form id="read-form"
+          toolname="read_cube_state"
+          tooltitle="Read cube state"
+          tooldescription="Read the current cube state without changing it."
+          toolautosubmit>
+    </form>
+
+    <form id="queue-form"
+          toolname="queue_cube_moves"
+          tooltitle="Queue cube moves"
+          tooldescription="Queue the supplied cube moves and complete after a short, observable delay."
+          toolautosubmit>
+      <label>Moves
+        <input name="moves" type="text" value=""
+               toolparamdescription="The space-separated cube moves to queue.">
+      </label>
+    </form>
+  </main>
+  <script>
+    (() => {
+      const state = {
+        ready: false,
+        value: "initial",
+        pending: false,
+        invocations: []
+      };
+      window.__webmcpAudioInterrupt = state;
+
+      const ready = document.querySelector("#ready");
+      const visible = document.querySelector("#state");
+      const queueDelayMilliseconds = 350;
+
+      const render = () => {
+        ready.textContent = state.ready ? "ready" : "starting";
+        visible.textContent = state.value;
+      };
+
+      const publishOracle = () => {
+        fetch("/__test/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ready: state.ready,
+            value: state.value,
+            visibleText: visible.textContent || "",
+            pending: state.pending,
+            invocations: state.invocations.slice()
+          })
+        }).catch(() => {});
+      };
+
+      const resolveResponse = (event, output) => {
+        if (typeof event.respondWith !== "function") {
+          event.preventDefault();
+          return;
+        }
+        event.preventDefault();
+        event.respondWith(Promise.resolve(output));
+      };
+
+      const submit = (event) => {
+        const form = event.currentTarget;
+        const toolName = String(form.getAttribute("toolname") || "");
+        const data = new FormData(form);
+        const moves = String(data.get("moves") || "").trim();
+
+        state.invocations.push(toolName + (moves ? ":" + moves : ""));
+        if (toolName === "read_cube_state") {
+          state.pending = false;
+          state.value = "read:" + state.value;
+          render();
+          publishOracle();
+          resolveResponse(event, { cube: "initial", value: state.value });
+          return;
+        }
+
+        state.pending = true;
+        state.value = "pending:" + moves;
+        render();
+        publishOracle();
+        if (typeof event.respondWith !== "function") {
+          event.preventDefault();
+          return;
+        }
+        event.preventDefault();
+        event.respondWith(new Promise((resolve) => {
+          window.setTimeout(() => {
+            state.pending = false;
+            state.value = "completed:" + moves;
+            state.invocations.push("completed:" + toolName + ":" + moves);
+            render();
+            publishOracle();
+            resolve({
+              status: "queued",
+              moves,
+              delay_ms: queueDelayMilliseconds
+            });
+          }, queueDelayMilliseconds);
+        }));
+      };
+
+      document.querySelector("#read-form").addEventListener("submit", submit);
+      document.querySelector("#queue-form").addEventListener("submit", submit);
+      window.addEventListener("toolcancel", (event) => {
+        state.invocations.push("canceled:" + String(event.toolName || ""));
+        publishOracle();
+      });
+      window.addEventListener("toolcanceled", (event) => {
+        state.invocations.push("canceled:" + String(event.toolName || ""));
+        publishOracle();
+      });
+
+      state.ready = true;
+      render();
+      publishOracle();
+    })();
+  </script>
+</body>
+</html>
