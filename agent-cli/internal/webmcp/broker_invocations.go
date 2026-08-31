@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -776,104 +775,6 @@ func (b *StatefulBroker) takeEarlyTerminalLocked(id InvocationID, generation uin
 	delete(b.earlyTerminals, id)
 	b.removeEarlyTerminalOrderIDLocked(id)
 	return observation, true
-}
-
-func freshnessFailureResult(invocation *brokerInvocation, phase, reason string, terminalObserved bool) InvokeResult {
-	if invocation == nil {
-		return InvokeResult{State: InvocationError, ErrorCode: string(ErrorInvocationFailed)}
-	}
-	descriptor := invocation.invocation.Tool
-	return invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-		"invocation_id":         string(invocation.invocation.ID),
-		"browser_invocation_id": string(invocation.browserID),
-		"browser_id":            string(descriptor.BrowserID),
-		"target_id":             string(descriptor.TargetID),
-		"generation":            descriptor.Generation,
-		"tool_ref":              string(descriptor.Ref),
-		"phase":                 "result_freshness",
-		"freshness_phase":       phase,
-		"reason_code":           reason,
-		"terminal_observed":     terminalObserved,
-		"side_effect_unknown":   true,
-		"safe_retryable":        invocation.invocation.Operation == OperationReadOnly,
-		"recovery":              "Refresh the current page tool catalog and retry with a newly correlated invocation.",
-	})
-}
-
-func terminalObservationFreshnessReason(invocation *brokerInvocation, observation terminalObservation) string {
-	if invocation == nil {
-		return "invocation_missing"
-	}
-	descriptor := invocation.invocation.Tool
-	if observation.browserID == "" {
-		return "terminal_browser_identity_missing"
-	}
-	if observation.browserID != descriptor.BrowserID {
-		return "terminal_browser_identity_mismatch"
-	}
-	if observation.targetID == "" {
-		return "terminal_target_identity_missing"
-	}
-	if observation.targetID != descriptor.TargetID {
-		return "terminal_target_identity_mismatch"
-	}
-	if observation.generation == 0 {
-		return "terminal_generation_missing"
-	}
-	if observation.generation != descriptor.Generation {
-		return "terminal_generation_mismatch"
-	}
-	if invocation.invokedSequence == 0 {
-		return "invocation_sequence_missing"
-	}
-	if observation.sequence == 0 {
-		return "terminal_sequence_missing"
-	}
-	if observation.sequence <= invocation.invokedSequence {
-		return "terminal_before_invocation"
-	}
-	return ""
-}
-
-func invocationCatalogFreshnessReasonLocked(b *StatefulBroker, invocation *brokerInvocation) string {
-	if b == nil || invocation == nil || invocation.selected == nil {
-		return "selected_session_missing"
-	}
-	selected := invocation.selected
-	if selected.context.Key.BrowserID != invocation.invocation.Tool.BrowserID || selected.context.Key.TargetID != invocation.invocation.Tool.TargetID {
-		return "selected_target_mismatch"
-	}
-	if selected.context.Generation != invocation.invocation.Tool.Generation {
-		return "catalog_generation_mismatch"
-	}
-	record, ok := b.refs[invocation.invocation.Tool.Ref]
-	if !ok || !refCurrentLocked(selected, record) {
-		return "tool_ref_not_current"
-	}
-	return ""
-}
-
-func sameJSONValue(left, right json.RawMessage) bool {
-	leftValue, leftErr := jsonValueWithNumbers(left)
-	rightValue, rightErr := jsonValueWithNumbers(right)
-	return leftErr == nil && rightErr == nil && reflect.DeepEqual(leftValue, rightValue)
-}
-
-func jsonValueWithNumbers(raw json.RawMessage) (any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(bytes.TrimSpace(raw)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return nil, errors.New("webmcp: JSON value contains multiple values")
-		}
-		return nil, err
-	}
-	return value, nil
 }
 
 func (b *StatefulBroker) removeEarlyTerminalOrderIDLocked(id InvocationID) {
