@@ -283,7 +283,20 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 		state.pendingSendErrors = nil
 		return
 	}
-	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.acknowledgementOutstanding {
+	// A control-plane event that asks the provider to open a new response
+	// (an ordinary continuation, or MESSAGE.END's commit-then-create
+	// end-of-turn boundary) must never be sent while the current response is
+	// still active locally -- whether that is a tracked acknowledgement or an
+	// ordinary in-flight response. Sending it early races the still-pending
+	// terminal boundary of the response we may have just tried to cancel: the
+	// provider can see a request for a second response before it has
+	// finished (or even acknowledged cancelling) the first, which is the
+	// state/timing mismatch behind the provider's response_cancel_not_active
+	// rejection. Hold the event until that boundary is observed, then replay
+	// it from flushDeferredSessionEvents.
+	requestsNewResponse := evt.Type == messages.StreamTypeMessageEnd ||
+		(evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt))
+	if requestsNewResponse && (state.acknowledgementOutstanding || state.responseInFlight) {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return
 	}

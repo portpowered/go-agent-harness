@@ -310,6 +310,13 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 	acknowledgementEnded := state.acknowledgementEnded
 	if acknowledgementEnded {
 		state.acknowledgementEnded = false
+	}
+	if acknowledgementEnded || messageEnded {
+		// Either this response's own terminal boundary was just observed, or
+		// an outstanding acknowledgement was just finalized (possibly by a
+		// replacement response retiring it before its own MESSAGE.END could
+		// be owned). Either way, the response that deferred events were
+		// waiting on is no longer active, so it is now safe to replay them.
 		r.flushDeferredSessionEvents(ctx, session, state)
 	}
 	if messageEnded && state.awaitingContinuation && !acknowledgementEnded {
@@ -507,6 +514,21 @@ func beginSessionResponse(state *sessionResponseState, msgID string) bool {
 		}
 		if state.currentResponseID != "" && msgID != state.currentResponseID {
 			state.retiredResponseIDs[state.currentResponseID] = struct{}{}
+			// The retired response's own MESSAGE.END, whenever it eventually
+			// arrives, will never be "owned" again (ownsSessionResponseEnd
+			// rejects retired ids), so the reset that normally happens there
+			// would never run. Finalize any acknowledgement bookkeeping for it
+			// here instead of leaving acknowledgementOutstanding stuck true:
+			// left stuck, every later non-silent audio frame would look like a
+			// live barge-in target (state.responseInFlight || state.
+			// acknowledgementOutstanding) even once nothing is actually
+			// active, producing a RESPONSE.CANCEL the provider rejects with
+			// response_cancel_not_active.
+			if state.acknowledgementOutstanding {
+				state.acknowledgementOutstanding = false
+				state.acknowledgementCancelled = false
+				state.acknowledgementEnded = true
+			}
 		}
 	}
 	state.currentResponseID = msgID
