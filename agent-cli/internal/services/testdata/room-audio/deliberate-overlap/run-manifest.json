@@ -75,8 +75,8 @@
       },
       "capture": {
         "path": "participants/agent-a/capture.session.json",
-        "size": 569,
-        "sha256": "51e9fe704abd63c3c6bf36a0da245918ae0e2adf0434dbea90a5e23b168eb587"
+        "size": 797,
+        "sha256": "a8a2ac68f9e5647110b8a55e516dc064f5b19f6664b1fb853c3613cabcc85f31"
       },
       "completed_turns": 1,
       "id": "agent-a",
@@ -175,8 +175,8 @@
       },
       "capture": {
         "path": "participants/agent-b/capture.session.json",
-        "size": 569,
-        "sha256": "2543607ace9bd775f323b0dce10e8523ba0db23d7447a98f75a8afc93e14c8ac"
+        "size": 797,
+        "sha256": "f7f96463b4ea7cbad297ec3e1f0041604740592a350464805171bed12f05574b"
       },
       "completed_turns": 1,
       "id": "agent-b",

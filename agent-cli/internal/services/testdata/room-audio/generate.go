@@ -670,20 +670,64 @@ func captureJSONForModel(id, model string) []byte {
 	if err != nil {
 		panic(err)
 	}
-	capture := map[string]any{
-		"version":  1,
-		"provider": map[string]any{"name": "offline", "model": model},
-		"session":  map[string]any{"id": id + "-offline-session", "started_at_utc": "2026-08-30T12:00:00Z", "fixture_provenance": "synthetic"},
-		"records": []map[string]any{{
-			"sequence":     1,
-			"direction":    "server_to_client",
-			"timestamp_ms": 0,
-			"type":         "session.created",
-			"payload_type": "websocket_message",
-			"payload":      json.RawMessage(payload),
+	type providerMetadata struct {
+		Name  string `json:"name,omitempty"`
+		Model string `json:"model,omitempty"`
+	}
+	type sessionMetadata struct {
+		ID                string `json:"id,omitempty"`
+		StartedAtUTC      string `json:"started_at_utc,omitempty"`
+		FixtureProvenance string `json:"fixture_provenance,omitempty"`
+	}
+	type record struct {
+		Sequence    int             `json:"sequence"`
+		Direction   string          `json:"direction"`
+		Timestamp   int64           `json:"timestamp_ms"`
+		Type        string          `json:"type"`
+		PayloadType string          `json:"payload_type"`
+		Payload     json.RawMessage `json:"payload,omitempty"`
+	}
+	type integrity struct {
+		Algorithm string `json:"algorithm"`
+		Coverage  string `json:"coverage"`
+		Digest    string `json:"digest"`
+	}
+	type captureEnvelope struct {
+		Version            int              `json:"version"`
+		Provider           providerMetadata `json:"provider"`
+		Session            sessionMetadata  `json:"session"`
+		Records            []record         `json:"records"`
+		Integrity          *integrity       `json:"integrity,omitempty"`
+		EndsWithDisconnect bool             `json:"ends_with_disconnect,omitempty"`
+	}
+	base := captureEnvelope{
+		Version:  2,
+		Provider: providerMetadata{Name: "offline", Model: model},
+		Session: sessionMetadata{
+			ID:                id + "-offline-session",
+			StartedAtUTC:      "2026-08-30T12:00:00Z",
+			FixtureProvenance: "synthetic",
+		},
+		Records: []record{{
+			Sequence:    1,
+			Direction:   "server_to_client",
+			Timestamp:   0,
+			Type:        "session.created",
+			PayloadType: "websocket_message",
+			Payload:     json.RawMessage(payload),
 		}},
 	}
-	data, err := json.MarshalIndent(capture, "", "  ")
+	coverage, err := json.Marshal(base)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(coverage)
+	base.Integrity = &integrity{
+		Algorithm: "sha256",
+		Coverage:  "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+		Digest:    hex.EncodeToString(digest[:]),
+	}
+	data, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
 		panic(err)
 	}
