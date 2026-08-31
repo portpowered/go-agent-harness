@@ -136,6 +136,7 @@ participant's own file. Each line is:
 | `participant_joined` | joining participant | mesh join completed |
 | `participant_ready` | ready participant | provider session ready to converse |
 | `participant_failed` | failed participant | a participant-local fault retired the participant; `fields.reason` contains the sanitized cause |
+| `participant_liveness_fault` | affected participant | a positively classified provider liveness failure; `fields.reason` is the stable classification and the same event is broadcast to every current room-stream subscriber |
 | `participant_terminated` | terminated participant | `fields.reason` names the termination reason |
 | `response_start` | speaker | provider `MESSAGE.START`; `fields.response_id` |
 | `response_end` | speaker | provider `MESSAGE.END`; `fields.response_id`, `fields.terminal_reason`, `fields.output_state` |

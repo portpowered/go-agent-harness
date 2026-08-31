@@ -185,6 +185,14 @@ func runRoomParticipant(
 	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 	observer.livenessObserver = func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
+		classification, _, _, _ := sessionLivenessMetadata(err)
+		if classification != "" {
+			participantID := runtime.plan.manifest.ID
+			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
+			if opts.Stream != nil {
+				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
+			}
+		}
 	}
 	observer.turnAdmission = func(msg messages.StreamMessage) bool {
 		value, ok := msg.Value.(*messages.MessageEndValue)

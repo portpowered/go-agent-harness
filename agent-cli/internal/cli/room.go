@@ -401,7 +401,11 @@ func writeRoomResult(output *roomCommandOutput, result services.RoomResult) {
 		if participantReason == "" {
 			participantReason = participant.Reason
 		}
-		output.printf("participant %q: %s turns=%d connected=%t\n", participantID, participantReason, participant.TurnsCompleted, participant.Connected)
+		line := fmt.Sprintf("participant %q: %s turns=%d connected=%t", participantID, participantReason, participant.TurnsCompleted, participant.Connected)
+		if participant.Classification != "" {
+			line += " classification=" + participant.Classification
+		}
+		output.printf("%s\n", line)
 	}
 }
 

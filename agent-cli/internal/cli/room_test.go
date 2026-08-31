@@ -153,6 +153,24 @@ func TestRoomRunCommandEmitsRunningAfterAllParticipantsAreReady(t *testing.T) {
 	}
 }
 
+func TestWriteRoomResultIncludesLivenessClassification(t *testing.T) {
+	var output bytes.Buffer
+	writeRoomResult(&roomCommandOutput{writer: &output}, services.RoomResult{
+		TerminationReason: services.RoomTerminationFailed,
+		Participants: map[string]services.RoomParticipantResult{
+			"silent": {
+				ID:                "silent",
+				ParticipantID:     "silent",
+				TerminationReason: services.ParticipantTerminationError,
+				Classification:    services.SessionSilentProviderTimeoutClassification,
+			},
+		},
+	})
+	if !strings.Contains(output.String(), `participant "silent": error turns=0 connected=false classification=`+services.SessionSilentProviderTimeoutClassification) {
+		t.Fatalf("room terminal output = %q, want typed participant classification", output.String())
+	}
+}
+
 func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	secret := "manifest-secret-value"
 	t.Setenv("ROOM_ALICE_KEY", secret)

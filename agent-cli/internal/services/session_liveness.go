@@ -202,7 +202,6 @@ func (o *sessionProgressObserver) latchLivenessFailureAtGeneration(err error, fa
 	o.livenessGeneration++
 	notify := o.livenessObserver
 	o.signalLivenessControlLocked()
-	o.signalLivenessLocked()
 	o.livenessMu.Unlock()
 	if timer != nil {
 		timer.Stop()
@@ -210,6 +209,13 @@ func (o *sessionProgressObserver) latchLivenessFailureAtGeneration(err error, fa
 	if notify != nil {
 		notify(err)
 	}
+	// Publish the session-loop wake only after the owner callback has recorded
+	// any room-level explanation and terminal metadata. Otherwise the loop can
+	// begin teardown concurrently with that callback and expose a generic
+	// disconnect before the typed liveness cause is visible.
+	o.livenessMu.Lock()
+	o.signalLivenessLocked()
+	o.livenessMu.Unlock()
 	return true
 }
 

@@ -28,11 +28,12 @@ const (
 
 // Room stream lifecycle event names.
 const (
-	RoomStreamEventParticipantJoined     = "participant_joined"
-	RoomStreamEventParticipantReady      = "participant_ready"
-	RoomStreamEventParticipantFailed     = "participant_failed"
-	RoomStreamEventParticipantTerminated = "participant_terminated"
-	RoomStreamEventRunTerminated         = "run_terminated"
+	RoomStreamEventParticipantJoined        = "participant_joined"
+	RoomStreamEventParticipantReady         = "participant_ready"
+	RoomStreamEventParticipantFailed        = "participant_failed"
+	RoomStreamEventParticipantLivenessFault = "participant_liveness_fault"
+	RoomStreamEventParticipantTerminated    = "participant_terminated"
+	RoomStreamEventRunTerminated            = "run_terminated"
 )
 
 const defaultRoomStreamQueueSize = 128
@@ -367,6 +368,20 @@ func (b *RoomEventBroker) PublishRoomEvent(event, participantID string, reason .
 	})
 }
 
+// PublishParticipantLivenessFault publishes the room-owned explanation for a
+// positively classified provider liveness failure. The failed participant ID
+// remains in the payload for attribution, while the broker broadcasts this
+// event to every current subscriber so a peer-filtered observer is not left
+// waiting on a participant that has gone dark.
+func (b *RoomEventBroker) PublishParticipantLivenessFault(participantID, classification string) {
+	participantID = strings.TrimSpace(participantID)
+	classification = strings.TrimSpace(classification)
+	if participantID == "" || classification == "" {
+		return
+	}
+	b.PublishRoomEvent(RoomStreamEventParticipantLivenessFault, participantID, classification)
+}
+
 // ServeHTTP serves GET /events as a forward-only JSON SSE stream.
 func (b *RoomEventBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/events" {
@@ -472,8 +487,9 @@ func (b *RoomEventBroker) publish(event RoomStreamEvent) {
 	if b.closed {
 		return
 	}
+	broadcastToAll := event.Type == RoomStreamEventTypeRoom && event.Event == RoomStreamEventParticipantLivenessFault
 	for client := range b.clients {
-		if client.participant != "" && client.participant != event.ParticipantID {
+		if !broadcastToAll && client.participant != "" && client.participant != event.ParticipantID {
 			continue
 		}
 		select {
