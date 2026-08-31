@@ -51,6 +51,21 @@ var (
 	ErrEmptyRecordingCredential = errors.New("transcript: empty recording credential")
 )
 
+const (
+	// RecordingStatusComplete identifies a recording that contains both
+	// transcript sides. It is the implicit status for legacy bundles that do
+	// not carry recording_status.
+	RecordingStatusComplete = "complete"
+	// RecordingStatusPartial identifies a bundle that intentionally contains
+	// only the evidence available when recording degraded.
+	RecordingStatusPartial = "partial"
+
+	// RecordingStateComplete and RecordingStatePartial are concise aliases for
+	// callers that prefer state-oriented names.
+	RecordingStateComplete = RecordingStatusComplete
+	RecordingStatePartial  = RecordingStatusPartial
+)
+
 // RecordingError preserves a stable error identity, the affected operation,
 // and destination context. Its Error text is assembled without recording
 // caller-supplied credential values.
@@ -156,6 +171,79 @@ type RecordingTerminalSummary struct {
 	OutputState        messages.TerminalOutputState `json:"output_state"`
 }
 
+// RecordingStatus explains whether a bundle is complete or intentionally
+// partial. A partial status must include a reason; the writer redacts
+// configured credentials from that reason before it reaches the manifest.
+type RecordingStatus struct {
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// Validate checks the status vocabulary and the reason requirement for a
+// partial recording. Transcript-side requirements are validated alongside the
+// recording input and manifest artifact list because this type has no access
+// to those bytes.
+func (s RecordingStatus) Validate() error {
+	switch s.State {
+	case RecordingStatusComplete:
+		if strings.TrimSpace(s.Reason) != "" {
+			return errors.New("complete recordings must not include a reason")
+		}
+	case RecordingStatusPartial:
+		if strings.TrimSpace(s.Reason) == "" {
+			return errors.New("partial recordings require a non-empty reason")
+		}
+	default:
+		return fmt.Errorf("unsupported recording status %q", s.State)
+	}
+	return nil
+}
+
+func cloneRecordingStatus(status *RecordingStatus) *RecordingStatus {
+	if status == nil {
+		return nil
+	}
+	clone := *status
+	return &clone
+}
+
+// UnmarshalJSON applies the same strict shape checks used by the rest of the
+// recording manifest contract. In particular, a null status is not treated as
+// an explicit status object.
+func (s *RecordingStatus) UnmarshalJSON(data []byte) error {
+	if s == nil {
+		return errors.New("cannot unmarshal recording status into nil receiver")
+	}
+	fields, err := decodeRecordingJSONObject(data)
+	if err != nil {
+		return fmt.Errorf("recording status: %v", err)
+	}
+	allowed := map[string]struct{}{"state": {}, "reason": {}}
+	if err := rejectRecordingUnknownFields(fields, allowed); err != nil {
+		return fmt.Errorf("recording status: %v", err)
+	}
+	if _, ok := fields["state"]; !ok {
+		return errors.New("recording status: state is required")
+	}
+	state, err := parseRecordingString(fields["state"])
+	if err != nil {
+		return fmt.Errorf("recording status.state: %v", err)
+	}
+	reason := ""
+	if raw, ok := fields["reason"]; ok {
+		reason, err = parseRecordingString(raw)
+		if err != nil {
+			return fmt.Errorf("recording status.reason: %v", err)
+		}
+	}
+	result := RecordingStatus{State: state, Reason: reason}
+	if err := result.Validate(); err != nil {
+		return err
+	}
+	*s = result
+	return nil
+}
+
 // Validate checks that an explicitly supplied summary is complete. A nil
 // summary is valid because terminal metadata is optional for legacy and
 // naturally incomplete recording inputs.
@@ -234,10 +322,13 @@ type RecordingConfig struct {
 	// transcripts and included in manifest hashes and layout verification.
 	SessionLog []byte
 
-	Metadata    RecordingMetadata
-	Terminal    *RecordingTerminalSummary
-	Corpus      []CorpusHash
-	Credentials []string
+	Metadata RecordingMetadata
+	// RecordingStatus is optional for backwards-compatible complete bundles.
+	// Partial status is required when either transcript side is absent.
+	RecordingStatus *RecordingStatus
+	Terminal        *RecordingTerminalSummary
+	Corpus          []CorpusHash
+	Credentials     []string
 
 	// ManifestVersion optionally selects the version written by the finalizer.
 	// Zero retains the legacy v1 default; browser evidence always requires v2.
@@ -263,19 +354,20 @@ type RecordingConfig struct {
 // declaration and all variable-length collections are normalized before
 // marshaling.
 type RecordingManifest struct {
-	FormatVersion  int                       `json:"format_version"`
-	InputDevice    DeviceMetadata            `json:"input_device"`
-	OutputDevice   DeviceMetadata            `json:"output_device"`
-	Transport      string                    `json:"transport"`
-	Model          string                    `json:"model"`
-	ClockBase      string                    `json:"clock_base"`
-	WallClockStart string                    `json:"wall_clock_start,omitempty"`
-	MediaSource    *MediaSourceMetadata      `json:"media_source,omitempty"`
-	Configuration  map[string]string         `json:"configuration,omitempty"`
-	Corpus         []CorpusHash              `json:"corpus,omitempty"`
-	Terminal       *RecordingTerminalSummary `json:"terminal,omitempty"`
-	Artifacts      []ArtifactHash            `json:"artifacts"`
-	Browser        *BrowserManifest          `json:"browser,omitempty"`
+	FormatVersion   int                       `json:"format_version"`
+	InputDevice     DeviceMetadata            `json:"input_device"`
+	OutputDevice    DeviceMetadata            `json:"output_device"`
+	Transport       string                    `json:"transport"`
+	Model           string                    `json:"model"`
+	ClockBase       string                    `json:"clock_base"`
+	RecordingStatus *RecordingStatus          `json:"recording_status,omitempty"`
+	WallClockStart  string                    `json:"wall_clock_start,omitempty"`
+	MediaSource     *MediaSourceMetadata      `json:"media_source,omitempty"`
+	Configuration   map[string]string         `json:"configuration,omitempty"`
+	Corpus          []CorpusHash              `json:"corpus,omitempty"`
+	Terminal        *RecordingTerminalSummary `json:"terminal,omitempty"`
+	Artifacts       []ArtifactHash            `json:"artifacts"`
+	Browser         *BrowserManifest          `json:"browser,omitempty"`
 }
 
 // RecordingWriter is a reusable finalizer for one RecordingConfig. It does
@@ -356,11 +448,15 @@ func WriteRecordingBundle(config RecordingConfig) error {
 		return nil
 	}
 
-	if err := write("client.transcript.jsonl", redactor.apply(normalized.clientTranscript)); err != nil {
-		return err
+	if len(normalized.clientTranscript) > 0 {
+		if err := write("client.transcript.jsonl", redactor.apply(normalized.clientTranscript)); err != nil {
+			return err
+		}
 	}
-	if err := write("agent.transcript.jsonl", redactor.apply(normalized.agentTranscript)); err != nil {
-		return err
+	if len(normalized.agentTranscript) > 0 {
+		if err := write("agent.transcript.jsonl", redactor.apply(normalized.agentTranscript)); err != nil {
+			return err
+		}
 	}
 	if len(normalized.sessionLog) > 0 {
 		if err := write("session-log.jsonl", redactor.apply(normalized.sessionLog)); err != nil {
@@ -425,6 +521,7 @@ type normalizedRecording struct {
 	destination      string
 	clientTranscript []byte
 	agentTranscript  []byte
+	recordingStatus  *RecordingStatus
 	inputSegments    [][]byte
 	outputSegments   [][]byte
 	sessionLog       []byte
@@ -466,8 +563,15 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	if err != nil {
 		return normalizedRecording{}, redactor, err
 	}
-	if len(clientTranscript) == 0 || len(agentTranscript) == 0 {
-		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate transcripts", destination, errors.New("both transcripts must be non-empty"), redactor)
+	recordingStatus, err := normalizeRecordingStatus(
+		config.RecordingStatus,
+		len(clientTranscript) > 0,
+		len(agentTranscript) > 0,
+		destination,
+		redactor,
+	)
+	if err != nil {
+		return normalizedRecording{}, redactor, err
 	}
 	inputSegments := config.InputSegments
 	outputSegments := config.OutputSegments
@@ -495,8 +599,16 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	if err != nil {
 		return normalizedRecording{}, redactor, err
 	}
-	artifactPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
-	expectedPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
+	artifactPaths := make([]string, 0, 2)
+	expectedPaths := make([]string, 0, 2)
+	if len(clientTranscript) > 0 {
+		artifactPaths = append(artifactPaths, "client.transcript.jsonl")
+		expectedPaths = append(expectedPaths, "client.transcript.jsonl")
+	}
+	if len(agentTranscript) > 0 {
+		artifactPaths = append(artifactPaths, "agent.transcript.jsonl")
+		expectedPaths = append(expectedPaths, "agent.transcript.jsonl")
+	}
 	if len(config.SessionLog) > 0 {
 		artifactPaths = append(artifactPaths, "session-log.jsonl")
 		expectedPaths = append(expectedPaths, "session-log.jsonl")
@@ -531,6 +643,7 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		destination:      destination,
 		clientTranscript: append([]byte(nil), clientTranscript...),
 		agentTranscript:  append([]byte(nil), agentTranscript...),
+		recordingStatus:  recordingStatus,
 		inputSegments:    copySegments(inputSegments),
 		outputSegments:   copySegments(outputSegments),
 		sessionLog:       append([]byte(nil), config.SessionLog...),
@@ -544,6 +657,51 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		browser:          browser,
 		additional:       additional,
 	}, redactor, nil
+}
+
+func normalizeRecordingStatus(
+	input *RecordingStatus,
+	clientPresent, agentPresent bool,
+	destination string,
+	redactor credentialRedactor,
+) (*RecordingStatus, error) {
+	if input == nil {
+		if !clientPresent || !agentPresent {
+			return nil, recordingError(
+				ErrInvalidRecording,
+				"validate recording status",
+				destination,
+				errors.New("one-sided transcripts require recording status partial"),
+				redactor,
+			)
+		}
+		return nil, nil
+	}
+
+	status := cloneRecordingStatus(input)
+	status.Reason = strings.TrimSpace(redactor.string(status.Reason))
+	if err := status.Validate(); err != nil {
+		return nil, recordingError(ErrInvalidRecording, "validate recording status", destination, err, redactor)
+	}
+	if status.State == RecordingStatusComplete && (!clientPresent || !agentPresent) {
+		return nil, recordingError(
+			ErrInvalidRecording,
+			"validate recording status",
+			destination,
+			errors.New("complete recordings require both transcripts to be non-empty"),
+			redactor,
+		)
+	}
+	if status.State == RecordingStatusPartial && !clientPresent && !agentPresent {
+		return nil, recordingError(
+			ErrInvalidRecording,
+			"validate recording status",
+			destination,
+			errors.New("partial recordings require at least one non-empty transcript"),
+			redactor,
+		)
+	}
+	return status, nil
 }
 
 func normalizeAdditionalRecordingArtifacts(
@@ -694,18 +852,19 @@ func buildManifest(recording normalizedRecording, redactor credentialRedactor, a
 	mediaSource := redactMediaSource(metadata.MediaSource, metadata.MediaSourceURL, redactor)
 	corpus := normalizeCorpus(recording.corpus, redactor)
 	manifest := RecordingManifest{
-		FormatVersion:  recording.manifestVersion,
-		InputDevice:    redactDevice(metadata.InputDevice, redactor),
-		OutputDevice:   redactDevice(metadata.OutputDevice, redactor),
-		Transport:      redactor.string(metadata.Transport),
-		Model:          redactor.string(metadata.Model),
-		ClockBase:      redactor.string(metadata.ClockBase),
-		WallClockStart: redactor.string(metadata.WallClockStart),
-		MediaSource:    mediaSource,
-		Configuration:  configuration,
-		Corpus:         corpus,
-		Terminal:       cloneRecordingTerminalSummary(recording.terminal),
-		Artifacts:      artifacts,
+		FormatVersion:   recording.manifestVersion,
+		InputDevice:     redactDevice(metadata.InputDevice, redactor),
+		OutputDevice:    redactDevice(metadata.OutputDevice, redactor),
+		Transport:       redactor.string(metadata.Transport),
+		Model:           redactor.string(metadata.Model),
+		ClockBase:       redactor.string(metadata.ClockBase),
+		RecordingStatus: cloneRecordingStatus(recording.recordingStatus),
+		WallClockStart:  redactor.string(metadata.WallClockStart),
+		MediaSource:     mediaSource,
+		Configuration:   configuration,
+		Corpus:          corpus,
+		Terminal:        cloneRecordingTerminalSummary(recording.terminal),
+		Artifacts:       artifacts,
 	}
 	if recording.browser != nil {
 		manifest.Browser = &BrowserManifest{

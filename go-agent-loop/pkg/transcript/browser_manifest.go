@@ -351,6 +351,31 @@ func (m RecordingManifest) Validate() error {
 		}
 		seenPaths[artifact.Path] = struct{}{}
 	}
+	if m.RecordingStatus != nil {
+		if err := m.RecordingStatus.Validate(); err != nil {
+			return invalidRecordingManifest("recording_status: %v", err)
+		}
+		clientTranscript := false
+		agentTranscript := false
+		for _, artifact := range m.Artifacts {
+			switch artifact.Path {
+			case "client.transcript.jsonl":
+				clientTranscript = true
+			case "agent.transcript.jsonl":
+				agentTranscript = true
+			}
+		}
+		switch m.RecordingStatus.State {
+		case RecordingStatusComplete:
+			if !clientTranscript || !agentTranscript {
+				return invalidRecordingManifest("complete recording requires both transcript artifacts")
+			}
+		case RecordingStatusPartial:
+			if !clientTranscript && !agentTranscript {
+				return invalidRecordingManifest("partial recording requires at least one transcript artifact")
+			}
+		}
+	}
 
 	if m.Browser == nil {
 		return nil
@@ -400,6 +425,9 @@ func (m *RecordingManifest) UnmarshalJSON(data []byte) error {
 	}
 	if raw, present := fields["browser"]; present && isRecordingJSONNull(raw) {
 		return invalidRecordingManifest("browser must be an object when present")
+	}
+	if raw, present := fields["recording_status"]; present && isRecordingJSONNull(raw) {
+		return invalidRecordingManifest("recording_status must be an object when present")
 	}
 	result := RecordingManifest(parsed)
 	if err := result.Validate(); err != nil {

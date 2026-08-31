@@ -145,6 +145,190 @@ func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
 	}
 }
 
+func TestWriteRecordingBundlePartialStatusDescribesOneSidedEvidence(t *testing.T) {
+	const recordingFailure = "recording sink credential-123 became unavailable"
+	tests := []struct {
+		name        string
+		client      []byte
+		agent       []byte
+		wantPath    string
+		missingPath string
+	}{
+		{
+			name:        "client only",
+			client:      []byte("client evidence\n"),
+			wantPath:    "client.transcript.jsonl",
+			missingPath: "agent.transcript.jsonl",
+		},
+		{
+			name:        "agent only",
+			agent:       []byte("agent evidence\n"),
+			wantPath:    "agent.transcript.jsonl",
+			missingPath: "client.transcript.jsonl",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "recording")
+			if err := WriteRecordingBundle(RecordingConfig{
+				Destination:      destination,
+				ClientTranscript: testCase.client,
+				AgentTranscript:  testCase.agent,
+				Credentials:      []string{"credential-123"},
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusPartial, Reason: recordingFailure},
+			}); err != nil {
+				t.Fatalf("WriteRecordingBundle: %v", err)
+			}
+
+			if got := readBundleFile(t, destination, testCase.wantPath); !bytes.Equal(got, append(testCase.client, testCase.agent...)) {
+				t.Fatalf("%s = %q, want recorded evidence", testCase.wantPath, got)
+			}
+			if _, err := os.Stat(filepath.Join(destination, testCase.missingPath)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("missing transcript stat error = %v, want absent", err)
+			}
+
+			manifestBytes := readBundleFile(t, destination, "manifest.json")
+			var manifest RecordingManifest
+			if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+				t.Fatalf("decode partial manifest: %v", err)
+			}
+			if manifest.RecordingStatus == nil {
+				t.Fatal("partial manifest omitted recording_status")
+			}
+			if manifest.RecordingStatus.State != RecordingStatusPartial {
+				t.Fatalf("recording_status.state = %q, want %q", manifest.RecordingStatus.State, RecordingStatusPartial)
+			}
+			if manifest.RecordingStatus.Reason != "recording sink REDACTED became unavailable" {
+				t.Fatalf("recording_status.reason = %q, want redacted reason", manifest.RecordingStatus.Reason)
+			}
+			if bytes.Contains(manifestBytes, []byte("credential-123")) {
+				t.Fatal("partial manifest contains the configured credential")
+			}
+			if got := manifestArtifactPaths(manifest); !equalStrings(got, []string{testCase.wantPath}) {
+				t.Fatalf("manifest artifacts = %v, want only %s", got, testCase.wantPath)
+			}
+		})
+	}
+}
+
+func TestWriteRecordingBundleExplicitCompleteStatusKeepsPairedContract(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	if err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		RecordingStatus:  &RecordingStatus{State: RecordingStatusComplete},
+	}); err != nil {
+		t.Fatalf("WriteRecordingBundle: %v", err)
+	}
+	var manifest RecordingManifest
+	if err := json.Unmarshal(readBundleFile(t, destination, "manifest.json"), &manifest); err != nil {
+		t.Fatalf("decode complete manifest: %v", err)
+	}
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != RecordingStatusComplete {
+		t.Fatalf("recording_status = %+v, want explicit complete status", manifest.RecordingStatus)
+	}
+	if got := manifestArtifactPaths(manifest); !equalStrings(got, []string{"client.transcript.jsonl", "agent.transcript.jsonl"}) {
+		t.Fatalf("manifest artifacts = %v, want paired transcripts", got)
+	}
+}
+
+func TestWriteRecordingBundleRejectsInvalidPartialStatusBeforePublication(t *testing.T) {
+	tests := []struct {
+		name   string
+		config RecordingConfig
+	}{
+		{
+			name: "partial without evidence",
+			config: RecordingConfig{
+				RecordingStatus: &RecordingStatus{State: RecordingStatusPartial, Reason: "sink unavailable"},
+			},
+		},
+		{
+			name: "partial without reason",
+			config: RecordingConfig{
+				ClientTranscript: []byte("client\n"),
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusPartial},
+			},
+		},
+		{
+			name: "unsupported state",
+			config: RecordingConfig{
+				ClientTranscript: []byte("client\n"),
+				AgentTranscript:  []byte("agent\n"),
+				RecordingStatus:  &RecordingStatus{State: "degraded", Reason: "sink unavailable"},
+			},
+		},
+		{
+			name: "complete with one side",
+			config: RecordingConfig{
+				ClientTranscript: []byte("client\n"),
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusComplete},
+			},
+		},
+		{
+			name: "one side without explicit partial state",
+			config: RecordingConfig{
+				ClientTranscript: []byte("client\n"),
+			},
+		},
+		{
+			name: "complete with reason",
+			config: RecordingConfig{
+				ClientTranscript: []byte("client\n"),
+				AgentTranscript:  []byte("agent\n"),
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusComplete, Reason: "not complete"},
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "recording")
+			testCase.config.Destination = destination
+			err := WriteRecordingBundle(testCase.config)
+			if !errors.Is(err, ErrInvalidRecording) {
+				t.Fatalf("error = %v, want ErrInvalidRecording", err)
+			}
+			if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("failed destination stat error = %v, want absent", statErr)
+			}
+		})
+	}
+}
+
+func TestRecordingManifestRejectsInvalidStatusShapes(t *testing.T) {
+	validDigest := strings.Repeat("a", 64)
+	base := `{"format_version":1,"input_device":{},"output_device":{},"transport":"","model":"","clock_base":"","recording_status":{"state":"partial","reason":"sink unavailable"},"artifacts":[{"path":"client.transcript.jsonl","sha256":"` + validDigest + `"}]}`
+	tests := []struct {
+		name string
+		json string
+	}{
+		{name: "valid client-only partial", json: base},
+		{name: "partial without reason", json: strings.Replace(base, `,"reason":"sink unavailable"`, "", 1)},
+		{name: "partial without transcript", json: strings.Replace(base, `{"path":"client.transcript.jsonl","sha256":"`+validDigest+`"}`, "", 1)},
+		{name: "null status", json: strings.Replace(base, `{"state":"partial","reason":"sink unavailable"}`, "null", 1)},
+		{name: "unknown status field", json: strings.Replace(base, `"reason":"sink unavailable"`, `"reason":"sink unavailable","extra":true`, 1)},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			var manifest RecordingManifest
+			err := json.Unmarshal([]byte(testCase.json), &manifest)
+			if testCase.name == "valid client-only partial" {
+				if err != nil {
+					t.Fatalf("decode valid partial manifest: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrInvalidRecordingManifest) {
+				t.Fatalf("error = %v, want ErrInvalidRecordingManifest", err)
+			}
+		})
+	}
+}
+
 func TestRecordingBundleEmitsDeterministicOptionalTerminalSummary(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "recording")
 	want := &RecordingTerminalSummary{
@@ -593,6 +777,14 @@ func equalStrings(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+func manifestArtifactPaths(manifest RecordingManifest) []string {
+	paths := make([]string, 0, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		paths = append(paths, artifact.Path)
+	}
+	return paths
 }
 
 func threeDigits(value int) string {
