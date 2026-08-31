@@ -583,6 +583,7 @@ the minimum a visualizer author needs, without reading Go source):
 {"type": "transcript_delta", "participant_id": "customer", "text": "so when can I expect", "ts": "2026-08-27T00:00:01Z"}
 {"type": "transcript_end", "participant_id": "customer", "full_text": "so when can I expect the refund to post?", "ts": "2026-08-27T00:00:02Z"}
 {"type": "room", "event": "participant_joined", "participant_id": "assistant", "ts": "2026-08-27T00:00:00Z"}
+{"type": "room", "event": "participant_failed", "participant_id": "assistant", "reason": "transport disconnected", "ts": "2026-08-27T00:00:03Z"}
 {"type": "room", "event": "run_terminated", "reason": "max_turns_reached", "ts": "2026-08-27T00:05:00Z"}
 ```
 

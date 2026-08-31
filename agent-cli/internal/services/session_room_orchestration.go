@@ -162,6 +162,14 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
+	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
+		if evidence != nil {
+			evidence.recordTimelineEvent(RoomStreamEventParticipantFailed, participantID, map[string]string{"reason": reason})
+		}
+		if opts.Stream != nil {
+			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantFailed, participantID, reason)
+		}
+	})
 	if replaySchedule != nil {
 		coordinator.blockEmptyStop()
 	}

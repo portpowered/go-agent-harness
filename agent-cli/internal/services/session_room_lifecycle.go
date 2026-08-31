@@ -700,19 +700,31 @@ type roomCoordinator struct {
 	// while its room-owned scheduler is still draining the final mixed frames.
 	emptyStopBlocked bool
 
-	onParticipant RoomParticipantObserver
+	onParticipant       RoomParticipantObserver
+	onParticipantFailed func(string, string)
+	participantFailures map[string]struct{}
 }
 
 func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, onParticipant RoomParticipantObserver) *roomCoordinator {
 	return &roomCoordinator{
-		done:          make(chan struct{}),
-		cancel:        cancel,
-		active:        make(map[string]*roomParticipantRuntime),
-		results:       make(map[string]RoomParticipantResult),
-		maxTurns:      maxTurns,
-		progress:      make(chan struct{}, 1),
-		onParticipant: onParticipant,
+		done:                make(chan struct{}),
+		cancel:              cancel,
+		active:              make(map[string]*roomParticipantRuntime),
+		results:             make(map[string]RoomParticipantResult),
+		maxTurns:            maxTurns,
+		progress:            make(chan struct{}, 1),
+		onParticipant:       onParticipant,
+		participantFailures: make(map[string]struct{}),
 	}
+}
+
+func (c *roomCoordinator) setParticipantFailureObserver(observer func(string, string)) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.onParticipantFailed = observer
+	c.mu.Unlock()
 }
 
 func (c *roomCoordinator) recordError(err error) {
@@ -773,6 +785,7 @@ func (c *roomCoordinator) failParticipant(participantID string, err error) {
 	if !retired {
 		return
 	}
+	c.notifyParticipantFailure(participantID, roomParticipantFailureReason(err, ParticipantTerminationError, "", false, nil))
 	if runtime.cancel != nil {
 		runtime.cancel()
 	}
@@ -780,6 +793,32 @@ func (c *roomCoordinator) failParticipant(participantID string, err error) {
 		// A participant fault never becomes the room verdict. Once no viable
 		// participant remains, the room has completed normally at zero.
 		c.stop(RoomTerminationStopped, nil)
+	}
+}
+
+// notifyParticipantFailure publishes a participant failure at most once. The
+// latch is separate from results because the event must be visible as soon as
+// the active-set retirement is committed, before participant cleanup finishes.
+func (c *roomCoordinator) notifyParticipantFailure(participantID, reason string) {
+	if c == nil || participantID == "" {
+		return
+	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "participant failure"
+	}
+	c.mu.Lock()
+	if c.participantFailures == nil {
+		c.participantFailures = make(map[string]struct{})
+	}
+	if _, alreadyNotified := c.participantFailures[participantID]; alreadyNotified {
+		c.mu.Unlock()
+		return
+	}
+	c.participantFailures[participantID] = struct{}{}
+	observer := c.onParticipantFailed
+	c.mu.Unlock()
+	if observer != nil {
+		observer(participantID, reason)
 	}
 }
 
@@ -976,6 +1015,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		return RoomParticipantResult{Reason: ParticipantTerminationError, Error: "room participant runtime is nil"}
 	}
 	id := runtime.plan.manifest.ID
+	roomStopping := c.isStopping()
 	c.mu.Lock()
 	if previous, alreadyFinished := c.results[id]; alreadyFinished {
 		c.mu.Unlock()
@@ -1013,6 +1053,9 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	// already have retired it; normal completion removes it here. Either way,
 	// activeExcept below sees only viable survivors.
 	_, roomEmptyAfterRemoval := c.removeParticipantForFinish(id)
+	if !roomStopping && (reason == ParticipantTerminationError || reason == ParticipantTerminationDisconnected) {
+		c.notifyParticipantFailure(id, roomParticipantFailureReason(err, reason, closeReason, transportEnded, secrets))
+	}
 
 	// Remove the source from every surviving inbound mixer before closing its
 	// own mixer. This discards only stale source bytes and keeps survivors live.
