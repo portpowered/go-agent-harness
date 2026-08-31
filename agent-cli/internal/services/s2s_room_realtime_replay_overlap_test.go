@@ -724,8 +724,11 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 			t.Fatalf("bidirectional room manifest is missing participant %q", check.id)
 		}
 		received := readRoomEvidenceFile(t, filepath.Join(outputDir, participantManifest.Artifacts.ReceivedPCM))
-		if !bytes.Equal(received, check.peerPCM) || bytes.Equal(received, check.ownPCM) {
-			t.Fatalf("bidirectional participant %q received PCM = %v, want exact peer-only PCM %v", check.id, received, check.peerPCM)
+		wantReceived := append([]byte(nil), silence...)
+		wantReceived = append(wantReceived, check.peerPCM...)
+		wantReceived = append(wantReceived, silence...)
+		if !bytes.Equal(received, wantReceived) || bytes.Contains(received, check.ownPCM) {
+			t.Fatalf("bidirectional participant %q received PCM = %v, want one silent frame, exact peer-only PCM %v, and one silent frame", check.id, received, check.peerPCM)
 		}
 		if participantManifest.Artifacts.ReceivedPCM != filepath.ToSlash(filepath.Join("participants", check.id, "received.pcm")) {
 			t.Fatalf("bidirectional participant %q received artifact = %q, want manifest-addressed path", check.id, participantManifest.Artifacts.ReceivedPCM)
@@ -749,8 +752,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	if err := json.Unmarshal(manifestData, &evidenceManifest); err != nil {
 		t.Fatalf("decode bidirectional room manifest: %v", err)
 	}
-	if !evidenceManifest.Finalized || evidenceManifest.AudioFormat.Encoding != "pcm_s16le" || evidenceManifest.AudioFormat.SampleRateHz != 100 || evidenceManifest.AudioFormat.Channels != 1 || evidenceManifest.AudioFormat.BitsPerSample != 16 || evidenceManifest.AudioFormat.FrameDuration != "20ms" {
-		t.Fatalf("bidirectional room manifest finalization/format = %+v, want finalized PCM16 100Hz mono 20ms", evidenceManifest)
+	if !evidenceManifest.Finalized || evidenceManifest.AudioFormat.Encoding != "pcm_s16le" || evidenceManifest.AudioFormat.SampleRate != 100 || evidenceManifest.AudioFormat.Channels != 1 || evidenceManifest.AudioFormat.SampleWidthBits != 16 || evidenceManifest.AudioFormat.ByteOrder != "little" {
+		t.Fatalf("bidirectional room manifest finalization/format = %+v, want finalized PCM16 100Hz mono 16-bit little-endian", evidenceManifest)
 	}
 }
 
