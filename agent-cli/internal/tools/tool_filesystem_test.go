@@ -681,6 +681,46 @@ func TestWriteFileToolSupportsOSMaximumFilename(t *testing.T) {
 	}
 }
 
+func TestWriteFileCleansStagingFileAfterInjectedWriteFailure(t *testing.T) {
+	injectedErr := errors.New("injected staged write failure")
+	failWrite := func(file *os.File, _ []byte) error {
+		if err := file.Close(); err != nil {
+			return errors.Join(injectedErr, err)
+		}
+		return injectedErr
+	}
+
+	for _, restricted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unrestricted", true: "workspace-restricted"}[restricted], func(t *testing.T) {
+			workspace := t.TempDir()
+			destinationDir := filepath.Join(workspace, "destination")
+			if err := os.Mkdir(destinationDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(destinationDir, "existing.txt")
+			original := []byte("original content")
+			if err := os.WriteFile(target, original, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			var filesystem fileSystem
+			if restricted {
+				filesystem = &sandboxFs{workspace: workspace, writeTempFileFunc: failWrite}
+			} else {
+				filesystem = &hostFs{writeTempFileFunc: failWrite}
+			}
+			err := filesystem.WriteFile(target, []byte("replacement content"))
+			if !errors.Is(err, injectedErr) {
+				t.Fatalf("injected write error = %v, want %v", err, injectedErr)
+			}
+			if got, readErr := os.ReadFile(target); readErr != nil || !bytes.Equal(got, original) {
+				t.Fatalf("target after injected write failure = %q, %v; want %q", got, readErr, original)
+			}
+			assertNoWriteFileTempArtifacts(t, destinationDir)
+		})
+	}
+}
+
 func discoverMaximumFilenameComponent(t *testing.T, dir string) string {
 	t.Helper()
 	accepts := func(length int) bool {

@@ -86,9 +86,9 @@ func (c *ChatCommand) Generate() *cobra.Command {
 		Long:  "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags); err != nil {
-				// Chat preflight failures are already actionable. Leave final
-				// process rendering to the CLI entrypoint without Cobra's usage
-				// dump or a second error prefix.
+				// Chat preflight failures are already actionable. Defer their
+				// rendering to the process boundary while suppressing Cobra's
+				// usage dump.
 				cmd.SilenceErrors = true
 				cmd.SilenceUsage = true
 				return err

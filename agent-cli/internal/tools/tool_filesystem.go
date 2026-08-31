@@ -434,8 +434,12 @@ type fileSystem interface {
 	ReadDir(path string) ([]os.DirEntry, error)
 }
 
+type writeFileTempFunc func(*os.File, []byte) error
+
 // hostFs is an unrestricted fileReadWriter that operates directly on the host filesystem.
-type hostFs struct{}
+type hostFs struct {
+	writeTempFileFunc writeFileTempFunc
+}
 
 func (h *hostFs) ReadFile(path string) ([]byte, error) {
 	content, err := os.ReadFile(path)
@@ -477,7 +481,7 @@ func (h *hostFs) WriteFile(path string, data []byte) error {
 	}
 	defer func() { _ = os.Remove(tmpPath) }() // clean up on write/close/rename failure
 
-	if err := writeAndCloseTempFile(tmpFile, data); err != nil {
+	if err := h.writeTempFile(tmpFile, data); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
@@ -485,6 +489,13 @@ func (h *hostFs) WriteFile(path string, data []byte) error {
 		return fmt.Errorf("failed to replace original file: %w", err)
 	}
 	return nil
+}
+
+func (h *hostFs) writeTempFile(file *os.File, data []byte) error {
+	if h.writeTempFileFunc != nil {
+		return h.writeTempFileFunc(file, data)
+	}
+	return writeAndCloseTempFile(file, data)
 }
 
 func newWriteFileTempName() (string, error) {
@@ -553,7 +564,8 @@ func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, er
 
 // sandboxFs is a sandboxed fileSystem that operates within a strictly defined workspace using os.Root.
 type sandboxFs struct {
-	workspace string
+	workspace         string
+	writeTempFileFunc writeFileTempFunc
 }
 
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
@@ -618,7 +630,7 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 		}
 		defer func() { _ = root.Remove(tmpRelPath) }() // clean up on failure
 
-		if err := writeAndCloseTempFile(tmpFile, data); err != nil {
+		if err := r.writeTempFile(tmpFile, data); err != nil {
 			return fmt.Errorf("failed to write to temp file: %w", err)
 		}
 
@@ -627,6 +639,13 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 		}
 		return nil
 	})
+}
+
+func (r *sandboxFs) writeTempFile(file *os.File, data []byte) error {
+	if r.writeTempFileFunc != nil {
+		return r.writeTempFileFunc(file, data)
+	}
+	return writeAndCloseTempFile(file, data)
 }
 
 func (r *sandboxFs) ReadDir(path string) ([]os.DirEntry, error) {
