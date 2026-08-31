@@ -139,6 +139,25 @@ func runRoomParticipant(
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, participantEvidence, secrets)
 	}()
 
+	if startupErr := runtime.plan.startupErr; startupErr != nil {
+		// Setup failures are already retired from the coordinator's active set.
+		// Still use the ordinary result path so participant cleanup, evidence
+		// finalization, and the terminal observer remain exactly once.
+		if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
+			startupErr = errors.Join(startupErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
+		}
+		runtime.lifecycle.markParticipantFailure(startupErr)
+		runtime.lifecycle.markRunDone(startupErr)
+		results <- roomParticipantRunResult{
+			plan:       runtime.plan,
+			runtime:    runtime,
+			err:        startupErr,
+			connected:  false,
+			connectErr: nil,
+		}
+		return
+	}
+
 	participantStream := RoomParticipantEventSink{}
 	if opts.Stream != nil {
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
@@ -217,7 +236,11 @@ func runRoomParticipant(
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
 	}
-	runtime.lifecycle.markRunDone(coordinator.participantRunError(runtime.plan.manifest.ID, runErr))
+	runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
+	if runErr != nil && !roomCancellationOnly(runErr) {
+		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, runErr, secretsForPlan(runtime.plan)))
+	}
+	runtime.lifecycle.markRunDone(runErr)
 	connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 	if trackedErr, ready := runtime.plan.tracker.outcome(); ready {
 		connectErr = trackedErr
@@ -302,9 +325,10 @@ func observeRoomParticipantStream(
 		if participantEvidence == nil {
 			return
 		}
-		if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil && evidence != nil {
-			evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
-		}
+		// A recording sink is observational. Its failure is retained by the
+		// participant evidence status, but never changes this participant's
+		// runtime outcome or cancellation context.
+		_ = participantEvidence.observeDelta(msg)
 	}
 	runtime.lifecycle.observe(msg)
 	recordRoomTimelineEvent(evidence, plan.manifest.ID, msg)
@@ -325,7 +349,7 @@ func observeRoomParticipantStream(
 	value, ok := msg.Value.(*messages.AudioDeltaValue)
 	if !ok || value == nil {
 		recordParticipantDelta()
-		coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value), secretsForPlan(plan)))
+		coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value), secretsForPlan(plan)))
 		return
 	}
 	pcm := append([]byte(nil), value.Content...)
@@ -347,15 +371,12 @@ func observeRoomParticipantStream(
 		// critical path: they are offset-anchored, so deferring them past the
 		// handoff would misplace this participant's audio in the room mix.
 		// The WAV write, which nothing else is ordered against, moves below.
-		if evidenceErr := participantEvidence.observeSentStream(pcm); evidenceErr != nil {
-			if evidence != nil {
-				evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
-			}
-		}
+		_ = participantEvidence.observeSentStream(pcm)
 	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
-			coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
+			coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
+			return
 		}
 	}
 	// Room replay audio is released by the single room scheduler from the
@@ -371,7 +392,7 @@ func observeRoomParticipantStream(
 			}
 			if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
 				if coordinator.isActive(target.plan.manifest.ID) {
-					coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
+					coordinator.failParticipant(target.plan.manifest.ID, roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr), secretsForPlan(target.plan)))
 				}
 				continue
 			}
@@ -390,11 +411,7 @@ func observeRoomParticipantStream(
 	if participantEvidence != nil {
 		// Durable WAV I/O only. A slow filesystem here must not delay the
 		// provider-to-peer handoff above.
-		if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
-			if evidence != nil {
-				evidence.recordError(plan.manifest.ID, fmt.Errorf("write WAV audio: %w", evidenceErr))
-			}
-		}
+		_ = participantEvidence.observeAudio(pcm)
 	}
 }
 
@@ -466,7 +483,6 @@ func collectRoomParticipantResults(
 	results <-chan roomParticipantRunResult,
 	cleanup *roomCleanupWaiter,
 ) error {
-	escalateRuntimeErrors := roomPlansHaveHumanParticipant(plans) || roomPlansHaveReplayParticipant(plans)
 	pending := make(map[string]struct{}, len(plans))
 	for _, plan := range plans {
 		if plan != nil {
@@ -513,16 +529,11 @@ func collectRoomParticipantResults(
 			delete(pending, id)
 			if !coordinator.isStopping() {
 				failure := result.connectErr
-				if escalateRuntimeErrors && failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
-					// A provider can connect successfully and then terminate with a
-					// transport/session error. Treat that runtime failure as a room
-					// failure too, so the coordinator cancels the human/device
-					// participant and every other sibling instead of leaving the room
-					// blocked on local capture or playback.
+				if failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
 					failure = result.err
 				}
 				if failure != nil {
-					coordinator.fail(roomParticipantFailure(id, failure, append(secretsForPlan(result.plan), secrets...)))
+					coordinator.failParticipant(id, roomParticipantFailure(id, failure, append(secretsForPlan(result.plan), secrets...)))
 				}
 			}
 			finishRoomParticipant(coordinator, mesh, result, secretsForPlan(result.plan), cleanup)
@@ -532,24 +543,6 @@ func collectRoomParticipantResults(
 		}
 	}
 	return nil
-}
-
-func roomPlansHaveHumanParticipant(plans []*roomParticipantPlan) bool {
-	for _, plan := range plans {
-		if roomParticipantIsHuman(plan) {
-			return true
-		}
-	}
-	return false
-}
-
-func roomPlansHaveReplayParticipant(plans []*roomParticipantPlan) bool {
-	for _, plan := range plans {
-		if plan != nil && plan.replay && !roomParticipantIsHuman(plan) {
-			return true
-		}
-	}
-	return false
 }
 
 func waitRoomParticipantWork(
@@ -699,7 +692,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		return
 	}
 	if loop == nil {
-		coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, errors.New("room session loop did not become ready"), secretsForPlan(runtime.plan)))
+		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, errors.New("room session loop did not become ready"), secretsForPlan(runtime.plan)))
 		return
 	}
 	for {
@@ -708,7 +701,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
-			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))
+			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))
 			return
 		}
 		// Record what this participant actually received before attempting
@@ -717,10 +710,10 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		// reached this participant, independent of whether the downstream
 		// session accepted it.
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
-				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
-				return
-			}
+			// received.pcm is an observation of the frame, not part of the
+			// participant's delivery contract. A degraded artifact must not
+			// interrupt the live mixer or session.
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
@@ -732,12 +725,12 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			if participantEvidence != nil && pcm16HasSignal(frame) {
 				participantEvidence.recordAudioDropped(err.Error(), len(frame))
 			}
-			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 			return
 		}
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
-				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+				coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 				return
 			}
 		}
@@ -781,22 +774,19 @@ func runRoomHumanCapture(
 				return nil
 			}
 			failure := roomParticipantFailure(participantID, fmt.Errorf("read human input device: %w", err), secrets)
-			coordinator.fail(failure)
+			coordinator.failParticipant(participantID, failure)
 			return failure
 		}
 		roomSamples, err := resampleRoomSamples(frame, audio.SampleRate, runtime.mixer.Format().SampleRate)
 		if err != nil {
 			failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio: %w", err), secrets)
-			coordinator.fail(failure)
+			coordinator.failParticipant(participantID, failure)
 			return failure
 		}
 		pcm := encodeRoomPCM16(roomSamples)
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
-				failure := roomParticipantFailure(participantID, fmt.Errorf("record human input audio: %w", evidenceErr), secrets)
-				coordinator.fail(failure)
-				return failure
-			}
+			// Evidence is best-effort and independent of human capture/fan-out.
+			_ = participantEvidence.observeSentAudio(pcm)
 		}
 		for _, target := range coordinator.activeExcept(participantID) {
 			if target == nil || target.mixer == nil {
@@ -807,14 +797,14 @@ func runRoomHumanCapture(
 				targetSamples, convertErr := resampleRoomSamples(frame, audio.SampleRate, target.mixer.Format().SampleRate)
 				if convertErr != nil {
 					failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, convertErr), secrets)
-					coordinator.fail(failure)
+					coordinator.failParticipant(participantID, failure)
 					return failure
 				}
 				targetPCM = encodeRoomPCM16(targetSamples)
 			}
 			if writeErr := target.mixer.WriteContext(runtime.ctx, participantID, targetPCM); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
-				failure := roomParticipantFailure(participantID, fmt.Errorf("fan out human PCM to %s: %w", target.plan.manifest.ID, writeErr), secrets)
-				coordinator.fail(failure)
+				failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
+				coordinator.failParticipant(target.plan.manifest.ID, failure)
 				return failure
 			}
 			if opts.onParticipantAudioFanned != nil {
@@ -842,20 +832,17 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
-			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
+			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
 			return
 		}
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
-				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
-				return
-			}
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
-			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
+			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
 			return
 		}
 	}

@@ -88,16 +88,18 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			publishStreamTermination(result)
 			return result, err
 		}
+		if opts.onRoomEvidenceReady != nil {
+			opts.onRoomEvidenceReady(evidence)
+		}
 	}
 	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
 		if evidence != nil {
-			finalizeErr := evidence.finalize(result, runErr, roomClock.Now().UTC())
-			if finalizeErr != nil {
-				runErr = errors.Join(runErr, finalizeErr)
-				if result.Error == "" {
-					result.Error = sanitizeRoomError(finalizeErr, evidenceSecrets)
-				}
-			}
+			// Evidence finalization may report a degraded sink, but it is not a
+			// room runtime failure. The status projection is applied to the
+			// returned result after all close/mix/manifest callbacks have had a
+			// chance to latch their first error.
+			_ = evidence.finalize(result, runErr, roomClock.Now().UTC())
+			evidence.applyRecordingHealth(&result)
 		}
 		publishStreamTermination(result)
 		return result, runErr
@@ -162,10 +164,15 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
-	coordinator.completeWhenEmpty = replayMode
-	if replaySchedule != nil {
-		coordinator.blockEmptyStop()
-	}
+	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
+		if evidence != nil {
+			evidence.recordTimelineEvent(RoomStreamEventParticipantFailed, participantID, map[string]string{"reason": reason})
+		}
+		if opts.Stream != nil {
+			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantFailed, participantID, reason)
+		}
+	})
+	coordinator.blockEmptyStop()
 	runtimes := make([]*roomParticipantRuntime, 0, len(plans))
 	cleanupSetup := func() error {
 		meshCloseClaimed = true
@@ -174,17 +181,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		defer cleanup.stop()
 		return errors.Join(cleanupRoomParticipantSetup(runtimes, mesh, cleanup), closeRoomParticipantPlanCapabilities(plans))
 	}
-	if evidence != nil {
-		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
-			coordinator.fail(roomParticipantFailure(participantID, fmt.Errorf("record room evidence: %w", evidenceErr), secrets))
-		})
-	}
 	for _, plan := range plans {
 		participantCtx, participantCancel := context.WithCancel(roomCtx)
 		mixerConfig := roomReplayMixerConfig(opts, replaySchedule != nil)
 		mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)
 		if mixerErr != nil {
-			coordinator.fail(roomParticipantFailure(plan.manifest.ID, mixerErr, secrets))
+			coordinator.fail(fmt.Errorf("construct room mixer: %w", mixerErr))
 			participantCancel()
 			roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 			result := roomFailureResult(roomErr, secrets)
@@ -207,30 +209,35 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			plan.tracker.lifecycle = runtime.lifecycle
 		}
 		runtimes = append(runtimes, runtime)
+		coordinator.addParticipant(runtime)
+		if plan.startupErr != nil {
+			coordinator.failParticipant(plan.manifest.ID, plan.startupErr)
+			continue
+		}
 		for _, other := range plans {
 			if other.manifest.ID == plan.manifest.ID {
 				continue
 			}
 			if addErr := mixer.AddInput(other.manifest.ID); addErr != nil {
-				coordinator.fail(roomParticipantFailure(plan.manifest.ID, addErr, secrets))
-				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
-				result := roomFailureResult(roomErr, secrets)
-				return finalizeEvidence(result, roomErr)
+				plan.startupErr = roomParticipantFailure(plan.manifest.ID, fmt.Errorf("configure participant mixer: %w", addErr), append(secretsForPlan(plan), secrets...))
+				coordinator.failParticipant(plan.manifest.ID, plan.startupErr)
+				break
 			}
 		}
 		if roomParticipantIsHuman(plan) && !replayMode {
 			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceRegistry); deviceErr != nil {
-				coordinator.fail(roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan)))
-				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
-				result := roomFailureResult(roomErr, secrets)
-				return finalizeEvidence(result, roomErr)
+				plan.startupErr = roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan))
+				coordinator.failParticipant(plan.manifest.ID, plan.startupErr)
+				continue
 			}
 		} else if roomParticipantIsHuman(plan) {
 			// A replayed human is represented by recorded artifacts only. Mark
 			// the logical participant admitted without touching host audio.
 			runtime.lifecycle.markDeviceReady()
 		}
-		coordinator.addParticipant(runtime)
+	}
+	if replaySchedule == nil {
+		coordinator.unblockEmptyStop()
 	}
 
 	// The room context is independent of caller cancellation; cancellation is
@@ -282,7 +289,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		cleanup.start()
 	}
 	if startupErr == nil && !coordinator.isStopping() {
-		publishRoomParticipantsReady(plans, opts, evidence)
+		publishRoomParticipantsReady(coordinator, plans, opts, evidence)
 	}
 	close(startGate)
 	replayWG.Wait()
@@ -313,9 +320,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 // publishRoomParticipantsReady announces every started participant as ready:
 // it enriches the evidence manifest with runtime-selected metadata, records
 // the room-timeline transition, and notifies the stream/callback observers.
-func publishRoomParticipantsReady(plans []*roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) {
+func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) {
 	for _, plan := range plans {
 		if plan == nil {
+			continue
+		}
+		if coordinator != nil && !coordinator.isActive(plan.manifest.ID) {
 			continue
 		}
 		ready := roomParticipantReady(plan)
@@ -389,7 +399,16 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 	// caller wait, while still giving it the complete result.
 	observerCleanup := &roomCleanupWaiter{}
 	observerCleanup.start()
-	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(result) }, nil)
+	observerResult := &RoomResult{
+		TerminationReason:  result.TerminationReason,
+		Reason:             result.Reason,
+		Participants:       result.Participants,
+		ActiveParticipants: append([]string(nil), result.ActiveParticipants...),
+		Error:              result.Error,
+		RecordingStatus:    cloneRoomRecordingStatus(result.RecordingStatus),
+		DegradedArtifacts:  cloneRoomStringMap(result.DegradedArtifacts),
+	}
+	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(*observerResult) }, nil)
 	observerCleanup.stop()
 	if observerErr == nil {
 		return result, roomErr

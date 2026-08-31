@@ -20,6 +20,18 @@ document: prior artifacts (`run-manifest.json`, `agent-<id>.wav`,
 names and shapes, only gaining the wall-clock fields described in
 "Wall-clock timestamps" below.
 
+## Degraded recording
+
+Room recording follows the shared transcript `recording_status` contract. A
+healthy bundle omits the optional status; if any evidence sink fails, the
+room and the affected participant manifest carry `{"state":"partial",
+"reason":"..."}` and `degraded_artifacts` maps each affected relative path
+to its sanitized first failure. The room's runtime result and participant
+termination reasons remain independent of this status: recording failures do
+not cancel a conversation, retire a participant, or turn a clean room stop
+into a runtime error. The first failure is retained so later writes to the
+same or another degraded sink cannot replace the diagnostic cause.
+
 ## Directory layout
 
 ```text
@@ -123,6 +135,7 @@ participant's own file. Each line is:
 |---|---|---|
 | `participant_joined` | joining participant | mesh join completed |
 | `participant_ready` | ready participant | provider session ready to converse |
+| `participant_failed` | failed participant | a participant-local fault retired the participant; `fields.reason` contains the sanitized cause |
 | `participant_terminated` | terminated participant | `fields.reason` names the termination reason |
 | `response_start` | speaker | provider `MESSAGE.START`; `fields.response_id` |
 | `response_end` | speaker | provider `MESSAGE.END`; `fields.response_id`, `fields.terminal_reason`, `fields.output_state` |

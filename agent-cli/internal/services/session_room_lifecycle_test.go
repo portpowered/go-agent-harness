@@ -558,6 +558,79 @@ func (r *roomLifecycleRun) admitAll(t *testing.T) {
 	}
 }
 
+func TestRoomCoordinator_FailParticipantRetiresOnlyTarget(t *testing.T) {
+	targetCtx, targetCancel := context.WithCancel(context.Background())
+	defer targetCancel()
+	siblingCtx, siblingCancel := context.WithCancel(context.Background())
+	defer siblingCancel()
+
+	target := &roomParticipantRuntime{
+		plan:      &roomParticipantPlan{manifest: room.Participant{ID: "target"}},
+		ctx:       targetCtx,
+		cancel:    targetCancel,
+		lifecycle: &roomParticipantLifecycle{},
+	}
+	sibling := &roomParticipantRuntime{
+		plan:      &roomParticipantPlan{manifest: room.Participant{ID: "sibling"}},
+		ctx:       siblingCtx,
+		cancel:    siblingCancel,
+		lifecycle: &roomParticipantLifecycle{},
+	}
+	roomCancelled := false
+	participantCallbacks := 0
+	coordinator := newRoomCoordinator(func() { roomCancelled = true }, 0, func(RoomParticipantResult) {
+		participantCallbacks++
+	})
+	coordinator.addParticipant(target)
+	coordinator.addParticipant(sibling)
+
+	coordinator.failParticipant("target", errors.New("target transport failed"))
+	if coordinator.isStopping() || roomCancelled {
+		t.Fatal("target failure stopped the room")
+	}
+	if err := coordinator.roomError(); err != nil {
+		t.Fatalf("target failure set room error: %v", err)
+	}
+	if coordinator.isActive("target") {
+		t.Fatal("failed target remained in the active set")
+	}
+	if !coordinator.isActive("sibling") {
+		t.Fatal("surviving sibling was removed from the active set")
+	}
+	select {
+	case <-targetCtx.Done():
+	default:
+		t.Fatal("failed target context was not cancelled")
+	}
+	select {
+	case <-siblingCtx.Done():
+		t.Fatal("surviving sibling context was cancelled")
+	default:
+	}
+	select {
+	case <-coordinator.done:
+		t.Fatal("target failure closed the room done signal")
+	default:
+	}
+
+	result := coordinator.finishParticipant(target, "", nil, nil, nil, nil)
+	if result.ParticipantID != "target" || result.Reason != ParticipantTerminationError {
+		t.Fatalf("target result = %+v, want target/error", result)
+	}
+	if !strings.Contains(result.Error, "target transport failed") {
+		t.Fatalf("target result = %+v, want causal failure", result)
+	}
+	if got := coordinator.finishParticipant(target, "", nil, nil, nil, nil); got != result {
+		t.Fatalf("duplicate target finalization = %+v, want original result %+v", got, result)
+	}
+	if participantCallbacks != 1 {
+		t.Fatalf("participant callback count = %d, want exactly once", participantCallbacks)
+	}
+	if !coordinator.isActive("sibling") {
+		t.Fatal("surviving sibling was removed during target finalization")
+	}
+}
+
 func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 	ids := []string{"target", "sibling", "observer"}
 
@@ -575,9 +648,13 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 				t.Fatalf("viable sibling %q connection error = %v, want successful admission outcome", id, err)
 			}
 		}
+		run.stop()
 		outcome := run.waitResult(t)
-		if outcome.result.Reason != RoomTerminationFailed {
-			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
+		if outcome.err != nil {
+			t.Fatalf("room after isolated connection failure: %v", outcome.err)
+		}
+		if outcome.result.Reason != RoomTerminationStopped {
+			t.Fatalf("room reason = %q, want stopped after explicit stop", outcome.result.Reason)
 		}
 		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()
@@ -608,9 +685,13 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 		if err := run.waitOutcome(t, "observer"); err != nil {
 			t.Fatalf("viable observer connection error = %v, want successful admission outcome", err)
 		}
+		run.stop()
 		outcome := run.waitResult(t)
-		if outcome.result.Reason != RoomTerminationFailed {
-			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
+		if outcome.err != nil {
+			t.Fatalf("room after isolated connection failure: %v", outcome.err)
+		}
+		if outcome.result.Reason != RoomTerminationStopped {
+			t.Fatalf("room reason = %q, want stopped after explicit stop", outcome.result.Reason)
 		}
 		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()

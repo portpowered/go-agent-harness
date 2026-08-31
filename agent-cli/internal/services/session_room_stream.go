@@ -30,6 +30,7 @@ const (
 const (
 	RoomStreamEventParticipantJoined     = "participant_joined"
 	RoomStreamEventParticipantReady      = "participant_ready"
+	RoomStreamEventParticipantFailed     = "participant_failed"
 	RoomStreamEventParticipantTerminated = "participant_terminated"
 	RoomStreamEventRunTerminated         = "run_terminated"
 )

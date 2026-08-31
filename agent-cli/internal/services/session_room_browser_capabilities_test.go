@@ -109,7 +109,7 @@ func TestBuildRoomParticipantPlansComposesIndependentBrowserCapabilities(t *test
 	}
 }
 
-func TestBuildRoomParticipantPlansClosesBrowserCapabilitiesWhenLaterConstructionFails(t *testing.T) {
+func TestBuildRoomParticipantPlansRetainsParticipantConstructionFailure(t *testing.T) {
 	ids := []string{"alpha", "beta"}
 	inferencers := map[string]*roomTestInferencer{
 		"alpha": {},
@@ -141,13 +141,22 @@ func TestBuildRoomParticipantPlansClosesBrowserCapabilitiesWhenLaterConstruction
 		return inferencers[participant.ID], nil
 	}
 
-	_, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
-	if err == nil || !strings.Contains(err.Error(), "beta") || !strings.Contains(err.Error(), "provider construction failed") {
-		t.Fatalf("build error = %v, want participant-qualified provider failure", err)
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
+	}
+	if len(plans) != len(ids) || plans[1].startupErr == nil || !strings.Contains(plans[1].startupErr.Error(), "provider construction failed") {
+		t.Fatalf("plans = %+v, want beta's participant-local construction failure", plans)
+	}
+	if closeCalls["alpha"] != 0 || closeCalls["beta"] != 0 {
+		t.Fatalf("capabilities closed before plan ownership transferred: %v", closeCalls)
+	}
+	if err := closeRoomParticipantPlanCapabilities(plans); err != nil {
+		t.Fatalf("close participant capabilities: %v", err)
 	}
 	for _, id := range ids {
 		if closeCalls[id] != 1 {
-			t.Fatalf("participant %q close calls = %d, want exactly one after failed planning", id, closeCalls[id])
+			t.Fatalf("participant %q close calls = %d, want exactly one after explicit plan cleanup", id, closeCalls[id])
 		}
 	}
 }

@@ -142,14 +142,14 @@ func TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns(t *testing.T) {
 	}
 
 	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err == nil {
-		t.Fatal("empty-response room returned clean success")
+	if err != nil {
+		t.Fatalf("empty-response room: %v", err)
 	}
 	if result.Reason == RoomTerminationMaxTurnsReached {
 		t.Fatal("empty response satisfied the room MaxTurns target")
 	}
-	if result.Reason != RoomTerminationFailed {
-		t.Fatalf("empty-response room reason = %q, want failed termination", result.Reason)
+	if result.Reason != RoomTerminationStopped {
+		t.Fatalf("empty-response room reason = %q, want clean stopped termination", result.Reason)
 	}
 	for _, id := range ids {
 		participant, ok := result.Participants[id]
