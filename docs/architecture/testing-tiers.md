@@ -25,8 +25,13 @@ pull-request gates.
 binary, replay fixtures, and test-owned child processes. The package therefore
 needs its own finite budget rather than inheriting the general package timeout.
 
-The selected default for the root-target contract is **300 seconds**. The
-budget is based on the package's Go test elapsed time, which is the scope owned
+The selected default for the root-target Agent CLI contract is **385 seconds**.
+The former 300-second budget left only 11.0% of its budget after the slowest
+post-optimization measurement. The new value is based on three clean,
+coverage-enabled 2-vCPU measurements: 266.87s, 240.55s, and 241.42s. The
+slowest accepted run is 266.87s, and `385s` leaves `(385 - 266.87) / 385 =
+30.7%` headroom. The budget is based on the package's Go test elapsed time,
+which is the scope owned
 by `go test -timeout` and includes the shared `TestMain` setup. The fresh-main
 baseline at `66c3ff8` reached a maximum successful cold CI-shaped package
 duration of 110.788 seconds; the package-only safety calculation is
@@ -37,12 +42,15 @@ wall time includes compilation; it is measured separately when collecting
 evidence and does not change the package-level calculation.
 
 The root `Makefile` exposes this contract as
-`AGENT_CLI_INTEGRATION_TIMEOUT`, whose default is the finite `300s` value and
+`AGENT_CLI_INTEGRATION_TIMEOUT`, whose default is the finite `385s` value and
 whose effective value is printed by every affected target. The direct package
 paths in `make test-integration`, `make test-regressions`, and `make test-budget`
 use this setting for `agent-cli/test/integration`; `make coverage` and
 `make test-hermetic` use it for the same package under their existing coverage
-and `CGO_ENABLED=0`/`nomicrophone` modes. `make test` and those target-wide
+and `CGO_ENABLED=0`/`nomicrophone` modes. The Agent CLI coverage invocation
+also prints elapsed duration, configured timeout, consumed percentage,
+remaining duration/percentage, and an explicit success, non-timeout failure,
+or timeout classification. `make test` and those target-wide
 module invocations necessarily apply it to all packages in the `agent-cli`
 module, which is the narrowly scoped module-level consequence of one
 `go test ./...` invocation. Other modules and package paths retain the general
