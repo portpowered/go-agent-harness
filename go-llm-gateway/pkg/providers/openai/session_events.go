@@ -340,7 +340,7 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
-		update := map[string]any{}
+		update := map[string]any{"type": realtimeSessionType}
 		if v.Model != "" {
 			update["model"] = v.Model
 		}

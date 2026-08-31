@@ -10,6 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+const realtimeSessionType = "realtime"
+
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
 	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	if p.realtimeLegacySessionUpdate {
@@ -17,7 +19,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	}
 
 	update := map[string]any{
-		"type":  "realtime",
+		"type":  realtimeSessionType,
 		"model": model,
 	}
 	if len(config.Modalities) > 0 {
@@ -44,6 +46,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string, disableTurnDetection bool) (models.SessionEvent, error) {
 	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	update := map[string]any{
+		"type":  realtimeSessionType,
 		"model": model,
 	}
 	if len(config.Modalities) > 0 {
