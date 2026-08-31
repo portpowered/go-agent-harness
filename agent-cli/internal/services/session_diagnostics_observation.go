@@ -10,6 +10,17 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
 	}
+	// Server-VAD providers own these boundaries and report them inbound. Emit
+	// the runtime observations before the general stream callback so room
+	// evidence and package-level test gates see the same accepted boundary.
+	if o.runtime != nil && o.runtime.providerBoundaryObserving && msg.Role != messages.RoleTool {
+		switch msg.Type {
+		case messages.StreamTypeInputItemAdded:
+			o.runtime.providerInputCommit()
+		case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+			o.runtime.responseCreate(msg)
+		}
+	}
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}

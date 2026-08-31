@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "room": {
+    "max_turns": 2,
+    "max_duration": "30s"
+  },
+  "participants": [
+    {
+      "id": "alpha",
+      "system_prompt": "You are Alpha in a short two-person spoken exchange. Speak naturally in five words or fewer. Address Beta, answer the latest point, and stop after two replies.",
+      "opening_prompt": "Greet Beta and ask for one short weekend-trip idea.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "cedar",
+      "tools": []
+    },
+    {
+      "id": "beta",
+      "system_prompt": "You are Beta in a short two-person spoken exchange. Speak naturally in five words or fewer. Answer Alpha, ask one concise follow-up, and stop after two replies.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "marin",
+      "tools": []
+    }
+  ]
+}

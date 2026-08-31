@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
@@ -18,11 +19,12 @@ import (
 type SessionRuntimeObservationKind string
 
 const (
-	SessionRuntimeObservationAudioOutput   SessionRuntimeObservationKind = "audio_output"
-	SessionRuntimeObservationAudioInput    SessionRuntimeObservationKind = "audio_input"
-	SessionRuntimeObservationInputCommit   SessionRuntimeObservationKind = "input_commit"
-	SessionRuntimeObservationTurnCompleted SessionRuntimeObservationKind = "turn_completed"
-	SessionRuntimeObservationTerminal      SessionRuntimeObservationKind = "terminal"
+	SessionRuntimeObservationAudioOutput    SessionRuntimeObservationKind = "audio_output"
+	SessionRuntimeObservationAudioInput     SessionRuntimeObservationKind = "audio_input"
+	SessionRuntimeObservationInputCommit    SessionRuntimeObservationKind = "input_commit"
+	SessionRuntimeObservationResponseCreate SessionRuntimeObservationKind = "response_create"
+	SessionRuntimeObservationTurnCompleted  SessionRuntimeObservationKind = "turn_completed"
+	SessionRuntimeObservationTerminal       SessionRuntimeObservationKind = "terminal"
 )
 
 // SessionTokenUsageSemantics identifies how provider usage values are consumed
@@ -65,11 +67,16 @@ type SessionRuntimeObservation struct {
 	Timestamp      time.Time
 	Payload        []byte
 	TurnsCompleted int
-	// InputCommit is the one-based ordinal of a client-to-server MESSAGE.END
-	// accepted by the session. It is populated only for InputCommit observations.
+	// InputCommit is the one-based ordinal of an input commit accepted by the
+	// session. It is populated for client-owned MESSAGE.END boundaries and may
+	// be zero for a provider-originated server-VAD commit.
 	InputCommit int
-	Clean       bool
-	Error       string
+	// ResponseID and ResponsePurpose are populated on ResponseCreate
+	// observations when the provider/session seam has those identities.
+	ResponseID      string
+	ResponsePurpose messages.ResponsePurpose
+	Clean           bool
+	Error           string
 	// FinalAccounting is populated only on the terminal observation. It is
 	// copied before delivery and can be retained by the observer safely.
 	FinalAccounting *SessionFinalAccounting
@@ -86,9 +93,10 @@ type SessionRuntimeObserver interface {
 // composition, so deterministic callers observe the same source that was
 // injected into the generated command graph.
 type sessionRuntimeObservationRecorder struct {
-	observer SessionRuntimeObserver
-	clock    platformclock.Source
-	sequence atomic.Uint64
+	observer                  SessionRuntimeObserver
+	clock                     platformclock.Source
+	sequence                  atomic.Uint64
+	providerBoundaryObserving bool
 
 	terminalOnce sync.Once
 	inputMu      sync.Mutex
@@ -106,15 +114,33 @@ func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, sourc
 	}
 }
 
+// enableProviderBoundaryObservations opts a runtime recorder into inbound
+// provider commit/response boundaries. Ordinary session runtime observers keep
+// their historical client-owned observation surface; room latency evidence is
+// the caller that needs server-VAD boundaries as well.
+func (r *sessionRuntimeObservationRecorder) enableProviderBoundaryObservations() {
+	if r != nil {
+		r.providerBoundaryObserving = true
+	}
+}
+
 func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservationKind, payload []byte, turns int, clean bool, runErr error) {
-	r.observeWithInputCommit(kind, payload, turns, 0, clean, runErr)
+	r.observeWithMetadata(kind, payload, turns, 0, clean, runErr, "", "")
 }
 
 func (r *sessionRuntimeObservationRecorder) observeWithInputCommit(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error) {
-	r.observeFinal(kind, payload, turns, inputCommit, clean, runErr, nil)
+	r.observeFinalWithMetadata(kind, payload, turns, inputCommit, clean, runErr, nil, "", "")
 }
 
 func (r *sessionRuntimeObservationRecorder) observeFinal(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting) {
+	r.observeFinalWithMetadata(kind, payload, turns, inputCommit, clean, runErr, finalAccounting, "", "")
+}
+
+func (r *sessionRuntimeObservationRecorder) observeWithMetadata(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, responseID string, responsePurpose messages.ResponsePurpose) {
+	r.observeFinalWithMetadata(kind, payload, turns, inputCommit, clean, runErr, nil, responseID, responsePurpose)
+}
+
+func (r *sessionRuntimeObservationRecorder) observeFinalWithMetadata(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting, responseID string, responsePurpose messages.ResponsePurpose) {
 	if r == nil || r.observer == nil {
 		return
 	}
@@ -126,6 +152,8 @@ func (r *sessionRuntimeObservationRecorder) observeFinal(kind SessionRuntimeObse
 		Payload:         append([]byte(nil), payload...),
 		TurnsCompleted:  turns,
 		InputCommit:     inputCommit,
+		ResponseID:      responseID,
+		ResponsePurpose: responsePurpose,
 		Clean:           clean,
 		Error:           sessionRuntimeObservationError(runErr),
 		FinalAccounting: cloneSessionFinalAccounting(finalAccounting),
@@ -161,6 +189,32 @@ func (r *sessionRuntimeObservationRecorder) inputCommit() {
 	r.inputPayload = nil
 	r.inputMu.Unlock()
 	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, commit, true, nil)
+}
+
+// providerInputCommit records a provider-originated commit boundary, such as
+// the INPUT_ITEM.ADDED event emitted after server-side VAD. The provider owns
+// the commit, so there is no client ordinal to report, but the accumulated
+// audio remains available to the runtime observer for evidence consumers.
+func (r *sessionRuntimeObservationRecorder) providerInputCommit() {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	payload := append([]byte(nil), r.inputPayload...)
+	r.inputPayload = nil
+	r.inputMu.Unlock()
+	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, 0, true, nil)
+}
+
+// responseCreate records the response request accepted by the session. A
+// MESSAGE.END is translated by provider sessions into commit plus response
+// creation; the observed session calls this immediately after inputCommit so
+// both boundaries remain explicit even when they share one deterministic tick.
+func (r *sessionRuntimeObservationRecorder) responseCreate(msg messages.StreamMessage) {
+	if r == nil {
+		return
+	}
+	r.observeWithMetadata(SessionRuntimeObservationResponseCreate, nil, 0, 0, true, nil, msg.ResponseID, msg.ResponsePurpose)
 }
 
 func (r *sessionRuntimeObservationRecorder) turnCompleted(turns int) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"os"
 	"sync"
 	"time"
@@ -17,23 +18,33 @@ import (
 // (barge-in response time, turn-to-turn gaps) could not be computed from the
 // bundle. Every recorded stream now carries both fields from this one clock.
 type roomClock struct {
-	start time.Time
+	start  time.Time
+	source platformclock.Source
 }
 
 // newRoomClock anchors a clock at the room's actual start time rather than
 // the Unix epoch, so manifest.clock_base is a real, comparable wall-clock
 // timestamp.
-func newRoomClock(start time.Time) roomClock {
-	if start.IsZero() {
-		start = time.Now().UTC()
+// newRoomClock anchors offsets to the room's start time. The source must be
+// the same clock that produced start: a room running on an injected clock would
+// otherwise measure elapsed time against real wall time, and the difference
+// between the two epochs — not the elapsed room time — would become the offset.
+func newRoomClock(start time.Time, sources ...platformclock.Source) roomClock {
+	var source platformclock.Source
+	if len(sources) > 0 {
+		source = sources[0]
 	}
-	return roomClock{start: start.UTC()}
+	clock := platformclock.Ensure(source)
+	if start.IsZero() {
+		start = clock.Now().UTC()
+	}
+	return roomClock{start: start.UTC(), source: clock}
 }
 
 // now returns the elapsed time since room start and the current wall-clock
 // time in Unix milliseconds.
 func (c roomClock) now() (time.Duration, int64) {
-	current := time.Now().UTC()
+	current := platformclock.Ensure(c.source).Now().UTC()
 	return current.Sub(c.start), current.UnixMilli()
 }
 

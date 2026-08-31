@@ -16,6 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -39,6 +40,10 @@ type roomEvidence struct {
 	manifest     room.Manifest
 	secrets      []string
 	participants map[string]*roomParticipantEvidence
+	latency      *roomLatencyRecorder
+	// source is the injectable platform clock the latency recorder samples;
+	// distinct from roomClock below, which anchors offsets to room start.
+	source platformclock.Source
 
 	// clock anchors every recorded wall-clock timestamp (deltas, diagnostics,
 	// room-timeline) to the room's real start time instead of the Unix epoch.
@@ -83,12 +88,17 @@ type roomEvidenceArtifactPaths struct {
 	ReceivedPCM string `json:"received_pcm"`
 }
 
-func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time) (*roomEvidence, error) {
+func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, errors.New("room evidence output directory is empty")
 	}
+	var source platformclock.Source
+	if len(sources) > 0 {
+		source = sources[0]
+	}
+	clock := platformclock.Ensure(source)
 	if startedAt.IsZero() {
-		startedAt = time.Now().UTC()
+		startedAt = clock.Now().UTC()
 	}
 	if format.SampleRate <= 0 {
 		format = room.DefaultPCM16Format()
@@ -101,8 +111,10 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		secrets:      append([]string(nil), secrets...),
 		participants: make(map[string]*roomParticipantEvidence, len(manifest.Participants)),
 		audioFormat:  format,
+		latency:      newRoomLatencyRecorder(clock, format),
+		source:       clock,
 	}
-	evidence.clock = newRoomClock(evidence.startedAt)
+	evidence.clock = newRoomClock(evidence.startedAt, clock)
 	evidence.mix = newRoomMixBuffer(format.SampleRate)
 	var err error
 	evidence.timeline, err = newRoomTimeline(filepath.Join(evidence.destination, RoomEvidenceTimelinePath), evidence.clock)
@@ -341,6 +353,19 @@ func (p *roomParticipantEvidence) observeSentAudio(pcm []byte) error {
 	if err := p.observeAudio(pcm); err != nil {
 		return err
 	}
+	return p.observeSentStream(pcm)
+}
+
+// observeSentStream records everything observeSentAudio does except the
+// participant WAV write: the sent-PCM stream, the room mix placement, and the
+// speech-segment timeline. It is split out so the room stream observer can keep
+// this on the provider-to-peer critical path (where the room mix and timeline
+// need the un-delayed offset) while deferring the WAV write until after the
+// bounded handoff.
+func (p *roomParticipantEvidence) observeSentStream(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return errors.New("room participant audio evidence is not initialized")
+	}
 	if p.sentPCM != nil {
 		if err := p.sentPCM.write(pcm); err != nil {
 			return err
@@ -450,6 +475,34 @@ func (e *roomEvidence) redactJSON(data []byte) []byte {
 	return result
 }
 
+func (e *roomEvidence) observeSpeakerAudio(sourceID string, targetIDs []string, pcm []byte) {
+	if e == nil || e.latency == nil {
+		return
+	}
+	e.latency.observeSpeakerAudio(sourceID, targetIDs, pcm)
+}
+
+func (e *roomEvidence) observeSpeechStopped(participantID string) {
+	if e == nil || e.latency == nil {
+		return
+	}
+	e.latency.observeSpeechStopped(participantID)
+}
+
+func (e *roomEvidence) observeProviderAudio(participantID string, responseID string) {
+	if e == nil || e.latency == nil {
+		return
+	}
+	e.latency.observeProviderAudio(participantID, responseID)
+}
+
+func (e *roomEvidence) observePeerAudio(sourceID, targetID string, pcm []byte) {
+	if e == nil || e.latency == nil {
+		return
+	}
+	e.latency.observePeerAudio(sourceID, targetID, pcm)
+}
+
 func redactRoomJSONValue(value any, redact func(string) string) any {
 	switch typed := value.(type) {
 	case string:
@@ -512,9 +565,10 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 		}
 
 		recordErr := e.err()
-		effectiveErr := errors.Join(runErr, recordErr, closeErr)
+		latencyErr := e.writeLatencyBundle()
+		effectiveErr := errors.Join(runErr, recordErr, closeErr, latencyErr)
 		manifestErr := e.writeManifest(result, effectiveErr, endedAt.UTC())
-		e.finalizeErr = errors.Join(recordErr, closeErr, manifestErr)
+		e.finalizeErr = errors.Join(recordErr, closeErr, latencyErr, manifestErr)
 	})
 	return e.finalizeErr
 }
@@ -591,7 +645,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		return nil
 	}
 	if endedAt.IsZero() {
-		endedAt = time.Now().UTC()
+		endedAt = e.source.Now().UTC()
 	}
 	reason := result.TerminationReason
 	if reason == "" {
@@ -625,6 +679,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 	}
 	manifest.Artifacts["room_mix"] = RoomEvidenceMixPath
 	manifest.Artifacts["room_timeline"] = RoomEvidenceTimelinePath
+	manifest.Artifacts["room.latency"] = RoomLatencyArtifactPath
 	if runErr != nil {
 		manifest.Error = e.redactText(runErr.Error())
 	}
@@ -679,6 +734,13 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		manifest.Artifacts[participant.ID+".received_pcm"] = paths.ReceivedPCM
 	}
 	return writeRoomEvidenceManifestFile(filepath.Join(e.destination, RoomEvidenceManifestPath), manifest, e.secrets)
+}
+
+func (e *roomEvidence) writeLatencyBundle() error {
+	if e == nil || e.latency == nil {
+		return nil
+	}
+	return e.latency.write(filepath.Join(e.destination, RoomLatencyArtifactPath), e.secrets)
 }
 
 func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, secrets []string) error {

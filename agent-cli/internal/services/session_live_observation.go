@@ -209,6 +209,10 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
 		s.runtime.inputCommit()
+		s.runtime.responseCreate(msg)
+	}
+	if msg.Type == messages.StreamTypeResponseCreate && s.runtime != nil {
+		s.runtime.responseCreate(msg)
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
@@ -224,7 +228,11 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 // RequestResponse forwards the optional explicit response request while
 // preserving the capability boundary of replay and injected sessions.
 func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	return messages.RequestSessionResponse(ctx, s.Session)
+	outcome := messages.RequestSessionResponse(ctx, s.Session)
+	if outcome.OK() && s.runtime != nil {
+		s.runtime.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+	}
+	return outcome
 }
 
 func (s *observedSession) SupportsResponseRequests() bool {

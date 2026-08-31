@@ -61,6 +61,12 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	if manifest.Timing.StartedAt == "" || manifest.Timing.EndedAt == "" || !strings.HasSuffix(manifest.Timing.StartedAt, "Z") || !strings.HasSuffix(manifest.Timing.EndedAt, "Z") {
 		t.Fatalf("manifest timing = %+v, want UTC start/end", manifest.Timing)
 	}
+	if manifest.Artifacts["room.latency"] != RoomLatencyArtifactPath {
+		t.Fatalf("room latency artifact = %q, want %q", manifest.Artifacts["room.latency"], RoomLatencyArtifactPath)
+	}
+	if _, err := ReadRoomLatencyBundle(filepath.Join(outputDir, RoomLatencyArtifactPath)); err != nil {
+		t.Fatalf("read finalized room latency artifact: %v", err)
+	}
 
 	for _, id := range ids {
 		participantResult, ok := result.Participants[id]
