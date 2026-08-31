@@ -782,3 +782,62 @@ func scaleSamples(samples []int16, factor int16) []int16 {
 	}
 	return scaled
 }
+
+// TestPCM16RoomLoudnessBarExpressesTightThreeDBBound proves the inter-speaker
+// loudness comparison can enforce a tightened ~3 dB bar, not just the 6 dB
+// suite default. A live probe measured --voice verse rendering ~7-8 dB
+// quieter than --voice alloy across two runs; a 3 dB bar must catch that gap
+// while still passing an ordinary ~2 dB natural difference.
+func TestPCM16RoomLoudnessBarExpressesTightThreeDBBound(t *testing.T) {
+	const tightBoundDB = 3.0
+
+	config := audio.DefaultRoomAnalysisConfig()
+	config.MaxLoudnessDifferenceDB = tightBoundDB
+
+	// ~7.5 dB quieter reproduces the shape of the reported verse-vs-alloy
+	// gap (10^(-7.5/20) =~ 0.4217).
+	quiet := roomAnalysisFixture()
+	quiet.Streams[1].Samples = scaleSamplesByFactor(quiet.Streams[1].Samples, 0.4217)
+	result, err := audio.AnalyzePCM16Room(quiet, config)
+	if err != nil {
+		t.Fatalf("AnalyzePCM16Room() error = %v", err)
+	}
+	var failure audio.PropertyFailure
+	var ok bool
+	for _, candidate := range result.Failures {
+		if candidate.Property == "inter-speaker-loudness" && candidate.StreamID == "b-sent" {
+			failure, ok = candidate, true
+			break
+		}
+	}
+	if !ok {
+		t.Fatalf("failures = %v, want inter-speaker-loudness for the ~7.5dB-quiet stream at a %vdB bar", result.Failures, tightBoundDB)
+	}
+	if failure.Bound != tightBoundDB || failure.Measured < 6 || failure.Measured > 9 {
+		t.Fatalf("loudness failure = %+v, want bound=%vdB and measured in [6,9]dB", failure, tightBoundDB)
+	}
+
+	// An ordinary ~2 dB difference (10^(-2/20) =~ 0.7943) must still pass the
+	// same 3 dB bar: the tightened bound must not be so tight it flags normal
+	// speaker-to-speaker variation.
+	mild := roomAnalysisFixture()
+	mild.Streams[1].Samples = scaleSamplesByFactor(mild.Streams[1].Samples, 0.7943)
+	if err := audio.ValidatePCM16Room(mild, config); err != nil {
+		t.Fatalf("ValidatePCM16Room() with a ~2dB natural difference at a %vdB bar error = %v, want pass", tightBoundDB, err)
+	}
+}
+
+func scaleSamplesByFactor(samples []int16, factor float64) []int16 {
+	scaled := make([]int16, len(samples))
+	for index, sample := range samples {
+		value := math.Round(float64(sample) * factor)
+		if value > math.MaxInt16 {
+			value = math.MaxInt16
+		}
+		if value < math.MinInt16 {
+			value = math.MinInt16
+		}
+		scaled[index] = int16(value)
+	}
+	return scaled
+}
