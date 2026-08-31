@@ -275,7 +275,17 @@ func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *te
 	}
 }
 
-func TestSessionBrowserBrokerRetainsStalePersistedIdentityInFailedState(t *testing.T) {
+// TestSessionBrowserBrokerKeepsBrowserUsableWhenPersistedTargetIsGone pins the
+// customer contract for a remembered page that no longer exists. A stale
+// persisted record is ordinary drift - the tab was closed, reloaded, or
+// replaced - and the browser endpoint itself is still healthy. The session
+// must therefore stay connected-but-unselected so the model can list tabs, ask
+// the customer, and select an exact target, after which its page tools are
+// published. Retaining the record as a permanently failed capability instead
+// leaves a browser-enabled session with no page tools, no connected-unselected
+// grounding, and no working browser control, which is what let the model tell
+// the customer that browser access does not exist.
+func TestSessionBrowserBrokerKeepsBrowserUsableWhenPersistedTargetIsGone(t *testing.T) {
 	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
 	defer server.Close()
 
@@ -299,10 +309,6 @@ func TestSessionBrowserBrokerRetainsStalePersistedIdentityInFailedState(t *testi
 	if err := seedBroker.Close(); err != nil {
 		t.Fatalf("close seed broker: %v", err)
 	}
-	record, err := selectionStore.Load()
-	if err != nil {
-		t.Fatalf("load persisted selection: %v", err)
-	}
 	runtime.mu.Lock()
 	runtime.targets = nil
 	runtime.mu.Unlock()
@@ -314,7 +320,8 @@ func TestSessionBrowserBrokerRetainsStalePersistedIdentityInFailedState(t *testi
 	}
 	defer func() { _ = broker.Close() }()
 
-	response, err := webmcpTools.NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+	executor := webmcpTools.NewBrokerToolSet(broker).Executor()
+	response, err := executor.Execute(context.Background(), messages.ToolCall{
 		ID:        "stale-first-browser-call",
 		Name:      webmcp.GetContextToolName,
 		Arguments: `{}`,
@@ -329,16 +336,35 @@ func TestSessionBrowserBrokerRetainsStalePersistedIdentityInFailedState(t *testi
 	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
 		t.Fatalf("stale browser envelope = %+v, want stale_selection", envelope)
 	}
-	if got := envelope.Error.Details; got["browser_id"] != browserID || got["target_id"] != targetID || got["selected_generation"] != float64(record.Generation) || got["reason"] != "target_missing_after_reconnect" {
-		t.Fatalf("stale browser details = %#v, want persisted identity and reason", got)
+
+	// The browser control surface must remain usable: this is the exact path
+	// the model takes to recover from a remembered page that is gone.
+	listResponse, err := executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "stale-recovery-list-tabs",
+		Name:      webmcp.ListTabsToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("list tabs after a stale persisted selection: %v", err)
 	}
+	listEnvelope, err := webmcp.UnmarshalToolResult([]byte(listResponse.Content))
+	if err != nil {
+		t.Fatalf("decode list tabs result: %v", err)
+	}
+	if !listEnvelope.OK {
+		t.Fatalf("list tabs after a stale persisted selection = %+v, want a usable browser control", listEnvelope.Error)
+	}
+
 	initializer, ok := broker.(SessionCapabilityInitializer)
 	if !ok {
 		t.Fatal("stale session broker does not expose capability status")
 	}
 	status := initializer.SessionCapabilityStatus()
-	if status.State != SessionCapabilityFailed || status.Err == nil {
-		t.Fatalf("stale capability status = %+v, want failed with error", status)
+	if status.State != SessionCapabilityReady || status.Err != nil {
+		t.Fatalf("stale capability status = %+v, want a ready capability", status)
+	}
+	if status.BrowserCapabilityState != webmcp.BrowserCapabilityConnectedUnselected {
+		t.Fatalf("stale browser capability state = %q, want connected_unselected", status.BrowserCapabilityState)
 	}
 	if runtime.count("attach") != 0 {
 		t.Fatalf("stale bootstrap attached a replacement target: %v", runtime.operationSnapshot())
