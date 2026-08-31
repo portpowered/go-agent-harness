@@ -1,0 +1,308 @@
+{
+  "annotations": {
+    "loudness": [
+      {
+        "end_ms": 3800,
+        "id": "clean-turn-balance",
+        "kind": "loudness",
+        "left": "agent-a",
+        "right": "agent-b",
+        "start_ms": 200
+      }
+    ]
+  },
+  "artifacts": {
+    "room_mix": {
+      "path": "room-mix.wav",
+      "size": 8044,
+      "sha256": "32ff2e806aad30fbea0b9ba78197ad11cd3aa4ea758fed93cc3f471ab42afcdd"
+    },
+    "room_timeline": {
+      "path": "room-timeline.jsonl",
+      "size": 1127,
+      "sha256": "13b722fdca230abfd90773f75ee99ad78e8c3e69848dc970634feb832cc2eb28"
+    }
+  },
+  "clock_base": "2026-08-30T12:00:00Z",
+  "finalized": true,
+  "participants": {
+    "agent-a": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-a/deltas.jsonl",
+          "size": 11292,
+          "sha256": "6f4e9596311b0e6a5e8815d596e196759f362c31266d2472c2c5e02331a13d68"
+        },
+        "diagnostics": {
+          "path": "participants/agent-a/diagnostics.jsonl",
+          "size": 241,
+          "sha256": "2c7b87aec4cd600885410747b8711d9b2deb88b5b7e04adddffc4f3df65b9e85"
+        },
+        "events": {
+          "path": "participants/agent-a/events.jsonl",
+          "size": 391,
+          "sha256": "7ecc4bd71977ea91b24690a116c045353840887e5b7534cab555aaab24013397"
+        },
+        "received_pcm": {
+          "path": "participants/agent-a/received.pcm",
+          "size": 8000,
+          "sha256": "01aff1d7fdf524b911c9600b7c2630ca7c112b2a4d49d0b9fd6214fc80ebab3f"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-a/sent.pcm",
+          "size": 8000,
+          "sha256": "b282edcd9d0d5e199858fd5aa8b997e0a42f47915d1737b742151ff9940a005c"
+        },
+        "wav": {
+          "path": "participants/agent-a/agent.wav",
+          "size": 8044,
+          "sha256": "8f284ee90bcdcca5ae20fab9c8af7d513e6bad947f57ff25d491fb0e94f3913f"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-a/capture.session.json",
+        "size": 568,
+        "sha256": "c0fca140b1f4942313b88c5dba527041611cfd7cd13f8179269f6dd8bdafac0e"
+      },
+      "completed_turns": 2,
+      "id": "agent-a",
+      "kind": "agent",
+      "model": "clean-turn-taking-v1",
+      "opening_prompt": "Begin the deterministic clean turn-taking fixture.",
+      "provider": "offline",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 2020,
+              "label": "agent-b-turn-1",
+              "start_ms": 1220
+            },
+            {
+              "end_ms": 3820,
+              "label": "agent-b-turn-2",
+              "start_ms": 3220
+            }
+          ],
+          "stream_id": "agent-a:received",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 1000,
+              "label": "agent-a-turn-1",
+              "start_ms": 200
+            },
+            {
+              "end_ms": 3000,
+              "label": "agent-a-turn-2",
+              "start_ms": 2200
+            }
+          ],
+          "stream_id": "agent-a:sent",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-a-chunk-1",
+              "sample_index": 1200
+            },
+            {
+              "id": "agent-a-chunk-2",
+              "sample_index": 2200
+            },
+            {
+              "id": "agent-a-chunk-3",
+              "sample_index": 3200
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 1000,
+              "label": "agent-a-turn-1",
+              "start_ms": 200
+            },
+            {
+              "end_ms": 3000,
+              "label": "agent-a-turn-2",
+              "start_ms": 2200
+            }
+          ],
+          "stream_id": "agent-a:output",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic fixture transcript; do not contact a provider.",
+      "voice": "synthetic-noise"
+    },
+    "agent-b": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-b/deltas.jsonl",
+          "size": 11319,
+          "sha256": "818752e2bb081789f87f637e8086becc9d34cca4e7906f05be11dbbf15c54068"
+        },
+        "diagnostics": {
+          "path": "participants/agent-b/diagnostics.jsonl",
+          "size": 242,
+          "sha256": "28e91ea18bb397e3de990b93a94f1840b7c2b88358c8814d0d364dce2f920738"
+        },
+        "events": {
+          "path": "participants/agent-b/events.jsonl",
+          "size": 392,
+          "sha256": "e2cd0d230ab6b21b3c1369feff51aebca12846bbc1b0ed1cd84ef9d922f6858d"
+        },
+        "received_pcm": {
+          "path": "participants/agent-b/received.pcm",
+          "size": 8000,
+          "sha256": "f3dc60a165608d0c29e15876c830e4913c997b91145da44f6b209bb2dc71e6b6"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-b/sent.pcm",
+          "size": 8000,
+          "sha256": "19c27597d2afe3147d6a43511d7a6404cbbf53f17147c24e4a90a5a15d5e27ae"
+        },
+        "wav": {
+          "path": "participants/agent-b/agent.wav",
+          "size": 8044,
+          "sha256": "7508f5b93c7cd7df60cd442c674c531e7822dd9ae3c5cb72b4d34194ef3c0352"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-b/capture.session.json",
+        "size": 568,
+        "sha256": "7aa63eae82ffddd0533761aa6b8dca362576c546b1107d202565cac379898d9d"
+      },
+      "completed_turns": 2,
+      "id": "agent-b",
+      "kind": "agent",
+      "model": "clean-turn-taking-v1",
+      "opening_prompt": "Begin the deterministic clean turn-taking fixture.",
+      "provider": "offline",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 1020,
+              "label": "agent-a-turn-1",
+              "start_ms": 220
+            },
+            {
+              "end_ms": 3020,
+              "label": "agent-a-turn-2",
+              "start_ms": 2220
+            }
+          ],
+          "stream_id": "agent-b:received",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 2000,
+              "label": "agent-b-turn-1",
+              "start_ms": 1200
+            },
+            {
+              "end_ms": 3800,
+              "label": "agent-b-turn-2",
+              "start_ms": 3200
+            }
+          ],
+          "stream_id": "agent-b:sent",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-b-chunk-1",
+              "sample_index": 1200
+            },
+            {
+              "id": "agent-b-chunk-2",
+              "sample_index": 2200
+            },
+            {
+              "id": "agent-b-chunk-3",
+              "sample_index": 3200
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 2000,
+              "label": "agent-b-turn-1",
+              "start_ms": 1200
+            },
+            {
+              "end_ms": 3800,
+              "label": "agent-b-turn-2",
+              "start_ms": 3200
+            }
+          ],
+          "stream_id": "agent-b:output",
+          "timeline_end_ms": 4000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic fixture transcript; do not contact a provider.",
+      "voice": "synthetic-noise"
+    }
+  },
+  "pcm_format": {
+    "byte_order": "little",
+    "channels": 1,
+    "encoding": "signed_pcm16",
+    "sample_rate_hz": 1000,
+    "sample_width_bits": 16
+  },
+  "provenance": {
+    "consent_review": "not applicable; all samples are generated from a fixed seeded pseudo-speech signal",
+    "fixture_provenance": "synthetic",
+    "hashes": "sha256 and byte sizes for every replay artifact are embedded in this manifest",
+    "regeneration_command": "go run ./agent-cli/internal/services/testdata/room-audio/generate.go --output agent-cli/internal/services/testdata/room-audio/clean-turn-taking",
+    "sanitization": "no real speech entered the fixture; participant identities and prompts are synthetic",
+    "source_run": "offline deterministic generator; no provider, microphone, credentials, or private recording",
+    "transformations": [
+      "generated mono signed little-endian PCM16 at 1000 Hz",
+      "kept four seconds with two non-empty turns per participant",
+      "delayed peer received streams by 20 ms",
+      "split each output stream into four timestamped delta chunks"
+    ]
+  },
+  "schema_version": 2,
+  "timing": {
+    "elapsed": "4s",
+    "ended_at": "2026-08-30T12:00:04Z",
+    "started_at": "2026-08-30T12:00:00Z"
+  },
+  "tolerances": {
+    "barge_in_speech_threshold_dbfs": -40,
+    "boundary_delta": 6000,
+    "boundary_quiet_dbfs": -24,
+    "clip_sample_threshold": 32700,
+    "correlation_lag_window": {
+      "max": "100ms",
+      "min": "-100ms"
+    },
+    "correlation_silence_floor_dbfs": -50,
+    "edge_sample_threshold": 1000,
+    "final_frame_max_rms_dbfs": -40,
+    "frame_duration": "20ms",
+    "max_barge_in_latency": "500ms",
+    "max_drift_absolute": "20ms",
+    "max_drift_fraction": 0.001,
+    "max_loudness_difference_db": 6,
+    "max_natural_pause": "750ms",
+    "max_self_correlation": 0.3,
+    "min_peer_correlation": 0.55,
+    "name": "clean-turn-taking-v1",
+    "silence_floor_dbfs": -50
+  }
+}

@@ -1,0 +1,8 @@
+{"monotonic_offset_ms":200,"participant_id":"agent-a","sequence":0,"turn_id":"agent-a-turn-1","type":"turn_started","unix_ms":1788091200200}
+{"monotonic_offset_ms":1000,"participant_id":"agent-a","sequence":1,"turn_id":"agent-a-turn-1","type":"turn_ended","unix_ms":1788091201000}
+{"monotonic_offset_ms":1200,"participant_id":"agent-b","sequence":2,"turn_id":"agent-b-turn-1","type":"turn_started","unix_ms":1788091201200}
+{"monotonic_offset_ms":2000,"participant_id":"agent-b","sequence":3,"turn_id":"agent-b-turn-1","type":"turn_ended","unix_ms":1788091202000}
+{"monotonic_offset_ms":2200,"participant_id":"agent-a","sequence":4,"turn_id":"agent-a-turn-2","type":"turn_started","unix_ms":1788091202200}
+{"monotonic_offset_ms":3000,"participant_id":"agent-a","sequence":5,"turn_id":"agent-a-turn-2","type":"turn_ended","unix_ms":1788091203000}
+{"monotonic_offset_ms":3200,"participant_id":"agent-b","sequence":6,"turn_id":"agent-b-turn-2","type":"turn_started","unix_ms":1788091203200}
+{"monotonic_offset_ms":3800,"participant_id":"agent-b","sequence":7,"turn_id":"agent-b-turn-2","type":"turn_ended","unix_ms":1788091203800}
