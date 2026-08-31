@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	functional "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -213,6 +214,135 @@ func TestPrepareSessionAudioInputsRejectsEmptyScheduledFile(t *testing.T) {
 	if !strings.Contains(err.Error(), "turn 1") || !strings.Contains(err.Error(), "no audio frames") {
 		t.Fatalf("empty scheduled audio error = %v, want turn and no-frame context", err)
 	}
+}
+
+func TestStartSessionAudioInterruptionsReleasesOnlyFirstMatchingDispatch(t *testing.T) {
+	events := make(chan webmcp.BrokerEvent)
+	inputs := []services.ScheduledAudioInput{
+		{PCM: []byte{1, 2}, EndOfTurn: true},
+		{PCM: []byte{3, 4}, EndOfTurn: false},
+	}
+	interruptions, stop := services.StartSessionAudioInterruptionsOnBrowserTool(
+		context.Background(), events, "queue_cube_moves", inputs,
+	)
+	t.Cleanup(stop)
+
+	send := func(event webmcp.BrokerEvent) {
+		t.Helper()
+		events <- event
+	}
+	assertNoInterruptAudio := func(label string) {
+		t.Helper()
+		select {
+		case input := <-interruptions:
+			t.Fatalf("%s released %#v", label, input)
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+
+	send(webmcp.BrokerEvent{
+		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationQueued,
+		InvocationID: "queued-1", ToolName: "queue_cube_moves",
+	})
+	assertNoInterruptAudio("queued admission")
+	send(webmcp.BrokerEvent{
+		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
+		ToolName: "queue_cube_moves",
+	})
+	assertNoInterruptAudio("dispatch without identity")
+	send(webmcp.BrokerEvent{
+		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
+		InvocationID: "missing-name",
+	})
+	assertNoInterruptAudio("dispatch without canonical tool name")
+	send(webmcp.BrokerEvent{
+		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
+		InvocationID: "other-1", ToolName: "read_cube_state",
+	})
+	assertNoInterruptAudio("nonmatching dispatch")
+
+	send(webmcp.BrokerEvent{
+		Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
+		InvocationID: "queue-1", ToolName: "queue_cube_moves",
+	})
+	for index, want := range inputs {
+		select {
+		case got, ok := <-interruptions:
+			if !ok {
+				t.Fatalf("interruptions closed before input %d", index)
+			}
+			if string(got.PCM) != string(want.PCM) || got.EndOfTurn != want.EndOfTurn {
+				t.Fatalf("input %d = %#v, want %#v", index, got, want)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for interrupt input %d", index)
+		}
+	}
+	select {
+	case _, ok := <-interruptions:
+		if ok {
+			t.Fatal("interruptions released more than the configured inputs")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("interruptions did not close after the one-shot release")
+	}
+}
+
+func TestStartSessionAudioInterruptionsUnfilteredAndStopsOnCancellationOrClose(t *testing.T) {
+	t.Run("unfiltered dispatch", func(t *testing.T) {
+		events := make(chan webmcp.BrokerEvent)
+		interruptions, stop := services.StartSessionAudioInterruptionsOnBrowserInvocation(
+			context.Background(), events, []services.ScheduledAudioInput{{PCM: []byte{9}}},
+		)
+		t.Cleanup(stop)
+		events <- webmcp.BrokerEvent{
+			Type: webmcp.BrokerEventInvocationCreated, State: webmcp.InvocationDispatched,
+			InvocationID: "any-tool", ToolName: "any_tool",
+		}
+		select {
+		case input, ok := <-interruptions:
+			if !ok || string(input.PCM) != string([]byte{9}) {
+				t.Fatalf("unfiltered input = %#v, open=%v", input, ok)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for unfiltered interruption")
+		}
+	})
+
+	t.Run("parent cancellation", func(t *testing.T) {
+		parent, cancel := context.WithCancel(context.Background())
+		events := make(chan webmcp.BrokerEvent)
+		interruptions, stop := services.StartSessionAudioInterruptionsOnBrowserInvocation(
+			parent, events, []services.ScheduledAudioInput{{PCM: []byte{1}}},
+		)
+		cancel()
+		t.Cleanup(stop)
+		select {
+		case _, ok := <-interruptions:
+			if ok {
+				t.Fatal("canceled interruption source released audio")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("canceled interruption source did not close")
+		}
+	})
+
+	t.Run("closed lifecycle stream", func(t *testing.T) {
+		events := make(chan webmcp.BrokerEvent)
+		interruptions, stop := services.StartSessionAudioInterruptionsOnBrowserInvocation(
+			context.Background(), events, []services.ScheduledAudioInput{{PCM: []byte{1}}},
+		)
+		close(events)
+		t.Cleanup(stop)
+		select {
+		case _, ok := <-interruptions:
+			if ok {
+				t.Fatal("closed lifecycle source released audio")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("closed lifecycle source did not close")
+		}
+	})
 }
 
 func TestSessionCommandAudioInputConflictUsesOwnerRegisteredDeviceFlag(t *testing.T) {

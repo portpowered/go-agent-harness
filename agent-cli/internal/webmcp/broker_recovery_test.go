@@ -232,6 +232,7 @@ func TestStatefulBrokerDisconnectAfterDispatchWinsOverLateResponse(t *testing.T)
 	if _, err := session.WaitForInvocation(testContext(t)); err != nil {
 		t.Fatalf("wait page invocation: %v", err)
 	}
+	assertInvocationStarted(t, watch, created.InvocationID, ref)
 
 	handle := runtime.Browser(candidate.ID)
 	if handle == nil {

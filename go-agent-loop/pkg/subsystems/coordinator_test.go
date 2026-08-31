@@ -365,6 +365,31 @@ func TestCoordinator_ModelOutputSendsToKernelDeltaInbox(t *testing.T) {
 	}
 }
 
+func TestCoordinator_ModelOutputResetsModelDeltaTracking(t *testing.T) {
+	c := NewCoordinator(nil)
+	ls := newCoordinatorTestState()
+	ls.History.ConversationDeltaBuffer = make([]messages.StreamMessage, 7)
+	ls.History.CurrentModelDeltaCount = 4
+	ls.ToolExecutionAvailable = true
+	ls.Inputs.ModelOutputMessage = []messages.Message{
+		{
+			Role:      messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{{ID: "tc1", Name: "read_file", Arguments: `{}`}},
+		},
+	}
+
+	if err := c.Execute(context.Background(), ls); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ls.History.ModelDeltaStartIndex != 7 {
+		t.Errorf("ModelDeltaStartIndex: got %d, want 7", ls.History.ModelDeltaStartIndex)
+	}
+	if ls.History.CurrentModelDeltaCount != 0 {
+		t.Errorf("CurrentModelDeltaCount: got %d, want 0", ls.History.CurrentModelDeltaCount)
+	}
+}
+
 // --- Reasoning-only messages ---
 
 func TestCoordinator_ModelOutputReasoningOnlyDoesNotDispatch(t *testing.T) {

@@ -85,6 +85,10 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if firstCreated.InvocationID != first.result.InvocationID {
 		t.Fatalf("first creation ID = %q, dispatched ID = %q; want one public ID", firstCreated.InvocationID, first.result.InvocationID)
 	}
+	firstStarted := assertInvocationStarted(t, watch, first.result.InvocationID, refs["write_state"])
+	if firstStarted.ToolName != "write_state" || firstStarted.Reason != "dispatched" {
+		t.Fatalf("first dispatch event = %#v, want canonical tool and dispatched reason", firstStarted)
+	}
 	firstRecord, err := session.WaitForInvocation(context.Background())
 	if err != nil {
 		t.Fatalf("observe first target invocation: %v", err)
@@ -128,10 +132,12 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if err != nil {
 		t.Fatalf("observe second target invocation: %v", err)
 	}
+	assertInvocationTerminal(t, watch, first.result.InvocationID)
 	second := receiveInvocationCall(t, secondDone)
 	if second.err != nil || second.result.State != webmcp.InvocationDispatched || second.result.InvocationID != secondRecord.ID {
 		t.Fatalf("second invoke = %#v, %v; target record = %#v", second.result, second.err, secondRecord)
 	}
+	assertInvocationStarted(t, watch, second.result.InvocationID, refs["read_state"])
 	if pending := session.PendingInvocations(); len(pending) != 1 || pending[0].ID != second.result.InvocationID {
 		t.Fatalf("target pending after first terminal = %#v, want only second", pending)
 	}
@@ -257,6 +263,34 @@ func assertInvocationCreated(t *testing.T, events <-chan webmcp.BrokerEvent, ref
 		return event
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for invocation-created event")
+		return webmcp.BrokerEvent{}
+	}
+}
+
+func assertInvocationStarted(t *testing.T, events <-chan webmcp.BrokerEvent, id webmcp.InvocationID, ref webmcp.ToolRef) webmcp.BrokerEvent {
+	t.Helper()
+	select {
+	case event := <-events:
+		if event.Type != webmcp.BrokerEventInvocationCreated || event.ToolRef != ref || event.State != webmcp.InvocationDispatched || event.InvocationID != id {
+			t.Fatalf("broker event = %#v, want dispatched start for %q", event, id)
+		}
+		return event
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for invocation-dispatched event")
+		return webmcp.BrokerEvent{}
+	}
+}
+
+func assertInvocationTerminal(t *testing.T, events <-chan webmcp.BrokerEvent, id webmcp.InvocationID) webmcp.BrokerEvent {
+	t.Helper()
+	select {
+	case event := <-events:
+		if event.Type != webmcp.BrokerEventInvocationTerminal || event.InvocationID != id {
+			t.Fatalf("broker event = %#v, want terminal for %q", event, id)
+		}
+		return event
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for invocation-terminal event")
 		return webmcp.BrokerEvent{}
 	}
 }

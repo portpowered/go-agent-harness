@@ -128,6 +128,12 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 			c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: hasFinalResponse})
 			curr.Inputs.TerminateLoop = true
 		}
+		// The model delta window belongs to one provider response. Reset it after
+		// dispatching the completed response so a later response (for example an
+		// acknowledgement or an interruption response) cannot reconstruct and
+		// execute tool calls from this response a second time.
+		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
+		curr.History.CurrentModelDeltaCount = 0
 		return nil
 	}
 

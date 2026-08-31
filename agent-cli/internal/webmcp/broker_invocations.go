@@ -494,6 +494,23 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	invocation.invocation.State = InvocationDispatched
 	invocation.invocation.DispatchedAt = b.clock.Now()
 	b.browserInvocations[id] = invocation
+	// The queued admission event identifies the broker invocation before the
+	// browser call starts. Publish the same identity again at the authoritative
+	// dispatch transition so session-scoped consumers can act inside the real
+	// browser invocation window rather than polling broker state or waiting for
+	// a terminal response.
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationCreated,
+		At:           invocation.invocation.DispatchedAt,
+		BrowserID:    invocation.invocation.Tool.BrowserID,
+		TargetID:     invocation.invocation.Tool.TargetID,
+		Generation:   invocation.invocation.Tool.Generation,
+		InvocationID: invocation.invocation.ID,
+		ToolRef:      invocation.invocation.Tool.Ref,
+		ToolName:     invocation.invocation.Tool.Name,
+		State:        InvocationDispatched,
+		Reason:       "dispatched",
+	})
 	result := InvokeResult{InvocationID: invocation.invocation.ID, BrowserInvocationID: id, State: InvocationDispatched}
 	if early, ok := b.takeEarlyTerminalLocked(id, invocation.invocation.Tool.Generation); ok {
 		b.applyTerminalObservationLocked(invocation, early)
