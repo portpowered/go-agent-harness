@@ -3,6 +3,8 @@ package tools
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -13,10 +15,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	_ "golang.org/x/image/webp"
+)
+
+const (
+	// writeFileTempPrefix is deliberately independent of the destination
+	// basename. Appending an internal suffix to the destination can make a
+	// legal maximum-length filename fail before the rename.
+	writeFileTempPrefix      = ".w-"
+	writeFileTempRandomBytes = 4
+	writeFileTempCreateTries = 100
 )
 
 // validatePath ensures the given path is within the workspace if restrict is true.
@@ -451,20 +461,94 @@ func (h *hostFs) WriteFile(path string, data []byte) error {
 		return fmt.Errorf("failed to create parent directories: %w", err)
 	}
 
-	// We use a "write-then-rename" pattern here to ensure an atomic write.
-	// This prevents the target file from being left in a truncated or partial state
-	// if the operation is interrupted, as the rename operation is atomic on Linux.
-	tmpPath := fmt.Sprintf("%s.%d.tmp", path, time.Now().UnixNano())
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		_ = os.Remove(tmpPath) // Ensure cleanup of partial/empty temp file
+	// Preserve the existing invalid-target error classification before creating
+	// a temporary file. A NUL byte, for example, is rejected by the OS only
+	// when the path is used, and should not leave a staging artifact behind.
+	if _, err := os.Lstat(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Write to a short, unique file in the destination directory, then rename
+	// it over the target. Keeping the temporary name independent of path means
+	// the staging write does not consume any of the target's filename budget.
+	tmpFile, tmpPath, err := createHostWriteTempFile(dir)
+	if err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmpPath) }() // clean up on write/close/rename failure
+
+	if err := writeAndCloseTempFile(tmpFile, data); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to replace original file: %w", err)
 	}
 	return nil
+}
+
+func newWriteFileTempName() (string, error) {
+	var token [writeFileTempRandomBytes]byte
+	if _, err := cryptorand.Read(token[:]); err != nil {
+		return "", fmt.Errorf("generate temporary filename: %w", err)
+	}
+	return writeFileTempPrefix + hex.EncodeToString(token[:]), nil
+}
+
+func createHostWriteTempFile(dir string) (*os.File, string, error) {
+	for attempt := 0; attempt < writeFileTempCreateTries; attempt++ {
+		name, err := newWriteFileTempName()
+		if err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(dir, name)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			return file, path, nil
+		}
+		if os.IsExist(err) {
+			continue
+		}
+		return nil, "", err
+	}
+	return nil, "", fmt.Errorf("could not allocate a unique temporary filename after %d attempts", writeFileTempCreateTries)
+}
+
+func writeAndCloseTempFile(file *os.File, data []byte) error {
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close: %w", err)
+	}
+	return nil
+}
+
+func validateSandboxWriteTarget(root *os.Root, path string) error {
+	if _, err := root.Lstat(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	return nil
+}
+
+func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, error) {
+	for attempt := 0; attempt < writeFileTempCreateTries; attempt++ {
+		name, err := newWriteFileTempName()
+		if err != nil {
+			return nil, "", err
+		}
+		relPath := filepath.Join(dir, name)
+		file, err := root.OpenFile(relPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			return file, relPath, nil
+		}
+		if os.IsExist(err) {
+			continue
+		}
+		return nil, "", err
+	}
+	return nil, "", fmt.Errorf("could not allocate a unique temporary filename after %d attempts", writeFileTempCreateTries)
 }
 
 // sandboxFs is a sandboxed fileSystem that operates within a strictly defined workspace using os.Root.
@@ -516,23 +600,29 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 	return r.execute(path, func(root *os.Root, relPath string) error {
 		dir := filepath.Dir(relPath)
 		if dir != "." && dir != "/" {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := root.MkdirAll(dir, 0o755); err != nil {
 				return fmt.Errorf("failed to create parent directories: %w", err)
 			}
 		}
 
-		// We use a "write-then-rename" pattern here to ensure an atomic write.
-		// This prevents the target file from being left in a truncated or partial state
-		// if the operation is interrupted, as the rename operation is atomic on Linux.
-		tmpRelPath := fmt.Sprintf("%s.%d.tmp", relPath, time.Now().UnixNano())
+		if err := validateSandboxWriteTarget(root, relPath); err != nil {
+			return err
+		}
 
-		if err := os.WriteFile(tmpRelPath, data, 0o644); err != nil {
-			_ = root.Remove(tmpRelPath) // Ensure cleanup of partial/empty temp file
+		// Keep the staging file short and in the destination directory. The
+		// root-owned operations preserve workspace confinement while retaining
+		// write-then-rename atomicity.
+		tmpFile, tmpRelPath, err := createSandboxWriteTempFile(root, dir)
+		if err != nil {
+			return fmt.Errorf("failed to write to temp file: %w", err)
+		}
+		defer func() { _ = root.Remove(tmpRelPath) }() // clean up on failure
+
+		if err := writeAndCloseTempFile(tmpFile, data); err != nil {
 			return fmt.Errorf("failed to write to temp file: %w", err)
 		}
 
-		if err := os.Rename(tmpRelPath, relPath); err != nil {
-			_ = root.Remove(tmpRelPath)
+		if err := root.Rename(tmpRelPath, relPath); err != nil {
 			return fmt.Errorf("failed to rename temp file over target: %w", err)
 		}
 		return nil

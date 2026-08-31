@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -622,6 +623,122 @@ func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
 	requireToolTextContains(t, msgs, err, "FILE:")
 	msgs, err = listTool.Execute(ctx, map[string]any{"path": filepath.Join(workspace, "missing-dir")})
 	requireToolTextContains(t, msgs, err, "failed to read directory:")
+}
+
+func TestWriteFileToolSupportsOSMaximumFilename(t *testing.T) {
+	for _, restricted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unrestricted", true: "workspace-restricted"}[restricted], func(t *testing.T) {
+			workspace := t.TempDir()
+			destinationDir := filepath.Join(workspace, "destination")
+			if err := os.Mkdir(destinationDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			name := discoverMaximumFilenameComponent(t, destinationDir)
+			path := filepath.Join(destinationDir, name)
+			content := "maximum filename content"
+			tool := NewWriteFileTool(workspace, restricted)
+
+			msgs, err := tool.Execute(context.Background(), map[string]any{
+				"path":    path,
+				"content": content,
+			})
+			gotMessage := requireToolTextContains(t, msgs, err, "File written: "+path)
+			if gotMessage != "File written: "+path {
+				t.Fatalf("write success message = %q, want %q", gotMessage, "File written: "+path)
+			}
+			if got, err := os.ReadFile(path); err != nil || string(got) != content {
+				t.Fatalf("maximum-length write persisted %q, %v; want %q", got, err, content)
+			}
+			assertNoWriteFileTempArtifacts(t, destinationDir)
+
+			replacement := "replacement content"
+			msgs, err = tool.Execute(context.Background(), map[string]any{
+				"path":    path,
+				"content": replacement,
+			})
+			requireToolTextContains(t, msgs, err, "File written: "+path)
+			if got, err := os.ReadFile(path); err != nil || string(got) != replacement {
+				t.Fatalf("maximum-length replacement persisted %q, %v; want %q", got, err, replacement)
+			}
+			assertNoWriteFileTempArtifacts(t, destinationDir)
+
+			var filesystem fileSystem
+			if restricted {
+				filesystem = &sandboxFs{workspace: workspace}
+			} else {
+				filesystem = &hostFs{}
+			}
+			failureTarget := filepath.Join(destinationDir, "rename-target")
+			if err := os.Mkdir(failureTarget, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := filesystem.WriteFile(failureTarget, []byte("must not replace directory")); err == nil || !strings.Contains(err.Error(), "rename") && !strings.Contains(err.Error(), "replace") {
+				t.Fatalf("rename failure = %v, want a rename/replace error", err)
+			}
+			assertNoWriteFileTempArtifacts(t, destinationDir)
+		})
+	}
+}
+
+func discoverMaximumFilenameComponent(t *testing.T, dir string) string {
+	t.Helper()
+	accepts := func(length int) bool {
+		name := strings.Repeat("n", length)
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("probe"), 0o644); err == nil {
+			if err := os.Remove(path); err != nil {
+				t.Fatalf("remove filename-length probe %d: %v", length, err)
+			}
+			return true
+		} else if isFilenameComponentTooLong(err) {
+			return false
+		} else {
+			t.Fatalf("probe filename length %d: %v", length, err)
+			return false
+		}
+	}
+
+	low, high := 0, 1
+	for accepts(high) {
+		low = high
+		high *= 2
+		if high > 1<<16 {
+			t.Skip("filesystem did not expose a filename-component limit during probing")
+		}
+	}
+	for high-low > 1 {
+		middle := low + (high-low)/2
+		if accepts(middle) {
+			low = middle
+		} else {
+			high = middle
+		}
+	}
+	return strings.Repeat("n", low)
+}
+
+func isFilenameComponentTooLong(err error) bool {
+	if errors.Is(err, syscall.ENAMETOOLONG) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "file name too long") ||
+		strings.Contains(lower, "filename too long") ||
+		strings.Contains(lower, "path too long")
+}
+
+func assertNoWriteFileTempArtifacts(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read destination directory: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), writeFileTempPrefix) {
+			t.Fatalf("temporary write artifact %q remains in destination directory", entry.Name())
+		}
+	}
 }
 
 func minimalWAV() []byte {
