@@ -30,6 +30,8 @@ var defaultSessionStragglerDrainPolicy = sessionStragglerDrainPolicy{
 
 var errInvalidSessionStragglerDrainPolicy = errors.New("session straggler drain policy requires a positive quiet period")
 
+var errMissingSessionStragglerDrain = errors.New("session termination boundary requires a straggler drain")
+
 // sessionTerminationBoundary is the one terminal shutdown boundary shared by
 // the live and duration session loops. Its callbacks are loop-owned adapters:
 // they retain the live renderer or duration artifact/terminal state while this
@@ -58,7 +60,12 @@ func (b *sessionTerminationBoundary) terminate(primary error) error {
 		if b.quiesceUpstream != nil {
 			quiesceErr = b.quiesceUpstream()
 		}
-		if b.waitForStragglers != nil {
+		if b.waitForStragglers == nil {
+			// A missing wait callback is a configuration error, never an implicit
+			// buffered-only exception. Keep the remaining cleanup phases running
+			// so a malformed boundary still releases owned resources.
+			waitErr = errMissingSessionStragglerDrain
+		} else {
 			waitErr = b.waitForStragglers(defaultSessionStragglerDrainPolicy)
 		}
 		if b.stopOwnedResources != nil {

@@ -99,6 +99,28 @@ func TestSessionStragglerDrainRejectsZeroPolicy(t *testing.T) {
 	}
 }
 
+func TestSessionTerminationBoundaryRejectsMissingStragglerDrain(t *testing.T) {
+	var stopCalls, flushCalls int
+	boundary := sessionTerminationBoundary{
+		stopOwnedResources: func() error {
+			stopCalls++
+			return nil
+		},
+		flushBuffered: func() error {
+			flushCalls++
+			return nil
+		},
+	}
+
+	err := boundary.terminate(nil)
+	if !errors.Is(err, errMissingSessionStragglerDrain) {
+		t.Fatalf("missing straggler drain error = %v, want %v", err, errMissingSessionStragglerDrain)
+	}
+	if stopCalls != 1 || flushCalls != 1 {
+		t.Fatalf("cleanup calls = stop:%d flush:%d, want one each after configuration error", stopCalls, flushCalls)
+	}
+}
+
 func TestSessionTerminationBoundaryWaitRemainsBoundedWhenOutputStops(t *testing.T) {
 	started := time.Now()
 	var rendered bytes.Buffer
