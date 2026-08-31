@@ -48,8 +48,21 @@ var (
 
 const (
 	// ScreenToolID is the stable model-facing name of the physical display
-	// capture tool.
+	// capture tool outside a browser-composed session. Browser-composed
+	// sessions reserve this legacy name for selected-page sight; the explicit
+	// host-display alias below is advertised for physical-display requests.
 	ScreenToolID = "show"
+	// HostDisplayToolID is the explicit physical-display name used when a
+	// browser-backed session also has selected-page sight. Keeping this name
+	// distinct prevents a page-content request from silently reaching the host
+	// display capture backend.
+	HostDisplayToolID = "show_screen"
+	// PhysicalDisplayToolID is a descriptive alias for HostDisplayToolID.
+	PhysicalDisplayToolID = HostDisplayToolID
+	// PageSightToolID is the stable selected-browser-page capture name. It is
+	// duplicated here as a provider-neutral composition constant so the tools
+	// package does not depend on the WebMCP adapter package.
+	PageSightToolID = "show_page"
 
 	// ScreenRecordingPermissionDeniedErrorCode is the provider-visible error
 	// classification for a denied macOS Screen Recording preflight.
@@ -72,6 +85,42 @@ type ScreenResult = sight.Result
 // ScreenTool contract still returns the original typed Go error; session
 // adapters use this envelope when they need to keep the session alive.
 func ScreenToolErrorResult(err error) string {
+	return encodeScreenToolErrorResult(err, true)
+}
+
+// ScreenToolSessionErrorResult creates the customer-safe result sent across
+// a live session boundary. It retains the typed source and error code while
+// intentionally omitting operator remediation; the original typed Go error
+// remains available to the direct tool/logger path.
+func ScreenToolSessionErrorResult(err error) string {
+	return encodeScreenToolErrorResult(err, false)
+}
+
+// ScreenToolErrorCode returns the stable classification used by both the
+// typed result envelope and operator diagnostics.
+func ScreenToolErrorCode(err error) string {
+	return screenErrorCode(err)
+}
+
+func encodeScreenToolErrorResult(err error, includeOperatorGuidance bool) string {
+	result := sight.NewError(sight.SourceScreen, err)
+	result.ErrorCode = screenErrorCode(err)
+	if !includeOperatorGuidance {
+		result.Error = "Screen sight is unavailable."
+	}
+	if includeOperatorGuidance && errors.Is(err, ErrScreenRecordingPermissionDenied) {
+		if !strings.Contains(result.Error, "System Settings → Privacy & Security → Screen & System Audio Recording") {
+			result.Error = strings.TrimSpace(strings.Join([]string{result.Error, screenRecordingPermissionGuidance()}, " "))
+		}
+	}
+	encoded, encodeErr := sight.Encode(result)
+	if encodeErr != nil {
+		return `{"version":2,"status":"error","source":"screen","error_code":"capture_failed","error":"image capture failed"}`
+	}
+	return string(encoded)
+}
+
+func screenErrorCode(err error) string {
 	result := sight.NewError(sight.SourceScreen, err)
 	var captureErr *ScreenCaptureError
 	if errors.As(err, &captureErr) && captureErr != nil && captureErr.State != "" {
@@ -83,15 +132,15 @@ func ScreenToolErrorResult(err error) string {
 	}
 	if errors.Is(err, ErrScreenRecordingPermissionDenied) {
 		result.ErrorCode = ScreenRecordingPermissionDeniedErrorCode
-		if !strings.Contains(result.Error, "System Settings → Privacy & Security → Screen & System Audio Recording") {
-			result.Error = strings.TrimSpace(strings.Join([]string{result.Error, screenRecordingPermissionGuidance()}, " "))
-		}
 	}
-	encoded, encodeErr := sight.Encode(result)
-	if encodeErr != nil {
-		return `{"version":2,"status":"error","source":"screen","error_code":"capture_failed","error":"image capture failed"}`
-	}
-	return string(encoded)
+	return result.ErrorCode
+}
+
+// IsPhysicalDisplayToolName identifies names that can reach the host display
+// backend. The generic ScreenToolID remains physical for plain/direct
+// sessions; composed browser sessions additionally use HostDisplayToolID.
+func IsPhysicalDisplayToolName(name string) bool {
+	return name == ScreenToolID || name == HostDisplayToolID
 }
 
 // ScreenRecordingValidationError describes one invalid record argument. It is

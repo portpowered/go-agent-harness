@@ -47,12 +47,17 @@ func (re *RegistryExecutor) screenRecordingPermissionRechecker() (ScreenRecordin
 	if re == nil || re.registry == nil {
 		return nil, false
 	}
-	tool, ok := re.registry.Get(ScreenToolID)
-	if !ok || isNilTool(tool) {
-		return nil, false
+	for _, name := range []string{HostDisplayToolID, ScreenToolID} {
+		tool, ok := re.registry.Get(name)
+		if !ok || isNilTool(tool) {
+			continue
+		}
+		rechecker, ok := tool.(ScreenRecordingPermissionRechecker)
+		if ok {
+			return rechecker, true
+		}
 	}
-	rechecker, ok := tool.(ScreenRecordingPermissionRechecker)
-	return rechecker, ok
+	return nil, false
 }
 
 func (re *RegistryExecutor) ScreenRecordingPermissionRecheckSupported() bool {

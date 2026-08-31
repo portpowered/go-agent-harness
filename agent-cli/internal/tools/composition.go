@@ -20,6 +20,8 @@ var (
 	ErrToolCompositionInvalid = errors.New("invalid tool composition")
 )
 
+const hostDisplayToolDescription = "Capture the host's physical display for an explicit host-display request. Use this only for the computer screen itself; use show_page for browser-page content."
+
 // ToolSurface is the executor and definitions that must cross a session
 // boundary together. Definitions are copied before they are returned so a
 // caller cannot mutate the routing contract after preflight.
@@ -66,17 +68,66 @@ func ComposeToolSurface(
 		return ToolSurface{}, fmt.Errorf("%w: tool %q is advertised by both static and broker surfaces", ErrToolCompositionCollision, collisions[0])
 	}
 
-	definitions := make([]messages.ToolDefinition, 0, len(staticDefinitions)+len(brokerDefinitions))
-	definitions = append(definitions, cloneToolDefinitions(staticDefinitions)...)
+	// A browser-composed surface has two independent sight backends. Keep the
+	// legacy "show" call routable for older providers, but make its page path
+	// authoritative whenever the page screenshot capability is present. The
+	// physical display remains available only under an explicit host-display
+	// name, so a page question cannot silently invoke the OS capture backend.
+	pageSightComposition := hasToolName(brokerNames, PageSightToolID)
+	if pageSightComposition {
+		if _, alreadyNamed := staticNames[HostDisplayToolID]; alreadyNamed {
+			if _, hasLegacyScreen := staticNames[ScreenToolID]; hasLegacyScreen {
+				return ToolSurface{}, fmt.Errorf("%w: browser sight needs the reserved physical display name %q", ErrToolCompositionInvalid, HostDisplayToolID)
+			}
+		}
+	}
+	effectiveStaticDefinitions := cloneToolDefinitions(staticDefinitions)
+	if pageSightComposition {
+		for index := range effectiveStaticDefinitions {
+			if effectiveStaticDefinitions[index].Name != ScreenToolID {
+				continue
+			}
+			effectiveStaticDefinitions[index].Name = HostDisplayToolID
+			effectiveStaticDefinitions[index].Description = hostDisplayToolDescription
+		}
+	}
+	if err := ValidateToolDefinitionNamespaces(effectiveStaticDefinitions, brokerDefinitions); err != nil {
+		return ToolSurface{}, err
+	}
+
+	definitions := make([]messages.ToolDefinition, 0, len(effectiveStaticDefinitions)+len(brokerDefinitions))
+	definitions = append(definitions, effectiveStaticDefinitions...)
 	definitions = append(definitions, cloneToolDefinitions(brokerDefinitions)...)
 	definitions = messages.CanonicalToolDefinitions(definitions)
 
-	routes := make(map[string]toolRoute, len(definitions))
+	routes := make(map[string]toolRoute, len(definitions)+1)
 	for _, definition := range staticDefinitions {
-		routes[definition.Name] = toolRoute{executor: staticExecutor}
+		name := definition.Name
+		route := toolRoute{executor: staticExecutor}
+		if pageSightComposition && name == ScreenToolID {
+			name = HostDisplayToolID
+			route.callName = ScreenToolID
+		}
+		routes[name] = route
 	}
 	for _, definition := range brokerDefinitions {
-		routes[definition.Name] = toolRoute{executor: brokerExecutor, broker: true}
+		routes[definition.Name] = toolRoute{
+			executor:  brokerExecutor,
+			broker:    true,
+			pageSight: definition.Name == PageSightToolID,
+		}
+	}
+	if pageSightComposition {
+		// "show" is an internal compatibility alias in a browser-composed
+		// session. It is deliberately not advertised; newly built providers
+		// receive show_page, while older providers still get page sight rather
+		// than a physical-screen fallback.
+		routes[ScreenToolID] = toolRoute{
+			executor:  brokerExecutor,
+			broker:    true,
+			callName:  PageSightToolID,
+			pageSight: true,
+		}
 	}
 
 	composed := &composedToolExecutor{routes: routes}
@@ -139,8 +190,18 @@ func ComposeExecutors(
 }
 
 type toolRoute struct {
-	executor messages.ToolExecutor
-	broker   bool
+	executor  messages.ToolExecutor
+	broker    bool
+	callName  string
+	pageSight bool
+}
+
+// PageSightToolRouter exposes the composition decision to the provider-
+// neutral session adapter. In particular, it prevents a timeout on the
+// compatibility "show" alias from triggering a host Screen Recording
+// permission re-check when that call actually belongs to page sight.
+type PageSightToolRouter interface {
+	IsPageSightTool(name string) bool
 }
 
 type composedToolExecutor struct {
@@ -149,6 +210,7 @@ type composedToolExecutor struct {
 }
 
 var _ messages.ToolExecutor = (*composedToolExecutor)(nil)
+var _ PageSightToolRouter = (*composedToolExecutor)(nil)
 
 func (e *composedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	response := messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}
@@ -163,7 +225,18 @@ func (e *composedToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 		route = toolRoute{executor: e.dynamicFallback, broker: true}
 	}
 
-	response, err := route.executor.Execute(ctx, call)
+	innerCall := call
+	if route.callName != "" {
+		innerCall.Name = route.callName
+	}
+	if route.pageSight && call.Name == ScreenToolID && route.callName == PageSightToolID {
+		// Older callers may still send the physical-screen action object with
+		// the legacy name. The page screenshot contract is a closed empty
+		// object, so discard those host-display-only arguments at the alias
+		// boundary instead of turning compatibility into a page input error.
+		innerCall.Arguments = `{}`
+	}
+	response, err := route.executor.Execute(ctx, innerCall)
 	// The outer call is authoritative even if an injected executor returns
 	// incomplete or conflicting metadata.
 	response.ToolCallID = call.ID
@@ -178,12 +251,25 @@ func (e *composedToolExecutor) screenRecordingPermissionRechecker() (ScreenRecor
 	if e == nil {
 		return nil, false
 	}
-	route, ok := e.routes[ScreenToolID]
-	if !ok || isNilToolExecutor(route.executor) {
-		return nil, false
+	for _, name := range []string{HostDisplayToolID, ScreenToolID} {
+		route, ok := e.routes[name]
+		if !ok || route.pageSight || isNilToolExecutor(route.executor) {
+			continue
+		}
+		rechecker, ok := route.executor.(ScreenRecordingPermissionRechecker)
+		if ok {
+			return rechecker, true
+		}
 	}
-	rechecker, ok := route.executor.(ScreenRecordingPermissionRechecker)
-	return rechecker, ok
+	return nil, false
+}
+
+func (e *composedToolExecutor) IsPageSightTool(name string) bool {
+	if e == nil {
+		return false
+	}
+	route, ok := e.routes[name]
+	return ok && route.pageSight
 }
 
 func (e *composedToolExecutor) ScreenRecordingPermissionRecheckSupported() bool {
@@ -236,6 +322,11 @@ func preflightToolNamespace(namespace string, executor messages.ToolExecutor, de
 		return nil, fmt.Errorf("%w: %s surface advertises tools without an executor", ErrToolCompositionInvalid, namespace)
 	}
 	return names, nil
+}
+
+func hasToolName(names map[string]struct{}, name string) bool {
+	_, ok := names[name]
+	return ok
 }
 
 func preflightDefinitionNames(namespace string, definitions []messages.ToolDefinition) (map[string]struct{}, error) {

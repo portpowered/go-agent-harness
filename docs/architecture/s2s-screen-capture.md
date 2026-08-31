@@ -1,7 +1,10 @@
 # Screen capture permission and failure runbook
 
-The `show` tool remains advertised on macOS, but it must report an honest,
-typed failure when the host cannot capture pixels. The CLI cannot grant macOS
+The direct `show` tool remains available to plain sessions and must report an
+honest, typed failure when the host cannot capture pixels. In a browser-
+composed session, `show_page` is the authoritative selected-page sight path;
+the legacy `show` call is routed there for compatibility, and physical display
+capture is advertised separately as `show_screen`. The CLI cannot grant macOS
 Screen & System Audio Recording permission and must never turn a TCC denial
 into a fake frame
 or a long outer timeout.
@@ -19,11 +22,14 @@ or a long outer timeout.
      process that launched `agent`; a shell or wrapper may need its own entry.
 3. Completely quit and restart that terminal, IDE, or direct CLI host. TCC
    permission changes are not reliable for an already-running host.
-4. Retry the same `agent session` command and the `show` request.
+4. Retry the same `agent session` command and the `show` or `show_screen`
+   request, as appropriate for the session surface.
 
-The `show` error names the detected terminal or CLI host and repeats these
-steps. There is no supported command-line or API path for this tool to grant
-the permission itself.
+Direct host-display errors name the detected terminal or CLI host and repeat
+these steps. A session-facing failure is intentionally shorter: it preserves
+the `screen` source and typed error code while sending the detailed original
+error to the operator diagnostic channel. There is no supported command-line
+or API path for this tool to grant the permission itself.
 
 ## Interactive recording bounds
 
@@ -41,17 +47,20 @@ of encoded frames and their animation duration.
 
 ## Diagnose a revoked permission
 
-To diagnose a regression, turn the host's Screen & System Audio Recording entry off, quit and
-restart the host, and retry `show`. A revoked entry should produce the typed
-`denied` outcome with the System Settings guidance, not a black image or a
-generic 60-second timeout. Re-enable the entry, restart the host again, and
-retry. If the entry is missing, check that the command is being launched by the
-expected Terminal, iTerm2, IDE, or direct CLI host; a newly signed or moved
-binary can appear as a new TCC identity.
+To diagnose a regression, turn the host's Screen & System Audio Recording entry
+off, quit and restart the host, and retry `show` in a plain session or
+`show_screen` in a browser-composed session. A revoked entry should produce
+the typed `denied` outcome with the System Settings guidance on the direct or
+operator diagnostic path, not a black image or a generic 60-second timeout.
+Re-enable the entry, restart the host again, and retry. If the entry is
+missing, check that the command is being launched by the expected Terminal,
+iTerm2, IDE, or direct CLI host; a newly signed or moved binary can appear as
+a new TCC identity.
 
 ## Grounded result and recording contract
 
-Successful `show` and browser-enabled `show_page` calls return one compact
+Successful host-display (`show` or `show_screen`) and browser-enabled
+`show_page` calls return one compact
 version-2 metadata object and one image part made from the same bytes. The
 metadata includes the source kind, MIME type, byte length, dimensions,
 lowercase SHA-256 digest, and the `input_image` projection marker; it never

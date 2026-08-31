@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -244,6 +245,33 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 	}
 	if _, ok := findSessionDefinition(capabilities.Definitions, "show"); ok {
 		t.Fatal("timed-out probe retained show")
+	}
+}
+
+func TestSessionToolDiagnosticSinkWritesTypedOperatorDetail(t *testing.T) {
+	var stderr strings.Builder
+	sessionToolDiagnosticSink(&stderr).RecordSessionToolDiagnostic(services.SessionToolDiagnostic{
+		ToolCallID: "show-screen-call",
+		ToolName:   tools.HostDisplayToolID,
+		Source:     sight.SourceScreen,
+		ErrorCode:  tools.ScreenRecordingPermissionDeniedErrorCode,
+		Error: &tools.ScreenCaptureError{
+			State:     tools.ScreenCaptureDenied,
+			Operation: "show",
+			Reason:    "screen recording permission denied",
+		},
+	})
+	got := stderr.String()
+	for _, want := range []string{
+		`tool="show_screen"`,
+		`call_id="show-screen-call"`,
+		`source="screen"`,
+		`error_code="screen_recording_permission_denied"`,
+		"System Settings → Privacy & Security → Screen & System Audio Recording",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stderr diagnostic %q does not contain %q", got, want)
+		}
 	}
 }
 

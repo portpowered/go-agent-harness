@@ -185,6 +185,40 @@ func TestComposeSessionInstructionsIsIdempotentAndLeavesNoToolsUnchanged(t *test
 	}
 }
 
+func TestComposeSessionInstructionsAddsDeterministicSightRouting(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions:     []messages.ToolDefinition{{Name: "show_page"}},
+	}, "customer instructions")
+	for _, want := range []string{
+		"Sight routing requirements:",
+		"show_page",
+		"authoritative page sight",
+		"show_screen",
+		"Never use host-display sight as a fallback",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sight instructions = %q, missing %q", got, want)
+		}
+	}
+	for _, forbidden := range []string{
+		"System Settings",
+		"Privacy & Security",
+		"Tell the customer",
+		"restart",
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("sight instructions = %q, contains operator-only text %q", got, forbidden)
+		}
+	}
+	if second := composeSessionInstructions(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions:     []messages.ToolDefinition{{Name: "show_page"}},
+	}, got); second != got {
+		t.Fatalf("sight instruction composition is not idempotent:\nfirst=%q\nsecond=%q", got, second)
+	}
+}
+
 func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *testing.T) {
 	states := []webmcp.BrowserCapabilityState{
 		webmcp.BrowserCapabilityDisabled,

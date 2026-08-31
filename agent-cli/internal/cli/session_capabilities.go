@@ -149,6 +149,11 @@ func newSessionToolCapabilitiesFactory(
 		for _, definition := range surface.Definitions {
 			reservedNames = append(reservedNames, definition.Name)
 		}
+		// These names are owned by the composed sight policy even when the
+		// physical display is unavailable or was not enabled in the static
+		// allowlist. A page tool named "show" must never reclaim the legacy
+		// compatibility route and make a later call ambiguous.
+		reservedNames = append(reservedNames, cliTools.ScreenToolID, cliTools.HostDisplayToolID)
 		brokerSet.SetReservedToolNames(reservedNames)
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
 		refreshDefinitions := func(ctx context.Context) ([]messages.ToolDefinition, error) {

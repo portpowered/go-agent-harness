@@ -303,6 +303,10 @@ type SessionRunOptions struct {
 	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
 	// behavior byte-for-byte unchanged.
 	Diagnostics SessionDiagnosticSink
+	// ToolDiagnostics optionally receives the original typed error for each
+	// session tool failure. It is an operator-only channel; the provider sees
+	// the session adapter's customer-safe projection instead.
+	ToolDiagnostics SessionToolDiagnosticSink
 	// MetricsRecorder optionally receives per-direction stream observations.
 	MetricsRecorder metrics.Recorder
 	// StreamObserver optionally receives every session stream delta after it
