@@ -11,8 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/logger"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"go.uber.org/zap"
 )
 
 // PageToolNamePrefix disambiguates a connected-catalog page tool whose name
@@ -102,29 +104,257 @@ func (s *BrokerToolSet) PageToolDefinitionsWithError(ctx context.Context) ([]mes
 		if _, stillReserved := state.reservedNames[advertised]; stillReserved {
 			continue
 		}
+		definition, skipReason, ok := pageToolDefinition(advertised, descriptor)
+		if !ok {
+			// One page tool with a schema no session provider can accept must
+			// never take the whole session down. Log it loudly and keep
+			// going: the customer gets a working session missing exactly one
+			// capability instead of a dead call. See
+			// normalizeProviderParameterSchema for what "cannot accept"
+			// means here.
+			logger.GetRequestLoggerFromContext(ctx).Warn(
+				"skipping page tool: its input schema cannot be normalized into a form the session provider accepts",
+				zap.String("tool", name),
+				zap.String("advertised_name", advertised),
+				zap.String("reason", skipReason),
+			)
+			continue
+		}
 		state.publishedName[advertised] = name
-		definitions = append(definitions, pageToolDefinition(advertised, descriptor))
+		definitions = append(definitions, definition)
 	}
 	return definitions, nil
 }
 
-func pageToolDefinition(advertised string, descriptor webmcp.ToolDescriptor) messages.ToolDefinition {
+// pageToolDefinition builds one first-class session tool definition from a
+// catalog descriptor. It returns ok=false when the descriptor's input schema
+// cannot be normalized into a shape the session's model provider will accept
+// (see normalizeProviderParameterSchema); the caller must skip such a tool
+// rather than publish a schema that would make the ENTIRE session's tool
+// registration fail.
+func pageToolDefinition(advertised string, descriptor webmcp.ToolDescriptor) (messages.ToolDefinition, string, bool) {
 	description := strings.TrimSpace(descriptor.Description)
 	if description == "" {
 		description = "Tool provided by the connected browser page."
 	}
-	parameters, closed := pageToolParameters(descriptor.InputSchema)
-	parameterSchema := append(json.RawMessage(nil), descriptor.InputSchema...)
-	if len(bytes.TrimSpace(parameterSchema)) == 0 {
-		parameterSchema = json.RawMessage(`{}`)
+	parameterSchema, reason, ok := normalizeProviderParameterSchema(descriptor.InputSchema)
+	if !ok {
+		return messages.ToolDefinition{}, reason, false
 	}
+	parameters, closed := pageToolParameters(parameterSchema)
 	return messages.ToolDefinition{
 		Name:             advertised,
 		Description:      description,
 		Parameters:       parameters,
 		ParameterSchema:  parameterSchema,
 		ParametersClosed: closed,
+	}, "", true
+}
+
+// normalizeProviderParameterSchema adapts a page tool's advertised JSON
+// Schema into a form accepted by strict function-calling schema validators -
+// notably the OpenAI Realtime API's session.tools[].parameters, which
+// rejected session.update outright (invalid_function_parameters) for a
+// top-level "anyOf" and took the ENTIRE session down with it, not just the
+// one tool.
+//
+// Those validators require the top-level schema to describe a single JSON
+// object. Pages sometimes express "one of several valid argument shapes" as
+// a top-level anyOf/oneOf (e.g. "update by id" OR "update by selector").
+// That is flattened here into one merged object schema: properties from every
+// branch are unioned so the model still sees every argument the tool
+// actually accepts, and "required" is intersected down to only the fields
+// every branch agrees on (the alternative-shape constraint the combinator
+// was expressing is not itself representable in a single object schema, but
+// the runtime broker still validates the real call against the ORIGINAL
+// descriptor schema - including its anyOf - at invocation time; this
+// normalized form only steers what the model is told, it never governs
+// execution). A top-level allOf is unioned instead, since every branch's
+// constraints must hold simultaneously.
+//
+// A schema that cannot be expressed as an object at all - for example a bare
+// scalar or array at the top level, which OpenAI's function-calling contract
+// has never accepted regardless of this bug - cannot be normalized. Callers
+// must skip that tool rather than send a shape the provider will reject and
+// lose every other tool along with it.
+//
+// Other JSON Schema constructs that can trip the same class of strict
+// validator, surveyed but deliberately NOT handled here because no connected
+// page has been observed to emit them: "$ref" siblings (a $ref alongside
+// other keywords), "if"/"then"/"else" conditionals, a "not" schema, and a
+// "type" expressed as a union array (e.g. ["string","null"]). anyOf/oneOf/
+// allOf are the ones known to reproduce the outage.
+func normalizeProviderParameterSchema(schema json.RawMessage) (json.RawMessage, string, bool) {
+	trimmed := bytes.TrimSpace(schema)
+	if len(trimmed) == 0 {
+		return json.RawMessage(`{}`), "", true
 	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.UseNumber()
+	var raw map[string]interface{}
+	if err := decoder.Decode(&raw); err != nil || raw == nil {
+		// Not a JSON object at all (e.g. `true`, `[...]`, a bare scalar).
+		// Pass it through unchanged: existing non-object-schema behavior
+		// (ultimately falling back to the flat Parameters contract) is
+		// preserved rather than newly rejecting something this function did
+		// not previously touch.
+		return append(json.RawMessage(nil), schema...), "", true
+	}
+
+	combinatorKey, branches, hasCombinator := topLevelCombinator(raw)
+	if !hasCombinator {
+		if declaredType, ok := raw["type"].(string); ok && declaredType != "object" {
+			return nil, fmt.Sprintf("top-level schema type %q cannot be represented as function-call parameters (must be an object)", declaredType), false
+		}
+		return append(json.RawMessage(nil), schema...), "", true
+	}
+
+	flattened, reason, ok := flattenTopLevelCombinator(raw, combinatorKey, branches)
+	if !ok {
+		return nil, reason, false
+	}
+	encoded, err := json.Marshal(flattened)
+	if err != nil {
+		return nil, fmt.Sprintf("failed to encode normalized schema: %v", err), false
+	}
+	return json.RawMessage(encoded), "", true
+}
+
+// topLevelCombinator reports the first top-level JSON Schema combinator key
+// present on raw, in anyOf/oneOf/allOf precedence order (multiple combinators
+// on one schema are not observed in practice; picking one deterministically
+// keeps normalization simple and predictable).
+func topLevelCombinator(raw map[string]interface{}) (string, []interface{}, bool) {
+	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+		if value, ok := raw[key]; ok {
+			branches, _ := value.([]interface{})
+			return key, branches, true
+		}
+	}
+	return "", nil, false
+}
+
+// flattenTopLevelCombinator merges a top-level anyOf/oneOf/allOf into one
+// object schema. Every branch must itself describe an object (explicit
+// "type":"object", "properties", or no type at all); a branch that names a
+// non-object type cannot be merged without fabricating meaning, so the whole
+// tool is reported as unnormalizable.
+func flattenTopLevelCombinator(raw map[string]interface{}, key string, branches []interface{}) (map[string]interface{}, string, bool) {
+	if len(branches) == 0 {
+		return nil, fmt.Sprintf("%s must be a non-empty array of schemas", key), false
+	}
+
+	merged := make(map[string]interface{}, len(raw))
+	for k, v := range raw {
+		if k == "anyOf" || k == "oneOf" || k == "allOf" {
+			continue
+		}
+		merged[k] = v
+	}
+
+	properties := map[string]interface{}{}
+	if existing, ok := merged["properties"].(map[string]interface{}); ok {
+		for name, propSchema := range existing {
+			properties[name] = propSchema
+		}
+	}
+
+	var requiredSets [][]string
+	if existing, ok := stringSliceValue(merged["required"]); ok {
+		requiredSets = append(requiredSets, existing)
+	}
+
+	for index, branchValue := range branches {
+		branch, ok := branchValue.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Sprintf("%s[%d] is not an object schema", key, index), false
+		}
+		if branchType, ok := branch["type"].(string); ok && branchType != "object" {
+			return nil, fmt.Sprintf("%s[%d] has type %q; only object branches can be merged into function-call parameters", key, index, branchType), false
+		}
+		if branchProperties, ok := branch["properties"].(map[string]interface{}); ok {
+			for name, propSchema := range branchProperties {
+				if _, exists := properties[name]; !exists {
+					properties[name] = propSchema
+				}
+			}
+		}
+		branchRequired, _ := stringSliceValue(branch["required"])
+		requiredSets = append(requiredSets, branchRequired)
+	}
+
+	merged["type"] = "object"
+	merged["properties"] = properties
+	if key == "allOf" {
+		merged["required"] = unionStrings(requiredSets)
+	} else {
+		merged["required"] = intersectStrings(requiredSets)
+	}
+	return merged, "", true
+}
+
+// stringSliceValue reads a JSON array-of-strings value decoded through
+// interface{} (e.g. a schema's "required" list). ok is false when value is
+// not a JSON array at all, distinguishing "absent" from "present but empty".
+func stringSliceValue(value interface{}) ([]string, bool) {
+	list, ok := value.([]interface{})
+	if !ok {
+		return nil, false
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if name, ok := item.(string); ok {
+			out = append(out, name)
+		}
+	}
+	return out, true
+}
+
+// intersectStrings returns the names common to every set (an anyOf/oneOf
+// branch that omits "required" contributes an empty set, correctly zeroing
+// out anything not required by every alternative). No sets at all yields an
+// empty, not nil, result so the caller can always marshal a `[]`.
+func intersectStrings(sets [][]string) []string {
+	out := []string{}
+	if len(sets) == 0 {
+		return out
+	}
+	counts := map[string]int{}
+	for _, set := range sets {
+		seen := map[string]bool{}
+		for _, name := range set {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			counts[name]++
+		}
+	}
+	for name, count := range counts {
+		if count == len(sets) {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// unionStrings returns the deduplicated names across every set, used for
+// allOf where every branch's requirement applies simultaneously.
+func unionStrings(sets [][]string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, set := range sets {
+		for _, name := range set {
+			if !seen[name] {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // pageToolParameters translates a page tool's JSON input schema into the flat
