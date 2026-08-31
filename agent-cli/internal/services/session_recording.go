@@ -175,6 +175,11 @@ func RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedA
 		return err
 	}
 	defer func() { _ = claim.release() }()
+	directoryClaim, _, err := ensureSessionRecordingDirectoryClaim(&opts.SessionRunOptions, directory)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directoryClaim.release() }()
 	scheduled, err := prepareScheduledAudioInputs(audioPaths)
 	if err != nil {
 		return err
@@ -248,6 +253,11 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer func() { _ = claim.release() }()
+	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(&opts.SessionRunOptions, directory)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directoryClaim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -267,10 +277,6 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	defer imageCleanup()
-	destination, err := prepareSessionRecordingDestination(directory)
-	if err != nil {
-		return err
-	}
 	var audioSource *sessionAudioSource
 	if audioInput != nil {
 		if err := validateSessionAudioInput(*audioInput); err != nil {
@@ -350,11 +356,11 @@ func runSessionWithRecordingDirectory(
 		return err
 	}
 	defer func() { _ = claim.release() }()
-
-	destination, err := prepareSessionRecordingDestination(directory)
+	directoryClaim, destination, err := ensureSessionRecordingDirectoryClaim(&opts, directory)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = directoryClaim.release() }()
 
 	if audioInput != nil {
 		// The finite source sends MESSAGE.END after its final frame. Keep the
@@ -575,8 +581,11 @@ func prepareSessionRecordingDestination(path string) (string, error) {
 
 	info, err := os.Lstat(destination)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, errors.New("destination must be a directory"))
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectorySymlink)
+		}
+		if !info.IsDir() {
+			return "", recordingDestinationError(transcript.ErrRecordingDestination, "validate destination", destination, ErrSessionRecordingDirectoryNotDirectory)
 		}
 		entries, readErr := os.ReadDir(destination)
 		if readErr != nil {
@@ -611,12 +620,13 @@ func recordingDestinationError(kind error, operation, path string, cause error) 
 }
 
 type sessionDirectoryRecording struct {
-	destination string
-	base        time.Time
-	clock       *platformclock.Deterministic
-	metadata    transcript.RecordingMetadata
-	writeFile   transcript.RecordingWriteFile
-	credentials []string
+	destination    string
+	directoryClaim *sessionRecordingDirectoryClaim
+	base           time.Time
+	clock          *platformclock.Deterministic
+	metadata       transcript.RecordingMetadata
+	writeFile      transcript.RecordingWriteFile
+	credentials    []string
 
 	mu             sync.Mutex
 	eventMu        sync.Mutex
@@ -643,10 +653,11 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 	// deterministic clock keeps both transcript sides on the same timeline.
 	base := sessionRecordingClockBase
 	return &sessionDirectoryRecording{
-		destination:  destination,
-		base:         base,
-		clock:        platformclock.NewDeterministic(base, time.Nanosecond),
-		conversation: sessionConversationCollector{now: time.Now},
+		destination:    destination,
+		directoryClaim: opts.recordingDirectoryClaim,
+		base:           base,
+		clock:          platformclock.NewDeterministic(base, time.Nanosecond),
+		conversation:   sessionConversationCollector{now: time.Now},
 		metadata: transcript.RecordingMetadata{
 			Transport: "websocket",
 			Model:     sessionRecordingModel(opts, plan),
@@ -1109,6 +1120,13 @@ func (r *sessionDirectoryRecording) Finalize() error {
 				recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser events", r.destination, browserErr),
 			)
 		}
+		if r.directoryClaim != nil {
+			if claimErr := r.directoryClaim.owns(); claimErr != nil {
+				r.finalizeErr = recordingDestinationError(transcript.ErrRecordingDestination, "verify destination claim", r.destination, claimErr)
+				r.mu.Unlock()
+				return
+			}
+		}
 		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
 		if sessionLogErr != nil {
 			r.finalizeErr = errors.Join(
@@ -1140,12 +1158,21 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			AdditionalArtifacts: copySessionRecordingArtifacts(r.imageArtifacts),
 			WriteFile:           r.writeFile,
 		}
+		if r.directoryClaim != nil {
+			config.BeforeCommit = r.directoryClaim.owns
+		}
 		timings := r.conversation.timingEntries()
 		r.mu.Unlock()
 		bundleErr := transcript.WriteRecordingBundle(config)
 		r.finalizeErr = errors.Join(latchedRecordErr, bundleErr)
 		if bundleErr != nil || len(timings) == 0 {
 			return
+		}
+		if r.directoryClaim != nil {
+			if claimErr := r.directoryClaim.owns(); claimErr != nil {
+				r.finalizeErr = recordingDestinationError(transcript.ErrRecordingDestination, "verify destination claim", r.destination, claimErr)
+				return
+			}
 		}
 		// timing.json is a run-specific diagnostic beside the deterministic,
 		// manifest-hashed bundle: real wall-clock turn latency legitimately

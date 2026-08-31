@@ -132,6 +132,13 @@ the manifest records the terminal classification and hashes of the finalized
 artifacts. Temporary staging content is removed, so a Ctrl-C does not leave a
 partial bundle that looks complete.
 
+Before a session starts, `--record-dir` validates and exclusively claims the
+cleaned destination. A non-empty or invalid destination, including a symlink,
+fails before provider work; concurrent commands targeting one directory leave
+one claimant and report the path plus non-secret holder identity to the loser.
+The claim remains active through atomic bundle publication, and failed runs
+remove only their private staging and claim state.
+
 The clean-cancellation classification applies only to the CLI-owned SIGINT
 intent. Parent-context cancellation, an unexpected provider close, malformed
 provider data, tool failures, and independent recording or transport errors

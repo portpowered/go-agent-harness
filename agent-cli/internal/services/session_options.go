@@ -353,6 +353,9 @@ type SessionRunOptions struct {
 	// nested session wrappers. It is intentionally private; command callers
 	// select the destination through RecordPath and do not manage sidecars.
 	recordingClaim *sessionRecordingClaim
+	// recordingDirectoryClaim is acquired before provider/media setup and shared
+	// by nested directory-recording wrappers through finalization.
+	recordingDirectoryClaim *sessionRecordingDirectoryClaim
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
