@@ -30,6 +30,137 @@ func TestMapToolToInputSchemaPreservesCompletePageSchema(t *testing.T) {
 	}
 }
 
+func TestCompleteToolInputSchema(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     json.RawMessage
+		wantOK  bool
+		checkFn func(t *testing.T, schema anthropic.ToolInputSchemaParam)
+	}{
+		{
+			name:   "nil schema is not complete",
+			raw:    nil,
+			wantOK: false,
+		},
+		{
+			name:   "empty schema is not complete",
+			raw:    json.RawMessage(``),
+			wantOK: false,
+		},
+		{
+			name:   "malformed JSON is not complete",
+			raw:    json.RawMessage(`{"type":"object",`),
+			wantOK: false,
+		},
+		{
+			name:   "non-object schema type is not complete",
+			raw:    json.RawMessage(`{"type":"array","items":{"type":"string"}}`),
+			wantOK: false,
+		},
+		{
+			name:   "JSON null decodes to a nil field map and is not complete",
+			raw:    json.RawMessage(`null`),
+			wantOK: false,
+		},
+		{
+			name:   "object schema with no properties defaults to an empty map",
+			raw:    json.RawMessage(`{"type":"object","required":["x"],"additionalProperties":false}`),
+			wantOK: true,
+			checkFn: func(t *testing.T, schema anthropic.ToolInputSchemaParam) {
+				props, ok := schema.Properties.(map[string]any)
+				if !ok {
+					t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
+				}
+				if len(props) != 0 {
+					t.Errorf("expected empty properties map, got %v", props)
+				}
+				if !reflect.DeepEqual(schema.Required, []string{"x"}) {
+					t.Errorf("expected required [x], got %v", schema.Required)
+				}
+				if schema.ExtraFields["additionalProperties"] != false {
+					t.Errorf("expected additionalProperties carried through ExtraFields, got %v", schema.ExtraFields)
+				}
+				for _, key := range []string{"type", "properties", "required"} {
+					if _, present := schema.ExtraFields[key]; present {
+						t.Errorf("expected ExtraFields to omit %q, got %v", key, schema.ExtraFields)
+					}
+				}
+			},
+		},
+		{
+			name:   "omitted type defaults to object and preserves nested properties plus root extensions",
+			raw:    json.RawMessage(`{"properties":{"move":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}},"required":["move"],"$schema":"https://json-schema.org/draft/2020-12/schema"}`),
+			wantOK: true,
+			checkFn: func(t *testing.T, schema anthropic.ToolInputSchemaParam) {
+				if string(schema.Type) != "object" {
+					t.Errorf("expected type object, got %q", schema.Type)
+				}
+				props, ok := schema.Properties.(map[string]any)
+				if !ok {
+					t.Fatalf("expected Properties to be map[string]any, got %T", schema.Properties)
+				}
+				var wantMove any
+				if err := json.Unmarshal(json.RawMessage(`{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]}},"required":["face"]}`), &wantMove); err != nil {
+					t.Fatalf("decode expected nested schema: %v", err)
+				}
+				if !reflect.DeepEqual(props["move"], wantMove) {
+					t.Fatalf("nested move schema = %#v, want %#v", props["move"], wantMove)
+				}
+				if !reflect.DeepEqual(schema.Required, []string{"move"}) {
+					t.Errorf("expected required [move], got %v", schema.Required)
+				}
+				if schema.ExtraFields["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+					t.Errorf("expected $schema carried through ExtraFields, got %v", schema.ExtraFields)
+				}
+				for _, key := range []string{"type", "properties", "required"} {
+					if _, present := schema.ExtraFields[key]; present {
+						t.Errorf("expected ExtraFields to omit %q, got %v", key, schema.ExtraFields)
+					}
+				}
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			schema, ok := completeToolInputSchema(tc.raw)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if tc.checkFn != nil {
+				tc.checkFn(t, schema)
+			}
+		})
+	}
+}
+
+func TestMapToolToInputSchemaFallsBackWithoutParameterSchema(t *testing.T) {
+	// A tool with a malformed/absent ParameterSchema must fall back to the
+	// flattened models.ToolParameter list rather than returning an empty schema.
+	input := mapToolToInputSchema(models.ToolDefinition{
+		ParameterSchema: json.RawMessage(`{"type":"array"}`),
+		Parameters: []models.ToolParameter{
+			{Name: "city", Type: "string", Description: "City name", Required: true},
+		},
+	})
+	if string(input.Type) != "object" {
+		t.Errorf("expected fallback type object, got %q", input.Type)
+	}
+	props, ok := input.Properties.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Properties to be map[string]any, got %T", input.Properties)
+	}
+	cityProp, ok := props["city"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected city property, got %v", props)
+	}
+	if cityProp["type"] != "string" || cityProp["description"] != "City name" {
+		t.Errorf("unexpected city property, got %v", cityProp)
+	}
+	if !reflect.DeepEqual(input.Required, []string{"city"}) {
+		t.Errorf("expected required [city], got %v", input.Required)
+	}
+}
+
 func TestMessagesToParams_UserMessageTextOnly(t *testing.T) {
 	system, params, err := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, "Hello")})
 	if err != nil {
