@@ -371,11 +371,15 @@ inputDrained:
 		}
 	}
 	metricsByID := make(map[string]SessionDiagnosticRecord, len(ids))
+	ingressSummariesByID := make(map[string]SessionDiagnosticRecord, len(ids))
 	for {
 		select {
 		case item := <-diagnostics:
 			if item.record.Event == SessionDiagnosticEventMetrics {
 				metricsByID[item.id] = item.record
+			}
+			if item.record.Event == SessionDiagnosticEventRoomAudioIngressSummary {
+				ingressSummariesByID[item.id] = item.record
 			}
 		default:
 			goto diagnosticsDrained
@@ -390,6 +394,16 @@ diagnosticsDrained:
 		bytesReceived, err := strconv.ParseUint(record.Fields["input_audio_bytes"], 10, 64)
 		if err != nil || bytesReceived == 0 {
 			t.Fatalf("%s input_audio_bytes = %q, want non-zero", id, record.Fields["input_audio_bytes"])
+		}
+		summary, ok := ingressSummariesByID[id]
+		if !ok {
+			t.Fatalf("%s missing room ingress summary", id)
+		}
+		if summary.Fields[SessionDiagnosticFieldDeliveredBytes] != "20" || summary.Fields[SessionDiagnosticFieldRejectedBytes] != "0" {
+			t.Fatalf("%s ingress summary = %v, want 20 delivered and 0 rejected bytes", id, summary.Fields)
+		}
+		if summary.Fields[SessionDiagnosticFieldContentLoss] != "false" {
+			t.Fatalf("%s ingress summary content_loss = %q, want false", id, summary.Fields[SessionDiagnosticFieldContentLoss])
 		}
 	}
 }

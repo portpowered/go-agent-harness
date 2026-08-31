@@ -420,7 +420,7 @@ func observeRoomParticipantStream(
 			if target == nil || target.mixer == nil {
 				continue
 			}
-			if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
+			if writeErr := routeRoomPeerPCM(runtime.ctx, plan.manifest.ID, target, pcm); writeErr != nil {
 				if coordinator.isActive(target.plan.manifest.ID) {
 					coordinator.failParticipant(target.plan.manifest.ID, roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out PCM from %s: %w", plan.manifest.ID, writeErr), secretsForPlan(target.plan)))
 				}
@@ -596,6 +596,11 @@ func waitRoomParticipantWork(
 	}()
 	select {
 	case <-done:
+		for _, plan := range plans {
+			if plan != nil && plan.participant != nil && plan.participant.ingress != nil {
+				plan.participant.ingress.finish()
+			}
+		}
 		var closeErr error
 		for _, plan := range plans {
 			if plan == nil || plan.participant == nil || roomParticipantIsHuman(plan) || plan.participant.lifecycle == nil {
@@ -668,6 +673,9 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		cleanupErr = errors.Join(cleanupErr, closeRoomParticipantDevices(runtime, cleanup))
 		if runtime.mixer != nil {
 			cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(runtime.plan.manifest.ID, "mixer"), runtime.mixer.Close))
+		}
+		if runtime.ingress != nil {
+			runtime.ingress.finish()
 		}
 	}
 	if mesh != nil {
@@ -748,6 +756,9 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
+			if roomPCMContentful(frame) && runtime.ingress != nil {
+				runtime.ingress.record(roomAudioIngressMixedSource, roomAudioIngressDispositionRejected, roomAudioIngressReasonProviderInputRejected, len(frame))
+			}
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
@@ -834,10 +845,13 @@ func runRoomHumanCapture(
 				}
 				targetPCM = encodeRoomPCM16(targetSamples)
 			}
-			if writeErr := target.mixer.WriteContext(runtime.ctx, participantID, targetPCM); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
-				failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
-				coordinator.failParticipant(target.plan.manifest.ID, failure)
-				return failure
+			if writeErr := routeRoomPeerPCM(runtime.ctx, participantID, target, targetPCM); writeErr != nil {
+				if coordinator.isActive(target.plan.manifest.ID) {
+					failure := roomParticipantFailure(target.plan.manifest.ID, fmt.Errorf("receive fan out human PCM from %s: %w", participantID, writeErr), secrets)
+					coordinator.failParticipant(target.plan.manifest.ID, failure)
+					return failure
+				}
+				continue
 			}
 			if opts.onParticipantAudioFanned != nil {
 				opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))

@@ -41,6 +41,17 @@ var (
 	ErrMixerInvalidInputID = errors.New("PCM16 mixer input ID is invalid")
 )
 
+// PCM16WriteDisposition describes how a complete PCM16 write entered the
+// mixer. Backpressured means the write waited for bounded queue capacity and
+// was then admitted; a write that cannot be admitted returns an error instead
+// of a disposition.
+type PCM16WriteDisposition string
+
+const (
+	PCM16WriteDelivered     PCM16WriteDisposition = "delivered"
+	PCM16WriteBackpressured PCM16WriteDisposition = "backpressured"
+)
+
 const (
 	// DefaultPCM16SampleRate is the sample rate used by the realtime room
 	// runtime. It matches the existing OpenAI realtime session configuration.
@@ -437,67 +448,80 @@ func (m *PCM16Mixer) Write(inputID string, pcm []byte) error {
 // entire queue is rejected immediately because it can never be accepted
 // atomically without an unbounded or partial write.
 func (m *PCM16Mixer) WriteContext(ctx context.Context, inputID string, pcm []byte) error {
+	_, err := m.WriteContextWithDisposition(ctx, inputID, pcm)
+	return err
+}
+
+// WriteContextWithDisposition is the diagnostics-aware spelling of
+// WriteContext. It preserves the all-or-nothing write contract while exposing
+// whether bounded input capacity caused the caller to wait before admission.
+func (m *PCM16Mixer) WriteContextWithDisposition(ctx context.Context, inputID string, pcm []byte) (PCM16WriteDisposition, error) {
 	if m == nil {
-		return ErrMixerClosed
+		return "", ErrMixerClosed
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 	if len(pcm) == 0 {
-		return nil
+		return PCM16WriteDelivered, nil
 	}
 	if len(pcm)%2 != 0 {
-		return fmt.Errorf("%w: PCM16 input has odd byte length %d", ErrMixerInvalidFormat, len(pcm))
+		return "", fmt.Errorf("%w: PCM16 input has odd byte length %d", ErrMixerInvalidFormat, len(pcm))
 	}
 	inputID, err := normalizeMixerInputID(inputID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	backpressured := false
 	for {
 		m.mu.Lock()
 		if m.closed {
 			m.mu.Unlock()
-			return ErrMixerClosed
+			return "", ErrMixerClosed
 		}
 		if m.err != nil {
 			err := m.err
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		if err := m.ctx.Err(); err != nil {
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		input, exists := m.inputs[inputID]
 		if !exists {
 			m.mu.Unlock()
-			return fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
+			return "", fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
 		}
 		if len(pcm) > m.maxInputSize {
 			m.mu.Unlock()
-			return fmt.Errorf("%w: input %q write is %d bytes but queue capacity is %d bytes", ErrMixerInputBufferFull, inputID, len(pcm), m.maxInputSize)
+			return "", fmt.Errorf("%w: input %q write is %d bytes but queue capacity is %d bytes", ErrMixerInputBufferFull, inputID, len(pcm), m.maxInputSize)
 		}
 		if err := ctx.Err(); err != nil {
 			m.mu.Unlock()
-			return err
+			return "", err
 		}
 		if len(pcm) <= m.maxInputSize-len(input.data) {
 			input.data = append(input.data, pcm...)
 			m.mu.Unlock()
-			return nil
+			if backpressured {
+				return PCM16WriteBackpressured, nil
+			}
+			return PCM16WriteDelivered, nil
 		}
+		backpressured = true
 		wake := m.writeWake
 		m.mu.Unlock()
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return "", ctx.Err()
 		case <-m.ctx.Done():
-			return m.writeTerminationError()
+			return "", m.writeTerminationError()
 		case <-wake:
 		}
 	}

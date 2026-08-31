@@ -308,6 +308,58 @@ func TestPCM16MixerWriteContextCancellationPreservesQueuedPCM(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerWriteContextWithDispositionReportsBoundedBackpressure(t *testing.T) {
+	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: time.Second}
+	cadence := newDeterministicPCM16Cadence()
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+		CadenceFactory: func(time.Duration) PCM16Cadence {
+			return cadence
+		},
+	})
+	if err != nil {
+		t.Fatalf("new mixer: %v", err)
+	}
+	defer mixer.Close()
+	if err := mixer.AddInput("alpha"); err != nil {
+		t.Fatalf("add input: %v", err)
+	}
+	frame := make([]byte, mixer.FrameBytes())
+	frame[0] = 1
+	if _, err := mixer.WriteContextWithDisposition(context.Background(), "alpha", frame); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+
+	type writeResult struct {
+		disposition PCM16WriteDisposition
+		err         error
+	}
+	resultCh := make(chan writeResult, 1)
+	go func() {
+		disposition, writeErr := mixer.WriteContextWithDisposition(context.Background(), "alpha", frame)
+		resultCh <- writeResult{disposition: disposition, err: writeErr}
+	}()
+	select {
+	case result := <-resultCh:
+		t.Fatalf("full-queue write returned before cadence drain: %+v", result)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cadence.Advance()
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("backpressured write: %v", result.err)
+		}
+		if result.disposition != PCM16WriteBackpressured {
+			t.Fatalf("write disposition=%q, want %q", result.disposition, PCM16WriteBackpressured)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("backpressured write did not complete after cadence drain")
+	}
+}
+
 func TestPCM16MixerBlockedWriteUnblocksOnClose(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
 	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {

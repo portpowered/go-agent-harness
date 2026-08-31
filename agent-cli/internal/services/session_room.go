@@ -224,6 +224,10 @@ type RoomRunOptions struct {
 	// been accepted by the target mixer. It is called after the real mixer write
 	// and never changes the audio path.
 	onParticipantAudioFanned func(sourceID, targetID string, pcm []byte)
+	// onParticipantMixerReady is an internal deterministic lifecycle seam used
+	// by package tests to exercise mixer admission failures through the normal
+	// room composition boundary. It is called after all peer inputs are added.
+	onParticipantMixerReady func(participantID string, mixer *room.PCM16Mixer)
 	// onParticipantStream is an internal observational seam used by package
 	// tests to gate the next deterministic input on a specific normalized
 	// provider event. It does not replace the real stream observer.
