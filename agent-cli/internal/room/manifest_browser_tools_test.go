@@ -110,6 +110,7 @@ room:
 participants:
   - id: customer
     system_prompt: "Use the browser"
+    opening_prompt: "Use the browser to start."
     provider: openai
     model: gpt-realtime
     api_key_env: ROOM_CUSTOMER_KEY

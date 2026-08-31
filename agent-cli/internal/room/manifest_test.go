@@ -39,6 +39,7 @@ room:
 participants:
   - id: customer
     system_prompt: "Ask for a trip"
+    opening_prompt: "Ask for a trip to start the room"
     provider: OPENAI
     model: gpt-realtime
     api_key_env: ROOM_CUSTOMER_KEY
@@ -67,8 +68,11 @@ participants:
 	if !strings.Contains(string(encoded), `"max_duration":"2m0s"`) {
 		t.Fatalf("normalized manifest does not preserve duration: %s", encoded)
 	}
-	if strings.Contains(string(encoded), "opening_prompt") {
-		t.Fatalf("YAML fixture unexpectedly gained an opening prompt: %s", encoded)
+	if strings.Count(string(encoded), "opening_prompt") != 1 {
+		t.Fatalf("YAML fixture opening prompt count changed unexpectedly: %s", encoded)
+	}
+	if manifest.Participants[1].OpeningPrompt != "" {
+		t.Fatalf("assistant unexpectedly gained an opening prompt: %+v", manifest.Participants[1])
 	}
 	yamlEncoded, err := yamlv3.Marshal(manifest)
 	if err != nil {
@@ -244,6 +248,48 @@ func TestParseManifest_RejectsMissingCredentialWithoutEchoingSecret(t *testing.T
 	assertManifestError(t, err, "participants[1].api_key_env", ErrCredential)
 	if strings.Contains(err.Error(), pastedSecret) {
 		t.Fatalf("credential value leaked in error: %v", err)
+	}
+}
+
+// TestParseManifest_RejectsAllAgentRoomWithNoDesignatedOpener guards the
+// silent-all-agent-room defect directly at the manifest-validation choke
+// point: a room with only agent participants and no opening_prompt anywhere
+// has nobody to speak first, so every participant waits for someone else and
+// the room idles until its bound expires — zero turns, zero audio, but no
+// upfront error. Catching this here, before ResolveRoomLaunchPlan or
+// RunRoomWithResult ever dial a provider, is what stops the run from
+// burning real provider money before reporting the outcome.
+func TestParseManifest_RejectsAllAgentRoomWithNoDesignatedOpener(t *testing.T) {
+	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
+	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
+	manifestData := validManifestData(t, func(document map[string]any) {
+		// The shared fixture normally designates "customer" as the opener;
+		// strip it so neither participant has one.
+		delete(document["participants"].([]any)[0].(map[string]any), "opening_prompt")
+	})
+	_, err := ParseManifest(manifestData)
+	assertManifestError(t, err, "participants", ErrNoRoomOpener)
+	if !strings.Contains(err.Error(), "opening_prompt") {
+		t.Fatalf("error = %v, want actionable guidance naming opening_prompt", err)
+	}
+}
+
+// TestParseManifest_HumanParticipantExemptsAllAgentOpenerRequirement confirms
+// the check does not over-trigger: a human participant can always speak
+// first on their own initiative, so a manifest that pairs one with an agent
+// remains valid even though no participant sets opening_prompt.
+func TestParseManifest_HumanParticipantExemptsAllAgentOpenerRequirement(t *testing.T) {
+	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
+	manifestData := []byte(`{
+  "schema_version": 1,
+  "room": {"max_turns": 1},
+  "participants": [
+    {"kind": "human", "id": "customer", "system_prompt": "Human customer", "input_device": "fake:input", "output_device": "fake:output", "tools": []},
+    {"id": "assistant", "system_prompt": "Answer", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_ASSISTANT_KEY", "tools": []}
+  ]
+}`)
+	if _, err := ParseManifest(manifestData); err != nil {
+		t.Fatalf("ParseManifest with human participant: %v", err)
 	}
 }
 
@@ -443,6 +489,7 @@ room:
 participants:
   - id: customer
     system_prompt: "Ask for a trip"
+    opening_prompt: "Ask for a trip"
     provider: openai
     model: gpt-realtime
     api_key_env: ROOM_CUSTOMER_KEY
@@ -466,12 +513,13 @@ func validManifestData(t *testing.T, mutate func(map[string]any)) []byte {
 		},
 		"participants": []any{
 			map[string]any{
-				"id":            "customer",
-				"system_prompt": "Ask for a trip",
-				"provider":      "openai",
-				"model":         "gpt-realtime",
-				"api_key_env":   "ROOM_CUSTOMER_KEY",
-				"tools":         []any{},
+				"id":             "customer",
+				"system_prompt":  "Ask for a trip",
+				"opening_prompt": "Ask for a trip",
+				"provider":       "openai",
+				"model":          "gpt-realtime",
+				"api_key_env":    "ROOM_CUSTOMER_KEY",
+				"tools":          []any{},
 			},
 			map[string]any{
 				"id":            "assistant",

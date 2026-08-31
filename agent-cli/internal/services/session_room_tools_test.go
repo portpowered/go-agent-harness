@@ -31,6 +31,7 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
     {
       "id": "customer",
       "system_prompt": "Ask the assistant to perform the room proof.",
+      "opening_prompt": "Ask the assistant to perform the room proof.",
       "provider": "openai",
       "model": %q,
       "api_key_env": "ROOM_OPENAI_KEY",

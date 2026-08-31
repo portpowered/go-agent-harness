@@ -40,6 +40,13 @@ var (
 	ErrDuplicateTool          = errors.New("room manifest contains duplicate tool")
 	ErrInvalidRecording       = errors.New("invalid room manifest recording")
 	ErrInvalidDocument        = errors.New("invalid room manifest document")
+	// ErrNoRoomOpener is returned when every participant in an all-agent room
+	// omits opening_prompt. With no human present to speak first and no agent
+	// designated to open the conversation, every participant waits for
+	// another participant to speak and the room idles until its bound
+	// expires, having produced no turns and no audio while still exiting as
+	// if it succeeded.
+	ErrNoRoomOpener = errors.New("room manifest has no participant designated to speak first")
 )
 
 // ParticipantKind identifies the owner of a room participant's media and
@@ -229,6 +236,15 @@ type ValidationOptions struct {
 	LookupModel      func(provider, model string) bool
 	LookupTool       func(string) bool
 	LookupVoice      func(provider, model, voice string) bool
+	// AllowMissingOpener suppresses ErrNoRoomOpener for a caller that already
+	// knows the room cannot idle silently even though no participant sets
+	// opening_prompt — for example, a fully test-harnessed room whose
+	// injected session/transport seam speaks first on its own. Manifest files
+	// read from disk are never given this option: ParseManifest and
+	// ReadManifest always enforce the opener requirement for user-authored
+	// documents, which is the only place a real, money-spending room launch
+	// is validated before dialing a provider.
+	AllowMissingOpener bool
 }
 
 // ValidationRegistry is a convenient immutable-by-convention adapter for
@@ -424,7 +440,41 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 			}
 		}
 	}
+	if !resolved.AllowMissingOpener {
+		if err := validateRoomHasOpener(m.Participants); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// validateRoomHasOpener rejects an all-agent room in which no participant is
+// designated to speak first. A human (or customer) participant can always
+// open the conversation on their own initiative, so the check only applies
+// when every participant is an agent. Without it, such a room idles silently
+// until its bound expires: zero turns, zero audio, but a "successful"
+// max_duration_reached exit that still burned a paid provider connection per
+// participant.
+func validateRoomHasOpener(participants []Participant) error {
+	hasHuman := false
+	hasOpener := false
+	for _, participant := range participants {
+		if NormalizeParticipantKind(participant.Kind) == ParticipantKindHuman {
+			hasHuman = true
+		}
+		if strings.TrimSpace(participant.OpeningPrompt) != "" {
+			hasOpener = true
+		}
+	}
+	if hasHuman || hasOpener {
+		return nil
+	}
+	return validation(
+		"participants",
+		"",
+		"all-agent room has nobody to speak first: set opening_prompt on at least one participant (or include a human participant)",
+		ErrNoRoomOpener,
+	)
 }
 
 // ParseManifest strictly decodes one JSON or YAML manifest and returns its

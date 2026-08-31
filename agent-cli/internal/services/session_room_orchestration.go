@@ -439,6 +439,16 @@ func prepareRoomReplayOptions(opts RoomRunOptions, validation room.ValidationOpt
 
 func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOptions, replayMode bool) error {
 	if !replayMode {
+		// A caller that already supplies its own session or transport seam
+		// (SessionFactory, SessionInferencers, or WebSocketDialerFactory) owns
+		// how — and whether — the room's first turn is triggered; the real CLI
+		// launch path never sets any of these, so this can only relax the
+		// opener requirement for a fully test-harnessed room, never for a live
+		// provider-dialing run.
+		harnessed := opts.SessionFactory != nil || len(opts.SessionInferencers) > 0 || opts.WebSocketDialerFactory != nil
+		if harnessed {
+			validation.AllowMissingOpener = true
+		}
 		if err := opts.Manifest.Validate(validation); err != nil {
 			return err
 		}
