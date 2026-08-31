@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
+const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
+
 var errSessionMaxDurationExpired = errors.New("session max duration expired")
 
 // ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
@@ -121,6 +123,14 @@ type sessionLoopOptions struct {
 	RequireTerminalAssistantResponse bool
 	Done                             <-chan struct{}
 	DoneErr                          func() error
+	// AdmissionClosed marks the first phase of a room-bound shutdown. The
+	// session may drain already-admitted provider output, but callers must not
+	// enqueue another turn or tool continuation after this signal.
+	AdmissionClosed <-chan struct{}
+	// BoundCancellation marks the end of the room-bound grace window. It is
+	// distinct from ordinary context cancellation so incomplete-response guards
+	// can preserve clean room-owned cancellation semantics.
+	BoundCancellation <-chan struct{}
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
@@ -795,7 +805,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			toolLifecycleEvents = nil
 		case <-boundCancellation:
 			boundCancellation = nil
-			return stopAndDrain()
+			return terminate(nil)
 		case publicationErr := <-publisherErrors:
 			return terminate(publicationErr)
 		case input, ok := <-audioInterruptions:

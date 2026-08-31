@@ -272,10 +272,19 @@ func runRoomParticipant(
 		if failureErr == nil {
 			failureErr = errors.New("session stream error")
 		}
-		// Close the room at the same boundary at which the lifecycle accepted
-		// the typed failure. If a bound cancellation won the race, the
+		// Retire only the participant at the same boundary at which the lifecycle
+		// accepted the typed failure. If a bound cancellation won the race, the
 		// lifecycle rejects the observation and this callback is not invoked.
-		coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan)))
+		failure := roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
+		// An explicit provider ERROR is the room's authoritative failure
+		// contract. Transport-close and liveness faults remain participant-local
+		// so a viable sibling can continue, but a typed provider terminal failure
+		// must preserve the room-level error and cancel the room consistently.
+		if observation.TerminalProvenance == string(messages.TerminalProvenanceProvider) && observation.FailingEvent == string(messages.StreamTypeError) {
+			coordinator.fail(failure)
+			return
+		}
+		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
 	}
 	observer.turnAdmission = func(msg messages.StreamMessage) bool {
 		value, ok := msg.Value.(*messages.MessageEndValue)
@@ -357,7 +366,7 @@ func runRoomParticipant(
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		failure := roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan))
 		runErr = errors.Join(runErr, failure)
-		coordinator.fail(failure)
+		coordinator.failParticipant(runtime.plan.manifest.ID, failure)
 	}
 	runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 	if runErr != nil && !roomCancellationOnly(runErr) {

@@ -42,23 +42,47 @@ type roomCoordinator struct {
 	onBoundShutdown     func(RoomTerminationReason)
 }
 
-func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, boundGrace time.Duration, onParticipant RoomParticipantObserver, onBoundShutdown func(RoomTerminationReason)) *roomCoordinator {
+func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, args ...interface{}) *roomCoordinator {
+	var boundGrace time.Duration
+	var onParticipant RoomParticipantObserver
+	var onBoundShutdown func(RoomTerminationReason)
+	if len(args) == 1 {
+		switch observer := args[0].(type) {
+		case RoomParticipantObserver:
+			onParticipant = observer
+		case func(RoomParticipantResult):
+			onParticipant = RoomParticipantObserver(observer)
+		}
+	} else if len(args) >= 3 {
+		if value, ok := args[0].(time.Duration); ok {
+			boundGrace = value
+		}
+		switch observer := args[1].(type) {
+		case RoomParticipantObserver:
+			onParticipant = observer
+		case func(RoomParticipantResult):
+			onParticipant = RoomParticipantObserver(observer)
+		}
+		if observer, ok := args[2].(func(RoomTerminationReason)); ok {
+			onBoundShutdown = observer
+		}
+	}
 	if boundGrace <= 0 {
 		boundGrace = DefaultRoomBoundShutdownGrace
 	}
 	return &roomCoordinator{
-		done:              make(chan struct{}),
-		admissionClosed:   make(chan struct{}),
-		boundCancellation: make(chan struct{}),
-		cancel:            cancel,
-		active:            make(map[string]*roomParticipantRuntime),
-		results:           make(map[string]RoomParticipantResult),
-		maxTurns:          maxTurns,
-		progress:          make(chan struct{}, 1),
-		boundGrace:        boundGrace,
-		onParticipant:     onParticipant,
+		done:                make(chan struct{}),
+		admissionClosed:     make(chan struct{}),
+		boundCancellation:   make(chan struct{}),
+		cancel:              cancel,
+		active:              make(map[string]*roomParticipantRuntime),
+		results:             make(map[string]RoomParticipantResult),
+		maxTurns:            maxTurns,
+		progress:            make(chan struct{}, 1),
+		boundGrace:          boundGrace,
+		onParticipant:       onParticipant,
 		participantFailures: make(map[string]struct{}),
-		onBoundShutdown:   onBoundShutdown,
+		onBoundShutdown:     onBoundShutdown,
 	}
 }
 
@@ -573,7 +597,11 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	observation := runtime.lifecycle.terminalObservationSnapshot()
 	if observation.failure {
 		reason = ParticipantTerminationError
-		if observation.err != nil {
+		// Preserve the redacted participant-local error latched above. The
+		// lifecycle observation may carry the provider's raw error, but the
+		// result contract must not leak it or lose its participant context.
+		var safeErr *roomSafeError
+		if observation.err != nil && !errors.As(err, &safeErr) {
 			err = observation.err
 		}
 	} else if observation.terminationDisposition == ParticipantTerminationDispositionDisconnected {
@@ -632,6 +660,9 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	if observation.terminalProvenance == "" {
 		observation.terminalProvenance = defaultRoomTerminalProvenance(observation.terminationDisposition, observation.terminalReason)
 	}
+	if !c.isStopping() && (reason == ParticipantTerminationError || reason == ParticipantTerminationDisconnected) {
+		c.notifyParticipantFailure(id, roomParticipantFailureReason(err, reason, closeReason, transportEnded, secrets))
+	}
 	result := RoomParticipantResult{
 		ID:                     id,
 		ParticipantID:          id,
@@ -648,6 +679,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		Error:                  sanitizeRoomError(err, secrets),
 	}
 
+	_, roomEmptyAfterRemoval := c.removeParticipantForFinish(id)
 	c.mu.Lock()
 	if _, alreadyFinished := c.results[id]; alreadyFinished {
 		previous := c.results[id]
@@ -655,8 +687,6 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		return previous
 	}
 	c.results[id] = result
-	delete(c.active, id)
-	shouldFailEmpty := len(c.active) == 0 && c.reason == ""
 	c.mu.Unlock()
 
 	// Remove the source from every surviving inbound mixer before closing its
@@ -664,7 +694,8 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	for _, survivor := range c.activeExcept(id) {
 		if survivor.mixer != nil {
 			if removeErr := survivor.mixer.RemoveInput(id); removeErr != nil && !errors.Is(removeErr, room.ErrMixerInputMissing) && !errors.Is(removeErr, room.ErrMixerClosed) {
-				c.fail(roomParticipantFailure(id, removeErr, secrets))
+				survivorID := survivor.plan.manifest.ID
+				c.failParticipant(survivorID, roomParticipantFailure(survivorID, removeErr, secrets))
 			}
 		}
 	}
@@ -687,27 +718,52 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		}
 	}
 	if cleanupErr != nil {
-		if c.isStopping() {
-			c.recordError(cleanupErr)
-		} else {
-			c.fail(roomParticipantFailure(id, cleanupErr, secrets))
+		err = errors.Join(err, roomParticipantFailure(id, cleanupErr, secrets))
+		if runtime.lifecycle != nil {
+			runtime.lifecycle.markParticipantFailure(cleanupErr)
 		}
+		c.recordParticipantError(id, cleanupErr, secrets)
 	}
 	if c.onParticipant != nil {
 		if observerErr := boundedRoomObserver(cleanup, roomLifecycleWorkLabel(id, "observer"), func() { c.onParticipant(result) }, runtime.markObserverDone); observerErr != nil {
-			if c.isStopping() {
-				c.recordError(observerErr)
-			} else {
-				c.fail(roomParticipantFailure(id, observerErr, secrets))
-			}
+			c.recordParticipantError(id, observerErr, secrets)
 		}
 	} else {
 		runtime.markObserverDone()
 	}
-	if shouldFailEmpty {
-		c.fail(fmt.Errorf("all room participants terminated"))
+	if roomEmptyAfterRemoval && !c.isStopping() {
+		c.stop(RoomTerminationStopped, nil)
 	}
-	return result
+	return c.participantResult(id, result)
+}
+
+func (c *roomCoordinator) recordParticipantError(participantID string, err error, secrets []string) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	result, ok := c.results[participantID]
+	if ok {
+		var previousErr error
+		if result.Error != "" {
+			previousErr = errors.New(result.Error)
+		}
+		result.Error = sanitizeRoomError(errors.Join(previousErr, err), secrets)
+		c.results[participantID] = result
+	}
+	c.mu.Unlock()
+}
+
+func (c *roomCoordinator) participantResult(participantID string, fallback RoomParticipantResult) RoomParticipantResult {
+	if c == nil {
+		return fallback
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if result, ok := c.results[participantID]; ok {
+		return result
+	}
+	return fallback
 }
 
 func (c *roomCoordinator) snapshot() (RoomTerminationReason, map[string]RoomParticipantResult, []string, error) {

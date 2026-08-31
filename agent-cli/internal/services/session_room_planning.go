@@ -403,9 +403,9 @@ func awaitRoomParticipantConnections(
 			if readinessErr != nil {
 				return readinessErr
 			}
-				if !ready {
-					allOpened = false
-				}
+			if !ready {
+				allOpened = false
+			}
 		}
 		if allOpened {
 			return nil

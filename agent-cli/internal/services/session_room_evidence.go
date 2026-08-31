@@ -151,7 +151,7 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		audioFormat:          format,
 		latency:              newRoomLatencyRecorder(clock, format),
 		source:               clock,
-		providerErrors: make(map[string]struct{}, len(manifest.Participants)),
+		providerErrors:       make(map[string]struct{}, len(manifest.Participants)),
 	}
 	evidence.clock = newRoomClock(evidence.startedAt, clock)
 	evidence.mix = newRoomMixBuffer(format.SampleRate)
