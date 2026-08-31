@@ -16,7 +16,9 @@ func main() {
 
 	rootCmd := agentCLI.Generate()
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		// Cobra owns rendering command execution errors. Keep the process
+		// boundary responsible for the exit status so a returned command error
+		// is not rendered a second time here.
 		os.Exit(1)
 	}
 }

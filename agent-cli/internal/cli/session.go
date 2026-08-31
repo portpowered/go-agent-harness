@@ -595,10 +595,11 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	browserFlags := flags.NewBrowserFlags()
 	voiceFlag := &sessionVoiceFlagValue{target: &voice}
 	cmd := &cobra.Command{
-		Use:   "session [message]",
-		Short: "Run or manage agent sessions",
-		Long:  sessionCommandLongHelp,
-		Args:  cobra.ArbitraryArgs,
+		Use:          "session [message]",
+		Short:        "Run or manage agent sessions",
+		Long:         sessionCommandLongHelp,
+		Args:         cobra.ArbitraryArgs,
+		SilenceUsage: true,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
