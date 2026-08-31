@@ -31,6 +31,11 @@ const (
 	// after the final delta crosses, carrying the terminal per-direction and
 	// per-modality byte matrix plus provider-reported token usage.
 	SessionDiagnosticEventMetrics = "session_metrics"
+	// SessionDiagnosticEventRoomBound is the room-owned terminal projection
+	// emitted once for a participant affected by a duration/turn bound. It is
+	// deliberately separate from session_failure: a bound cancellation is an
+	// expected room outcome, not a provider failure.
+	SessionDiagnosticEventRoomBound = "room_bound_shutdown"
 )
 
 // Stable field keys for canonical diagnostic records.
@@ -308,6 +313,15 @@ type sessionProgressObserver struct {
 	// lifecycle errors; an independently observed provider failure remains
 	// authoritative.
 	roomBoundCancellation bool
+	// terminalObserver receives authoritative terminal observations even when
+	// no diagnostic sink is configured. Room orchestration uses it to preserve
+	// the same terminal fields in participant results and run manifests.
+	terminalObserver func(sessionTerminalObservation) bool
+	// failureObserver lets room orchestration close the room at the same
+	// observation boundary as a typed provider failure. It is intentionally
+	// separate from the diagnostic sink so a failure still produces exactly
+	// one canonical session_failure record.
+	failureObserver func(sessionTerminalObservation)
 
 	emitOnce    sync.Once
 	metricsOnce sync.Once
@@ -317,6 +331,26 @@ func (o *sessionProgressObserver) markRoomBoundCancellation() {
 	if o != nil {
 		o.roomBoundCancellation = true
 	}
+}
+
+func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionTerminalObservation) bool {
+	if o == nil {
+		return false
+	}
+	if o.terminalObserver == nil {
+		return true
+	}
+	return o.terminalObserver(observation)
+}
+
+func (o *sessionProgressObserver) notifyFailureObservation(observation sessionTerminalObservation) bool {
+	if !observation.Failure || !o.notifyTerminalObservation(observation) {
+		return false
+	}
+	if o.failureObserver != nil {
+		o.failureObserver(observation)
+	}
+	return true
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {

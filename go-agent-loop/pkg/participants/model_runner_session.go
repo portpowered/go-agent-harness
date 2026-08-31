@@ -188,7 +188,7 @@ func sessionAudioSendError(operation string, outcome messages.SessionSendOutcome
 // observable stream error. The session lifecycle can then report the still-
 // unresolved obligation instead of allowing a false clean close.
 func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool) {
-	if sessionAdmissionClosed(session) && sessionEventBlockedByAdmission(msg) {
+	if sessionAdmissionClosed(session) && sessionEventBlockedByAdmissionForSession(session, msg) {
 		// The room has already recorded its bound and is draining an existing
 		// response. Tool results, continuations, and configuration updates that
 		// cross this boundary are not admitted and are not session failures.
@@ -241,6 +241,10 @@ type sessionAdmissionController interface {
 	SessionAdmissionClosed() bool
 }
 
+type sessionAdmissionPolicy interface {
+	SessionAdmissionAllows(messages.StreamMessage) bool
+}
+
 func sessionAdmissionClosed(session messages.Session) bool {
 	controller, ok := session.(sessionAdmissionController)
 	return ok && controller.SessionAdmissionClosed()
@@ -253,6 +257,13 @@ func sessionEventBlockedByAdmission(msg messages.StreamMessage) bool {
 	default:
 		return true
 	}
+}
+
+func sessionEventBlockedByAdmissionForSession(session messages.Session, msg messages.StreamMessage) bool {
+	if policy, ok := session.(sessionAdmissionPolicy); ok {
+		return !policy.SessionAdmissionAllows(msg)
+	}
+	return sessionEventBlockedByAdmission(msg)
 }
 
 // forwardQueuedSessionEvent applies the session's control-plane ordering

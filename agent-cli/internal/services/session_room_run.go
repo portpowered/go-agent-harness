@@ -36,6 +36,7 @@ func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg m
 		fields := map[string]string{"response_id": msg.ResponseID}
 		if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
 			fields["terminal_reason"] = string(value.TerminalReason)
+			fields["terminal_provenance"] = string(value.TerminalProvenance)
 			fields["output_state"] = string(value.OutputState)
 			evidence.recordTimelineEvent("response_end", participantID, fields)
 			if value.TerminalReason == messages.TerminalReasonCancellation {
@@ -52,14 +53,18 @@ func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg m
 		if !ok || value == nil {
 			return
 		}
-		fields := map[string]string{"code": value.Code, "classification": value.Classification, "message": value.Message}
+		// Keep raw provider prose out of the room timeline. The structured
+		// diagnostic/manifest fields carry the stable taxonomy; a provider error
+		// message can contain credentials, request bodies, or other sensitive
+		// transport detail even after the participant API key is redacted.
+		fields := map[string]string{"code": value.Code, "classification": value.Classification}
 		if value.Classification == providers.ErrorClassResponseCancelNotActive {
 			// The provider rejected a barge-in cancel because it had no
 			// active response to cancel: an observable cancel failure.
 			evidence.recordTimelineEvent("barge_in_cancel_failed", participantID, fields)
 			return
 		}
-		evidence.recordTimelineEvent("provider_error", participantID, fields)
+		evidence.recordProviderErrorTimeline(participantID, fields)
 	case messages.StreamTypeToolCallStart:
 		evidence.recordTimelineEvent("tool_call_start", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
 	case messages.StreamTypeToolCallEnd:
@@ -221,6 +226,75 @@ func runRoomParticipant(
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
+	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
+	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	observer.livenessObserver = func(err error) {
+		runtime.lifecycle.markLivenessFailure(err)
+		classification, _, _, _ := sessionLivenessMetadata(err)
+		if classification != "" {
+			participantID := runtime.plan.manifest.ID
+			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
+			if opts.Stream != nil {
+				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
+			}
+		}
+	}
+	observer.terminalObserver = runtime.lifecycle.observeTerminal
+	observer.failureObserver = func(observation sessionTerminalObservation) {
+		if !observation.Failure || observation.Classification == providers.ErrorClassCancellation {
+			return
+		}
+		// A provider-close boundary is also the participant's terminal
+		// observation. Let the participant publish that result before a room
+		// cancellation can reorder sibling terminal callbacks; human-backed
+		// rooms still escalate the returned transport error in the collector.
+		if observation.TerminalReason == string(messages.TerminalReasonProviderClose) &&
+			observation.FailingEvent == string(messages.StreamTypeSessionClose) {
+			return
+		}
+		if observation.TerminalProvenance == string(messages.TerminalProvenanceProvider) || observation.FailingEvent == string(messages.StreamTypeError) {
+			fields := map[string]string{
+				"classification": observation.Classification,
+			}
+			if observation.Code != "" {
+				fields["code"] = observation.Code
+			}
+			evidence.recordProviderErrorTimeline(runtime.plan.manifest.ID, fields)
+		}
+		failureErr := observation.Err
+		if runtime.lifecycle != nil {
+			if transportErr := runtime.lifecycle.transportTerminalErrorSnapshot(); transportErr != nil {
+				// A transport watcher may know the provider's causal error even
+				// when the model runner reports only its generic stream fallback.
+				failureErr = transportErr
+			}
+		}
+		if failureErr == nil {
+			failureErr = errors.New("session stream error")
+		}
+		// Close the room at the same boundary at which the lifecycle accepted
+		// the typed failure. If a bound cancellation won the race, the
+		// lifecycle rejects the observation and this callback is not invoked.
+		coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan)))
+	}
+	observer.turnAdmission = func(msg messages.StreamMessage) bool {
+		value, ok := msg.Value.(*messages.MessageEndValue)
+		if !ok || value == nil || value.TerminalReason == "" {
+			return runtime.lifecycle.admitResponseTerminal()
+		}
+		if value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion && value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+			return false
+		}
+		return runtime.lifecycle.admitResponseTerminal()
+	}
+	observer.streamObserver = func(msg messages.StreamMessage) {
+		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
+	}
+	observer.admittedTurnObserver = func(messages.StreamMessage) {
+		turns := runtime.lifecycle.observeAdmittedTurn()
+		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
+	}
 	var latencyRuntime *sessionRuntimeObservationRecorder
 	if evidence != nil && evidence.latency != nil {
 		latencyRuntime = newSessionRuntimeObservationRecorder(roomLatencyRuntimeObserver{
@@ -236,11 +310,16 @@ func runRoomParticipant(
 		}
 	}
 	loopOptions := sessionLoopOptions{
-		Prompt:                 runtime.plan.options.Prompt,
-		livenessClock:          runtime.plan.options.LivenessClock,
-		WaitForClose:           true,
-		Done:                   coordinator.done,
-		DoneErr:                coordinator.roomError,
+		Prompt:        runtime.plan.options.Prompt,
+		livenessClock: runtime.plan.options.LivenessClock,
+		WaitForClose:  true,
+		Done:          coordinator.done,
+		DoneErr: func() error {
+			if failedID := coordinator.failedParticipantID(); failedID != "" && failedID != runtime.plan.manifest.ID {
+				return nil
+			}
+			return coordinator.roomError()
+		},
 		AdmissionClosed:        coordinator.admissionDone(),
 		BoundCancellation:      coordinator.boundCancellationDone(),
 		ToolExecutor:           runtime.plan.options.ToolExecutor,
@@ -276,7 +355,9 @@ func runRoomParticipant(
 		}
 	}
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
-		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
+		failure := roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan))
+		runErr = errors.Join(runErr, failure)
+		coordinator.fail(failure)
 	}
 	runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
 	if runErr != nil && !roomCancellationOnly(runErr) {
@@ -479,14 +560,103 @@ func finalizeRoomParticipantResults(
 		}
 		connected, _, sessionClosed, closeReason, terminalReason, turns, connectErr := plan.participant.lifecycle.snapshot()
 		participantReason := classifyRoomParticipantTermination(true, connectErr, connected, plan.participant.lifecycle.transportHasEnded(), sessionClosed, closeReason, terminalReason)
+		participantErr := errors.Join(connectErr, completionErr)
+		observation := plan.participant.lifecycle.terminalObservationSnapshot()
+		if observation.failure {
+			participantReason = ParticipantTerminationError
+			if observation.err != nil {
+				participantErr = observation.err
+			}
+		} else if observation.terminationDisposition == ParticipantTerminationDispositionDisconnected {
+			participantReason = ParticipantTerminationDisconnected
+		} else if observation.terminationDisposition != "" {
+			participantReason = ParticipantTerminationEnded
+		}
+		roomReason := coordinator.reasonSnapshot()
+		if !observation.failure && participantReason == ParticipantTerminationError {
+			observation.failure = true
+			if observation.err == nil {
+				observation.err = connectErr
+			}
+		}
+		if observation.terminationTrigger == "" {
+			switch {
+			case observation.failure:
+				observation.terminationTrigger = ParticipantTerminationTriggerSessionFailure
+			case isRoomBoundTermination(roomReason):
+				observation.terminationTrigger = roomBoundTerminationTrigger(roomReason, false)
+			case roomReason == RoomTerminationFailed:
+				observation.terminationTrigger = ParticipantTerminationTriggerSessionFailure
+			case roomReason != "":
+				observation.terminationTrigger = string(roomReason)
+			case participantReason == ParticipantTerminationDisconnected:
+				observation.terminationTrigger = ParticipantTerminationTriggerProviderClose
+			default:
+				observation.terminationTrigger = ParticipantTerminationTriggerParticipantCompletion
+			}
+		}
+		if observation.terminationDisposition == "" {
+			switch {
+			case observation.failure:
+				observation.terminationDisposition = ParticipantTerminationDispositionFailed
+			case participantReason == ParticipantTerminationDisconnected:
+				observation.terminationDisposition = ParticipantTerminationDispositionDisconnected
+			case roomReason != "" && !isRoomBoundTermination(roomReason):
+				observation.terminationDisposition = ParticipantTerminationDispositionStopped
+			default:
+				observation.terminationDisposition = ParticipantTerminationDispositionCompleted
+			}
+		}
+		if observation.terminalReason == "" {
+			switch {
+			case observation.failure:
+				observation.terminalReason = string(messages.TerminalReasonTerminalFailure)
+			case observation.terminationDisposition == ParticipantTerminationDispositionCancelledAfterGrace,
+				observation.terminationDisposition == ParticipantTerminationDispositionStopped:
+				observation.terminalReason = string(messages.TerminalReasonCancellation)
+			case participantReason == ParticipantTerminationDisconnected:
+				observation.terminalReason = string(messages.TerminalReasonProviderClose)
+			default:
+				observation.terminalReason = string(messages.TerminalReasonProviderAuthoredCompletion)
+			}
+		}
+		if observation.outputState == "" {
+			if observation.failure {
+				observation.outputState = deriveOutputState(connected, turns)
+			} else {
+				observation.outputState = string(messages.TerminalOutputNone)
+			}
+		}
+		if observation.classification == "" && observation.failure {
+			classificationErr := observation.err
+			if classificationErr == nil {
+				classificationErr = participantErr
+			}
+			observation.classification = providers.ErrorClassification(classificationErr)
+			if observation.classification == "" {
+				observation.classification = providers.ErrorClassUnknown
+			}
+		}
+		if observation.classification == "" && observation.terminationDisposition == ParticipantTerminationDispositionCancelledAfterGrace {
+			observation.classification = RoomBoundCancelledClassification
+		}
+		if observation.terminalProvenance == "" {
+			observation.terminalProvenance = defaultRoomTerminalProvenance(observation.terminationDisposition, observation.terminalReason)
+		}
 		participantResult := RoomParticipantResult{
-			ID:                plan.manifest.ID,
-			ParticipantID:     plan.manifest.ID,
-			TerminationReason: participantReason,
-			Reason:            participantReason,
-			TurnsCompleted:    turns,
-			Connected:         connected,
-			Error:             sanitizeRoomError(errors.Join(connectErr, completionErr), secretsForPlan(plan)),
+			ID:                     plan.manifest.ID,
+			ParticipantID:          plan.manifest.ID,
+			TerminationReason:      participantReason,
+			Reason:                 participantReason,
+			TerminationTrigger:     observation.terminationTrigger,
+			TerminationDisposition: observation.terminationDisposition,
+			Classification:         observation.classification,
+			TerminalReason:         observation.terminalReason,
+			TerminalProvenance:     observation.terminalProvenance,
+			OutputState:            observation.outputState,
+			TurnsCompleted:         turns,
+			Connected:              connected,
+			Error:                  sanitizeRoomError(participantErr, secretsForPlan(plan)),
 		}
 		applyRoomParticipantTerminalMetadata(&participantResult, plan.participant.lifecycle, errors.Join(connectErr, completionErr))
 		participantResults[plan.manifest.ID] = participantResult

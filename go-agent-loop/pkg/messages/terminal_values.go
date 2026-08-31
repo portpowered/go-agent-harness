@@ -48,10 +48,14 @@ type TerminalProvenance string
 const (
 	TerminalProvenanceProvider TerminalProvenance = "provider"
 	TerminalProvenanceLoop     TerminalProvenance = "loop"
-	TerminalProvenanceGateway  TerminalProvenance = "gateway"
-	TerminalProvenanceSession  TerminalProvenance = "session"
-	TerminalProvenanceReplay   TerminalProvenance = "replay"
-	TerminalProvenanceCLI      TerminalProvenance = "cli"
+	// TerminalProvenanceRoom identifies a room coordinator's deliberate bound
+	// cancellation. It is distinct from a generic loop cancellation so room
+	// consumers can preserve ownership of the terminal outcome.
+	TerminalProvenanceRoom    TerminalProvenance = "room"
+	TerminalProvenanceGateway TerminalProvenance = "gateway"
+	TerminalProvenanceSession TerminalProvenance = "session"
+	TerminalProvenanceReplay  TerminalProvenance = "replay"
+	TerminalProvenanceCLI     TerminalProvenance = "cli"
 )
 
 // TerminalOutputState identifies whether terminal output is complete, partial,
