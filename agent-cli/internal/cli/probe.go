@@ -142,6 +142,11 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 			"before execution; hosts without both directions receive a machine-readable SKIP result.\n\n" +
 			"The command exits non-zero when any scenario fails.",
 		SilenceUsage: true,
+		// SilenceErrors: cmd/agent's main.go prints "Error: %s" for every
+		// non-nil error returned from Execute(). Without this, Cobra also
+		// prints its own "Error: %s" first, so a probe run failure showed up
+		// twice.
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.run(cmd, args)
 		},

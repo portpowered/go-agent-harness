@@ -61,6 +61,11 @@ func (c *ProbeFleetCommand) Generate() *cobra.Command {
 			"partial manifest.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
+		// SilenceErrors: cmd/agent's main.go prints "Error: %s" for every
+		// non-nil error returned from Execute(). Without this, Cobra also
+		// prints its own "Error: %s" first, so a probe fleet failure showed
+		// up twice.
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return c.run(cmd)
 		},

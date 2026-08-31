@@ -158,6 +158,24 @@ func TestProbeRunRecordUnsupportedOffline(t *testing.T) {
 	if !strings.Contains(run.stderr, "--record is not supported") {
 		t.Fatalf("unexpected record error: %q", run.stderr)
 	}
+	// Regression guard: a probe run failure must be rendered exactly once
+	// (by cmd/agent's main.go, simulated here via writeSimulatedMainError),
+	// never once by Cobra's own error printing and again by main.go.
+	if got := strings.Count(run.stderr, "--record is not supported"); got != 1 {
+		t.Fatalf("record error appeared %d times in stderr, want exactly once: %q", got, run.stderr)
+	}
+}
+
+// TestProbeRunCommandSetsSilenceErrors is a direct, cobra-version-agnostic
+// regression guard for the "probe run prints its own error twice" defect:
+// without SilenceErrors, Cobra prints "Error: ..." itself in addition to
+// cmd/agent's main.go, which prints "Error: %s" for every error Execute()
+// returns.
+func TestProbeRunCommandSetsSilenceErrors(t *testing.T) {
+	cmd := NewProbeRunCommand().Generate()
+	if !cmd.SilenceErrors {
+		t.Fatal("probe run command does not set SilenceErrors: a failure would print twice (once from Cobra, once from cmd/agent's main.go)")
+	}
 }
 
 func TestProbeRunMissingReplayFixtureErrors(t *testing.T) {
@@ -247,8 +265,9 @@ func executeCLIWithInput(input string, args ...string) cliExecution {
 	root.SetArgs(args)
 
 	exitCode := 0
-	if root.Execute() != nil {
+	if err := root.Execute(); err != nil {
 		exitCode = 1
+		writeSimulatedMainError(&stderr, err)
 	}
 	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
 }
@@ -268,8 +287,17 @@ func TestProbeReportAggregatesFixtureArtifactsAndWritesBothOutputs(t *testing.T)
 	if run.exitCode != 1 {
 		t.Fatalf("exit code = %d, want 1 for fixture failures; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
 	}
-	if run.stdout != "" || run.stderr != "" {
-		t.Fatalf("file outputs leaked to process streams: stdout=%q stderr=%q", run.stdout, run.stderr)
+	if run.stdout != "" {
+		t.Fatalf("file outputs leaked to stdout: %q", run.stdout)
+	}
+	// stderr must carry exactly one line: the command's own top-level
+	// "N failed scenarios" summary error, rendered once by the simulated
+	// cmd/agent main.go (see writeSimulatedMainError) -- never the
+	// --json/--summary file bodies (which would leak as embedded JSON/text),
+	// and never twice (Cobra's own duplicate "Error: ..." print, which the
+	// probe report command's SilenceErrors exists to prevent).
+	if strings.Count(run.stderr, "Error:") != 1 || !strings.Contains(run.stderr, "failed scenarios") || strings.Contains(run.stderr, "{") {
+		t.Fatalf("stderr = %q, want exactly one summary error line and no leaked file content", run.stderr)
 	}
 
 	jsonBytes, err := os.ReadFile(jsonPath)

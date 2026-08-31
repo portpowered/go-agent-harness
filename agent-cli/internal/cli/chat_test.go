@@ -163,8 +163,13 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			wantCode:       1,
 			wantStdout:     "",
 			wantStdoutPart: "Usage:\n  agent chat [flags]",
-			wantStderr:     "Error: invalid argument \"not-a-float\" for \"--context-pressure-threshold\" flag: strconv.ParseFloat: parsing \"not-a-float\": invalid syntax\n",
-			wantErr:        `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
+			// The root command sets SilenceErrors so Cobra never prints its
+			// own "Error: ..." line here; cmd/agent's main.go is the single
+			// place that renders the returned error (checked below via
+			// wantErr), so this harness's stderr capture -- which only sees
+			// Cobra's own channel, not main.go's -- is empty.
+			wantStderr: "",
+			wantErr:    `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
 		},
 		{
 			name:       "text session cancels through root",
@@ -358,6 +363,41 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 				}
 			},
 		},
+		// Regression guards for "out-of-range numeric flags are silently
+		// discarded": these used to be accepted and then quietly ignored (a
+		// negative --max-iterations fell into runLoopChat's "<=0 -> default
+		// to 5" fallback; a --context-pressure-threshold outside (0,1]
+		// either disabled the notifier or wired it up permanently inert).
+		// They must now be rejected before any task prompt or iteration.
+		{
+			name:          "negative max iterations with loop is rejected",
+			args:          []string{"chat", "--loop", "--max-iterations", "-5"},
+			wantExit:      1,
+			wantErrorPart: "--max-iterations must be a positive integer, got -5",
+		},
+		{
+			name:          "negative context pressure threshold with loop is rejected",
+			args:          []string{"chat", "--loop", "--context-pressure-threshold", "-3"},
+			wantExit:      1,
+			wantErrorPart: "--context-pressure-threshold must be greater than 0 and at most 1",
+		},
+		{
+			name:          "context pressure threshold above 1 with loop is rejected",
+			args:          []string{"chat", "--loop", "--context-pressure-threshold", "5000"},
+			wantExit:      1,
+			wantErrorPart: "--context-pressure-threshold must be greater than 0 and at most 1",
+		},
+		// No-over-triggering guard: an in-range --context-pressure-threshold
+		// alongside a valid --max-iterations must still run the loop
+		// normally, not get caught by the new range check.
+		{
+			name:            "in-range loop flags with loop are accepted",
+			args:            []string{"chat", "--loop", "--max-iterations", "2", "--context-pressure-threshold", "0.5"},
+			input:           "task\nsteer\n",
+			wantExit:        0,
+			wantOutputParts: []string{"Port OS Agent Loop Chat (up to 2 iterations)", "Loop complete: 2 iteration(s)"},
+			wantInferCalls:  2,
+		},
 		{
 			name:          "context pressure message alone",
 			args:          []string{"chat", "--context-pressure-message", "warning"},
@@ -503,8 +543,14 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			if !strings.Contains(got.stdout, "Usage:\n  agent chat [flags]") {
 				t.Fatalf("stdout = %q, want Cobra usage on flag failure", got.stdout)
 			}
-			if got.stderr != "Error: "+got.err.Error()+"\n" {
-				t.Fatalf("stderr = %q, want exact Cobra error channel", got.stderr)
+			// The root command sets SilenceErrors so Cobra never prints its
+			// own "Error: ..." line for a flag-parse failure; cmd/agent's
+			// main.go is the single place that renders the returned error
+			// (already asserted above via got.err), so this harness's
+			// stderr capture -- which only sees Cobra's own channel -- is
+			// empty here.
+			if got.stderr != "" {
+				t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", got.stderr)
 			}
 		})
 	}
@@ -512,19 +558,26 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 
 func TestChatCommand_LoopBranches(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		input      string
-		response   string
-		callErr    error
-		wantExit   int
-		wantOutput []string
-		wantCalls  int
+		name          string
+		args          []string
+		input         string
+		response      string
+		callErr       error
+		wantExit      int
+		wantOutput    []string
+		wantCalls     int
+		wantErrorPart string
 	}{
 		{
-			name:       "zero max iterations defaults and EOF returns",
-			args:       []string{"chat", "--loop", "--max-iterations", "0"},
-			wantOutput: []string{"up to 5 iterations", "Enter your task:"},
+			// Regression guard for "out-of-range numeric flags are silently
+			// discarded": --max-iterations 0 used to fall into
+			// runLoopChat's own "maxIter <= 0 -> default to 5" fallback
+			// with no warning at all. It must now be rejected before any
+			// task prompt or iteration runs.
+			name:          "zero max iterations is rejected",
+			args:          []string{"chat", "--loop", "--max-iterations", "0"},
+			wantExit:      1,
+			wantErrorPart: "--max-iterations must be a positive integer, got 0",
 		},
 		{
 			name:       "empty task is rejected",
@@ -569,6 +622,9 @@ func TestChatCommand_LoopBranches(t *testing.T) {
 			if tt.wantExit == 0 && got.err != nil {
 				t.Fatalf("ExecuteContext() error = %v", got.err)
 			}
+			if tt.wantErrorPart != "" && (got.err == nil || !strings.Contains(got.err.Error(), tt.wantErrorPart)) {
+				t.Fatalf("error = %v, want substring %q", got.err, tt.wantErrorPart)
+			}
 			for _, want := range tt.wantOutput {
 				if !strings.Contains(got.stdout, want) {
 					t.Fatalf("stdout = %q, want substring %q", got.stdout, want)
@@ -595,8 +651,12 @@ func TestChatCommand_AudioFactoryErrorIsReported(t *testing.T) {
 	if !errors.Is(got.err, deviceErr) || got.err.Error() != "open microphone: device unavailable" {
 		t.Fatalf("error = %v, want wrapped device error", got.err)
 	}
-	if got.stderr != "Error: open microphone: device unavailable\n" {
-		t.Fatalf("stderr = %q, want exact error channel", got.stderr)
+	// The root command sets SilenceErrors so Cobra never prints its own
+	// "Error: ..." line here; cmd/agent's main.go is the single place that
+	// renders the returned error (asserted above), so this harness's stderr
+	// capture -- which only sees Cobra's own channel -- is empty.
+	if got.stderr != "" {
+		t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", got.stderr)
 	}
 }
 

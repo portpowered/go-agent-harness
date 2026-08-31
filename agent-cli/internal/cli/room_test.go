@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
 
@@ -171,6 +172,55 @@ func TestWriteRoomResultIncludesLivenessClassification(t *testing.T) {
 	}
 }
 
+// TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero is the
+// regression guard for the "no schema reference or example" defect: a
+// first-time user should not have to reverse-engineer the manifest shape one
+// validation error at a time. `--example` must print a real manifest that
+// room.ParseManifest accepts unmodified, and must never touch the runner or
+// require any of the command's other flags.
+func TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero(t *testing.T) {
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	var calls atomic.Int32
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		calls.Add(1)
+		return services.RoomResult{}, nil
+	})
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--example"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute room run --example: %v, want exit 0", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("runner calls = %d, want zero: --example must not run anything", calls.Load())
+	}
+	manifest, err := room.ParseManifest(output.Bytes(), room.ValidationOptions{
+		LookupCredential: func(name string) (string, bool) { return "x", name == "OPENAI_API_KEY" },
+	})
+	if err != nil {
+		t.Fatalf("--example output did not parse as a valid room manifest: %v\noutput:\n%s", err, output.String())
+	}
+	if len(manifest.Participants) < 2 {
+		t.Fatalf("--example manifest participants = %d, want at least 2", len(manifest.Participants))
+	}
+}
+
+// TestRoomRunCommandHelpNamesRequiredManifestFields guards the same defect
+// from the other direction: even without running --example, --help alone
+// must name the fields a probe spent thirteen rounds of trial and error
+// discovering (opening_prompt and the required `tools: []` in particular).
+func TestRoomRunCommandHelpNamesRequiredManifestFields(t *testing.T) {
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	cmd := command.Generate()
+	help := cmd.Long
+	for _, want := range []string{"opening_prompt", "tools", "system_prompt", "api_key_env", "input_device", "output_device", "--example"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("room run --help text missing %q:\n%s", want, help)
+		}
+	}
+}
+
 func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	secret := "manifest-secret-value"
 	t.Setenv("ROOM_ALICE_KEY", secret)
@@ -195,6 +245,37 @@ func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	}
 	if calls.Load() != 0 {
 		t.Fatalf("runner calls = %d, want zero", calls.Load())
+	}
+}
+
+// TestRoomRunCommandDoesNotDoublePrintValidationErrors is the regression
+// guard for the "room validation errors print twice" defect: without
+// SilenceErrors, Cobra prints its own "Error: ..." line for a returned RunE
+// error in addition to cmd/agent's main.go, which prints "Error: %s" for
+// every error Execute() returns.
+func TestRoomRunCommandDoesNotDoublePrintValidationErrors(t *testing.T) {
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	cmd := command.Generate()
+	if !cmd.SilenceErrors {
+		t.Fatal("room run command does not set SilenceErrors: a validation failure would print twice (once from Cobra, once from cmd/agent's main.go)")
+	}
+	path := filepath.Join(t.TempDir(), "invalid.json")
+	if err := os.WriteFile(path, []byte(`{"schema_version":1,"room":{"max_turns":1},"participants":[]}`), 0o600); err != nil {
+		t.Fatalf("write invalid manifest: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--manifest", path, "--out", filepath.Join(t.TempDir(), "out")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("expected a validation error")
+	}
+	// cmd/agent's main.go (not exercised by this in-process command
+	// execution) is the single place that renders the error text; Cobra's
+	// own channel, captured here, must stay silent.
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty: Cobra must not print its own duplicate error line", stderr.String())
 	}
 }
 

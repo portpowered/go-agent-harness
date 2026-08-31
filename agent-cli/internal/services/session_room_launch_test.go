@@ -86,8 +86,16 @@ func TestResolveBareRoomLaunchPlanMissingCredentialFailsBeforeDeviceAcquisition(
 			return "", false
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "OpenAI API key is required for live realtime session mode") {
-		t.Fatalf("missing credential error = %v", err)
+	// `room run` has no --api-key flag, so its missing-credential error must
+	// direct the user to the environment variable it actually accepts
+	// instead of the shared session-config helper's --api-key wording (that
+	// wording is correct for `session`/`ask`/`chat`, which do accept the
+	// flag, but sends a `room run` user in a circle).
+	if err == nil || !strings.Contains(err.Error(), DefaultRoomCredentialEnv) {
+		t.Fatalf("missing credential error = %v, want it to name %s", err, DefaultRoomCredentialEnv)
+	}
+	if err != nil && strings.Contains(err.Error(), "--api-key") {
+		t.Fatalf("missing credential error = %v, want no --api-key mention: room run does not accept that flag", err)
 	}
 	if registry.defaultCalls != 0 || registry.openCalls != 0 {
 		t.Fatalf("missing credential touched devices: defaults=%d opens=%d", registry.defaultCalls, registry.openCalls)

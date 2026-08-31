@@ -47,5 +47,17 @@ func (c *RootCommand) Generate() *cobra.Command {
 		Use:   "agent",
 		Short: "Port OS Agent CLI - run agentic loops from the command line",
 		Long:  "A CLI that runs Port OS agentic loops with configurable LLM providers.",
+		// SilenceErrors: cmd/agent's main.go is the single place that prints
+		// "Error: %s" for any error Execute() returns. Cobra also prints its
+		// own "Error: ..." line for two cases this per-command
+		// SilenceErrors can never reach because they happen at root
+		// resolution, before any subcommand's RunE runs: an unrecognized
+		// top-level command (agent unknown-command) and a flag rejected
+		// while still parsing the root command's own flags (agent
+		// --unknown-flag). Setting it here, in addition to the individual
+		// leaf commands that already set it (ask, probe run, probe fleet,
+		// probe report, room run), closes that gap so every error path
+		// prints exactly once.
+		SilenceErrors: true,
 	}
 }
