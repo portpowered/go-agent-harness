@@ -318,15 +318,80 @@ func TestToolCommandFilesystemScopeAllowsMultipleRootsAndRejectsOutside(t *testi
 
 	deniedParent := filepath.Join(outside, "not-created", "nested")
 	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=must-not-write"})
 	out.Reset()
-	if err := runToolTestCommand(t, command, []string{"write_file", "path=" + deniedTarget, "content=must-not-write"}, &out); err != nil {
-		t.Fatalf("outside write command: %v", err)
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(&out)
+	cmd.SetErr(stderr)
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !errors.Is(err, errToolRefusal) || !errors.Is(err, tools.ErrFilesystemRefused) {
+		t.Fatalf("outside write error = %v, want stable refusal identity", err)
 	}
-	if got := out.String(); !strings.Contains(got, "path escapes workspace") || strings.Contains(got, "must-not-write") {
-		t.Fatalf("outside write output = %q, want confinement denial without content", got)
+	if out.Len() != 0 {
+		t.Fatalf("outside write stdout = %q, want empty", out.String())
+	}
+	refusal, decodeErr := tools.DecodeFilesystemRefusal([]byte(strings.TrimSpace(stderr.String())))
+	if decodeErr != nil {
+		t.Fatalf("decode outside write refusal: %v; stderr=%q", decodeErr, stderr.String())
+	}
+	if refusal.Operation != "write_file" || refusal.Path != deniedTarget || refusal.Reason != tools.FilesystemRefusalOutsidePermittedRoots {
+		t.Fatalf("outside write refusal = %#v, want write/path/outside identity", refusal)
+	}
+	if strings.Contains(stderr.String(), "must-not-write") {
+		t.Fatalf("outside write refusal leaked mutation content: %q", stderr.String())
 	}
 	if _, err := os.Stat(deniedParent); !os.IsNotExist(err) {
 		t.Fatalf("outside write parent = %v, want absent", err)
+	}
+}
+
+func TestToolCommandFilesystemRefusalIsStderrAndNonZero(t *testing.T) {
+	workdir := t.TempDir()
+	outside := t.TempDir()
+	deniedParent := filepath.Join(outside, "not-created", "nested")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	canonicalWorkdir, err := filepath.EvalSymlinks(workdir)
+	if err != nil {
+		t.Fatalf("canonicalize workdir: %v", err)
+	}
+
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	globalFlags.WorkDirPath = workdir
+	command := NewToolCommand(globalFlags)
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=MUST-NOT-WRITE"})
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	err = cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("denied direct tool call unexpectedly succeeded")
+	}
+	if !errors.Is(err, errToolRefusal) || !errors.Is(err, tools.ErrFilesystemRefused) {
+		t.Fatalf("direct refusal error = %v, want stable refusal identity", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("denied direct tool stdout = %q, want empty", stdout.String())
+	}
+	refusal, decodeErr := tools.DecodeFilesystemRefusal([]byte(strings.TrimSpace(stderr.String())))
+	if decodeErr != nil {
+		t.Fatalf("decode stderr refusal: %v; stderr=%q", decodeErr, stderr.String())
+	}
+	if refusal.Operation != "write_file" || refusal.Path != deniedTarget || refusal.WorkDir != canonicalWorkdir || refusal.Reason != tools.FilesystemRefusalOutsidePermittedRoots {
+		t.Fatalf("stderr refusal = %#v, want write/path/workdir/outside identity", refusal)
+	}
+	if strings.Contains(stderr.String(), "MUST-NOT-WRITE") {
+		t.Fatalf("stderr refusal leaked mutation content: %q", stderr.String())
+	}
+	if _, statErr := os.Stat(deniedParent); !os.IsNotExist(statErr) {
+		t.Fatalf("denied parent = %v, want absent", statErr)
 	}
 }
 

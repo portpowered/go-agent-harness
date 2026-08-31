@@ -22,6 +22,8 @@ var ErrProtectedFilesystemRead = errors.New("protected filesystem read")
 
 type filesystemAccessDeniedError struct {
 	message string
+	workdir string
+	reason  FilesystemRefusalReason
 }
 
 func (e *filesystemAccessDeniedError) Error() string {
@@ -33,7 +35,17 @@ func (e *filesystemAccessDeniedError) Unwrap() error {
 }
 
 func newFilesystemAccessDenied(message string) error {
-	return &filesystemAccessDeniedError{message: message}
+	return &filesystemAccessDeniedError{
+		message: message,
+		reason:  FilesystemRefusalOutsidePermittedRoots,
+	}
+}
+
+func newFilesystemAccessDeniedWithContext(workdir string, reason FilesystemRefusalReason, message string) error {
+	if reason == "" {
+		reason = FilesystemRefusalOutsidePermittedRoots
+	}
+	return &filesystemAccessDeniedError{message: message, workdir: workdir, reason: reason}
 }
 
 // FilesystemPolicy is the immutable set of roots available to filesystem

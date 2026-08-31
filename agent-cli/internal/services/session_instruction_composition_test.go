@@ -510,6 +510,23 @@ func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *test
 	}
 }
 
+func TestComposeSessionInstructionsRequiresHonestFilesystemRefusalHandling(t *testing.T) {
+	instructions := composeSessionInstructions(SessionRunOptions{
+		ToolDefinitions: []messages.ToolDefinition{{Name: "write_file"}},
+	}, "customer instructions")
+	for _, want := range []string{
+		"filesystem refusal envelope",
+		"refused and not performed",
+		"operation, path, workdir, reason, and remediation",
+		"--allow-path",
+		"protected or sensitive reads cannot be authorized",
+	} {
+		if !strings.Contains(instructions, want) {
+			t.Fatalf("composed refusal policy = %q, want substring %q", instructions, want)
+		}
+	}
+}
+
 func sessionRequestFromPlanner(t *testing.T, inferencer messages.SessionInferencer) inference.SessionRequest {
 	t.Helper()
 	if image, ok := inferencer.(*sessionImageInferencer); ok {

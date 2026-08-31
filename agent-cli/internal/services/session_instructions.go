@@ -374,7 +374,9 @@ func appendFilesystemScopeInstructions(instructions string, policy interface{ Sc
 const sessionToolGroundingPolicy = `Tool-grounding requirements:
 - For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.
 - Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.
-- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.`
+- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.
+- A filesystem refusal envelope means the requested operation was refused and not performed. Tell the customer that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.
+- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.`
 
 const sessionSightGroundingPolicy = `Sight routing requirements:
 - For any question about the contents or rendered appearance of the selected browser page, use show_page. Its result is the authoritative page sight for both broad visual requests and literal follow-up questions.

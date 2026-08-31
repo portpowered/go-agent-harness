@@ -35,13 +35,14 @@ const (
 // for the correlated typed ImagePart; the exact bytes are exposed only through
 // that rich part. Error results intentionally omit all success-only fields.
 type ReadImageResult struct {
-	Version         int    `json:"version"`
-	Status          string `json:"status"`
-	MIMEType        string `json:"mime_type,omitempty"`
-	ByteLength      int    `json:"byte_length,omitempty"`
-	SHA256          string `json:"sha256,omitempty"`
-	TypedProjection string `json:"typed_projection,omitempty"`
-	Error           string `json:"error,omitempty"`
+	Version         int                `json:"version"`
+	Status          string             `json:"status"`
+	MIMEType        string             `json:"mime_type,omitempty"`
+	ByteLength      int                `json:"byte_length,omitempty"`
+	SHA256          string             `json:"sha256,omitempty"`
+	TypedProjection string             `json:"typed_projection,omitempty"`
+	Error           string             `json:"error,omitempty"`
+	Refusal         *FilesystemRefusal `json:"refusal,omitempty"`
 }
 
 var (
@@ -70,8 +71,9 @@ type SessionImagePreparerBinder interface {
 // A nil preparer is intentional for the process-wide/default registry: only a
 // session knows which provider/model capabilities should govern the read.
 type ReadImageTool struct {
-	preparer ImagePartPreparer
-	policy   *FilesystemPolicy
+	preparer       ImagePartPreparer
+	policy         *FilesystemPolicy
+	policyRequired bool
 }
 
 func NewReadImageTool(preparer ImagePartPreparer) *ReadImageTool {
@@ -87,14 +89,14 @@ func NewReadImageToolWithPolicy(policy *FilesystemPolicy, preparer ...ImagePartP
 	if len(preparer) > 0 {
 		imagePreparer = preparer[0]
 	}
-	return &ReadImageTool{preparer: imagePreparer, policy: policy}
+	return &ReadImageTool{preparer: imagePreparer, policy: policy, policyRequired: true}
 }
 
 func (t *ReadImageTool) withSessionImagePreparer(preparer ImagePartPreparer) *ReadImageTool {
 	if t == nil {
 		return &ReadImageTool{preparer: preparer}
 	}
-	return &ReadImageTool{preparer: preparer, policy: t.policy}
+	return &ReadImageTool{preparer: preparer, policy: t.policy, policyRequired: t.policyRequired}
 }
 
 func (t *ReadImageTool) Name() string { return ReadImageToolID }
@@ -127,9 +129,15 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 	if t == nil {
 		return readImageErrorMessage(ErrReadImagePreparerUnavailable)
 	}
-	if t.policy != nil {
-		if err := t.policy.AuthorizeRead(path); err != nil {
-			return readImageErrorMessage(err)
+	if t.policyRequired {
+		var err error
+		if t.policy == nil {
+			err = newFilesystemAccessDeniedWithContext("", FilesystemRefusalInvalidScope, ErrInvalidFilesystemRoot.Error())
+		} else {
+			err = t.policy.AuthorizeRead(path)
+		}
+		if err != nil {
+			return readImageErrorMessageForPath(path, err)
 		}
 	}
 	if t.preparer == nil {
@@ -174,14 +182,22 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 }
 
 func readImageErrorMessage(err error) ([]messages.Message, error) {
+	return readImageErrorMessageForPath("", err)
+}
+
+func readImageErrorMessageForPath(path string, err error) ([]messages.Message, error) {
 	if err == nil {
 		err = ErrReadImageInvalidResult
 	}
-	encoded, _ := json.Marshal(ReadImageResult{
+	result := ReadImageResult{
 		Version: ReadImageResultVersion,
 		Status:  ReadImageResultStatusError,
 		Error:   err.Error(),
-	})
+	}
+	if refusal, ok := filesystemRefusalFor(ReadImageToolID, path, nil, err); ok {
+		result.Refusal = &refusal
+	}
+	encoded, _ := json.Marshal(result)
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
 }
 

@@ -31,6 +31,7 @@ var (
 	errToolConfig       = errors.New("tool configuration error")
 	errToolFlagConflict = errors.New("tool flag conflict")
 	errToolIDRequired   = errors.New("tool id required")
+	errToolRefusal      = errors.New("filesystem operation refused")
 )
 
 type toolCommandError struct {
@@ -148,10 +149,12 @@ func coerceValue(s string) any {
 // Generate returns the cobra command for tool.
 func (c *ToolCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "tool <tool-id> [key=value...]",
-		Short: "Invoke a tool directly by name and key=value args (for debugging)",
-		Long:  "Invoke a tool directly. Example: agent tool read_file path=./foo.txt",
-		Args:  cobra.ArbitraryArgs,
+		Use:           "tool <tool-id> [key=value...]",
+		Short:         "Invoke a tool directly by name and key=value args (for debugging)",
+		Long:          "Invoke a tool directly. Example: agent tool read_file path=./foo.txt",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			list, _ := cmd.Flags().GetBool("list")
 			if list && len(args) > 0 {
@@ -188,12 +191,38 @@ func (c *ToolCommand) Generate() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("tool %q: %w", toolID, err)
 			}
+			if refusal, ok := filesystemRefusalFromMessages(msgs); ok {
+				if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
+					return err
+				}
+				return newToolCommandError(errToolRefusal, refusal.Error(), &tools.FilesystemRefusalError{Refusal: refusal})
+			}
 
 			return c.writeMessages(cmd.OutOrStdout(), msgs)
 		},
 	}
 	cmd.Flags().Bool("list", false, "List available tool IDs")
 	return cmd
+}
+
+func filesystemRefusalFromMessages(msgs []messages.Message) (tools.FilesystemRefusal, bool) {
+	for _, message := range msgs {
+		if refusal, ok := tools.FilesystemRefusalFromContent(message.TextContent()); ok {
+			return refusal, true
+		}
+	}
+	return tools.FilesystemRefusal{}, false
+}
+
+func (c *ToolCommand) writeRefusal(w io.Writer, refusal tools.FilesystemRefusal) error {
+	encoded, err := tools.MarshalFilesystemRefusal(refusal)
+	if err != nil {
+		return fmt.Errorf("encode filesystem refusal: %w", err)
+	}
+	if _, err := fmt.Fprintln(w, string(encoded)); err != nil {
+		return fmt.Errorf("write filesystem refusal: %w", err)
+	}
+	return nil
 }
 
 func (c *ToolCommand) listTools(w io.Writer, registry *tools.ToolRegistry) error {

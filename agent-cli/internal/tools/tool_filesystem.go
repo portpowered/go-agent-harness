@@ -273,7 +273,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) ([]mess
 
 	content, err := t.fs.ReadFile(path)
 	if err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 
 	kind := mediaKindFromPath(path)
@@ -361,7 +361,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) ([]mes
 	}
 
 	if err := t.fs.WriteFile(path, []byte(content)); err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, fmt.Sprintf("File written: %s", path))}, nil
 }
@@ -409,7 +409,7 @@ func (t *ListDirTool) Execute(ctx context.Context, args map[string]any) ([]messa
 
 	entries, err := t.fs.ReadDir(path)
 	if err != nil {
-		return ErrorAsToolMessage(fmt.Errorf("failed to read directory: %w", err))
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, fmt.Errorf("failed to read directory: %w", err))
 	}
 	formatted := formatDirEntries(entries)
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, formatted)}, nil
@@ -570,6 +570,13 @@ type sandboxFs struct {
 	enforceCanonical     bool
 }
 
+func (r *sandboxFs) filesystemWorkDir() string {
+	if r == nil {
+		return ""
+	}
+	return r.workspace
+}
+
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
 	rootPath, relPath, err := r.resolve(path)
 	if err != nil {
@@ -587,11 +594,11 @@ func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) 
 
 func newSandboxFs(policy *FilesystemPolicy) *sandboxFs {
 	if policy == nil {
-		return &sandboxFs{}
+		return &sandboxFs{enforceCanonical: true}
 	}
 	roots := policy.WritableRoots()
 	if len(roots) == 0 {
-		return &sandboxFs{}
+		return &sandboxFs{enforceCanonical: true}
 	}
 	return &sandboxFs{
 		workspace:            roots[0],
@@ -619,7 +626,11 @@ func (r *sandboxFs) executeRead(path string, fn func(root *os.Root, relPath stri
 func (r *sandboxFs) resolve(path string) (string, string, error) {
 	roots, err := r.rootPaths()
 	if err != nil {
-		return "", "", err
+		workdir := ""
+		if r != nil {
+			workdir = r.workspace
+		}
+		return "", "", newFilesystemAccessDeniedWithContext(workdir, FilesystemRefusalInvalidScope, err.Error())
 	}
 
 	candidate := path
@@ -633,7 +644,7 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 		// particular, do not fall back to a lexical check when an existing
 		// symlink or ancestor cannot be resolved: the root operation would be
 		// making the authorization decision after the check.
-		return "", "", fmt.Errorf("%w: unable to resolve requested path", ErrFilesystemAccessDenied)
+		return "", "", newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalOutsidePermittedRoots, "unable to resolve requested path")
 	}
 	for _, rootPath := range roots {
 		relPath, err := filepath.Rel(rootPath, comparisonCandidate)
@@ -674,17 +685,18 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 			// The lexical path is beneath a permitted root, but its canonical
 			// target is not. This is the symlink-specific refusal and is
 			// wrapped so callers can distinguish it without relying on text.
-			return "", "", newFilesystemAccessDenied(fmt.Sprintf("path escapes workspace: %s: %s", path, ErrFilesystemAccessDenied))
+			return "", "", newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalOutsidePermittedRoots, fmt.Sprintf("path escapes workspace: %s: %s", path, ErrFilesystemAccessDenied))
 		}
 	}
 	// Preserve the long-standing diagnostic for an ordinary absolute or
 	// traversal path that was never lexically beneath a configured root.
-	return "", "", newFilesystemAccessDenied(fmt.Sprintf("path escapes workspace: %s", path))
+	return "", "", newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalOutsidePermittedRoots, fmt.Sprintf("path escapes workspace: %s", path))
 }
 
 func (r *sandboxFs) resolveRead(path string) (string, string, error) {
 	if r.isProtectedRead(path) {
-		return "", "", fmt.Errorf("%w: %w", ErrFilesystemAccessDenied, ErrProtectedFilesystemRead)
+		denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveRead, ErrFilesystemAccessDenied.Error())
+		return "", "", fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemRead)
 	}
 	return r.resolve(path)
 }

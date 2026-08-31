@@ -409,6 +409,9 @@ func correlatedSessionToolCancellation(call messages.ToolCall, err error) (messa
 // while retaining the generic executor contract: a non-WebMCP result is
 // considered complete unless the executor returned a Go error.
 func sessionToolResponseFailed(content string) bool {
+	if _, refusal := cliTools.FilesystemRefusalFromContent(content); refusal {
+		return true
+	}
 	var envelope struct {
 		Version string `json:"version"`
 		OK      *bool  `json:"ok"`

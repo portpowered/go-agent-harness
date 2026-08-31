@@ -73,7 +73,7 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]any) ([]mess
 	}
 
 	if err := editFile(t.fs, path, oldText, newText); err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, fmt.Sprintf("File edited: %s", path))}, nil
 }
@@ -129,7 +129,7 @@ func (t *AppendFileTool) Execute(ctx context.Context, args map[string]any) ([]me
 	}
 
 	if err := appendFile(t.fs, path, content); err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, fmt.Sprintf("Appended to %s", path))}, nil
 }
