@@ -105,7 +105,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		return result, runErr
 	}
 
-	plans, secrets, err := buildRoomParticipantPlansWithContext(ctx, opts, validation)
+	plans, secrets, err := buildRoomParticipantPlansWithContext(ctx, opts, validation, evidence)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
 		return finalizeEvidence(result, err)

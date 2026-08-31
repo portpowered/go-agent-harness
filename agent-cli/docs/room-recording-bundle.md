@@ -3,7 +3,7 @@
 ---
 author: Codex
 owner: Agent CLI maintainers
-last modified: 2026, August, 30
+last modified: 2026, August, 31
 ---
 
 `agent room run --out <dir>` writes a complete evidence bundle for the
@@ -39,6 +39,7 @@ same or another degraded sink cannot replace the diagnostic cause.
   run-manifest.json                      # bundle manifest (see below)
   room-timeline.jsonl                    # room-level ordered event log
   room-mix.wav                           # composite "fly on the wall" mix
+  room-latency.json                      # diagnostic-only latency bundle (not a replay artifact role)
   agent-<id>.wav                         # this participant's own output (unchanged)
   agent-<id>.diagnostics.jsonl           # session diagnostics (now wall-clock stamped)
   agent-<id>.deltas.jsonl                # raw provider stream deltas (now wall-clock stamped)
@@ -46,6 +47,8 @@ same or another degraded sink cannot replace the diagnostic cause.
     <id>/
       sent.pcm                           # raw PCM16: what this participant spoke into the room
       received.pcm                       # raw PCM16: what the room delivered to this participant
+      events.jsonl                       # participant event stream (currently same content as agent-<id>.deltas.jsonl)
+      capture.json                       # raw provider websocket session capture (agent participants only)
 ```
 
 `<id>` is a filesystem-safe stem derived from the manifest participant ID
@@ -54,6 +57,75 @@ collision between two IDs that normalize to the same stem gets an appended
 hash suffix. `run-manifest.json` is authoritative for every artifact's exact
 relative path — look up `participants[<id>].artifacts` and the top-level
 `room_mix`/`room_timeline` fields rather than reconstructing paths.
+
+## Replay-required artifact roles and `artifact_integrity`
+
+`agent room run --replay` (`LoadRoomReplayPlan`) admits a bundle only if it
+can validate every one of the following roles for every participant, plus
+two room-level artifacts. Each is looked up via `run-manifest.json`'s
+`participants[<id>].artifacts` object (role name -> `{path, size, sha256}`)
+or the top-level `room_mix`/`room_timeline` fields:
+
+| Role | File | Required for |
+|---|---|---|
+| `wav` | `agent-<id>.wav` | every participant |
+| `diagnostics` | `agent-<id>.diagnostics.jsonl` | every participant |
+| `deltas` | `agent-<id>.deltas.jsonl` | every participant |
+| `sent_pcm` | `participants/<id>/sent.pcm` | every participant |
+| `received_pcm` | `participants/<id>/received.pcm` | every participant |
+| `events` | `participants/<id>/events.jsonl` | every participant |
+| `capture` | `participants/<id>/capture.json` | agent participants only |
+| `timeline` (room) | `room-timeline.jsonl` | the room |
+| `mix` (room) | `room-mix.wav` | the room |
+
+Every one of those paths also needs a declared `size` and `sha256` digest
+that matches the file actually on disk, or admission rejects it as
+incomplete. `run-manifest.json`'s top-level `artifact_integrity` object
+supplies that: it maps each artifact's bundle-relative path (not its role
+name) to `{"size": <bytes>, "sha256": "<hex digest>"}`, computed from the
+file the writer actually wrote. `room-latency.json` is deliberately **not**
+in `artifacts`/`artifact_integrity`: no replay role ever claims it, and an
+inventory entry with no owning role is rejected as an orphan; it is named
+instead by the dedicated top-level `room_latency` field, which replay
+admission does not scan.
+
+### `events.jsonl`
+
+Every participant's stream of observed `messages.StreamMessage` events,
+wall-clock-stamped the same way as `agent-<id>.deltas.jsonl`. It is required
+as its own artifact role, independent of `deltas.jsonl`, because a bundle
+cannot declare two roles that both claim the same file path (the replay
+reader treats that as an ownership conflict). Today it carries exactly the
+same content as `deltas.jsonl`.
+
+### `capture.json`
+
+The raw provider websocket session capture for one agent participant: every
+JSON message actually sent to and received from the realtime provider
+connection, recorded through the same `gwtesting.RecordingWebSocketDialer`
+solo `agent session --record` sessions use, wrapped around whichever
+websocket dialer that participant's live session was constructed with. It is
+what lets `agent room run --replay` reconstruct that participant's exact
+provider exchange without a live connection (via
+`gwtesting.NewReplayWebSocketDialerFromCapture`), and it is what the replay
+scheduler (`session_room_replay_scheduler.go`) reads to detect recorded
+inbound audio (`input_audio_buffer.append` records) when scheduling replay
+frames.
+
+`capture.json` is written only when a participant's session was constructed
+through the real live-session path (`NewLiveSessionInferencer`, the default
+room session factory): a participant driven by an injected
+`messages.SessionInferencer` or a custom `SessionFactory` (a deterministic
+test seam) has no raw wire traffic to capture, exactly like solo
+`agent session run --record` never captures traffic for an injected
+inferencer either. `capture.json`'s manifest path is always declared for a
+non-human participant, but replay admission still rejects a bundle whose
+`capture.json` was never actually written (no declared size/sha256, or an
+empty capture) as incomplete -- the artifact role exists, but the bundle is
+not really replayable.
+
+Human participants have no provider session, so they have no `capture`
+artifact role at all.
 
 ## `sent.pcm` and `received.pcm`
 
@@ -116,6 +188,13 @@ guess which timing field is the anchor. It is always the room's real start
 time — never an epoch placeholder — so per-turn and cross-participant
 latency (e.g. barge-in response time) is directly computable from the
 bundle.
+
+`timing.ended_at` is the instant the room's final `run_terminated`
+`room-timeline.jsonl` entry was actually recorded, not an independently-read
+timestamp captured moments earlier while that entry was still being written.
+Recording it any other way would let that final timeline entry's own offset
+occasionally exceed the span `ended_at - started_at` declares it must fall
+inside, which `agent room run --replay`'s bundle admission rejects.
 
 (This clock is unrelated to `agent session --record-dir`'s existing,
 deliberately-fixed 1970-01-01 `clock_base`: that single/dual-participant
@@ -215,3 +294,20 @@ room's wall-clock span. `session_room_evidence_capture_test.go` unit-tests
 the underlying primitives (wall-clock injection, the speech-segment
 tracker, the mix buffer's overlap summation and span padding, and the
 dropped-audio diagnostic) directly.
+
+`agent-cli/internal/services/session_room_replay_roundtrip_test.go` is the
+regression suite for the writer/reader replay-admission contract described
+above:
+
+- `TestRoomEvidenceArtifactPaths_DeclaresEveryReplayRequiredParticipantRole`
+  is a field-coverage guard: it fails immediately if a required participant
+  artifact role and the writer's `roomEvidenceArtifactPaths` struct ever
+  drift apart again, without needing a real room run.
+- `TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds` drives a real
+  two-participant room through `RunRoomWithResult` on the real
+  live-construction path (a hermetic websocket transport standing in for the
+  network), admits the resulting bundle with `LoadRoomReplayPlan`, and then
+  replays it end to end through a second `RunRoomWithResult` call with every
+  live seam (credentials, session factory, websocket dialer factory) wired to
+  fail the test if touched. No hand-authored manifest or capture fixture is
+  used anywhere in it.

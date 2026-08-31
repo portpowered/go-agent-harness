@@ -311,6 +311,16 @@ type roomTimelineEntry struct {
 type roomTimeline struct {
 	writer *selfPlayJSONLWriter
 	clock  roomClock
+
+	// mu serializes the clock read and the resulting write. record is called
+	// concurrently from every participant goroutine; without this lock, two
+	// concurrent callers can read their timestamps in one order (A before B)
+	// but land their writes in the other order (B's write completing before
+	// A's), producing a room-timeline.jsonl whose offsets are not
+	// monotonically increasing even though each individual timestamp is
+	// accurate. Replay admission validates strict offset/sequence ordering,
+	// so that race makes an otherwise-valid recording unreplayable.
+	mu sync.Mutex
 }
 
 func newRoomTimeline(path string, clock roomClock) (*roomTimeline, error) {
@@ -322,17 +332,31 @@ func newRoomTimeline(path string, clock roomClock) (*roomTimeline, error) {
 }
 
 func (t *roomTimeline) record(event, participant string, fields map[string]string) error {
+	_, _, err := t.recordNow(event, participant, fields)
+	return err
+}
+
+// recordNow is the primitive record builds on; it additionally returns the
+// exact clock reading (offset since room start, and the equivalent Unix
+// millisecond timestamp) that was written for this event, so a caller that
+// needs to reason about that specific instant -- rather than re-reading the
+// clock a moment later, which is necessarily a different instant -- can do
+// so without a second, racing clock read.
+func (t *roomTimeline) recordNow(event, participant string, fields map[string]string) (time.Duration, int64, error) {
 	if t == nil || t.writer == nil {
-		return nil
+		return 0, 0, nil
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	offset, unixMs := t.clock.now()
-	return t.writer.write(roomTimelineEntry{
+	err := t.writer.write(roomTimelineEntry{
 		TOffsetMS:   roomClockOffsetMillis(offset),
 		TUnixMS:     unixMs,
 		Event:       event,
 		Participant: participant,
 		Fields:      fields,
 	})
+	return offset, unixMs, err
 }
 
 func (t *roomTimeline) close() error {

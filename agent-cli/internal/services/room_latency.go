@@ -488,7 +488,13 @@ func ReadRoomLatencyReport(destination string) (RoomLatencyReport, error) {
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return RoomLatencyReport{}, fmt.Errorf("decode room run manifest: %w", err)
 	}
-	artifactPath := manifest.Artifacts["room.latency"]
+	// RoomLatency is the current field; the "room.latency" Artifacts entry is
+	// read as a fallback for bundles written before it moved out of the
+	// replay-scanned artifact inventory (see roomEvidenceManifest.RoomLatency).
+	artifactPath := manifest.RoomLatency
+	if artifactPath == "" {
+		artifactPath = manifest.Artifacts["room.latency"]
+	}
 	if artifactPath == "" {
 		artifactPath = RoomLatencyArtifactPath
 	}

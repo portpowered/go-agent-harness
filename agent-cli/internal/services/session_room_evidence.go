@@ -84,6 +84,14 @@ type roomParticipantEvidence struct {
 	audio       *selfPlayWAVRecorder
 	diagnostics *selfPlayJSONLWriter
 	deltas      *selfPlayJSONLWriter
+	// events is the participant-level event stream artifact role required by
+	// replay bundle admission (roomReplayArtifactRoleEvents), independently
+	// declared from deltas so the two artifact roles never share one
+	// filesystem path (the replay reader treats two roles claiming the same
+	// path as an ownership conflict). It currently carries the same
+	// wall-clock-stamped StreamMessage content as deltas: every event this
+	// participant's session observed.
+	events *selfPlayJSONLWriter
 
 	// sentPCM/receivedPCM capture both directions of this participant's raw
 	// audio: sentPCM is what this participant spoke into the room (mirrors
@@ -102,6 +110,16 @@ type roomEvidenceArtifactPaths struct {
 	Deltas      string `json:"deltas"`
 	SentPCM     string `json:"sent_pcm"`
 	ReceivedPCM string `json:"received_pcm"`
+	// Events is always populated (see roomParticipantEvidence.events above).
+	Events string `json:"events"`
+	// Capture is empty for a human participant: it has no provider session
+	// to capture. It is also empty for a provider participant whose live
+	// session was constructed through an injected SessionInferencer/custom
+	// SessionFactory instead of the real websocket dialer (deterministic
+	// tests that never touch a real or hermetic websocket transport cannot
+	// produce one); recording only happens on the genuine live-construction
+	// path, matching how solo `agent session run --record` behaves.
+	Capture string `json:"capture,omitempty"`
 }
 
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
@@ -144,16 +162,21 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 	stems := roomEvidenceArtifactStems(manifest.Participants)
 	for _, participant := range manifest.Participants {
 		stem := stems[participant.ID]
+		artifactPaths := roomEvidenceArtifactPaths{
+			WAV:         "agent-" + stem + ".wav",
+			Diagnostics: "agent-" + stem + ".diagnostics.jsonl",
+			Deltas:      "agent-" + stem + ".deltas.jsonl",
+			SentPCM:     filepath.Join("participants", stem, "sent.pcm"),
+			ReceivedPCM: filepath.Join("participants", stem, "received.pcm"),
+			Events:      filepath.Join("participants", stem, "events.jsonl"),
+		}
+		if room.NormalizeParticipantKind(participant.Kind) != room.ParticipantKindHuman {
+			artifactPaths.Capture = filepath.Join("participants", stem, "capture.json")
+		}
 		participantEvidence := &roomParticipantEvidence{
-			owner: evidence,
-			id:    participant.ID,
-			artifacts: roomEvidenceArtifactPaths{
-				WAV:         "agent-" + stem + ".wav",
-				Diagnostics: "agent-" + stem + ".diagnostics.jsonl",
-				Deltas:      "agent-" + stem + ".deltas.jsonl",
-				SentPCM:     filepath.Join("participants", stem, "sent.pcm"),
-				ReceivedPCM: filepath.Join("participants", stem, "received.pcm"),
-			},
+			owner:          evidence,
+			id:             participant.ID,
+			artifacts:      artifactPaths,
 			sentSpeech:     &roomSpeechTracker{},
 			receivedSpeech: &roomSpeechTracker{},
 		}
@@ -178,6 +201,11 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		if err != nil {
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create room participant %q delta evidence: %w", participant.ID, err)
+		}
+		participantEvidence.events, err = newSelfPlayJSONLWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.Events))
+		if err != nil {
+			evidence.cleanupSetup()
+			return nil, fmt.Errorf("create room participant %q event evidence: %w", participant.ID, err)
 		}
 		participantEvidence.sentPCM, err = newRawPCMWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.SentPCM))
 		if err != nil {
@@ -210,6 +238,23 @@ func (e *roomEvidence) recordTimelineEvent(event, participant string, fields map
 	if err := e.timeline.record(event, participant, fields); err != nil {
 		e.recordError("", RoomEvidenceTimelinePath, fmt.Errorf("record %s: %w", event, err))
 	}
+}
+
+// recordFinalTimelineEvent records the room's terminal timeline entry and
+// returns the exact wall-clock instant it was recorded at (the room's start
+// time plus the offset actually written), so a caller that also declares the
+// room's overall span end (run-manifest.json's timing.ended_at) can use that
+// same instant rather than an independently-read timestamp that necessarily
+// precedes it. Returns the zero Time if there is no timeline to record to.
+func (e *roomEvidence) recordFinalTimelineEvent(event, participant string, fields map[string]string) time.Time {
+	if e == nil || e.timeline == nil {
+		return time.Time{}
+	}
+	offset, _, err := e.timeline.recordNow(event, participant, fields)
+	if err != nil {
+		e.recordError("", RoomEvidenceTimelinePath, fmt.Errorf("record %s: %w", event, err))
+	}
+	return e.clock.start.Add(offset).UTC()
 }
 
 func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
@@ -346,7 +391,7 @@ func (e *roomEvidence) recordingHealth() (*transcript.RecordingStatus, map[strin
 		participantStatuses[participantID] = roomRecordingStatus(err, secrets)
 	}
 	for participantID, paths := range participants {
-		for _, path := range []string{paths.WAV, paths.Diagnostics, paths.Deltas, paths.SentPCM, paths.ReceivedPCM} {
+		for _, path := range []string{paths.WAV, paths.Diagnostics, paths.Deltas, paths.SentPCM, paths.ReceivedPCM, paths.Events, paths.Capture} {
 			if err, exists := artifactErrs[filepath.ToSlash(path)]; exists {
 				if participantArtifacts[participantID] == nil {
 					participantArtifacts[participantID] = make(map[string]string)
@@ -404,6 +449,9 @@ func (e *roomEvidence) cleanupSetup() {
 		if participant.deltas != nil {
 			_ = participant.deltas.close()
 		}
+		if participant.events != nil {
+			_ = participant.events.close()
+		}
 		if participant.sentPCM != nil {
 			_ = participant.sentPCM.close()
 		}
@@ -416,6 +464,7 @@ func (e *roomEvidence) cleanupSetup() {
 			filepath.Join(e.destination, participant.artifacts.Deltas),
 			filepath.Join(e.destination, participant.artifacts.SentPCM),
 			filepath.Join(e.destination, participant.artifacts.ReceivedPCM),
+			filepath.Join(e.destination, participant.artifacts.Events),
 		} {
 			_ = os.Remove(path)
 		}
@@ -470,7 +519,18 @@ func (p *roomParticipantEvidence) observeDelta(msg messages.StreamMessage) error
 	if err != nil {
 		return p.recordError(p.artifacts.Deltas, fmt.Errorf("stamp delta wall clock: %w", err))
 	}
-	return p.recordError(p.artifacts.Deltas, p.deltas.writeRaw(stamped))
+	deltaErr := p.recordError(p.artifacts.Deltas, p.deltas.writeRaw(stamped))
+	// events.jsonl is the replay bundle's independently-declared participant
+	// event stream (roomReplayArtifactRoleEvents): the replay reader requires
+	// it as its own artifact, distinct from deltas.jsonl, so it cannot simply
+	// alias the same file. It carries the same wall-clock-stamped record.
+	eventsErr := error(nil)
+	if p.events != nil {
+		eventsErr = p.recordError(p.artifacts.Events, p.events.writeRaw(stamped))
+	} else {
+		eventsErr = p.recordError(p.artifacts.Events, errors.New("room participant event sink is not initialized"))
+	}
+	return errors.Join(deltaErr, eventsErr)
 }
 
 func (p *roomParticipantEvidence) observeAudio(pcm []byte) error {
@@ -669,7 +729,18 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 		if reason == "" {
 			reason = result.Reason
 		}
-		e.recordTimelineEvent("run_terminated", "", map[string]string{"reason": string(reason)})
+		// run_terminated's own timestamp is read fresh here, strictly after
+		// the caller captured endedAt. Any real time elapsed between those
+		// two independent clock reads (even nanoseconds) would otherwise let
+		// this final timeline event's own offset exceed the room span the
+		// manifest declares it must fall inside -- which the replay reader
+		// rejects. Recording it through recordFinalTimelineEvent and folding
+		// its own instant into endedAt (never earlier, only later) makes the
+		// declared span the true superset of everything actually recorded,
+		// by construction instead of by racing two clock reads.
+		if finalizedAt := e.recordFinalTimelineEvent("run_terminated", "", map[string]string{"reason": string(reason)}); finalizedAt.After(endedAt) {
+			endedAt = finalizedAt
+		}
 
 		for _, participant := range e.participants {
 			if participant == nil {
@@ -688,6 +759,11 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 			if participant.deltas != nil {
 				if err := participant.deltas.close(); err != nil {
 					e.recordError(participant.id, participant.artifacts.Deltas, err)
+				}
+			}
+			if participant.events != nil {
+				if err := participant.events.close(); err != nil {
+					e.recordError(participant.id, participant.artifacts.Events, err)
 				}
 			}
 			if participant.sentPCM != nil {
@@ -749,13 +825,57 @@ type roomEvidenceManifest struct {
 	// wall-clock-stamped log of the conversation's shape.
 	RoomMix      string            `json:"room_mix"`
 	RoomTimeline string            `json:"room_timeline"`
+	// RoomLatency names the room-level latency artifact. It is deliberately a
+	// dedicated field rather than an Artifacts/ArtifactIntegrity entry: those
+	// two maps are the replay reader's artifact inventory, and it rejects any
+	// entry there that no declared participant or room artifact role claims
+	// ("orphan integrity entry") -- latency has no such role, since replay
+	// admission never consumes it.
+	RoomLatency  string            `json:"room_latency,omitempty"`
 	Artifacts    map[string]string `json:"artifacts"`
+	// ArtifactIntegrity declares the size and sha256 digest of every artifact
+	// this manifest references, keyed by the artifact's own bundle-relative
+	// path (not its role name) -- the replay reader's artifact-metadata merge
+	// (mergeRoomReplayArtifactMetadata in session_room_replay_manifest.go)
+	// looks entries up by path, so this map supplies the integrity metadata
+	// for every path named anywhere above (Artifacts, RoomMix, RoomTimeline,
+	// and every participant's nested artifacts) regardless of which key
+	// declared that path. Without it, replay admission rejects every
+	// artifact as incomplete: it requires a declared size and sha256 for
+	// each one it validates.
+	ArtifactIntegrity map[string]roomEvidenceArtifactIntegrity `json:"artifact_integrity,omitempty"`
 	// RecordingStatus follows transcript's shared complete/partial contract;
 	// a partial room bundle is still a valid room result with degraded
 	// evidence, not a failed conversation.
 	RecordingStatus   *transcript.RecordingStatus `json:"recording_status,omitempty"`
 	DegradedArtifacts map[string]string           `json:"degraded_artifacts,omitempty"`
 	Error             string                      `json:"error,omitempty"`
+}
+
+// roomEvidenceArtifactIntegrity is one entry of roomEvidenceManifest's
+// artifact_integrity map: the declared size and sha256 digest of one
+// artifact file, computed from the file actually written to disk.
+type roomEvidenceArtifactIntegrity struct {
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+// roomEvidenceHashArtifact stats and hashes one bundle-relative artifact path
+// and reports whether it could be read. A missing or unreadable file (for
+// example one behind a degraded recording sink) is reported as absent rather
+// than as an integrity entry with a size of zero: an absent entry correctly
+// makes replay admission reject that artifact as incomplete, instead of
+// admitting a zero-byte stand-in as if it were the real, complete artifact.
+func roomEvidenceHashArtifact(destination, relativePath string) (roomEvidenceArtifactIntegrity, bool) {
+	if strings.TrimSpace(relativePath) == "" {
+		return roomEvidenceArtifactIntegrity{}, false
+	}
+	data, err := os.ReadFile(filepath.Join(destination, relativePath))
+	if err != nil {
+		return roomEvidenceArtifactIntegrity{}, false
+	}
+	digest := sha256.Sum256(data)
+	return roomEvidenceArtifactIntegrity{Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])}, true
 }
 
 // roomEvidenceAudioFormat is the full PCM contract the replay reader
@@ -861,13 +981,29 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		},
 		RoomMix:           RoomEvidenceMixPath,
 		RoomTimeline:      RoomEvidenceTimelinePath,
-		Artifacts:         make(map[string]string, len(e.manifest.Participants)*5+2),
+		RoomLatency:       RoomLatencyArtifactPath,
+		Artifacts:         make(map[string]string, len(e.manifest.Participants)*7+2),
+		ArtifactIntegrity: make(map[string]roomEvidenceArtifactIntegrity, len(e.manifest.Participants)*7+2),
 		RecordingStatus:   cloneRoomRecordingStatus(recordingStatus),
 		DegradedArtifacts: cloneRoomStringMap(degradedArtifacts),
 	}
+	hashInto := func(relativePath string) {
+		if relativePath == "" {
+			return
+		}
+		if integrity, ok := roomEvidenceHashArtifact(e.destination, relativePath); ok {
+			manifest.ArtifactIntegrity[relativePath] = integrity
+		}
+	}
 	manifest.Artifacts["room_mix"] = RoomEvidenceMixPath
 	manifest.Artifacts["room_timeline"] = RoomEvidenceTimelinePath
-	manifest.Artifacts["room.latency"] = RoomLatencyArtifactPath
+	hashInto(RoomEvidenceMixPath)
+	hashInto(RoomEvidenceTimelinePath)
+	// room-latency.json is diagnostic-only: no replay artifact role ever
+	// claims it, so it is deliberately not added to Artifacts/
+	// ArtifactIntegrity. Declaring it there without any role claiming
+	// ownership would make replay admission's integrity-inventory check
+	// reject it as an orphan entry.
 	if runErr != nil {
 		manifest.Error = e.redactText(runErr.Error())
 	}
@@ -926,6 +1062,17 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		manifest.Artifacts[participant.ID+".deltas"] = paths.Deltas
 		manifest.Artifacts[participant.ID+".sent_pcm"] = paths.SentPCM
 		manifest.Artifacts[participant.ID+".received_pcm"] = paths.ReceivedPCM
+		manifest.Artifacts[participant.ID+".events"] = paths.Events
+		hashInto(paths.WAV)
+		hashInto(paths.Diagnostics)
+		hashInto(paths.Deltas)
+		hashInto(paths.SentPCM)
+		hashInto(paths.ReceivedPCM)
+		hashInto(paths.Events)
+		if paths.Capture != "" {
+			manifest.Artifacts[participant.ID+".capture"] = paths.Capture
+			hashInto(paths.Capture)
+		}
 	}
 	return writeRoomEvidenceManifestFile(filepath.Join(e.destination, RoomEvidenceManifestPath), manifest, e.secrets)
 }
