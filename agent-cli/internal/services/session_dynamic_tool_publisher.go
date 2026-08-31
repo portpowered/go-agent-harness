@@ -241,13 +241,13 @@ func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.A
 		} else {
 			if !settleTimer.Stop() {
 				select {
-				case <-settleTimer.C:
+				case <-settleTimer.C():
 				default:
 				}
 			}
 			settleTimer.Reset(sessionDynamicToolPublicationSettleWindow)
 		}
-		settleC = settleTimer.C
+		settleC = settleTimer.C()
 	}
 	stopSettleTimer := func() {
 		if settleTimer == nil {
@@ -255,7 +255,7 @@ func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.A
 		}
 		if !settleTimer.Stop() {
 			select {
-			case <-settleTimer.C:
+			case <-settleTimer.C():
 			default:
 			}
 		}
