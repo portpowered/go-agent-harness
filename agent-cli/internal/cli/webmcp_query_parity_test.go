@@ -131,6 +131,15 @@ func TestWebMCPLiveSessionAndDirectQueryPayloadParity(t *testing.T) {
 }
 
 func newQueryParityFixture(t *testing.T) queryParityFixture {
+	return newQueryParityFixtureWithTool(t, webmcp.ToolDescriptor{
+		Name:        queryParityToolName,
+		Description: "List documents in the current Margin page.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		FrameID:     queryParityFrame,
+	})
+}
+
+func newQueryParityFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) queryParityFixture {
 	t.Helper()
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()
@@ -144,14 +153,21 @@ func newQueryParityFixture(t *testing.T) queryParityFixture {
 		Origin:    "https://margin.fixture",
 		Eligible:  true,
 	}
-	readOnly := true
-	tool := webmcp.ToolDescriptor{
-		Name:        queryParityToolName,
-		Description: "List documents in the current Margin page.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-		Annotations: webmcp.ToolAnnotations{ReadOnly: &readOnly},
-		FrameID:     queryParityFrame,
-		Origin:      target.Origin,
+	if tool.Name == "" {
+		t.Fatal("query parity fixture tool name is empty")
+	}
+	if tool.FrameID == "" {
+		tool.FrameID = queryParityFrame
+	}
+	if tool.Origin == "" {
+		tool.Origin = target.Origin
+	}
+	if len(tool.InputSchema) == 0 {
+		tool.InputSchema = json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
+	}
+	if tool.Annotations.ReadOnly == nil {
+		readOnly := true
+		tool.Annotations.ReadOnly = &readOnly
 	}
 	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
 		testkit.RuntimeOptions{Clock: clock, IDs: ids},
@@ -240,15 +256,25 @@ func (f queryParityFixture) liveExecutor(t *testing.T) messages.ToolExecutor {
 
 func (f queryParityFixture) runLiveQuery(t *testing.T, callID, output string) queryParityLiveResult {
 	t.Helper()
-	return f.runLiveQueryWithTerminal(t, callID, output, true)
+	return f.runLiveQueryWithInputAndTerminal(t, callID, `{}`, output, true)
 }
 
 func (f queryParityFixture) runLiveQueryWithoutTerminal(t *testing.T, callID string) queryParityLiveResult {
 	t.Helper()
-	return f.runLiveQueryWithTerminal(t, callID, "", false)
+	return f.runLiveQueryWithInputAndTerminal(t, callID, `{}`, "", false)
 }
 
 func (f queryParityFixture) runLiveQueryWithTerminal(t *testing.T, callID, output string, releaseTerminal bool) queryParityLiveResult {
+	t.Helper()
+	return f.runLiveQueryWithInputAndTerminal(t, callID, `{}`, output, releaseTerminal)
+}
+
+func (f queryParityFixture) runLiveQueryWithInput(t *testing.T, callID, input, output string) queryParityLiveResult {
+	t.Helper()
+	return f.runLiveQueryWithInputAndTerminal(t, callID, input, output, true)
+}
+
+func (f queryParityFixture) runLiveQueryWithInputAndTerminal(t *testing.T, callID, input, output string, releaseTerminal bool) queryParityLiveResult {
 	t.Helper()
 	callContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -258,7 +284,7 @@ func (f queryParityFixture) runLiveQueryWithTerminal(t *testing.T, callID, outpu
 		response, err := executor.Execute(callContext, messages.ToolCall{
 			ID:        callID,
 			Name:      f.tool.Name,
-			Arguments: `{}`,
+			Arguments: input,
 		})
 		resultCh <- queryParityLiveResult{response: response, err: err}
 	}()
@@ -267,7 +293,7 @@ func (f queryParityFixture) runLiveQueryWithTerminal(t *testing.T, callID, outpu
 	if err != nil {
 		t.Fatalf("wait for live target invocation: %v", err)
 	}
-	f.assertInvocation(t, invocation)
+	f.assertInvocationInput(t, invocation, []byte(input))
 	if releaseTerminal {
 		if err := f.session.ReleaseInvocation(invocation.ID, json.RawMessage(output)); err != nil {
 			t.Fatalf("release live target invocation %q: %v", invocation.ID, err)
@@ -290,6 +316,11 @@ func (f queryParityFixture) runLiveQueryWithTerminal(t *testing.T, callID, outpu
 
 func (f queryParityFixture) runDirectQuery(t *testing.T, callID, output string) directCommandResult {
 	t.Helper()
+	return f.runDirectQueryWithInput(t, callID, `{}`, output)
+}
+
+func (f queryParityFixture) runDirectQueryWithInput(t *testing.T, callID, input, output string) directCommandResult {
+	t.Helper()
 	configDir := writeDirectConfig(t, "")
 	callContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -300,7 +331,7 @@ func (f queryParityFixture) runDirectQuery(t *testing.T, callID, output string) 
 			"--browser", string(f.candidate.ID),
 			"--tab", string(f.target.ID),
 			"--tool-ref", string(f.ref),
-			"--input-json", `{}`,
+			"--input-json", input,
 			"--reason", "query parity regression",
 			"--timeout", "5s",
 			"--json",
@@ -312,7 +343,7 @@ func (f queryParityFixture) runDirectQuery(t *testing.T, callID, output string) 
 		result := <-resultCh
 		t.Fatalf("wait for direct target invocation: %v; command err=%v stdout=%s stderr=%s", err, result.err, result.stdout, result.stderr)
 	}
-	f.assertInvocation(t, invocation)
+	f.assertInvocationInput(t, invocation, []byte(input))
 	if err := f.session.ReleaseInvocation(invocation.ID, json.RawMessage(output)); err != nil {
 		t.Fatalf("release direct target invocation %q: %v", invocation.ID, err)
 	}
@@ -330,7 +361,12 @@ func (f queryParityFixture) runDirectQuery(t *testing.T, callID, output string) 
 
 func (f queryParityFixture) assertInvocation(t *testing.T, invocation testkit.InvocationRecord) {
 	t.Helper()
-	if invocation.BrowserID != f.candidate.ID || invocation.TargetID != f.target.ID || invocation.Generation != 1 || invocation.FrameID != f.tool.FrameID || invocation.ToolName != f.tool.Name || !jsonEqual(invocation.Input, []byte(`{}`)) {
+	f.assertInvocationInput(t, invocation, []byte(`{}`))
+}
+
+func (f queryParityFixture) assertInvocationInput(t *testing.T, invocation testkit.InvocationRecord, input []byte) {
+	t.Helper()
+	if invocation.BrowserID != f.candidate.ID || invocation.TargetID != f.target.ID || invocation.Generation != 1 || invocation.FrameID != f.tool.FrameID || invocation.ToolName != f.tool.Name || !jsonEqual(invocation.Input, input) {
 		t.Fatalf("target invocation = %+v, want exact browser/target/generation/frame/tool/input provenance", invocation)
 	}
 }

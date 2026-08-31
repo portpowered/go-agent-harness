@@ -1,7 +1,7 @@
 # WebMCP live-session result trace
 
-Status: story 001 diagnosis recorded; the freshness enforcement and scope
-regressions are subsequent stories in `prd.json`.
+Status: stories 001–004 diagnosis, freshness enforcement, parity, and query
+scope regression recorded.
 
 ## Controlled reproduction
 
@@ -52,11 +52,11 @@ reproduction.
 
 The currently exercised Margin page catalog exposes these page tools:
 
-| Tool | Classification | Story-001 finding |
+| Tool | Classification | Incident and scope finding |
 | --- | --- | --- |
-| `get_document` | query/read | Shares the broker invocation/result path; no separate reproduction yet |
-| `list_documents` | query/read | Affected in the controlled reproduction |
-| `list_comments` | query/read | Shares the broker invocation/result path; no separate reproduction yet |
+| `get_document` | query/read | No separate incident reproduction; covered as a read-only member of the shared corrected broker path by the table-driven scope regression |
+| `list_documents` | query/read | Affected in the controlled reproduction; live/direct scope and payload-parity regression |
+| `list_comments` | query/read | No separate incident reproduction; covered as a read-only member of the shared corrected broker path by the table-driven scope regression |
 | `add_comment` | mutation | Not a query result; preserve side-effect/cancellation semantics |
 | `create_document` | mutation | Not a query result; preserve side-effect/cancellation semantics |
 | `open_document` | page action | Not classified as a query result |
@@ -65,7 +65,15 @@ The currently exercised Margin page catalog exposes these page tools:
 | `resolve_comment` | mutation | Not a query result; preserve side-effect/cancellation semantics |
 | `update_document` | mutation | Not a query result; preserve side-effect/cancellation semantics |
 
-Thus the affected set confirmed by this reproduction is only
-`list_documents`; the other read tools use the same shared boundary and must
-be covered by the freshness fix and behavioral scope audit rather than being
-declared unaffected from a name-only inventory.
+The incident-specific affected set confirmed by the reproduction is only
+`list_documents`. The corrected-boundary scope is all three query/read tools:
+`get_document`, `list_documents`, and `list_comments`, because all three are
+catalog descriptors with `read_only: true` and invoke through the same broker
+provenance guard. There are no query tools classified as unaffected by a
+different ownership or correlation path in this catalog. The table-driven
+`TestWebMCPQueryToolScopeUsesFreshnessGuard` exercises each read descriptor
+through both the first-class live executor and direct CLI adapter with a
+representative non-empty payload, and compares decoded payloads. Mutation and
+page-action tools are excluded from that matrix; their existing side-effect,
+cancellation, timeout, and stale-reference behavior remains covered by the
+broker and operation suites.
