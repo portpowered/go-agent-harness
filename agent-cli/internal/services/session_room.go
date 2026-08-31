@@ -1,11 +1,14 @@
 package services
 
 import (
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -45,6 +48,38 @@ const (
 	ParticipantTerminationError        ParticipantTerminationReason = "error"
 )
 
+// ParticipantTerminationTrigger identifies the event that caused a
+// participant's terminal observation. Bound triggers gain a _mid_response
+// suffix when the room bound arrived while that participant had an active
+// provider response.
+const (
+	ParticipantTerminationTriggerStopped                       = "stopped"
+	ParticipantTerminationTriggerMaxTurnsReached               = "max_turns_reached"
+	ParticipantTerminationTriggerMaxTurnsReachedMidResponse    = "max_turns_reached_mid_response"
+	ParticipantTerminationTriggerMaxDurationReached            = "max_duration_reached"
+	ParticipantTerminationTriggerMaxDurationReachedMidResponse = "max_duration_reached_mid_response"
+	ParticipantTerminationTriggerSessionFailure                = "session_failure"
+	ParticipantTerminationTriggerParticipantCompletion         = "participant_completion"
+	ParticipantTerminationTriggerProviderClose                 = "provider_close"
+)
+
+// ParticipantTerminationDisposition explains how the triggering event was
+// resolved. In particular, bound responses either complete in grace or are
+// cancelled after grace; those are intentionally distinct from failure.
+const (
+	ParticipantTerminationDispositionCompletedDuringGrace = "completed_during_grace"
+	ParticipantTerminationDispositionCancelledAfterGrace  = "cancelled_after_grace"
+	ParticipantTerminationDispositionCompleted            = "completed"
+	ParticipantTerminationDispositionStopped              = "stopped"
+	ParticipantTerminationDispositionFailed               = "failed"
+	ParticipantTerminationDispositionDisconnected         = "disconnected"
+)
+
+// RoomBoundCancelledClassification is the stable participant classification
+// for a response deliberately cancelled by the room after its bound grace
+// budget. It is intentionally distinct from generic caller cancellation.
+const RoomBoundCancelledClassification = providers.ErrorClassRoomBoundCancelled
+
 // RoomParticipantResult contains the observable outcome for one participant.
 // Error is already sanitized; the resolved API-key value is never retained in
 // the result.
@@ -52,17 +87,19 @@ type RoomParticipantResult struct {
 	// ID and TerminationReason are the joined run-manifest names. The
 	// ParticipantID and Reason aliases keep the result convenient for runtime
 	// callers that use the same terminology as RoomParticipantEvent.
-	ID                 string                       `json:"id"`
-	ParticipantID      string                       `json:"participant_id,omitempty"`
-	TerminationReason  ParticipantTerminationReason `json:"termination_reason"`
-	Reason             ParticipantTerminationReason `json:"reason,omitempty"`
-	TurnsCompleted     int                          `json:"turns_completed"`
-	Connected          bool                         `json:"connected"`
-	Error              string                       `json:"error,omitempty"`
-	Classification     string                       `json:"classification,omitempty"`
-	TerminalReason     messages.TerminalReason      `json:"terminal_reason,omitempty"`
-	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
-	OutputState        messages.TerminalOutputState `json:"output_state,omitempty"`
+	ID                     string                       `json:"id"`
+	ParticipantID          string                       `json:"participant_id,omitempty"`
+	TerminationReason      ParticipantTerminationReason `json:"termination_reason"`
+	Reason                 ParticipantTerminationReason `json:"reason,omitempty"`
+	TerminationTrigger     string                       `json:"termination_trigger"`
+	TerminationDisposition string                       `json:"termination_disposition"`
+	Classification         string                       `json:"classification"`
+	TerminalReason         string                       `json:"terminal_reason"`
+	TerminalProvenance     string                       `json:"terminal_provenance"`
+	OutputState            string                       `json:"output_state"`
+	TurnsCompleted         int                          `json:"turns_completed"`
+	Connected              bool                         `json:"connected"`
+	Error                  string                       `json:"error,omitempty"`
 	// RecordingStatus is nil for a healthy evidence bundle and partial when
 	// one or more participant-owned recording artifacts degraded. It is
 	// independent from the participant runtime termination reason.
@@ -158,6 +195,10 @@ type RoomRunOptions struct {
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
 	LivenessClock SessionLivenessClock
+	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
+	// selects the documented production default; tests may override it with a
+	// small positive duration to make the bounded drain deterministic.
+	BoundShutdownGrace time.Duration
 	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
 	// The CLI supplies it for bare launches so command/service composition tests
 	// can observe the selected devices and credential provenance without
@@ -240,6 +281,9 @@ type RoomRunOptions struct {
 	// all room evidence sinks are opened and before participant work starts, so
 	// package tests can inject a sink failure without changing live APIs.
 	onRoomEvidenceReady func(*roomEvidence)
+	// onRoomBoundShutdown is an internal deterministic lifecycle seam used by
+	// package tests to release a response after bound admission has closed.
+	onRoomBoundShutdown func(RoomTerminationReason)
 	// Stream optionally receives the room's diagnostic, transcript, and
 	// lifecycle projections. The broker is observational and never carries raw
 	// audio. Callers that expose it over HTTP own the listener lifecycle.

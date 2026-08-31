@@ -78,7 +78,7 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		if !ok {
 			t.Fatalf("run manifest is missing participant %q", id)
 		}
-		if participantManifest.CompletedTurns != participantResult.TurnsCompleted || participantManifest.TerminationReason != participantResult.TerminationReason {
+		if participantManifest.CompletedTurns != participantResult.TurnsCompleted || participantManifest.TerminationReason != participantResult.TerminationReason || participantManifest.TerminationTrigger != participantResult.TerminationTrigger || participantManifest.TerminationDisposition != participantResult.TerminationDisposition || participantManifest.Classification != participantResult.Classification || participantManifest.TerminalReason != participantResult.TerminalReason || participantManifest.TerminalProvenance != participantResult.TerminalProvenance || participantManifest.OutputState != participantResult.OutputState {
 			t.Fatalf("participant %q manifest facts = %+v, result = %+v", id, participantManifest, participantResult)
 		}
 		if manifest.TurnCounts[id] != participantResult.TurnsCompleted {

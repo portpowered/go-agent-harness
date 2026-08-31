@@ -203,6 +203,31 @@ otherwise-identical recordings byte-comparable across runs. Rooms have no
 such byte-comparability requirement across live runs, so their clock is
 simply real wall-clock time.)
 
+## Participant terminal fields
+
+Each `run-manifest.json` participant entry retains the existing
+`termination_reason`, `reason`, `completed_turns`, `connected`, `error`, and
+`artifacts` fields and adds the terminal projection below. The same projection
+is present in the room result and on `participant_terminated` timeline entries.
+
+| Field | Meaning |
+|---|---|
+| `termination_trigger` | `max_duration_reached` or `max_turns_reached`, with `_mid_response` when the bound arrived during an active response; otherwise `session_failure`, `provider_close`, or `participant_completion` |
+| `termination_disposition` | How the trigger resolved: `completed_during_grace`, `cancelled_after_grace`, `completed`, `failed`, `disconnected`, or `stopped` |
+| `classification` | Provider/session failure taxonomy, or `room_bound_cancelled` for a room-bound grace expiry |
+| `terminal_reason` | The authoritative terminal reason, such as `provider_authored_completion`, `cancellation`, `provider_close`, or `terminal_failure` |
+| `terminal_provenance` | Layer that authored the terminal reason (`provider`, `loop`, `room`, `session`, or another public terminal provenance) |
+| `output_state` | `complete`, `partial`, `none`, or `not_applicable`, based on observed output |
+
+When a duration or turn bound closes admission, active responses get one
+fixed 250ms grace window. A response that emits its successful terminal boundary
+within that window is `completed_during_grace`; otherwise the participant is
+`cancelled_after_grace` with `classification=room_bound_cancelled`,
+`terminal_reason=cancellation`, and `terminal_provenance=room`. These are
+room-owned outcomes and do not emit `session_failure`. A provider or runtime
+failure accepted before the forced cancellation remains `failed` with its
+original terminal fields.
+
 ## `room-timeline.jsonl`
 
 The room-level companion to the per-participant streams: one ordered JSONL
@@ -221,15 +246,16 @@ participant's own file. Each line is:
 | `participant_ready` | ready participant | provider session ready to converse |
 | `participant_failed` | failed participant | a participant-local fault retired the participant; `fields.reason` contains the sanitized cause |
 | `participant_liveness_fault` | affected participant | a positively classified provider liveness failure; `fields.reason` is the stable classification and the same event is broadcast to every current room-stream subscriber |
-| `participant_terminated` | terminated participant | `fields.reason` names the termination reason |
+| `participant_terminated` | terminated participant | `fields.reason` plus the participant terminal projection |
+| `room_bound_shutdown` | participant affected by a duration/turn bound | the same terminal projection, including the exact bound trigger and grace disposition |
 | `response_start` | speaker | provider `MESSAGE.START`; `fields.response_id` |
-| `response_end` | speaker | provider `MESSAGE.END`; `fields.response_id`, `fields.terminal_reason`, `fields.output_state` |
+| `response_end` | speaker | provider `MESSAGE.END`; `fields.response_id`, `fields.terminal_reason`, `fields.terminal_provenance`, `fields.output_state` |
 | `speech_start` / `speech_end` | speaker | this participant's own audio output started/stopped (energy-based; `speech_end` also fires on an explicit `AUDIO.END`) |
 | `received_speech_start` / `received_speech_end` | listener | the room's mixed stream delivered to this participant transitioned into/out of audible signal — the observable counterpart of `speech_start` on the other side |
 | `barge_in_cancel_acked` | interrupted speaker | the provider reported its response as cancelled (`terminal_reason=cancellation`) — a successful barge-in |
-| `barge_in_cancel_failed` | interrupted speaker | the provider rejected a cancel request (`response_cancel_not_active`); `fields.code`, `fields.message` |
+| `barge_in_cancel_failed` | interrupted speaker | the provider rejected a cancel request (`response_cancel_not_active`); `fields.code`, `fields.classification` |
 | `audio_input_dropped` | listener | non-silent incoming audio was not delivered to this participant's session; `fields.reason`, `fields.bytes` (see below) |
-| `provider_error` | affected participant | any other provider `ERROR` event; `fields.code`, `fields.classification`, `fields.message` |
+| `provider_error` | affected participant | any other provider `ERROR` event; `fields.code`, `fields.classification` (raw provider prose is not recorded) |
 | `tool_call_start` / `tool_call_end` | caller | `fields.tool_call_id` |
 | `turn_completed` | speaker | `fields.turn_index` |
 | `run_terminated` | (room-level, no participant) | `fields.reason` |

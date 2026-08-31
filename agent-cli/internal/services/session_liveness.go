@@ -563,7 +563,7 @@ func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecyc
 		return
 	}
 	result.Classification = classification
-	result.TerminalReason = terminalReason
-	result.TerminalProvenance = provenance
-	result.OutputState = outputState
+	result.TerminalReason = string(terminalReason)
+	result.TerminalProvenance = string(provenance)
+	result.OutputState = string(outputState)
 }

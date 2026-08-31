@@ -1,0 +1,5 @@
+{"end_ms":2200,"event":"turn","participant_id":"agent-a","start_ms":200,"status":"complete","t_offset_ms":2200,"t_unix_ms":1788195602200,"turn_id":"agent-a-turn-1"}
+{"end_ms":8200,"event":"turn","participant_id":"agent-a","start_ms":6200,"status":"complete","t_offset_ms":8200,"t_unix_ms":1788195608200,"turn_id":"agent-a-turn-2"}
+{"end_ms":14200,"event":"turn","participant_id":"agent-a","start_ms":12200,"status":"complete","t_offset_ms":14200,"t_unix_ms":1788195614200,"turn_id":"agent-a-turn-3"}
+{"end_ms":20200,"event":"turn","participant_id":"agent-a","start_ms":18200,"status":"complete","t_offset_ms":20200,"t_unix_ms":1788195620200,"turn_id":"agent-a-turn-4"}
+{"event":"room_bound_shutdown","fields":{"classification":"","output_state":"complete","reason":"ended","terminal_provenance":"provider","terminal_reason":"provider_authored_completion","termination_disposition":"completed","termination_trigger":"max_turns_reached"},"t_offset_ms":23200,"t_unix_ms":1788195623200}

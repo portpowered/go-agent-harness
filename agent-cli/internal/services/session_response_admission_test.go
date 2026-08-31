@@ -268,7 +268,7 @@ func TestRunRoom_ExplicitEmptyPartialResponseTerminatesParticipant(t *testing.T)
 	if participant.Classification != SessionSilentProviderEmptyResponseClassification {
 		t.Fatalf("silent participant classification = %q, want %q", participant.Classification, SessionSilentProviderEmptyResponseClassification)
 	}
-	if participant.TerminalReason != messages.TerminalReasonTerminalFailure || participant.TerminalProvenance != messages.TerminalProvenanceSession || participant.OutputState != messages.TerminalOutputNone {
+	if participant.TerminalReason != string(messages.TerminalReasonTerminalFailure) || participant.TerminalProvenance != string(messages.TerminalProvenanceSession) || participant.OutputState != string(messages.TerminalOutputNone) {
 		t.Fatalf("silent participant terminal metadata = (%q, %q, %q), want terminal failure/session/none", participant.TerminalReason, participant.TerminalProvenance, participant.OutputState)
 	}
 	if participant.TurnsCompleted != 0 {

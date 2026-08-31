@@ -1,9 +1,12 @@
 package services
 
 import (
+	"errors"
+	"strconv"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"strconv"
 )
 
 type failureFacts struct {
@@ -14,17 +17,6 @@ type failureFacts struct {
 	errorType      string
 	code           string
 	failingEvent   string
-}
-
-func (o *sessionProgressObserver) setFailureIfUnset(f *failureFacts) {
-	if o == nil || f == nil {
-		return
-	}
-	o.livenessMu.Lock()
-	if o.failure == nil {
-		o.failure = f
-	}
-	o.livenessMu.Unlock()
 }
 
 func (o *sessionProgressObserver) failureSnapshot() *failureFacts {
@@ -57,7 +49,23 @@ func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue
 	if o == nil || v == nil || v.IsNonTerminal() {
 		return
 	}
-	o.setFailureIfUnset(factsFromErrorValue(v))
+	// Cancellation is an intentional terminal state, including the provider's
+	// acknowledgement of the room's forced bound cancellation. It must not be
+	// converted into a session_failure diagnostic; the room observer projects
+	// the cancellation fields after the loop finishes.
+	if v.TerminalReason == messages.TerminalReasonCancellation ||
+		(v.Classification == providers.ErrorClassCancellation && v.TerminalReason == "") ||
+		v.Classification == RoomBoundCancelledClassification {
+		return
+	}
+	facts := factsFromErrorValue(v)
+	err := v.Err
+	if err == nil && v.Message != "" {
+		err = errors.New(v.Message)
+	}
+	if !o.acceptFailureObservation(facts, err) {
+		return
+	}
 }
 
 // factsFromErrorValue maps one typed ERROR stream value onto the canonical
@@ -85,6 +93,40 @@ func factsFromErrorValue(v *messages.ErrorValue) *failureFacts {
 		f.outputState = string(messages.TerminalOutputNone)
 	}
 	return f
+}
+
+// factsFromSessionRunError recovers the typed provider ERROR that the engine
+// consumed as its terminal run error. Terminal ERROR deltas stop the engine
+// before they can cross the consumer-facing delta stream, so the session
+// observer must inspect the preserved StreamDeltaError wrapper instead.
+func factsFromSessionRunError(err error) *failureFacts {
+	if err == nil {
+		return nil
+	}
+	var deltaErr *engine.StreamDeltaError
+	if !errors.As(err, &deltaErr) || deltaErr == nil || deltaErr.Value == nil {
+		return nil
+	}
+	return factsFromErrorValue(deltaErr.Value)
+}
+
+func (o *sessionProgressObserver) acceptFailureObservation(facts *failureFacts, err error) bool {
+	if o == nil || facts == nil {
+		return false
+	}
+	observation := sessionTerminalObservationFromFailure(facts, err)
+	accepted := o.notifyTerminalObservation(observation)
+	if !accepted {
+		return false
+	}
+	// Set the local facts before invoking room failure ownership. The callback
+	// may cancel this observer's loop synchronously; finish must still retain
+	// the typed provider fields while that teardown is in flight.
+	o.failure = facts
+	if o.failureObserver != nil {
+		o.failureObserver(observation)
+	}
+	return true
 }
 
 // captureFailureFromClose captures only failure-worthy session closes; clean,
@@ -125,7 +167,9 @@ func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionClo
 		// knowledge; derive the state from what the stream actually delivered.
 		f.outputState = deriveOutputState(o.sawSessionOpen, o.turnsCompleted)
 	}
-	o.setFailureIfUnset(f)
+	if !o.acceptFailureObservation(f, nil) {
+		return
+	}
 }
 
 func (o *sessionProgressObserver) unresolvedToolResultFailureFacts(failingEvent string) *failureFacts {

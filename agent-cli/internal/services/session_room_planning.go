@@ -399,32 +399,13 @@ func awaitRoomParticipantConnections(
 			if !coordinator.isActive(plan.manifest.ID) {
 				continue
 			}
-			if roomParticipantIsHuman(plan) {
-				if plan.participant.lifecycle.deviceHasReady() {
-					continue
-				}
-				if plan.participant.lifecycle.runHasFinished() || coordinator.isStopping() {
-					coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), append(secretsForPlan(plan), secrets...)))
-					continue
-				}
+			ready, readinessErr := roomParticipantReadyForAdmission(coordinator, plan, secrets)
+			if readinessErr != nil {
+				return readinessErr
+			}
+			if !ready {
 				allOpened = false
-				continue
 			}
-			_, opened, closed, _, _, _, _ := plan.participant.lifecycle.snapshot()
-			if opened {
-				continue
-			}
-			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
-				failure := error(nil)
-				if _, terminalErr, terminalObserved := plan.participant.lifecycle.terminal(); terminalObserved && terminalErr != nil {
-					failure = terminalErr
-				} else {
-					failure = errors.New("session ended before SESSION.OPEN")
-				}
-				coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, failure, append(secretsForPlan(plan), secrets...)))
-				continue
-			}
-			allOpened = false
 		}
 		if allOpened {
 			return nil
@@ -470,4 +451,40 @@ func awaitRoomParticipantConnections(
 		case <-coordinator.progress:
 		}
 	}
+}
+
+func roomParticipantReadyForAdmission(coordinator *roomCoordinator, plan *roomParticipantPlan, secrets []string) (bool, error) {
+	if plan == nil || plan.participant == nil || plan.participant.lifecycle == nil {
+		return true, nil
+	}
+	lifecycle := plan.participant.lifecycle
+	participantSecrets := append(secretsForPlan(plan), secrets...)
+	if roomParticipantIsHuman(plan) {
+		if lifecycle.deviceHasReady() {
+			return true, nil
+		}
+		if lifecycle.runHasFinished() || coordinator.isStopping() {
+			return false, roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), participantSecrets)
+		}
+		return false, nil
+	}
+	_, opened, closed, _, _, _, _ := lifecycle.snapshot()
+	if opened {
+		return true, nil
+	}
+	transportEnded := lifecycle.transportHasEnded()
+	runFinished := lifecycle.runHasFinished()
+	if transportEnded && !runFinished {
+		// A provider ERROR can make the engine stop and close its transport before
+		// the session loop has finished draining the typed run error. Wait for that
+		// bounded participant unwind before synthesizing a generic pre-open error.
+		return false, nil
+	}
+	if closed || transportEnded || runFinished {
+		if _, terminalErr, terminalObserved := lifecycle.terminal(); terminalObserved && terminalErr != nil {
+			return false, roomParticipantFailure(plan.manifest.ID, terminalErr, participantSecrets)
+		}
+		return false, roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), participantSecrets)
+	}
+	return false, nil
 }

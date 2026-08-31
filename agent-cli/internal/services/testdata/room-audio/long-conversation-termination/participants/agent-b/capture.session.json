@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "provider": {
+    "name": "offline",
+    "model": "room-bound-long-conversation-v1"
+  },
+  "session": {
+    "id": "agent-b-offline-session",
+    "started_at_utc": "2026-08-30T12:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "id": "agent-b-offline-session"
+        },
+        "type": "session.created"
+      }
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "4ba50441ec81776d6d5fd6efda277c733c0a42376d722d86ab184d95e9ee2b4e"
+  }
+}

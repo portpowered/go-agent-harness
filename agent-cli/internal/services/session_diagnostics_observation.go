@@ -269,6 +269,11 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.messageEndAdmitted = admitted
 		o.toolStateMu.Unlock()
 		if admitted {
+			terminalAccepted := o.notifyTerminalObservation(sessionTerminalObservationFromMessageEnd(responseLifecycleID, v))
+			if !terminalAccepted {
+				o.finishObservedResponse(responseLifecycleID)
+				return
+			}
 			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCompleted)
 			o.completeTurn()
 			if o.admittedTurnObserver != nil {

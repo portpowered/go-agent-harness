@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -18,6 +17,11 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 	o.emitOnce.Do(func() {
 		if o.userCancelled {
 			o.emitUserCancelledTerminal()
+			return
+		}
+		if o.roomBoundCancellation && o.failure == nil && roomCancellationOnly(runErr) {
+			// A room-owned grace expiry is an intentional terminal path. It has
+			// no session_failure record; room-level evidence owns the cause.
 			return
 		}
 		completedScheduled, dispatchedInputs, scheduledInputs := o.scheduledAudioCounts()
@@ -47,13 +51,10 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			f = o.scheduledAudioFailureFacts(failingEventRun)
 		}
 		if f == nil && runErr != nil {
-			var deltaErr *engine.StreamDeltaError
-			if errors.As(runErr, &deltaErr) && deltaErr.Value != nil {
-				// The engine terminates the hot loop on ERROR deltas and the
-				// typed value may never cross the consumer deltas; recover the
-				// canonical facts from the run error itself.
-				f = factsFromErrorValue(deltaErr.Value)
-			}
+			// The engine terminates the hot loop on ERROR deltas and the typed
+			// value may never cross the consumer deltas; recover the canonical
+			// facts from the run error itself.
+			f = factsFromSessionRunError(runErr)
 		}
 		if f == nil {
 			if len(unresolvedIDs) > 0 {
@@ -204,11 +205,20 @@ func (o *sessionProgressObserver) finish(err error) error {
 		o.clearFailure()
 		err = nil
 	}
-	if !o.userCancelled {
+	if o.roomBoundCancellation && o.failure == nil && roomCancellationOnly(err) {
+		// Once the room has deliberately crossed the grace boundary, any
+		// remaining cancellation-derived loop error is teardown fallout. A
+		// non-cancellation error remains visible below so the final observer can
+		// classify it as an independent failure even if the provider's ERROR did
+		// not cross the consumer delta stream before forced teardown.
+		err = nil
+	}
+	if !o.userCancelled && !o.roomBoundCancellation {
 		err = withUnresolvedToolResults(err, o)
 		err = withPendingToolContinuations(err, o)
 		err = withPendingImageContinuations(err, o)
 	}
+	o.notifyFinalTerminalObservation(err)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
 	if o.runtime != nil {

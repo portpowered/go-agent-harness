@@ -121,6 +121,14 @@ type sessionLoopOptions struct {
 	RequireTerminalAssistantResponse bool
 	Done                             <-chan struct{}
 	DoneErr                          func() error
+	// AdmissionClosed marks the first phase of a room-bound shutdown. The
+	// session may drain already-admitted provider output, but callers must not
+	// enqueue another turn or tool continuation after this signal.
+	AdmissionClosed <-chan struct{}
+	// BoundCancellation marks the end of the room-bound grace window. It is
+	// distinct from ordinary context cancellation so incomplete-response guards
+	// can preserve clean room-owned cancellation semantics.
+	BoundCancellation <-chan struct{}
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
@@ -305,8 +313,15 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	reporter.markRunStarted()
 	renderer := newSessionReplayRenderer(out, reporter)
 	runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
-	runErr = audioResponseCompletionError(runErr, opts)
-	runErr = scheduledAudioCompletionError(runErr, opts)
+	if !roomChannelClosed(opts.BoundCancellation) {
+		runErr = audioResponseCompletionError(runErr, opts)
+		runErr = scheduledAudioCompletionError(runErr, opts)
+	} else if opts.observer != nil {
+		// A bound cancellation is an intentional room-owned terminal path. Mark
+		// it before finish so unresolved tool work and incomplete-response guards
+		// cannot turn the deliberate teardown into a session failure.
+		opts.observer.markRoomBoundCancellation()
+	}
 	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
 	runErr = opts.observer.finish(runErr)
 	if cleanSIGINT {
@@ -776,10 +791,19 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// error, or max-duration expiry may end the session.
 	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
+	admissionClosed := opts.AdmissionClosed
+	boundCancellation := opts.BoundCancellation
 	audioInterruptions := opts.AudioInterruptions
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	for {
 		select {
+		case <-admissionClosed:
+			admissionClosed = nil
+			audioInterruptions = nil
+			toolLifecycleEvents = nil
+		case <-boundCancellation:
+			boundCancellation = nil
+			return terminate(nil)
 		case publicationErr := <-publisherErrors:
 			return terminate(publicationErr)
 		case input, ok := <-audioInterruptions:
