@@ -420,3 +420,60 @@ func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t
 		t.Fatalf("response trigger value = %T, want *ResponseCreateValue", sent[2].Value)
 	}
 }
+
+func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+	history := []messages.Message{
+		messages.NewTextMessage(messages.RoleUser, "run the tool"),
+		{
+			Role:      messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{{ID: "call-queued", Name: "queued_tool"}},
+		},
+		{
+			Role:         messages.RoleTool,
+			ToolCallID:   "call-queued",
+			ContentParts: []messages.ContentPart{messages.TextPart{Text: "tool output"}},
+		},
+	}
+
+	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-queued", "queued_tool", "tool output"),
+	}); err != nil {
+		t.Fatalf("queue tool result: %v", err)
+	}
+	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}); err != nil {
+		t.Fatalf("queue continuation: %v", err)
+	}
+
+	// The coordinator's inference request can reach the session runner while
+	// these events are still in UserEventInbox. It must wait for the queued
+	// boundary instead of requesting a bare response itself.
+	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{Messages: history})
+	if sent := session.sentMessages(); len(sent) != 0 {
+		t.Fatalf("queued tool boundary was overtaken by %d direct sends: %#v", len(sent), sent)
+	}
+
+	state := newSessionResponseState()
+	for i := 0; i < 2; i++ {
+		select {
+		case evt := <-runner.UserEventInbox:
+			runner.forwardQueuedSessionEvent(ctx, session, state, evt)
+		default:
+			t.Fatal("queued tool boundary was not available")
+		}
+	}
+	if runner.hasPendingSessionToolEvents() {
+		t.Fatal("tool boundary remains pending after both events were forwarded")
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 2 || sent[0].Type != messages.StreamTypeToolCallEnd || sent[1].Type != messages.StreamTypeResponseCreate {
+		t.Fatalf("forwarded tool boundary = %#v, want TOOLCALL.END then RESPONSE.CREATE", sent)
+	}
+}

@@ -24,6 +24,14 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		// result-driven inference request reaches the session runner. Consume
 		// that boundary when the session loop recorded it; an isolated caller
 		// still needs the explicit request below.
+		if r.hasPendingSessionToolEvents() {
+			// ToolResultForwarder has accepted the result boundary into the
+			// session input queue, but the session loop has not forwarded it to
+			// the provider yet. Waiting here preserves TOOLCALL.END before the
+			// continuation even when the inference request wins the runner's
+			// select race.
+			return
+		}
 		if r.sessionToolContinuation != sessionToolContinuationNone {
 			r.sessionToolContinuation = sessionToolContinuationNone
 			return

@@ -237,6 +237,7 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 // them as soon as the acknowledgement has ended.
 func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) {
 	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.suppressContinuation {
+		r.markSessionToolEventConsumed(evt)
 		// A result in this batch was rejected at the provider boundary. Do not
 		// ask the provider to continue from a partially delivered batch; the
 		// accepted sibling remains pending and the deferred result error names
@@ -251,6 +252,7 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return
 	}
+	defer r.markSessionToolEventConsumed(evt)
 
 	failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt)
 	if deferred {
