@@ -347,6 +347,11 @@ type SessionRunOptions struct {
 	// Keeping it private prevents callers from bypassing the capability
 	// resolver while allowing all session wrappers to share one snapshot.
 	sessionImageCapabilities *SessionImageCapabilities
+
+	// recordingClaim is acquired before provider construction and shared by
+	// nested session wrappers. It is intentionally private; command callers
+	// select the destination through RecordPath and do not manage sidecars.
+	recordingClaim *sessionRecordingClaim
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {

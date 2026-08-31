@@ -115,6 +115,14 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	if len(audioPaths) == 0 {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
 	}
+	if err := validateSessionRecordingOptions(opts); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	scheduled, err := prepareScheduledAudioInputs(audioPaths)
 	if err != nil {
 		return err
@@ -159,6 +167,14 @@ func RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedA
 	if err := ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
 		return err
 	}
+	if err := validateSessionRecordingOptions(opts.SessionRunOptions); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	scheduled, err := prepareScheduledAudioInputs(audioPaths)
 	if err != nil {
 		return err
@@ -227,6 +243,11 @@ func runSessionWithImagesAndRecordingDirectory(
 	if err := validateSessionRecordingOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -324,6 +345,11 @@ func runSessionWithRecordingDirectory(
 	if err := validateSessionRecordingOptions(opts); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 
 	destination, err := prepareSessionRecordingDestination(directory)
 	if err != nil {
@@ -518,6 +544,14 @@ func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, sy
 			}
 			return recorder.FlushToFile(opts.RecordPath)
 		}
+		plan.flushCaptureTo = func(path string) error {
+			recorder := fixture.Recorder()
+			if recorder == nil {
+				return errors.New("session fixture recorder did not connect")
+			}
+			return recorder.FlushToFile(path)
+		}
+		plan = wireSessionRecordingClaim(plan, plan.captureClaim)
 	}
 	if opts.RecordPath == "" && opts.ReplayPath == "" && opts.SessionInferencer == nil {
 		plan.mode = sessionRuntimeModeInjectedLive

@@ -120,6 +120,11 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err
@@ -173,6 +178,14 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
+	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err

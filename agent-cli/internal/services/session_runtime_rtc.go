@@ -129,11 +129,12 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
 	model := opts.Model
 	var (
-		inner        messages.SessionInferencer
-		flushCapture func() error
-		announce     string
-		finalize     func(context.Context, io.Writer) error
-		mode         = sessionRuntimeModeInjectedLive
+		inner          messages.SessionInferencer
+		flushCapture   func() error
+		flushCaptureTo func(string) error
+		announce       string
+		finalize       func(context.Context, io.Writer) error
+		mode           = sessionRuntimeModeInjectedLive
 	)
 
 	if opts.SessionInferencer != nil {
@@ -157,6 +158,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 			return closeOnPlanError(err)
 		}
 		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
+		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
 		announce = fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
@@ -180,6 +182,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 			return closeOnPlanError(err)
 		}
 		flushCapture = func() error { return recordingDialer.FlushToFile(opts.RecordPath) }
+		flushCaptureTo = func(path string) error { return recordingDialer.FlushToFile(path) }
 		announce = fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath)
 		finalize = func(_ context.Context, out io.Writer) error {
 			_, writeErr := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
@@ -192,14 +195,15 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 	rtcInferencer.inner = inner
 
 	return sessionRuntimePlan{
-		mode:         mode,
-		provider:     provider,
-		model:        model,
-		capturePath:  opts.RecordPath,
-		announce:     announce,
-		inferencer:   rtcInferencer,
-		flushCapture: flushCapture,
-		finalize:     finalize,
+		mode:           mode,
+		provider:       provider,
+		model:          model,
+		capturePath:    opts.RecordPath,
+		announce:       announce,
+		inferencer:     rtcInferencer,
+		flushCapture:   flushCapture,
+		flushCaptureTo: flushCaptureTo,
+		finalize:       finalize,
 		loop: sessionLoopOptions{
 			Prompt:         opts.Prompt,
 			CloseAfterOpen: true,

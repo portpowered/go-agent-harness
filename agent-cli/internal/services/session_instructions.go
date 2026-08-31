@@ -45,6 +45,11 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
@@ -82,6 +87,11 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	instructions, err := resolveSessionInstructions(opts, systemPrompt)
 	if err != nil {
 		return err

@@ -108,6 +108,9 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 			return f.plan.finalize(finalizeCtx, out)
 		})))
 	}
+	if f.plan.captureClaim != nil {
+		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(f.plan.captureClaim.release)))
+	}
 
 	return errors.Join(errs...)
 }
