@@ -234,6 +234,48 @@ func TestWriteRecordingBundleExplicitCompleteStatusKeepsPairedContract(t *testin
 	}
 }
 
+func TestWriteRecordingBundleRejectsAdditionalArtifactCollisionWithAbsentTranscript(t *testing.T) {
+	tests := []struct {
+		name      string
+		client    []byte
+		agent     []byte
+		collision string
+	}{
+		{
+			name:      "client-only cannot fabricate agent transcript",
+			client:    []byte("client evidence\n"),
+			collision: "agent.transcript.jsonl",
+		},
+		{
+			name:      "agent-only cannot fabricate client transcript",
+			agent:     []byte("agent evidence\n"),
+			collision: "client.transcript.jsonl",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "recording")
+			err := WriteRecordingBundle(RecordingConfig{
+				Destination:      destination,
+				ClientTranscript: testCase.client,
+				AgentTranscript:  testCase.agent,
+				RecordingStatus:  &RecordingStatus{State: RecordingStatusPartial, Reason: "sink unavailable"},
+				AdditionalArtifacts: []RecordingArtifact{{
+					Path: testCase.collision,
+					Data: []byte("fabricated transcript\n"),
+				}},
+			})
+			if !errors.Is(err, ErrInvalidRecording) {
+				t.Fatalf("error = %v, want ErrInvalidRecording", err)
+			}
+			if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("rejected destination stat error = %v, want absent", statErr)
+			}
+		})
+	}
+}
+
 func TestWriteRecordingBundleRejectsInvalidPartialStatusBeforePublication(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -306,6 +348,7 @@ func TestRecordingManifestRejectsInvalidStatusShapes(t *testing.T) {
 		json string
 	}{
 		{name: "valid client-only partial", json: base},
+		{name: "implicit complete client-only", json: strings.Replace(base, `"recording_status":{"state":"partial","reason":"sink unavailable"},`, "", 1)},
 		{name: "partial without reason", json: strings.Replace(base, `,"reason":"sink unavailable"`, "", 1)},
 		{name: "partial without transcript", json: strings.Replace(base, `{"path":"client.transcript.jsonl","sha256":"`+validDigest+`"}`, "", 1)},
 		{name: "null status", json: strings.Replace(base, `{"state":"partial","reason":"sink unavailable"}`, "null", 1)},

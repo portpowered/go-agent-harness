@@ -1050,6 +1050,41 @@ func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNot
 	}
 }
 
+func TestSessionDirectoryRecordingReportsTimingShortWrite(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "capture")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording.client.WriteString("client\n")
+	recording.agent.WriteString("agent\n")
+	recording.conversation.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{0x01}),
+	}, true, -1, -1)
+	recording.conversation.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, true, -1, -1)
+	recording.writeFile = func(path string, data []byte, mode os.FileMode) (int, error) {
+		if filepath.Base(path) == "timing.json" {
+			if err := os.WriteFile(path, data, mode); err != nil {
+				return 0, err
+			}
+			return len(data) - 1, nil
+		}
+		if err := os.WriteFile(path, data, mode); err != nil {
+			return 0, err
+		}
+		return len(data), nil
+	}
+
+	err := recording.Finalize()
+	if !errors.Is(err, io.ErrShortWrite) || !errors.Is(err, transcript.ErrRecordingWrite) {
+		t.Fatalf("finalize error = %v, want short-write and recording-write identities", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(destination, "manifest.json")); statErr != nil {
+		t.Fatalf("bundle manifest missing after timing diagnostic failure: %v", statErr)
+	}
+}
+
 func recordingFileBytes(t *testing.T, root string) map[string][]byte {
 	t.Helper()
 	files := make(map[string][]byte)

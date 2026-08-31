@@ -351,19 +351,23 @@ func (m RecordingManifest) Validate() error {
 		}
 		seenPaths[artifact.Path] = struct{}{}
 	}
-	if m.RecordingStatus != nil {
+	clientTranscript := false
+	agentTranscript := false
+	for _, artifact := range m.Artifacts {
+		switch artifact.Path {
+		case "client.transcript.jsonl":
+			clientTranscript = true
+		case "agent.transcript.jsonl":
+			agentTranscript = true
+		}
+	}
+	if m.RecordingStatus == nil {
+		if clientTranscript != agentTranscript {
+			return invalidRecordingManifest("implicit complete recording requires both transcript artifacts")
+		}
+	} else {
 		if err := m.RecordingStatus.Validate(); err != nil {
 			return invalidRecordingManifest("recording_status: %v", err)
-		}
-		clientTranscript := false
-		agentTranscript := false
-		for _, artifact := range m.Artifacts {
-			switch artifact.Path {
-			case "client.transcript.jsonl":
-				clientTranscript = true
-			case "agent.transcript.jsonl":
-				agentTranscript = true
-			}
 		}
 		switch m.RecordingStatus.State {
 		case RecordingStatusComplete:

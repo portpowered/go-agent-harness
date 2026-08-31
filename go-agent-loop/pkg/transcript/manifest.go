@@ -721,6 +721,12 @@ func normalizeAdditionalRecordingArtifacts(
 	for _, path := range expectedPaths {
 		seen[path] = struct{}{}
 	}
+	// Reserve both built-in transcript names even when one side is absent from
+	// this partial recording. Otherwise an additional artifact could fabricate
+	// the missing transcript path and make the bundle ambiguous to readers.
+	for _, path := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+		seen[path] = struct{}{}
+	}
 	normalized := make([]normalizedRecordingArtifact, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		if err := validateRecordingArtifactPath(artifact.Path); err != nil {

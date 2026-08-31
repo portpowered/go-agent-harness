@@ -1106,11 +1106,19 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			)
 			return
 		}
+		timingData := append(timingBytes, 0x0a)
+		var written int
 		var writeErr error
 		if r.writeFile != nil {
-			_, writeErr = r.writeFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+			written, writeErr = r.writeFile(filepath.Join(r.destination, "timing.json"), timingData, 0o644)
 		} else {
-			writeErr = os.WriteFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+			writeErr = os.WriteFile(filepath.Join(r.destination, "timing.json"), timingData, 0o644)
+			if writeErr == nil {
+				written = len(timingData)
+			}
+		}
+		if writeErr == nil && written != len(timingData) {
+			writeErr = io.ErrShortWrite
 		}
 		if writeErr != nil {
 			r.finalizeErr = errors.Join(
