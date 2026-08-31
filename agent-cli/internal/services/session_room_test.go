@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -21,20 +22,19 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	for _, id := range ids {
 		inferencers[id] = &roomTestInferencer{events: []messages.StreamMessage{
 			roomTestSessionOpen(id),
-			roomTestAudioEvent(values[id], 10),
+			roomTestAudioSignalEvent(values[id], 20),
 		}}
 	}
 
-	inputFrames := make(chan roomAudioFrame, 128)
-	outputIDs := make(chan string, len(ids))
+	audioOutputs := make(chan roomAudioFrame, len(ids))
+	fanouts := make(chan roomFanoutFrame, len(ids)*(len(ids)-1))
 	opts, factoryCalls := newRoomTestRunOptions(ids, inferencers)
-	opts.OnAudioInput = func(id string, pcm []byte) error {
-		inputFrames <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
+	opts.OnAudioOutput = func(id string, pcm []byte) error {
+		audioOutputs <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
 		return nil
 	}
-	opts.OnAudioOutput = func(id string, _ []byte) error {
-		outputIDs <- id
-		return nil
+	opts.onParticipantAudioFanned = func(sourceID, targetID string, pcm []byte) {
+		fanouts <- roomFanoutFrame{sourceID: sourceID, targetID: targetID, pcm: append([]byte(nil), pcm...)}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,22 +45,34 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 		outcome <- roomTestRunOutcome{result: result, err: err}
 	}()
 
-	want := map[string][]byte{
-		"a": roomPCM16(5000, 10),
-		"b": roomPCM16(4000, 10),
-		"c": roomPCM16(3000, 10),
-	}
-	seen := make(map[string]bool, len(ids))
+	outputs := make(map[string][]byte, len(ids))
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
-	for len(seen) < len(ids) {
+	for len(outputs) < len(ids) {
 		select {
-		case frame := <-inputFrames:
-			if expected, ok := want[frame.id]; ok && bytes.Equal(frame.pcm, expected) {
-				seen[frame.id] = true
+		case frame := <-audioOutputs:
+			if _, exists := outputs[frame.id]; !exists {
+				outputs[frame.id] = frame.pcm
+				assertSessionNormalizedPCM(t, frame.pcm, 20, float64(values[frame.id]))
 			}
 		case <-deadline.C:
-			t.Fatalf("timed out waiting for N-1 mixed frames; seen %v", seen)
+			t.Fatalf("timed out waiting for normalized participant audio; seen %v", outputs)
+		}
+	}
+	seenFanouts := make(map[string]bool, len(ids)*(len(ids)-1))
+	for len(seenFanouts) < len(ids)*(len(ids)-1) {
+		select {
+		case frame := <-fanouts:
+			key := frame.sourceID + "->" + frame.targetID
+			if seenFanouts[key] {
+				continue
+			}
+			seenFanouts[key] = true
+			if !bytes.Equal(frame.pcm, outputs[frame.sourceID]) {
+				t.Fatalf("fanout %s = %v, want normalized source output %v", key, frame.pcm, outputs[frame.sourceID])
+			}
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for N-1 normalized fanouts; seen %v", seenFanouts)
 		}
 	}
 	cancel()
@@ -83,13 +95,6 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 	for _, id := range ids {
 		if !factoryCalls[id].WaitForClose || factoryCalls[id].APIKey == "" {
 			t.Fatalf("factory options for %s = %+v, want live participant configuration", id, factoryCalls[id])
-		}
-	}
-	for range ids {
-		select {
-		case <-outputIDs:
-		case <-time.After(time.Second):
-			t.Fatal("room did not observe every provider audio delta")
 		}
 	}
 }
@@ -543,6 +548,12 @@ type roomAudioFrame struct {
 	pcm []byte
 }
 
+type roomFanoutFrame struct {
+	sourceID string
+	targetID string
+	pcm      []byte
+}
+
 type roomTestInferencer struct {
 	connectErr   error
 	events       []messages.StreamMessage
@@ -774,6 +785,26 @@ func roomTestAudioEvent(value int16, samples int) messages.StreamMessage {
 		Role:  messages.RoleAssistant,
 		Value: messages.NewAudioDeltaValue(roomPCM16(value, samples)),
 	}
+}
+
+func roomTestAudioSignalEvent(amplitude int16, samples int) messages.StreamMessage {
+	return messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue(roomTestSignalPCM16(amplitude, samples)),
+	}
+}
+
+func roomTestSignalPCM16(amplitude int16, samples int) []byte {
+	pcm := make([]byte, samples*2)
+	for index := 0; index < samples; index++ {
+		phase := 2 * math.Pi * float64(index) / 5
+		value := float64(amplitude) * (math.Sin(phase) + 0.21*math.Sin(phase*2))
+		sample := int16(math.Round(value))
+		pcm[index*2] = byte(sample)
+		pcm[index*2+1] = byte(sample >> 8)
+	}
+	return pcm
 }
 
 func roomTestMessageEnd() messages.StreamMessage {

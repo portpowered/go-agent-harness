@@ -22,7 +22,7 @@ func TestRunRoomWithResult_SilenceCadenceDoesNotCancelActiveResponse(t *testing.
 	)
 
 	silence := []byte{0, 0, 0, 0}
-	responsePCM := []byte{0x34, 0x12, 0x78, 0x56}
+	responsePCM := roomReplayOnTargetPCM()
 	responseAudioBase64 := base64.StdEncoding.EncodeToString(responsePCM)
 	silenceBase64 := base64.StdEncoding.EncodeToString(silence)
 

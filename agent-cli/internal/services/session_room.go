@@ -85,10 +85,27 @@ type RoomParticipantSessionFactory = RoomSessionInferencerFactory
 // RoomSessionFactory is a concise alias for the participant factory.
 type RoomSessionFactory = RoomSessionInferencerFactory
 
-// RoomParticipantAudioObserver receives a copied provider AUDIO.DELTA before
-// it is fanned into the other participants' mixers. It is observational and
-// may be used by the evidence writer in a later composition layer.
+// RoomParticipantAudioObserver receives a copied, normalized provider
+// AUDIO.DELTA before it is fanned into the other participants' mixers. It is
+// observational and may be used by the evidence writer in a later composition
+// layer.
 type RoomParticipantAudioObserver func(participantID string, pcm []byte) error
+
+// roomPCM16NormalizerConfigForOptions aligns the participant normalizer with
+// the room's output format. The normalizer's frame is never allowed to exceed
+// its 20 ms streaming bound; a room cadence shorter than 20 ms is preserved.
+func roomPCM16NormalizerConfigForOptions(opts RoomRunOptions) audio.PCM16NormalizerConfig {
+	format := roomMixerConfigForOptions(opts).Format
+	if format == (room.PCM16Format{}) {
+		format = room.DefaultPCM16Format()
+	}
+	config := audio.DefaultPCM16NormalizerConfig
+	config.SampleRate = format.SampleRate
+	if format.FrameDuration > 0 && format.FrameDuration <= audio.PCM16NormalizerFrameDuration {
+		config.FrameDuration = format.FrameDuration
+	}
+	return config
+}
 
 // RoomParticipantDiagnosticObserver receives the credential-free diagnostic
 // projection for one participant. It is intended for bounded terminal

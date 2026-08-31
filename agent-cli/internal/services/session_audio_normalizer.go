@@ -18,6 +18,7 @@ import (
 type sessionAudioNormalizerInferencer struct {
 	inner  messages.SessionInferencer
 	record func(error)
+	config audio.PCM16NormalizerConfig
 
 	mu        sync.Mutex
 	lastErr   error
@@ -25,7 +26,25 @@ type sessionAudioNormalizerInferencer struct {
 }
 
 func newSessionAudioNormalizerInferencer(inner messages.SessionInferencer, record func(error)) *sessionAudioNormalizerInferencer {
-	return &sessionAudioNormalizerInferencer{inner: inner, record: record}
+	return &sessionAudioNormalizerInferencer{
+		inner:  inner,
+		record: record,
+		config: audio.DefaultPCM16NormalizerConfig,
+	}
+}
+
+// newSessionAudioNormalizerInferencerWithConfig creates a response-local
+// normalizer with an explicit audio profile. Room participants use the room
+// mixer format rather than the standalone session's 16 kHz default.
+func newSessionAudioNormalizerInferencerWithConfig(
+	inner messages.SessionInferencer,
+	record func(error),
+	config audio.PCM16NormalizerConfig,
+) (*sessionAudioNormalizerInferencer, error) {
+	if _, err := audio.NewPCM16NormalizerWithConfig(config); err != nil {
+		return nil, err
+	}
+	return &sessionAudioNormalizerInferencer{inner: inner, record: record, config: config}, nil
 }
 
 func (i *sessionAudioNormalizerInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -39,7 +58,11 @@ func (i *sessionAudioNormalizerInferencer) ConnectSession(ctx context.Context) (
 	if session == nil {
 		return nil, errors.New("session audio normalizer received a nil session")
 	}
-	wrapped := newSessionAudioNormalizerSession(ctx, session, i.recordErr)
+	config := i.config
+	if config == (audio.PCM16NormalizerConfig{}) {
+		config = audio.DefaultPCM16NormalizerConfig
+	}
+	wrapped := newSessionAudioNormalizerSessionWithConfig(ctx, session, i.recordErr, config)
 	i.mu.Lock()
 	i.connected = wrapped
 	i.mu.Unlock()
@@ -75,6 +98,15 @@ func (i *sessionAudioNormalizerInferencer) recordErr(err error) {
 	}
 }
 
+func (i *sessionAudioNormalizerInferencer) setRecord(record func(error)) {
+	if i == nil {
+		return
+	}
+	i.mu.Lock()
+	i.record = record
+	i.mu.Unlock()
+}
+
 func (i *sessionAudioNormalizerInferencer) err() error {
 	if i == nil {
 		return nil
@@ -102,10 +134,6 @@ type sessionAudioNormalizerSession struct {
 	segmentActive bool
 	audioAccepted bool
 	audioEnvelope messages.StreamMessage
-}
-
-func newSessionAudioNormalizerSession(ctx context.Context, inner messages.Session, record func(error)) *sessionAudioNormalizerSession {
-	return newSessionAudioNormalizerSessionWithConfig(ctx, inner, record, audio.DefaultPCM16NormalizerConfig)
 }
 
 func newSessionAudioNormalizerSessionWithConfig(ctx context.Context, inner messages.Session, record func(error), config audio.PCM16NormalizerConfig) *sessionAudioNormalizerSession {

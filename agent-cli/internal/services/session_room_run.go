@@ -115,6 +115,11 @@ func runRoomParticipant(
 	if evidence != nil {
 		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
 	}
+	if runtime.plan.audioNormalizer != nil {
+		runtime.plan.audioNormalizer.setRecord(func(err error) {
+			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("normalize assistant audio: %w", err), secretsForPlan(runtime.plan)))
+		})
+	}
 
 	go func() {
 		if mixerWG != nil {
@@ -175,6 +180,11 @@ func runRoomParticipant(
 		observer:               observer,
 		loopReady:              runtime.loopReady,
 	})
+	if runtime.plan.audioNormalizer != nil {
+		if normalizationErr := runtime.plan.audioNormalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("normalize assistant audio: %w", normalizationErr))
+		}
+	}
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
 	}

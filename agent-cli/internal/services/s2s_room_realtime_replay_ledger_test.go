@@ -84,7 +84,7 @@ func TestRunRoomWithResult_PreservesExactThreeParticipantTurnLedgers(t *testing.
 	)
 
 	silence := []byte{0, 0, 0, 0}
-	sourcePCM := []byte{0x34, 0x12, 0x78, 0x56}
+	sourcePCM := roomReplayOnTargetPCM()
 	captures := map[string]gwtesting.SessionCapture{
 		sourceID: roomRealtimeLedgerCapture(t, sourceID, model,
 			roomRealtimeLedgerResponse{input: silence, id: "resp-source-audio", audio: sourcePCM},

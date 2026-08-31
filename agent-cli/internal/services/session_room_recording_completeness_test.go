@@ -65,8 +65,8 @@ func TestRunRoom_RecordingBundleCompleteness(t *testing.T) {
 	// response's terminal boundary.
 	push(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
 	push(messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()})
-	push(roomTestAudioEvent(12000, 10))
-	push(roomTestAudioEvent(12000, 10))
+	push(roomTestAudioSignalEvent(12000, 240))
+	push(roomTestAudioSignalEvent(12000, 240))
 
 	fanDeadline := time.NewTimer(2 * time.Second)
 	defer fanDeadline.Stop()

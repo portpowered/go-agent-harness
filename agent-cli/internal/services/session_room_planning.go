@@ -158,6 +158,16 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			}
 			plan.inferencer = inferencer
 		}
+		audioNormalizer, normalizerErr := newSessionAudioNormalizerInferencerWithConfig(
+			plan.inferencer,
+			nil,
+			roomPCM16NormalizerConfigForOptions(opts),
+		)
+		if normalizerErr != nil {
+			return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure room audio normalizer: %w", normalizerErr), []string{value})
+		}
+		plan.audioNormalizer = audioNormalizer
+		plan.inferencer = audioNormalizer
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
 		if participant.BrowserTools == nil {
 			plans = append(plans, plan)

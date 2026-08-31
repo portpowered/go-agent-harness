@@ -181,9 +181,9 @@ func TestRunRoomWithResult_RealtimeTerminalBoundaryPrecedesPeerSpeech(t *testing
 	)
 
 	silence := []byte{0, 0, 0, 0}
-	targetFirstPCM := []byte{0x34, 0x12, 0x78, 0x56}
-	speakerSpeech := []byte{0x20, 0x03, 0xe0, 0xfc}
-	targetNextPCM := []byte{0x56, 0x34, 0x12, 0x78}
+	targetFirstPCM := roomReplayOnTargetPCM()
+	speakerSpeech := roomReplayOnTargetPCM()
+	targetNextPCM := roomReplayOnTargetPCM()
 	silenceBase64 := base64.StdEncoding.EncodeToString(silence)
 	targetFirstBase64 := base64.StdEncoding.EncodeToString(targetFirstPCM)
 	speakerSpeechBase64 := base64.StdEncoding.EncodeToString(speakerSpeech)
@@ -329,8 +329,8 @@ func TestRunRoomWithResult_RealtimeInactiveCancelKeepsParticipantAlive(t *testin
 	)
 
 	silence := []byte{0, 0, 0, 0}
-	targetFirstPCM := []byte{0x34, 0x12, 0x78, 0x56}
-	speakerSpeech := []byte{0x20, 0x03, 0xe0, 0xfc}
+	targetFirstPCM := roomReplayOnTargetPCM()
+	speakerSpeech := roomReplayOnTargetPCM()
 	silenceBase64 := base64.StdEncoding.EncodeToString(silence)
 	targetFirstBase64 := base64.StdEncoding.EncodeToString(targetFirstPCM)
 	speakerSpeechBase64 := base64.StdEncoding.EncodeToString(speakerSpeech)

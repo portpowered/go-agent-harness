@@ -72,11 +72,11 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 		Type:  messages.StreamTypeAudioStart,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewAudioStartValue(),
-	}) || !session.receive.Write(context.Background(), roomTestAudioEvent(agentValue, audio.FrameSize)) || !session.receive.Write(context.Background(), roomTestAudioEvent(agentValue, audio.FrameSize)) {
+	}) || !session.receive.Write(context.Background(), roomTestAudioSignalEvent(agentValue, audio.FrameSize)) || !session.receive.Write(context.Background(), roomTestAudioSignalEvent(agentValue, audio.FrameSize)) {
 		t.Fatal("scripted provider stopped before output audio was accepted")
 	}
 
-	if !waitForRoomHumanOutput(t, registry.outputHandle.frames, agentValue) {
+	if !waitForRoomHumanSignal(t, registry.outputHandle.frames) {
 		t.Fatal("customer output did not receive scripted agent PCM")
 	}
 
@@ -175,13 +175,13 @@ func TestRunRoom_HumanCancellationFinalizesAllDefaultEvidence(t *testing.T) {
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
-		roomTestAudioEvent(agentValue, audio.FrameSize),
+		roomTestAudioSignalEvent(agentValue, audio.FrameSize),
 	} {
 		if !session.receive.Write(context.Background(), event) {
 			t.Fatal("scripted provider stopped before recording agent audio")
 		}
 	}
-	if !waitForRoomHumanOutput(t, registry.outputHandle.frames, agentValue) {
+	if !waitForRoomHumanSignal(t, registry.outputHandle.frames) {
 		t.Fatal("customer output did not receive scripted agent PCM")
 	}
 	const customerValue int16 = 0x1357
@@ -423,7 +423,7 @@ func waitRoomHumanTestSession(t *testing.T, inferencer *roomTestInferencer) *roo
 	}
 }
 
-func waitForRoomHumanOutput(t *testing.T, frames <-chan []int16, want int16) bool {
+func waitForRoomHumanSignal(t *testing.T, frames <-chan []int16) bool {
 	t.Helper()
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
@@ -431,7 +431,7 @@ func waitForRoomHumanOutput(t *testing.T, frames <-chan []int16, want int16) boo
 		select {
 		case frame := <-frames:
 			for _, sample := range frame {
-				if sample == want {
+				if sample != 0 {
 					return true
 				}
 			}

@@ -33,6 +33,7 @@ type roomParticipantPlan struct {
 	manifest              room.Participant
 	options               SessionRunOptions
 	inferencer            messages.SessionInferencer
+	audioNormalizer       *sessionAudioNormalizerInferencer
 	secret                string
 	tracker               *roomConnectTrackingInferencer
 	participant           *roomParticipantRuntime

@@ -21,6 +21,13 @@ import (
 
 const roomRealtimeReplayTestTimeout = 2 * time.Second
 
+// roomReplayOnTargetPCM is a two-sample, zero-mean signal already at the
+// normalizer target. Lifecycle replays use it so their strict wire assertions
+// remain about ordering and ownership rather than re-testing level acquisition.
+func roomReplayOnTargetPCM() []byte {
+	return []byte{0x33, 0xf3, 0xcd, 0x0c}
+}
+
 // roomRealtimeReplayHarness is the room-level composition helper used by the
 // real-path replay stories. Each participant owns one strict raw WebSocket
 // dialer; no messages.Session or SessionInferencer is injected into the room.
@@ -380,7 +387,7 @@ func TestRunRoomWithResult_UsesRealRealtimeStackAndStrictParticipantWires(t *tes
 		listenerText = "listener system"
 	)
 
-	speakerPCM := []byte{0x34, 0x12, 0x78, 0x56}
+	speakerPCM := roomReplayOnTargetPCM()
 	speakerAudioBase64 := base64.StdEncoding.EncodeToString(speakerPCM)
 	speakerCapture := roomRealtimeReplayCapture(model,
 		roomRealtimeReplayEvent(1, gwtesting.DirectionClientToServer, "session.update", roomRealtimeReplaySessionUpdate(t, model, speakerText)),

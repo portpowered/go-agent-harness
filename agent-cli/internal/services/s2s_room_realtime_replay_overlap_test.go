@@ -51,9 +51,9 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 	)
 
 	silence := []byte{0, 0, 0, 0}
-	expectedSpeech := []byte{0x20, 0x03, 0xe0, 0xfc}
-	targetOutput := []byte{0x34, 0x12, 0x78, 0x56}
-	followupOutput := []byte{0x56, 0x34, 0x12, 0x78}
+	expectedSpeech := roomReplayOnTargetPCM()
+	targetOutput := roomReplayOnTargetPCM()
+	followupOutput := roomReplayOnTargetPCM()
 	peerOutput = append([]byte(nil), peerOutput...)
 	silenceBase64 := base64.StdEncoding.EncodeToString(silence)
 	expectedSpeechBase64 := base64.StdEncoding.EncodeToString(expectedSpeech)
@@ -275,7 +275,7 @@ func newRoomSpeechOverlapScenario(t *testing.T, peerOutput []byte) *roomSpeechOv
 
 func TestRunRoomWithResult_SpeechOverlapCancelsExactlyOnce(t *testing.T) {
 	t.Run("speech overlap", func(t *testing.T) {
-		scenario := newRoomSpeechOverlapScenario(t, []byte{0x20, 0x03, 0xe0, 0xfc})
+		scenario := newRoomSpeechOverlapScenario(t, roomReplayOnTargetPCM())
 
 		scenario.targetCadence.Advance()
 		assertRoomSpeechOverlapAppend(t, scenario.harness.participant("target"), scenario.silence)
