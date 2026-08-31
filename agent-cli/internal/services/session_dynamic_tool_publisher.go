@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -19,6 +20,13 @@ import (
 // refresh or provider session.update delivery. The last successful surface is
 // deliberately retained when this error is reported.
 var ErrSessionDynamicToolPublication = errors.New("session dynamic tool publication failed")
+
+// sessionDynamicToolPublicationSettleWindow is long enough to collect the
+// selection/generation/catalog notifications emitted by one browser change,
+// while keeping a genuine later catalog change responsive. The publisher
+// refreshes at the end of this window, rather than once per notification, so
+// the provider sees the final surface for one effective change.
+const sessionDynamicToolPublicationSettleWindow = 10 * time.Millisecond
 
 // SessionDynamicToolPublicationLifecycle is the bounded lifecycle vocabulary
 // retained by the session-owned dynamic publication controller.
@@ -36,13 +44,24 @@ const (
 // session. Definitions are copied on the way in and out so callers cannot
 // mutate the state used by the publisher.
 type SessionDynamicToolPublicationState struct {
-	StaticStableDefinitions   []messages.ToolDefinition
-	LastSuccessfulDefinitions []messages.ToolDefinition
-	LastSuccessfulDigest      string
-	LatestEventSequence       uint64
-	Lifecycle                 SessionDynamicToolPublicationLifecycle
-	Err                       error
-	PublicationCount          uint64
+	StaticStableDefinitions     []messages.ToolDefinition
+	LastSuccessfulDefinitions   []messages.ToolDefinition
+	LastSuccessfulDigest        string
+	LastSuccessfulBrowserID     webmcp.BrowserID
+	LastSuccessfulTargetID      webmcp.TargetID
+	LastSuccessfulGeneration    uint64
+	LastSuccessfulEventSequence uint64
+	LatestEventSequence         uint64
+	Lifecycle                   SessionDynamicToolPublicationLifecycle
+	Err                         error
+	PublicationCount            uint64
+}
+
+type sessionDynamicToolPublicationEvent struct {
+	browserID  webmcp.BrowserID
+	targetID   webmcp.TargetID
+	generation uint64
+	sequence   uint64
 }
 
 // sessionDynamicToolPublisher observes one independent broker watch and
@@ -54,6 +73,7 @@ type sessionDynamicToolPublisher struct {
 	initialDefinitions      []messages.ToolDefinition
 	watch                   func(context.Context) <-chan webmcp.BrokerEvent
 	refresh                 func(context.Context) ([]messages.ToolDefinition, error)
+	timerFactory            webmcp.TimerFactory
 
 	ready     chan struct{}
 	readyOnce sync.Once
@@ -62,10 +82,12 @@ type sessionDynamicToolPublisher struct {
 	done      chan struct{}
 	errCh     chan error
 
-	mu      sync.Mutex
-	state   SessionDynamicToolPublicationState
-	started bool
-	cancel  context.CancelFunc
+	mu         sync.Mutex
+	state      SessionDynamicToolPublicationState
+	pending    sessionDynamicToolPublicationEvent
+	hasPending bool
+	started    bool
+	cancel     context.CancelFunc
 }
 
 func newSessionDynamicToolPublisher(
@@ -74,8 +96,21 @@ func newSessionDynamicToolPublisher(
 	watch func(context.Context) <-chan webmcp.BrokerEvent,
 	refresh func(context.Context) ([]messages.ToolDefinition, error),
 ) *sessionDynamicToolPublisher {
+	return newSessionDynamicToolPublisherWithTimer(staticStableDefinitions, initialDefinitions, watch, refresh, nil)
+}
+
+func newSessionDynamicToolPublisherWithTimer(
+	staticStableDefinitions []messages.ToolDefinition,
+	initialDefinitions []messages.ToolDefinition,
+	watch func(context.Context) <-chan webmcp.BrokerEvent,
+	refresh func(context.Context) ([]messages.ToolDefinition, error),
+	timerFactory webmcp.TimerFactory,
+) *sessionDynamicToolPublisher {
 	if watch == nil || refresh == nil {
 		return nil
+	}
+	if timerFactory == nil {
+		timerFactory = sessionDynamicToolPublicationWallTimerFactory{}
 	}
 	base := messages.CanonicalToolDefinitions(staticStableDefinitions)
 	initial := messages.CanonicalToolDefinitions(initialDefinitions)
@@ -89,6 +124,7 @@ func newSessionDynamicToolPublisher(
 		initialDefinitions:      append([]messages.ToolDefinition(nil), initial...),
 		watch:                   watch,
 		refresh:                 refresh,
+		timerFactory:            timerFactory,
 		ready:                   make(chan struct{}),
 		done:                    make(chan struct{}),
 		errCh:                   make(chan error, 1),
@@ -102,11 +138,12 @@ func newSessionDynamicToolPublisher(
 }
 
 func startSessionDynamicToolPublisher(parent context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions) (*sessionDynamicToolPublisher, <-chan error) {
-	publisher := newSessionDynamicToolPublisher(
+	publisher := newSessionDynamicToolPublisherWithTimer(
 		opts.ToolDefinitionBase,
 		opts.ToolDefinitions,
 		opts.BrowserWatch,
 		opts.RefreshToolDefinitions,
+		opts.PublicationTimerFactory,
 	)
 	if publisher == nil {
 		return nil, nil
@@ -195,6 +232,53 @@ func (p *sessionDynamicToolPublisher) stateSnapshot() SessionDynamicToolPublicat
 func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.AgentLoop, events <-chan webmcp.BrokerEvent) {
 	defer close(p.done)
 	ready := p.ready
+	var settleTimer webmcp.Timer
+	var settleC <-chan time.Time
+	pendingRefresh := false
+	resetSettleTimer := func() {
+		if settleTimer == nil {
+			settleTimer = p.timerFactory.NewTimer(sessionDynamicToolPublicationSettleWindow)
+		} else {
+			if !settleTimer.Stop() {
+				select {
+				case <-settleTimer.C:
+				default:
+				}
+			}
+			settleTimer.Reset(sessionDynamicToolPublicationSettleWindow)
+		}
+		settleC = settleTimer.C
+	}
+	stopSettleTimer := func() {
+		if settleTimer == nil {
+			return
+		}
+		if !settleTimer.Stop() {
+			select {
+			case <-settleTimer.C:
+			default:
+			}
+		}
+		settleC = nil
+	}
+	defer stopSettleTimer()
+
+	drainEvents := func() bool {
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					p.setLifecycle(SessionDynamicToolPublicationWatchGone)
+					return false
+				}
+				if p.consumeEvent(event) {
+					pendingRefresh = true
+				}
+			default:
+				return true
+			}
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -203,6 +287,13 @@ func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.A
 		case <-ready:
 			ready = nil
 			p.setLifecycle(SessionDynamicToolPublicationReady)
+			// Events can arrive while the provider handshake is in flight. Drain
+			// the already queued portion before taking the first snapshot so the
+			// initial publication observes the latest catalog state.
+			if !drainEvents() {
+				return
+			}
+			pendingRefresh = false
 			if err := p.refreshAndPublish(ctx, loop, "session_ready"); err != nil {
 				return
 			}
@@ -214,6 +305,20 @@ func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.A
 			if !p.consumeEvent(event) || ready != nil {
 				continue
 			}
+			pendingRefresh = true
+			resetSettleTimer()
+		case <-settleC:
+			stopSettleTimer()
+			if !pendingRefresh {
+				continue
+			}
+			// A buffered broker watch is a complete notification burst at this
+			// boundary. Fold it in before reading the catalog so related
+			// selection, generation, and catalog events publish only once.
+			if !drainEvents() {
+				return
+			}
+			pendingRefresh = false
 			if err := p.refreshAndPublish(ctx, loop, "broker_event"); err != nil {
 				return
 			}
@@ -221,19 +326,72 @@ func (p *sessionDynamicToolPublisher) run(ctx context.Context, loop *agentloop.A
 	}
 }
 
+type sessionDynamicToolPublicationWallTimerFactory struct{}
+
+func (sessionDynamicToolPublicationWallTimerFactory) NewTimer(duration time.Duration) webmcp.Timer {
+	return sessionDynamicToolPublicationWallTimer{timer: time.NewTimer(duration)}
+}
+
+type sessionDynamicToolPublicationWallTimer struct {
+	timer *time.Timer
+}
+
+func (t sessionDynamicToolPublicationWallTimer) C() <-chan time.Time {
+	return t.timer.C
+}
+
+func (t sessionDynamicToolPublicationWallTimer) Stop() bool {
+	return t.timer.Stop()
+}
+
+func (t sessionDynamicToolPublicationWallTimer) Reset(duration time.Duration) bool {
+	return t.timer.Reset(duration)
+}
+
 func (p *sessionDynamicToolPublisher) consumeEvent(event webmcp.BrokerEvent) bool {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if event.Sequence != 0 && event.Sequence <= p.state.LatestEventSequence {
-		p.mu.Unlock()
 		return false
 	}
 	if event.Sequence > p.state.LatestEventSequence {
 		p.state.LatestEventSequence = event.Sequence
 	}
-	p.mu.Unlock()
 
 	switch event.Type {
 	case webmcp.BrokerEventSelected, webmcp.BrokerEventCatalogChanged, webmcp.BrokerEventGenerationChanged:
+		candidate := sessionDynamicToolPublicationEvent{
+			browserID:  event.BrowserID,
+			targetID:   event.TargetID,
+			generation: event.Generation,
+			sequence:   event.Sequence,
+		}
+		// Sequence is authoritative for ordering across different targets. A
+		// generation never moves backwards for the same target, even when a
+		// producer omitted its sequence while replaying a stale notification.
+		if p.hasPending && samePublicationTarget(candidate, p.pending) &&
+			candidate.generation != 0 && p.pending.generation != 0 && candidate.generation < p.pending.generation {
+			return false
+		}
+		if samePublicationTarget(candidate, sessionDynamicToolPublicationEvent{
+			browserID:  p.state.LastSuccessfulBrowserID,
+			targetID:   p.state.LastSuccessfulTargetID,
+			generation: p.state.LastSuccessfulGeneration,
+		}) && candidate.generation != 0 && p.state.LastSuccessfulGeneration != 0 && candidate.generation < p.state.LastSuccessfulGeneration {
+			return false
+		}
+		if candidate.generation == 0 {
+			if p.hasPending && samePublicationTarget(candidate, p.pending) {
+				candidate.generation = p.pending.generation
+			} else if samePublicationTarget(candidate, sessionDynamicToolPublicationEvent{
+				browserID: p.state.LastSuccessfulBrowserID,
+				targetID:  p.state.LastSuccessfulTargetID,
+			}) {
+				candidate.generation = p.state.LastSuccessfulGeneration
+			}
+		}
+		p.pending = candidate
+		p.hasPending = true
 		return true
 	default:
 		return false
@@ -256,8 +414,11 @@ func (p *sessionDynamicToolPublisher) refreshAndPublish(ctx context.Context, loo
 
 	p.mu.Lock()
 	unchanged := digest == p.state.LastSuccessfulDigest
+	pending := p.pending
+	hasPending := p.hasPending
 	p.mu.Unlock()
 	if unchanged {
+		p.commitSuccessfulPublication(pending, hasPending, canonical, digest, false)
 		return nil
 	}
 	if loop == nil {
@@ -275,12 +436,37 @@ func (p *sessionDynamicToolPublisher) refreshAndPublish(ctx context.Context, loo
 		return p.fail(phase+"_send", p.latestEventSequence(), err)
 	}
 
-	p.mu.Lock()
-	p.state.LastSuccessfulDefinitions = append([]messages.ToolDefinition(nil), canonical...)
-	p.state.LastSuccessfulDigest = digest
-	p.state.PublicationCount++
-	p.mu.Unlock()
+	p.commitSuccessfulPublication(pending, hasPending, canonical, digest, true)
 	return nil
+}
+
+func (p *sessionDynamicToolPublisher) commitSuccessfulPublication(event sessionDynamicToolPublicationEvent, hasEvent bool, definitions []messages.ToolDefinition, digest string, delivered bool) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if delivered {
+		p.state.LastSuccessfulDefinitions = append([]messages.ToolDefinition(nil), definitions...)
+		p.state.LastSuccessfulDigest = digest
+		p.state.PublicationCount++
+		if hasEvent {
+			p.state.LastSuccessfulBrowserID = event.browserID
+			p.state.LastSuccessfulTargetID = event.targetID
+			p.state.LastSuccessfulGeneration = event.generation
+			p.state.LastSuccessfulEventSequence = event.sequence
+		}
+	}
+	if hasEvent && p.hasPending && p.pending == event {
+		// Clearing the work item is not a publication-state advance. It only
+		// records that this unchanged or delivered event has been reconciled;
+		// LastSuccessful* remains unchanged when no provider frame was needed.
+		p.hasPending = false
+	}
+}
+
+func samePublicationTarget(left, right sessionDynamicToolPublicationEvent) bool {
+	return left.browserID == right.browserID && left.targetID == right.targetID
 }
 
 func (p *sessionDynamicToolPublisher) latestEventSequence() uint64 {
