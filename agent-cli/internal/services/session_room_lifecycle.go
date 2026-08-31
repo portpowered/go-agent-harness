@@ -183,27 +183,30 @@ func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 }
 
 type roomParticipantLifecycle struct {
-	mu                   sync.Mutex
-	connected            bool
-	connectErr           error
-	deviceReady          bool
-	sessionCreated       bool
-	ownedSessionClosed   bool
-	sessionCloseErr      error
-	ownedSession         *roomTrackedSession
-	sessionOpened        bool
-	sessionClosed        bool
-	transportEnded       bool
-	transportDone        <-chan struct{}
-	stateChanged         chan<- struct{}
-	roomStopping         bool
-	runDone              bool
-	closeReason          string
-	terminalReason       messages.TerminalReason
-	terminalKind         ParticipantTerminationReason
-	terminalErr          error
-	transportTerminalErr func() error
-	turns                int
+	mu                     sync.Mutex
+	connected              bool
+	connectErr             error
+	deviceReady            bool
+	sessionCreated         bool
+	ownedSessionClosed     bool
+	sessionCloseErr        error
+	ownedSession           *roomTrackedSession
+	sessionOpened          bool
+	sessionClosed          bool
+	transportEnded         bool
+	transportDone          <-chan struct{}
+	stateChanged           chan<- struct{}
+	roomStopping           bool
+	runDone                bool
+	closeReason            string
+	terminalReason         messages.TerminalReason
+	terminalKind           ParticipantTerminationReason
+	terminalErr            error
+	terminalClassification string
+	terminalProvenance     messages.TerminalProvenance
+	terminalOutputState    messages.TerminalOutputState
+	transportTerminalErr   func() error
+	turns                  int
 }
 
 func (l *roomParticipantLifecycle) markConnected(err error) {
@@ -320,6 +323,24 @@ func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 	l.mu.Unlock()
 }
 
+func (l *roomParticipantLifecycle) markLivenessFailure(err error) {
+	if l == nil {
+		return
+	}
+	classification, terminalReason, provenance, outputState := sessionLivenessMetadata(err)
+	l.mu.Lock()
+	if l.terminalKind == "" {
+		l.terminalKind = ParticipantTerminationError
+		l.terminalErr = err
+		l.terminalReason = terminalReason
+		l.terminalClassification = classification
+		l.terminalProvenance = provenance
+		l.terminalOutputState = outputState
+		l.signalLocked()
+	}
+	l.mu.Unlock()
+}
+
 func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	if l == nil {
 		return 0
@@ -335,9 +356,14 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 		l.signalLocked()
 		if value, ok := msg.Value.(*messages.SessionCloseValue); ok && value != nil {
 			l.closeReason = value.Reason
-			l.terminalReason = value.TerminalReason
-			if l.terminalReason == "" && value.Reason == "provider_closed" {
-				l.terminalReason = messages.TerminalReasonProviderClose
+			// Preserve a terminal cause latched before teardown. In particular,
+			// draining the provider's close after an empty-response liveness
+			// failure must not rewrite terminal_failure as provider_close.
+			if l.terminalKind == "" {
+				l.terminalReason = value.TerminalReason
+				if l.terminalReason == "" && value.Reason == "provider_closed" {
+					l.terminalReason = messages.TerminalReasonProviderClose
+				}
 			}
 		}
 		if !l.roomStopping {
@@ -493,6 +519,15 @@ func (l *roomParticipantLifecycle) terminal() (ParticipantTerminationReason, err
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.terminalKind, l.terminalErr, l.terminalKind != ""
+}
+
+func (l *roomParticipantLifecycle) terminalMetadata() (string, messages.TerminalReason, messages.TerminalProvenance, messages.TerminalOutputState) {
+	if l == nil {
+		return "", "", "", ""
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.terminalClassification, l.terminalReason, l.terminalProvenance, l.terminalOutputState
 }
 
 func (l *roomParticipantLifecycle) ownedSessionSnapshot() (created, closed bool, transportDone <-chan struct{}, closeErr error) {
@@ -1068,7 +1103,6 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	} else if reason == "" {
 		reason = classifyRoomParticipantTermination(c.isStopping(), err, connected, transportEnded, sessionClosed, closeReason, terminalReason)
 	}
-
 	// Remove the participant before touching any of its resources. A fault may
 	// already have retired it; normal completion removes it here. Either way,
 	// activeExcept below sees only viable survivors.
@@ -1133,6 +1167,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		Connected:         connected,
 		Error:             sanitizeRoomError(err, secrets),
 	}
+	applyRoomParticipantTerminalMetadata(&result, runtime.lifecycle, err)
 	c.mu.Lock()
 	if previous, alreadyFinished := c.results[id]; alreadyFinished {
 		c.mu.Unlock()

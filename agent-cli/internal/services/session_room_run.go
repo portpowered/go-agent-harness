@@ -183,6 +183,17 @@ func runRoomParticipant(
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
 	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	observer.livenessObserver = func(err error) {
+		runtime.lifecycle.markLivenessFailure(err)
+		classification, _, _, _ := sessionLivenessMetadata(err)
+		if classification != "" {
+			participantID := runtime.plan.manifest.ID
+			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
+			if opts.Stream != nil {
+				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
+			}
+		}
+	}
 	observer.turnAdmission = func(msg messages.StreamMessage) bool {
 		value, ok := msg.Value.(*messages.MessageEndValue)
 		if !ok || value == nil || value.TerminalReason == "" {
@@ -215,6 +226,7 @@ func runRoomParticipant(
 	}
 	loopOptions := sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
+		livenessClock:          runtime.plan.options.LivenessClock,
 		WaitForClose:           true,
 		Done:                   coordinator.done,
 		DoneErr:                coordinator.roomError,
@@ -437,7 +449,7 @@ func finalizeRoomParticipantResults(
 		}
 		connected, _, sessionClosed, closeReason, terminalReason, turns, connectErr := plan.participant.lifecycle.snapshot()
 		participantReason := classifyRoomParticipantTermination(true, connectErr, connected, plan.participant.lifecycle.transportHasEnded(), sessionClosed, closeReason, terminalReason)
-		participantResults[plan.manifest.ID] = RoomParticipantResult{
+		participantResult := RoomParticipantResult{
 			ID:                plan.manifest.ID,
 			ParticipantID:     plan.manifest.ID,
 			TerminationReason: participantReason,
@@ -446,6 +458,8 @@ func finalizeRoomParticipantResults(
 			Connected:         connected,
 			Error:             sanitizeRoomError(errors.Join(connectErr, completionErr), secretsForPlan(plan)),
 		}
+		applyRoomParticipantTerminalMetadata(&participantResult, plan.participant.lifecycle, errors.Join(connectErr, completionErr))
+		participantResults[plan.manifest.ID] = participantResult
 	}
 	return reason, participantResults, sortedRoomIDs(active), roomErr
 }

@@ -43,6 +43,7 @@ func (o *sessionProgressObserver) noteUserTextInput(text string) {
 		return
 	}
 	o.account(metrics.DirectionInput, metrics.ModalityText, len(text))
+	o.armProviderProgress()
 }
 
 // dispatchScheduledInputs delivers due scheduled audio through the loop's
@@ -68,6 +69,7 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 			if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
 				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
 			}
+			o.armProviderProgress()
 		}
 		if !o.scheduledTurnBaseSet {
 			o.scheduledTurnBase = o.turnsCompleted

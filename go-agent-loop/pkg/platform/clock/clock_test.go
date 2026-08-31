@@ -142,6 +142,46 @@ func TestEnsure(t *testing.T) {
 	}
 }
 
+func TestDeterministicTimerFiresAtLogicalDeadline(t *testing.T) {
+	clock := NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
+	timer := clock.NewTimer(3 * time.Second)
+
+	select {
+	case <-timer.C():
+		t.Fatal("timer fired before its logical deadline")
+	default:
+	}
+	clock.AdvanceTo(2)
+	select {
+	case <-timer.C():
+		t.Fatal("timer fired before its logical deadline")
+	default:
+	}
+	clock.Advance()
+	select {
+	case <-timer.C():
+	default:
+		t.Fatal("timer did not fire at its logical deadline")
+	}
+	if timer.Stop() {
+		t.Fatal("Stop reported an active timer after it fired")
+	}
+}
+
+func TestDeterministicTimerStopPreventsDelivery(t *testing.T) {
+	clock := NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
+	timer := clock.NewTimer(time.Second)
+	if !timer.Stop() {
+		t.Fatal("Stop reported an inactive timer")
+	}
+	clock.Advance()
+	select {
+	case <-timer.C():
+		t.Fatal("stopped timer delivered a tick")
+	default:
+	}
+}
+
 func FuzzS7DeterministicMapping(f *testing.F) {
 	f.Add(int64(42), int64(time.Microsecond), []byte{0, 1, 5, 2, 9})
 	f.Add(int64(-100), int64(time.Second), []byte{3, 7, 1})

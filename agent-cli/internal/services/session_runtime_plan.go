@@ -214,6 +214,10 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
+	obs.livenessClock = loop.livenessClock
+	if obs.livenessClock == nil {
+		obs.livenessClock = sessionLivenessClockFromSource(p.clockSource)
+	}
 	obs.cancellationIntent = loop.cancellationIntent
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
 	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
@@ -269,6 +273,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.loop.livenessClock = opts.LivenessClock
+	if plan.loop.livenessClock == nil {
+		plan.loop.livenessClock = sessionLivenessClockFromSource(plan.clockSource)
+	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout

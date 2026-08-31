@@ -140,6 +140,10 @@ type sessionLoopOptions struct {
 	// consumed delta stream; nil keeps runtime behavior unchanged.
 	observer *sessionProgressObserver
 
+	// livenessClock is the participant-owned watchdog timer seam. Runtime plans
+	// derive it from the public session clock when a caller does not inject one.
+	livenessClock SessionLivenessClock
+
 	// toolLifecycleObserver records the exact call/result boundary owned by the
 	// composed session executor. It is separate from the provider progress
 	// observer because provider tool-call frames are requests, not executions.
@@ -261,7 +265,7 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 			opts.ToolExecutor,
 			opts.InteractiveToolPolicy,
 			opts.ToolExecutionTimeout,
-			opts.toolLifecycleObserver,
+			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer),
 			opts.cancellationIntent,
 		)))
 		if opts.InteractiveToolPolicy != nil {
@@ -435,6 +439,11 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	if err := writeSessionReplayMessage(out, msg); err != nil {
 		return state, false, errors.Join(err, stopAndDrain())
 	}
+	if opts.observer != nil {
+		if livenessErr := opts.observer.livenessFailure(); livenessErr != nil {
+			return state, false, errors.Join(livenessErr, stopAndDrain())
+		}
+	}
 	if msg.Type == messages.StreamTypeSessionCreated && opts.BareLive && opts.ListeningBanner != "" && !state.listeningReported {
 		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
 			return state, false, errors.Join(err, stopAndDrain())
@@ -557,6 +566,7 @@ func retryScheduledRateLimitedResponse(ctx context.Context, sessionDone <-chan s
 	}); err != nil {
 		return fmt.Errorf("send rate-limit retry response: %w", err)
 	}
+	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	return nil
 }
 
@@ -601,7 +611,11 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
 	observedInferencer.progress = opts.observer
 	if opts.observer != nil {
+		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	}
+	if opts.observer != nil {
+		defer opts.observer.stopLiveness()
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
@@ -611,6 +625,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
 	if opts.loopReady != nil {
 		select {
@@ -744,6 +759,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				if err := loop.SendSessionEvent(runCtx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
 					return errors.Join(fmt.Errorf("send event-driven audio input end-of-turn: %w", err), stopAndDrain())
 				}
+				if opts.observer != nil {
+					opts.observer.armProviderProgress()
+				}
 			}
 		case <-toolLifecycleEvents:
 			// A tool lifecycle transition can make the next scheduled audio
@@ -810,19 +828,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			stopSessionUpdatedTimer()
 			return errors.Join(sessionScheduledAudioConfigTimeoutError(opts), stopAndDrain())
 		case <-ctx.Done():
-			// Cancellation can race the model runner's final provider deltas. Drain
-			// briefly before stopping, then drain once more after the hot loop exits,
-			// so a queued TOOLCALL.END or continuation boundary still contributes its
-			// call ID to the terminal lifecycle error.
-			preCancelDrainErr := drainSessionLoopMessagesUntilQuiet(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
-			stopErr := stopAndDrain()
-			if preCancelDrainErr != nil {
-				stopErr = errors.Join(stopErr, preCancelDrainErr)
-			}
-			if awaitingResponse {
-				return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
-			}
-			return sessionRunTerminationError(ctx, stopErr)
+			return terminateSessionLoopOnContextCancellation(ctx, out, loop, opts, awaitingResponse, stopAndDrain)
 		case <-observedInferencer.Done():
 			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()
@@ -868,6 +874,21 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			}
 		}
 	}
+}
+
+// terminateSessionLoopOnContextCancellation preserves provider deltas that
+// raced caller cancellation, then reports whether the session was awaiting a
+// response at the cancellation boundary.
+func terminateSessionLoopOnContextCancellation(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, awaitingResponse bool, stopAndDrain func() error) error {
+	preCancelDrainErr := drainSessionLoopMessagesUntilQuiet(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
+	stopErr := stopAndDrain()
+	if preCancelDrainErr != nil {
+		stopErr = errors.Join(stopErr, preCancelDrainErr)
+	}
+	if awaitingResponse {
+		return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
+	}
+	return sessionRunTerminationError(ctx, stopErr)
 }
 
 // closePendingSessionIfReady is shared by response handling and the

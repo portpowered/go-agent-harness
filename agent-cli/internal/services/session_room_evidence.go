@@ -773,26 +773,30 @@ type roomEvidenceBounds struct {
 }
 
 type roomEvidenceParticipantManifest struct {
-	ID                string                       `json:"id"`
-	Kind              room.ParticipantKind         `json:"kind"`
-	SystemPrompt      string                       `json:"system_prompt"`
-	OpeningPrompt     string                       `json:"opening_prompt,omitempty"`
-	Provider          string                       `json:"provider"`
-	Model             string                       `json:"model"`
-	APIKeyEnv         string                       `json:"api_key_env"`
-	Voice             string                       `json:"voice,omitempty"`
-	Tools             []string                     `json:"tools"`
-	BrowserTools      *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
-	CompletedTurns    int                          `json:"completed_turns"`
-	TerminationReason ParticipantTerminationReason `json:"termination_reason"`
-	Reason            ParticipantTerminationReason `json:"reason,omitempty"`
-	Connected         bool                         `json:"connected"`
-	InputDevice       string                       `json:"input_device,omitempty"`
-	OutputDevice      string                       `json:"output_device,omitempty"`
-	Error             string                       `json:"error,omitempty"`
-	Artifacts         roomEvidenceArtifactPaths    `json:"artifacts"`
-	RecordingStatus   *transcript.RecordingStatus  `json:"recording_status,omitempty"`
-	DegradedArtifacts map[string]string            `json:"degraded_artifacts,omitempty"`
+	ID                 string                       `json:"id"`
+	Kind               room.ParticipantKind         `json:"kind"`
+	SystemPrompt       string                       `json:"system_prompt"`
+	OpeningPrompt      string                       `json:"opening_prompt,omitempty"`
+	Provider           string                       `json:"provider"`
+	Model              string                       `json:"model"`
+	APIKeyEnv          string                       `json:"api_key_env"`
+	Voice              string                       `json:"voice,omitempty"`
+	Tools              []string                     `json:"tools"`
+	BrowserTools       *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
+	CompletedTurns     int                          `json:"completed_turns"`
+	TerminationReason  ParticipantTerminationReason `json:"termination_reason"`
+	Reason             ParticipantTerminationReason `json:"reason,omitempty"`
+	Connected          bool                         `json:"connected"`
+	Classification     string                       `json:"classification,omitempty"`
+	TerminalReason     messages.TerminalReason      `json:"terminal_reason,omitempty"`
+	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
+	OutputState        messages.TerminalOutputState `json:"output_state,omitempty"`
+	InputDevice        string                       `json:"input_device,omitempty"`
+	OutputDevice       string                       `json:"output_device,omitempty"`
+	Error              string                       `json:"error,omitempty"`
+	Artifacts          roomEvidenceArtifactPaths    `json:"artifacts"`
+	RecordingStatus    *transcript.RecordingStatus  `json:"recording_status,omitempty"`
+	DegradedArtifacts  map[string]string            `json:"degraded_artifacts,omitempty"`
 }
 
 func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt time.Time) error {
@@ -865,26 +869,30 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 			paths = participantEvidence.artifacts
 		}
 		manifest.Participants[participant.ID] = roomEvidenceParticipantManifest{
-			ID:                participant.ID,
-			Kind:              room.NormalizeParticipantKind(participant.Kind),
-			SystemPrompt:      e.redactText(participant.SystemPrompt),
-			OpeningPrompt:     e.redactText(participant.OpeningPrompt),
-			Provider:          e.redactText(participant.Provider),
-			Model:             e.redactText(participant.Model),
-			APIKeyEnv:         e.redactText(participant.APIKeyEnv),
-			Voice:             e.redactText(participant.Voice),
-			Tools:             redactRoomStrings(participant.Tools, e.redactText),
-			BrowserTools:      participant.BrowserTools,
-			CompletedTurns:    participantResult.TurnsCompleted,
-			TerminationReason: participantReason,
-			Reason:            participantReason,
-			Connected:         participantResult.Connected,
-			InputDevice:       e.redactText(participant.InputDevice),
-			OutputDevice:      e.redactText(participant.OutputDevice),
-			Error:             e.redactText(participantResult.Error),
-			Artifacts:         paths,
-			RecordingStatus:   cloneRoomRecordingStatus(participantStatuses[participant.ID]),
-			DegradedArtifacts: cloneRoomStringMap(participantArtifacts[participant.ID]),
+			ID:                 participant.ID,
+			Kind:               room.NormalizeParticipantKind(participant.Kind),
+			SystemPrompt:       e.redactText(participant.SystemPrompt),
+			OpeningPrompt:      e.redactText(participant.OpeningPrompt),
+			Provider:           e.redactText(participant.Provider),
+			Model:              e.redactText(participant.Model),
+			APIKeyEnv:          e.redactText(participant.APIKeyEnv),
+			Voice:              e.redactText(participant.Voice),
+			Tools:              redactRoomStrings(participant.Tools, e.redactText),
+			BrowserTools:       participant.BrowserTools,
+			CompletedTurns:     participantResult.TurnsCompleted,
+			TerminationReason:  participantReason,
+			Reason:             participantReason,
+			Connected:          participantResult.Connected,
+			Classification:     participantResult.Classification,
+			TerminalReason:     participantResult.TerminalReason,
+			TerminalProvenance: participantResult.TerminalProvenance,
+			OutputState:        participantResult.OutputState,
+			InputDevice:        e.redactText(participant.InputDevice),
+			OutputDevice:       e.redactText(participant.OutputDevice),
+			Error:              e.redactText(participantResult.Error),
+			Artifacts:          paths,
+			RecordingStatus:    cloneRoomRecordingStatus(participantStatuses[participant.ID]),
+			DegradedArtifacts:  cloneRoomStringMap(participantArtifacts[participant.ID]),
 		}
 		manifest.TurnCounts[participant.ID] = participantResult.TurnsCompleted
 		manifest.Artifacts[participant.ID+".wav"] = paths.WAV

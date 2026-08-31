@@ -24,6 +24,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
+	o.observeProviderEvent(msg)
 	// Input-audio transcription belongs to the customer input stream. It must
 	// remain observable, but it cannot open, reset, or complete an assistant
 	// response—especially when a provider interleaves recognition with output.
@@ -249,6 +250,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
+		toolObligation := o.responseHasToolLifecycleObligation()
 		candidate := false
 		if !acknowledgementResponse {
 			candidate = o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
@@ -276,10 +278,18 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
 		}
 		o.finishObservedResponse(responseLifecycleID)
+		if !acknowledgementResponse {
+			o.observeSilentProviderEmptyResponse(msg, v, outputPresent, toolObligation)
+		}
+		o.disarmProviderProgress()
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
+		if v != nil && v.IsTerminal() {
+			o.disarmProviderProgress()
+		}
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
+		o.disarmProviderProgress()
 	}
 }
 

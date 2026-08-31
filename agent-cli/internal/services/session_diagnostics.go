@@ -280,7 +280,20 @@ type sessionProgressObserver struct {
 	usageReasoning  uint64
 	usageSeen       bool
 
-	failure *failureFacts
+	livenessMu             sync.Mutex
+	livenessErr            error
+	livenessObserver       func(error)
+	livenessClock          SessionLivenessClock
+	livenessTimer          SessionLivenessTimer
+	livenessWakeCh         chan struct{}
+	livenessControlCh      chan struct{}
+	livenessWatcherStop    chan struct{}
+	livenessWatcherStarted bool
+	livenessGeneration     uint64
+	livenessArmed          bool
+	livenessStopped        bool
+	localToolDepth         int
+	failure                *failureFacts
 	// userCancelled is set once by finish after the explicit SIGINT marker has
 	// proved that all observed causes were cancellation-only.
 	userCancelled bool
@@ -312,6 +325,8 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		completedResponseIDs:  make(map[string]struct{}),
 		retiredResponseIDs:    make(map[string]struct{}),
 		scheduledResponseByID: make(map[string]int),
+		livenessClock:         realSessionDurationClock{},
+		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
 

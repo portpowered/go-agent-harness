@@ -222,6 +222,9 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
 		s.progress.noteToolContinuationRequested()
 	}
+	if s.progress != nil {
+		s.progress.observeProviderDispatch(msg)
+	}
 	return outcome
 }
 
@@ -231,6 +234,9 @@ func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionS
 	outcome := messages.RequestSessionResponse(ctx, s.Session)
 	if outcome.OK() && s.runtime != nil {
 		s.runtime.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+	}
+	if outcome.OK() && s.progress != nil {
+		s.progress.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	}
 	return outcome
 }
@@ -280,17 +286,24 @@ func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.
 }
 
 func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
-	if s == nil || s.progress == nil || msg.ToolCallID == "" {
+	if s == nil || s.progress == nil {
 		return
 	}
 	if outcome.OK() {
-		s.progress.noteToolResultAccepted(msg.ToolCallID)
+		if msg.ToolCallID != "" {
+			s.progress.noteToolResultAccepted(msg.ToolCallID)
+		}
 		if requestsContinuation {
-			s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+			if msg.ToolCallID != "" {
+				s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+			}
+			s.progress.armProviderProgress()
 		}
 		return
 	}
-	s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
+	if msg.ToolCallID != "" {
+		s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
+	}
 }
 
 func (s *observedSession) SupportsCompleteMessages() bool {

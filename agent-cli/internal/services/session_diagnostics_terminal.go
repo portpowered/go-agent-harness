@@ -28,7 +28,7 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		pendingImageContinuationIDs := o.pendingImageContinuationCallIDs()
 		continuationStatuses, continuationCodes, continuationDetails := o.pendingContinuationMetadata()
 		_, scheduledCode, _ := o.scheduledAudioFailureMetadata()
-		f := o.failure
+		f := o.failureSnapshot()
 		if f == nil && len(unresolvedIDs) == 0 && len(pendingContinuationIDs) == 0 && !scheduleIncomplete {
 			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 				return
@@ -196,9 +196,12 @@ func (o *sessionProgressObserver) finish(err error) error {
 	if o == nil {
 		return err
 	}
+	if livenessErr := o.livenessFailure(); livenessErr != nil && !errors.Is(err, livenessErr) {
+		err = errors.Join(livenessErr, err)
+	}
 	if sessionSIGINTCleanForObserver(err, o.cancellationIntent, o) {
 		o.userCancelled = true
-		o.failure = nil
+		o.clearFailure()
 		err = nil
 	}
 	if !o.userCancelled {

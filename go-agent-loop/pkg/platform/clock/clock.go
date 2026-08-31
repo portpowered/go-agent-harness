@@ -2,6 +2,7 @@
 package clock
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -12,12 +13,49 @@ type Source interface {
 	Now() time.Time
 }
 
+// Timer is the small timer contract used by components that need to share a
+// clock's notion of time. It intentionally mirrors the useful subset of
+// time.Timer so callers can stop every timer they create on teardown.
+type Timer interface {
+	C() <-chan time.Time
+	Stop() bool
+}
+
+// TimerSource is an optional extension to Source. Real and deterministic
+// clocks implement it; callers that only need timestamps can continue to
+// depend on Source.
+type TimerSource interface {
+	Source
+	NewTimer(time.Duration) Timer
+}
+
 // Real reads the host wall clock.
 type Real struct{}
 
 // Now returns the current host time.
 func (Real) Now() time.Time {
 	return time.Now()
+}
+
+type realTimer struct {
+	timer *time.Timer
+}
+
+func (t realTimer) C() <-chan time.Time {
+	if t.timer == nil {
+		return nil
+	}
+	return t.timer.C
+}
+
+func (t realTimer) Stop() bool {
+	return t.timer != nil && t.timer.Stop()
+}
+
+// NewTimer creates a host-time timer for components that opt into the
+// TimerSource extension.
+func (Real) NewTimer(duration time.Duration) Timer {
+	return realTimer{timer: time.NewTimer(duration)}
 }
 
 // Deterministic maps a logical tick to a stable timestamp. Its configuration
@@ -27,6 +65,8 @@ type Deterministic struct {
 	base         time.Time
 	tickDuration time.Duration
 	tick         atomic.Uint64
+	timersMu     sync.Mutex
+	timers       map[*deterministicTimer]struct{}
 }
 
 // NewDeterministic creates a clock at tick zero. A zero base uses the Unix
@@ -42,6 +82,7 @@ func NewDeterministic(base time.Time, tickDuration time.Duration) *Deterministic
 	return &Deterministic{
 		base:         base,
 		tickDuration: tickDuration,
+		timers:       make(map[*deterministicTimer]struct{}),
 	}
 }
 
@@ -61,9 +102,11 @@ func (d *Deterministic) Advance() uint64 {
 	for {
 		current := d.tick.Load()
 		if current == ^uint64(0) {
+			d.fireDueTimers()
 			return current
 		}
 		if d.tick.CompareAndSwap(current, current+1) {
+			d.fireDueTimers()
 			return current + 1
 		}
 	}
@@ -75,11 +118,111 @@ func (d *Deterministic) AdvanceTo(target uint64) uint64 {
 	for {
 		current := d.tick.Load()
 		if target <= current {
+			d.fireDueTimers()
 			return current
 		}
 		if d.tick.CompareAndSwap(current, target) {
+			d.fireDueTimers()
 			return target
 		}
+	}
+}
+
+// NewTimer creates a timer whose deadline is evaluated against the current
+// logical timestamp. The timer is delivered when Advance or AdvanceTo moves
+// the clock to or beyond that deadline.
+func (d *Deterministic) NewTimer(duration time.Duration) Timer {
+	if d == nil {
+		return nil
+	}
+	timer := &deterministicTimer{
+		clock:    d,
+		deadline: d.Now().Add(duration),
+		ch:       make(chan time.Time, 1),
+		active:   true,
+	}
+	d.timersMu.Lock()
+	if d.timers == nil {
+		d.timers = make(map[*deterministicTimer]struct{})
+	}
+	d.timers[timer] = struct{}{}
+	d.timersMu.Unlock()
+	d.fireDueTimers()
+	return timer
+}
+
+func (d *Deterministic) fireDueTimers() {
+	if d == nil {
+		return
+	}
+	now := d.Now()
+	d.timersMu.Lock()
+	due := make([]*deterministicTimer, 0)
+	for timer := range d.timers {
+		if !now.Before(timer.deadline) {
+			delete(d.timers, timer)
+			due = append(due, timer)
+		}
+	}
+	d.timersMu.Unlock()
+	for _, timer := range due {
+		timer.fire(now)
+	}
+}
+
+func (d *Deterministic) removeTimer(timer *deterministicTimer) {
+	if d == nil || timer == nil {
+		return
+	}
+	d.timersMu.Lock()
+	delete(d.timers, timer)
+	d.timersMu.Unlock()
+}
+
+type deterministicTimer struct {
+	clock    *Deterministic
+	deadline time.Time
+	ch       chan time.Time
+
+	mu     sync.Mutex
+	active bool
+}
+
+func (t *deterministicTimer) C() <-chan time.Time {
+	if t == nil {
+		return nil
+	}
+	return t.ch
+}
+
+func (t *deterministicTimer) Stop() bool {
+	if t == nil {
+		return false
+	}
+	t.mu.Lock()
+	wasActive := t.active
+	t.active = false
+	t.mu.Unlock()
+	if wasActive {
+		t.clock.removeTimer(t)
+	}
+	return wasActive
+}
+
+func (t *deterministicTimer) fire(at time.Time) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	if !t.active {
+		t.mu.Unlock()
+		return
+	}
+	t.active = false
+	t.mu.Unlock()
+	select {
+	case t.ch <- at:
+	default:
 	}
 }
 
@@ -107,6 +250,8 @@ func elapsed(tick uint64, tickDuration time.Duration) time.Duration {
 }
 
 var (
-	_ Source = Real{}
-	_ Source = (*Deterministic)(nil)
+	_ Source      = Real{}
+	_ Source      = (*Deterministic)(nil)
+	_ TimerSource = Real{}
+	_ TimerSource = (*Deterministic)(nil)
 )

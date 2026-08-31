@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,6 +134,388 @@ func TestRoomEventBroker_ServesContractAndFiltersAudio(t *testing.T) {
 	roomEvent := reader.next(t)
 	if roomSSEString(t, roomEvent, "type") != RoomStreamEventTypeRoom || roomSSEString(t, roomEvent, "event") != RoomStreamEventRunTerminated || roomSSEString(t, roomEvent, "participant_id") != RoomStreamRoomParticipantID || roomSSEString(t, roomEvent, "reason") != string(RoomTerminationStopped) {
 		t.Fatalf("room event = %v", roomEvent)
+	}
+}
+
+func TestRoomEventBroker_BroadcastsParticipantLivenessFaultToFilteredPeer(t *testing.T) {
+	broker, err := NewRoomEventBroker([]string{"silent", "peer"})
+	if err != nil {
+		t.Fatalf("NewRoomEventBroker: %v", err)
+	}
+	defer broker.Close()
+	server := httptest.NewServer(broker)
+	defer server.Close()
+
+	open := func(path string) (*http.Response, *roomSSEReader) {
+		t.Helper()
+		requestContext, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		t.Cleanup(cancel)
+		request, err := http.NewRequestWithContext(requestContext, http.MethodGet, server.URL+path, nil)
+		if err != nil {
+			t.Fatalf("create room stream request: %v", err)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		if response.StatusCode != http.StatusOK {
+			response.Body.Close()
+			t.Fatalf("GET %s status = %d, want %d", path, response.StatusCode, http.StatusOK)
+		}
+		return response, newRoomSSEReader(response.Body)
+	}
+
+	allResponse, allReader := open("/events")
+	defer allResponse.Body.Close()
+	peerResponse, peerReader := open("/events?participant=peer")
+	defer peerResponse.Body.Close()
+
+	broker.PublishParticipantLivenessFault("silent", SessionSilentProviderTimeoutClassification)
+	for name, payload := range map[string]map[string]json.RawMessage{
+		"unfiltered":    allReader.next(t),
+		"peer-filtered": peerReader.next(t),
+	} {
+		if roomSSEString(t, payload, "type") != RoomStreamEventTypeRoom || roomSSEString(t, payload, "event") != RoomStreamEventParticipantLivenessFault {
+			t.Fatalf("%s liveness event = %v", name, payload)
+		}
+		if roomSSEString(t, payload, "participant_id") != "silent" || roomSSEString(t, payload, "reason") != SessionSilentProviderTimeoutClassification {
+			t.Fatalf("%s liveness event attribution = %v", name, payload)
+		}
+	}
+}
+
+func TestRunRoom_EmptyLivenessFaultPrecedesParticipantTermination(t *testing.T) {
+	const participantID = "silent"
+	ids := []string{"silent", "peer"}
+	inferencers := map[string]*roomTestInferencer{
+		participantID: {events: []messages.StreamMessage{
+			roomTestSessionOpen(participantID),
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{
+				Type:       messages.StreamTypeMessageEnd,
+				Role:       messages.RoleAssistant,
+				ResponseID: "empty-response",
+				Value: messages.NewMessageEndValueWithTerminal(
+					messages.TokenUsage{},
+					messages.TerminalReasonPartialOutput,
+					messages.TerminalProvenanceProvider,
+					messages.TerminalOutputNone,
+				),
+			},
+		}},
+		"peer": {events: []messages.StreamMessage{roomTestSessionOpen("peer")}},
+	}
+	// The room stream includes the viable sibling as well as the failed
+	// participant; the sibling is held open until the fault is observed.
+	broker, err := NewRoomEventBroker(ids)
+	if err != nil {
+		t.Fatalf("NewRoomEventBroker: %v", err)
+	}
+	defer broker.Close()
+	server := httptest.NewServer(broker)
+	defer server.Close()
+	requestContext, cancelRequest := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelRequest()
+	request, err := http.NewRequestWithContext(requestContext, http.MethodGet, server.URL+"/events", nil)
+	if err != nil {
+		t.Fatalf("create room stream request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("GET /events: %v", err)
+	}
+	defer response.Body.Close()
+	reader := newRoomSSEReader(response.Body)
+
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.Manifest.Room.MaxDuration = time.Hour
+	opts.OutputDir = filepath.Join(t.TempDir(), "empty-liveness-room")
+	opts.Stream = broker
+	roomContext, cancelRoom := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelRoom()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, runErr := RunRoomWithResult(roomContext, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: runErr}
+	}()
+
+	roomEvents := make([]map[string]json.RawMessage, 0)
+	peerReleased := false
+	failureDiagnostic := false
+	for {
+		payload := reader.next(t)
+		roomEvents = append(roomEvents, payload)
+		if roomSSEString(t, payload, "type") == RoomStreamEventTypeDiagnostic && roomSSEString(t, payload, "participant_id") == participantID && roomSSEString(t, payload, "event") == SessionDiagnosticEventFailure {
+			var fields map[string]string
+			if err := json.Unmarshal(payload["fields"], &fields); err != nil {
+				t.Fatalf("decode empty liveness diagnostic: %v", err)
+			}
+			if fields[fieldClassification] != SessionSilentProviderEmptyResponseClassification {
+				t.Fatalf("empty liveness diagnostic fields = %v", fields)
+			}
+			failureDiagnostic = true
+		}
+		if roomSSEString(t, payload, "type") != RoomStreamEventTypeRoom {
+			continue
+		}
+		event := roomSSEString(t, payload, "event")
+		if event == RoomStreamEventParticipantLivenessFault && !peerReleased {
+			if roomSSEString(t, payload, "participant_id") != participantID || roomSSEString(t, payload, "reason") != SessionSilentProviderEmptyResponseClassification {
+				t.Fatalf("empty liveness event = %v", payload)
+			}
+			peerSessions := inferencers["peer"].sessionsSnapshot()
+			if len(peerSessions) != 1 {
+				t.Fatalf("peer sessions = %d, want one before releasing the viable sibling", len(peerSessions))
+			}
+			peerSessions[0].end()
+			peerReleased = true
+		}
+		if event == RoomStreamEventRunTerminated {
+			break
+		}
+	}
+	if !peerReleased {
+		t.Fatal("room terminated without publishing the empty-response liveness fault")
+	}
+	if !failureDiagnostic {
+		t.Fatal("empty provider room did not publish its typed session failure diagnostic")
+	}
+
+	var got roomTestRunOutcome
+	select {
+	case got = <-outcome:
+	case <-time.After(2 * time.Second):
+		t.Fatal("empty provider room did not terminate promptly")
+	}
+	if got.err != nil || got.result.Reason != RoomTerminationStopped {
+		t.Fatalf("empty provider room outcome = %+v, err=%v", got.result, got.err)
+	}
+	participant, ok := got.result.Participants[participantID]
+	if !ok {
+		t.Fatalf("room result is missing %q: result=%+v err=%v events=%v", participantID, got.result, got.err, roomEvents)
+	}
+	if participant.Classification != SessionSilentProviderEmptyResponseClassification || participant.TurnsCompleted != 0 {
+		t.Fatalf("empty participant result = %+v, want typed zero-turn failure", participant)
+	}
+	faultIndex := -1
+	terminatedIndex := -1
+	faultCount := 0
+	for index, payload := range roomEvents {
+		if roomSSEString(t, payload, "type") != RoomStreamEventTypeRoom {
+			continue
+		}
+		event := roomSSEString(t, payload, "event")
+		switch event {
+		case RoomStreamEventParticipantLivenessFault:
+			faultCount++
+			faultIndex = index
+			if roomSSEString(t, payload, "participant_id") != participantID || roomSSEString(t, payload, "reason") != SessionSilentProviderEmptyResponseClassification {
+				t.Fatalf("empty liveness event = %v", payload)
+			}
+		case RoomStreamEventParticipantTerminated:
+			if roomSSEString(t, payload, "participant_id") == participantID {
+				terminatedIndex = index
+			}
+		}
+	}
+	if faultCount != 1 || faultIndex < 0 || terminatedIndex < 0 || faultIndex >= terminatedIndex {
+		t.Fatalf("room event ordering fault_count=%d fault_index=%d terminated_index=%d events=%v", faultCount, faultIndex, terminatedIndex, roomEvents)
+	}
+
+	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
+	var manifest roomEvidenceManifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("decode empty liveness manifest: %v", err)
+	}
+	if got := manifest.Participants[participantID].Classification; got != SessionSilentProviderEmptyResponseClassification {
+		t.Fatalf("evidence manifest classification = %q, want %q", got, SessionSilentProviderEmptyResponseClassification)
+	}
+	timeline := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, RoomEvidenceTimelinePath))
+	timelineFaultIndex := -1
+	timelineTerminatedIndex := -1
+	for index, line := range timeline {
+		var entry roomTimelineEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			t.Fatalf("decode liveness timeline entry: %v", err)
+		}
+		switch entry.Event {
+		case RoomStreamEventParticipantLivenessFault:
+			if entry.Participant == participantID && entry.Fields["reason"] == SessionSilentProviderEmptyResponseClassification {
+				timelineFaultIndex = index
+			}
+		case RoomStreamEventParticipantTerminated:
+			if entry.Participant == participantID {
+				timelineTerminatedIndex = index
+			}
+		}
+	}
+	if timelineFaultIndex < 0 || timelineTerminatedIndex < 0 || timelineFaultIndex >= timelineTerminatedIndex {
+		t.Fatalf("evidence timeline ordering fault_index=%d terminated_index=%d entries=%v", timelineFaultIndex, timelineTerminatedIndex, timeline)
+	}
+}
+
+func TestRunRoom_SilentProviderFaultReachesPeerFilteredStream(t *testing.T) {
+	ids := []string{"silent", "peer"}
+	inferencers := map[string]*roomTestInferencer{
+		"silent": {events: []messages.StreamMessage{roomTestSessionOpen("silent")}},
+		"peer":   {events: []messages.StreamMessage{roomTestSessionOpen("peer")}},
+	}
+	peerConnected := make(chan struct{})
+	inferencers["peer"].onConnect = func() { close(peerConnected) }
+	livenessClock := &livenessTestClock{created: make(chan struct{}, 4)}
+	broker, err := NewRoomEventBroker(ids)
+	if err != nil {
+		t.Fatalf("NewRoomEventBroker: %v", err)
+	}
+	defer broker.Close()
+	server := httptest.NewServer(broker)
+	defer server.Close()
+	open := func(path string) (*http.Response, *roomSSEReader) {
+		t.Helper()
+		requestContext, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		t.Cleanup(cancel)
+		request, err := http.NewRequestWithContext(requestContext, http.MethodGet, server.URL+path, nil)
+		if err != nil {
+			t.Fatalf("create room stream request: %v", err)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		if response.StatusCode != http.StatusOK {
+			response.Body.Close()
+			t.Fatalf("GET %s status = %d, want %d", path, response.StatusCode, http.StatusOK)
+		}
+		return response, newRoomSSEReader(response.Body)
+	}
+	allResponse, allReader := open("/events")
+	defer allResponse.Body.Close()
+	peerResponse, peerReader := open("/events?participant=peer")
+	defer peerResponse.Body.Close()
+
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.Manifest.Room.MaxDuration = time.Hour
+	opts.Manifest.Participants[0].OpeningPrompt = "the silent provider needs a response"
+	opts.LivenessClock = livenessClock
+	opts.Stream = broker
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, runErr := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: runErr}
+	}()
+
+	select {
+	case <-livenessClock.created:
+	case <-ctx.Done():
+		t.Fatal("silent participant watchdog was not armed")
+	}
+	select {
+	case <-peerConnected:
+	case <-ctx.Done():
+		t.Fatal("peer participant did not connect")
+	}
+	if !livenessClock.fireLatest() {
+		t.Fatal("silent participant watchdog did not fire")
+	}
+
+	var peerFault map[string]json.RawMessage
+	for peerFault == nil {
+		payload := peerReader.next(t)
+		if roomSSEString(t, payload, "type") == RoomStreamEventTypeRoom && roomSSEString(t, payload, "event") == RoomStreamEventParticipantLivenessFault {
+			peerFault = payload
+		}
+	}
+	if roomSSEString(t, peerFault, "participant_id") != "silent" || roomSSEString(t, peerFault, "reason") != SessionSilentProviderTimeoutClassification {
+		t.Fatalf("peer-filtered fault = %v, want silent timeout", peerFault)
+	}
+	peerSessions := inferencers["peer"].sessionsSnapshot()
+	if len(peerSessions) != 1 {
+		t.Fatalf("peer sessions = %d, want one", len(peerSessions))
+	}
+	if peerSessions[0].closeCallsSnapshot() != 0 {
+		t.Fatalf("viable peer was closed by sibling liveness fault: %d close calls", peerSessions[0].closeCallsSnapshot())
+	}
+
+	var allEvents []map[string]json.RawMessage
+	faultCount := 0
+	faultIndex := -1
+	silentTerminationIndex := -1
+	failureDiagnostic := false
+	for {
+		payload := allReader.next(t)
+		allEvents = append(allEvents, payload)
+		if roomSSEString(t, payload, "type") == RoomStreamEventTypeDiagnostic && roomSSEString(t, payload, "participant_id") == "silent" && roomSSEString(t, payload, "event") == SessionDiagnosticEventFailure {
+			var fields map[string]string
+			if err := json.Unmarshal(payload["fields"], &fields); err != nil {
+				t.Fatalf("decode timeout liveness diagnostic: %v", err)
+			}
+			if fields[fieldClassification] != SessionSilentProviderTimeoutClassification {
+				t.Fatalf("timeout liveness diagnostic fields = %v", fields)
+			}
+			failureDiagnostic = true
+		}
+		if roomSSEString(t, payload, "type") != RoomStreamEventTypeRoom {
+			continue
+		}
+		event := roomSSEString(t, payload, "event")
+		switch event {
+		case RoomStreamEventParticipantLivenessFault:
+			faultCount++
+			faultIndex = len(allEvents) - 1
+		case RoomStreamEventParticipantTerminated:
+			if roomSSEString(t, payload, "participant_id") == "silent" {
+				silentTerminationIndex = len(allEvents) - 1
+			}
+		}
+		if silentTerminationIndex >= 0 {
+			// The peer stream has already observed the fault. Keep the viable
+			// participant alive until that ordering is also visible on the
+			// unfiltered stream.
+			break
+		}
+	}
+
+	peerSessions[0].end()
+	for {
+		payload := allReader.next(t)
+		allEvents = append(allEvents, payload)
+		if roomSSEString(t, payload, "type") != RoomStreamEventTypeRoom {
+			continue
+		}
+		event := roomSSEString(t, payload, "event")
+		if event == RoomStreamEventParticipantLivenessFault {
+			faultCount++
+			faultIndex = len(allEvents) - 1
+		}
+		if event == RoomStreamEventParticipantTerminated && roomSSEString(t, payload, "participant_id") == "silent" {
+			silentTerminationIndex = len(allEvents) - 1
+		}
+		if event == RoomStreamEventRunTerminated {
+			break
+		}
+	}
+
+	select {
+	case got := <-outcome:
+		if got.err != nil || got.result.Reason != RoomTerminationStopped {
+			t.Fatalf("silent provider room outcome = %+v, err=%v", got.result, got.err)
+		}
+		if got.result.Participants["silent"].Classification != SessionSilentProviderTimeoutClassification {
+			t.Fatalf("silent result = %+v, want timeout classification", got.result.Participants["silent"])
+		}
+		if got.result.Participants["peer"].Classification == SessionSilentProviderTimeoutClassification {
+			t.Fatalf("viable peer inherited timeout classification: %+v", got.result.Participants["peer"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("silent provider room did not terminate after viable peer was released")
+	}
+	if faultCount != 1 || faultIndex < 0 || silentTerminationIndex < 0 || faultIndex >= silentTerminationIndex {
+		t.Fatalf("unfiltered liveness ordering fault_count=%d fault_index=%d silent_termination_index=%d events=%v", faultCount, faultIndex, silentTerminationIndex, allEvents)
+	}
+	if !failureDiagnostic {
+		t.Fatal("silent provider room did not publish its typed session failure diagnostic")
 	}
 }
 

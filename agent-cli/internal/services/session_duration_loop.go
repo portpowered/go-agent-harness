@@ -80,7 +80,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	observedInferencer := newObservedSessionInferencer(boundInferencer)
 	observedInferencer.progress = opts.observer
 	if opts.observer != nil {
+		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	}
+	if opts.observer != nil {
+		defer opts.observer.stopLiveness()
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
@@ -90,6 +94,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
 	runErrCh := make(chan error, 1)
 	go func() {

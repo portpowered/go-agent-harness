@@ -288,6 +288,11 @@ type SessionRunOptions struct {
 	// generated CLI supplies the composed clock so replay and recording
 	// observers can correlate events across command instances.
 	Clock platformclock.Source
+	// LivenessClock supplies participant-owned watchdog timers. Nil derives a
+	// timer clock from Clock when possible, otherwise the session uses the host
+	// clock. Deterministic callers can inject this seam without changing the
+	// runtime timestamp source.
+	LivenessClock SessionLivenessClock
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
 	// from the session command. The terminal event carries the production-owned
 	// session-cumulative token totals and complete metrics snapshot. Nil keeps
