@@ -30,6 +30,16 @@ const (
 	RoomRunManifestPath = RoomEvidenceManifestPath
 
 	roomEvidenceSchemaVersion = 1
+
+	// roomEvidenceAudioEncoding, roomEvidenceAudioSampleWidthBits, and
+	// roomEvidenceAudioByteOrder describe the room runtime's one and only raw
+	// PCM contract (see room.PCM16Format / room.DefaultPCM16Format): signed
+	// 16-bit little-endian samples. They are constants, not derived values,
+	// because nothing in the room runtime ever records a different width or
+	// byte order.
+	roomEvidenceAudioEncoding        = "pcm_s16le"
+	roomEvidenceAudioSampleWidthBits = 16
+	roomEvidenceAudioByteOrder       = "little"
 )
 
 // roomEvidence owns all file-backed observations for one room. Participant
@@ -748,10 +758,24 @@ type roomEvidenceManifest struct {
 	Error             string                      `json:"error,omitempty"`
 }
 
+// roomEvidenceAudioFormat is the full PCM contract the replay reader
+// (parseRoomReplayPCMFormat in session_room_replay_manifest.go) requires:
+// sample_rate/channels/encoding alone are not enough to satisfy it. Every
+// field here MUST have a matching required (or aliased) field on the reader
+// side — see roomReplayPCMFormatFieldCoverage in
+// session_room_evidence_test.go, which asserts that coverage directly so the
+// two schemas cannot silently drift apart again.
 type roomEvidenceAudioFormat struct {
 	SampleRate int    `json:"sample_rate"`
 	Channels   int    `json:"channels"`
 	Encoding   string `json:"encoding"`
+	// SampleWidthBits and ByteOrder complete the raw PCM contract. The room
+	// runtime only ever records signed 16-bit little-endian PCM (see
+	// DefaultPCM16Format and the "pcm_s16le" Encoding below), so these are
+	// fixed constants rather than derived from a variable format, but the
+	// replay reader requires them as explicit fields regardless.
+	SampleWidthBits int    `json:"sample_width_bits"`
+	ByteOrder       string `json:"byte_order"`
 }
 
 type roomEvidenceTiming struct {
@@ -829,9 +853,11 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		Participants:      make(map[string]roomEvidenceParticipantManifest, len(e.manifest.Participants)),
 		TurnCounts:        make(map[string]int, len(e.manifest.Participants)),
 		AudioFormat: roomEvidenceAudioFormat{
-			SampleRate: e.audioFormat.SampleRate,
-			Channels:   e.audioFormat.Channels,
-			Encoding:   "pcm_s16le",
+			SampleRate:      e.audioFormat.SampleRate,
+			Channels:        e.audioFormat.Channels,
+			Encoding:        roomEvidenceAudioEncoding,
+			SampleWidthBits: roomEvidenceAudioSampleWidthBits,
+			ByteOrder:       roomEvidenceAudioByteOrder,
 		},
 		RoomMix:           RoomEvidenceMixPath,
 		RoomTimeline:      RoomEvidenceTimelinePath,
