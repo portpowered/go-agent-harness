@@ -41,6 +41,7 @@ var newMicrophoneSource = func() (audio.AudioSource, error) {
 	return audio.NewMicrophoneSource()
 }
 
+//lint:ignore ST1005 the terminal admission message is an exact customer-facing CLI contract.
 var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage)
 
 // NewChatCommand creates the ChatCommand with the given dependencies.
