@@ -145,6 +145,9 @@ type rtcDeviceBoundSession struct {
 }
 
 func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
+	}
 	return messages.RequestSessionResponse(ctx, s.Session)
 }
 
@@ -153,11 +156,17 @@ func (s *rtcDeviceBoundSession) SupportsResponseRequests() bool {
 }
 
 func (s *rtcDeviceBoundSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
+		return false
+	}
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *rtcDeviceBoundSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
+		return false
+	}
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
@@ -170,6 +179,41 @@ func (s *rtcDeviceBoundSession) SupportsCompleteMessages() bool {
 func (s *rtcDeviceBoundSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
+}
+
+func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s == nil || s.Session == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(msg) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
+	}
+	return messages.SendSessionWithOutcome(ctx, s.Session, msg)
+}
+
+func (s *rtcDeviceBoundSession) SessionAdmissionClosed() bool {
+	controller, ok := s.Session.(interface{ SessionAdmissionClosed() bool })
+	return ok && controller.SessionAdmissionClosed()
+}
+
+func (s *rtcDeviceBoundSession) SessionAdmissionAllows(msg messages.StreamMessage) bool {
+	controller, ok := s.Session.(interface {
+		SessionAdmissionAllows(messages.StreamMessage) bool
+	})
+	if ok {
+		return controller.SessionAdmissionAllows(msg)
+	}
+	return !s.SessionAdmissionClosed()
+}
+
+func (s *rtcDeviceBoundSession) SessionAdmissionAllowsCompleteMessage(msg messages.Message) bool {
+	controller, ok := s.Session.(interface {
+		SessionAdmissionAllowsCompleteMessage(messages.Message) bool
+	})
+	if ok {
+		return controller.SessionAdmissionAllowsCompleteMessage(msg)
+	}
+	return !s.SessionAdmissionClosed()
 }
 
 func (s *rtcDeviceBoundSession) Close() error {

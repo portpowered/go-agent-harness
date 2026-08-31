@@ -81,7 +81,7 @@ func TestObserveRoomParticipantStream_FansOutBeforeDurableAudioEvidence(t *testi
 		mixer:     targetMixer,
 		lifecycle: &roomParticipantLifecycle{},
 	}
-	coordinator := newRoomCoordinator(nil, 0, nil)
+	coordinator := newRoomCoordinator(nil, 0, 0, nil, nil)
 	coordinator.addParticipant(source)
 	coordinator.addParticipant(target)
 

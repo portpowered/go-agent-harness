@@ -237,9 +237,32 @@ func (s *observedSession) SessionAdmissionClosed() bool {
 	return ok && controller.SessionAdmissionClosed()
 }
 
+func (s *observedSession) SessionAdmissionAllows(msg messages.StreamMessage) bool {
+	controller, ok := s.Session.(interface {
+		SessionAdmissionAllows(messages.StreamMessage) bool
+	})
+	if ok {
+		return controller.SessionAdmissionAllows(msg)
+	}
+	return !s.SessionAdmissionClosed()
+}
+
+func (s *observedSession) SessionAdmissionAllowsCompleteMessage(msg messages.Message) bool {
+	controller, ok := s.Session.(interface {
+		SessionAdmissionAllowsCompleteMessage(messages.Message) bool
+	})
+	if ok {
+		return controller.SessionAdmissionAllowsCompleteMessage(msg)
+	}
+	return !s.SessionAdmissionClosed()
+}
+
 // RequestResponse forwards the optional explicit response request while
 // preserving the capability boundary of replay and injected sessions.
 func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
+	}
 	outcome := messages.RequestSessionResponse(ctx, s.Session)
 	if outcome.OK() && s.runtime != nil {
 		s.runtime.responseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
@@ -258,7 +281,7 @@ func (s *observedSession) SupportsResponseRequests() bool {
 // observation wrapper embeds the stream-only public Session interface, so it
 // must preserve the rich tool-result path used by multimodal sessions.
 func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	if s.SessionAdmissionClosed() {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
 	sender, ok := s.Session.(SessionImageMessageSender)
@@ -273,7 +296,7 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 // SendMessageWithoutResponse preserves deferred rich-message delivery for
 // callers that batch tool results before requesting one provider response.
 func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	if s.SessionAdmissionClosed() {
+	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)

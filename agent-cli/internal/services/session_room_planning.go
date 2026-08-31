@@ -393,9 +393,6 @@ func awaitRoomParticipantConnections(
 	for {
 		allOpened := true
 		for _, plan := range plans {
-			if plan == nil || plan.participant == nil {
-				continue
-			}
 			if !coordinator.isActive(plan.manifest.ID) {
 				continue
 			}
@@ -414,7 +411,17 @@ func awaitRoomParticipantConnections(
 			if opened {
 				continue
 			}
-			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
+			transportEnded := plan.participant.lifecycle.transportHasEnded()
+			runFinished := plan.participant.lifecycle.runHasFinished()
+			if transportEnded && !runFinished {
+				// A provider ERROR can make the engine stop and close its transport
+				// before the session loop has finished draining the typed run
+				// error. Wait for that bounded participant unwind before
+				// synthesizing a generic pre-open failure.
+				allOpened = false
+				continue
+			}
+			if closed || transportEnded || runFinished {
 				failure := error(nil)
 				if _, terminalErr, terminalObserved := plan.participant.lifecycle.terminal(); terminalObserved && terminalErr != nil {
 					failure = terminalErr

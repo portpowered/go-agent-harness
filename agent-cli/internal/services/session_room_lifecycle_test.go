@@ -578,9 +578,9 @@ func TestRoomCoordinator_FailParticipantRetiresOnlyTarget(t *testing.T) {
 	}
 	roomCancelled := false
 	participantCallbacks := 0
-	coordinator := newRoomCoordinator(func() { roomCancelled = true }, 0, func(RoomParticipantResult) {
+	coordinator := newRoomCoordinator(func() { roomCancelled = true }, 0, 0, func(RoomParticipantResult) {
 		participantCallbacks++
-	})
+	}, nil)
 	coordinator.addParticipant(target)
 	coordinator.addParticipant(sibling)
 

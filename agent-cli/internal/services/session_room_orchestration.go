@@ -154,7 +154,8 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	onParticipantTerminated := opts.OnParticipantTerminated
 	if opts.Stream != nil || onParticipantTerminated != nil || evidence != nil {
 		onParticipantTerminated = func(result RoomParticipantResult) {
-			evidence.recordTimelineEvent("participant_terminated", result.ParticipantID, map[string]string{"reason": string(result.TerminationReason)})
+			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
+			evidence.recordTimelineEvent("participant_terminated", result.ParticipantID, participantTerminalFields(result))
 			if opts.Stream != nil {
 				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantTerminated, result.ParticipantID, string(result.TerminationReason))
 			}

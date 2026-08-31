@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -54,7 +55,8 @@ type roomEvidence struct {
 	latency      *roomLatencyRecorder
 	// source is the injectable platform clock the latency recorder samples;
 	// distinct from roomClock below, which anchors offsets to room start.
-	source platformclock.Source
+	source         platformclock.Source
+	providerErrors map[string]struct{}
 
 	// clock anchors every recorded wall-clock timestamp (deltas, diagnostics,
 	// room-timeline) to the room's real start time instead of the Unix epoch.
@@ -149,6 +151,7 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		audioFormat:          format,
 		latency:              newRoomLatencyRecorder(clock, format),
 		source:               clock,
+		providerErrors:       make(map[string]struct{}, len(manifest.Participants)),
 	}
 	evidence.clock = newRoomClock(evidence.startedAt, clock)
 	evidence.mix = newRoomMixBuffer(format.SampleRate)
@@ -255,6 +258,23 @@ func (e *roomEvidence) recordFinalTimelineEvent(event, participant string, field
 		e.recordError("", RoomEvidenceTimelinePath, fmt.Errorf("record %s: %w", event, err))
 	}
 	return e.clock.start.Add(offset).UTC()
+}
+
+func (e *roomEvidence) recordProviderErrorTimeline(participant string, fields map[string]string) {
+	if e == nil || e.timeline == nil {
+		return
+	}
+	e.mu.Lock()
+	if e.providerErrors == nil {
+		e.providerErrors = make(map[string]struct{})
+	}
+	if _, seen := e.providerErrors[participant]; seen {
+		e.mu.Unlock()
+		return
+	}
+	e.providerErrors[participant] = struct{}{}
+	e.mu.Unlock()
+	e.recordTimelineEvent("provider_error", participant, fields)
 }
 
 func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
@@ -891,30 +911,32 @@ type roomEvidenceBounds struct {
 }
 
 type roomEvidenceParticipantManifest struct {
-	ID                 string                       `json:"id"`
-	Kind               room.ParticipantKind         `json:"kind"`
-	SystemPrompt       string                       `json:"system_prompt"`
-	OpeningPrompt      string                       `json:"opening_prompt,omitempty"`
-	Provider           string                       `json:"provider"`
-	Model              string                       `json:"model"`
-	APIKeyEnv          string                       `json:"api_key_env"`
-	Voice              string                       `json:"voice,omitempty"`
-	Tools              []string                     `json:"tools"`
-	BrowserTools       *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
-	CompletedTurns     int                          `json:"completed_turns"`
-	TerminationReason  ParticipantTerminationReason `json:"termination_reason"`
-	Reason             ParticipantTerminationReason `json:"reason,omitempty"`
-	Connected          bool                         `json:"connected"`
-	Classification     string                       `json:"classification,omitempty"`
-	TerminalReason     messages.TerminalReason      `json:"terminal_reason,omitempty"`
-	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
-	OutputState        messages.TerminalOutputState `json:"output_state,omitempty"`
-	InputDevice        string                       `json:"input_device,omitempty"`
-	OutputDevice       string                       `json:"output_device,omitempty"`
-	Error              string                       `json:"error,omitempty"`
-	Artifacts          roomEvidenceArtifactPaths    `json:"artifacts"`
-	RecordingStatus    *transcript.RecordingStatus  `json:"recording_status,omitempty"`
-	DegradedArtifacts  map[string]string            `json:"degraded_artifacts,omitempty"`
+	ID                     string                       `json:"id"`
+	Kind                   room.ParticipantKind         `json:"kind"`
+	SystemPrompt           string                       `json:"system_prompt"`
+	OpeningPrompt          string                       `json:"opening_prompt,omitempty"`
+	Provider               string                       `json:"provider"`
+	Model                  string                       `json:"model"`
+	APIKeyEnv              string                       `json:"api_key_env"`
+	Voice                  string                       `json:"voice,omitempty"`
+	Tools                  []string                     `json:"tools"`
+	BrowserTools           *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
+	CompletedTurns         int                          `json:"completed_turns"`
+	TerminationReason      ParticipantTerminationReason `json:"termination_reason"`
+	Reason                 ParticipantTerminationReason `json:"reason,omitempty"`
+	TerminationTrigger     string                       `json:"termination_trigger,omitempty"`
+	TerminationDisposition string                       `json:"termination_disposition,omitempty"`
+	Connected              bool                         `json:"connected"`
+	Classification         string                       `json:"classification,omitempty"`
+	TerminalReason         messages.TerminalReason      `json:"terminal_reason,omitempty"`
+	TerminalProvenance     messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
+	OutputState            messages.TerminalOutputState `json:"output_state,omitempty"`
+	InputDevice            string                       `json:"input_device,omitempty"`
+	OutputDevice           string                       `json:"output_device,omitempty"`
+	Error                  string                       `json:"error,omitempty"`
+	Artifacts              roomEvidenceArtifactPaths    `json:"artifacts"`
+	RecordingStatus        *transcript.RecordingStatus  `json:"recording_status,omitempty"`
+	DegradedArtifacts      map[string]string            `json:"degraded_artifacts,omitempty"`
 }
 
 func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt time.Time) error {
@@ -978,11 +1000,17 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		participantResult, exists := result.Participants[participant.ID]
 		if !exists {
 			participantResult = RoomParticipantResult{
-				ID:                participant.ID,
-				ParticipantID:     participant.ID,
-				TerminationReason: ParticipantTerminationError,
-				Reason:            ParticipantTerminationError,
-				Error:             sanitizeRoomError(runErr, e.secrets),
+				ID:                     participant.ID,
+				ParticipantID:          participant.ID,
+				TerminationReason:      ParticipantTerminationError,
+				Reason:                 ParticipantTerminationError,
+				TerminationTrigger:     ParticipantTerminationTriggerSessionFailure,
+				TerminationDisposition: ParticipantTerminationDispositionFailed,
+				Classification:         providers.ErrorClassUnknown,
+				TerminalReason:         messages.TerminalReasonTerminalFailure,
+				TerminalProvenance:     messages.TerminalProvenanceSession,
+				OutputState:            messages.TerminalOutputNone,
+				Error:                  sanitizeRoomError(runErr, e.secrets),
 			}
 		}
 		participantReason := participantResult.TerminationReason
@@ -997,30 +1025,32 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 			paths = participantEvidence.artifacts
 		}
 		manifest.Participants[participant.ID] = roomEvidenceParticipantManifest{
-			ID:                 participant.ID,
-			Kind:               room.NormalizeParticipantKind(participant.Kind),
-			SystemPrompt:       e.redactText(participant.SystemPrompt),
-			OpeningPrompt:      e.redactText(participant.OpeningPrompt),
-			Provider:           e.redactText(participant.Provider),
-			Model:              e.redactText(participant.Model),
-			APIKeyEnv:          e.redactText(participant.APIKeyEnv),
-			Voice:              e.redactText(participant.Voice),
-			Tools:              redactRoomStrings(participant.Tools, e.redactText),
-			BrowserTools:       participant.BrowserTools,
-			CompletedTurns:     participantResult.TurnsCompleted,
-			TerminationReason:  participantReason,
-			Reason:             participantReason,
-			Connected:          participantResult.Connected,
-			Classification:     participantResult.Classification,
-			TerminalReason:     participantResult.TerminalReason,
-			TerminalProvenance: participantResult.TerminalProvenance,
-			OutputState:        participantResult.OutputState,
-			InputDevice:        e.redactText(participant.InputDevice),
-			OutputDevice:       e.redactText(participant.OutputDevice),
-			Error:              e.redactText(participantResult.Error),
-			Artifacts:          paths,
-			RecordingStatus:    cloneRoomRecordingStatus(participantStatuses[participant.ID]),
-			DegradedArtifacts:  cloneRoomStringMap(participantArtifacts[participant.ID]),
+			ID:                     participant.ID,
+			Kind:                   room.NormalizeParticipantKind(participant.Kind),
+			SystemPrompt:           e.redactText(participant.SystemPrompt),
+			OpeningPrompt:          e.redactText(participant.OpeningPrompt),
+			Provider:               e.redactText(participant.Provider),
+			Model:                  e.redactText(participant.Model),
+			APIKeyEnv:              e.redactText(participant.APIKeyEnv),
+			Voice:                  e.redactText(participant.Voice),
+			Tools:                  redactRoomStrings(participant.Tools, e.redactText),
+			BrowserTools:           participant.BrowserTools,
+			CompletedTurns:         participantResult.TurnsCompleted,
+			TerminationReason:      participantReason,
+			Reason:                 participantReason,
+			TerminationTrigger:     participantResult.TerminationTrigger,
+			TerminationDisposition: participantResult.TerminationDisposition,
+			Connected:              participantResult.Connected,
+			Classification:         participantResult.Classification,
+			TerminalReason:         participantResult.TerminalReason,
+			TerminalProvenance:     participantResult.TerminalProvenance,
+			OutputState:            participantResult.OutputState,
+			InputDevice:            e.redactText(participant.InputDevice),
+			OutputDevice:           e.redactText(participant.OutputDevice),
+			Error:                  e.redactText(participantResult.Error),
+			Artifacts:              paths,
+			RecordingStatus:        cloneRoomRecordingStatus(participantStatuses[participant.ID]),
+			DegradedArtifacts:      cloneRoomStringMap(participantArtifacts[participant.ID]),
 		}
 		manifest.TurnCounts[participant.ID] = participantResult.TurnsCompleted
 		manifest.Artifacts[participant.ID+".wav"] = paths.WAV

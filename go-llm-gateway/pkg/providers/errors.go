@@ -46,10 +46,13 @@ const (
 	ErrorClassUnsupportedRequest      = "unsupported_request"
 	ErrorClassTransport               = "transport"
 	ErrorClassCancellation            = "cancellation"
-	ErrorClassReplayMismatch          = "replay_mismatch"
-	ErrorClassReplayIncomplete        = "replay_incomplete"
-	ErrorClassPartialOutput           = "partial_output"
-	ErrorClassUnknown                 = "unknown"
+	// ErrorClassRoomBoundCancelled identifies deliberate room-owned teardown.
+	// It is an outcome classification, not a provider failure taxonomy.
+	ErrorClassRoomBoundCancelled = "room_bound_cancelled"
+	ErrorClassReplayMismatch     = "replay_mismatch"
+	ErrorClassReplayIncomplete   = "replay_incomplete"
+	ErrorClassPartialOutput      = "partial_output"
+	ErrorClassUnknown            = "unknown"
 )
 
 // ProviderError carries provider rejection details while preserving errors.Is

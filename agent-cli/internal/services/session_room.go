@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -47,6 +48,38 @@ const (
 	ParticipantTerminationError        ParticipantTerminationReason = "error"
 )
 
+// ParticipantTerminationTrigger identifies the event that caused a
+// participant's terminal observation. Bound triggers gain a _mid_response
+// suffix when the room bound arrived while that participant had an active
+// provider response.
+const (
+	ParticipantTerminationTriggerStopped                       = "stopped"
+	ParticipantTerminationTriggerMaxTurnsReached               = "max_turns_reached"
+	ParticipantTerminationTriggerMaxTurnsReachedMidResponse    = "max_turns_reached_mid_response"
+	ParticipantTerminationTriggerMaxDurationReached            = "max_duration_reached"
+	ParticipantTerminationTriggerMaxDurationReachedMidResponse = "max_duration_reached_mid_response"
+	ParticipantTerminationTriggerSessionFailure                = "session_failure"
+	ParticipantTerminationTriggerParticipantCompletion         = "participant_completion"
+	ParticipantTerminationTriggerProviderClose                 = "provider_close"
+)
+
+// ParticipantTerminationDisposition explains how the triggering event was
+// resolved. In particular, bound responses either complete in grace or are
+// cancelled after grace; those are intentionally distinct from failure.
+const (
+	ParticipantTerminationDispositionCompletedDuringGrace = "completed_during_grace"
+	ParticipantTerminationDispositionCancelledAfterGrace  = "cancelled_after_grace"
+	ParticipantTerminationDispositionCompleted            = "completed"
+	ParticipantTerminationDispositionStopped              = "stopped"
+	ParticipantTerminationDispositionFailed               = "failed"
+	ParticipantTerminationDispositionDisconnected         = "disconnected"
+)
+
+// RoomBoundCancelledClassification is the stable participant classification
+// for a response deliberately cancelled by the room after its bound grace
+// budget. It is intentionally distinct from generic caller cancellation.
+const RoomBoundCancelledClassification = providers.ErrorClassRoomBoundCancelled
+
 // RoomParticipantResult contains the observable outcome for one participant.
 // Error is already sanitized; the resolved API-key value is never retained in
 // the result.
@@ -65,6 +98,16 @@ type RoomParticipantResult struct {
 	TerminalReason     messages.TerminalReason      `json:"terminal_reason,omitempty"`
 	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
 	OutputState        messages.TerminalOutputState `json:"output_state,omitempty"`
+	// TerminationTrigger names the event that caused this participant's
+	// terminal observation. A room-bound trigger gains a _mid_response suffix
+	// when the bound arrived while this participant had an active provider
+	// response, so a truthful "why did it stop" survives into the manifest.
+	TerminationTrigger string `json:"termination_trigger,omitempty"`
+	// TerminationDisposition explains how the triggering event resolved: a
+	// bound-affected response either completed inside the grace window or was
+	// deliberately cancelled after it. This is kept distinct from Error/
+	// Classification so a bound cancellation never reads as a failure.
+	TerminationDisposition string `json:"termination_disposition,omitempty"`
 	// RecordingStatus is nil for a healthy evidence bundle and partial when
 	// one or more participant-owned recording artifacts degraded. It is
 	// independent from the participant runtime termination reason.
