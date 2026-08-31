@@ -228,6 +228,10 @@ type RoomRunOptions struct {
 	// by package tests to exercise mixer admission failures through the normal
 	// room composition boundary. It is called after all peer inputs are added.
 	onParticipantMixerReady func(participantID string, mixer *room.PCM16Mixer)
+	// onParticipantAudioInput is an internal deterministic failure seam used by
+	// package tests to exercise provider-input rejection after a mixed frame has
+	// left the participant mixer. A nil hook uses AgentLoop.SendAudioInput.
+	onParticipantAudioInput func(participantID string, pcm []byte) error
 	// onParticipantStream is an internal observational seam used by package
 	// tests to gate the next deterministic input on a specific normalized
 	// provider event. It does not replace the real stream observer.

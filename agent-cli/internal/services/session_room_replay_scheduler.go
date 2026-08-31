@@ -262,7 +262,7 @@ func (s *roomReplaySchedule) run(ctx context.Context, runtimes []*roomParticipan
 					}
 					return fmt.Errorf("room replay target %q terminated before logical frame %d", targetID, frameIndex)
 				}
-				if err := target.mixer.WriteContext(ctx, contribution.sourceID, contribution.pcm); err != nil {
+				if err := routeRoomPeerPCM(ctx, contribution.sourceID, target, contribution.pcm); err != nil {
 					if coordinator != nil && coordinator.isStopping() {
 						return nil
 					}

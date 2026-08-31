@@ -326,6 +326,13 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 						t.Fatalf("%s peer audio arrived without ordered response cancel", id)
 					}
 				}
+			case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd:
+				// A scripted session can echo a setup/user text turn while the
+				// provider response is being admitted. It is unrelated to the
+				// peer-audio contract; keep consuming it so the assertion remains
+				// strict about RESPONSE.CANCEL ordering and exact AUDIO.DELTA
+				// payloads without racing harmless text wire traffic.
+				continue
 			default:
 				waitCancel()
 				t.Fatalf("%s unexpected provider-bound message %s", id, msg.Type)

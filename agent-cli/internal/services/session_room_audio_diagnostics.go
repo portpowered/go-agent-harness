@@ -53,12 +53,13 @@ const (
 	roomAudioIngressDispositionBackpressured = RoomAudioIngressBackpressured
 	roomAudioIngressDispositionRejected      = RoomAudioIngressRejected
 
-	roomAudioIngressReasonNoContentfulPeerAudio = "no_contentful_peer_audio"
-	roomAudioIngressReasonParticipantTerminated = "participant_terminated"
-	roomAudioIngressReasonProviderInputRejected = "provider_input_rejected"
-	roomAudioIngressMixedSource                 = "room-mix"
-	roomAudioIngressNoPeer                      = "none"
-	roomAudioIngressMaxFirstEvents              = 32
+	roomAudioIngressReasonNoContentfulPeerAudio     = "no_contentful_peer_audio"
+	roomAudioIngressReasonParticipantTerminated     = "participant_terminated"
+	roomAudioIngressReasonParticipantOutputRejected = "participant_output_rejected"
+	roomAudioIngressReasonProviderInputRejected     = "provider_input_rejected"
+	roomAudioIngressMixedSource                     = "room-mix"
+	roomAudioIngressNoPeer                          = "none"
+	roomAudioIngressMaxFirstEvents                  = 32
 )
 
 // RoomAudioIngressDisposition is the stable disposition vocabulary used by
@@ -76,6 +77,22 @@ type roomAudioIngressCount struct {
 	bytes        uint64
 	frames       uint64
 	eventEmitted bool
+}
+
+type roomAudioIngressAdmission struct {
+	sourcePeer  string
+	disposition RoomAudioIngressDisposition
+	reason      string
+	byteCount   int
+	contentful  bool
+}
+
+type roomAudioIngressContribution struct {
+	sourcePeer  string
+	disposition RoomAudioIngressDisposition
+	reason      string
+	byteCount   int
+	contentful  bool
 }
 
 type roomAudioIngressTotals struct {
@@ -97,6 +114,7 @@ type roomAudioIngressLedger struct {
 
 	mu            sync.Mutex
 	entries       map[roomAudioIngressKey]roomAudioIngressCount
+	pending       map[string][]roomAudioIngressAdmission
 	totals        roomAudioIngressTotals
 	emittedEvents int
 	finishOnce    sync.Once
@@ -108,6 +126,7 @@ func newRoomAudioIngressLedger(participantID string, sink SessionDiagnosticSink)
 		roomID:        RoomStreamRoomParticipantID,
 		sink:          sink,
 		entries:       make(map[roomAudioIngressKey]roomAudioIngressCount),
+		pending:       make(map[string][]roomAudioIngressAdmission),
 	}
 }
 
@@ -128,6 +147,138 @@ func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, e
 func notifyRoomParticipantMixerReady(opts RoomRunOptions, participantID string, mixer *room.PCM16Mixer) {
 	if opts.onParticipantMixerReady != nil {
 		opts.onParticipantMixerReady(participantID, mixer)
+	}
+}
+
+// admit records the source identity and mixer admission disposition only after
+// the mixer has appended the complete PCM chunk. It deliberately does not emit
+// a diagnostic yet: the chunk is still pending until a mixed frame reaches the
+// participant's downstream sink. Silent chunks are retained as non-contentful
+// byte ranges so a later contentful chunk cannot be attributed to an earlier
+// mixed frame.
+//
+// The mixer invokes this callback while holding its input lock. Keep this
+// method bounded and independent of the mixer so admission and source metadata
+// cannot be separated by a concurrent mix tick.
+func (l *roomAudioIngressLedger) admit(sourcePeer string, disposition RoomAudioIngressDisposition, reason string, byteCount int, contentful bool) {
+	if l == nil || byteCount <= 0 {
+		return
+	}
+	if strings.TrimSpace(sourcePeer) == "" {
+		sourcePeer = roomAudioIngressMixedSource
+	}
+	if reason == "" {
+		_, reason = roomAudioIngressDisposition(room.PCM16WriteDelivered, nil)
+	}
+	switch disposition {
+	case roomAudioIngressDispositionDelivered, roomAudioIngressDispositionBackpressured:
+	default:
+		return
+	}
+	l.mu.Lock()
+	l.pending[sourcePeer] = append(l.pending[sourcePeer], roomAudioIngressAdmission{
+		sourcePeer:  sourcePeer,
+		disposition: disposition,
+		reason:      reason,
+		byteCount:   byteCount,
+		contentful:  contentful,
+	})
+	l.mu.Unlock()
+}
+
+// resolveFrame consumes the source-side byte ranges represented by one mixed
+// cadence frame and records their downstream outcome. A failed downstream
+// send turns every contributing admitted range into a rejection while keeping
+// the original peer identity; it must never collapse into the synthetic
+// room-mix source.
+func (l *roomAudioIngressLedger) resolveFrame(sourcePeers []string, byteCount int, downstreamReason string) {
+	if l == nil || byteCount <= 0 {
+		return
+	}
+	contributions := l.consumeFrame(sourcePeers, byteCount)
+	for _, contribution := range contributions {
+		if !contribution.contentful {
+			continue
+		}
+		disposition := contribution.disposition
+		reason := contribution.reason
+		if downstreamReason != "" {
+			disposition = roomAudioIngressDispositionRejected
+			reason = downstreamReason
+		}
+		l.record(contribution.sourcePeer, disposition, reason, contribution.byteCount)
+	}
+}
+
+// consumeFrame mirrors PCM16Mixer's per-input bounded drain. A mixer frame
+// consumes at most frameBytes from each source input, so the ledger consumes
+// the same amount from that source's FIFO admissions and preserves source and
+// disposition across mixed output frames.
+func (l *roomAudioIngressLedger) consumeFrame(sourcePeers []string, frameBytes int) []roomAudioIngressContribution {
+	if l == nil || frameBytes <= 0 || len(sourcePeers) == 0 {
+		return nil
+	}
+	ids := append([]string(nil), sourcePeers...)
+	sort.Strings(ids)
+	contributions := make([]roomAudioIngressContribution, 0, len(ids))
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, sourcePeer := range ids {
+		admissions := l.pending[sourcePeer]
+		remaining := frameBytes
+		for remaining > 0 && len(admissions) > 0 {
+			admission := &admissions[0]
+			take := admission.byteCount
+			if take > remaining {
+				take = remaining
+			}
+			if take <= 0 {
+				admissions = admissions[1:]
+				continue
+			}
+			contributions = append(contributions, roomAudioIngressContribution{
+				sourcePeer:  admission.sourcePeer,
+				disposition: admission.disposition,
+				reason:      admission.reason,
+				byteCount:   take,
+				contentful:  admission.contentful,
+			})
+			admission.byteCount -= take
+			remaining -= take
+			if admission.byteCount == 0 {
+				admissions = admissions[1:]
+			}
+		}
+		if len(admissions) == 0 {
+			delete(l.pending, sourcePeer)
+		} else {
+			l.pending[sourcePeer] = admissions
+		}
+	}
+	return contributions
+}
+
+func (l *roomAudioIngressLedger) rejectPending(reason string) {
+	if l == nil {
+		return
+	}
+	if reason == "" {
+		reason = roomAudioIngressReasonParticipantTerminated
+	}
+	l.mu.Lock()
+	pending := make([]roomAudioIngressAdmission, 0)
+	for sourcePeer, admissions := range l.pending {
+		for _, admission := range admissions {
+			admission.sourcePeer = sourcePeer
+			pending = append(pending, admission)
+		}
+	}
+	l.pending = make(map[string][]roomAudioIngressAdmission)
+	l.mu.Unlock()
+	for _, admission := range pending {
+		if admission.contentful {
+			l.record(admission.sourcePeer, roomAudioIngressDispositionRejected, reason, admission.byteCount)
+		}
 	}
 }
 
@@ -194,6 +345,10 @@ func (l *roomAudioIngressLedger) finish() {
 		return
 	}
 	l.finishOnce.Do(func() {
+		// Accepted chunks that never reached a mixed output frame were stranded
+		// in the participant mixer when its work stopped. Preserve their peer
+		// attribution as terminal loss instead of silently dropping them.
+		l.rejectPending(roomAudioIngressReasonParticipantTerminated)
 		l.mu.Lock()
 		sources := make(map[string]struct{}, len(l.entries))
 		for key := range l.entries {
@@ -297,8 +452,13 @@ func routeRoomPeerPCM(ctx context.Context, sourceID string, target *roomParticip
 	if target == nil || target.mixer == nil {
 		return room.ErrMixerClosed
 	}
-	writeDisposition, writeErr := target.mixer.WriteContextWithDisposition(ctx, sourceID, pcm)
-	if roomPCMContentful(pcm) && target.ingress != nil {
+	writeDisposition, writeErr := target.mixer.WriteContextWithDispositionAndObserver(ctx, sourceID, pcm, func(admitted room.PCM16WriteDisposition) {
+		if target.ingress != nil {
+			disposition, reason := roomAudioIngressDisposition(admitted, nil)
+			target.ingress.admit(sourceID, disposition, reason, len(pcm), roomPCMContentful(pcm))
+		}
+	})
+	if roomPCMContentful(pcm) && writeErr != nil && target.ingress != nil {
 		disposition, reason := roomAudioIngressDisposition(writeDisposition, writeErr)
 		target.ingress.record(sourceID, disposition, reason, len(pcm))
 	}
