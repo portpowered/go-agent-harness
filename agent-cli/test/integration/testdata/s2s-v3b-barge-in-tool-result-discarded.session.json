@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v3b-discarded"
@@ -81,5 +81,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "5643cc5a060026407b4e7f54156a95ae9820742c2ccae03e18237d304bb4917d"
+  }
 }

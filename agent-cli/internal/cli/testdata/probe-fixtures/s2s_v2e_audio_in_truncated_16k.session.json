@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-synthetic"
@@ -85,5 +85,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "a1816dab8e3bf5c1a6786b690be7a9c9ffaae936126beb9649b0d9426393dbc4"
+  }
 }

@@ -508,7 +508,7 @@ func TestSessionReplayer_AcceptsLegacyEventArray(t *testing.T) {
 		t.Fatalf("marshal events: %v", err)
 	}
 
-	replayer := mustNewSessionReplayerFromBytes(t, data)
+	replayer := mustNewSessionReplayerFromLegacyBytes(t, data)
 	<-replayer.Done()
 
 	msg, ok := replayer.Receive().Read()
@@ -676,12 +676,12 @@ func mustNewSessionReplayer(t *testing.T, path string, opts ...SessionReplayerOp
 	return replayer
 }
 
-func mustNewSessionReplayerFromBytes(t *testing.T, data []byte, opts ...SessionReplayerOption) *SessionReplayer {
+func mustNewSessionReplayerFromLegacyBytes(t *testing.T, data []byte, opts ...SessionReplayerOption) *SessionReplayer {
 	t.Helper()
 
-	replayer, err := NewSessionReplayerFromBytes(data, opts...)
+	replayer, err := NewSessionReplayerFromLegacyBytes(data, opts...)
 	if err != nil {
-		t.Fatalf("NewSessionReplayerFromBytes: %v", err)
+		t.Fatalf("NewSessionReplayerFromLegacyBytes: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := replayer.Close(); err != nil {

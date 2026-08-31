@@ -16,6 +16,15 @@ Use `agent session --record` to capture live Grok realtime or OpenAI Realtime se
 
 Replay mode does not require live provider credentials. It reads provider traffic from the capture file and installs a replay dialer instead of a live WebSocket dialer.
 
+Replay accepts only the protected version-2 capture envelope. Every capture
+produced by the recorder includes an integrity object with `algorithm: "sha256"`,
+the fixed coverage contract
+`session_capture.v2:json(version,provider,session,records,ends_with_disconnect)`,
+and a lowercase SHA-256 digest over the replay-relevant envelope fields (the
+integrity object itself is excluded). Loading validates the envelope, event
+sequence, directions, payload types, payload JSON, and digest before creating
+a replay transport, session loop, or derived artifact sink.
+
 ## Configure Grok for Recording
 
 Set Grok as the session provider in `~/.agent-cli/config.yaml`:
@@ -270,6 +279,15 @@ payloads report the zero-based byte offset instead of a JSON pointer. This
 keeps the same strict post-handshake replay contract useful for both prompt
 and spoken-turn diagnosis.
 
+If the capture was changed without recomputing its digest, replay fails before
+provider setup with an `integrity_checksum_mismatch` error that names the
+capture path, `algorithm=sha256`, and bounded stored-versus-computed digests.
+Legacy version-1 envelopes and bare event arrays are unprotected and are
+rejected with `integrity_unavailable`; they cannot be silently treated as
+verified. Regenerate a trusted capture with the current recorder (or migrate a
+reviewed fixture explicitly with the gateway package's `SealSessionCapture`)
+before replaying it. The shipped CLI has no integrity bypass.
+
 ## Sanitize Before Committing
 
 Before promoting a local recording into a test fixture:
@@ -296,7 +314,7 @@ Session captures use a versioned JSON envelope:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "openai",
     "model": "gpt-realtime"
@@ -306,7 +324,12 @@ Session captures use a versioned JSON envelope:
     "started_at_utc": "2026-04-11T00:00:00Z",
     "fixture_provenance": "synthetic"
   },
-  "records": []
+  "records": [],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "<64 lowercase hexadecimal characters>"
+  }
 }
 ```
 

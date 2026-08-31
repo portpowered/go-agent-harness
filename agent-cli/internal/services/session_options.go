@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -372,6 +373,15 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	}
 	if opts.ReplayPath != "" && !isJSONCapturePath(opts.ReplayPath) {
 		return fmt.Errorf("--replay path %q must end with .json", opts.ReplayPath)
+	}
+	// Validate the complete capture before any caller-owned audio source,
+	// derived artifact sink, provider plan, or replay session can be created.
+	// Injected sessions are an explicit low-level test seam and do not use the
+	// path-based replay contract.
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+		if _, err := gwtesting.LoadSessionCapture(opts.ReplayPath); err != nil {
+			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+		}
 	}
 	return nil
 }

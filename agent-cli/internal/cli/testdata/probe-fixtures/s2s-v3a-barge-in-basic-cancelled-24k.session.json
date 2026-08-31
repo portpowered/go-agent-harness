@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-synthetic-v3a-24k"
@@ -7,8 +7,7 @@
   "session": {
     "id": "sess_v3a_cancelled_24k",
     "started_at_utc": "2026-08-26T00:00:00Z",
-    "fixture_provenance": "synthetic",
-    "description": "Barge-in basic (24 kHz): the overlap_24k utterance streams as two appends starting on outbound tick 2 while the assistant audio response streams; the client cancels the in-flight response at tick 4, exactly two ticks after the interrupting audio (the bound boundary)."
+    "fixture_provenance": "synthetic"
   },
   "records": [
     {
@@ -120,5 +119,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "fbe09a73cbb7a0183f2ab0019e342f1e9f55d7c00ccff3f7f967dc1cfc0c1a9d"
+  }
 }

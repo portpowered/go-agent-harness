@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-failure-auth"
@@ -39,5 +39,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "bb8478e9be3642894cf606389ff00b40e4636d88276bd8d58280e524b577b5c6"
+  },
   "ends_with_disconnect": true
 }

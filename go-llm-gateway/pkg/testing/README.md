@@ -62,7 +62,7 @@ A JSON envelope containing capture metadata and ordered bidirectional session re
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-realtime"
@@ -72,9 +72,26 @@ A JSON envelope containing capture metadata and ordered bidirectional session re
     "started_at_utc": "2026-04-11T00:00:00Z",
     "fixture_provenance": "synthetic"
   },
-  "records": []
+  "records": [],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "<64 lowercase hexadecimal characters>"
+  }
 }
 ```
+
+Current captures are protected by a SHA-256 digest over the fixed JSON
+coverage contract named by `integrity.coverage`; the integrity object is not
+part of its own digest. `LoadSessionCapture`, `NewSessionReplayer`, and
+`NewReplayWebSocketDialer` validate the supported version, required envelope
+fields, ordered positive event sequences, direction and payload-type enums,
+payload JSON, and digest before exposing records to replay. A changed payload
+therefore fails closed with a bounded expected-versus-actual digest diagnostic.
+Legacy version-1 envelopes and event arrays return an actionable
+`integrity_unavailable` error. `LoadSessionCaptureUnverified` and
+`NewSessionReplayerFromLegacyBytes` are explicit migration-only compatibility
+seams and must not be used by the shipped CLI.
 
 ### Event Schema
 
@@ -115,7 +132,7 @@ Replay preserves the ordered bidirectional flow. Server-to-client events are del
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-realtime"
@@ -183,7 +200,12 @@ Replay preserves the ordered bidirectional flow. Server-to-client events are del
         }
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "<64 lowercase hexadecimal characters>"
+  }
 }
 ```
 

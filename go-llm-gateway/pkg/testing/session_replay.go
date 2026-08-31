@@ -107,25 +107,40 @@ type SessionReplayer struct {
 var _ messages.Session = (*SessionReplayer)(nil)
 var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
 
-// NewSessionReplayer creates a SessionReplayer from a capture file at the given
-// path. The file must be a SessionCapture JSON object produced by
-// SessionRecorder.FlushToFile. Legacy JSON arrays of CapturedSessionEvent
-// objects are accepted for older fixtures.
+// NewSessionReplayer creates a SessionReplayer from a fully verified,
+// version-2 capture file at the given path. Legacy and unprotected captures
+// are rejected before the replay goroutines are created.
 func NewSessionReplayer(path string, opts ...SessionReplayerOption) (*SessionReplayer, error) {
-	data, err := os.ReadFile(path)
+	capture, err := LoadSessionCapture(path)
 	if err != nil {
-		return nil, fmt.Errorf("read session capture file: %w", err)
+		return nil, err
 	}
-	return NewSessionReplayerFromBytes(data, opts...)
+	return newSessionReplayer(capture.Records, opts...), nil
 }
 
-// NewSessionReplayerFromBytes creates a SessionReplayer from raw JSON bytes.
+// NewSessionReplayerFromBytes creates a SessionReplayer from raw protected
+// version-2 capture JSON bytes. It exists for callers that already own the
+// capture bytes; legacy bytes require NewSessionReplayerFromLegacyBytes.
 func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
-	events, err := decodeSessionCaptureEvents(data)
+	capture, err := validateSessionCapturePath("", data)
 	if err != nil {
 		return nil, fmt.Errorf("parse session capture: %w", err)
 	}
+	return newSessionReplayer(capture.Records, opts...), nil
+}
 
+// NewSessionReplayerFromLegacyBytes is an explicit compatibility seam for
+// controlled fixture migration. It never participates in the shipped CLI or
+// path-based replay flow and does not claim integrity for its input.
+func NewSessionReplayerFromLegacyBytes(data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
+	events, err := decodeLegacySessionCaptureEvents(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse legacy session capture: %w", err)
+	}
+	return newSessionReplayer(events, opts...), nil
+}
+
+func newSessionReplayer(events []CapturedSessionEvent, opts ...SessionReplayerOption) *SessionReplayer {
 	r := &SessionReplayer{
 		events:   events,
 		outbound: messages.NewTypedBuffer[messages.StreamMessage](64),
@@ -144,7 +159,7 @@ func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*S
 	go r.watchReplayContext()
 	go r.replayLoop()
 
-	return r, nil
+	return r
 }
 
 // Send verifies the outbound message against the next expected client-to-server
@@ -467,7 +482,7 @@ func compareCapturedStreamMessage(expected CapturedSessionEvent, actual messages
 	return nil
 }
 
-func decodeSessionCaptureEvents(data []byte) ([]CapturedSessionEvent, error) {
+func decodeLegacySessionCaptureEvents(data []byte) ([]CapturedSessionEvent, error) {
 	var capture SessionCapture
 	if err := json.Unmarshal(data, &capture); err == nil && capture.Version != 0 {
 		return capture.Records, nil

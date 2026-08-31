@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v3c-dropped-commit"
@@ -458,5 +458,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "1323593bff300cb970a26c9522c6be7fd06aeaf354d9755b6bdd9039e46e6f4e"
+  }
 }

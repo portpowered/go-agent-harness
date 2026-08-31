@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "openai",
     "model": "gpt-realtime"
@@ -34,7 +34,9 @@
                     "description": "Path to the local image to attach"
                   }
                 },
-                "required": ["path"]
+                "required": [
+                  "path"
+                ]
               }
             }
           ]
@@ -205,5 +207,10 @@
         }
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "02725f9d0d42305b3ca1a5c8d1b066fdf5829b74c166621ff31152ccd9696f31"
+  }
 }

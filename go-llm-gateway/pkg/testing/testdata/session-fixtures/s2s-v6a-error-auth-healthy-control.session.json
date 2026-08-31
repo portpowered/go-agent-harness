@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v6a-healthy-control"
@@ -67,5 +67,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "48d16fa821f7dc45f0162ab2aa27eda6a7ef748dd89e364eb3ec2a34d724c4c4"
+  },
   "ends_with_disconnect": true
 }

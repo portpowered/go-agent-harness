@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-realtime"
@@ -24,5 +24,10 @@
         }
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "6c21915d822ee2bbcde5a6edaec5e941e1fc6566ff11e874633e1ef93ea3af10"
+  }
 }

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-dead-zeroturn"
@@ -36,5 +36,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "ac151da75a8f3b579f7b53ed1742de148775096d4f18a32bbe98504a2500b61e"
+  },
   "ends_with_disconnect": true
 }

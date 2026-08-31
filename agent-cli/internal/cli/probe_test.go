@@ -919,21 +919,24 @@ func TestProbeRunV3ANegativeControlFailsWhenCancelSuppressed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read committed v3a fixture: %v", err)
 	}
-	var capture map[string]any
+	var capture gatewaytesting.SessionCapture
 	if err := json.Unmarshal(source, &capture); err != nil {
 		t.Fatalf("decode committed v3a fixture: %v", err)
 	}
-	records := capture["records"].([]any)
-	broken := make([]any, 0, len(records))
-	for _, record := range records {
-		if record.(map[string]any)["type"] == "response.cancel" {
+	broken := make([]gatewaytesting.CapturedSessionEvent, 0, len(capture.Records))
+	for _, record := range capture.Records {
+		if record.Type == "response.cancel" {
 			continue
 		}
 		broken = append(broken, record)
 	}
-	capture["records"] = broken
+	capture.Records = broken
+	sealed, err := gatewaytesting.SealSessionCapture(capture)
+	if err != nil {
+		t.Fatalf("seal broken fixture: %v", err)
+	}
 	fixture := filepath.Join(t.TempDir(), "s2s-v3a-barge-in-basic-cancelled-16k.session.json")
-	encoded, err := json.Marshal(capture)
+	encoded, err := json.Marshal(sealed)
 	if err != nil {
 		t.Fatalf("encode broken fixture: %v", err)
 	}

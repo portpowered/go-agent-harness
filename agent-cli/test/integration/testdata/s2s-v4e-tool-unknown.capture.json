@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-s2s-v4e-tool-unknown"
@@ -96,5 +96,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "7dc6a2dbea1319aaa65ad22e23192262e2d3e18a74a6ff4cedc7506901e3aab9"
+  }
 }

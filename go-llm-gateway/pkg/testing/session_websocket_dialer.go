@@ -2,6 +2,7 @@ package testing
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,6 +91,12 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 
 	capture := d.capture
 	capture.Records = events
+	// Keep the in-memory capture and the flushed representation equally
+	// verifiable. FlushToFile still recomputes this value immediately before
+	// publication through json.MarshalIndent.
+	if sealed, err := SealSessionCapture(capture); err == nil {
+		capture = sealed
+	}
 	return capture
 }
 
@@ -186,10 +193,13 @@ func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
 }
 
 // NewReplayWebSocketDialerFromCapture builds a replay dialer from an already
-// decoded capture. Callers that construct an ephemeral capture may use this
-// seam after validating the source fixture; unlike the path-based constructor,
-// it cannot apply file-level fixture hygiene to data that is not on disk.
+// decoded, integrity-verified capture. Callers that construct an ephemeral
+// capture should call SealSessionCapture first; unlike the path-based
+// constructor, this seam cannot apply file-level fixture hygiene.
 func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSocketDialer, error) {
+	if err := validateSessionCaptureEnvelope("<in-memory>", capture); err != nil {
+		return nil, err
+	}
 	for _, evt := range capture.Records {
 		if evt.PayloadType != SessionPayloadTypeWebSocketMessage {
 			return nil, fmt.Errorf("session capture contains %q payload; expected %q", evt.PayloadType, SessionPayloadTypeWebSocketMessage)
@@ -387,13 +397,29 @@ func (c *replayWebSocketConn) closeDoneLocked() {
 	})
 }
 
-// LoadSessionCapture reads a versioned session capture or a legacy event array.
+// LoadSessionCapture reads and fully verifies a protected version-2 session
+// capture. Legacy version-1 envelopes and event arrays are intentionally
+// rejected; use LoadSessionCaptureUnverified only for explicit trusted fixture
+// migration.
 func LoadSessionCapture(path string) (SessionCapture, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return SessionCapture{}, fmt.Errorf("read session capture file: %w", err)
 	}
+	return validateSessionCapturePath(path, data)
+}
 
+// LoadSessionCaptureUnverified loads an old or otherwise unprotected capture
+// for controlled migration tooling. It must not be used as a replay input.
+func LoadSessionCaptureUnverified(path string) (SessionCapture, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SessionCapture{}, fmt.Errorf("read session capture file: %w", err)
+	}
+	return decodeUnverifiedSessionCapture(data)
+}
+
+func decodeUnverifiedSessionCapture(data []byte) (SessionCapture, error) {
 	var capture SessionCapture
 	if err := json.Unmarshal(data, &capture); err == nil && capture.Version != 0 {
 		return capture, nil
@@ -404,9 +430,39 @@ func LoadSessionCapture(path string) (SessionCapture, error) {
 		return SessionCapture{}, fmt.Errorf("parse session capture: %w", err)
 	}
 	return SessionCapture{
-		Version: SessionCaptureVersion,
+		Version: SessionCaptureLegacyVersion,
 		Records: events,
 	}, nil
+}
+
+func validateSessionCaptureEnvelope(path string, capture SessionCapture) error {
+	if capture.Version == SessionCaptureLegacyVersion {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityUnavailable, "/version", 0, "", fmt.Sprintf("protected schema version %d", SessionCaptureVersion), fmt.Sprintf("unprotected schema version %d", capture.Version), ErrSessionCaptureIntegrityUnavailable)
+	}
+	if capture.Version != SessionCaptureVersion {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassUnsupportedVersion, "/version", 0, "", fmt.Sprintf("%d", SessionCaptureVersion), fmt.Sprintf("%d", capture.Version), ErrSessionCaptureUnsupportedVersion)
+	}
+	if isZeroSessionCaptureIntegrity(capture.Integrity) {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", "algorithm, coverage, and digest", "missing", ErrSessionCaptureIntegrity)
+	}
+	metadata, err := json.Marshal(capture.Integrity)
+	if err != nil {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", "valid integrity object", "unserializable", errors.Join(ErrSessionCaptureIntegrity, err))
+	}
+	if err := validateSessionCaptureIntegrityMetadata(path, metadata, capture.Integrity); err != nil {
+		return err
+	}
+	if err := validateSessionCaptureStructure(path, capture); err != nil {
+		return err
+	}
+	actual, err := ComputeSessionCaptureDigest(capture)
+	if err != nil {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, "$", 0, SessionCaptureIntegrityAlgorithm, "serializable protected envelope", "serialization failed", errors.Join(ErrSessionCaptureStructure, err))
+	}
+	if actual != capture.Integrity.Digest {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityChecksum, "/integrity/digest", 0, capture.Integrity.Algorithm, "stored "+capture.Integrity.Digest, "computed "+actual, ErrSessionCaptureIntegrity)
+	}
+	return nil
 }
 
 func eventPayload(evt CapturedSessionEvent) []byte {

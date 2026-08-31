@@ -80,6 +80,11 @@ func newRoomRealtimeReplayHarness(t *testing.T, captures map[string]gwtesting.Se
 }
 
 func newRoomRealtimeReplayDialer(participantID string, capture gwtesting.SessionCapture) (*roomRealtimeReplayDialer, error) {
+	sealed, err := gwtesting.SealSessionCapture(capture)
+	if err != nil {
+		return nil, err
+	}
+	capture = sealed
 	inner, err := gwtesting.NewReplayWebSocketDialerFromCapture(capture)
 	if err != nil {
 		return nil, err
