@@ -279,6 +279,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	}
 	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
+	plan.loop.toolDiagnostics = opts.ToolDiagnostics
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding

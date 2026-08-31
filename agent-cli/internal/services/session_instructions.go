@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -346,6 +347,11 @@ const sessionToolGroundingPolicy = `Tool-grounding requirements:
 - Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.
 - Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.`
 
+const sessionSightGroundingPolicy = `Sight routing requirements:
+- For any question about the contents or rendered appearance of the selected browser page, use show_page. Its result is the authoritative page sight for both broad visual requests and literal follow-up questions.
+- Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.
+- Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.`
+
 const sessionConnectedUnselectedBrowserGrounding = `WebMCP browser selection:
 - A browser endpoint is connected, but no page is selected.
 - Before any page work, call webmcp_list_tabs.
@@ -379,6 +385,9 @@ func composeSessionInstructions(opts SessionRunOptions, instructions string) str
 	}
 	if opts.BrowserToolsEnabled && !strings.Contains(instructions, sessionWebMCPAmbiguityPolicy) {
 		blocks = append(blocks, sessionWebMCPAmbiguityPolicy)
+	}
+	if opts.BrowserToolsEnabled && sessionHasTool(opts.ToolDefinitions, cliTools.PageSightToolID) && !strings.Contains(instructions, sessionSightGroundingPolicy) {
+		blocks = append(blocks, sessionSightGroundingPolicy)
 	}
 	filtered := blocks[:0]
 	for _, block := range blocks {

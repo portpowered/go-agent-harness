@@ -76,6 +76,25 @@ type resolvedSessionToolSurface struct {
 	capabilityClose   func() error
 }
 
+func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink {
+	return services.SessionToolDiagnosticFunc(func(diagnostic services.SessionToolDiagnostic) {
+		if diagnostic.Error == nil {
+			return
+		}
+		_, _ = fmt.Fprintf(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
+	})
+}
+
+func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID) services.RTCDeviceBindingRequest {
+	return services.RTCDeviceBindingRequest{
+		Registry:      c.deviceRegistry,
+		InputDevice:   input,
+		OutputDevice:  output,
+		InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+		OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+	}
+}
+
 func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
 	if capabilities.Initialize != nil {
 		// Initialization is deliberately completed before the provider receives
@@ -687,18 +706,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				CancellationIntent:     cancellationIntent,
 				LoadedConfig:           loadedConfig,
 				BrowserToolsEnabled:    !bareSession && browserConfigEnablesTools(loadedConfig),
+				ToolDiagnostics:        sessionToolDiagnosticSink(cmd.ErrOrStderr()),
 				WaitForClose:           waitForClose,
 				StreamObserver:         c.streamObserver,
 				Clock:                  c.clockSource,
 				RuntimeObserver:        c.runtimeObserver,
 				AudioInTurnBarge:       audioInTurnBarge,
-				RTCDeviceBinding: services.RTCDeviceBindingRequest{
-					Registry:      c.deviceRegistry,
-					InputDevice:   audioInDevice,
-					OutputDevice:  audioOutDevice,
-					InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
-				},
+				RTCDeviceBinding:       c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice),
 			}
 			if bareSession {
 				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)

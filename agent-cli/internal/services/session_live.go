@@ -155,6 +155,9 @@ type sessionLoopOptions struct {
 	// execute through the product executor instead of the loop default.
 	// Nil keeps loop construction byte-for-byte identical to today.
 	ToolExecutor messages.ToolExecutor
+	// toolDiagnostics receives original tool errors for the operator-facing
+	// channel. The session adapter projects a separate customer-safe result.
+	toolDiagnostics SessionToolDiagnosticSink
 
 	// ToolDefinitions is the config-filtered tool surface advertised to the
 	// session loop. It is paired with ToolExecutor by the runtime planner.
@@ -261,12 +264,13 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
 			opts.ToolExecutor,
 			opts.InteractiveToolPolicy,
 			opts.ToolExecutionTimeout,
 			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer),
 			opts.cancellationIntent,
+			opts.toolDiagnostics,
 		)))
 		if opts.InteractiveToolPolicy != nil {
 			policy := opts.InteractiveToolPolicy.Clone()

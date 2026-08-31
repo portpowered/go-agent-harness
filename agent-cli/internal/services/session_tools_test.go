@@ -103,16 +103,19 @@ func TestSessionToolExecutor_ScreenTimeoutDeniedRecheckUsesOneCorrelatedPermissi
 	if result.Version != sight.ResultVersion || result.Status != sight.StatusError || result.Source != sight.SourceScreen || result.ErrorCode != cliTools.ScreenRecordingPermissionDeniedErrorCode {
 		t.Fatalf("screen timeout denial result = %+v, want version 2 permission denial", result)
 	}
-	for _, want := range []string{
+	for _, forbidden := range []string{
 		"System Settings → Privacy & Security → Screen & System Audio Recording",
 		"hosting application",
 		"completely quit and restart",
 		"macOS Sequoia",
 		"monthly re-confirmation",
 	} {
-		if !strings.Contains(result.Error, want) {
-			t.Errorf("screen timeout denial error %q does not contain %q", result.Error, want)
+		if strings.Contains(result.Error, forbidden) {
+			t.Errorf("screen timeout denial error %q contains operator-only text %q", result.Error, forbidden)
 		}
+	}
+	if result.Error != "Screen sight is unavailable." {
+		t.Fatalf("screen timeout denial error = %q, want concise customer-safe message", result.Error)
 	}
 	if executor.recheckCount() != 1 {
 		t.Fatalf("screen permission rechecks = %d, want exactly one", executor.recheckCount())
@@ -176,8 +179,8 @@ func TestSessionToolExecutor_ScreenTimeoutRecheckPreservesTimeoutForNonDenial(t 
 				if decodeErr != nil {
 					t.Fatalf("decode timeout result: %v", decodeErr)
 				}
-				if result.ErrorCode == cliTools.ScreenRecordingPermissionDeniedErrorCode || !strings.Contains(result.Error, "tool execution timed out") {
-					t.Fatalf("timeout result = %+v, want unchanged timeout failure", result)
+				if result.ErrorCode == cliTools.ScreenRecordingPermissionDeniedErrorCode || result.Error != "Screen sight is unavailable." {
+					t.Fatalf("timeout result = %+v, want safe non-denial timeout failure", result)
 				}
 			}
 			wantRechecks := 1
@@ -208,6 +211,8 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 
 	executor := newTimeoutScreenPermissionExecutor(cliTools.DisplayPermission{State: cliTools.DisplayPermissionGranted})
 	out := newSignalingBuffer()
+	var diagnostic SessionToolDiagnostic
+	var diagnosticCalls int
 	inferencer := newScriptedToolCallInferencer(
 		out,
 		"post-screen-timeout continuation",
@@ -225,6 +230,10 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
 		InteractiveToolPolicy: &policy,
+		toolDiagnostics: SessionToolDiagnosticFunc(func(got SessionToolDiagnostic) {
+			diagnostic = got
+			diagnosticCalls++
+		}),
 	})
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
@@ -234,6 +243,24 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 	}
 	if !strings.Contains(out.String(), cliTools.ScreenRecordingPermissionDeniedErrorCode) {
 		t.Fatalf("session output = %q, want permission denial result", out.String())
+	}
+	if !strings.Contains(out.String(), "Screen sight is unavailable.") {
+		t.Fatalf("session output = %q, want customer-safe screen failure", out.String())
+	}
+	for _, forbidden := range []string{
+		"System Settings → Privacy & Security → Screen & System Audio Recording",
+		"hosting application",
+		"Tell the customer",
+		"completely quit and restart",
+		"macOS Sequoia",
+		"monthly re-confirmation",
+	} {
+		if strings.Contains(out.String(), forbidden) {
+			t.Errorf("assistant-visible session output contains operator-only text %q: %s", forbidden, out.String())
+		}
+	}
+	if diagnosticCalls != 1 || diagnostic.ToolCallID != callID || diagnostic.ToolName != cliTools.ScreenToolID || diagnostic.Source != sight.SourceScreen || diagnostic.ErrorCode != cliTools.ScreenRecordingPermissionDeniedErrorCode || diagnostic.Error == nil || !strings.Contains(diagnostic.Error.Error(), "System Settings → Privacy & Security → Screen & System Audio Recording") {
+		t.Fatalf("operator diagnostic = %#v, calls=%d, want original typed denial with remediation", diagnostic, diagnosticCalls)
 	}
 	if !strings.Contains(out.String(), "post-screen-timeout continuation") {
 		t.Fatalf("session did not reach one grounded continuation:\n%s", out.String())

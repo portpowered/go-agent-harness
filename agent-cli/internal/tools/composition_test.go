@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -89,6 +91,76 @@ func TestComposeToolSurfaceRoutesExactNamesAndTextualizesBrokerResult(t *testing
 	}
 }
 
+func TestComposeToolSurfaceMakesPageSightAuthoritativeAndSplitsHostDisplay(t *testing.T) {
+	static := &compositionExecutor{
+		response: messages.ToolCallResponse{Content: "physical display"},
+	}
+	pageMetadata := `{"version":2,"status":"success","source":"browser_page","mime_type":"image/png","byte_length":4,"width":1,"height":1,"sha256":"` + strings.Repeat("0", 64) + `","typed_projection":"input_image"}`
+	broker := &compositionExecutor{
+		response: messages.ToolCallResponse{
+			Content: pageMetadata,
+			ContentParts: []messages.ContentPart{
+				messages.TextPart{Text: pageMetadata},
+				messages.ImagePart{Bytes: []byte{0x89, 'P', 'N', 'G'}, MediaType: "image/png"},
+			},
+		},
+	}
+	surface, err := tools.ComposeToolSurface(
+		static,
+		[]messages.ToolDefinition{{Name: tools.ScreenToolID, Description: "legacy host capture"}},
+		broker,
+		[]messages.ToolDefinition{{Name: tools.PageSightToolID, Description: "selected page capture"}},
+	)
+	if err != nil {
+		t.Fatalf("ComposeToolSurface: %v", err)
+	}
+	if _, ok := findDefinition(surface.Definitions, tools.ScreenToolID); ok {
+		t.Fatalf("browser-composed definitions still advertise legacy physical name: %#v", surface.Definitions)
+	}
+	if host, ok := findDefinition(surface.Definitions, tools.HostDisplayToolID); !ok || host.Description == "legacy host capture" {
+		t.Fatalf("host display definition = %#v, want explicit renamed capability", host)
+	}
+
+	pageResponse, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "page-call", Name: tools.ScreenToolID, Arguments: `{"action":"screenshot"}`})
+	if err != nil {
+		t.Fatalf("legacy page execute: %v", err)
+	}
+	if static.calls != 0 || broker.calls != 1 || broker.lastCall.Name != tools.PageSightToolID || broker.lastCall.Arguments != `{}` {
+		t.Fatalf("page route calls = static:%d broker:%d last=%#v, want broker show_page only", static.calls, broker.calls, broker.lastCall)
+	}
+	if pageResponse.ToolCallID != "page-call" || pageResponse.Name != tools.ScreenToolID || len(pageResponse.ContentParts) != 2 {
+		t.Fatalf("page response = %#v, want correlated rich response under legacy call name", pageResponse)
+	}
+	var pageResult sight.Result
+	pageResult, err = sight.Decode([]byte(pageResponse.Content))
+	if err != nil || pageResult.Source != sight.SourceBrowserPage {
+		t.Fatalf("page result = %+v, err = %v, want browser_page source", pageResult, err)
+	}
+	literalResponse, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "literal-page-call", Name: tools.PageSightToolID, Arguments: `{}`})
+	if err != nil {
+		t.Fatalf("literal page execute: %v", err)
+	}
+	if broker.calls != 2 || static.calls != 0 || broker.lastCall.Name != tools.PageSightToolID || len(literalResponse.ContentParts) != 2 {
+		t.Fatalf("successive page routes = static:%d broker:%d last=%#v response=%#v, want two broker page captures and no host capture", static.calls, broker.calls, broker.lastCall, literalResponse)
+	}
+
+	hostResponse, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "host-call", Name: tools.HostDisplayToolID, Arguments: `{}`})
+	if err != nil {
+		t.Fatalf("host display execute: %v", err)
+	}
+	if static.calls != 1 || static.lastCall.Name != tools.ScreenToolID || broker.calls != 2 {
+		t.Fatalf("host route calls = static:%d last=%#v broker:%d, want static show only", static.calls, static.lastCall, broker.calls)
+	}
+	if hostResponse.ToolCallID != "host-call" || hostResponse.Name != tools.HostDisplayToolID || hostResponse.Content != "physical display" {
+		t.Fatalf("host response = %#v", hostResponse)
+	}
+
+	router, ok := surface.Executor.(tools.PageSightToolRouter)
+	if !ok || !router.IsPageSightTool(tools.ScreenToolID) || !router.IsPageSightTool(tools.PageSightToolID) || router.IsPageSightTool(tools.HostDisplayToolID) {
+		t.Fatalf("page routing classification = ok:%v legacy:%v page:%v host:%v", ok, pageSight(router, tools.ScreenToolID), pageSight(router, tools.PageSightToolID), pageSight(router, tools.HostDisplayToolID))
+	}
+}
+
 func TestComposeToolSurfacePreservesBrokerImageProjection(t *testing.T) {
 	imageBytes := []byte{0x89, 'P', 'N', 'G'}
 	metadata := `{"version":2,"status":"success","source":"browser_page","mime_type":"image/png","byte_length":4,"width":1,"height":1,"sha256":"fixture","typed_projection":"input_image"}`
@@ -134,6 +206,22 @@ type compositionExecutor struct {
 	response messages.ToolCallResponse
 	calls    int
 	lastCall messages.ToolCall
+}
+
+func findDefinition(definitions []messages.ToolDefinition, name string) (messages.ToolDefinition, bool) {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return definition, true
+		}
+	}
+	return messages.ToolDefinition{}, false
+}
+
+func pageSight(router tools.PageSightToolRouter, name string) bool {
+	if router == nil {
+		return false
+	}
+	return router.IsPageSightTool(name)
 }
 
 func (e *compositionExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
