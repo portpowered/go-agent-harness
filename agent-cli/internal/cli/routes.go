@@ -210,8 +210,11 @@ func (r *Router) BuildRoot() *cobra.Command {
 	cmd.PersistentFlags().CountVarP(&r.Flags.VerboseMode, "verbose", "v", "Enable verbose output (use -v for info, -vv for debug)")
 	cmd.PersistentFlags().StringVarP(&r.Flags.ConfigDirPath, "config-dir", "C", r.Flags.ConfigDirPath, "Directory for agent CLI config (default: ~/.agent-cli)")
 	cmd.PersistentFlags().BoolVar(&r.Flags.LogToStdout, "log-to-stdout", false, "Log to stdout/stderr instead of file (default: logs to file in config directory)")
-	cmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
-		return r.resolveConfigDir()
+	cmd.PersistentPreRunE = func(command *cobra.Command, args []string) error {
+		if err := r.resolveConfigDir(); err != nil {
+			return err
+		}
+		return r.resolveCommandPaths(command, args)
 	}
 
 	return cmd
