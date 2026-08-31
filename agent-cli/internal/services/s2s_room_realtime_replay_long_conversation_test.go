@@ -186,7 +186,7 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 		if !participant.Connected || participant.TurnsCompleted != longConversationTurnsPerParticipant || participant.Reason != ParticipantTerminationEnded || participant.Error != "" {
 			t.Fatalf("long-conversation participant %q = %+v, want connected, %d turns, ended, and no error", participantID, participant, longConversationTurnsPerParticipant)
 		}
-		if participant.TerminationDisposition != ParticipantTerminationDispositionCompleted || participant.Classification != "" || participant.TerminalReason != string(messages.TerminalReasonProviderAuthoredCompletion) || participant.TerminalProvenance != string(messages.TerminalProvenanceProvider) || participant.OutputState != string(messages.TerminalOutputComplete) {
+		if participant.TerminationDisposition != ParticipantTerminationDispositionCompleted || participant.Classification != "" || participant.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion || participant.TerminalProvenance != messages.TerminalProvenanceProvider || participant.OutputState != messages.TerminalOutputComplete {
 			t.Fatalf("long-conversation participant %q terminal metadata = %+v, want ordinary provider completion", participantID, participant)
 		}
 		if err := harness.participant(participantID).dialer.Err(); err != nil {

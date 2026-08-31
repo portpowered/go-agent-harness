@@ -1,0 +1,9 @@
+{"event":"turn_started","participant_id":"agent-b","timestamp_ms":3200,"turn_id":"agent-b-turn-1"}
+{"event":"turn_ended","participant_id":"agent-b","timestamp_ms":5200,"turn_id":"agent-b-turn-1"}
+{"event":"turn_started","participant_id":"agent-b","timestamp_ms":9200,"turn_id":"agent-b-turn-2"}
+{"event":"turn_ended","participant_id":"agent-b","timestamp_ms":11200,"turn_id":"agent-b-turn-2"}
+{"event":"turn_started","participant_id":"agent-b","timestamp_ms":15200,"turn_id":"agent-b-turn-3"}
+{"event":"turn_ended","participant_id":"agent-b","timestamp_ms":17200,"turn_id":"agent-b-turn-3"}
+{"event":"turn_started","participant_id":"agent-b","timestamp_ms":21200,"turn_id":"agent-b-turn-4"}
+{"event":"turn_ended","participant_id":"agent-b","timestamp_ms":23200,"turn_id":"agent-b-turn-4"}
+{"event":"participant_terminated","fields":{"classification":"","output_state":"complete","reason":"ended","terminal_provenance":"provider","terminal_reason":"provider_authored_completion","termination_disposition":"completed","termination_trigger":"max_turns_reached"},"participant_id":"agent-b","timestamp_ms":23200}

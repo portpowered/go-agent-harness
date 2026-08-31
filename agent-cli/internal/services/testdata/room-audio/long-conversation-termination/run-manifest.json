@@ -1,0 +1,564 @@
+{
+  "annotations": {
+    "loudness": [
+      {
+        "end_ms": 23200,
+        "id": "long-conversation-balance",
+        "kind": "loudness",
+        "left": "agent-a",
+        "right": "agent-b",
+        "start_ms": 200
+      }
+    ]
+  },
+  "artifacts": {
+    "room_mix": {
+      "path": "room-mix.wav",
+      "size": 48044,
+      "sha256": "cfb80ace8264fe77d2d7b45c670d0f594918bf49fe6a2a2750a789cdb6885bd8"
+    },
+    "room_timeline": {
+      "path": "room-timeline.jsonl",
+      "size": 5013,
+      "sha256": "ce574f461bff06d18f24fa94c14d3a83e44828973adf580f4b7a4d9baf2ea49b"
+    }
+  },
+  "audio_format": {
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "sample_rate": 1000
+  },
+  "bounds": {
+    "max_turns": 4
+  },
+  "clock_base": "2026-08-31T17:00:00Z",
+  "finalized": true,
+  "fixture_id": "long-conversation-termination-v1",
+  "participants": {
+    "agent-a": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-a/deltas.jsonl",
+          "size": 67863,
+          "sha256": "f382ef47e223c581d14e64b0d687d7c45ecffc935dcb51d7c739bbd64209763b"
+        },
+        "diagnostics": {
+          "path": "participants/agent-a/diagnostics.jsonl",
+          "size": 983,
+          "sha256": "1191684df2cf3418a21c74561acdcab9775c1f63990011a1c486e17093fb2936"
+        },
+        "events": {
+          "path": "participants/agent-a/events.jsonl",
+          "size": 1106,
+          "sha256": "4610c7a31da58e474aeb4472ba2d5d4562b5aa922ba57e77d0508595edd07583"
+        },
+        "received_pcm": {
+          "path": "participants/agent-a/received.pcm",
+          "size": 48000,
+          "sha256": "b61520d6ae5c151a6b183a4a0065dfa241e50c2c615266b2c1902f300f568e4d"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-a/sent.pcm",
+          "size": 48000,
+          "sha256": "20cfa0f9ca2e879550cca6a9701de7657ea572a09bde8e7b7aafd197a1ae6c8d"
+        },
+        "wav": {
+          "path": "participants/agent-a/agent.wav",
+          "size": 48044,
+          "sha256": "71814ca588c3d2c634471d74419940650a3b8f100cae5154136ad19d84c475e4"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-a/capture.session.json",
+        "size": 807,
+        "sha256": "9bd7885070143d18e52909b18b7d8aedeb81a1f8e3e2c8888befe5892cc034b1"
+      },
+      "classification": "",
+      "completed_turns": 4,
+      "connected": true,
+      "id": "agent-a",
+      "kind": "agent",
+      "model": "room-bound-long-conversation-v1",
+      "opening_prompt": "Begin the deterministic post-fix long conversation fixture.",
+      "output_state": "complete",
+      "provider": "offline",
+      "reason": "ended",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 5220,
+              "label": "agent-b-turn-1",
+              "start_ms": 3220
+            },
+            {
+              "end_ms": 11220,
+              "label": "agent-b-turn-2",
+              "start_ms": 9220
+            },
+            {
+              "end_ms": 17220,
+              "label": "agent-b-turn-3",
+              "start_ms": 15220
+            },
+            {
+              "end_ms": 23220,
+              "label": "agent-b-turn-4",
+              "start_ms": 21220
+            }
+          ],
+          "stream_id": "agent-a:received",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 2200,
+              "label": "agent-a-turn-1",
+              "start_ms": 200
+            },
+            {
+              "end_ms": 8200,
+              "label": "agent-a-turn-2",
+              "start_ms": 6200
+            },
+            {
+              "end_ms": 14200,
+              "label": "agent-a-turn-3",
+              "start_ms": 12200
+            },
+            {
+              "end_ms": 20200,
+              "label": "agent-a-turn-4",
+              "start_ms": 18200
+            }
+          ],
+          "stream_id": "agent-a:sent",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-a-chunk-1",
+              "sample_index": 1000
+            },
+            {
+              "id": "agent-a-chunk-2",
+              "sample_index": 2000
+            },
+            {
+              "id": "agent-a-chunk-3",
+              "sample_index": 3000
+            },
+            {
+              "id": "agent-a-chunk-4",
+              "sample_index": 4000
+            },
+            {
+              "id": "agent-a-chunk-5",
+              "sample_index": 5000
+            },
+            {
+              "id": "agent-a-chunk-6",
+              "sample_index": 6000
+            },
+            {
+              "id": "agent-a-chunk-7",
+              "sample_index": 7000
+            },
+            {
+              "id": "agent-a-chunk-8",
+              "sample_index": 8000
+            },
+            {
+              "id": "agent-a-chunk-9",
+              "sample_index": 9000
+            },
+            {
+              "id": "agent-a-chunk-10",
+              "sample_index": 10000
+            },
+            {
+              "id": "agent-a-chunk-11",
+              "sample_index": 11000
+            },
+            {
+              "id": "agent-a-chunk-12",
+              "sample_index": 12000
+            },
+            {
+              "id": "agent-a-chunk-13",
+              "sample_index": 13000
+            },
+            {
+              "id": "agent-a-chunk-14",
+              "sample_index": 14000
+            },
+            {
+              "id": "agent-a-chunk-15",
+              "sample_index": 15000
+            },
+            {
+              "id": "agent-a-chunk-16",
+              "sample_index": 16000
+            },
+            {
+              "id": "agent-a-chunk-17",
+              "sample_index": 17000
+            },
+            {
+              "id": "agent-a-chunk-18",
+              "sample_index": 18000
+            },
+            {
+              "id": "agent-a-chunk-19",
+              "sample_index": 19000
+            },
+            {
+              "id": "agent-a-chunk-20",
+              "sample_index": 20000
+            },
+            {
+              "id": "agent-a-chunk-21",
+              "sample_index": 21000
+            },
+            {
+              "id": "agent-a-chunk-22",
+              "sample_index": 22000
+            },
+            {
+              "id": "agent-a-chunk-23",
+              "sample_index": 23000
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 2200,
+              "label": "agent-a-turn-1",
+              "start_ms": 200
+            },
+            {
+              "end_ms": 8200,
+              "label": "agent-a-turn-2",
+              "start_ms": 6200
+            },
+            {
+              "end_ms": 14200,
+              "label": "agent-a-turn-3",
+              "start_ms": 12200
+            },
+            {
+              "end_ms": 20200,
+              "label": "agent-a-turn-4",
+              "start_ms": 18200
+            }
+          ],
+          "stream_id": "agent-a:output",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic long-conversation fixture; do not contact a provider.",
+      "terminal_provenance": "provider",
+      "terminal_reason": "provider_authored_completion",
+      "termination_disposition": "completed",
+      "termination_reason": "ended",
+      "termination_trigger": "max_turns_reached",
+      "voice": "synthetic-noise"
+    },
+    "agent-b": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-b/deltas.jsonl",
+          "size": 67863,
+          "sha256": "e4dc9795e548701050fef0fafd28290e11c262ed5c2274fee5e2a4d872a2b416"
+        },
+        "diagnostics": {
+          "path": "participants/agent-b/diagnostics.jsonl",
+          "size": 986,
+          "sha256": "4b156c22f05907fcec1022957421b73d936e76bf9f66829fba30375ada267391"
+        },
+        "events": {
+          "path": "participants/agent-b/events.jsonl",
+          "size": 1108,
+          "sha256": "2ab04120f399ab740a06aacf70e9fc0e71508f627f3c795758c5addad2238217"
+        },
+        "received_pcm": {
+          "path": "participants/agent-b/received.pcm",
+          "size": 48000,
+          "sha256": "1a2323865e0323dcaa989cc3e2f0f319b085d86bc3f732021bef19e11133f0b5"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-b/sent.pcm",
+          "size": 48000,
+          "sha256": "8aabf0673b8b13260d7d6ef7d85ccb0e43a307b84cdcd28365d01b678daf759b"
+        },
+        "wav": {
+          "path": "participants/agent-b/agent.wav",
+          "size": 48044,
+          "sha256": "e05ddb65cd6071ef572a201a467848318e8864067d1e57e773d22d04cc1129fd"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-b/capture.session.json",
+        "size": 807,
+        "sha256": "18c0083584b95ba7ac8223cb743db620d36aaee090f82010b84df6ac8e8d6400"
+      },
+      "classification": "",
+      "completed_turns": 4,
+      "connected": true,
+      "id": "agent-b",
+      "kind": "agent",
+      "model": "room-bound-long-conversation-v1",
+      "opening_prompt": "Begin the deterministic post-fix long conversation fixture.",
+      "output_state": "complete",
+      "provider": "offline",
+      "reason": "ended",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 2220,
+              "label": "agent-a-turn-1",
+              "start_ms": 220
+            },
+            {
+              "end_ms": 8220,
+              "label": "agent-a-turn-2",
+              "start_ms": 6220
+            },
+            {
+              "end_ms": 14220,
+              "label": "agent-a-turn-3",
+              "start_ms": 12220
+            },
+            {
+              "end_ms": 20220,
+              "label": "agent-a-turn-4",
+              "start_ms": 18220
+            }
+          ],
+          "stream_id": "agent-b:received",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 5200,
+              "label": "agent-b-turn-1",
+              "start_ms": 3200
+            },
+            {
+              "end_ms": 11200,
+              "label": "agent-b-turn-2",
+              "start_ms": 9200
+            },
+            {
+              "end_ms": 17200,
+              "label": "agent-b-turn-3",
+              "start_ms": 15200
+            },
+            {
+              "end_ms": 23200,
+              "label": "agent-b-turn-4",
+              "start_ms": 21200
+            }
+          ],
+          "stream_id": "agent-b:sent",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-b-chunk-1",
+              "sample_index": 1000
+            },
+            {
+              "id": "agent-b-chunk-2",
+              "sample_index": 2000
+            },
+            {
+              "id": "agent-b-chunk-3",
+              "sample_index": 3000
+            },
+            {
+              "id": "agent-b-chunk-4",
+              "sample_index": 4000
+            },
+            {
+              "id": "agent-b-chunk-5",
+              "sample_index": 5000
+            },
+            {
+              "id": "agent-b-chunk-6",
+              "sample_index": 6000
+            },
+            {
+              "id": "agent-b-chunk-7",
+              "sample_index": 7000
+            },
+            {
+              "id": "agent-b-chunk-8",
+              "sample_index": 8000
+            },
+            {
+              "id": "agent-b-chunk-9",
+              "sample_index": 9000
+            },
+            {
+              "id": "agent-b-chunk-10",
+              "sample_index": 10000
+            },
+            {
+              "id": "agent-b-chunk-11",
+              "sample_index": 11000
+            },
+            {
+              "id": "agent-b-chunk-12",
+              "sample_index": 12000
+            },
+            {
+              "id": "agent-b-chunk-13",
+              "sample_index": 13000
+            },
+            {
+              "id": "agent-b-chunk-14",
+              "sample_index": 14000
+            },
+            {
+              "id": "agent-b-chunk-15",
+              "sample_index": 15000
+            },
+            {
+              "id": "agent-b-chunk-16",
+              "sample_index": 16000
+            },
+            {
+              "id": "agent-b-chunk-17",
+              "sample_index": 17000
+            },
+            {
+              "id": "agent-b-chunk-18",
+              "sample_index": 18000
+            },
+            {
+              "id": "agent-b-chunk-19",
+              "sample_index": 19000
+            },
+            {
+              "id": "agent-b-chunk-20",
+              "sample_index": 20000
+            },
+            {
+              "id": "agent-b-chunk-21",
+              "sample_index": 21000
+            },
+            {
+              "id": "agent-b-chunk-22",
+              "sample_index": 22000
+            },
+            {
+              "id": "agent-b-chunk-23",
+              "sample_index": 23000
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 5200,
+              "label": "agent-b-turn-1",
+              "start_ms": 3200
+            },
+            {
+              "end_ms": 11200,
+              "label": "agent-b-turn-2",
+              "start_ms": 9200
+            },
+            {
+              "end_ms": 17200,
+              "label": "agent-b-turn-3",
+              "start_ms": 15200
+            },
+            {
+              "end_ms": 23200,
+              "label": "agent-b-turn-4",
+              "start_ms": 21200
+            }
+          ],
+          "stream_id": "agent-b:output",
+          "timeline_end_ms": 24000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic long-conversation fixture; do not contact a provider.",
+      "terminal_provenance": "provider",
+      "terminal_reason": "provider_authored_completion",
+      "termination_disposition": "completed",
+      "termination_reason": "ended",
+      "termination_trigger": "max_turns_reached",
+      "voice": "synthetic-noise"
+    }
+  },
+  "pcm_format": {
+    "byte_order": "little",
+    "channels": 1,
+    "encoding": "signed_pcm16",
+    "sample_rate_hz": 1000,
+    "sample_width_bits": 16
+  },
+  "provenance": {
+    "consent_review": "not applicable; all samples are generated from a fixed seeded pseudo-speech signal",
+    "fixture_provenance": "synthetic_post_fix_termination",
+    "hashes": "sha256 and byte sizes for every replay artifact are embedded in this manifest",
+    "regeneration_command": "go run ./agent-cli/internal/services/testdata/room-audio/generate.go --shape long-conversation-termination --output agent-cli/internal/services/testdata/room-audio/long-conversation-termination",
+    "sanitization": "no real speech entered the fixture; participant identities and prompts are synthetic",
+    "source_run": "offline deterministic scripted-provider replay; no provider, microphone, credentials, or private recording",
+    "transformations": [
+      "generated mono signed little-endian PCM16 at 1000 Hz",
+      "kept 24 seconds with eight ordered turns, four per participant",
+      "preserved one-second delta boundaries across each multi-second scripted turn",
+      "recorded max_turns=4 after the final provider-authored response",
+      "retained room-owned terminal fields in participant sidecars and timeline"
+    ]
+  },
+  "reason": "max_turns_reached",
+  "room_mix": "room-mix.wav",
+  "room_timeline": "room-timeline.jsonl",
+  "schema_version": 2,
+  "termination_reason": "max_turns_reached",
+  "timing": {
+    "elapsed": "24s",
+    "ended_at": "2026-08-31T17:00:24Z",
+    "started_at": "2026-08-31T17:00:00Z"
+  },
+  "tolerances": {
+    "barge_in_speech_threshold_dbfs": -40,
+    "boundary_delta": 6000,
+    "boundary_quiet_dbfs": -24,
+    "clip_sample_threshold": 32700,
+    "correlation_lag_window": {
+      "max": "100ms",
+      "min": "-100ms"
+    },
+    "correlation_silence_floor_dbfs": -50,
+    "edge_sample_threshold": 1000,
+    "final_frame_max_rms_dbfs": -40,
+    "frame_duration": "20ms",
+    "max_barge_in_latency": "500ms",
+    "max_drift_absolute": "20ms",
+    "max_drift_fraction": 0.001,
+    "max_loudness_difference_db": 6,
+    "max_natural_pause": "750ms",
+    "max_self_correlation": 0.3,
+    "min_peer_correlation": 0.55,
+    "name": "long-conversation-termination-v1",
+    "silence_floor_dbfs": -50
+  },
+  "turn_counts": {
+    "agent-a": 4,
+    "agent-b": 4
+  }
+}

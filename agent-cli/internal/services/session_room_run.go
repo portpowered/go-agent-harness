@@ -178,10 +178,22 @@ func runRoomParticipant(
 			if failureErr == nil {
 				failureErr = errors.New("session stream error")
 			}
-			// Close the room at the same boundary at which the lifecycle accepted
-			// the typed failure. If a bound cancellation won the race, the
-			// lifecycle rejects the observation and this callback is not invoked.
-			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan)))
+			wrapped := roomParticipantFailure(runtime.plan.manifest.ID, failureErr, secretsForPlan(runtime.plan))
+			if observation.FailingEvent == string(messages.StreamTypeError) {
+				// A typed provider ERROR is a systemic, protocol-level fault, not a
+				// per-participant heuristic (silence/empty-response/liveness
+				// watchdog). Close the room at the same boundary at which the
+				// lifecycle accepted it. If a bound cancellation won the race, the
+				// lifecycle rejects the observation and this callback is not
+				// invoked.
+				coordinator.fail(wrapped)
+				return
+			}
+			// Every other failure origin (a synthesized run-terminal error such as
+			// a liveness/silence/empty-response watchdog fault) is isolated to
+			// this participant so a surviving peer's session is never torn down by
+			// a sibling's local fault.
+			coordinator.failParticipant(runtime.plan.manifest.ID, wrapped)
 		}
 		observer.turnAdmission = func(msg messages.StreamMessage) bool {
 			value, ok := msg.Value.(*messages.MessageEndValue)

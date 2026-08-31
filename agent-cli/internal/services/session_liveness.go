@@ -556,10 +556,16 @@ func applyRoomParticipantTerminalMetadata(result *RoomParticipantResult, lifecyc
 	if lifecycle != nil {
 		classification, terminalReason, provenance, outputState = lifecycle.terminalMetadata()
 	}
-	if classification == "" {
+	// A clean completion legitimately carries an empty Classification (there
+	// was no fault to classify) while still having a real terminal reason/
+	// provenance/output state. Only fall back to the liveness-derived
+	// metadata when the lifecycle produced nothing at all.
+	terminalEmpty := classification == "" && terminalReason == "" && provenance == "" && outputState == ""
+	if terminalEmpty {
 		classification, terminalReason, provenance, outputState = sessionLivenessMetadata(err)
+		terminalEmpty = classification == "" && terminalReason == "" && provenance == "" && outputState == ""
 	}
-	if classification == "" {
+	if terminalEmpty {
 		return
 	}
 	result.Classification = classification
