@@ -339,6 +339,177 @@ func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing
 	}
 }
 
+// TestComposeSessionInstructionsCalibratesSingleMatchActImmediately covers
+// the ask-vs-act calibration's act side (required tests 1-3): a customer
+// request that resolves to exactly one eligible tab -- whether by exact
+// title, by an obvious paraphrase of that title, or by the page's stated
+// purpose or category -- must be switched to immediately, with confirmation
+// only after the switch, and never gated behind a pre-emptive clarifying
+// question. This is the Session-1 ("the document editor") and Session-4
+// ("the local first writing app" paraphrase) live failure: a single resolved
+// candidate still produced a clarifying question instead of a switch.
+func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, "customer instructions")
+
+	if strings.Count(got, "WebMCP tab selection calibration:") != 1 {
+		t.Fatalf("tab selection calibration heading count = %d, want 1; instructions=%q", strings.Count(got, "WebMCP tab selection calibration:"), got)
+	}
+	for _, want := range []string{
+		// Test 1: exact title.
+		"matches by exact title",
+		// Test 2: paraphrase.
+		"an obvious paraphrase of that title",
+		"Do not require the customer's wording to be a literal, word-for-word match",
+		// Test 3: purpose/category.
+		"the page's stated purpose or category",
+		"document editor",
+		// Act immediately on the single match; confirm only afterward.
+		"Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately",
+		"Do not ask a clarifying or confirmation question first",
+		"Confirm only after the switch succeeds",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tab selection calibration = %q, missing %q", got, want)
+		}
+	}
+
+	second := composeSessionInstructions(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, got)
+	if second != got {
+		t.Fatalf("tab selection calibration is not idempotent:\nfirst=%q\nsecond=%q", got, second)
+	}
+}
+
+// TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth
+// covers required test 4: when two or more tabs genuinely match, the
+// calibration must direct exactly one question naming every candidate, and
+// it must never fall back to declaring the capability unavailable. This
+// mirrors the working "genuinely ambiguous" probe on current main, which
+// this change must not regress.
+func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, "customer instructions")
+
+	for _, want := range []string{
+		"Two or more eligible tabs: ask exactly one concise question naming every eligible candidate by its title",
+		"Do not guess and do not select by list order",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tab selection calibration = %q, missing %q", got, want)
+		}
+	}
+}
+
+// TestComposeSessionInstructionsNeverDeniesCapabilityForSelectionAmbiguity
+// covers required test 5: unresolved selection ambiguity must never surface
+// to the model as "the capability is unavailable." This is the Session-2/3
+// live failure (zero tool calls, "I can't directly inspect..."). Critically,
+// the calibration block -- unlike sessionConnectedUnselectedBrowserGrounding
+// -- must appear for every browser capability state as long as browser tools
+// are enabled, not only the narrow "connected but never yet selected" state,
+// because the failing live probe had already selected a page earlier in the
+// session before the customer asked to switch tabs.
+func TestComposeSessionInstructionsNeverDeniesCapabilityForSelectionAmbiguity(t *testing.T) {
+	states := []webmcp.BrowserCapabilityState{
+		webmcp.BrowserCapabilityConnectedUnselected,
+		webmcp.BrowserCapabilitySelected,
+		webmcp.BrowserCapabilityInitializing,
+		"",
+	}
+	for _, state := range states {
+		t.Run(string(state)+"/enabled", func(t *testing.T) {
+			got := composeSessionInstructions(SessionRunOptions{
+				BrowserCapabilityState: state,
+				BrowserToolsEnabled:    true,
+				ToolDefinitions: []messages.ToolDefinition{
+					{Name: webmcp.ListTabsToolName},
+					{Name: webmcp.SelectTabToolName},
+				},
+			}, "customer instructions")
+			if !strings.Contains(got, "WebMCP tab selection calibration:") {
+				t.Fatalf("state %q with browser tools enabled did not receive proactive tab selection calibration: %q", state, got)
+			}
+			if !strings.Contains(got, "do not deny the capability") {
+				t.Fatalf("state %q calibration missing the never-deny-capability instruction: %q", state, got)
+			}
+		})
+	}
+
+	// Without browser tools enabled, the browser-specific calibration must
+	// not leak in -- this is not a browser-capable session at all.
+	withoutBrowserTools := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilitySelected,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, "customer instructions")
+	if strings.Contains(withoutBrowserTools, "WebMCP tab selection calibration:") {
+		t.Fatalf("tab selection calibration leaked into a non-browser-tools session: %q", withoutBrowserTools)
+	}
+}
+
+// TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged covers
+// required test 6: the single-eligible-tab happy path (no genuine ambiguity
+// at all) must keep resolving exactly as before -- the new calibration text
+// must not introduce an extra "ask first" step for the already-correct
+// connected-but-unselected grounding, and composition must stay idempotent
+// and free of duplicate headings when both blocks apply together.
+func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
+		BrowserToolsEnabled:    true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, "customer instructions")
+
+	for _, heading := range []string{
+		"WebMCP browser selection:",
+		"WebMCP tab selection calibration:",
+		"WebMCP ambiguity recovery:",
+		"Tool-grounding requirements:",
+	} {
+		if strings.Count(got, heading) != 1 {
+			t.Fatalf("heading %q count = %d, want 1; instructions=%q", heading, strings.Count(got, heading), got)
+		}
+	}
+	// The pre-existing connected-unselected grounding's own single-match
+	// language must remain untouched.
+	if !strings.Contains(got, "If multiple eligible tabs are returned, ask the customer which page to use; do not guess.") {
+		t.Fatalf("connected-unselected grounding lost its existing single-match language: %q", got)
+	}
+
+	second := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
+		BrowserToolsEnabled:    true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, got)
+	if second != got {
+		t.Fatalf("combined grounding composition is not idempotent:\nfirst=%q\nsecond=%q", got, second)
+	}
+}
+
 func sessionRequestFromPlanner(t *testing.T, inferencer messages.SessionInferencer) inference.SessionRequest {
 	t.Helper()
 	if image, ok := inferencer.(*sessionImageInferencer); ok {
