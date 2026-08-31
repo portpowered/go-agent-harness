@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"testing"
+	"time"
 )
 
 func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
