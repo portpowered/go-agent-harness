@@ -243,6 +243,9 @@ func TestRunRoom_ParticipantFailureDrainsSurvivorOutput(t *testing.T) {
 	survivorText := make(chan string, 1)
 	terminated := make(chan RoomParticipantResult, 2)
 	var audioRenderOnce sync.Once
+	var releaseAudioOnce sync.Once
+	releaseAudio := func() { releaseAudioOnce.Do(func() { close(releaseAudioRender) }) }
+	t.Cleanup(releaseAudio)
 
 	opts, _ := newRoomTestRunOptions([]string{failedParticipant, survivorParticipant}, inferencers)
 	opts.OutputDir = outputDir
@@ -324,7 +327,7 @@ func TestRunRoom_ParticipantFailureDrainsSurvivorOutput(t *testing.T) {
 	default:
 	}
 
-	close(releaseAudioRender)
+	releaseAudio()
 	select {
 	case got := <-renderedAudio:
 		if !bytes.Equal(got, survivorPCM) {
