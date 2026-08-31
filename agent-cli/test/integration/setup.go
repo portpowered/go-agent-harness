@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 )
 
@@ -38,4 +39,21 @@ func NewTestWriter() *testWriter {
 		stdout: bytes.Buffer{},
 		stderr: bytes.Buffer{},
 	}
+}
+
+// writeSimulatedMainError mirrors cmd/agent/main.go's own error rendering
+// exactly: fmt.Fprintf(os.Stderr, "Error: %s\n", err) for any error
+// Execute() returns. A test in this package that builds the real root
+// command tree and calls rootCmd.ExecuteContext(...) in-process (rather
+// than exec'ing the built binary) never runs main.go, so its captured
+// stdout/stderr only reflects Cobra's own channel -- which cmd/agent's root
+// command deliberately silences (SilenceErrors) to avoid printing every
+// error twice (once from Cobra, once from main.go). Call this after such an
+// in-process Execute() returns a non-nil error so the captured output still
+// reflects what a real invocation actually prints, exactly once.
+func writeSimulatedMainError(w io.Writer, err error) {
+	if err == nil {
+		return
+	}
+	fmt.Fprintf(w, "Error: %s\n", err)
 }
