@@ -118,6 +118,7 @@ type sessionRuntimePlan struct {
 	inferencer             messages.SessionInferencer
 	loop                   sessionLoopOptions
 	announce               string
+	replayIntegrityWarning string
 	flushCapture           func() error
 	flushCaptureTo         func(string) error
 	finalize               func(context.Context, io.Writer) error
@@ -174,6 +175,11 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	if p.replayIntegrityWarning != "" {
+		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
+			return err
+		}
+	}
 
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
 	if err != nil {
@@ -458,22 +464,39 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 		}, nil
 	}
 
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+	}
+	replayIntegrityWarning := loaded.IntegrityWarning(opts.ReplayPath)
+
 	if _, err := os.Stat(opts.ReplayPath); err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 
 	if usesWebSocketCapture(opts.ReplayPath) {
 		if usesOpenAIWebSocketCapture(opts.ReplayPath) {
-			return planOpenAIReplayRuntime(opts, factory)
+			plan, err := planOpenAIReplayRuntime(opts, factory)
+			if err != nil {
+				return sessionRuntimePlan{}, err
+			}
+			plan.replayIntegrityWarning = replayIntegrityWarning
+			return plan, nil
 		}
-		return planGrokReplayRuntime(opts, factory)
+		plan, err := planGrokReplayRuntime(opts, factory)
+		if err != nil {
+			return sessionRuntimePlan{}, err
+		}
+		plan.replayIntegrityWarning = replayIntegrityWarning
+		return plan, nil
 	}
 
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeReplayGeneric,
-		capturePath: opts.ReplayPath,
-		loopOut:     io.Discard,
-		inferencer:  factory.newReplayInferencer(opts.ReplayPath),
+		mode:                   sessionRuntimeModeReplayGeneric,
+		capturePath:            opts.ReplayPath,
+		replayIntegrityWarning: replayIntegrityWarning,
+		loopOut:                io.Discard,
+		inferencer:             factory.newReplayInferencer(opts.ReplayPath),
 		loop: sessionLoopOptions{
 			Prompt:      opts.Prompt,
 			MaxDuration: 200 * time.Millisecond,

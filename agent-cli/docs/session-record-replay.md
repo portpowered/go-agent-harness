@@ -35,14 +35,22 @@ case-insensitive literal substring match on the session ID; the three options
 compose after newest-first ordering. Listing reads file metadata only and
 does not load conversation bodies.
 
-Replay accepts only the protected version-2 capture envelope. Every capture
-produced by the recorder includes an integrity object with `algorithm: "sha256"`,
-the fixed coverage contract
+New captures use the protected version-2 envelope. Every capture produced by
+the recorder includes an integrity object with `algorithm: "sha256"`, the fixed
+coverage contract
 `session_capture.v2:json(version,provider,session,records,ends_with_disconnect)`,
 and a lowercase SHA-256 digest over the replay-relevant envelope fields (the
 integrity object itself is excluded). Loading validates the envelope, event
 sequence, directions, payload types, payload JSON, and digest before creating
-a replay transport, session loop, or derived artifact sink.
+a replay transport, session loop, or derived artifact sink. A changed v2
+capture, missing v2 integrity metadata, or malformed v2 structure fails closed.
+
+The shipped replay command also retains compatibility with older, unprotected
+version-1 captures so existing paid-session evidence remains replayable. It
+validates the legacy event structure before setup, prints one warning that
+integrity was unavailable and replay has reduced guarantees, and never rewrites
+the source capture. Legacy captures cannot provide corruption detection; to
+obtain the protected guarantee, record a new v2 capture from a trusted source.
 
 ## Configure Grok for Recording
 

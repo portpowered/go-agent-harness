@@ -32,9 +32,10 @@ The digest covers the deterministic JSON serialization of `version`,
 object is excluded from its own coverage. The required coverage value is
 `session_capture.v2:json(version,provider,session,records,ends_with_disconnect)`.
 Replay validates the envelope and digest before opening a transport or any
-derived artifact sink. Version-1 or array captures are not verified and are
-rejected by normal replay as `integrity_unavailable`; regenerate or explicitly
-migrate a reviewed fixture with `SealSessionCapture`.
+derived artifact sink. Version-1 or array captures are not integrity-verified;
+the shipped replay path structurally validates them, emits a reduced-guarantee
+warning, and preserves the source bytes for backward compatibility. New or
+regenerated committed fixtures must use version 2 and `SealSessionCapture`.
 
 ```json
 {

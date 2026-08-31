@@ -145,6 +145,34 @@ func TestSessionCaptureIntegrityRejectsUnprotectedInputs(t *testing.T) {
 	}
 }
 
+func TestSessionCaptureReplayLoaderAcceptsLegacyV1WithReducedGuarantee(t *testing.T) {
+	capture := protectedTestCapture()
+	capture.Version = SessionCaptureLegacyVersion
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal legacy capture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "legacy.session.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write legacy capture: %v", err)
+	}
+
+	loaded, err := LoadSessionCaptureForReplay(path)
+	if err != nil {
+		t.Fatalf("LoadSessionCaptureForReplay: %v", err)
+	}
+	if loaded.IntegrityVerified {
+		t.Fatal("legacy capture was reported as integrity-verified")
+	}
+	if loaded.Capture.Version != SessionCaptureLegacyVersion || len(loaded.Capture.Records) != len(capture.Records) {
+		t.Fatalf("loaded legacy capture = %+v, want version %d and %d records", loaded.Capture, SessionCaptureLegacyVersion, len(capture.Records))
+	}
+	warning := loaded.IntegrityWarning(path)
+	if !strings.Contains(warning, path) || !strings.Contains(warning, "integrity was unavailable") || !strings.Contains(warning, "reduced guarantees") {
+		t.Fatalf("legacy warning = %q, want path and reduced-guarantee details", warning)
+	}
+}
+
 func TestSessionCaptureIntegrityRejectsTruncatedJSON(t *testing.T) {
 	data := marshalProtectedTestCapture(t)
 	if len(data) < 2 {

@@ -707,8 +707,8 @@ func sessionRecordingModel(opts SessionRunOptions, plan sessionRuntimePlan) stri
 		return model
 	}
 	if opts.ReplayPath != "" {
-		if capture, err := gwtesting.LoadSessionCapture(opts.ReplayPath); err == nil && capture.Provider.Model != "" {
-			return capture.Provider.Model
+		if loaded, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath); err == nil && loaded.Capture.Provider.Model != "" {
+			return loaded.Capture.Provider.Model
 		}
 	}
 	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)

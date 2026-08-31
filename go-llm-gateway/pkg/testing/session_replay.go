@@ -107,15 +107,16 @@ type SessionReplayer struct {
 var _ messages.Session = (*SessionReplayer)(nil)
 var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
 
-// NewSessionReplayer creates a SessionReplayer from a fully verified,
-// version-2 capture file at the given path. Legacy and unprotected captures
-// are rejected before the replay goroutines are created.
+// NewSessionReplayer creates a SessionReplayer from a capture file at the
+// given path. Version-2 captures are fully verified; retained version-1
+// captures are structurally validated and replayed with reduced-integrity
+// guarantees before any replay goroutines are created.
 func NewSessionReplayer(path string, opts ...SessionReplayerOption) (*SessionReplayer, error) {
-	capture, err := LoadSessionCapture(path)
+	loaded, err := LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, err
 	}
-	return newSessionReplayer(capture.Records, opts...), nil
+	return newSessionReplayer(loaded.Capture.Records, opts...), nil
 }
 
 // NewSessionReplayerFromBytes creates a SessionReplayer from raw protected
@@ -130,8 +131,9 @@ func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*S
 }
 
 // NewSessionReplayerFromLegacyBytes is an explicit compatibility seam for
-// controlled fixture migration. It never participates in the shipped CLI or
-// path-based replay flow and does not claim integrity for its input.
+// callers that already own legacy bytes. The shipped path-based replay flow
+// uses LoadSessionCaptureForReplay instead, so it can validate the source path
+// and surface the reduced-integrity warning.
 func NewSessionReplayerFromLegacyBytes(data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
 	events, err := decodeLegacySessionCaptureEvents(data)
 	if err != nil {

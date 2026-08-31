@@ -450,6 +450,9 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecorded
 	}
 
 	got := testWriter.StdoutString()
+	if !strings.Contains(got, "warning: session capture "+capturePath+" uses unprotected schema version 1; integrity was unavailable, so replay continues with reduced guarantees") {
+		t.Fatalf("legacy v1 replay should emit its reduced-guarantee warning, got:\n%s", got)
+	}
 	for _, want := range []string{"Carrot grows underground.", "Six letters", `rot".`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("bare audio-turn replay missing recorded transcript %q, got:\n%s", want, got)

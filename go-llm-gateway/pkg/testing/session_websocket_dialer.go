@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,20 +185,22 @@ type ReplayOutboundPacer interface {
 var _ ReplayOutboundPacer = (*ReplayWebSocketDialer)(nil)
 
 // NewReplayWebSocketDialer loads a raw WebSocket session capture from path.
+// Current captures are fully verified; retained version-1 captures are
+// structurally validated and replayed with a reduced-integrity guarantee.
 func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
-	capture, err := LoadSessionCapture(path)
+	loaded, err := LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, err
 	}
-	return NewReplayWebSocketDialerFromCapture(capture)
+	return NewReplayWebSocketDialerFromCapture(loaded.Capture)
 }
 
 // NewReplayWebSocketDialerFromCapture builds a replay dialer from an already
-// decoded, integrity-verified capture. Callers that construct an ephemeral
-// capture should call SealSessionCapture first; unlike the path-based
-// constructor, this seam cannot apply file-level fixture hygiene.
+// decoded capture. Version-2 captures must be integrity-verified; version-1
+// captures are accepted only as an explicit replay compatibility seam and are
+// structurally validated without claiming integrity.
 func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSocketDialer, error) {
-	if err := validateSessionCaptureEnvelope("<in-memory>", capture); err != nil {
+	if err := validateSessionCaptureReplayEnvelope("<in-memory>", capture); err != nil {
 		return nil, err
 	}
 	for _, evt := range capture.Records {
@@ -399,14 +402,60 @@ func (c *replayWebSocketConn) closeDoneLocked() {
 
 // LoadSessionCapture reads and fully verifies a protected version-2 session
 // capture. Legacy version-1 envelopes and event arrays are intentionally
-// rejected; use LoadSessionCaptureUnverified only for explicit trusted fixture
-// migration.
+// rejected; use LoadSessionCaptureForReplay for the shipped compatibility
+// replay path or LoadSessionCaptureUnverified for explicit fixture migration.
 func LoadSessionCapture(path string) (SessionCapture, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return SessionCapture{}, fmt.Errorf("read session capture file: %w", err)
 	}
 	return validateSessionCapturePath(path, data)
+}
+
+// LoadSessionCaptureForReplay validates a capture before replay setup. Current
+// version-2 captures require a valid SHA-256 envelope. Retained version-1
+// captures are accepted after structural validation because replaying owned
+// historical evidence is still useful, but the result explicitly reports that
+// its integrity could not be verified.
+func LoadSessionCaptureForReplay(path string) (SessionCaptureReplayLoad, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SessionCaptureReplayLoad{}, fmt.Errorf("read session capture file: %w", err)
+	}
+	return decodeSessionCaptureForReplay(path, data)
+}
+
+func decodeSessionCaptureForReplay(path string, data []byte) (SessionCaptureReplayLoad, error) {
+	if isLegacySessionCaptureData(data) {
+		capture, err := decodeUnverifiedSessionCapture(data)
+		if err != nil {
+			return SessionCaptureReplayLoad{}, fmt.Errorf("parse legacy session capture: %w", err)
+		}
+		if err := validateLegacySessionCaptureStructure(path, capture); err != nil {
+			return SessionCaptureReplayLoad{}, err
+		}
+		return SessionCaptureReplayLoad{Capture: capture}, nil
+	}
+
+	capture, err := validateSessionCapturePath(path, data)
+	if err != nil {
+		return SessionCaptureReplayLoad{}, err
+	}
+	return SessionCaptureReplayLoad{Capture: capture, IntegrityVerified: true}, nil
+}
+
+func isLegacySessionCaptureData(data []byte) bool {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && trimmed[0] == '[' && json.Valid(trimmed) {
+		return true
+	}
+	var header struct {
+		Version *int `json:"version"`
+	}
+	if err := json.Unmarshal(trimmed, &header); err != nil {
+		return false
+	}
+	return header.Version != nil && *header.Version == SessionCaptureLegacyVersion
 }
 
 // LoadSessionCaptureUnverified loads an old or otherwise unprotected capture
@@ -463,6 +512,13 @@ func validateSessionCaptureEnvelope(path string, capture SessionCapture) error {
 		return newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityChecksum, "/integrity/digest", 0, capture.Integrity.Algorithm, "stored "+capture.Integrity.Digest, "computed "+actual, ErrSessionCaptureIntegrity)
 	}
 	return nil
+}
+
+func validateSessionCaptureReplayEnvelope(path string, capture SessionCapture) error {
+	if capture.Version == SessionCaptureLegacyVersion {
+		return validateLegacySessionCaptureStructure(path, capture)
+	}
+	return validateSessionCaptureEnvelope(path, capture)
 }
 
 func eventPayload(evt CapturedSessionEvent) []byte {

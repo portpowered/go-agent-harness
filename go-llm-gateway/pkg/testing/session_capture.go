@@ -14,8 +14,8 @@ const (
 	// SessionCaptureVersion is the current on-disk session capture schema version.
 	SessionCaptureVersion = 2
 	// SessionCaptureLegacyVersion identifies the unprotected envelope that was
-	// written before capture integrity was introduced. It is retained only for
-	// explicit fixture migration; normal loading rejects it.
+	// written before capture integrity was introduced. Strict loading rejects it,
+	// while the explicit replay compatibility loader accepts it with a warning.
 	SessionCaptureLegacyVersion = 1
 	// SessionCaptureIntegrityAlgorithm is the digest algorithm used by the
 	// protected capture envelope.
@@ -34,7 +34,7 @@ var (
 	// validation failures.
 	ErrSessionCaptureIntegrity = errors.New("session capture integrity validation failed")
 	// ErrSessionCaptureIntegrityUnavailable identifies legacy or otherwise
-	// unprotected input that cannot safely be replayed by the shipped CLI.
+	// unprotected input that cannot be integrity-verified by strict loading.
 	ErrSessionCaptureIntegrityUnavailable = errors.New("session capture integrity unavailable")
 	// ErrSessionCaptureStructure identifies a malformed protected capture
 	// envelope or event stream.
@@ -43,6 +43,28 @@ var (
 	// build does not understand.
 	ErrSessionCaptureUnsupportedVersion = errors.New("unsupported session capture schema version")
 )
+
+// SessionCaptureReplayLoad describes a capture that is safe to hand to the
+// replay transport. Current captures are integrity-verified; legacy captures
+// are structurally checked but intentionally carry a reduced guarantee because
+// they were written before capture digests existed.
+type SessionCaptureReplayLoad struct {
+	Capture           SessionCapture
+	IntegrityVerified bool
+}
+
+// IntegrityWarning returns the one-line operator warning for an unprotected
+// replay capture. An empty string means the capture is integrity-verified.
+func (l SessionCaptureReplayLoad) IntegrityWarning(path string) string {
+	if l.IntegrityVerified {
+		return ""
+	}
+	return fmt.Sprintf(
+		"warning: session capture %s uses unprotected schema version %d; integrity was unavailable, so replay continues with reduced guarantees",
+		path,
+		l.Capture.Version,
+	)
+}
 
 const (
 	// SessionCaptureErrorClassIntegrityUnavailable is reported for legacy or
@@ -469,6 +491,17 @@ func validateSessionCaptureStructure(path string, capture SessionCapture) error 
 	if capture.Version != SessionCaptureVersion {
 		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, "/version", 0, "", fmt.Sprintf("%d", SessionCaptureVersion), fmt.Sprintf("%d", capture.Version), ErrSessionCaptureStructure)
 	}
+	return validateSessionCaptureRecords(path, capture)
+}
+
+func validateLegacySessionCaptureStructure(path string, capture SessionCapture) error {
+	if capture.Version != SessionCaptureLegacyVersion {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, "/version", 0, "", fmt.Sprintf("%d", SessionCaptureLegacyVersion), fmt.Sprintf("%d", capture.Version), ErrSessionCaptureStructure)
+	}
+	return validateSessionCaptureRecords(path, capture)
+}
+
+func validateSessionCaptureRecords(path string, capture SessionCapture) error {
 	previousSequence := 0
 	for index, record := range capture.Records {
 		fieldPrefix := fmt.Sprintf("/records/%d", index)

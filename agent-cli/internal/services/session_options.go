@@ -382,7 +382,7 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	// Injected sessions are an explicit low-level test seam and do not use the
 	// path-based replay contract.
 	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if _, err := gwtesting.LoadSessionCapture(opts.ReplayPath); err != nil {
+		if _, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath); err != nil {
 			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 		}
 	}

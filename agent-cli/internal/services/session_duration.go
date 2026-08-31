@@ -202,6 +202,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	if plan.replayIntegrityWarning != "" {
+		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
+			return err
+		}
+	}
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
 	if err != nil {
 		return err

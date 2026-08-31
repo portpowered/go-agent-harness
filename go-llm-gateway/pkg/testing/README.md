@@ -83,15 +83,20 @@ A JSON envelope containing capture metadata and ordered bidirectional session re
 
 Current captures are protected by a SHA-256 digest over the fixed JSON
 coverage contract named by `integrity.coverage`; the integrity object is not
-part of its own digest. `LoadSessionCapture`, `NewSessionReplayer`, and
-`NewReplayWebSocketDialer` validate the supported version, required envelope
-fields, ordered positive event sequences, direction and payload-type enums,
-payload JSON, and digest before exposing records to replay. A changed payload
-therefore fails closed with a bounded expected-versus-actual digest diagnostic.
-Legacy version-1 envelopes and event arrays return an actionable
-`integrity_unavailable` error. `LoadSessionCaptureUnverified` and
-`NewSessionReplayerFromLegacyBytes` are explicit migration-only compatibility
-seams and must not be used by the shipped CLI.
+part of its own digest. `LoadSessionCapture` validates the supported version,
+required envelope fields, ordered positive event sequences, direction and
+payload-type enums, payload JSON, and digest before exposing records to
+callers. A changed payload therefore fails closed with a bounded
+expected-versus-actual digest diagnostic.
+
+The replay constructors use `LoadSessionCaptureForReplay`: version-2 captures
+retain all of those checks, while retained version-1 envelopes and event arrays
+are structurally validated and replayed with `IntegrityVerified == false`.
+Callers should surface `SessionCaptureReplayLoad.IntegrityWarning` because
+legacy input cannot detect later corruption; replay never rewrites the source.
+`LoadSessionCaptureUnverified` and `NewSessionReplayerFromLegacyBytes` remain
+explicit migration seams for callers that need raw legacy data rather than
+normal replay behavior.
 
 ### Event Schema
 
