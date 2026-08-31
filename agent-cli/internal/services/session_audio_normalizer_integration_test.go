@@ -139,8 +139,8 @@ func assertSessionNormalizedPCM(t *testing.T, pcm []byte, wantSamples int, level
 	}
 	rms := sessionAudioRMS(samples)
 	dbfs := 20 * math.Log10(rms/float64(1<<15))
-	if dbfs < -21.5 || dbfs > -18.5 {
-		t.Fatalf("level %.0f output RMS = %.3f dBFS, want -21.5..-18.5 dBFS", level, dbfs)
+	if dbfs < audio.PCM16NormalizerTargetRMSDBFS-1.5 || dbfs > audio.PCM16NormalizerTargetRMSDBFS+1.5 {
+		t.Fatalf("level %.0f output RMS = %.3f dBFS, want %.1f..%.1f dBFS", level, dbfs, audio.PCM16NormalizerTargetRMSDBFS-1.5, audio.PCM16NormalizerTargetRMSDBFS+1.5)
 	}
 	var sum int64
 	for index, sample := range samples {

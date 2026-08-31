@@ -28,8 +28,8 @@ func TestPCM16NormalizerLevelingProfiles(t *testing.T) {
 			if len(got) != len(source) {
 				t.Fatalf("output sample count = %d, want %d", len(got), len(source))
 			}
-			if gotDBFS := normalizerRMSDBFS(got); gotDBFS < -21.5 || gotDBFS > -18.5 {
-				t.Fatalf("normalized RMS = %.3f dBFS, want -21.5..-18.5 dBFS", gotDBFS)
+			if gotDBFS := normalizerRMSDBFS(got); gotDBFS < PCM16NormalizerTargetRMSDBFS-1.5 || gotDBFS > PCM16NormalizerTargetRMSDBFS+1.5 {
+				t.Fatalf("normalized RMS = %.3f dBFS, want %.1f..%.1f dBFS", gotDBFS, PCM16NormalizerTargetRMSDBFS-1.5, PCM16NormalizerTargetRMSDBFS+1.5)
 			}
 		})
 	}
@@ -66,8 +66,8 @@ func TestPCM16NormalizerSilenceAndSilenceFloorDoNotAcquireGain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("active Process() error = %v", err)
 	}
-	if gotDBFS := normalizerRMSDBFS(got); gotDBFS < -21.5 || gotDBFS > -18.5 {
-		t.Fatalf("active output RMS = %.3f dBFS, want -21.5..-18.5 dBFS", gotDBFS)
+	if gotDBFS := normalizerRMSDBFS(got); gotDBFS < PCM16NormalizerTargetRMSDBFS-1.5 || gotDBFS > PCM16NormalizerTargetRMSDBFS+1.5 {
+		t.Fatalf("active output RMS = %.3f dBFS, want %.1f..%.1f dBFS", gotDBFS, PCM16NormalizerTargetRMSDBFS-1.5, PCM16NormalizerTargetRMSDBFS+1.5)
 	}
 	if normalizer.GainDB() <= 0 {
 		t.Fatalf("gain after quiet speech = %.3f dB, want positive acquisition", normalizer.GainDB())
