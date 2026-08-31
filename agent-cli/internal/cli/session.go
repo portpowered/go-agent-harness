@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -634,6 +635,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
+			filesystemPolicy, err := cliTools.ResolveFilesystemPolicy(
+				globalWorkDir(c.globalFlags),
+				globalAllowPaths(c.globalFlags)...,
+			)
+			if err != nil {
+				return fmt.Errorf("resolve filesystem scope: %w", err)
+			}
 			hasSessionMode := sessionHasExplicitMode(cmd, args, c.imagePaths)
 			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
 			if err != nil {
@@ -642,6 +650,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if !hasSessionMode && !browserToolsAdmission(cmd) && !bareSession {
 				return cmd.Help()
 			}
+			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
@@ -691,6 +700,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					if err != nil {
 						return err
 					}
+					loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 				}
 				capabilities, err := c.sessionToolCapabilities(loadedConfig)
 				if err != nil {
@@ -707,6 +717,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				}
 				capabilityClose = surface.capabilityClose
 			}
+			toolExecutor = cliTools.ApplyFilesystemPolicy(toolExecutor, filesystemPolicy)
 			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)
 			if err != nil {
 				return err
@@ -722,6 +733,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				APIKey:                 c.askFlags.APIKey,
 				BaseURL:                c.askFlags.BaseURL,
 				ConfigDir:              c.globalFlags.ConfigDir(),
+				WorkDir:                filesystemPolicy.PrimaryRoot(),
+				AllowPaths:             filesystemPolicy.AdditionalRoots(),
+				FilesystemPolicy:       filesystemPolicy,
 				Prompt:                 strings.Join(args, " "),
 				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:                  voice,
@@ -956,19 +970,45 @@ func validateSessionMediaSource(transport, source string, provided, audioInProvi
 
 // getSessionStorage resolves workspace from global flags and returns session storage.
 func getSessionStorage(globalFlags *flags.GlobalFlags) (*session.Storage, error) {
-	workspaceDir := globalFlags.ConfigDir()
+	configDir := globalFlags.ConfigDir()
+	workspaceDir := configDir
 	if workspaceDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("get workspace dir: %w", err)
 		}
-		workspaceDir = filepath.Join(home, config.ConfigDirName)
+		configDir = filepath.Join(home, config.ConfigDirName)
+		workspaceDir = configDir
 	}
-	workspaceDir, err := filepath.Abs(workspaceDir)
+	configDir, err := filepath.Abs(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("get workspace dir: %w", err)
+		return nil, fmt.Errorf("get config dir: %w", err)
 	}
-	return session.NewStorage(workspaceDir), nil
+	return session.NewStorageWithWorkspace(configDir, workspaceDir), nil
+}
+
+func globalWorkDir(globalFlags *flags.GlobalFlags) string {
+	if globalFlags == nil {
+		return ""
+	}
+	return globalFlags.WorkDir()
+}
+
+func globalAllowPaths(globalFlags *flags.GlobalFlags) []string {
+	if globalFlags == nil {
+		return nil
+	}
+	return globalFlags.AllowPaths()
+}
+
+func withFilesystemPolicyMetadata(cfg *config.Config, policy *cliTools.FilesystemPolicy) *config.Config {
+	if cfg == nil || policy == nil {
+		return cfg
+	}
+	copy := *cfg
+	copy.FilesystemWorkDir = policy.PrimaryRoot()
+	copy.FilesystemAllowPaths = policy.AdditionalRoots()
+	return &copy
 }
 
 // SessionShowCommand wraps the session show subcommand.

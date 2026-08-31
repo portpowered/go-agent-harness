@@ -43,6 +43,32 @@ func (re *RegistryExecutor) WithSessionImagePreparer(preparer ImagePartPreparer)
 	return &RegistryExecutor{registry: re.registry.cloneWithSessionImagePreparer(preparer)}
 }
 
+// WithFilesystemPolicy returns a registry executor snapshot whose
+// customer-facing filesystem tools use policy. Non-filesystem tools remain
+// shared immutable values, while dispatch_agent receives a policy-scoped child
+// registry as well.
+func (re *RegistryExecutor) WithFilesystemPolicy(policy *FilesystemPolicy) messages.ToolExecutor {
+	if re == nil {
+		return nil
+	}
+	return &RegistryExecutor{registry: re.registry.cloneWithFilesystemPolicy(policy)}
+}
+
+// ApplyFilesystemPolicy scopes a registry-backed executor when possible. A
+// caller-owned non-registry executor is returned unchanged for compatibility;
+// production CLI composition supplies RegistryExecutor values.
+func ApplyFilesystemPolicy(executor messages.ToolExecutor, policy *FilesystemPolicy) messages.ToolExecutor {
+	if executor == nil || policy == nil {
+		return executor
+	}
+	if binder, ok := executor.(interface {
+		WithFilesystemPolicy(*FilesystemPolicy) messages.ToolExecutor
+	}); ok {
+		return binder.WithFilesystemPolicy(policy)
+	}
+	return executor
+}
+
 func (re *RegistryExecutor) screenRecordingPermissionRechecker() (ScreenRecordingPermissionRechecker, bool) {
 	if re == nil || re.registry == nil {
 		return nil, false

@@ -124,6 +124,7 @@ func TestFullLoopLifecycle_HappyPath(t *testing.T) {
 	exec := newIterativeTestExecutor(inf)
 	cfg := &agent.Config{
 		ConfigDir:           tmpDir,
+		WorkDir:             tmpDir,
 		NoSystemInformation: true,
 		SystemPrompt:        "none",
 	}

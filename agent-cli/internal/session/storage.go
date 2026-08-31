@@ -71,19 +71,31 @@ type StoredSession struct {
 
 // Storage loads and saves session conversation history.
 type Storage struct {
-	sessionsDir string
+	sessionsDir  string
+	workspaceDir string
 }
 
 // NewStorage creates a Storage using the workspace directory (e.g. ~/.agent-cli).
 // Sessions are stored in <workspace>/sessions/.
 func NewStorage(workspaceDir string) *Storage {
+	return NewStorageWithWorkspace(workspaceDir, workspaceDir)
+}
+
+// NewStorageWithWorkspace keeps session persistence under storageDir while
+// exposing workspaceDir to prompt and tool callers. This separates the
+// config/session store from the customer's filesystem-tool workdir.
+func NewStorageWithWorkspace(storageDir, workspaceDir string) *Storage {
 	return &Storage{
-		sessionsDir: filepath.Join(workspaceDir, sessionDirName),
+		sessionsDir:  filepath.Join(storageDir, sessionDirName),
+		workspaceDir: workspaceDir,
 	}
 }
 
 // WorkspaceDir returns the workspace root directory (e.g. for resolving AGENTS.md).
 func (s *Storage) WorkspaceDir() string {
+	if s.workspaceDir != "" {
+		return s.workspaceDir
+	}
 	return filepath.Dir(s.sessionsDir)
 }
 

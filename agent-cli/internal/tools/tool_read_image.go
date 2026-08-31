@@ -71,14 +71,30 @@ type SessionImagePreparerBinder interface {
 // session knows which provider/model capabilities should govern the read.
 type ReadImageTool struct {
 	preparer ImagePartPreparer
+	policy   *FilesystemPolicy
 }
 
 func NewReadImageTool(preparer ImagePartPreparer) *ReadImageTool {
 	return &ReadImageTool{preparer: preparer}
 }
 
+// NewReadImageToolWithPolicy constructs a read_image tool that authorizes the
+// requested path against the supplied filesystem policy before invoking the
+// session-owned image preparer. The optional preparer keeps construction
+// compatible with callers that bind the provider-aware preparer later.
+func NewReadImageToolWithPolicy(policy *FilesystemPolicy, preparer ...ImagePartPreparer) *ReadImageTool {
+	var imagePreparer ImagePartPreparer
+	if len(preparer) > 0 {
+		imagePreparer = preparer[0]
+	}
+	return &ReadImageTool{preparer: imagePreparer, policy: policy}
+}
+
 func (t *ReadImageTool) withSessionImagePreparer(preparer ImagePartPreparer) *ReadImageTool {
-	return &ReadImageTool{preparer: preparer}
+	if t == nil {
+		return &ReadImageTool{preparer: preparer}
+	}
+	return &ReadImageTool{preparer: preparer, policy: t.policy}
 }
 
 func (t *ReadImageTool) Name() string { return ReadImageToolID }
@@ -108,7 +124,15 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 	if strings.TrimSpace(path) == "" {
 		return readImageErrorMessage(fmt.Errorf("path must not be empty"))
 	}
-	if t == nil || t.preparer == nil {
+	if t == nil {
+		return readImageErrorMessage(ErrReadImagePreparerUnavailable)
+	}
+	if t.policy != nil {
+		if err := t.policy.AuthorizeRead(path); err != nil {
+			return readImageErrorMessage(err)
+		}
+	}
+	if t.preparer == nil {
 		return readImageErrorMessage(ErrReadImagePreparerUnavailable)
 	}
 

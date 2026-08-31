@@ -219,6 +219,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	if plan.loop.BareLive {
 		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
 	}
+	announcement = appendFilesystemScopeAnnouncement(announcement, plan.filesystemPolicy)
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return wrapSessionRuntimeError(plan, err)

@@ -59,12 +59,16 @@ func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
 
 // getRegistry loads config and returns a registry with only enabled tools.
 func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
+	policy, err := c.filesystemPolicy()
+	if err != nil {
+		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("filesystem scope: %v", err), err)
+	}
 	if c.registryLoader != nil {
 		registry, err := c.registryLoader()
 		if err != nil {
 			return nil, newToolCommandError(errToolConfig, err.Error(), err)
 		}
-		return registry, nil
+		return registry.WithFilesystemPolicy(policy), nil
 	}
 	storageFactory := config.NewDefaultConfigStorage
 	if c.configStorageFactory != nil {
@@ -78,7 +82,20 @@ func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
 	if err != nil {
 		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("load config: %v", err), err)
 	}
-	return tools.NewToolRegistryFromConfig(cfg), nil
+	return tools.NewToolRegistryFromConfigWithPolicy(cfg, policy), nil
+}
+
+func (c *ToolCommand) filesystemPolicy() (*tools.FilesystemPolicy, error) {
+	if c == nil {
+		return tools.ResolveFilesystemPolicy("")
+	}
+	var workdir string
+	var allowPaths []string
+	if c.globalFlags != nil {
+		workdir = c.globalFlags.WorkDir()
+		allowPaths = c.globalFlags.AllowPaths()
+	}
+	return tools.ResolveFilesystemPolicy(workdir, allowPaths...)
 }
 
 // parseKeyValueArgs parses args of the form "key=value" into a map.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -141,6 +142,7 @@ type sessionRuntimePlan struct {
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
 	interactivePolicy      *InteractiveToolPolicy
+	filesystemPolicy       *tools.FilesystemPolicy
 }
 
 func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
@@ -193,6 +195,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	if p.loop.BareLive {
 		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
 	}
+	announcement = appendFilesystemScopeAnnouncement(announcement, p.filesystemPolicy)
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return err
@@ -211,6 +214,17 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		}
 	}
 	return nil
+}
+
+func appendFilesystemScopeAnnouncement(announcement string, policy *tools.FilesystemPolicy) string {
+	if policy == nil {
+		return announcement
+	}
+	scope := "Filesystem scope: " + policy.ScopeDescription()
+	if announcement == "" {
+		return scope
+	}
+	return scope + "\n" + announcement
 }
 
 // configureLoopObserver installs the shared stream observer for every session
@@ -286,6 +300,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		plan.audioInputs = opts.AudioInputs
 	}
 	plan.scheduledAudioDispatch = scheduledAudioDispatch
+	plan.filesystemPolicy = opts.FilesystemPolicy
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime

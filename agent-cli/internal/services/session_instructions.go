@@ -335,10 +335,18 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 // and path-or-literal precedence to the existing ask-path Executor contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
 	toolDefinitions := messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	workDir := opts.WorkDir
+	if workDir == "" && opts.FilesystemPolicy == nil {
+		// Preserve the direct service API's historical workspace behavior. CLI
+		// sessions always supply the launch-captured policy explicitly.
+		workDir = opts.ConfigDir
+	}
 	cfg := &agent.Config{
 		SystemPrompt:        systemPrompt,
 		NoSystemInformation: true,
 		ConfigDir:           opts.ConfigDir,
+		WorkDir:             workDir,
+		AllowPaths:          append([]string(nil), opts.AllowPaths...),
 	}
 	executor := agent.NewExecutor(nil, nil, nil, true)
 	storage, err := executor.GetSessionStorage(cfg)
@@ -349,7 +357,18 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
+	if opts.FilesystemPolicy != nil {
+		instructions = appendFilesystemScopeInstructions(instructions, opts.FilesystemPolicy)
+	}
 	return instructions, nil
+}
+
+func appendFilesystemScopeInstructions(instructions string, policy interface{ ScopeDescription() string }) string {
+	scope := "Filesystem scope: " + policy.ScopeDescription() + ". Relative filesystem-tool paths resolve from this workdir."
+	if instructions == "" {
+		return scope
+	}
+	return instructions + "\n\n" + scope
 }
 
 const sessionToolGroundingPolicy = `Tool-grounding requirements:

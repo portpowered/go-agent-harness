@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -80,6 +81,13 @@ func BuildAgentConfigFromFlags(globalFlags *flags.GlobalFlags, askFlags *flags.A
 	}
 	if globalFlags != nil {
 		cfg.ConfigDir = globalFlags.ConfigDir()
+		cfg.WorkDir = globalFlags.WorkDir()
+		if cfg.WorkDir == "" {
+			// Capture the launch directory while command construction is still
+			// request-scoped. ConfigDir remains independent session storage.
+			cfg.WorkDir, _ = os.Getwd()
+		}
+		cfg.AllowPaths = globalFlags.AllowPaths()
 		cfg.Verbose = globalFlags.VerboseMode > 0
 		cfg.VerbosityLevel = globalFlags.VerboseMode
 		cfg.LogToStdout = globalFlags.LogToStdout

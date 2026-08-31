@@ -437,7 +437,10 @@ type fileSystem interface {
 
 func newLegacyFileSystem(workspace string, restrict bool) fileSystem {
 	if restrict {
-		return &sandboxFs{workspace: workspace}
+		return &sandboxFs{
+			workspace:          workspace,
+			protectedReadRoots: normalizeProtectedReadRoots(platformProtectedReadRoots()),
+		}
 	}
 	return &hostFs{}
 }
@@ -563,6 +566,7 @@ func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, er
 type sandboxFs struct {
 	workspace            string
 	additionalWorkspaces []string
+	protectedReadRoots   []string
 }
 
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
@@ -591,7 +595,23 @@ func newSandboxFs(policy *FilesystemPolicy) *sandboxFs {
 	return &sandboxFs{
 		workspace:            roots[0],
 		additionalWorkspaces: append([]string(nil), roots[1:]...),
+		protectedReadRoots:   policy.ProtectedReadRoots(),
 	}
+}
+
+func (r *sandboxFs) executeRead(path string, fn func(root *os.Root, relPath string) error) error {
+	rootPath, relPath, err := r.resolveRead(path)
+	if err != nil {
+		return err
+	}
+
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return fmt.Errorf("failed to open workspace: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	return fn(root, relPath)
 }
 
 func (r *sandboxFs) resolve(path string) (string, string, error) {
@@ -632,6 +652,44 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 		}
 	}
 	return "", "", fmt.Errorf("path escapes workspace: %s", path)
+}
+
+func (r *sandboxFs) resolveRead(path string) (string, string, error) {
+	if r.isProtectedRead(path) {
+		return "", "", fmt.Errorf("%w: %w", ErrFilesystemAccessDenied, ErrProtectedFilesystemRead)
+	}
+	return r.resolve(path)
+}
+
+func (r *sandboxFs) authorizeRead(path string) error {
+	_, _, err := r.resolveRead(path)
+	return err
+}
+
+func (r *sandboxFs) isProtectedRead(path string) bool {
+	roots, err := r.rootPaths()
+	if err != nil || len(roots) == 0 {
+		return false
+	}
+	candidate := path
+	if !filepath.IsAbs(candidate) {
+		candidate = filepath.Join(roots[0], candidate)
+	}
+	candidate = filepath.Clean(candidate)
+	comparisonCandidate := candidate
+	if resolved, err := canonicalizeExistingPath(candidate); err == nil {
+		comparisonCandidate = resolved
+	}
+	protectedRoots := r.protectedReadRoots
+	if len(protectedRoots) == 0 {
+		protectedRoots = normalizeProtectedReadRoots(platformProtectedReadRoots())
+	}
+	for _, protectedRoot := range protectedRoots {
+		if isWithinWorkspace(candidate, protectedRoot) || isWithinWorkspace(comparisonCandidate, protectedRoot) {
+			return true
+		}
+	}
+	return false
 }
 
 // canonicalizeExistingPath resolves the existing portion of a path and then
@@ -695,7 +753,7 @@ func isSandboxAccessDenied(err error) bool {
 
 func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 	var content []byte
-	err := r.execute(path, func(root *os.Root, relPath string) error {
+	err := r.executeRead(path, func(root *os.Root, relPath string) error {
 		fileContent, err := root.ReadFile(relPath)
 		if err != nil {
 			if os.IsNotExist(err) || errors.Is(err, fs.ErrNotExist) {
@@ -774,7 +832,7 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 
 func (r *sandboxFs) ReadDir(path string) ([]os.DirEntry, error) {
 	var entries []os.DirEntry
-	err := r.execute(path, func(root *os.Root, relPath string) error {
+	err := r.executeRead(path, func(root *os.Root, relPath string) error {
 		dirEntries, err := fs.ReadDir(root.FS(), filepath.ToSlash(relPath))
 		if err != nil {
 			return err

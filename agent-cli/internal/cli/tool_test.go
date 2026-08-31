@@ -235,6 +235,69 @@ func TestToolCommandLoadsTemporaryConfig(t *testing.T) {
 	}
 }
 
+func TestToolCommandFilesystemScopeUsesLaunchCwdOrExplicitWorkdir(t *testing.T) {
+	launchDir := t.TempDir()
+	configDir := t.TempDir()
+	selectedDir := t.TempDir()
+
+	tests := []struct {
+		name        string
+		workdir     string
+		wantDir     string
+		unwantedDir string
+	}{
+		{name: "launch cwd default", wantDir: launchDir, unwantedDir: selectedDir},
+		{name: "explicit workdir", workdir: selectedDir, wantDir: selectedDir, unwantedDir: launchDir},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(launchDir)
+			fileName := strings.ReplaceAll(tt.name, " ", "-") + ".txt"
+			globalFlags := flags.NewGlobalFlags()
+			globalFlags.ConfigDirPath = configDir
+			globalFlags.WorkDirPath = tt.workdir
+			command := NewToolCommand(globalFlags)
+			command.registryLoader = func() (*tools.ToolRegistry, error) {
+				return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+			}
+
+			var out bytes.Buffer
+			err := runToolTestCommand(t, command, []string{"write_file", "path=" + fileName, "content=cwd-marker"}, &out)
+			if err != nil {
+				t.Fatalf("write_file: %v", err)
+			}
+			if got, err := os.ReadFile(filepath.Join(tt.wantDir, fileName)); err != nil || string(got) != "cwd-marker" {
+				t.Fatalf("effective workdir file = %q, %v; want cwd-marker in %s", got, err, tt.wantDir)
+			}
+			if _, err := os.Stat(filepath.Join(tt.unwantedDir, fileName)); !os.IsNotExist(err) {
+				t.Fatalf("relative write escaped into %s: stat error = %v", tt.unwantedDir, err)
+			}
+			if _, err := os.Stat(filepath.Join(configDir, fileName)); !os.IsNotExist(err) {
+				t.Fatalf("relative write used config dir: stat error = %v", err)
+			}
+		})
+	}
+}
+
+func TestToolCommandInvalidWorkdirFailsBeforeRegistryLoad(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.WorkDirPath = filepath.Join(t.TempDir(), "missing-workdir")
+	command := NewToolCommand(globalFlags)
+	loaderCalled := false
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		loaderCalled = true
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	err := runToolTestCommand(t, command, []string{"write_file", "path=relative.txt", "content=should-not-run"}, &bytes.Buffer{})
+	if err == nil || !errors.Is(err, tools.ErrInvalidFilesystemRoot) {
+		t.Fatalf("invalid workdir error = %v, want invalid filesystem root", err)
+	}
+	if loaderCalled {
+		t.Fatal("registry loaded after invalid workdir; scope validation must precede tool setup")
+	}
+}
+
 func TestToolCommandConfigLoadError(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, config.ConfigFileName), []byte("model: ["), 0600); err != nil {

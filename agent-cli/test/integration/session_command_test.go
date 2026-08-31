@@ -336,7 +336,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsComp
 	}
 
 	got := testWriter.StdoutString()
-	want := "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+	want := defaultFilesystemScopePrefix(t) + "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare OpenAI replay output = %q, want %q", got, want)
 	}
@@ -383,7 +383,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *te
 	}
 
 	got := testWriter.StdoutString()
-	want := "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+	want := defaultFilesystemScopePrefix(t) + "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare empty-prompt OpenAI replay output = %q, want %q", got, want)
 	}
@@ -596,6 +596,19 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 	if !strings.Contains(err.Error(), "sequence") || !strings.Contains(err.Error(), "expected") || !strings.Contains(err.Error(), "actual") {
 		t.Fatalf("strict replay mismatch should include expected/actual sequence details, got: %v", err)
 	}
+}
+
+func defaultFilesystemScopePrefix(t *testing.T) string {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get test working directory: %v", err)
+	}
+	canonical, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		t.Fatalf("canonicalize test working directory: %v", err)
+	}
+	return "Filesystem scope: workdir=" + canonical + "; additional_allowed_roots=none\n"
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *testing.T) {

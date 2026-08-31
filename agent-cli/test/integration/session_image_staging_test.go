@@ -48,6 +48,7 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	rootCommand.SetErr(&output)
 	rootCommand.SetArgs([]string{
 		"--config-dir", configDir,
+		"--workdir", root,
 		"session",
 		"--record-dir", recordingDir,
 		"--provider", "openai",
