@@ -29,6 +29,39 @@ const (
 	SessionToolTimeoutClassification = "interactive_tool_timeout"
 )
 
+// sessionToolLifecycleMux preserves the optional recording hook while adding
+// the participant-owned liveness boundary. A running local tool must suppress
+// the provider watchdog; the next accepted response.create re-arms it.
+type sessionToolLifecycleMux struct {
+	recording sessionToolLifecycleObserver
+	progress  *sessionProgressObserver
+}
+
+func (m sessionToolLifecycleMux) observeToolCall(call messages.ToolCall) {
+	if m.progress != nil {
+		m.progress.beginLocalToolExecution()
+	}
+	if m.recording != nil {
+		m.recording.observeToolCall(call)
+	}
+}
+
+func (m sessionToolLifecycleMux) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
+	if m.recording != nil {
+		m.recording.observeToolResult(call, response, failed)
+	}
+	if m.progress != nil {
+		m.progress.endLocalToolExecution()
+	}
+}
+
+func composeSessionToolLifecycleObserver(recording sessionToolLifecycleObserver, progress *sessionProgressObserver) sessionToolLifecycleObserver {
+	if recording == nil && progress == nil {
+		return nil
+	}
+	return sessionToolLifecycleMux{recording: recording, progress: progress}
+}
+
 var (
 	// ErrSessionToolTimeout is retained behind the correlated tool-result
 	// contract so callers and tests can classify a local deadline without

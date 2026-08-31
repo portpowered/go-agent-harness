@@ -28,7 +28,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		}
 	}()
 	if opts.ReplayPlan != nil {
-		return buildRoomReplayParticipantPlans(ctx, *opts.ReplayPlan)
+		return buildRoomReplayParticipantPlans(ctx, *opts.ReplayPlan, opts)
 	}
 	lookup := validation.LookupCredential
 	if lookup == nil {
@@ -82,6 +82,8 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			APIKey:          value,
 			BaseURL:         opts.BaseURL,
 			ConfigDir:       opts.ConfigDir,
+			Clock:           opts.Clock,
+			LivenessClock:   opts.LivenessClock,
 			Prompt:          participant.OpeningPrompt,
 			Voice:           participant.Voice,
 			WebSocketDialer: opts.WebSocketDialer,
@@ -200,7 +202,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 // live room manifest, credential lookup, capability factories, or injected
 // live session factories: the validated bundle is the complete source of
 // replay runtime configuration.
-func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan) ([]*roomParticipantPlan, []string, error) {
+func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan, opts RoomRunOptions) ([]*roomParticipantPlan, []string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -237,8 +239,10 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan)
 			// Replay planning reads provider configuration from the captured
 			// session.update. Keep ConfigDir and APIKey empty so no live config
 			// or credential path can be consulted accidentally.
-			ConfigDir:    "",
-			WaitForClose: false,
+			ConfigDir:     "",
+			Clock:         opts.Clock,
+			LivenessClock: opts.LivenessClock,
+			WaitForClose:  false,
 		}
 		runtimePlan, err := planSessionRuntime(sessionOptions)
 		if err != nil {

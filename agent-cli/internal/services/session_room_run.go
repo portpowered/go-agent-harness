@@ -218,6 +218,7 @@ func runRoomParticipant(
 	}
 	loopOptions := sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
+		livenessClock:          runtime.plan.options.LivenessClock,
 		WaitForClose:           true,
 		Done:                   coordinator.done,
 		DoneErr:                coordinator.roomError,

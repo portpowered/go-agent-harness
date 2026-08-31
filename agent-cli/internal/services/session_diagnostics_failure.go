@@ -16,13 +16,48 @@ type failureFacts struct {
 	failingEvent   string
 }
 
+func (o *sessionProgressObserver) setFailureIfUnset(f *failureFacts) {
+	if o == nil || f == nil {
+		return
+	}
+	o.livenessMu.Lock()
+	if o.failure == nil {
+		o.failure = f
+	}
+	o.livenessMu.Unlock()
+}
+
+func (o *sessionProgressObserver) failureSnapshot() *failureFacts {
+	if o == nil {
+		return nil
+	}
+	o.livenessMu.Lock()
+	f := o.failure
+	if f == nil {
+		o.livenessMu.Unlock()
+		return nil
+	}
+	copy := *f
+	o.livenessMu.Unlock()
+	return &copy
+}
+
+func (o *sessionProgressObserver) clearFailure() {
+	if o == nil {
+		return
+	}
+	o.livenessMu.Lock()
+	o.failure = nil
+	o.livenessMu.Unlock()
+}
+
 // audioTurnCounters tracks per-turn byte attribution between MESSAGE.END
 // boundaries.
 func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue) {
-	if o.failure != nil || v == nil || v.IsNonTerminal() {
+	if o == nil || v == nil || v.IsNonTerminal() {
 		return
 	}
-	o.failure = factsFromErrorValue(v)
+	o.setFailureIfUnset(factsFromErrorValue(v))
 }
 
 // factsFromErrorValue maps one typed ERROR stream value onto the canonical
@@ -58,7 +93,7 @@ func factsFromErrorValue(v *messages.ErrorValue) *failureFacts {
 // provider transport died without an explicit close (marker reason
 // "provider_closed"); an explicit wire session.closed is normal teardown.
 func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionCloseValue) {
-	if o.failure != nil || v == nil {
+	if o == nil || v == nil {
 		return
 	}
 	switch v.TerminalReason {
@@ -90,7 +125,7 @@ func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionClo
 		// knowledge; derive the state from what the stream actually delivered.
 		f.outputState = deriveOutputState(o.sawSessionOpen, o.turnsCompleted)
 	}
-	o.failure = f
+	o.setFailureIfUnset(f)
 }
 
 func (o *sessionProgressObserver) unresolvedToolResultFailureFacts(failingEvent string) *failureFacts {

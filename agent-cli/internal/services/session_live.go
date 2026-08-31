@@ -140,6 +140,10 @@ type sessionLoopOptions struct {
 	// consumed delta stream; nil keeps runtime behavior unchanged.
 	observer *sessionProgressObserver
 
+	// livenessClock is the participant-owned watchdog timer seam. Runtime plans
+	// derive it from the public session clock when a caller does not inject one.
+	livenessClock SessionLivenessClock
+
 	// toolLifecycleObserver records the exact call/result boundary owned by the
 	// composed session executor. It is separate from the provider progress
 	// observer because provider tool-call frames are requests, not executions.
@@ -261,7 +265,7 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 			opts.ToolExecutor,
 			opts.InteractiveToolPolicy,
 			opts.ToolExecutionTimeout,
-			opts.toolLifecycleObserver,
+			composeSessionToolLifecycleObserver(opts.toolLifecycleObserver, opts.observer),
 			opts.cancellationIntent,
 		)))
 		if opts.InteractiveToolPolicy != nil {
@@ -562,6 +566,7 @@ func retryScheduledRateLimitedResponse(ctx context.Context, sessionDone <-chan s
 	}); err != nil {
 		return fmt.Errorf("send rate-limit retry response: %w", err)
 	}
+	observer.observeProviderDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 	return nil
 }
 
@@ -606,7 +611,11 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
 	observedInferencer.progress = opts.observer
 	if opts.observer != nil {
+		opts.observer.setLivenessClock(opts.livenessClock)
 		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	}
+	if opts.observer != nil {
+		defer opts.observer.stopLiveness()
 	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
@@ -616,6 +625,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	publisherErrors = mergeSessionErrorChannels(runCtx, publisherErrors, sessionLivenessErrorChannel(runCtx, opts.observer))
 	defer publisher.stop()
 	if opts.loopReady != nil {
 		select {
@@ -748,6 +758,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if input.EndOfTurn {
 				if err := loop.SendSessionEvent(runCtx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
 					return errors.Join(fmt.Errorf("send event-driven audio input end-of-turn: %w", err), stopAndDrain())
+				}
+				if opts.observer != nil {
+					opts.observer.armProviderProgress()
 				}
 			}
 		case <-toolLifecycleEvents:

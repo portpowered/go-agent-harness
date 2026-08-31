@@ -102,7 +102,8 @@ func sessionSIGINTCleanForObserver(err error, intent *SessionCancellationIntent,
 }
 
 func sessionSIGINTObserverFailureOnly(observer *sessionProgressObserver) bool {
-	if observer == nil || observer.failure == nil {
+	failure := observer.failureSnapshot()
+	if failure == nil {
 		return true
 	}
 	// The model runner can publish a terminal cancellation ERROR while the
@@ -110,6 +111,6 @@ func sessionSIGINTObserverFailureOnly(observer *sessionProgressObserver) bool {
 	// reason are explicit evidence of the same signal-driven shutdown, not a
 	// provider failure. Provider-authored cancellation-shaped failures remain
 	// independent and are deliberately preserved.
-	return observer.failure.terminalReason == string(messages.TerminalReasonCancellation) &&
-		observer.failure.provenance == string(messages.TerminalProvenanceLoop)
+	return failure.terminalReason == string(messages.TerminalReasonCancellation) &&
+		failure.provenance == string(messages.TerminalProvenanceLoop)
 }

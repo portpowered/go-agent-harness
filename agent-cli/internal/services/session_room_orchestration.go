@@ -456,6 +456,9 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source) {
 	roomClock := platformclock.Ensure(opts.Clock)
 	opts.Clock = roomClock
+	if opts.LivenessClock == nil {
+		opts.LivenessClock = sessionLivenessClockFromSource(roomClock)
+	}
 	return opts, roomClock
 }
 

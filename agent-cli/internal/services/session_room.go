@@ -153,6 +153,11 @@ type RoomRunOptions struct {
 	// finalized evidence. Nil selects the host clock; deterministic callers
 	// should inject one source for all participants.
 	Clock platformclock.Source
+	// LivenessClock supplies the participant-owned provider watchdog timers.
+	// Nil derives timers from Clock when possible, otherwise each participant
+	// uses the host timer. A shared deterministic clock keeps room tests and
+	// participant watchdogs on one controllable timeline.
+	LivenessClock SessionLivenessClock
 	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
 	// The CLI supplies it for bare launches so command/service composition tests
 	// can observe the selected devices and credential provenance without
