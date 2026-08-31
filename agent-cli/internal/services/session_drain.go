@@ -368,16 +368,23 @@ func sessionTerminalFields(classification string, reason messages.TerminalReason
 	return strings.Join(fields, " ")
 }
 
-func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop, idleDelay time.Duration, obs *sessionProgressObserver) error {
-	if idleDelay <= 0 {
-		return drainSessionLoopMessages(out, loop, obs)
+// waitForSessionLoopStragglers waits for provider deltas until the required
+// positive policy quiet period elapses. The terminal boundary is the only
+// caller; buffered-only cleanup has its own explicitly named operation.
+func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, policy sessionStragglerDrainPolicy, obs *sessionProgressObserver) error {
+	quiet := policy.quietPeriod
+	if quiet <= 0 {
+		return errInvalidSessionStragglerDrainPolicy
 	}
 
-	idle := time.NewTimer(idleDelay)
+	idle := time.NewTimer(quiet)
 	defer idle.Stop()
 	for {
 		select {
-		case msg := <-loop.Deltas().Chan():
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
 			if obs != nil {
 				obs.observe(msg)
 			}
@@ -390,7 +397,7 @@ func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop,
 				default:
 				}
 			}
-			idle.Reset(idleDelay)
+			idle.Reset(quiet)
 		case <-idle.C:
 			return nil
 		}
@@ -398,10 +405,20 @@ func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop,
 }
 
 func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) bool {
+	if msg.Type == messages.StreamTypeLoopEnd {
+		return true
+	}
 	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
 		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
 			return true
 		}
+	}
+	// A terminal provider error is itself an authoritative terminal signal. It
+	// must not wait for a follow-up SESSION.CLOSE before entering the shared
+	// termination boundary; non-terminal provider diagnostics are excluded by
+	// isTerminalErrorMessage.
+	if isTerminalErrorMessage(msg) {
+		return true
 	}
 	if opts.CloseAfterOpen {
 		return closeSent && msg.Type == messages.StreamTypeSessionClose
@@ -433,7 +450,10 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 	}
 }
 
-func drainSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
+// flushBufferedSessionLoopMessages renders only messages already buffered.
+// It never waits for a future provider message; the terminal boundary invokes
+// it only after owned resources have been stopped.
+func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
@@ -444,35 +464,6 @@ func drainSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *ses
 		}
 		if err := writeSessionReplayMessage(out, msg); err != nil {
 			return err
-		}
-	}
-}
-
-func drainSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, obs *sessionProgressObserver) error {
-	timer := time.NewTimer(quiet)
-	defer timer.Stop()
-
-	for {
-		select {
-		case msg, ok := <-loop.Deltas().Chan():
-			if !ok {
-				return nil
-			}
-			if obs != nil {
-				obs.observe(msg)
-			}
-			if err := writeSessionReplayMessage(out, msg); err != nil {
-				return err
-			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(quiet)
-		case <-timer.C:
-			return nil
 		}
 	}
 }

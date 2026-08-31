@@ -241,6 +241,13 @@ func runRoomParticipant(
 		loopOptions.MaxDuration = 0
 		loopOptions.Done = combineRoomDoneChannels(coordinator.done, loopOptions.Done)
 		loopOptions.DoneErr = combineRoomDoneErrors(coordinator.roomError, loopOptions.DoneErr)
+		if runtime.replayFrameAcks == nil && runtime.mixer != nil {
+			// Text-only room replays still start the ordinary mixer pump. Stop
+			// that producer before the session boundary's quiet drain so its
+			// synthetic silence cannot become an unexpected outbound audio event
+			// after the capture has completed.
+			loopOptions.quiesceUpstream = runtime.mixer.Close
+		}
 	}
 	loopOptions.observer = observer
 	loopOptions.loopReady = runtime.loopReady
@@ -712,7 +719,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 	for {
 		frame, err := runtime.mixer.ReadFrame(runtime.ctx)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))

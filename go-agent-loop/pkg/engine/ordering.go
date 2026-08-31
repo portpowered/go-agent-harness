@@ -189,6 +189,17 @@ func (e *StreamDeltaError) Error() string {
 	return "stream error"
 }
 
+// Unwrap preserves the in-process cause attached to a terminal ERROR value.
+// Session callers need the engine's typed failure envelope for classification,
+// while errors.Is/errors.As must still reach the provider or loop cause that
+// initiated the terminal path.
+func (e *StreamDeltaError) Unwrap() error {
+	if e == nil || e.Value == nil {
+		return nil
+	}
+	return e.Value.Err
+}
+
 // consumeModelDelta processes one delta from the model runner's DeltaOutbox.
 // Terminal ERROR deltas clean up history and return an error. Nonterminal ERROR
 // diagnostics are ordered and forwarded without affecting response history.
