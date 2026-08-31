@@ -285,10 +285,11 @@ func (c *WebMCPOperationsCommand) tabsCommand() *cobra.Command {
 				}
 				rows := make([]WebMCPDirectTab, 0)
 				for _, candidate := range candidates {
-					targets, listErr := broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
+					rawTargets, listErr := broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
 					if listErr != nil {
 						return nil, listErr
 					}
+					targets := directPageTargetCandidates(rawTargets)
 					for _, target := range targets {
 						if target.BrowserID == "" {
 							target.BrowserID = candidate.ID
@@ -1016,6 +1017,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		}
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
+	targets = directPageTargetCandidates(targets)
 	for index := range targets {
 		if targets[index].BrowserID == "" {
 			targets[index].BrowserID = candidate.ID

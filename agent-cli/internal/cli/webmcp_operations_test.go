@@ -232,6 +232,97 @@ func TestWebMCPDirectDefaultSelectionDoesNotChooseAConvenientTab(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets(t *testing.T) {
+	page, target, candidate, _ := directFixture()
+	uiTarget := target
+	uiTarget.ID = "omnibox-popup"
+	uiTarget.Type = "browser_ui"
+	uiTarget.Title = "Omnibox Popup"
+	uiTarget.URL = "chrome://omnibox-popup"
+	nonExactPageTarget := target
+	nonExactPageTarget.ID = "capitalized-page"
+	nonExactPageTarget.Type = "Page"
+	targets := []webmcp.Target{uiTarget, nonExactPageTarget, target}
+
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "json", json: true},
+		{name: "human"},
+	} {
+		t.Run("tabs_"+testCase.name, func(t *testing.T) {
+			broker := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    targets,
+				selected:   page,
+			}
+			args := []string{"tabs", "--browser", string(candidate.ID)}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), args...)
+			if result.err != nil {
+				t.Fatalf("tabs: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
+			}
+			if testCase.json {
+				envelope := requireDirectSuccess(t, result)
+				var data WebMCPDirectTabsData
+				decodeDirectData(t, envelope.Data, &data)
+				if len(data.Tabs) != 1 || data.Tabs[0].TargetID != string(target.ID) || data.Tabs[0].Type != "page" {
+					t.Fatalf("page-only tabs = %+v", data.Tabs)
+				}
+			} else {
+				if !strings.Contains(result.stdout, string(target.ID)) || !strings.Contains(result.stdout, "Tabs:") {
+					t.Fatalf("human page-only tabs omitted the page: %q", result.stdout)
+				}
+				for _, forbidden := range []string{string(uiTarget.ID), uiTarget.Title, string(nonExactPageTarget.ID)} {
+					if strings.Contains(result.stdout, forbidden) {
+						t.Fatalf("human page-only tabs exposed %q: %q", forbidden, result.stdout)
+					}
+				}
+			}
+		})
+	}
+
+	selectBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    targets,
+		selected:   page,
+	}
+	selected := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(selectBroker), "select", "--browser", string(candidate.ID), "--auto-select", "single", "--json")
+	selectionEnvelope := requireDirectSuccess(t, selected)
+	var selectionData WebMCPDirectContext
+	decodeDirectData(t, selectionEnvelope.Data, &selectionData)
+	if selectionData.TargetID != string(target.ID) {
+		t.Fatalf("auto-selected target = %q, want %q", selectionData.TargetID, target.ID)
+	}
+	if len(selectBroker.selectCalls) != 1 || selectBroker.selectCalls[0].TargetID != target.ID {
+		t.Fatalf("auto-selection calls = %+v", selectBroker.selectCalls)
+	}
+
+	secondPage := target
+	secondPage.ID = "tab-b"
+	ambiguousBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{uiTarget, target, secondPage},
+	}
+	ambiguous := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(ambiguousBroker), "select", "--browser", string(candidate.ID), "--auto-select", "single", "--json")
+	if ambiguous.err == nil {
+		t.Fatal("auto-selection unexpectedly chose one of two page targets")
+	}
+	ambiguousEnvelope := decodeDirectEnvelope(t, ambiguous.stdout)
+	if ambiguousEnvelope.OK || ambiguousEnvelope.Error == nil || ambiguousEnvelope.Error.Code != string(webmcp.ErrorAmbiguousTab) {
+		t.Fatalf("multi-page ambiguity envelope = %+v", ambiguousEnvelope)
+	}
+	if ids := directSafeIDList(ambiguousEnvelope.Error.Details["candidate_target_ids"]); !reflect.DeepEqual(ids, []string{"tab-a", "tab-b"}) {
+		t.Fatalf("multi-page ambiguity candidates = %v", ids)
+	}
+	if len(ambiguousBroker.selectCalls) != 0 {
+		t.Fatalf("ambiguous page selection caused side effects: %+v", ambiguousBroker.selectCalls)
+	}
+}
+
 func TestWebMCPDirectNoEligibleTabUsesC0DetailsInHumanAndJSONModes(t *testing.T) {
 	browserID := randomizedWebMCPTestID(t, "browser-")
 	targetID := randomizedWebMCPTestID(t, "target-")
