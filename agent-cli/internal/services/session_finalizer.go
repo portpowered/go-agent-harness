@@ -100,8 +100,12 @@ func (f *sessionRuntimeFinalizer) cleanup(ctx context.Context, out io.Writer) er
 		appendErr(wrapSessionRuntimeError(f.plan, wrapSessionPhaseError("flush capture", invokeSessionFinalizer(f.plan.flushCapture))))
 	}
 	if f.plan.finalize != nil {
+		finalizeCtx := ctx
+		if reporter := f.plan.loop.terminalReporter; reporter != nil {
+			finalizeCtx = withSessionTerminalReporter(ctx, reporter)
+		}
 		appendErr(wrapSessionRuntimeError(f.plan, invokeSessionFinalizer(func() error {
-			return f.plan.finalize(ctx, out)
+			return f.plan.finalize(finalizeCtx, out)
 		})))
 	}
 

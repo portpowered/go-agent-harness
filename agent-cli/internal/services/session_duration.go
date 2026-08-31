@@ -173,16 +173,24 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 
 func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	artifacts := sessionDurationArtifactsFromContext(ctx)
+	reporter := plan.loop.terminalReporter
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		plan.loop.terminalReporter = reporter
+	}
 	finalizer := newSessionRuntimeFinalizer(plan)
 	defer func() {
 		// The common finalizer must complete browser/provider/capture teardown
 		// before the duration sidecar is flushed and closed as the final bundle
 		// stage. This keeps duration, image, and recording runs on one C0 order.
 		runErr = finalizer.finish(ctx, out, runErr)
-		runErr = errors.Join(runErr, finalizeSessionDurationArtifacts(artifacts))
-		if runErr == nil && plan.replayCompletion != nil {
-			runErr = plan.replayCompletion(out)
+		artifactErr := finalizeSessionDurationArtifacts(artifacts)
+		runErr = errors.Join(runErr, artifactErr)
+		reporter.recordArtifactFinalization(artifacts != nil, artifactErr)
+		if !sessionErrorHasIndependentFailure(runErr) && plan.replayCompletion != nil {
+			plan.replayCompletion(reporter)
 		}
+		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
 	if err != nil {
@@ -208,6 +216,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	}
 	plan.configureLoopObserver(&plan.loop)
 	if plan.inferencer != nil {
+		reporter.markRunStarted()
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}
 

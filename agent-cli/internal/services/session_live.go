@@ -192,6 +192,11 @@ type sessionLoopOptions struct {
 	// same summary through writeDurationSessionReplayMessage.
 	terminalSummaryRecorder sessionDurationTerminalRecorder
 
+	// terminalReporter is the services-owned consume-once boundary for the
+	// customer-facing terminal announcement. Stream consumers only contribute
+	// evidence; the enclosing runtime plan publishes it after finalization.
+	terminalReporter *sessionTerminalReporter
+
 	// AudioOutputError lets the audio-output wrapper report a concrete artifact
 	// failure before the incomplete-response guard classifies a tool round trip.
 	// Without this seam, malformed output can stop the wrapper before the final
@@ -274,17 +279,30 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 	return loopOpts
 }
 
-func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
-	renderer := newSessionReplayRenderer(out)
-	err := runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
-	err = audioResponseCompletionError(err, opts)
-	err = scheduledAudioCompletionError(err, opts)
-	cleanSIGINT := sessionSIGINTCleanForObserver(err, opts.cancellationIntent, opts.observer)
-	err = opts.observer.finish(err)
-	if cleanSIGINT {
-		err = errors.Join(err, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
+func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
+	reporter := opts.terminalReporter
+	ownsReporter := reporter == nil
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		opts.terminalReporter = reporter
 	}
-	return err
+	reporter.markRunStarted()
+	renderer := newSessionReplayRenderer(out, reporter)
+	runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
+	runErr = audioResponseCompletionError(runErr, opts)
+	runErr = scheduledAudioCompletionError(runErr, opts)
+	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
+	runErr = opts.observer.finish(runErr)
+	if cleanSIGINT {
+		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
+	}
+	if ownsReporter {
+		if err := renderer.finishTranscript(); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+	}
+	return runErr
 }
 
 func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {
@@ -300,7 +318,15 @@ func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, writ
 			}
 		}
 	}
-	if write != nil {
+	if opts.terminalReporter != nil {
+		if _, ok := out.(sessionReplayMessageWriter); ok && write != nil {
+			if err := write(out, terminal); err != nil {
+				errs = append(errs, err)
+			}
+		} else {
+			opts.terminalReporter.observeStreamMessage(terminal, true)
+		}
+	} else if write != nil {
 		if err := write(out, terminal); err != nil {
 			errs = append(errs, err)
 		}
@@ -550,7 +576,26 @@ func shouldDispatchScheduledAudioForMessage(msg messages.StreamMessage, policy S
 	}
 }
 
-func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
+func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
+	reporter := opts.terminalReporter
+	ownsReporter := reporter == nil
+	reportOut := out
+	var ownedRenderer *sessionReplayRenderer
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		opts.terminalReporter = reporter
+		reporter.markRunStarted()
+		ownedRenderer = newSessionReplayRenderer(out, reporter)
+		out = ownedRenderer
+	}
+	if ownsReporter {
+		defer func() {
+			if err := ownedRenderer.finishTranscript(); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+			runErr = errors.Join(runErr, reporter.publish(reportOut, runErr))
+		}()
+	}
 	var rtcPumpErrors <-chan error
 	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
@@ -608,7 +653,6 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		return audioErr
 	}
 
-	var runErr error
 	runDone := false
 	waitRun := func() error {
 		if !runDone {

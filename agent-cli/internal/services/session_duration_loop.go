@@ -33,19 +33,32 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)
 }
 
-func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
-	renderer := newSessionReplayRenderer(out)
-	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, renderer, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
-	err = scheduledAudioCompletionError(err, opts)
-	cleanSIGINT := sessionSIGINTCleanForObserver(err, opts.cancellationIntent, opts.observer)
-	err = opts.observer.finish(err)
+func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
+	reporter := opts.terminalReporter
+	ownsReporter := reporter == nil
+	if reporter == nil {
+		reporter = newSessionTerminalReporter()
+		opts.terminalReporter = reporter
+	}
+	reporter.markRunStarted()
+	renderer := newSessionReplayRenderer(out, reporter)
+	runErr = runAgentLoopSessionWithDurationAdmissionClockStream(ctx, renderer, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
+	runErr = scheduledAudioCompletionError(runErr, opts)
+	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
+	runErr = opts.observer.finish(runErr)
 	if cleanSIGINT {
 		artifacts := sessionDurationArtifactsFromContext(ctx)
-		err = errors.Join(err, publishSessionUserCancellation(renderer, opts, func(out io.Writer, msg messages.StreamMessage) error {
+		runErr = errors.Join(runErr, publishSessionUserCancellation(renderer, opts, func(out io.Writer, msg messages.StreamMessage) error {
 			return writeDurationSessionReplayMessage(out, msg, artifacts)
 		}))
 	}
-	return err
+	if ownsReporter {
+		if err := renderer.finishTranscript(); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		runErr = errors.Join(runErr, reporter.publish(out, runErr))
+	}
+	return runErr
 }
 
 func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
@@ -146,6 +159,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState); drainErr != nil {
 			return drainErr
 		}
+		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
 		if planned && !terminalState.terminalWritten {
 			if err := terminalState.writeObservedProviderTerminal(out, artifacts); err != nil {
 				return err
@@ -268,6 +282,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if err != nil && !errors.Is(err, context.Canceled) {
 				return sessionRunTerminationError(ctx, fmt.Errorf("session error: %w", err))
 			}
+			markSessionDurationExpiry(opts.terminalReporter, durationExpired, terminalState.outputState())
 			if durationExpired && !terminalState.terminalWritten {
 				if err := terminalState.writeObservedProviderTerminal(out, artifacts); err != nil {
 					return sessionRunTerminationError(ctx, err)
