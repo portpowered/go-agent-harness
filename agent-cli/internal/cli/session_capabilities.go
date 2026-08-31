@@ -97,13 +97,15 @@ func newSessionToolCapabilitiesFactory(
 			staticDefinitions      []messages.ToolDefinition
 		)
 		if isRegistryExecutor || staticExecutor == nil {
-			var filesystemPolicy *cliTools.FilesystemPolicy
-			if cfg != nil && cfg.FilesystemWorkDir != "" {
-				var policyErr error
-				filesystemPolicy, policyErr = cliTools.ResolveFilesystemPolicy(cfg.FilesystemWorkDir, cfg.FilesystemAllowPaths...)
-				if policyErr != nil {
-					return SessionToolCapabilities{}, fmt.Errorf("resolve filesystem scope: %w", policyErr)
-				}
+			var workdir string
+			var allowPaths []string
+			if cfg != nil {
+				workdir = cfg.FilesystemWorkDir
+				allowPaths = cfg.FilesystemAllowPaths
+			}
+			filesystemPolicy, policyErr := cliTools.ResolveFilesystemPolicy(workdir, allowPaths...)
+			if policyErr != nil {
+				return SessionToolCapabilities{}, fmt.Errorf("resolve filesystem scope: %w", policyErr)
 			}
 			registry := cliTools.NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy(cfg, displayCapability, displaySurface, filesystemPolicy)
 			resolvedStaticExecutor = cliTools.NewRegistryExecutor(registry)

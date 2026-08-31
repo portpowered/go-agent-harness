@@ -258,6 +258,18 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{}, err
 	}
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	filesystemPolicy := opts.FilesystemPolicy
+	if filesystemPolicy == nil {
+		var err error
+		filesystemPolicy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
+		if err != nil {
+			return sessionRuntimePlan{}, fmt.Errorf("resolve filesystem scope: %w", err)
+		}
+	}
+	opts.FilesystemPolicy = filesystemPolicy
+	opts.WorkDir = filesystemPolicy.PrimaryRoot()
+	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
+	opts.ToolExecutor = tools.ApplyFilesystemPolicy(opts.ToolExecutor, filesystemPolicy)
 	var capabilityCoordinator *SessionCapabilityCoordinator
 	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {

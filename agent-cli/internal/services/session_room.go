@@ -5,6 +5,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -234,9 +235,15 @@ type RoomRunOptions struct {
 	Validation       room.ValidationOptions
 	CredentialLookup func(string) (string, bool)
 
-	PairFactory            room.PairFactory
-	BaseURL                string
-	ConfigDir              string
+	PairFactory room.PairFactory
+	BaseURL     string
+	ConfigDir   string
+	// WorkDir and AllowPaths are the canonical customer filesystem scope for
+	// room participant tools. FilesystemPolicy is the immutable snapshot shared
+	// by every participant that receives a filesystem tool.
+	WorkDir                string
+	AllowPaths             []string
+	FilesystemPolicy       *tools.FilesystemPolicy
 	WebSocketDialer        transport.Dialer
 	WebSocketDialerFactory func(room.Participant) transport.Dialer
 	// FrameSamples is a compact deterministic cadence override. Zero leaves

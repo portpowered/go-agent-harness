@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -212,11 +213,17 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if parent == nil {
 		parent = context.Background()
 	}
+	filesystemPolicy, err := cliTools.ResolveFilesystemPolicy(
+		globalWorkDir(roomRunGlobalFlags(c)),
+		globalAllowPaths(roomRunGlobalFlags(c))...,
+	)
+	if err != nil {
+		return fmt.Errorf("resolve filesystem scope: %w", err)
+	}
 	replayPath = strings.TrimSpace(replayPath)
 	var launchPlan services.RoomLaunchPlan
 	var replayPlan services.RoomReplayPlan
 	var replayMode bool
-	var err error
 	if replayPath != "" {
 		if strings.TrimSpace(configPath) != "" || strings.TrimSpace(manifestPath) != "" {
 			return fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", services.ErrRoomReplaySourceConflict)
@@ -318,13 +325,16 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
-		Manifest:   roomManifest,
-		ReplayPath: replayPath,
-		OutputDir:  outputDir,
-		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
-		ReplayPlan: nil,
-		LaunchPlan: nil,
-		Stream:     broker,
+		Manifest:         roomManifest,
+		ReplayPath:       replayPath,
+		OutputDir:        outputDir,
+		ConfigDir:        roomConfigDir(roomRunGlobalFlags(c)),
+		WorkDir:          filesystemPolicy.PrimaryRoot(),
+		AllowPaths:       filesystemPolicy.AdditionalRoots(),
+		FilesystemPolicy: filesystemPolicy,
+		ReplayPlan:       nil,
+		LaunchPlan:       nil,
+		Stream:           broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},

@@ -212,6 +212,137 @@ func TestReadImageToolWithPolicy_PreservesOrdinaryImageResult(t *testing.T) {
 	}
 }
 
+func TestResolveFilesystemPolicyCanonicalizesAndValidatesAdditionalRoots(t *testing.T) {
+	parent := t.TempDir()
+	workdir := filepath.Join(parent, "workdir")
+	additional := filepath.Join(parent, "allowed")
+	if err := os.Mkdir(workdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(additional, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	policy, err := ResolveFilesystemPolicy(workdir, "../allowed", additional)
+	if err != nil {
+		t.Fatalf("ResolveFilesystemPolicy: %v", err)
+	}
+	canonicalWorkdir, err := filepath.EvalSymlinks(workdir)
+	if err != nil {
+		t.Fatalf("canonicalize workdir: %v", err)
+	}
+	canonicalAdditional, err := filepath.EvalSymlinks(additional)
+	if err != nil {
+		t.Fatalf("canonicalize additional root: %v", err)
+	}
+	if policy.PrimaryRoot() != canonicalWorkdir {
+		t.Fatalf("primary root = %q, want canonical %q", policy.PrimaryRoot(), canonicalWorkdir)
+	}
+	if got := policy.AdditionalRoots(); len(got) != 1 || got[0] != canonicalAdditional {
+		t.Fatalf("additional roots = %#v, want one canonical %q", got, canonicalAdditional)
+	}
+
+	file := filepath.Join(parent, "not-a-directory")
+	if err := os.WriteFile(file, []byte("not a root"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		workdir string
+		allow   []string
+	}{
+		{name: "missing workdir", workdir: filepath.Join(parent, "missing")},
+		{name: "file workdir", workdir: file},
+		{name: "missing additional", workdir: workdir, allow: []string{filepath.Join(parent, "missing-allowed")}},
+		{name: "file additional", workdir: workdir, allow: []string{file}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ResolveFilesystemPolicy(tc.workdir, tc.allow...)
+			if err == nil || !errors.Is(err, ErrInvalidFilesystemRoot) {
+				t.Fatalf("ResolveFilesystemPolicy error = %v, want ErrInvalidFilesystemRoot", err)
+			}
+		})
+	}
+}
+
+func TestFilesystemPolicyAppliesToReadsListsAndAllMutationTools(t *testing.T) {
+	primary := t.TempDir()
+	additional := t.TempDir()
+	outside := t.TempDir()
+	primaryFile := filepath.Join(primary, "primary.txt")
+	additionalFile := filepath.Join(additional, "additional.txt")
+	outsideFile := filepath.Join(outside, "outside.txt")
+	if err := os.WriteFile(primaryFile, []byte("primary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(additionalFile, []byte("additional"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("SENTINEL-CONTENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	policy, err := NewFilesystemPolicy(primary, additional)
+	if err != nil {
+		t.Fatalf("NewFilesystemPolicy: %v", err)
+	}
+	readTool := NewReadFileToolWithPolicy(policy)
+	listTool := NewListDirToolWithPolicy(policy)
+	writeTool := NewWriteFileToolWithPolicy(policy)
+	editTool := NewEditFileToolWithPolicy(policy)
+	appendTool := NewAppendFileToolWithPolicy(policy)
+
+	requireToolTextContains(t, mustToolExecute(t, readTool, map[string]any{"path": "primary.txt"}), nil, "primary")
+	requireToolTextContains(t, mustToolExecute(t, readTool, map[string]any{"path": additionalFile}), nil, "additional")
+	requireToolTextContains(t, mustToolExecute(t, listTool, map[string]any{"path": additional}), nil, "FILE: additional.txt\n")
+
+	additionalWrite := filepath.Join(additional, "new.txt")
+	requireToolTextContains(t, mustToolExecute(t, writeTool, map[string]any{"path": additionalWrite, "content": "new"}), nil, "File written")
+	requireToolTextContains(t, mustToolExecute(t, editTool, map[string]any{"path": additionalFile, "old_text": "additional", "new_text": "edited"}), nil, "File edited")
+	requireToolTextContains(t, mustToolExecute(t, appendTool, map[string]any{"path": additionalFile, "content": "-appended"}), nil, "Appended")
+	if got, err := os.ReadFile(additionalFile); err != nil || string(got) != "edited-appended" {
+		t.Fatalf("additional mutation content = %q, %v", got, err)
+	}
+
+	deniedParent := filepath.Join(outside, "not-created", "nested")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	for _, tc := range []struct {
+		name string
+		tool Tool
+		args map[string]any
+	}{
+		{name: "read", tool: readTool, args: map[string]any{"path": outsideFile}},
+		{name: "list", tool: listTool, args: map[string]any{"path": outside}},
+		{name: "write", tool: writeTool, args: map[string]any{"path": deniedTarget, "content": "must not write"}},
+		{name: "edit", tool: editTool, args: map[string]any{"path": outsideFile, "old_text": "outside", "new_text": "changed"}},
+		{name: "append", tool: appendTool, args: map[string]any{"path": outsideFile, "content": "must not append"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := requireToolTextContains(t, mustToolExecute(t, tc.tool, tc.args), nil, "path escapes workspace")
+			if strings.Contains(got, "must not") || strings.Contains(got, "SENTINEL-CONTENT") {
+				// The denial must not echo mutation content or the protected file's
+				// contents; the generic path category is sufficient for this story.
+				t.Fatalf("denial text = %q, want no request/content leak", got)
+			}
+		})
+	}
+	if got, err := os.ReadFile(outsideFile); err != nil || string(got) != "SENTINEL-CONTENT" {
+		t.Fatalf("outside sentinel = %q, %v; want unchanged", got, err)
+	}
+	if _, err := os.Stat(deniedParent); !os.IsNotExist(err) {
+		t.Fatalf("denied parent = %v, want absent", err)
+	}
+}
+
+func mustToolExecute(t *testing.T, tool Tool, args map[string]any) []messages.Message {
+	t.Helper()
+	msgs, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("tool %q returned Go error: %v", tool.Name(), err)
+	}
+	return msgs
+}
+
 func protectedSystemFixture(t *testing.T) (root, file string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

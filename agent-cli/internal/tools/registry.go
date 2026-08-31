@@ -99,13 +99,13 @@ func NewEmptyToolRegistry() *ToolRegistry {
 // NewToolRegistryFromConfig creates a registry with only tools that are enabled in config.
 // If cfg is nil or tools.list is empty, all tools are enabled. Use tools.list with enabled: false to disable tools.
 func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, nil)
+	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, nil, false)
 }
 
 // NewToolRegistryFromConfigWithPolicy creates a config-filtered registry whose
 // customer-facing filesystem tools all share one validated policy.
 func NewToolRegistryFromConfigWithPolicy(cfg *config.Config, policy *FilesystemPolicy) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, policy)
+	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, policy, true)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapability creates the session-specific
@@ -125,7 +125,7 @@ func NewToolRegistryFromConfigWithDisplayCapability(
 	capability DisplayCapability,
 	surface DisplaySurface,
 ) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, capability, surface, true, nil)
+	return newToolRegistryFromConfig(cfg, capability, surface, true, nil, false)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy is the session
@@ -137,10 +137,26 @@ func NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy(
 	surface DisplaySurface,
 	policy *FilesystemPolicy,
 ) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, capability, surface, true, policy)
+	return newToolRegistryFromConfig(cfg, capability, surface, true, policy, true)
 }
 
-func newToolRegistryFromConfig(cfg *config.Config, displayCapability DisplayCapability, displaySurface DisplaySurface, gateDisplayTools bool, policy *FilesystemPolicy) *ToolRegistry {
+func newToolRegistryFromConfig(
+	cfg *config.Config,
+	displayCapability DisplayCapability,
+	displaySurface DisplaySurface,
+	gateDisplayTools bool,
+	policy *FilesystemPolicy,
+	policyRequired bool,
+) *ToolRegistry {
+	if policyRequired && policy == nil {
+		// Policy-aware composition is fail-closed even when a caller omits the
+		// optional value. Resolve the ordinary default when possible, but never
+		// silently switch back to the legacy unrestricted host filesystem.
+		policy, _ = ResolveFilesystemPolicy("")
+		if policy == nil {
+			policy = &FilesystemPolicy{}
+		}
+	}
 	registry := &ToolRegistry{
 		tools: make(map[string]Tool),
 	}

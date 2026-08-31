@@ -47,6 +47,17 @@ func roomManifestHasTools(manifest room.Manifest) bool {
 // used as the source so selected tool objects, including any mutable callback
 // state, are never shared between room participants.
 func newDefaultRoomParticipantToolCapabilitiesFactory(configDir string) (RoomParticipantToolCapabilitiesFactory, error) {
+	policy, err := tools.ResolveFilesystemPolicy("")
+	if err != nil {
+		return nil, fmt.Errorf("resolve filesystem scope: %w", err)
+	}
+	return newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir, policy)
+}
+
+func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir string, policy *tools.FilesystemPolicy) (RoomParticipantToolCapabilitiesFactory, error) {
+	if policy == nil {
+		return nil, fmt.Errorf("resolve filesystem scope: policy is nil")
+	}
 	storage, err := config.NewDefaultConfigStorage(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("initialize room tool config: %w", err)
@@ -57,7 +68,7 @@ func newDefaultRoomParticipantToolCapabilitiesFactory(configDir string) (RoomPar
 	}
 
 	return func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
-		available := tools.NewToolRegistryFromConfig(cfg)
+		available := tools.NewToolRegistryFromConfigWithPolicy(cfg, policy)
 		selected := tools.NewEmptyToolRegistry()
 		for _, name := range participant.Tools {
 			tool, ok := available.Get(name)

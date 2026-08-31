@@ -131,7 +131,10 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	loadedCfg = &loadedCfgCopy
 	registry := tools.NewToolRegistryFromConfigWithPolicy(loadedCfg, filesystemPolicy)
 	if e.inferencerOverride != nil && e.executor != nil {
-		loopExecutor = e.executor
+		// Test and embedded callers may inject the executor while still using
+		// the production filesystem registry. Re-scope registry-backed
+		// executors so the override path cannot silently bypass the run policy.
+		loopExecutor = tools.ApplyFilesystemPolicy(e.executor, filesystemPolicy)
 		loopToolDefs = e.toolDefs
 	} else {
 		// dispatch_agent requires the inferencer, so it is registered after the inferencer is built.
