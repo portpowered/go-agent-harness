@@ -285,13 +285,24 @@ func runSessionWithImagesAndRecordingDirectory(
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
+	var audioNormalizer *sessionAudioNormalizerInferencer
 	if plan.inferencer != nil {
+		audioNormalizer = newSessionAudioNormalizerInferencer(plan.inferencer, recording.fail)
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
-			inner:     plan.inferencer,
+			inner:     audioNormalizer,
 			recording: recording,
 		}
 	}
-	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	// The recording wrapper already owns the single normalizer shared by the
+	// recording artifact and any image-session audio sink. Do not add another
+	// normalizer inside the image output decorator.
+	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt, false)
+	if audioNormalizer != nil {
+		audioNormalizer.wait()
+		if normalizationErr := audioNormalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("normalize assistant audio: %w", normalizationErr))
+		}
+	}
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 func runSessionWithRecordingDirectory(
@@ -368,9 +379,11 @@ func runSessionWithRecordingDirectory(
 	recording := newSessionDirectoryRecording(destination, plan, opts)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
+	var audioNormalizer *sessionAudioNormalizerInferencer
 	if plan.inferencer != nil {
+		audioNormalizer = newSessionAudioNormalizerInferencer(plan.inferencer, recording.fail)
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
-			inner:     plan.inferencer,
+			inner:     audioNormalizer,
 			recording: recording,
 		}
 	}
@@ -439,6 +452,12 @@ func runSessionWithRecordingDirectory(
 		audioWrapper.wait()
 		if outputErr := audioWrapper.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
+		}
+	}
+	if audioNormalizer != nil {
+		audioNormalizer.wait()
+		if normalizationErr := audioNormalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("normalize assistant audio: %w", normalizationErr))
 		}
 	}
 	if audioOutput != nil {
@@ -825,7 +844,35 @@ func (s *sessionDirectoryRecordingSession) relay() {
 				}
 			}
 		case <-s.ctx.Done():
+			// A canceled provider response can leave one bounded normalizer tail
+			// queued on the inner decorator. Close it before draining so the
+			// recording observes the complete audio already accepted upstream.
+			_ = s.inner.Close()
+			s.drainAfterCancellation(source)
 			return
+		}
+	}
+}
+
+func (s *sessionDirectoryRecordingSession) drainAfterCancellation(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		select {
+		case msg := <-source.Chan():
+			s.recording.observe(msg, false)
+			if !s.forward(msg) {
+				return
+			}
+		case <-s.inner.Done():
+			for {
+				msg, ok := source.Read()
+				if !ok {
+					return
+				}
+				s.recording.observe(msg, false)
+				if !s.forward(msg) {
+					return
+				}
+			}
 		}
 	}
 }

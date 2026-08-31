@@ -71,6 +71,8 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	}()
 
 	if plan.inferencer != nil {
+		normalizer := newSessionAudioNormalizerInferencer(plan.inferencer, nil)
+		plan.inferencer = normalizer
 		wirePrompt := ""
 		if seed.Present {
 			wirePrompt = nextSessionTextWirePrompt()
@@ -87,8 +89,12 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		}
 		runErr = plan.run(ctx, sessionOut)
 		wrapped.wait()
+		normalizer.wait()
 		if outputErr := wrapped.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+		}
+		if normalizationErr := normalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: normalize assistant audio: %w", path, normalizationErr))
 		}
 		return runErr
 	}
@@ -140,6 +146,8 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	}()
 
 	if plan.inferencer != nil {
+		normalizer := newSessionAudioNormalizerInferencer(plan.inferencer, nil)
+		plan.inferencer = normalizer
 		wirePrompt := ""
 		if seed.Present {
 			wirePrompt = nextSessionTextWirePrompt()
@@ -164,8 +172,12 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 			runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 		}
 		wrapped.wait()
+		normalizer.wait()
 		if outputErr := wrapped.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+		}
+		if normalizationErr := normalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: normalize assistant audio: %w", path, normalizationErr))
 		}
 		return runErr
 	}
@@ -648,24 +660,51 @@ func (s *sessionAudioOutputSession) forward() {
 			s.drain(input)
 			return
 		case <-s.ctx.Done():
+			// The normalizer may still have an accepted partial frame when the
+			// session context is canceled. Close it first so its bounded tail is
+			// emitted, then consume that tail with a non-cancelable sink context.
+			_ = s.Session.Close()
+			s.drainAfterCancellation(input)
 			return
 		}
 	}
 }
 
 func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.StreamMessage]) {
+	s.drainWithOutputContext(input, s.ctx)
+}
+
+func (s *sessionAudioOutputSession) drainWithOutputContext(input *messages.TypedBuffer[messages.StreamMessage], outputContext context.Context) {
 	for {
 		msg, ok := input.Read()
 		if !ok {
 			return
 		}
-		if !s.forwardMessage(msg) {
+		if !s.forwardMessageWithOutputContext(msg, outputContext) {
+			return
+		}
+	}
+}
+
+func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		select {
+		case msg := <-input.Chan():
+			if !s.forwardMessageWithOutputContext(msg, context.Background()) {
+				return
+			}
+		case <-s.Session.Done():
+			s.drainWithOutputContext(input, context.Background())
 			return
 		}
 	}
 }
 
 func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) bool {
+	return s.forwardMessageWithOutputContext(msg, s.ctx)
+}
+
+func (s *sessionAudioOutputSession) forwardMessageWithOutputContext(msg messages.StreamMessage, outputContext context.Context) bool {
 	if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok {
@@ -673,7 +712,7 @@ func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) b
 			_ = s.Close()
 			return false
 		}
-		if err := s.output.writeDelta(s.ctx, value.Content); err != nil {
+		if err := s.output.writeDelta(outputContext, value.Content); err != nil {
 			s.record(err)
 			_ = s.Close()
 			return false

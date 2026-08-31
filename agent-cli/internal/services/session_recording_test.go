@@ -575,12 +575,11 @@ func writeSessionRecordingInputFixture(t *testing.T, segments [][]byte) string {
 func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *testing.T) {
 	inputSegments := sessionRecordingInputSegments()
 	inputPath := writeSessionRecordingInputFixture(t, inputSegments)
-	outputSegments := [][]byte{{0x10, 0x00}, {0x11, 0x00, 0x12, 0x00}}
+	outputSegments := [][]byte{pcm16Bytes(sessionNormalizerSpeech(900, 320))}
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue("runner-session", "gpt-realtime")},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(outputSegments[0])},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(outputSegments[1])},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("paired runner response")},
@@ -637,7 +636,6 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		"audio/in-000.pcm",
 		"audio/in-001.pcm",
 		"audio/out-000.pcm",
-		"audio/out-001.pcm",
 		"client.transcript.jsonl",
 		"manifest.json",
 		"session-log.jsonl",
@@ -652,11 +650,14 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 			t.Fatalf("runner input segment %s = %x, err %v, want %x", path, got, err, want)
 		}
 	}
-	for index, want := range outputSegments {
-		path := filepath.Join(destination, "audio", "out-"+threeRecordingDigits(index)+".pcm")
-		if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, want) {
-			t.Fatalf("runner output segment %s = %x, err %v, want %x", path, got, err, want)
-		}
+	path := filepath.Join(destination, "audio", "out-000.pcm")
+	gotOutput, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("runner output segment %s: %v", path, err)
+	}
+	wantOutput := normalizedSessionPCM16(t, outputSegments[0])
+	if !bytes.Equal(gotOutput, wantOutput) {
+		t.Fatalf("runner output segment %s = %x, want normalized %x", path, gotOutput, wantOutput)
 	}
 
 	recordedSession := recordedInferencer.sessions[0]
@@ -699,6 +700,12 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 					wantDirection = transcript.DirectionOut
 				}
 			}
+			if wantMessage.Type == messages.StreamTypeAudioDelta && wantMessage.Role == messages.RoleAssistant {
+				value, ok := wantMessage.Value.(*messages.AudioDeltaValue)
+				if ok && value != nil {
+					wantMessage.Value = messages.NewAudioDeltaValueWithMediaType(normalizedSessionPCM16(t, value.Content), value.MediaType)
+				}
+			}
 			wantPayload, err := gwtesting.MarshalStreamMessage(wantMessage)
 			if err != nil {
 				t.Fatalf("marshal runner expected frame %d: %v", index, err)
@@ -734,7 +741,6 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		"audio/in-000.pcm",
 		"audio/in-001.pcm",
 		"audio/out-000.pcm",
-		"audio/out-001.pcm",
 	})
 }
 

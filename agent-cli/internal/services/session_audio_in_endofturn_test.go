@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -34,6 +35,20 @@ func sessionAudioInTestWAVPCM(t *testing.T, wavPath string) []byte {
 		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
 	}
 	return pcm
+}
+
+func normalizedSessionAudioInTestPCM(t *testing.T, pcm []byte) []byte {
+	t.Helper()
+	normalizer := audio.NewPCM16Normalizer()
+	first, err := normalizer.ProcessPCM16(context.Background(), pcm)
+	if err != nil {
+		t.Fatalf("normalize response audio: %v", err)
+	}
+	tail, err := normalizer.FinishPCM16(context.Background())
+	if err != nil {
+		t.Fatalf("finish response audio normalization: %v", err)
+	}
+	return append(first, tail...)
 }
 
 // TestSessionCommandAudioInputRecordsPostCommitResponse drives the real
@@ -170,12 +185,13 @@ func TestSessionCommandAudioInputRecordsPostCommitResponse(t *testing.T) {
 		t.Fatalf("recorded response audio holds no samples")
 	}
 	payloadOnly := recorded[44:]
-	if len(payloadOnly) != len(responseAudio) {
-		t.Fatalf("recorded response audio length = %d, want %d", len(payloadOnly), len(responseAudio))
+	wantAudio := normalizedSessionAudioInTestPCM(t, responseAudio)
+	if len(payloadOnly) != len(wantAudio) {
+		t.Fatalf("recorded response audio length = %d, want %d", len(payloadOnly), len(wantAudio))
 	}
-	for i := range responseAudio {
-		if payloadOnly[i] != responseAudio[i] {
-			t.Fatalf("recorded response audio byte %d changed against the scripted response", i)
+	for i := range wantAudio {
+		if payloadOnly[i] != wantAudio[i] {
+			t.Fatalf("recorded normalized response audio byte %d = %d, want %d", i, payloadOnly[i], wantAudio[i])
 		}
 	}
 }

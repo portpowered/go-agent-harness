@@ -228,7 +228,7 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 					s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
 					s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
 					if !s.holdBargeResponseOutput {
-						s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
+						s.events <- `{"type":"response.output_audio.delta","delta":"AQIDBA==","format":"pcm16"}`
 					}
 					select {
 					case <-s.firstResponseCancel:
@@ -976,30 +976,32 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 		t.Fatalf("scheduled barge-in wire order = %v, want response.created < response.cancel < second append", writes)
 	}
 
-	seenSecondAudio, seenStaleAudio := false, false
+	seenSecondAudio := false
+	currentResponse := ""
+	responseOneAudio := 0
 	for _, msg := range observed {
-		if msg.Type != messages.StreamTypeAudioDelta {
-			continue
-		}
-		value, ok := msg.Value.(*messages.AudioDeltaValue)
-		if !ok || value == nil {
-			t.Fatalf("observed scheduled audio delta value = %T, want *AudioDeltaValue", msg.Value)
-		}
-		switch string(value.Content) {
-		case string([]byte{1, 2, 3}):
-			// The active boundary is response.created. Depending on which
-			// already-queued provider delta the model runner drains first, the
-			// first response's output may or may not cross before cancellation.
-		case string([]byte{2, 0, 12, 0}):
-			seenSecondAudio = true
-		case "cancel-stale":
-			seenStaleAudio = true
+		switch msg.Type {
+		case messages.StreamTypeMessageStart:
+			currentResponse = msg.ResponseID
+		case messages.StreamTypeMessageEnd:
+			currentResponse = ""
+		case messages.StreamTypeAudioDelta:
+			value, ok := msg.Value.(*messages.AudioDeltaValue)
+			if !ok || value == nil {
+				t.Fatalf("observed scheduled audio delta value = %T, want *AudioDeltaValue", msg.Value)
+			}
+			if currentResponse == "resp_1" {
+				responseOneAudio++
+			}
+			if currentResponse == "resp_2" && len(value.Content) > 0 {
+				seenSecondAudio = true
+			}
 		}
 	}
 	if !seenSecondAudio {
 		t.Fatalf("replacement response audio was not observed; stream=%#v", observed)
 	}
-	if seenStaleAudio {
+	if responseOneAudio > 1 {
 		t.Fatalf("stale provider audio crossed the cancellation boundary: %#v", observed)
 	}
 }

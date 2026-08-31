@@ -143,7 +143,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
-	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt, true)
 }
 
 // RunSessionWithImagesAndAudioInput composes the ordinary image session path
@@ -215,7 +215,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.MaxDuration = opts.MaxDuration
 	plan.loop.RequireAssistantResponse = true
 	plan.loop.RequireTerminalAssistantResponse = true
-	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt, true)
 }
 
 func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
@@ -278,7 +278,7 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 	}
 	return plan, "", nil
 }
-func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
+func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string, normalizeAudio bool) (runErr error) {
 	if opts.AudioOutPath != "" {
 		sink, err := newSessionAudioSink(opts.AudioOutPath, out)
 		if err != nil {
@@ -290,6 +290,11 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))
 			}
 		}()
+		var normalizer *sessionAudioNormalizerInferencer
+		if normalizeAudio {
+			normalizer = newSessionAudioNormalizerInferencer(plan.inferencer, nil)
+			plan.inferencer = normalizer
+		}
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
 		plan.inferencer = wrapped
 		if opts.AudioOutPath == "-" {
@@ -301,8 +306,16 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 			runErr = runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
 		}
 		wrapped.wait()
+		if normalizer != nil {
+			normalizer.wait()
+		}
 		if outputErr := wrapped.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, outputErr))
+		}
+		if normalizer != nil {
+			if normalizationErr := normalizer.err(); normalizationErr != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: normalize assistant audio: %w", opts.AudioOutPath, normalizationErr))
+			}
 		}
 		return runErr
 	}

@@ -170,6 +170,8 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		if seed.Present {
 			wirePrompt = plan.loop.Prompt
 		}
+		normalizer := newSessionAudioNormalizerInferencer(plan.inferencer, nil)
+		plan.inferencer = normalizer
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
 		plan.inferencer = wrapped
 		if maxDuration == 0 {
@@ -182,8 +184,12 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 			runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 		}
 		wrapped.wait()
+		normalizer.wait()
 		if outputErr := wrapped.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, outputErr))
+		}
+		if normalizationErr := normalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: normalize assistant audio: %w", audioPath, normalizationErr))
 		}
 		return runErr
 	}

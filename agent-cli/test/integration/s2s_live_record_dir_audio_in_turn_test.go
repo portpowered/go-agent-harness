@@ -191,20 +191,38 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 	observedMu.Lock()
 	observedCopy := append([]messages.StreamMessage(nil), observed...)
 	observedMu.Unlock()
+	currentResponse := ""
+	firstResponseAudio := 0
 	seenReplacement, seenThird, seenStale := false, false, false
 	for _, msg := range observedCopy {
+		switch msg.Type {
+		case messages.StreamTypeMessageStart:
+			currentResponse = msg.ResponseID
+		case messages.StreamTypeMessageEnd:
+			currentResponse = ""
+		}
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || value == nil {
 			continue
 		}
-		switch string(value.Content) {
-		case string([]byte{2, 0, 22, 0}):
+		if currentResponse == "resp_boundary_1" {
+			firstResponseAudio++
+		}
+		if len(value.Content) == 0 {
+			continue
+		}
+		switch currentResponse {
+		case "resp_boundary_2":
 			seenReplacement = true
-		case string([]byte{3, 0, 23, 0}):
+		case "resp_boundary_3":
 			seenThird = true
-		case "cancel-stale":
+		}
+		if string(value.Content) == "cancel-stale" {
 			seenStale = true
 		}
+	}
+	if firstResponseAudio > 1 {
+		t.Fatalf("cancelled response emitted %d audio deltas, want at most one; stream=%#v", firstResponseAudio, observedCopy)
 	}
 	if !seenReplacement {
 		t.Fatalf("replacement response audio was not observed; stream=%#v", observedCopy)

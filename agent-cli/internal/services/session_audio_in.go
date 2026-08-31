@@ -311,6 +311,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	sessionOut := out
 	var audioOutput *sessionAudioOutput
 	var audioWrapped *sessionAudioOutputInferencer
+	var audioNormalizer *sessionAudioNormalizerInferencer
 	if audioOutPath != "" {
 		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
 		if sinkErr != nil {
@@ -322,6 +323,8 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
 			}
 		}()
+		audioNormalizer = newSessionAudioNormalizerInferencer(plan.inferencer, nil)
+		plan.inferencer = audioNormalizer
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOutput, "", seed.Value)
 		plan.inferencer = wrapped
 		audioWrapped = wrapped
@@ -344,6 +347,12 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 		audioWrapped.wait()
 		if outputErr := audioWrapped.err(); outputErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
+		}
+	}
+	if audioNormalizer != nil {
+		audioNormalizer.wait()
+		if normalizationErr := audioNormalizer.err(); normalizationErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: normalize assistant audio: %w", audioOutPath, normalizationErr))
 		}
 	}
 	return runErr

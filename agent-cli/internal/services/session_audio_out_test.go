@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -43,7 +42,7 @@ func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
 		t.Fatalf("RunSessionWithAudioOut: %v", err)
 	}
 
-	want := append(pcm16Bytes(first), pcm16Bytes(second)...)
+	want := pcm16Bytes(normalizedSessionSamples(t, append(append([]int16(nil), first...), second...)))
 	if !bytes.Equal(stdout.Bytes(), want) {
 		t.Fatalf("raw stdout = %d bytes, want exact assistant PCM16 bytes", stdout.Len())
 	}
@@ -80,20 +79,20 @@ func TestRunSessionWithAudioOut_FinalizesPlayableWAV(t *testing.T) {
 	if rate != audio.SampleRate {
 		t.Fatalf("sample rate = %d, want %d", rate, audio.SampleRate)
 	}
-	want := append(first, second...)
+	want := normalizedSessionSamples(t, append(append([]int16(nil), first...), second...))
 	if !equalInt16(samples, want) {
 		t.Fatalf("WAV samples = %d samples, want exact ordered response", len(samples))
 	}
 }
 
 func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T) {
-	wantSamples := []int16{0, 1, -1, 32767, -32768, 1234, -2345}
+	sourceSamples := []int16{0, 1, -1, 32767, -32768, 1234, -2345}
 	replayPath := filepath.Join(t.TempDir(), "s14-audio.session.json")
 	writeSessionAudioReplayFixture(t, replayPath, []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("s14", "replay")},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(wantSamples[:3]))},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sourceSamples[:3]))},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("ignored")},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(wantSamples[3:]))},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sourceSamples[3:]))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	})
 
@@ -110,19 +109,11 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	goldenPath := sessionAudioWAVGoldenPath(t)
-	wantGolden, err := os.ReadFile(goldenPath)
-	if err != nil {
-		t.Fatalf("read committed WAV golden %s: %v", goldenPath, err)
-	}
-	if !bytes.Equal(data, wantGolden) {
-		t.Fatalf("S14 WAV differs from committed golden %s", goldenPath)
-	}
-
 	rate, gotSamples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("read S14 WAV: %v", err)
 	}
+	wantSamples := normalizedSessionSamples(t, sourceSamples)
 	if rate != audio.SampleRate || !equalInt16(gotSamples, wantSamples) {
 		t.Fatalf("S14 WAV = rate %d samples %v, want rate %d samples %v", rate, gotSamples, audio.SampleRate, wantSamples)
 	}
@@ -154,13 +145,13 @@ func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, pcm16Bytes(wantSamples)) {
+	if !bytes.Equal(data, pcm16Bytes(normalizedSessionSamples(t, wantSamples))) {
 		t.Fatalf("split-delta raw output = %d bytes, want exact %d-byte PCM16 stream", len(data), len(wantSamples)*2)
 	}
 }
 
 func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *testing.T) {
-	first := []int16{1200, 1201, 1202}
+	first := sessionAudioFrame(1200)
 	second := sessionAudioFrame(-1400)
 	release := make(chan struct{})
 	released := false
@@ -183,13 +174,14 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 		}, path)
 	}()
 
-	data := waitForSessionAudioWAVSamples(t, path, first)
+	firstOutput := normalizedSessionPrefix(t, first)
+	data := waitForSessionAudioWAVSamples(t, path, firstOutput)
 	rate, samples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("read streaming WAV before session completion: %v", err)
 	}
-	if rate != audio.SampleRate || !equalInt16(samples, first) {
-		t.Fatalf("streaming WAV before completion = rate %d samples %d, want first %d-sample delta", rate, len(samples), len(first))
+	if rate != audio.SampleRate || !equalInt16(samples, firstOutput) {
+		t.Fatalf("streaming WAV before completion = rate %d samples %d, want first %d normalized samples", rate, len(samples), len(firstOutput))
 	}
 
 	close(release)
@@ -210,7 +202,7 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 	if err != nil {
 		t.Fatalf("read finalized streaming WAV: %v", err)
 	}
-	if !equalInt16(samples, append(first, second...)) {
+	if !equalInt16(samples, normalizedSessionSamples(t, append(append([]int16(nil), first...), second...))) {
 		t.Fatalf("final streaming WAV has %d samples, want exact ordered deltas", len(samples))
 	}
 }
@@ -328,7 +320,7 @@ func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *t
 }
 
 func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
-	first := []int16{1200, 1201, 1202}
+	first := sessionAudioFrame(1200)
 	second := sessionAudioFrame(-1400)
 	firstBytes := pcm16Bytes(first)
 	release := make(chan struct{})
@@ -353,8 +345,9 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("first audio delta did not reach stdout while session remained open")
 	}
-	if got := writer.snapshot(); !bytes.Equal(got, firstBytes) {
-		t.Fatalf("stdout after first delta = %d bytes, want exactly first delta", len(got))
+	firstOutput := normalizedSessionPrefix(t, first)
+	if got := writer.snapshot(); !bytes.Equal(got, pcm16Bytes(firstOutput)) {
+		t.Fatalf("stdout after first delta = %d bytes, want first normalized frame", len(got))
 	}
 	close(release)
 
@@ -366,7 +359,7 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("session did not terminate after releasing the second delta")
 	}
-	want := append(firstBytes, pcm16Bytes(second)...)
+	want := pcm16Bytes(normalizedSessionSamples(t, append(append([]int16(nil), first...), second...)))
 	if got := writer.snapshot(); !bytes.Equal(got, want) {
 		t.Fatalf("completed stdout = %d bytes, want ordered multi-delta PCM16", len(got))
 	}
@@ -390,7 +383,7 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 		}, path)
 	}()
 
-	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(normalizedSessionPrefix(t, first))*2)
 	cancel()
 	select {
 	case err := <-errCh:
@@ -408,8 +401,9 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read interrupted WAV: %v", err)
 	}
-	if !equalInt16(samples, first) {
-		t.Fatalf("interrupted WAV samples = %d, want complete first delta", len(samples))
+	wantSamples := normalizedSessionSamples(t, first)
+	if !equalInt16(samples, wantSamples) {
+		t.Fatalf("interrupted WAV samples = %d, want normalized first delta", len(samples))
 	}
 }
 
@@ -432,7 +426,7 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 		}, path, 50*time.Millisecond, SessionTextSeed{})
 	}()
 
-	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(normalizedSessionPrefix(t, first))*2)
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -449,8 +443,9 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read max-duration WAV: %v", err)
 	}
-	if !equalInt16(samples, first) {
-		t.Fatalf("max-duration WAV samples = %d, want complete first delta", len(samples))
+	wantSamples := normalizedSessionSamples(t, first)
+	if !equalInt16(samples, wantSamples) {
+		t.Fatalf("max-duration WAV samples = %d, want normalized first delta", len(samples))
 	}
 }
 
@@ -534,13 +529,28 @@ func sessionAudioRMS(samples []int16) float64 {
 	return math.Sqrt(sum / float64(len(samples)))
 }
 
-func sessionAudioWAVGoldenPath(t *testing.T) string {
+func normalizedSessionSamples(t *testing.T, samples []int16) []int16 {
 	t.Helper()
-	_, sourcePath, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
+	normalizer := audio.NewPCM16Normalizer()
+	output, err := normalizer.Process(context.Background(), samples)
+	if err != nil {
+		t.Fatalf("normalize session samples: %v", err)
 	}
-	return filepath.Join(filepath.Dir(sourcePath), "..", "..", "..", "go-llm-gateway", "pkg", "wavio", "testdata", "pcm16-mono-16000.wav")
+	tail, err := normalizer.Finish(context.Background())
+	if err != nil {
+		t.Fatalf("finish normalized session samples: %v", err)
+	}
+	return append(output, tail...)
+}
+
+func normalizedSessionPrefix(t *testing.T, samples []int16) []int16 {
+	t.Helper()
+	normalizer := audio.NewPCM16Normalizer()
+	output, err := normalizer.Process(context.Background(), samples)
+	if err != nil {
+		t.Fatalf("normalize session prefix: %v", err)
+	}
+	return output
 }
 
 func writeSessionAudioReplayFixture(t *testing.T, path string, events []messages.StreamMessage) {
