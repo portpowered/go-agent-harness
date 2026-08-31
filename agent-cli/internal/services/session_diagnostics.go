@@ -244,6 +244,12 @@ type sessionProgressObserver struct {
 	counters            audioTurnCounters
 	totals              audioTurnCounters
 	pendingInputs       []ScheduledAudioInput
+	// Room mixer input is admitted by a background pump rather than the
+	// session delta consumer. Keep its per-turn and lifetime byte totals behind
+	// their own lock so concurrent provider observation remains race-free.
+	roomInputMu         sync.Mutex
+	roomInputTurnBytes  uint64
+	roomInputTotalBytes uint64
 
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}

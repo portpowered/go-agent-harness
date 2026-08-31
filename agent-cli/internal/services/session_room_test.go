@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -202,6 +203,193 @@ func TestRunRoom_FansPCMToEveryOtherParticipant(t *testing.T) {
 		case <-outputIDs:
 		case <-time.After(time.Second):
 			t.Fatal("room did not observe every provider audio delta")
+		}
+	}
+}
+
+func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
+	ids := []string{"alice", "bob"}
+	values := map[string]int16{"alice": 1100, "bob": 2200}
+	releaseAudio := make(chan struct{})
+	releaseEnd := make(chan struct{})
+	inferencers := make(map[string]*roomTestInferencer, len(ids))
+	for _, id := range ids {
+		inferencers[id] = &roomTestInferencer{events: []messages.StreamMessage{
+			roomTestSessionOpen(id),
+			roomTestMessageStart(),
+			roomTestAudioEvent(values[id], 10),
+			roomTestMessageEnd(),
+		}, eventWait: func(index int) <-chan struct{} {
+			switch index {
+			case 2:
+				return releaseAudio
+			case 3:
+				return releaseEnd
+			default:
+				return nil
+			}
+		}}
+	}
+
+	opened := make(chan string, len(ids))
+	started := make(chan string, len(ids))
+	ended := make(chan string, len(ids))
+	inputFrames := make(chan roomAudioFrame, 128)
+	diagnostics := make(chan struct {
+		id     string
+		record SessionDiagnosticRecord
+	}, 128)
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.onParticipantSessionOpen = func(id string) { opened <- id }
+	opts.onParticipantStream = func(id string, msg messages.StreamMessage) {
+		switch msg.Type {
+		case messages.StreamTypeMessageStart:
+			started <- id
+		case messages.StreamTypeMessageEnd:
+			ended <- id
+		}
+	}
+	opts.OnAudioInput = func(id string, pcm []byte) error {
+		inputFrames <- roomAudioFrame{id: id, pcm: append([]byte(nil), pcm...)}
+		return nil
+	}
+	opts.OnDiagnostic = func(id string, record SessionDiagnosticRecord) {
+		diagnostics <- struct {
+			id     string
+			record SessionDiagnosticRecord
+		}{id: id, record: record}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	seenOpened := make(map[string]struct{}, len(ids))
+	for len(seenOpened) < len(ids) {
+		select {
+		case id := <-opened:
+			seenOpened[id] = struct{}{}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("session-open observations = %v, want %d participants", seenOpened, len(ids))
+		}
+	}
+	seenStarted := make(map[string]struct{}, len(ids))
+	for len(seenStarted) < len(ids) {
+		select {
+		case id := <-started:
+			seenStarted[id] = struct{}{}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("response-start observations = %v, want %d participants", seenStarted, len(ids))
+		}
+	}
+	close(releaseAudio)
+
+	want := map[string][]byte{
+		"alice": roomPCM16(values["bob"], 10),
+		"bob":   roomPCM16(values["alice"], 10),
+	}
+	for _, id := range ids {
+		sessions := inferencers[id].sessionsSnapshot()
+		if len(sessions) != 1 {
+			t.Fatalf("%s sessions = %d, want one", id, len(sessions))
+		}
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		sawContentfulAudio := false
+		sawCancel := false
+		for !sawContentfulAudio {
+			msg, ok := sessions[0].nextSent(waitCtx)
+			if !ok {
+				waitCancel()
+				t.Fatalf("%s provider session received no peer audio", id)
+			}
+			switch msg.Type {
+			case messages.StreamTypeResponseCancel:
+				if sawCancel {
+					waitCancel()
+					t.Fatalf("%s provider session received duplicate response cancel", id)
+				}
+				sawCancel = true
+			case messages.StreamTypeAudioDelta:
+				value, ok := msg.Value.(*messages.AudioDeltaValue)
+				if !ok || value == nil {
+					waitCancel()
+					t.Fatalf("%s provider-bound value = %T, want *AudioDeltaValue", id, msg.Value)
+				}
+				if bytes.Equal(value.Content, want[id]) {
+					sawContentfulAudio = true
+					if !sawCancel {
+						waitCancel()
+						t.Fatalf("%s peer audio arrived without ordered response cancel", id)
+					}
+				}
+			default:
+				waitCancel()
+				t.Fatalf("%s unexpected provider-bound message %s", id, msg.Type)
+			}
+		}
+		waitCancel()
+	}
+
+	close(releaseEnd)
+	seenEnded := make(map[string]struct{}, len(ids))
+	for len(seenEnded) < len(ids) {
+		select {
+		case id := <-ended:
+			seenEnded[id] = struct{}{}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("response-end observations = %v, want %d participants", seenEnded, len(ids))
+		}
+	}
+	cancel()
+	got := <-outcome
+	if got.err != nil {
+		t.Fatalf("room cancellation: %v", got.err)
+	}
+	if got.result.Reason != RoomTerminationStopped {
+		t.Fatalf("room reason = %q, want %q", got.result.Reason, RoomTerminationStopped)
+	}
+
+	inputCounts := make(map[string]int, len(ids))
+	for {
+		select {
+		case frame := <-inputFrames:
+			if bytes.Equal(frame.pcm, want[frame.id]) {
+				inputCounts[frame.id]++
+			}
+		default:
+			goto inputDrained
+		}
+	}
+inputDrained:
+	for _, id := range ids {
+		if inputCounts[id] != 1 {
+			t.Fatalf("%s contentful mixer frames = %d, want exactly one", id, inputCounts[id])
+		}
+	}
+	metricsByID := make(map[string]SessionDiagnosticRecord, len(ids))
+	for {
+		select {
+		case item := <-diagnostics:
+			if item.record.Event == SessionDiagnosticEventMetrics {
+				metricsByID[item.id] = item.record
+			}
+		default:
+			goto diagnosticsDrained
+		}
+	}
+diagnosticsDrained:
+	for _, id := range ids {
+		record, ok := metricsByID[id]
+		if !ok {
+			t.Fatalf("%s missing terminal metrics diagnostic", id)
+		}
+		bytesReceived, err := strconv.ParseUint(record.Fields["input_audio_bytes"], 10, 64)
+		if err != nil || bytesReceived == 0 {
+			t.Fatalf("%s input_audio_bytes = %q, want non-zero", id, record.Fields["input_audio_bytes"])
 		}
 	}
 }
@@ -787,6 +975,7 @@ type roomAudioFrame struct {
 type roomTestInferencer struct {
 	connectErr   error
 	events       []messages.StreamMessage
+	eventWait    func(index int) <-chan struct{}
 	disconnect   bool
 	terminalErr  error
 	onConnect    func()
@@ -813,7 +1002,16 @@ func (i *roomTestInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 	i.mu.Unlock()
 	events := append([]messages.StreamMessage(nil), i.events...)
 	go func() {
-		for _, event := range events {
+		for index, event := range events {
+			if i.eventWait != nil {
+				if wait := i.eventWait(index); wait != nil {
+					select {
+					case <-wait:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
 			if !session.receive.Write(ctx, event) {
 				return
 			}
@@ -1021,6 +1219,14 @@ func roomTestAudioEvent(value int16, samples int) messages.StreamMessage {
 		Type:  messages.StreamTypeAudioDelta,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewAudioDeltaValue(roomPCM16(value, samples)),
+	}
+}
+
+func roomTestMessageStart() messages.StreamMessage {
+	return messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
 	}
 }
 

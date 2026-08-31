@@ -247,11 +247,12 @@ func (o *sessionProgressObserver) emitMetricsMatrix() {
 		return
 	}
 	o.metricsOnce.Do(func() {
+		inputAudioBytes := o.totals.inputAudio + o.roomAudioInputTotalBytes()
 		fields := map[string]string{
 			fieldProvider:         o.provider,
 			fieldModel:            o.model,
 			fieldTurnsCompleted:   strconv.Itoa(o.turnsCompleted),
-			fieldInputAudioBytes:  strconv.FormatUint(o.totals.inputAudio, 10),
+			fieldInputAudioBytes:  strconv.FormatUint(inputAudioBytes, 10),
 			fieldInputTextBytes:   strconv.FormatUint(o.totals.inputText, 10),
 			fieldOutputAudioBytes: strconv.FormatUint(o.totals.outAudio, 10),
 			fieldOutputTextBytes:  strconv.FormatUint(o.totals.outText, 10),

@@ -27,6 +27,47 @@ func (o *sessionProgressObserver) account(direction metrics.Direction, modality 
 	o.totals.account(direction, modality, uint64(n))
 }
 
+// accountRoomAudioInput records a mixer frame after AgentLoop accepted it for
+// the provider session. Room mixer frames are admitted by a background pump,
+// so their counters cannot be folded into the ordinary delta-consumer state
+// without synchronization. The production sink is concurrency-safe and keeps
+// the terminal metrics matrix inclusive of these provider-bound frames.
+func (o *sessionProgressObserver) accountRoomAudioInput(n int) {
+	if o == nil || n <= 0 {
+		return
+	}
+	if o.productionSink != nil {
+		_ = o.productionSink.Record(metrics.DirectionInput, metrics.ModalityAudio, int64(n))
+	}
+	o.roomInputMu.Lock()
+	o.roomInputTurnBytes += uint64(n)
+	o.roomInputTotalBytes += uint64(n)
+	if o.recorder != nil {
+		_ = o.recorder.Record(metrics.DirectionInput, metrics.ModalityAudio, int64(n))
+	}
+	o.roomInputMu.Unlock()
+}
+
+func (o *sessionProgressObserver) takeRoomAudioInputTurnBytes() uint64 {
+	if o == nil {
+		return 0
+	}
+	o.roomInputMu.Lock()
+	defer o.roomInputMu.Unlock()
+	bytes := o.roomInputTurnBytes
+	o.roomInputTurnBytes = 0
+	return bytes
+}
+
+func (o *sessionProgressObserver) roomAudioInputTotalBytes() uint64 {
+	if o == nil {
+		return 0
+	}
+	o.roomInputMu.Lock()
+	defer o.roomInputMu.Unlock()
+	return o.roomInputTotalBytes
+}
+
 func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
 	if o == nil {
 		return false
@@ -177,12 +218,13 @@ func (o *sessionProgressObserver) completeTurn() {
 	if o.runtime != nil {
 		o.runtime.turnCompleted(o.turnsCompleted)
 	}
+	inputAudioBytes := o.counters.inputAudio + o.takeRoomAudioInputTurnBytes()
 	if o.sink != nil {
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event: SessionDiagnosticEventTurn,
 			Fields: map[string]string{
 				fieldTurnIndex:        strconv.Itoa(o.turnsCompleted),
-				fieldInputAudioBytes:  strconv.FormatUint(o.counters.inputAudio, 10),
+				fieldInputAudioBytes:  strconv.FormatUint(inputAudioBytes, 10),
 				fieldOutputToolBytes:  strconv.FormatUint(o.counters.outTool, 10),
 				fieldInputTextBytes:   strconv.FormatUint(o.counters.inputText, 10),
 				fieldOutputAudioBytes: strconv.FormatUint(o.counters.outAudio, 10),

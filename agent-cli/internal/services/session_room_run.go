@@ -117,12 +117,56 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
-
 	participantEvidence := (*roomParticipantEvidence)(nil)
 	if evidence != nil {
 		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
 	}
-
+	participantStream := RoomParticipantEventSink{}
+	if opts.Stream != nil {
+		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
+	}
+	var observer *sessionProgressObserver
+	if !roomParticipantIsHuman(runtime.plan) {
+		diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
+		observer = newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+		observer.livenessObserver = func(err error) {
+			runtime.lifecycle.markLivenessFailure(err)
+			classification, _, _, _ := sessionLivenessMetadata(err)
+			if classification != "" {
+				participantID := runtime.plan.manifest.ID
+				evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
+				if opts.Stream != nil {
+					opts.Stream.PublishParticipantLivenessFault(participantID, classification)
+				}
+			}
+		}
+		observer.turnAdmission = func(msg messages.StreamMessage) bool {
+			value, ok := msg.Value.(*messages.MessageEndValue)
+			if !ok || value == nil || value.TerminalReason == "" {
+				return true
+			}
+			return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
+				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
+		}
+		observer.streamObserver = func(msg messages.StreamMessage) {
+			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
+		}
+		observer.admittedTurnObserver = func(messages.StreamMessage) {
+			turns := runtime.lifecycle.observeAdmittedTurn()
+			coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+			evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
+		}
+	}
+	inputObserver := opts.OnAudioInput
+	if observer != nil {
+		inputObserver = func(participantID string, pcm []byte) error {
+			observer.accountRoomAudioInput(len(pcm))
+			if opts.OnAudioInput != nil {
+				return opts.OnAudioInput(participantID, pcm)
+			}
+			return nil
+		}
+	}
 	go func() {
 		if mixerWG != nil {
 			defer mixerWG.Done()
@@ -136,7 +180,7 @@ func runRoomParticipant(
 			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
 			return
 		}
-		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, participantEvidence, secrets)
+		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, inputObserver, participantEvidence, secrets)
 	}()
 
 	if startupErr := runtime.plan.startupErr; startupErr != nil {
@@ -158,10 +202,6 @@ func runRoomParticipant(
 		return
 	}
 
-	participantStream := RoomParticipantEventSink{}
-	if opts.Stream != nil {
-		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
-	}
 	if roomParticipantIsHuman(runtime.plan) {
 		if runtime.plan.replay {
 			select {
@@ -180,35 +220,6 @@ func runRoomParticipant(
 		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
-	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
-	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
-	observer.livenessObserver = func(err error) {
-		runtime.lifecycle.markLivenessFailure(err)
-		classification, _, _, _ := sessionLivenessMetadata(err)
-		if classification != "" {
-			participantID := runtime.plan.manifest.ID
-			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
-			if opts.Stream != nil {
-				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
-			}
-		}
-	}
-	observer.turnAdmission = func(msg messages.StreamMessage) bool {
-		value, ok := msg.Value.(*messages.MessageEndValue)
-		if !ok || value == nil || value.TerminalReason == "" {
-			return true
-		}
-		return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
-			value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
-	}
-	observer.streamObserver = func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
-	}
-	observer.admittedTurnObserver = func(messages.StreamMessage) {
-		turns := runtime.lifecycle.observeAdmittedTurn()
-		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
-		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
 	var latencyRuntime *sessionRuntimeObservationRecorder
 	if evidence != nil && evidence.latency != nil {
