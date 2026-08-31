@@ -289,59 +289,60 @@ func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testin
 	}
 }
 
-func TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown(t *testing.T) {
-	clock := &durationTestClock{}
-	writer := newDurationTestWriter()
-	providerTerminal := messages.StreamMessage{
-		Type: messages.StreamTypeSessionClose,
-		Value: messages.NewSessionCloseValueWithTerminal(
-			"duration-session",
-			"provider_shutdown",
-			"transport",
-			messages.TerminalReasonProviderClose,
-			messages.TerminalProvenanceProvider,
-			messages.TerminalOutputPartial,
-		),
-	}
-	inferencer := &durationTestInferencer{
-		events:               durationOutputEvents(),
-		providerCloseOnClose: &providerTerminal,
-	}
-	runErrCh := make(chan error, 1)
-	go func() {
-		runErrCh <- runAgentLoopSessionWithDurationClock(
-			context.Background(),
-			writer,
-			inferencer,
-			sessionLoopOptions{},
-			time.Minute,
-			clock,
-		)
-	}()
+func TestRunSessionWithMaxDuration_ReportsPlannedReasonWhenProviderClosesDuringShutdown(t *testing.T) {
+	for _, waitForClose := range []bool{false, true} {
+		t.Run(map[bool]string{false: "without-wait-for-close", true: "with-wait-for-close"}[waitForClose], func(t *testing.T) {
+			clock := &durationTestClock{}
+			writer := newDurationTestWriter()
+			providerTerminal := messages.StreamMessage{
+				Type: messages.StreamTypeSessionClose,
+				Value: messages.NewSessionCloseValueWithTerminal(
+					"duration-session",
+					"provider_shutdown",
+					"transport",
+					messages.TerminalReasonProviderClose,
+					messages.TerminalProvenanceProvider,
+					messages.TerminalOutputPartial,
+				),
+			}
+			inferencer := &durationTestInferencer{
+				events:               durationOutputEvents(),
+				providerCloseOnClose: &providerTerminal,
+			}
+			runErrCh := make(chan error, 1)
+			go func() {
+				runErrCh <- runAgentLoopSessionWithDurationClock(
+					context.Background(),
+					writer,
+					inferencer,
+					sessionLoopOptions{WaitForClose: waitForClose},
+					time.Minute,
+					clock,
+				)
+			}()
 
-	writer.waitFor(t, "accepted output")
-	clock.fire()
-	select {
-	case err := <-runErrCh:
-		if err != nil {
-			t.Fatalf("duration cutoff returned error: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("duration cutoff did not finish")
-	}
+			writer.waitFor(t, "accepted output")
+			clock.fire()
+			select {
+			case err := <-runErrCh:
+				if err != nil {
+					t.Fatalf("duration cutoff returned error: %v", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("duration cutoff did not finish")
+			}
 
-	got := writer.String()
-	if !strings.Contains(got, "provider_shutdown") {
-		t.Fatalf("duration output lost provider terminal: %q", got)
-	}
-	if !strings.Contains(got, "terminal_provenance=provider") {
-		t.Fatalf("duration output lost provider provenance: %q", got)
-	}
-	if !strings.Contains(got, "output_state=partial") {
-		t.Fatalf("duration output lost partial output state: %q", got)
-	}
-	if strings.Contains(got, "terminal_reason=max_duration") {
-		t.Fatalf("duration output rewrote provider terminal as max duration: %q", got)
+			got := writer.String()
+			if strings.Count(got, "[session terminal:") != 1 {
+				t.Fatalf("duration terminal count = %d; output = %q", strings.Count(got, "[session terminal:"), got)
+			}
+			if strings.Count(got, "terminal_reason=max_duration") != 1 {
+				t.Fatalf("duration output = %q, want exactly one max-duration reason", got)
+			}
+			if strings.Contains(got, "terminal_reason=provider_close") {
+				t.Fatalf("duration output let provider close override planned expiry: %q", got)
+			}
+		})
 	}
 }
 

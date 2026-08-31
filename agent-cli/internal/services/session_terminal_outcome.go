@@ -387,24 +387,11 @@ func (r *sessionTerminalReporter) reconcileLocked(runErr error) (*sessionTermina
 		o.completion = sessionTerminalCompletionComplete
 		return candidate, true
 	}
-	if o.cancellation != nil {
-		candidate := o.cancellation
-		candidate.value = normalizeSessionTerminalValue(candidate.value, messages.TerminalReasonCancellation, o.outputStateOrNone())
-		o.cause = messages.TerminalReasonCancellation
-		o.completion = sessionTerminalCompletionIncomplete
-		return candidate, false
-	}
-	if o.observedTerminal != nil {
-		candidate := o.observedTerminal
-		candidate.value = normalizeSessionTerminalValue(candidate.value, terminalReasonOrDefault(candidate.value, messages.TerminalReasonSessionClose), o.outputStateOrNone())
-		o.cause = candidate.value.TerminalReason
-		if isSuccessfulTerminalReason(o.cause) {
-			o.completion = sessionTerminalCompletionComplete
-		} else {
-			o.completion = sessionTerminalCompletionIncomplete
-		}
-		return candidate, false
-	}
+	// A planned duration expiry is controller evidence, so it wins over a
+	// provider close or cancellation observed during the mandatory shutdown
+	// drain. Fatal errors and verified replay completion remain stronger above;
+	// natural provider-close completion still uses observedTerminal below when
+	// no duration expiry was planned.
 	if o.durationTerminal != nil || o.durationExpired {
 		candidate := o.durationTerminal
 		if candidate == nil {
@@ -423,6 +410,24 @@ func (r *sessionTerminalReporter) reconcileLocked(runErr error) (*sessionTermina
 		candidate.value = normalizeSessionTerminalValue(candidate.value, SessionMaxDurationReason, o.outputStateOrNone())
 		o.cause = SessionMaxDurationReason
 		o.completion = sessionTerminalCompletionIncomplete
+		return candidate, false
+	}
+	if o.cancellation != nil {
+		candidate := o.cancellation
+		candidate.value = normalizeSessionTerminalValue(candidate.value, messages.TerminalReasonCancellation, o.outputStateOrNone())
+		o.cause = messages.TerminalReasonCancellation
+		o.completion = sessionTerminalCompletionIncomplete
+		return candidate, false
+	}
+	if o.observedTerminal != nil {
+		candidate := o.observedTerminal
+		candidate.value = normalizeSessionTerminalValue(candidate.value, terminalReasonOrDefault(candidate.value, messages.TerminalReasonSessionClose), o.outputStateOrNone())
+		o.cause = candidate.value.TerminalReason
+		if isSuccessfulTerminalReason(o.cause) {
+			o.completion = sessionTerminalCompletionComplete
+		} else {
+			o.completion = sessionTerminalCompletionIncomplete
+		}
 		return candidate, false
 	}
 	if sessionErrorIsCancellation(runErr) {

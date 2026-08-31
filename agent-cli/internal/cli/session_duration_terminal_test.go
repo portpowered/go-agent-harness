@@ -97,6 +97,55 @@ func TestSessionCommandMaxDurationRejectsInvalidPartialArtifact(t *testing.T) {
 	}
 }
 
+func TestSessionCommandMaxDurationProviderCloseDuringShutdownUsesPlannedReason(t *testing.T) {
+	for _, waitForClose := range []bool{false, true} {
+		t.Run(map[bool]string{false: "without-wait-for-close", true: "with-wait-for-close"}[waitForClose], func(t *testing.T) {
+			artifactRoot := t.TempDir()
+			recordPath := filepath.Join(artifactRoot, "cutoff.json")
+			recordingDir := filepath.Join(artifactRoot, "recording")
+			inferencer := newCLIDurationInferencer(cliDurationPartialEvents())
+			inferencer.providerCloseOnClose = cliDurationProviderClose()
+			root := newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(), inferencer)
+			var stdout, stderr bytes.Buffer
+			root.SetOut(&stdout)
+			root.SetErr(&stderr)
+			args := []string{
+				"--config-dir", filepath.Join(artifactRoot, "config"),
+				"session", "hold this session open",
+				"--provider", config.ProviderOpenAI,
+				"--model", services.DefaultOpenAIRealtimeModel,
+				"--api-key", "test-key",
+				"--record", recordPath,
+				"--record-dir", recordingDir,
+				"--max-duration", "40ms",
+			}
+			if waitForClose {
+				args = append(args, "--wait-for-close")
+			}
+			root.SetArgs(args)
+
+			if err := root.Execute(); err != nil {
+				t.Fatalf("session command: %v\nstdout=%q\nstderr=%q", err, stdout.String(), stderr.String())
+			}
+			if got := strings.Count(stdout.String(), "[session terminal:"); got != 1 {
+				t.Fatalf("terminal block count = %d, want 1; stdout=%q", got, stdout.String())
+			}
+			if got := strings.Count(stdout.String(), "terminal_reason=max_duration"); got != 1 {
+				t.Fatalf("max-duration reason count = %d, want 1; stdout=%q", got, stdout.String())
+			}
+			if strings.Contains(stdout.String(), "terminal_reason=provider_close") {
+				t.Fatalf("provider close overrode planned duration: %q", stdout.String())
+			}
+			if !strings.Contains(stdout.String(), "accepted partial transcript") {
+				t.Fatalf("stdout lost accepted output: %q", stdout.String())
+			}
+			if stderr.String() != "" {
+				t.Fatalf("successful duration command wrote stderr: %q", stderr.String())
+			}
+		})
+	}
+}
+
 func assertSuccessfulDurationCommandOutput(t *testing.T, stdout, stderr string) {
 	t.Helper()
 	if got := strings.Count(stdout, "[session terminal:"); got != 1 {
@@ -260,7 +309,8 @@ func cliDurationInvalidAudioEvents() []messages.StreamMessage {
 }
 
 type cliDurationInferencer struct {
-	events []messages.StreamMessage
+	events               []messages.StreamMessage
+	providerCloseOnClose *messages.StreamMessage
 }
 
 func newCLIDurationInferencer(events []messages.StreamMessage) *cliDurationInferencer {
@@ -269,8 +319,9 @@ func newCLIDurationInferencer(events []messages.StreamMessage) *cliDurationInfer
 
 func (i *cliDurationInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := &cliDurationSession{
-		receive: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:    make(chan struct{}),
+		receive:              messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:                 make(chan struct{}),
+		providerCloseOnClose: i.providerCloseOnClose,
 	}
 	for _, event := range i.events {
 		if !session.receive.Write(ctx, event) {
@@ -281,9 +332,10 @@ func (i *cliDurationInferencer) ConnectSession(ctx context.Context) (messages.Se
 }
 
 type cliDurationSession struct {
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
-	once    sync.Once
+	receive              *messages.TypedBuffer[messages.StreamMessage]
+	done                 chan struct{}
+	once                 sync.Once
+	providerCloseOnClose *messages.StreamMessage
 }
 
 func (s *cliDurationSession) Send(context.Context, messages.StreamMessage) bool { return true }
@@ -295,8 +347,25 @@ func (s *cliDurationSession) Receive() *messages.TypedBuffer[messages.StreamMess
 func (s *cliDurationSession) Done() <-chan struct{} { return s.done }
 
 func (s *cliDurationSession) Close() error {
+	if s.providerCloseOnClose != nil {
+		s.receive.Write(context.Background(), *s.providerCloseOnClose)
+	}
 	s.once.Do(func() { close(s.done) })
 	return nil
+}
+
+func cliDurationProviderClose() *messages.StreamMessage {
+	return &messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"duration-cli",
+			"provider_shutdown",
+			"transport",
+			messages.TerminalReasonProviderClose,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputPartial,
+		),
+	}
 }
 
 var _ messages.SessionInferencer = (*cliDurationInferencer)(nil)
