@@ -25,7 +25,7 @@ const roomRealtimeReplayTestTimeout = 2 * time.Second
 // normalizer target. Lifecycle replays use it so their strict wire assertions
 // remain about ordering and ownership rather than re-testing level acquisition.
 func roomReplayOnTargetPCM() []byte {
-	return []byte{0x33, 0xf3, 0xcd, 0x0c}
+	return []byte{0x71, 0xf2, 0x8f, 0x0d}
 }
 
 // roomRealtimeReplayHarness is the room-level composition helper used by the

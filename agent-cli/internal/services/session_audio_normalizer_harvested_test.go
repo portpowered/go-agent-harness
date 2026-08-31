@@ -21,7 +21,6 @@ import (
 
 const (
 	harvestedVoiceSampleRate        = 24000
-	harvestedVoiceFrameSamples      = harvestedVoiceSampleRate / 50
 	harvestedVoiceTargetToleranceDB = 1.5
 )
 
@@ -243,7 +242,9 @@ func normalizeHarvestedVoiceThroughSessionBoundary(t *testing.T, pcm []byte) ([]
 	if err != nil {
 		t.Fatalf("construct production session normalizer: %v", err)
 	}
-	session, err := normalizer.ConnectSession(context.Background())
+	readContext, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	session, err := normalizer.ConnectSession(readContext)
 	if err != nil {
 		t.Fatalf("connect production session normalizer: %v", err)
 	}
@@ -251,9 +252,9 @@ func normalizeHarvestedVoiceThroughSessionBoundary(t *testing.T, pcm []byte) ([]
 	var output []byte
 	var boundaries []int
 	for {
-		msg, ok := session.Receive().Read()
-		if !ok {
-			t.Fatal("normalized session closed before MESSAGE.END")
+		msg, err := session.Receive().ReadContext(readContext)
+		if err != nil {
+			t.Fatalf("read normalized session before MESSAGE.END: %v", err)
 		}
 		if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 			value, ok := msg.Value.(*messages.AudioDeltaValue)
