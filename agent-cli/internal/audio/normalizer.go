@@ -14,9 +14,10 @@ const (
 	// PCM16NormalizerFrameDuration is the default analysis/output window. It
 	// bounds the amount of input retained while a response is streaming.
 	PCM16NormalizerFrameDuration = 20 * time.Millisecond
-	// PCM16NormalizerTargetRMSDBFS is the active-speech RMS target. -20 dBFS
-	// leaves useful crest-factor headroom while matching the session baseline.
-	PCM16NormalizerTargetRMSDBFS = -20.0
+	// PCM16NormalizerTargetRMSDBFS is the active-speech RMS target. -19.5 dBFS
+	// is the midpoint of the probe's -19..-20 dBFS speech range while leaving
+	// useful crest-factor headroom.
+	PCM16NormalizerTargetRMSDBFS = -19.5
 	// PCM16NormalizerSilenceFloorDBFS excludes quiet background material from
 	// gain acquisition and recovery decisions.
 	PCM16NormalizerSilenceFloorDBFS = -50.0
