@@ -158,6 +158,10 @@ type RoomRunOptions struct {
 	// uses the host timer. A shared deterministic clock keeps room tests and
 	// participant watchdogs on one controllable timeline.
 	LivenessClock SessionLivenessClock
+	// BoundShutdownGrace is the fixed room-bound drain window. A zero value
+	// selects the documented production default; tests may override it with a
+	// small positive duration to make the bounded drain deterministic.
+	BoundShutdownGrace time.Duration
 	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
 	// The CLI supplies it for bare launches so command/service composition tests
 	// can observe the selected devices and credential provenance without
@@ -240,6 +244,9 @@ type RoomRunOptions struct {
 	// all room evidence sinks are opened and before participant work starts, so
 	// package tests can inject a sink failure without changing live APIs.
 	onRoomEvidenceReady func(*roomEvidence)
+	// onRoomBoundShutdown is an internal deterministic lifecycle seam used by
+	// package tests to release a response after bound admission has closed.
+	onRoomBoundShutdown func(RoomTerminationReason)
 	// Stream optionally receives the room's diagnostic, transcript, and
 	// lifecycle projections. The broker is observational and never carries raw
 	// audio. Callers that expose it over HTTP own the listener lifecycle.

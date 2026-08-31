@@ -339,6 +339,12 @@ func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session me
 func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
 	defer r.completeAudioInput()
 	state.ensureMaps()
+	if sessionAdmissionClosed(session) {
+		// Room-bound shutdown closes input admission before it cancels the
+		// session. A frame that was already queued behind that boundary is
+		// intentionally discarded without manufacturing a provider failure.
+		return nil
+	}
 	// Barge-in: new user audio while the current model response is still
 	// non-terminal. The response-created-before-first-audio state is
 	// intentionally included: provider response creation and its first output

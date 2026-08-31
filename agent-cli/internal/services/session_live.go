@@ -305,8 +305,15 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	reporter.markRunStarted()
 	renderer := newSessionReplayRenderer(out, reporter)
 	runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
-	runErr = audioResponseCompletionError(runErr, opts)
-	runErr = scheduledAudioCompletionError(runErr, opts)
+	if !roomChannelClosed(opts.BoundCancellation) {
+		runErr = audioResponseCompletionError(runErr, opts)
+		runErr = scheduledAudioCompletionError(runErr, opts)
+	} else if opts.observer != nil {
+		// A bound cancellation is an intentional room-owned terminal path. Mark
+		// it before finish so unresolved tool work and incomplete-response guards
+		// cannot turn the deliberate teardown into a session failure.
+		opts.observer.markRoomBoundCancellation()
+	}
 	cleanSIGINT := sessionSIGINTCleanForObserver(runErr, opts.cancellationIntent, opts.observer)
 	runErr = opts.observer.finish(runErr)
 	if cleanSIGINT {
@@ -776,10 +783,19 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// error, or max-duration expiry may end the session.
 	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
+	admissionClosed := opts.AdmissionClosed
+	boundCancellation := opts.BoundCancellation
 	audioInterruptions := opts.AudioInterruptions
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	for {
 		select {
+		case <-admissionClosed:
+			admissionClosed = nil
+			audioInterruptions = nil
+			toolLifecycleEvents = nil
+		case <-boundCancellation:
+			boundCancellation = nil
+			return stopAndDrain()
 		case publicationErr := <-publisherErrors:
 			return terminate(publicationErr)
 		case input, ok := <-audioInterruptions:

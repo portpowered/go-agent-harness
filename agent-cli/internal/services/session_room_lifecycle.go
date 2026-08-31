@@ -27,6 +27,10 @@ const (
 	// third-party owner violates that contract.
 	roomCleanupTimeout   = time.Second
 	roomAdmissionTimeout = 5 * time.Second
+	// roomBoundShutdownGrace is the one production drain window used after a
+	// duration or turn bound closes room admission. The RoomRunOptions override
+	// exists solely to keep hermetic tests fast and deterministic.
+	roomBoundShutdownGrace = 250 * time.Millisecond
 )
 
 type roomParticipantPlan struct {
@@ -46,6 +50,8 @@ type roomParticipantRuntime struct {
 	plan            *roomParticipantPlan
 	ctx             context.Context
 	cancel          context.CancelFunc
+	admissionCtx    context.Context
+	admissionCancel context.CancelFunc
 	loopReady       chan *agentloop.AgentLoop
 	participantDone chan struct{}
 	mixerDone       chan struct{}
@@ -197,7 +203,10 @@ type roomParticipantLifecycle struct {
 	transportEnded         bool
 	transportDone          <-chan struct{}
 	stateChanged           chan<- struct{}
+	admissionClosed        <-chan struct{}
 	roomStopping           bool
+	boundShutdown          bool
+	boundCancellation      bool
 	runDone                bool
 	closeReason            string
 	terminalReason         messages.TerminalReason
@@ -208,6 +217,7 @@ type roomParticipantLifecycle struct {
 	terminalOutputState    messages.TerminalOutputState
 	transportTerminalErr   func() error
 	turns                  int
+	responseInFlight       bool
 }
 
 func (l *roomParticipantLifecycle) markConnected(err error) {
@@ -349,6 +359,16 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	switch msg.Type {
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		if msg.Role != messages.RoleTool {
+			l.responseInFlight = true
+			l.signalLocked()
+		}
+	case messages.StreamTypeMessageEnd:
+		if msg.Role != messages.RoleTool {
+			l.responseInFlight = false
+			l.signalLocked()
+		}
 	case messages.StreamTypeSessionOpen:
 		l.sessionOpened = true
 		l.signalLocked()
@@ -367,7 +387,7 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 				}
 			}
 		}
-		if !l.roomStopping {
+		if !l.roomStopping || l.boundShutdown && !l.boundCancellation {
 			terminalErr := error(nil)
 			if l.transportTerminalErr != nil {
 				terminalErr = l.transportTerminalErr()
@@ -405,7 +425,7 @@ func (l *roomParticipantLifecycle) markTransportEndedWithError(terminalErr error
 	l.mu.Lock()
 	l.transportEnded = true
 	l.signalLocked()
-	if !l.roomStopping {
+	if !l.roomStopping || l.boundShutdown && !l.boundCancellation {
 		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
 			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
 		} else {
@@ -460,7 +480,7 @@ func (l *roomParticipantLifecycle) transportHasEnded() bool {
 // coordinator cancels participant contexts. A transport that is already done
 // at this boundary is causal; one that closes afterwards belongs to the
 // coordinator's teardown and must not be reported as a provider disconnect.
-func (l *roomParticipantLifecycle) markCoordinatorStopping() {
+func (l *roomParticipantLifecycle) markCoordinatorStopping(bound bool) {
 	if l == nil {
 		return
 	}
@@ -478,6 +498,20 @@ func (l *roomParticipantLifecycle) markCoordinatorStopping() {
 		}
 	}
 	l.roomStopping = true
+	l.boundShutdown = bound
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+// markBoundCancellation records the second phase of a bound shutdown. A
+// provider close observed after this point is teardown-owned unless it carries
+// an independent terminal error.
+func (l *roomParticipantLifecycle) markBoundCancellation() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.boundCancellation = true
 	l.signalLocked()
 	l.mu.Unlock()
 }
@@ -546,9 +580,27 @@ func (l *roomParticipantLifecycle) ownedSessionSnapshot() (created, closed bool,
 // the underlying provider session.
 type roomTrackedSession struct {
 	messages.Session
-	lifecycle *roomParticipantLifecycle
-	once      sync.Once
-	closeErr  error
+	lifecycle       *roomParticipantLifecycle
+	admissionClosed <-chan struct{}
+	once            sync.Once
+	closeErr        error
+}
+
+func (s *roomTrackedSession) SessionAdmissionClosed() bool {
+	return s != nil && roomChannelClosed(s.admissionClosed)
+}
+
+func roomSessionMessageBlockedAfterAdmission(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeResponseCancel, messages.StreamTypeSessionClose:
+		return false
+	default:
+		return true
+	}
+}
+
+func (s *roomTrackedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
 }
 
 func (s *roomTrackedSession) Close() error {
@@ -565,6 +617,9 @@ func (s *roomTrackedSession) Close() error {
 }
 
 func (s *roomTrackedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s.SessionAdmissionClosed() && roomSessionMessageBlockedAfterAdmission(msg) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
+	}
 	if sender, ok := s.Session.(messages.SessionSendOutcomeSender); ok {
 		return sender.SendWithOutcome(ctx, msg)
 	}
@@ -572,6 +627,9 @@ func (s *roomTrackedSession) SendWithOutcome(ctx context.Context, msg messages.S
 }
 
 func (s *roomTrackedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s.SessionAdmissionClosed() {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
+	}
 	return messages.RequestSessionResponse(ctx, s.Session)
 }
 
@@ -580,11 +638,17 @@ func (s *roomTrackedSession) SupportsResponseRequests() bool {
 }
 
 func (s *roomTrackedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	if s.SessionAdmissionClosed() {
+		return false
+	}
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
 
 func (s *roomTrackedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	if s.SessionAdmissionClosed() {
+		return false
+	}
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
@@ -679,7 +743,11 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 			if i.lifecycle != nil {
 				i.lifecycle.markSessionCreated()
 			}
-			tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
+			var admissionClosed <-chan struct{}
+			if i.lifecycle != nil {
+				admissionClosed = i.lifecycle.admissionClosed
+			}
+			tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle, admissionClosed: admissionClosed}
 			if i.lifecycle != nil {
 				i.lifecycle.setOwnedSession(tracked)
 				terminalError := func() error { return terminalSessionError(tracked) }
@@ -694,7 +762,7 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 	}
 	if err == nil && session != nil && i.lifecycle != nil {
 		i.lifecycle.markSessionCreated()
-		tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
+		tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle, admissionClosed: i.lifecycle.admissionClosed}
 		i.lifecycle.setOwnedSession(tracked)
 		terminalError := func() error { return terminalSessionError(tracked) }
 		i.lifecycle.setTransportDone(tracked.Done(), terminalError)
@@ -726,16 +794,24 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 var _ messages.SessionInferencer = (*roomConnectTrackingInferencer)(nil)
 
 type roomCoordinator struct {
-	done   chan struct{}
-	cancel context.CancelFunc
+	done              chan struct{}
+	admissionClosed   chan struct{}
+	boundCancellation chan struct{}
+	cancel            context.CancelFunc
 
-	mu       sync.Mutex
-	reason   RoomTerminationReason
-	err      error
-	active   map[string]*roomParticipantRuntime
-	results  map[string]RoomParticipantResult
-	maxTurns int
-	progress chan struct{}
+	mu                    sync.Mutex
+	reason                RoomTerminationReason
+	err                   error
+	active                map[string]*roomParticipantRuntime
+	results               map[string]RoomParticipantResult
+	maxTurns              int
+	progress              chan struct{}
+	boundGrace            time.Duration
+	bound                 bool
+	forceOnce             sync.Once
+	doneOnce              sync.Once
+	admissionOnce         sync.Once
+	boundCancellationOnce sync.Once
 	// emptyStopBlocked keeps participant completion from terminating a replay
 	// while its room-owned scheduler is still draining the final mixed frames.
 	emptyStopBlocked bool
@@ -743,18 +819,27 @@ type roomCoordinator struct {
 	onParticipant       RoomParticipantObserver
 	onParticipantFailed func(string, string)
 	participantFailures map[string]struct{}
+	onParticipant   RoomParticipantObserver
+	onBoundShutdown func(RoomTerminationReason)
 }
 
-func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, onParticipant RoomParticipantObserver) *roomCoordinator {
+func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, boundGrace time.Duration, onParticipant RoomParticipantObserver, onBoundShutdown func(RoomTerminationReason)) *roomCoordinator {
+	if boundGrace <= 0 {
+		boundGrace = roomBoundShutdownGrace
+	}
 	return &roomCoordinator{
-		done:                make(chan struct{}),
-		cancel:              cancel,
-		active:              make(map[string]*roomParticipantRuntime),
-		results:             make(map[string]RoomParticipantResult),
-		maxTurns:            maxTurns,
-		progress:            make(chan struct{}, 1),
-		onParticipant:       onParticipant,
+		done:              make(chan struct{}),
+		admissionClosed:   make(chan struct{}),
+		boundCancellation: make(chan struct{}),
+		cancel:            cancel,
+		active:            make(map[string]*roomParticipantRuntime),
+		results:           make(map[string]RoomParticipantResult),
+		maxTurns:          maxTurns,
+		progress:          make(chan struct{}, 1),
+		boundGrace:        boundGrace,
+		onParticipant:     onParticipant,
 		participantFailures: make(map[string]struct{}),
+		onBoundShutdown:   onBoundShutdown,
 	}
 }
 
@@ -783,6 +868,104 @@ func (c *roomCoordinator) stop(reason RoomTerminationReason, err error) {
 	if reason == "" {
 		reason = RoomTerminationFailed
 	}
+	if isRoomBoundTermination(reason) {
+		c.beginBoundShutdown(reason, err)
+		return
+	}
+	c.stopImmediately(reason, err)
+}
+
+func isRoomBoundTermination(reason RoomTerminationReason) bool {
+	return reason == RoomTerminationMaxDurationReached || reason == RoomTerminationMaxTurnsReached
+}
+
+// beginBoundShutdown records the authoritative room bound and closes only the
+// admission boundary. Existing participant responses retain their contexts
+// until the fixed grace window expires.
+func (c *roomCoordinator) beginBoundShutdown(reason RoomTerminationReason, err error) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.reason != "" {
+		c.mu.Unlock()
+		return
+	}
+	c.reason = reason
+	c.err = err
+	c.bound = true
+	runtimes := make([]*roomParticipantRuntime, 0, len(c.active))
+	for _, runtime := range c.active {
+		if runtime == nil {
+			continue
+		}
+		runtimes = append(runtimes, runtime)
+		if runtime.lifecycle != nil {
+			runtime.lifecycle.markCoordinatorStopping(true)
+		}
+	}
+	c.mu.Unlock()
+
+	c.closeAdmission()
+	for _, runtime := range runtimes {
+		if runtime.admissionCancel != nil {
+			runtime.admissionCancel()
+		}
+	}
+	if c.onBoundShutdown != nil {
+		c.onBoundShutdown(reason)
+	}
+	go c.awaitBoundGrace()
+}
+
+func (c *roomCoordinator) awaitBoundGrace() {
+	if c == nil {
+		return
+	}
+	timer := time.NewTimer(c.boundGrace)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		c.forceBoundShutdown()
+	case <-c.done:
+	}
+}
+
+// forceBoundShutdown is the deliberate second phase of a bound stop. It
+// closes the session-loop cancellation signal before cancelling participant
+// contexts, so the loop can drain any already-queued terminal deltas through
+// its normal stop path.
+func (c *roomCoordinator) forceBoundShutdown() {
+	if c == nil {
+		return
+	}
+	c.forceOnce.Do(func() {
+		c.mu.Lock()
+		if !c.bound {
+			c.mu.Unlock()
+			return
+		}
+		for _, runtime := range c.active {
+			if runtime != nil {
+				if runtime.lifecycle != nil {
+					runtime.lifecycle.markBoundCancellation()
+				}
+			}
+		}
+		c.mu.Unlock()
+
+		c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
+		c.doneOnce.Do(func() { close(c.done) })
+		if c.cancel != nil {
+			c.cancel()
+		}
+	})
+}
+
+func (c *roomCoordinator) stopImmediately(reason RoomTerminationReason, err error) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	if c.reason != "" {
 		c.mu.Unlock()
@@ -792,14 +975,36 @@ func (c *roomCoordinator) stop(reason RoomTerminationReason, err error) {
 	c.err = err
 	for _, runtime := range c.active {
 		if runtime != nil && runtime.lifecycle != nil {
-			runtime.lifecycle.markCoordinatorStopping()
+			runtime.lifecycle.markCoordinatorStopping(false)
 		}
 	}
 	c.mu.Unlock()
-	close(c.done)
+	c.closeAdmission()
+	c.doneOnce.Do(func() { close(c.done) })
 	if c.cancel != nil {
 		c.cancel()
 	}
+}
+
+func (c *roomCoordinator) closeAdmission() {
+	if c == nil {
+		return
+	}
+	c.admissionOnce.Do(func() { close(c.admissionClosed) })
+}
+
+func (c *roomCoordinator) admissionDone() <-chan struct{} {
+	if c == nil {
+		return nil
+	}
+	return c.admissionClosed
+}
+
+func (c *roomCoordinator) boundCancellationDone() <-chan struct{} {
+	if c == nil {
+		return nil
+	}
+	return c.boundCancellation
 }
 
 func (c *roomCoordinator) fail(err error) {

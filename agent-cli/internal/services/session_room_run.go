@@ -241,6 +241,8 @@ func runRoomParticipant(
 		WaitForClose:           true,
 		Done:                   coordinator.done,
 		DoneErr:                coordinator.roomError,
+		AdmissionClosed:        coordinator.admissionDone(),
+		BoundCancellation:      coordinator.boundCancellationDone(),
 		ToolExecutor:           runtime.plan.options.ToolExecutor,
 		ToolDefinitions:        cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitions),
 		ToolDefinitionBase:     cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitionBase),
@@ -677,6 +679,9 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		if runtime == nil {
 			continue
 		}
+		if runtime.admissionCancel != nil {
+			runtime.admissionCancel()
+		}
 		if runtime.cancel != nil {
 			runtime.cancel()
 		}
@@ -752,7 +757,11 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		}
 	}
 	for {
-		mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)
+		admissionCtx := runtime.admissionCtx
+		if admissionCtx == nil {
+			admissionCtx = runtime.ctx
+		}
+		mixed, err := runtime.mixer.ReadFrameWithSources(admissionCtx)
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
@@ -761,7 +770,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			return
 		}
 		frame := mixed.PCM
-		if err := sendAudioInput(runtime.ctx, frame); err != nil {
+		if err := sendAudioInput(admissionCtx, frame); err != nil {
 			if runtime.ingress != nil {
 				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonProviderInputRejected)
 			}
