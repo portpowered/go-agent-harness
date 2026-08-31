@@ -853,12 +853,16 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	if event.TargetID != "" && event.TargetID != selected.context.Key.TargetID {
 		return
 	}
-	if event.Sequence != 0 {
-		if event.Sequence <= selected.lastBrowserEventSequence {
-			return
-		}
-		selected.lastBrowserEventSequence = event.Sequence
+	if event.Sequence == 0 {
+		// Some adapters preserve protocol event order but do not provide a
+		// transport sequence. The broker still needs a target-session-local
+		// order for the invocation-before-terminal proof.
+		event.Sequence = selected.lastBrowserEventSequence + 1
 	}
+	if event.Sequence <= selected.lastBrowserEventSequence {
+		return
+	}
+	selected.lastBrowserEventSequence = event.Sequence
 	b.emitBrowserEventLocked(event)
 	// Direct cancellation has to observe the same target-local stream as the
 	// normal invocation coordinator. Register this before the ordinary
@@ -899,14 +903,15 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 // observeBrowserInvocationLocked turns a protocol invocation initiated by a
 // different command-scoped broker into a safe lifecycle observation. Direct
 // CLI commands intentionally create a fresh broker for every process, while
-// Chrome broadcasts target events to every attached DevTools session. The
-// invoking broker already owns its ID and is therefore ignored here; a watch
-// broker records only the opaque invocation ID and the catalog-bound ref.
+// Chrome broadcasts target events to every attached DevTools session. An
+// invoking broker also consumes its own event here: the event is the required
+// provenance barrier before a terminal response can complete the invocation.
 func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
 	if selected == nil || event.InvocationID == "" {
 		return
 	}
-	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+	if invocation, owned := b.browserInvocations[event.InvocationID]; owned {
+		b.observeOwnedBrowserInvocationLocked(selected, event, invocation)
 		return
 	}
 	if _, observed := selected.observedInvocations[event.InvocationID]; observed {
@@ -951,6 +956,81 @@ func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession,
 		b.recordBrowserTerminalIDLocked(event.InvocationID)
 		b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, terminal.status, terminal.errorCode, terminal.reason, terminal.at)
 	}
+}
+
+func (b *StatefulBroker) observeOwnedBrowserInvocationLocked(selected *brokerSession, event BrowserEvent, invocation *brokerInvocation) {
+	if invocation == nil || invocation.terminalized || invocation.invokedObserved {
+		return
+	}
+	if invocation.selected != selected {
+		return
+	}
+	if reason := invocationEventFreshnessReason(invocation, event); reason != "" {
+		b.takeEarlyTerminalLocked(event.InvocationID, 0)
+		b.finishInvocationLocked(invocation, freshnessFailureResult(invocation, "invocation_provenance", reason, false))
+		return
+	}
+	if reason := invocationCatalogFreshnessReasonLocked(b, invocation); reason != "" {
+		b.takeEarlyTerminalLocked(event.InvocationID, 0)
+		b.finishInvocationLocked(invocation, freshnessFailureResult(invocation, "catalog_provenance", reason, false))
+		return
+	}
+	invocation.invokedObserved = true
+	invocation.invokedSequence = event.Sequence
+	if terminal, ok := b.takeEarlyTerminalLocked(event.InvocationID, 0); ok {
+		if reason := terminalObservationFreshnessReason(invocation, terminal); reason != "" {
+			b.finishInvocationLocked(invocation, freshnessFailureResult(invocation, "terminal_provenance", reason, true))
+			return
+		}
+		b.applyTerminalObservationLocked(invocation, terminal)
+	}
+}
+
+func invocationEventFreshnessReason(invocation *brokerInvocation, event BrowserEvent) string {
+	if invocation == nil {
+		return "invocation_missing"
+	}
+	descriptor := invocation.invocation.Tool
+	if event.BrowserID == "" {
+		return "invocation_browser_identity_missing"
+	}
+	if event.BrowserID != descriptor.BrowserID {
+		return "invocation_browser_identity_mismatch"
+	}
+	if event.TargetID == "" {
+		return "invocation_target_identity_missing"
+	}
+	if event.TargetID != descriptor.TargetID {
+		return "invocation_target_identity_mismatch"
+	}
+	if event.Generation == 0 {
+		return "invocation_generation_missing"
+	}
+	if event.Generation != descriptor.Generation {
+		return "invocation_generation_mismatch"
+	}
+	if event.FrameID == "" {
+		return "invocation_frame_missing"
+	}
+	if event.FrameID != descriptor.FrameID {
+		return "invocation_frame_mismatch"
+	}
+	if event.ToolName == "" {
+		return "invocation_tool_name_missing"
+	}
+	if event.ToolName != descriptor.Name {
+		return "invocation_tool_name_mismatch"
+	}
+	if len(event.Input) == 0 {
+		return "invocation_input_missing"
+	}
+	if !sameJSONValue(event.Input, invocation.invocation.Arguments) {
+		return "invocation_input_mismatch"
+	}
+	if event.Sequence == 0 {
+		return "invocation_sequence_missing"
+	}
+	return ""
 }
 
 func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {

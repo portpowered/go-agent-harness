@@ -323,19 +323,21 @@ func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.Tool
 			code = webmcp.ErrorInvocationFailed
 		}
 	}
-	details := result.ErrorDetails
-	if details == nil {
+	details := make(map[string]any, len(result.ErrorDetails)+3)
+	for key, value := range result.ErrorDetails {
+		details[key] = value
+	}
+	if len(details) == 0 {
 		details = map[string]any{"invocation_id": string(result.InvocationID), "tool_ref": string(toolRef), "phase": "invoke"}
 	}
+	retryable, _ := details["safe_retryable"].(bool)
+	delete(details, "safe_retryable")
 	if result.BrowserInvocationID != "" {
-		copied := make(map[string]any, len(details)+1)
-		for key, value := range details {
-			copied[key] = value
-		}
-		copied["invocation_id"] = string(result.BrowserInvocationID)
-		details = copied
+		details["invocation_id"] = string(result.BrowserInvocationID)
 	}
-	return webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
+	classified := webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
+	classified.Retryable = retryable
+	return classified
 }
 
 func runDirectWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WebMCPDirectWatchData, error) {

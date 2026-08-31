@@ -653,6 +653,8 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 	if result.ErrorDetails != nil {
 		details = cloneMap(result.ErrorDetails)
 	}
+	retryable, _ := details["safe_retryable"].(bool)
+	delete(details, "safe_retryable")
 	switch code {
 	case webmcp.ErrorInvocationCanceled:
 		if result.ErrorDetails == nil {
@@ -677,8 +679,10 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 			details["observed_bytes"] = 0
 		}
 	case webmcp.ErrorInvocationFailed:
-		if _, ok := details["page_error_code"]; !ok {
-			details["page_error_code"] = result.ErrorCode
+		if details["phase"] != "result_freshness" {
+			if _, ok := details["page_error_code"]; !ok {
+				details["page_error_code"] = result.ErrorCode
+			}
 		}
 		if _, ok := details["side_effect_unknown"]; !ok {
 			details["side_effect_unknown"] = true
@@ -687,7 +691,7 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 	resultError := webmcp.ToolResultError{
 		Code:      string(code),
 		Message:   invocationMessage(code),
-		Retryable: false,
+		Retryable: retryable,
 		Details:   details,
 	}
 	return webmcp.EncodeToolResult(nil, &resultError)
