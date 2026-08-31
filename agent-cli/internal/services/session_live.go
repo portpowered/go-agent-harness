@@ -828,19 +828,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			stopSessionUpdatedTimer()
 			return errors.Join(sessionScheduledAudioConfigTimeoutError(opts), stopAndDrain())
 		case <-ctx.Done():
-			// Cancellation can race the model runner's final provider deltas. Drain
-			// briefly before stopping, then drain once more after the hot loop exits,
-			// so a queued TOOLCALL.END or continuation boundary still contributes its
-			// call ID to the terminal lifecycle error.
-			preCancelDrainErr := drainSessionLoopMessagesUntilQuiet(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
-			stopErr := stopAndDrain()
-			if preCancelDrainErr != nil {
-				stopErr = errors.Join(stopErr, preCancelDrainErr)
-			}
-			if awaitingResponse {
-				return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
-			}
-			return sessionRunTerminationError(ctx, stopErr)
+			return terminateSessionLoopOnContextCancellation(ctx, out, loop, opts, awaitingResponse, stopAndDrain)
 		case <-observedInferencer.Done():
 			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()
@@ -886,6 +874,21 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			}
 		}
 	}
+}
+
+// terminateSessionLoopOnContextCancellation preserves provider deltas that
+// raced caller cancellation, then reports whether the session was awaiting a
+// response at the cancellation boundary.
+func terminateSessionLoopOnContextCancellation(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, awaitingResponse bool, stopAndDrain func() error) error {
+	preCancelDrainErr := drainSessionLoopMessagesUntilQuiet(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
+	stopErr := stopAndDrain()
+	if preCancelDrainErr != nil {
+		stopErr = errors.Join(stopErr, preCancelDrainErr)
+	}
+	if awaitingResponse {
+		return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
+	}
+	return sessionRunTerminationError(ctx, stopErr)
 }
 
 // closePendingSessionIfReady is shared by response handling and the
