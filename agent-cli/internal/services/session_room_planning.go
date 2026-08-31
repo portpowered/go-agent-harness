@@ -401,7 +401,13 @@ func awaitRoomParticipantConnections(
 			}
 			ready, readinessErr := roomParticipantReadyForAdmission(coordinator, plan, secrets)
 			if readinessErr != nil {
-				return readinessErr
+				// A readiness fault belongs to this participant alone. Isolating it
+				// here (instead of returning the error and failing the whole
+				// admission wait) keeps a sibling that is still legitimately
+				// connecting from being torn down by an unrelated participant's
+				// pre-open failure.
+				coordinator.failParticipant(plan.manifest.ID, readinessErr)
+				continue
 			}
 			if !ready {
 				allOpened = false
