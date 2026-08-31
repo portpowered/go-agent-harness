@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -14,11 +15,22 @@ func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
 	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
 }
 
-func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions) ([]*roomParticipantPlan, []string, error) {
-	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation)
+func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) ([]*roomParticipantPlan, []string, error) {
+	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation, evidences...)
 }
 
-func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+// buildRoomParticipantPlansWithContext accepts the room's evidence sink as an
+// optional trailing argument (mirroring newRoomEvidence's own sources
+// ...platformclock.Source pattern) so every existing two-argument call site
+// -- almost all of them deterministic tests with no evidence bundle -- keeps
+// compiling unchanged. When evidence is supplied and recording is not a
+// replay, it is used to wire each live provider participant's websocket
+// dialer for capture recording; see the loop below.
+func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+	var evidence *roomEvidence
+	if len(evidences) > 0 {
+		evidence = evidences[0]
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -124,6 +136,17 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		}
 		if opts.WebSocketDialerFactory != nil {
 			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
+		}
+		// Recording only applies on the genuine live-construction path
+		// (evidence enabled, not a replay run): NewLiveSessionInferencer is
+		// the only constructor that consults RecordSessionCapturePath. A
+		// custom SessionFactory or an injected SessionInferencer (both
+		// deterministic-test seams) ignore it, exactly like solo session
+		// recording never applies to an injected inferencer either.
+		if evidence != nil {
+			if participantEvidence := evidence.participant(participant.ID); participantEvidence != nil && participantEvidence.artifacts.Capture != "" {
+				sessionOptions.RecordSessionCapturePath = filepath.Join(evidence.destination, participantEvidence.artifacts.Capture)
+			}
 		}
 		if participant.BrowserTools != nil {
 			if opts.BrowserCapabilitiesFactory == nil {

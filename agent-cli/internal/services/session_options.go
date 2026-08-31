@@ -193,6 +193,16 @@ type SessionRunOptions struct {
 	Voice             string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
+	// RecordSessionCapturePath, when non-empty, makes NewLiveSessionInferencer
+	// wrap the resolved websocket dialer (WebSocketDialer, or the provider's
+	// real default dialer when that is unset) with a raw-traffic recorder,
+	// and makes the returned inferencer additionally implement
+	// SessionInferencerCaptureFlusher. It is unrelated to RecordPath/the
+	// solo `agent session run --record` path: this seam exists so a caller
+	// that constructs a session through NewLiveSessionInferencer directly
+	// (the room runtime's default participant factory) can capture the same
+	// kind of raw provider session capture that path produces.
+	RecordSessionCapturePath string
 	// RTCRuntimeFactory optionally supplies the service-owned WebRTC runtime
 	// constructor. A nil value keeps the WebSocket path unchanged; selecting
 	// WebRTC without a factory returns an explicit setup error rather than
@@ -672,6 +682,59 @@ func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscripti
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
+// SessionInferencerCaptureFlusher is implemented by the inferencer
+// NewLiveSessionInferencer returns when SessionRunOptions.RecordSessionCapturePath
+// is set: its live websocket traffic is being recorded, and FlushCapture
+// persists everything captured so far to that path. A caller should call
+// FlushCapture once the session this inferencer produced has fully closed,
+// so the persisted capture reflects the complete exchange rather than a
+// still-in-progress one.
+type SessionInferencerCaptureFlusher interface {
+	FlushCapture() error
+}
+
+// sessionInferencerWithCaptureFlush adapts a *gwtesting.RecordingWebSocketDialer
+// (which records raw websocket traffic, not messages.SessionInferencer calls)
+// into the SessionInferencerCaptureFlusher a caller can type-assert for
+// without depending on the concrete recorder type.
+type sessionInferencerWithCaptureFlush struct {
+	messages.SessionInferencer
+	path     string
+	recorder *gwtesting.RecordingWebSocketDialer
+}
+
+func (w *sessionInferencerWithCaptureFlush) FlushCapture() error {
+	return w.recorder.FlushToFile(w.path)
+}
+
+// resolveSessionWebSocketDialer picks the dialer NewLiveSessionInferencer's
+// provider construction should use: the caller-injected dialer (or the
+// provider's real default when none was injected), optionally wrapped with a
+// raw-traffic recorder when SessionRunOptions.RecordSessionCapturePath is
+// set. The returned recorder is nil unless recording was requested.
+func resolveSessionWebSocketDialer(opts SessionRunOptions, providerName, model string, newDefaultDialer func() transport.Dialer) (transport.Dialer, *gwtesting.RecordingWebSocketDialer) {
+	dialer := opts.WebSocketDialer
+	if dialer == nil {
+		dialer = newDefaultDialer()
+	}
+	if strings.TrimSpace(opts.RecordSessionCapturePath) == "" {
+		return dialer, nil
+	}
+	recorder := gwtesting.NewRecordingWebSocketDialer(dialer, providerName, model)
+	return recorder, recorder
+}
+
+// wrapSessionInferencerCaptureFlush leaves inferencer unchanged when recorder
+// is nil (recording was not requested), and otherwise wraps it so a caller
+// can type-assert for SessionInferencerCaptureFlusher and flush the capture
+// once the session this inferencer produced has closed.
+func wrapSessionInferencerCaptureFlush(inferencer messages.SessionInferencer, recorder *gwtesting.RecordingWebSocketDialer, path string) messages.SessionInferencer {
+	if recorder == nil {
+		return inferencer
+	}
+	return &sessionInferencerWithCaptureFlush{SessionInferencer: inferencer, path: path, recorder: recorder}
+}
+
 // NewLiveSessionInferencer builds the audio-capable realtime session used by
 // device-tier probes. Unlike the ordinary session constructors, this helper
 // supplies the provider's audio formats and rates in the initial request so a
@@ -705,21 +768,19 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
+		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
 		providerOpts := []oaiprovider.Option{
 			oaiprovider.WithAPIKey(sessionCfg.APIKey),
 			oaiprovider.WithModel(sessionCfg.Model),
 			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-		}
-		if opts.WebSocketDialer != nil {
-			providerOpts = append(providerOpts, oaiprovider.WithWebSocketDialer(opts.WebSocketDialer))
-		} else {
-			providerOpts = append(providerOpts, oaiprovider.WithWebSocketDialer(oaiprovider.NewDefaultWebSocketDialer()))
+			oaiprovider.WithWebSocketDialer(dialer),
 		}
 		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
 		if err != nil {
 			return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 		}
-		return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), model, nil
+		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
+		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
 	case sessionProviderGrok:
 		sessionCfg, err := resolveGrokSessionConfig(opts)
 		if err != nil {
@@ -734,20 +795,17 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
+		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return grok.NewDefaultWebSocketDialer() })
+		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
 		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
 			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
-		}
-		if opts.WebSocketDialer != nil {
-			providerOpts = append(providerOpts, grok.WithWebSocketDialer(opts.WebSocketDialer))
-		} else {
-			providerOpts = append(providerOpts, grok.WithWebSocketDialer(grok.NewDefaultWebSocketDialer()))
 		}
 		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
 		if err != nil {
 			return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
 		}
-		return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), model, nil
+		inferencer := inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config}))
+		return wrapSessionInferencerCaptureFlush(inferencer, recorder, opts.RecordSessionCapturePath), model, nil
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}

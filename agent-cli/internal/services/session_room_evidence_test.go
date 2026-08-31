@@ -62,8 +62,8 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	if manifest.Timing.StartedAt == "" || manifest.Timing.EndedAt == "" || !strings.HasSuffix(manifest.Timing.StartedAt, "Z") || !strings.HasSuffix(manifest.Timing.EndedAt, "Z") {
 		t.Fatalf("manifest timing = %+v, want UTC start/end", manifest.Timing)
 	}
-	if manifest.Artifacts["room.latency"] != RoomLatencyArtifactPath {
-		t.Fatalf("room latency artifact = %q, want %q", manifest.Artifacts["room.latency"], RoomLatencyArtifactPath)
+	if manifest.RoomLatency != RoomLatencyArtifactPath {
+		t.Fatalf("room latency artifact = %q, want %q", manifest.RoomLatency, RoomLatencyArtifactPath)
 	}
 	if _, err := ReadRoomLatencyBundle(filepath.Join(outputDir, RoomLatencyArtifactPath)); err != nil {
 		t.Fatalf("read finalized room latency artifact: %v", err)
@@ -91,6 +91,8 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 			Deltas:      "agent-" + id + ".deltas.jsonl",
 			SentPCM:     filepath.Join("participants", id, "sent.pcm"),
 			ReceivedPCM: filepath.Join("participants", id, "received.pcm"),
+			Events:      filepath.Join("participants", id, "events.jsonl"),
+			Capture:     filepath.Join("participants", id, "capture.json"),
 		}
 		if participantManifest.Artifacts != wantArtifacts {
 			t.Fatalf("participant %q artifacts = %+v, want %+v", id, participantManifest.Artifacts, wantArtifacts)
@@ -101,6 +103,8 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 			"deltas":       participantManifest.Artifacts.Deltas,
 			"sent_pcm":     participantManifest.Artifacts.SentPCM,
 			"received_pcm": participantManifest.Artifacts.ReceivedPCM,
+			"events":       participantManifest.Artifacts.Events,
+			"capture":      participantManifest.Artifacts.Capture,
 		} {
 			if filepath.IsAbs(relativePath) || filepath.Clean(relativePath) != relativePath || strings.HasPrefix(relativePath, "..") {
 				t.Fatalf("participant %q %s path is unsafe: %q", id, name, relativePath)
@@ -144,6 +148,20 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 		}
 		if deltaTurns != participantResult.TurnsCompleted {
 			t.Fatalf("participant %q delta turns = %d, want %d", id, deltaTurns, participantResult.TurnsCompleted)
+		}
+
+		// events.jsonl is the replay bundle's independently-declared
+		// participant event stream (roomReplayArtifactRoleEvents): required
+		// by replay admission as its own artifact, distinct from deltas.jsonl,
+		// even though it carries the same content today.
+		events := readRoomEvidenceJSONLLines(t, filepath.Join(outputDir, participantManifest.Artifacts.Events))
+		if len(events) != len(deltas) {
+			t.Fatalf("participant %q events.jsonl has %d lines, want %d (matching deltas.jsonl)", id, len(events), len(deltas))
+		}
+		for index, line := range events {
+			if !bytes.Equal(line, deltas[index]) {
+				t.Fatalf("participant %q events.jsonl line %d = %s, want %s (matching deltas.jsonl)", id, index, line, deltas[index])
+			}
 		}
 	}
 }

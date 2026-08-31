@@ -252,6 +252,16 @@ func runRoomParticipant(
 	loopOptions.observer = observer
 	loopOptions.loopReady = runtime.loopReady
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, loopOptions)
+	// The provider session this participant's inferencer produced is fully
+	// closed at this point (runAgentLoopSession only returns after the loop
+	// has finished, including session close). Flushing the capture here --
+	// rather than earlier -- is what makes it reflect the complete exchange
+	// instead of a possibly-truncated one.
+	if flusher, ok := runtime.plan.inferencer.(SessionInferencerCaptureFlusher); ok {
+		if flushErr := flusher.FlushCapture(); flushErr != nil && participantEvidence != nil {
+			participantEvidence.recordError(participantEvidence.artifacts.Capture, flushErr)
+		}
+	}
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
 	}

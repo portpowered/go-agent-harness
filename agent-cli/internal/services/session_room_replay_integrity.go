@@ -296,7 +296,14 @@ func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string
 		if len(result) > 0 && (offsetNanos < previousOffsetNanos || offsetNanos == previousOffsetNanos && int64(sequence) <= previousSequence) {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d]", lineNumber), artifact.Path, "ordered by offset and increasing sequence", fmt.Sprintf("offset=%d sequence=%d after offset=%d sequence=%d", offsetMS, sequence, previousOffsetNanos/int64(time.Millisecond), previousSequence), ErrInvalidRoomReplayBundle)
 		}
-		expectedUnix := clockBase.UnixMilli() + offsetMS
+		// expectedUnix is derived from the same nanosecond-precision instant
+		// (clockBase + offsetNanos) the recorder used to compute unix_ms, not
+		// from the independently-floored millisecond offsetMS. Flooring
+		// offsetMS and clockBase's own sub-millisecond remainder separately
+		// before adding them compounds two independent truncations and is
+		// off-by-one from the recorder's actual unix_ms on any fractional
+		// offset -- which every real (non-integer-ms) room recording has.
+		expectedUnix := clockBase.Add(time.Duration(offsetNanos)).UnixMilli()
 		if int64(unixMS) != expectedUnix {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].unix_ms", lineNumber), artifact.Path, fmt.Sprintf("%d", expectedUnix), fmt.Sprintf("%d", unixMS), ErrInvalidRoomReplayBundle)
 		}
