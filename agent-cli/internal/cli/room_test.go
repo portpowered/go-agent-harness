@@ -475,3 +475,90 @@ func writeRoomCLIManifest(t *testing.T) string {
 	}
 	return path
 }
+
+// TestRoomRunCommandFailsWhenEveryParticipantFailsEvenIfRunnerReturnsNoError
+// covers Instance 3 of the exit-code-must-mean-the-work-happened defect
+// family under the same contract established for session --prompt and
+// --loop: `room run` used to exit 0 when every participant failed, because
+// the runner reports per-participant failures without itself returning a
+// room-level error. The fix lives entirely at the CLI boundary
+// (roomAllParticipantsFailedError) — services.RunRoom and its #321 fault
+// isolation are untouched.
+func TestRoomRunCommandFailsWhenEveryParticipantFailsEvenIfRunnerReturnsNoError(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	command.SetRunner(func(_ context.Context, _ io.Writer, _ services.RoomRunOptions) (services.RoomResult, error) {
+		return services.RoomResult{
+			TerminationReason: services.RoomTerminationStopped,
+			Participants: map[string]services.RoomParticipantResult{
+				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: services.ParticipantTerminationError, Error: "provider dial failed"},
+				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: services.ParticipantTerminationError, Error: "provider dial failed"},
+			},
+		}, nil
+	})
+
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--manifest", manifestPath})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatalf("room run with every participant failing returned nil error; want a named non-zero failure; output=%q", output.String())
+	}
+	for _, want := range []string{"alice", "bob", "all 2 participant"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want it to name %q", err, want)
+		}
+	}
+}
+
+// TestRoomRunCommandPartialParticipantFailureStillExitsZero asserts no
+// over-triggering, and that #321 fault isolation is preserved at the CLI
+// boundary: one participant failing while the other survives must still exit
+// 0, exactly as before this fix.
+func TestRoomRunCommandPartialParticipantFailureStillExitsZero(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	command.SetRunner(func(_ context.Context, _ io.Writer, _ services.RoomRunOptions) (services.RoomResult, error) {
+		return services.RoomResult{
+			TerminationReason: services.RoomTerminationMaxTurnsReached,
+			Participants: map[string]services.RoomParticipantResult{
+				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: services.ParticipantTerminationError, Error: "provider dial failed"},
+				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: services.ParticipantTerminationEnded, TurnsCompleted: 2},
+			},
+		}, nil
+	})
+
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--manifest", manifestPath})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("room run with a surviving peer returned an error: %v\noutput=%q", err, output.String())
+	}
+}
+
+// TestRoomRunCommandAllParticipantsSucceedStillExitsZero asserts no
+// over-triggering for the ordinary success case: every participant ending
+// normally must still exit 0.
+func TestRoomRunCommandAllParticipantsSucceedStillExitsZero(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	command.SetRunner(func(_ context.Context, _ io.Writer, _ services.RoomRunOptions) (services.RoomResult, error) {
+		return services.RoomResult{
+			TerminationReason: services.RoomTerminationMaxTurnsReached,
+			Participants: map[string]services.RoomParticipantResult{
+				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: services.ParticipantTerminationEnded, TurnsCompleted: 2},
+				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: services.ParticipantTerminationEnded, TurnsCompleted: 2},
+			},
+		}, nil
+	})
+
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--manifest", manifestPath})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("room run with every participant succeeding returned an error: %v\noutput=%q", err, output.String())
+	}
+}
