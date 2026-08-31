@@ -238,6 +238,133 @@ func TestAssertPCM16ReturnsStructuredActionableFailure(t *testing.T) {
 	}
 }
 
+func TestAnalyzeAndValidatePCM16AreConciseAliases(t *testing.T) {
+	clean := cleanAnalysisInput()
+	config := audio.DefaultAnalysisConfig()
+
+	want, err := audio.AnalyzePCM16(clean, config)
+	if err != nil {
+		t.Fatalf("AnalyzePCM16() error = %v", err)
+	}
+	got, err := audio.Analyze(clean, config)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+	if got.StreamID != want.StreamID || len(got.Failures) != len(want.Failures) || !got.Passed() {
+		t.Fatalf("Analyze() = %+v, want the same report as AnalyzePCM16() = %+v", got, want)
+	}
+	if failures := got.FailuresCopy(); len(failures) != 0 {
+		t.Fatalf("FailuresCopy() on a passing analysis = %v, want empty", failures)
+	}
+	if err := audio.ValidatePCM16(clean, config); err != nil {
+		t.Fatalf("ValidatePCM16() error = %v, want clean input to pass", err)
+	}
+
+	clipped := cleanAnalysisInput()
+	clipped.Samples[800] = 32700
+	if err := audio.ValidatePCM16(clipped, config); err == nil || !errors.Is(err, audio.ErrPCM16AnalysisFailed) {
+		t.Fatalf("ValidatePCM16() error = %v, want ErrPCM16AnalysisFailed for a clipped stream", err)
+	}
+	clippedAnalysis, err := audio.Analyze(clipped, config)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+	if failures := clippedAnalysis.FailuresCopy(); len(failures) != 1 || failures[0].Property != "clipping" {
+		t.Fatalf("FailuresCopy() on a clipped analysis = %v, want one clipping failure", failures)
+	}
+}
+
+func TestPCM16AnalysisErrorTypesHandleNilAndEmptyState(t *testing.T) {
+	var nilAssertionErr *audio.PCM16AssertionError
+	if got, want := nilAssertionErr.Error(), "<nil>"; got != want {
+		t.Errorf("nil *PCM16AssertionError.Error() = %q, want %q", got, want)
+	}
+	if failures := nilAssertionErr.FailuresCopy(); failures != nil {
+		t.Errorf("nil *PCM16AssertionError.FailuresCopy() = %v, want nil", failures)
+	}
+	emptyAssertionErr := &audio.PCM16AssertionError{StreamID: "s"}
+	if got, want := emptyAssertionErr.Error(), audio.ErrPCM16AnalysisFailed.Error(); got != want {
+		t.Errorf("empty-failures *PCM16AssertionError.Error() = %q, want %q", got, want)
+	}
+	populatedAssertionErr := &audio.PCM16AssertionError{StreamID: "s", Failures: []audio.PropertyFailure{{Property: "clipping"}}}
+	if failures := populatedAssertionErr.FailuresCopy(); len(failures) != 1 || failures[0].Property != "clipping" {
+		t.Errorf("populated *PCM16AssertionError.FailuresCopy() = %v, want one clipping failure", failures)
+	}
+
+	var nilInputErr *audio.InvalidPCM16AnalysisInputError
+	if got, want := nilInputErr.Error(), "<nil>"; got != want {
+		t.Errorf("nil *InvalidPCM16AnalysisInputError.Error() = %q, want %q", got, want)
+	}
+	fieldlessInputErr := &audio.InvalidPCM16AnalysisInputError{Reason: "broken"}
+	if got, want := fieldlessInputErr.Error(), audio.ErrInvalidPCM16AnalysisInput.Error()+": broken"; got != want {
+		t.Errorf("fieldless *InvalidPCM16AnalysisInputError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestPCM16AnalysisConfigRejectsInvalidBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*audio.PCM16AnalysisConfig)
+		field  string
+	}{
+		{
+			name:   "non-positive frame duration",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.FrameDuration = -time.Millisecond },
+			field:  "frame_duration",
+		},
+		{
+			name:   "positive silence floor",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.SilenceFloorDBFS = 5 },
+			field:  "silence_floor_dbfs",
+		},
+		{
+			name:   "non-positive max natural pause",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.MaxNaturalPause = -time.Millisecond },
+			field:  "max_natural_pause",
+		},
+		{
+			name:   "non-positive boundary delta",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.BoundaryDelta = -1 },
+			field:  "boundary_delta",
+		},
+		{
+			name:   "non-negative boundary quiet dbfs",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.BoundaryQuietDBFS = 0.5 },
+			field:  "boundary_quiet_dbfs",
+		},
+		{
+			name:   "clip threshold above int16 max",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.ClipSampleThreshold = 40000 },
+			field:  "clip_sample_threshold",
+		},
+		{
+			name:   "negative edge threshold",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.EdgeSampleThreshold = -1 },
+			field:  "edge_sample_threshold",
+		},
+		{
+			name:   "positive final frame max rms",
+			mutate: func(config *audio.PCM16AnalysisConfig) { config.FinalFrameMaxRMSDBFS = 5 },
+			field:  "final_frame_max_rms_dbfs",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := audio.DefaultAnalysisConfig()
+			test.mutate(&config)
+			_, err := audio.AnalyzePCM16(cleanAnalysisInput(), config)
+			if err == nil || !errors.Is(err, audio.ErrInvalidPCM16AnalysisInput) {
+				t.Fatalf("AnalyzePCM16() error = %v, want invalid-input error", err)
+			}
+			var inputErr *audio.InvalidPCM16AnalysisInputError
+			if !errors.As(err, &inputErr) || inputErr.Field != test.field {
+				t.Fatalf("AnalyzePCM16() typed error = %+v, want field %q", inputErr, test.field)
+			}
+		})
+	}
+}
+
 func TestAnalyzePCM16RejectsInconsistentInputs(t *testing.T) {
 	tests := []struct {
 		name   string

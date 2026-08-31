@@ -314,6 +314,383 @@ func TestAssertPCM16RoomReturnsActionableTypedFailure(t *testing.T) {
 	}
 }
 
+func TestMeasurePCM16DriftRejectsInvalidTimedStream(t *testing.T) {
+	room := roomAnalysisFixture()
+	valid := room.Streams[0]
+
+	tests := []struct {
+		name   string
+		mutate func(*audio.PCM16TimedStream)
+		field  string
+	}{
+		{
+			name:   "missing participant id",
+			mutate: func(stream *audio.PCM16TimedStream) { stream.ParticipantID = "" },
+			field:  "stream.participant_id",
+		},
+		{
+			name:   "non-positive sample rate",
+			mutate: func(stream *audio.PCM16TimedStream) { stream.SampleRate = 0 },
+			field:  "stream.sample_rate",
+		},
+		{
+			name:   "empty samples",
+			mutate: func(stream *audio.PCM16TimedStream) { stream.Samples = nil },
+			field:  "stream.samples",
+		},
+		{
+			name:   "negative timeline start",
+			mutate: func(stream *audio.PCM16TimedStream) { stream.TimelineStart = -time.Millisecond },
+			field:  "stream.timeline_start",
+		},
+		{
+			name:   "timeline end before start",
+			mutate: func(stream *audio.PCM16TimedStream) { stream.TimelineEnd = stream.TimelineStart },
+			field:  "stream.timeline_end",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stream := valid
+			test.mutate(&stream)
+			_, err := audio.MeasurePCM16Drift(stream)
+			if err == nil || !errors.Is(err, audio.ErrInvalidPCM16RoomAnalysisInput) {
+				t.Fatalf("MeasurePCM16Drift() error = %v, want invalid-room-input", err)
+			}
+			var inputErr *audio.InvalidPCM16RoomAnalysisInputError
+			if !errors.As(err, &inputErr) || inputErr.Field != test.field {
+				t.Fatalf("typed input error = %+v, want field %q", inputErr, test.field)
+			}
+		})
+	}
+}
+
+func TestPCM16RoomRejectsInvalidBargeInAndOverlapEndpoints(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*audio.PCM16RoomInput)
+		field  string
+	}{
+		{
+			name: "negative barge-in interval start",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.BargeIns[0].Start = -time.Millisecond
+			},
+			field: "barge_ins[0].start",
+		},
+		{
+			name: "missing barge-in interrupter and interrupted ids",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.BargeIns[0].InterrupterStreamID = ""
+				room.BargeIns[0].InterruptedStreamID = ""
+			},
+			field: "barge_ins[0]",
+		},
+		{
+			name: "identical barge-in interrupter and interrupted streams",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.BargeIns[0].InterruptedStreamID = room.BargeIns[0].InterrupterStreamID
+			},
+			field: "barge_ins[0]",
+		},
+		{
+			name: "unknown barge-in interrupted stream",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.BargeIns[0].InterruptedStreamID = "missing"
+			},
+			field: "barge_ins[0].interrupted_stream_id",
+		},
+		{
+			name: "missing overlap sent/received ids",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.Overlaps[0].A.SentStreamID = ""
+				room.Overlaps[0].A.ReceivedStreamID = ""
+			},
+			field: "overlaps[0].a",
+		},
+		{
+			name: "overlap endpoint owned by a different participant",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.Overlaps[0].A.ParticipantID = "someone-else"
+			},
+			field: "overlaps[0].a.participant_id",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			room := roomAnalysisFixture()
+			test.mutate(&room)
+			_, err := audio.AnalyzePCM16Room(room, audio.DefaultRoomAnalysisConfig())
+			if err == nil || !errors.Is(err, audio.ErrInvalidPCM16RoomAnalysisInput) {
+				t.Fatalf("AnalyzePCM16Room() error = %v, want invalid-room-input", err)
+			}
+			var inputErr *audio.InvalidPCM16RoomAnalysisInputError
+			if !errors.As(err, &inputErr) || inputErr.Field != test.field {
+				t.Fatalf("typed input error = %+v, want field %q", inputErr, test.field)
+			}
+		})
+	}
+}
+
+func TestMeasurePCM16BargeInRejectsInvalidInputsAndDefaultsThreshold(t *testing.T) {
+	room := roomAnalysisFixture()
+
+	if _, err := audio.MeasurePCM16BargeIn(room.Streams[4], room.Streams[4], room.BargeIns[0], -40); err == nil {
+		t.Fatal("MeasurePCM16BargeIn() error = nil, want identical-stream failure")
+	}
+
+	if _, err := audio.MeasurePCM16BargeIn(room.Streams[4], room.Streams[5], room.BargeIns[0], 5); err == nil || !errors.Is(err, audio.ErrInvalidPCM16RoomAnalysisInput) {
+		t.Fatalf("MeasurePCM16BargeIn() error = %v, want invalid-threshold failure", err)
+	}
+
+	defaulted, err := audio.MeasurePCM16BargeIn(room.Streams[4], room.Streams[5], room.BargeIns[0], 0)
+	if err != nil {
+		t.Fatalf("MeasurePCM16BargeIn() with zero threshold error = %v", err)
+	}
+	explicit, err := audio.MeasurePCM16BargeIn(room.Streams[4], room.Streams[5], room.BargeIns[0], audio.PCM16AnalysisDefaultBargeInSpeechThresholdDBFS)
+	if err != nil {
+		t.Fatalf("MeasurePCM16BargeIn() error = %v", err)
+	}
+	if defaulted.Latency != explicit.Latency || defaulted.Passed != explicit.Passed {
+		t.Fatalf("MeasurePCM16BargeIn() zero threshold = %+v, want the same result as the explicit default = %+v", defaulted, explicit)
+	}
+}
+
+func TestPCM16RoomErrorTypesHandleNilAndEmptyState(t *testing.T) {
+	var nilAssertionErr *audio.PCM16RoomAssertionError
+	if got, want := nilAssertionErr.Error(), "<nil>"; got != want {
+		t.Errorf("nil *PCM16RoomAssertionError.Error() = %q, want %q", got, want)
+	}
+	emptyAssertionErr := &audio.PCM16RoomAssertionError{}
+	if got, want := emptyAssertionErr.Error(), audio.ErrPCM16AnalysisFailed.Error(); got != want {
+		t.Errorf("empty-failures *PCM16RoomAssertionError.Error() = %q, want %q", got, want)
+	}
+
+	var nilInputErr *audio.InvalidPCM16RoomAnalysisInputError
+	if got, want := nilInputErr.Error(), "<nil>"; got != want {
+		t.Errorf("nil *InvalidPCM16RoomAnalysisInputError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestPCM16RoomAnalysisConfigRejectsInvalidBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*audio.PCM16RoomAnalysisConfig)
+		field  string
+	}{
+		{
+			name: "inverted correlation lag window",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.CorrelationLagWindow = audio.PCM16LagWindow{Min: 50 * time.Millisecond, Max: -50 * time.Millisecond}
+			},
+			field: "correlation_lag_window",
+		},
+		{
+			name: "positive correlation silence floor",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.CorrelationLagWindow = audio.DefaultPCM16RoomAnalysisConfig.CorrelationLagWindow
+				config.CorrelationSilenceFloorDBFS = 5
+			},
+			field: "correlation_silence_floor_dbfs",
+		},
+		{
+			name: "min peer correlation above one",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.CorrelationSilenceFloorDBFS = audio.DefaultPCM16RoomAnalysisConfig.CorrelationSilenceFloorDBFS
+				config.MinPeerCorrelation = 1.5
+			},
+			field: "min_peer_correlation",
+		},
+		{
+			name: "max self correlation negative",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.MinPeerCorrelation = audio.DefaultPCM16RoomAnalysisConfig.MinPeerCorrelation
+				config.MaxSelfCorrelation = -0.1
+			},
+			field: "max_self_correlation",
+		},
+		{
+			name: "positive barge-in speech threshold",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.MaxSelfCorrelation = audio.DefaultPCM16RoomAnalysisConfig.MaxSelfCorrelation
+				config.BargeInSpeechThresholdDBFS = 5
+			},
+			field: "barge_in_speech_threshold_dbfs",
+		},
+		{
+			name: "non-positive max barge-in latency",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.BargeInSpeechThresholdDBFS = audio.DefaultPCM16RoomAnalysisConfig.BargeInSpeechThresholdDBFS
+				config.MaxBargeInLatency = -time.Millisecond
+			},
+			field: "max_barge_in_latency",
+		},
+		{
+			name: "negative max loudness difference",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.MaxBargeInLatency = audio.DefaultPCM16RoomAnalysisConfig.MaxBargeInLatency
+				config.MaxLoudnessDifferenceDB = -1
+			},
+			field: "max_loudness_difference_db",
+		},
+		{
+			name: "non-positive max drift absolute",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.MaxLoudnessDifferenceDB = audio.DefaultPCM16RoomAnalysisConfig.MaxLoudnessDifferenceDB
+				config.MaxDriftAbsolute = -time.Millisecond
+			},
+			field: "max_drift_absolute",
+		},
+		{
+			name: "negative max drift fraction",
+			mutate: func(config *audio.PCM16RoomAnalysisConfig) {
+				config.MaxDriftAbsolute = audio.DefaultPCM16RoomAnalysisConfig.MaxDriftAbsolute
+				config.MaxDriftFraction = -0.1
+			},
+			field: "max_drift_fraction",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := audio.DefaultRoomAnalysisConfig()
+			test.mutate(&config)
+			_, err := audio.AnalyzePCM16Room(roomAnalysisFixture(), config)
+			if err == nil || !errors.Is(err, audio.ErrInvalidPCM16RoomAnalysisInput) {
+				t.Fatalf("AnalyzePCM16Room() error = %v, want invalid-room-input", err)
+			}
+			var inputErr *audio.InvalidPCM16RoomAnalysisInputError
+			if !errors.As(err, &inputErr) || inputErr.Field != test.field {
+				t.Fatalf("typed input error = %+v, want field %q", inputErr, test.field)
+			}
+		})
+	}
+}
+
+func TestPCM16RoomCorrelationAndValidateAreConciseAliases(t *testing.T) {
+	room := roomAnalysisFixture()
+	interval := audio.PCM16TimeInterval{ID: "standalone-overlap", Start: 600 * time.Millisecond, End: 2 * time.Second}
+	lagWindow := audio.PCM16LagWindow{Min: -100 * time.Millisecond, Max: 100 * time.Millisecond}
+
+	want, err := audio.NormalizedPCM16CrossCorrelation(room.Streams[0], room.Streams[3], interval, lagWindow, -50)
+	if err != nil {
+		t.Fatalf("NormalizedPCM16CrossCorrelation() error = %v", err)
+	}
+	got, err := audio.MeasurePCM16Correlation(room.Streams[0], room.Streams[3], interval, lagWindow, -50)
+	if err != nil {
+		t.Fatalf("MeasurePCM16Correlation() error = %v", err)
+	}
+	if got.BestCorrelation != want.BestCorrelation || got.BestLag != want.BestLag || got.ComparedSamples != want.ComparedSamples {
+		t.Fatalf("MeasurePCM16Correlation() = %+v, want the same measurement as NormalizedPCM16CrossCorrelation() = %+v", got, want)
+	}
+
+	config := audio.DefaultRoomAnalysisConfig()
+	if err := audio.ValidatePCM16Room(room, config); err != nil {
+		t.Fatalf("ValidatePCM16Room() error = %v, want the fixture room to pass", err)
+	}
+
+	broken := roomAnalysisFixture()
+	broken.Streams[3].Samples = make([]int16, len(broken.Streams[3].Samples))
+	broken.Streams[3].ExpectedSpeech = nil
+	err = audio.ValidatePCM16Room(broken, config)
+	if err == nil || !errors.Is(err, audio.ErrPCM16AnalysisFailed) {
+		t.Fatalf("ValidatePCM16Room() error = %v, want ErrPCM16AnalysisFailed", err)
+	}
+	var assertionErr *audio.PCM16RoomAssertionError
+	if !errors.As(err, &assertionErr) {
+		t.Fatalf("ValidatePCM16Room() error = %T, want *PCM16RoomAssertionError", err)
+	}
+	if failures := assertionErr.FailuresCopy(); len(failures) == 0 {
+		t.Fatalf("FailuresCopy() = %v, want the room's typed failures", failures)
+	}
+	var nilAssertionErr *audio.PCM16RoomAssertionError
+	if failures := nilAssertionErr.FailuresCopy(); failures != nil {
+		t.Fatalf("FailuresCopy() on a nil *PCM16RoomAssertionError = %v, want nil", failures)
+	}
+}
+
+func TestPCM16RoomExplicitLoudnessIntervalValidatesAndMeasures(t *testing.T) {
+	valid := audio.PCM16LoudnessInterval{
+		PCM16TimeInterval: audio.PCM16TimeInterval{Start: 600 * time.Millisecond, End: 2 * time.Second},
+		LeftStreamID:      "a-sent",
+		RightStreamID:     "b-sent",
+	}
+	room := roomAnalysisFixture()
+	room.Loudness = []audio.PCM16LoudnessInterval{valid}
+	result, err := audio.AnalyzePCM16Room(room, audio.DefaultRoomAnalysisConfig())
+	if err != nil {
+		t.Fatalf("AnalyzePCM16Room() error = %v", err)
+	}
+	found := false
+	for _, measurement := range result.Loudness {
+		if measurement.IntervalID == "loudness-0" {
+			found = true
+			if measurement.LeftStreamID != "a-sent" || measurement.RightStreamID != "b-sent" {
+				t.Errorf("explicit loudness measurement streams = %s/%s, want a-sent/b-sent", measurement.LeftStreamID, measurement.RightStreamID)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("loudness measurements = %+v, want an explicit loudness-0 measurement", result.Loudness)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*audio.PCM16LoudnessInterval)
+		field  string
+	}{
+		{
+			name:   "missing left stream id",
+			mutate: func(interval *audio.PCM16LoudnessInterval) { interval.LeftStreamID = "" },
+			field:  "loudness[0]",
+		},
+		{
+			name:   "missing right stream id",
+			mutate: func(interval *audio.PCM16LoudnessInterval) { interval.RightStreamID = "" },
+			field:  "loudness[0]",
+		},
+		{
+			name: "identical left and right streams",
+			mutate: func(interval *audio.PCM16LoudnessInterval) {
+				interval.RightStreamID = interval.LeftStreamID
+			},
+			field: "loudness[0]",
+		},
+		{
+			name:   "unknown left stream",
+			mutate: func(interval *audio.PCM16LoudnessInterval) { interval.LeftStreamID = "missing" },
+			field:  "loudness[0].left_stream_id",
+		},
+		{
+			name:   "unknown right stream",
+			mutate: func(interval *audio.PCM16LoudnessInterval) { interval.RightStreamID = "missing" },
+			field:  "loudness[0].right_stream_id",
+		},
+		{
+			name:   "interval outside timeline",
+			mutate: func(interval *audio.PCM16LoudnessInterval) { interval.End = 4 * time.Second },
+			field:  "loudness[0].left_stream_id",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			interval := valid
+			test.mutate(&interval)
+			invalidRoom := roomAnalysisFixture()
+			invalidRoom.Loudness = []audio.PCM16LoudnessInterval{interval}
+			_, err := audio.AnalyzePCM16Room(invalidRoom, audio.DefaultRoomAnalysisConfig())
+			if err == nil || !errors.Is(err, audio.ErrInvalidPCM16RoomAnalysisInput) {
+				t.Fatalf("AnalyzePCM16Room() error = %v, want invalid-room-input", err)
+			}
+			var inputErr *audio.InvalidPCM16RoomAnalysisInputError
+			if !errors.As(err, &inputErr) || inputErr.Field != test.field {
+				t.Fatalf("typed input error = %+v, want field %q", inputErr, test.field)
+			}
+		})
+	}
+}
+
 func roomAnalysisFixture() audio.PCM16RoomInput {
 	const sampleRate = 1000
 	const streamSamples = 3000
