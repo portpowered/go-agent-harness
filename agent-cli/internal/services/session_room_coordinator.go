@@ -166,8 +166,10 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		}
 		c.boundForced = true
 		var firstFailure error
+		runtimes := make([]*roomParticipantRuntime, 0, len(c.active))
 		for _, runtime := range c.active {
 			if runtime != nil {
+				runtimes = append(runtimes, runtime)
 				if runtime.lifecycle != nil {
 					runtime.lifecycle.markBoundCancellation()
 					observation := runtime.lifecycle.terminalObservationSnapshot()
@@ -190,6 +192,14 @@ func (c *roomCoordinator) forceBoundShutdown() {
 			c.bound = false
 		}
 		c.mu.Unlock()
+
+		if firstFailure == nil {
+			for _, runtime := range runtimes {
+				if runtime != nil && runtime.lifecycle != nil {
+					runtime.lifecycle.cancelActiveResponse()
+				}
+			}
+		}
 
 		c.boundCancellationOnce.Do(func() { close(c.boundCancellation) })
 		c.doneOnce.Do(func() { close(c.done) })

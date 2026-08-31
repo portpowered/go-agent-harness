@@ -26,6 +26,10 @@ const (
 	// finish during this window; responses still active at its end are
 	// deliberately cancelled.
 	DefaultRoomBoundShutdownGrace = 250 * time.Millisecond
+	// roomBoundResponseCancelTimeout bounds the provider-facing cancel write.
+	// The room does not wait for a provider acknowledgement; the cancellation
+	// signal and session close remain the authoritative force path.
+	roomBoundResponseCancelTimeout = 50 * time.Millisecond
 
 	// Room lifecycle cleanup is deliberately finite. Provider/session contracts
 	// are expected to make Close and cancellation progress, but a diagnostic is
@@ -224,6 +228,7 @@ type roomParticipantLifecycle struct {
 	turns                      int
 	responseInFlight           bool
 	responseID                 string
+	responseCancelSent         bool
 	responseTerminalPending    bool
 	pendingToolCalls           map[string]struct{}
 	acceptedToolResults        map[string]struct{}
@@ -487,6 +492,49 @@ func (l *roomParticipantLifecycle) recordToolContinuationRequest(accepted bool) 
 	l.mu.Unlock()
 }
 
+// recordResponseCancellation remembers a provider-facing RESPONSE.CANCEL that
+// another session-loop owner already sent. The latch is response-scoped and
+// is reset only when a new provider response starts.
+func (l *roomParticipantLifecycle) recordResponseCancellation() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.responseInFlight {
+		l.responseCancelSent = true
+	}
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+// cancelActiveResponse sends the one room-owned cancellation for a response
+// that remained active through the grace window. It latches before sending so
+// a racing loop shutdown or repeated force call cannot emit a duplicate.
+// Failure to enqueue the cancellation is intentionally not promoted to a
+// participant failure: force shutdown still closes the session and the room
+// bound remains the authoritative terminal cause.
+func (l *roomParticipantLifecycle) cancelActiveResponse() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if !l.boundCancellation || !l.boundResponsePending || !l.responseInFlight || l.responseCancelSent || l.ownedSession == nil {
+		l.mu.Unlock()
+		return
+	}
+	l.responseCancelSent = true
+	session := l.ownedSession
+	l.signalLocked()
+	l.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), roomBoundResponseCancelTimeout)
+	defer cancel()
+	_ = session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCancel,
+		Value: messages.NewResponseCancelValue(),
+	})
+}
+
 // admitResponseTerminal is checked after the shared observer has seen a
 // provider MESSAGE.END but before it awards a room turn. It makes a terminal
 // event belonging to the response that was already in flight the only
@@ -691,8 +739,19 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		if msg.Role != messages.RoleTool {
+			// MESSAGE.START opens a new response. AUDIO.START can be the first
+			// boundary for an audio-only response, but it can also be a modality
+			// start inside an already-active MESSAGE.START response; do not reset
+			// the response-scoped cancellation latch in the latter case.
+			newResponse := msg.Type == messages.StreamTypeMessageStart || !l.responseInFlight
+			if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" && responseID != l.responseID {
+				newResponse = true
+			}
 			l.responseInFlight = true
 			l.responseID = msg.ResponseID
+			if newResponse {
+				l.responseCancelSent = false
+			}
 			l.responseTerminalPending = false
 			l.signalLocked()
 		}
@@ -1124,6 +1183,8 @@ func (s *roomTrackedSession) SendWithOutcome(ctx context.Context, msg messages.S
 			s.lifecycle.recordToolResultSend(s.lifecycle.toolCallID(msg), true, false)
 		case messages.StreamTypeResponseCreate:
 			s.lifecycle.recordToolContinuationRequest(true)
+		case messages.StreamTypeResponseCancel:
+			s.lifecycle.recordResponseCancellation()
 		}
 	}
 	return outcome

@@ -238,6 +238,12 @@ func TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly(t *testing.T) {
 			if err != nil {
 				t.Fatalf("bound cancellation: %v", err)
 			}
+			if got := activeSession.sentTypeCountSnapshot(messages.StreamTypeResponseCancel); got != 1 {
+				t.Fatalf("active response cancellations = %d, want exactly one", got)
+			}
+			if got := peerSession.sentTypeCountSnapshot(messages.StreamTypeResponseCancel); got != 0 {
+				t.Fatalf("peer response cancellations = %d, want none", got)
+			}
 			if result.Reason != testCase.wantReason {
 				t.Fatalf("room reason = %q, want %q", result.Reason, testCase.wantReason)
 			}

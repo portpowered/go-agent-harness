@@ -1200,6 +1200,18 @@ func (s *roomTestSession) sentCountSnapshot() int {
 	return len(s.sent)
 }
 
+func (s *roomTestSession) sentTypeCountSnapshot(want messages.StreamMessageType) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, message := range s.sent {
+		if message.Type == want {
+			count++
+		}
+	}
+	return count
+}
+
 func (s *roomTestSession) nextSent(ctx context.Context) (messages.StreamMessage, bool) {
 	if s == nil {
 		return messages.StreamMessage{}, false
