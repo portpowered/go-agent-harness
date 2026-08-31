@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -196,20 +197,58 @@ func resequencedBatch(records []gwtesting.CapturedSessionEvent, sequence *int) [
 // syncBuffer is a mutex-protected output buffer because the session command
 // writes replay text and terminal status from independent goroutines.
 type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu      sync.Mutex
+	buf     bytes.Buffer
+	changed chan struct{}
 }
 
 func (b *syncBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
+	if b.changed == nil {
+		b.changed = make(chan struct{}, 1)
+	}
+	changed := b.changed
+	n, err := b.buf.Write(p)
+	b.mu.Unlock()
+	select {
+	case changed <- struct{}{}:
+	default:
+	}
+	return n, err
 }
 
 func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+func (b *syncBuffer) waitFor(fragment string, timeout time.Duration) bool {
+	return b.waitForContext(context.Background(), fragment, timeout)
+}
+
+func (b *syncBuffer) waitForContext(ctx context.Context, fragment string, timeout time.Duration) bool {
+	b.mu.Lock()
+	if b.changed == nil {
+		b.changed = make(chan struct{}, 1)
+	}
+	changed := b.changed
+	b.mu.Unlock()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		if strings.Contains(b.String(), fragment) {
+			return true
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return strings.Contains(b.String(), fragment)
+		}
+	}
 }
 
 // runMultiturnTurn drives the shipped 'session' command surface over the
@@ -225,9 +264,8 @@ func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})
 	err := cmd.ExecuteContext(t.Context())
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(stdout.String(), "[session closed:") && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	if !stdout.waitFor("[session closed:", 10*time.Second) {
+		return stdout.String(), fmt.Errorf("timed out waiting for session close output after 10s")
 	}
 	return stdout.String(), err
 }

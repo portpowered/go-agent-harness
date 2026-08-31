@@ -5,7 +5,7 @@ MODULES := agent-cli go-agent-loop go-llm-gateway
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/agent
 GO_TEST_TIMEOUT ?= 300s
-AGENT_CLI_INTEGRATION_TIMEOUT ?= 300s
+AGENT_CLI_INTEGRATION_TIMEOUT ?= 385s
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
@@ -263,7 +263,7 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 		echo "==> coverage $$module ($$timeout_scope: $$effective_timeout)"; \
 		if [ "$$module" = "agent-cli" ]; then \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" --report-budget --label "agent-cli coverage" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		else \
 			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		fi; \

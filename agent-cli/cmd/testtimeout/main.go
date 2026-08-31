@@ -24,6 +24,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	timeout := flags.Duration("timeout", 0, "finite outer test-command timeout")
 	dir := flags.String("dir", "", "working directory for the test command")
 	label := flags.String("label", "agent-cli test command", "diagnostic label for the command")
+	reportBudget := flags.Bool("report-budget", false, "print elapsed time and budget headroom after the command")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -47,6 +48,23 @@ func run(args []string, stdout, stderr io.Writer) error {
 		Stdout:  stdout,
 		Stderr:  stderr,
 	})
+	if *reportBudget {
+		classification := "success"
+		switch {
+		case result.TimedOut:
+			classification = "timeout (outer test-command budget exceeded)"
+		case err != nil:
+			classification = "test failure (non-timeout command exit)"
+		}
+		summary, summaryErr := testtimeout.CalculateBudgetSummary(result.Duration, *timeout)
+		if summaryErr != nil {
+			if err == nil {
+				return summaryErr
+			}
+		} else if reportErr := testtimeout.WriteBudgetReport(stdout, summary, classification); reportErr != nil && err == nil {
+			return fmt.Errorf("write budget report: %w", reportErr)
+		}
+	}
 	if err != nil {
 		return err
 	}

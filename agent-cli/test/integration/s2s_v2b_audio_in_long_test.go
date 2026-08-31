@@ -366,6 +366,7 @@ func assertS2SV2BOneTurn(capture gatewaytesting.SessionCapture) error {
 }
 
 func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
+	t.Parallel()
 	wavPath := locateS2SV2BLongWAV(t)
 	capture, frameCount := buildS2SV2BLongCapture(t, wavPath)
 	capturePath := writeS2SV2BCapture(t, capture)
@@ -430,6 +431,7 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 // rejection; substituting this fixture into the positive case would fail its
 // assertions.
 func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
+	t.Parallel()
 	wavPath := locateS2SV2BLongWAV(t)
 	positive, _ := buildS2SV2BLongCapture(t, wavPath)
 	negative := buildS2SV2BPerChunkCommitCapture(t, positive)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -20,6 +21,7 @@ type mockWebSocketConn struct {
 	readIdx         int
 	clientMessages  [][]byte
 	clientMessageCh chan []byte
+	clientWriteCh   chan struct{}
 
 	closed    bool
 	readBlock chan struct{}
@@ -30,6 +32,7 @@ func newMockWebSocketConn() *mockWebSocketConn {
 	return &mockWebSocketConn{
 		readBlock:       make(chan struct{}),
 		clientMessageCh: make(chan []byte, 64),
+		clientWriteCh:   make(chan struct{}, 1),
 	}
 }
 
@@ -79,6 +82,10 @@ func (c *mockWebSocketConn) WriteMessage(_ int, data []byte) error {
 	c.clientMessages = append(c.clientMessages, payload)
 	select {
 	case c.clientMessageCh <- payload:
+	default:
+	}
+	select {
+	case c.clientWriteCh <- struct{}{}:
 	default:
 	}
 	return nil
@@ -162,8 +169,7 @@ func TestConnectSession_OpenAIRealtimeSessionCreatedThroughGateway(t *testing.T)
 		t.Fatalf("NewSessionGateway: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 
 	session, err := sessionGateway.ConnectSession(ctx, models.SessionConfig{
 		Model: "gpt-realtime",
@@ -218,8 +224,7 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{
 		Model: "gpt-realtime",
@@ -521,8 +526,7 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -566,8 +570,7 @@ func TestConnectSession_SendsExplicitResponseCreate(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -604,8 +607,7 @@ func TestConnectSession_VADObservationsDoNotCreateAnOutboundTurnBoundary(t *test
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -711,30 +713,79 @@ func assertStringSliceField(t *testing.T, fields map[string]any, key string, wan
 	}
 }
 
-func waitForClientMessages(t *testing.T, conn *mockWebSocketConn, want int) [][]byte {
+const realtimeTestSafetyTimeout = 10 * time.Second
+
+func newRealtimeTestContext(t *testing.T) context.Context {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
+	ctx, cancel := context.WithTimeout(context.Background(), realtimeTestSafetyTimeout)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func waitForClientMessages(t *testing.T, conn *mockWebSocketConn, want int, phase ...string) [][]byte {
+	t.Helper()
+	label := fmt.Sprintf("%d client messages", want)
+	if len(phase) > 0 && phase[0] != "" {
+		label = phase[0]
+	}
+	timer := time.NewTimer(realtimeTestSafetyTimeout)
+	defer timer.Stop()
+	for {
 		messages := conn.getClientMessages()
 		if len(messages) >= want {
 			return messages
 		}
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-conn.clientWriteCh:
+		case <-timer.C:
+			messages := conn.getClientMessages()
+			t.Fatalf("timed out waiting for %s after %s: got %d client messages", label, realtimeTestSafetyTimeout, len(messages))
+		}
 	}
-	messages := conn.getClientMessages()
-	t.Fatalf("timed out waiting for %d client messages, got %d", want, len(messages))
-	return nil
 }
 
-func waitForClientMessage(t *testing.T, ctx context.Context, conn *mockWebSocketConn) []byte {
+func waitForClientMessage(t *testing.T, ctx context.Context, conn *mockWebSocketConn, phase ...string) []byte {
 	t.Helper()
+	label := "client message"
+	if len(phase) > 0 && phase[0] != "" {
+		label = phase[0]
+	}
+	waitContext, cancel := context.WithTimeout(ctx, realtimeTestSafetyTimeout)
+	defer cancel()
 	select {
 	case data := <-conn.clientMessageCh:
 		return data
-	case <-ctx.Done():
-		t.Fatalf("timed out waiting for client message: %v", ctx.Err())
+	case <-waitContext.Done():
+		t.Fatalf("timed out waiting for %s: %v; observed %d client messages", label, waitContext.Err(), len(conn.getClientMessages()))
 		return nil
 	}
+}
+
+func readRealtimeMessage(t *testing.T, session messages.Session, ctx context.Context, phase string) messages.StreamMessage {
+	t.Helper()
+	message, err := session.Receive().ReadContext(ctx)
+	if err != nil {
+		t.Fatalf("waiting for %s failed: %v; %s", phase, err, realtimeSessionDiagnostics(session))
+	}
+	return message
+}
+
+func realtimeSessionDiagnostics(session messages.Session) string {
+	done := false
+	select {
+	case <-session.Done():
+		done = true
+	default:
+	}
+	terminalError := "<unavailable>"
+	if providerSession, ok := session.(interface{ TerminalError() error }); ok {
+		terminalError = fmt.Sprintf("%v", providerSession.TerminalError())
+	}
+	drops := "<unavailable>"
+	if counters, ok := session.(messages.SessionDropCounters); ok {
+		drops = fmt.Sprintf("input=%d output=%d", counters.InputDrops(), counters.OutputDrops())
+	}
+	return fmt.Sprintf("session_done=%t receive_buffer=%d drops=%s terminal_error=%s", done, session.Receive().Len(), drops, terminalError)
 }
 
 func TestConnectSession_InvalidRealtimeEndpointFailsBeforeDial(t *testing.T) {

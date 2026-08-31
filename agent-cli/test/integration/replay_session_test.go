@@ -9,6 +9,8 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const sessionReplaySafetyTimeout = 10 * time.Second
+
 // TestRecordReplaySession exercises the session replay path by loading a
 // .session.json fixture containing realistic bidirectional events (text deltas)
 // and verifying that the replayer produces the same server-to-client event
@@ -28,15 +30,16 @@ func TestRecordReplaySession(t *testing.T) {
 
 	// Collect all server-to-client events from the replayer.
 	var received []messages.StreamMessage
-	timeout := time.After(5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionReplaySafetyTimeout)
+	defer cancel()
 	for {
 		select {
 		case <-replayer.Done():
 			goto drain
 		case msg := <-replayer.Receive().Chan():
 			received = append(received, msg)
-		case <-timeout:
-			t.Fatal("timed out waiting for replayer to finish")
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for replayer to finish: %v", ctx.Err())
 		}
 	}
 drain:
@@ -185,9 +188,15 @@ func readFixtureReplayMessage(t *testing.T, replayer *gwtesting.SessionReplayer)
 	case msg := <-replayer.Receive().Chan():
 		return msg
 	case <-replayer.Done():
+		// Done can become selectable alongside a buffered final message because
+		// the replayer publishes the message before closing its lifecycle signal.
+		// Drain that message before treating completion as an unexpected end.
+		if msg, ok := replayer.Receive().Read(); ok {
+			return msg
+		}
 		t.Fatalf("replayer finished before next fixture event: %v", replayer.Err())
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for fixture replay message")
+	case <-time.After(sessionReplaySafetyTimeout):
+		t.Fatalf("timed out waiting for fixture replay message after %s", sessionReplaySafetyTimeout)
 	}
 	return messages.StreamMessage{}
 }

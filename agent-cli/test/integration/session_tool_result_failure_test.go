@@ -248,8 +248,8 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		select {
 		case err := <-runErr:
 			assertUnresolvedFailure(t, err, sink, "")
-		case <-time.After(2 * time.Second):
-			t.Fatal("provider close did not terminate the unresolved session")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("provider close did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
 	})
 
@@ -283,8 +283,8 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("cancelled unresolved session error = %v, want context.Canceled preserved", err)
 			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("caller cancellation did not terminate the unresolved session")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("caller cancellation did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
 	})
 
@@ -310,8 +310,8 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 			if !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatalf("deadline unresolved session error = %v, want context.DeadlineExceeded preserved", err)
 			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("caller deadline did not terminate the unresolved session")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("caller deadline did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
 	})
 
@@ -319,7 +319,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		sink := &unresolvedToolDiagnosticSink{}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 		defer cancel()
 		runErr := make(chan error, 1)
 		go func() {
@@ -337,8 +337,8 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		select {
 		case err := <-runErr:
 			assertUnresolvedFailure(t, err, sink, "")
-		case <-time.After(2 * time.Second):
-			t.Fatal("explicit client close did not terminate the unresolved session")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("explicit client close did not terminate the unresolved session within %s", sessionLifecycleSafetyTimeout)
 		}
 	})
 }

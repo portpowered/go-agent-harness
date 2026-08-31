@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -41,15 +40,7 @@ func TestRealtimeSessionSendMessage_WireOrderAndFidelity(t *testing.T) {
 		t.Fatal("SendMessage returned false for a complete image turn")
 	}
 
-	var written [][]byte
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		written = conn.getClientMessages()
-		if len(written) == 2 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	written := waitForClientMessages(t, conn, 2, "complete image message wire events")
 	if len(written) != 2 {
 		t.Fatalf("wire events = %d, want conversation.item.create then response.create", len(written))
 	}
@@ -124,15 +115,7 @@ func TestRealtimeSessionSendMessageWithoutResponse_QueuesOnlyMessageItem(t *test
 		t.Fatal("SendMessageWithoutResponse returned false for a complete image turn")
 	}
 
-	var written [][]byte
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		written = conn.getClientMessages()
-		if len(written) == 1 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	written := waitForClientMessages(t, conn, 1, "image message wire item")
 	if len(written) != 1 {
 		t.Fatalf("wire events = %d, want only conversation.item.create", len(written))
 	}
@@ -536,17 +519,11 @@ func TestRealtimeToolImageItemID_IsDeterministicURLSafeAndBounded(t *testing.T) 
 
 func waitForWireMessages(t *testing.T, conn *mockWebSocketConn, want int) [][]byte {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		written := conn.getClientMessages()
-		if len(written) == want || time.Now().After(deadline) {
-			if len(written) != want {
-				t.Fatalf("wire events = %d, want %d", len(written), want)
-			}
-			return written
-		}
-		time.Sleep(5 * time.Millisecond)
+	written := waitForClientMessages(t, conn, want, "wire events")
+	if len(written) != want {
+		t.Fatalf("wire events = %d, want %d", len(written), want)
 	}
+	return written
 }
 
 func TestRealtimeSessionSendMessage_RejectsIncompleteMessages(t *testing.T) {

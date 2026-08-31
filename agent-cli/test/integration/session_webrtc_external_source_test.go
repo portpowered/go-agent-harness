@@ -241,17 +241,8 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 	}
 	rootCmd.SetArgs(argv)
 	runErr := rootCmd.ExecuteContext(ctx)
-	wait := time.NewTimer(20 * time.Second)
-	defer wait.Stop()
-	for !strings.Contains(stdout.String(), "[session closed:") {
-		select {
-		case <-ctx.Done():
-			return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
-		case <-wait.C:
-			return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
-		default:
-		}
-		time.Sleep(10 * time.Millisecond)
+	if !stdout.waitForContext(ctx, "[session closed:", 20*time.Second) {
+		return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
 	}
 	return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
 }

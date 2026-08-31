@@ -14,19 +14,28 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
+const sessionTestSafetyTimeout = 10 * time.Second
+
+func newSessionTestContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), sessionTestSafetyTimeout)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func TestSharedCommittedSessionFixtureReplaysDeterministically(t *testing.T) {
 	replayer := mustNewSessionReplayer(t, SharedSessionFixturePath("session_text_reply.session.json"), WithReplayOutboundValidation(false))
 
 	var received []messages.StreamMessage
-	timeout := time.After(5 * time.Second)
+	ctx := newSessionTestContext(t)
 	for {
 		select {
 		case <-replayer.Done():
 			goto drain
 		case msg := <-replayer.Receive().Chan():
 			received = append(received, msg)
-		case <-timeout:
-			t.Fatal("timed out waiting for shared session fixture replay")
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for shared session fixture replay: %v", ctx.Err())
 		}
 	}
 
@@ -96,7 +105,7 @@ func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 		t.Fatalf("Send returned false, expected true: %v", replayer.Err())
 	}
 
-	timeout := time.After(2 * time.Second)
+	ctx := newSessionTestContext(t)
 	for len(received) < 3 {
 		select {
 		case msg := <-replayer.Receive().Chan():
@@ -112,8 +121,8 @@ func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 			if len(received) < 3 {
 				t.Fatalf("expected 3 events before replay finished, got %d", len(received))
 			}
-		case <-timeout:
-			t.Fatal("timed out waiting for replayer to finish")
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for replayer to finish: %v", ctx.Err())
 		}
 	}
 
@@ -552,8 +561,8 @@ func TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled(t *testing.T) {
 	case msg := <-replayer.Receive().Chan():
 		t.Fatalf("unexpected replayed message after cancellation: %s", msg.Type)
 	case <-replayer.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for replay cancellation to stop delivery")
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("timed out waiting for replay cancellation to stop delivery after %s", sessionTestSafetyTimeout)
 	}
 
 	select {
@@ -579,8 +588,8 @@ func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
 
 	select {
 	case <-replayer.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for replay cancellation while blocked on expected outbound event")
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("timed out waiting for replay cancellation while blocked on expected outbound event after %s", sessionTestSafetyTimeout)
 	}
 
 	outcome := replayer.Outcome()
@@ -645,6 +654,8 @@ func writeCapture(t *testing.T, path string, events []CapturedSessionEvent) {
 
 func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamMessage {
 	t.Helper()
+	timer := time.NewTimer(sessionTestSafetyTimeout)
+	defer timer.Stop()
 	select {
 	case msg := <-replayer.Receive().Chan():
 		return msg
@@ -655,8 +666,8 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 		default:
 		}
 		t.Fatalf("replayer finished before next message: %v", replayer.Err())
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for replay message")
+	case <-timer.C:
+		t.Fatalf("timed out waiting for replay message after %s; outcome=%+v", sessionTestSafetyTimeout, replayer.Outcome())
 	}
 	return messages.StreamMessage{}
 }

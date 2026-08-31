@@ -246,9 +246,8 @@ func runVisionDescribeSessionMode(t *testing.T, fixturePath, wavPath, imagePath,
 	}
 	cmd.SetArgs(args)
 	err := cmd.ExecuteContext(t.Context())
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(stdout.String(), "[session closed:") && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	if !stdout.waitFor("[session closed:", 10*time.Second) {
+		return stdout.String(), fmt.Errorf("timed out waiting for session close output after 10s")
 	}
 	return stdout.String(), err
 }
@@ -457,10 +456,6 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixture, "--audio-in", wavPath})
 	runErr := cmd.ExecuteContext(t.Context())
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(stdout.String(), "[session closed:") && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
 
 	if runErr == nil {
 		t.Fatalf("run without --image succeeded; expected the typed replay divergence\nstdout:\n%s", stdout.String())

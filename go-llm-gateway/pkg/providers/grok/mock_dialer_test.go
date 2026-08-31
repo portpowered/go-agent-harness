@@ -19,6 +19,7 @@ type mockWebSocketConn struct {
 
 	// clientMessages captures messages written by the client via WriteMessage.
 	clientMessages [][]byte
+	clientWriteCh  chan struct{}
 
 	closed    bool
 	readBlock chan struct{} // closed to unblock a pending ReadMessage
@@ -31,7 +32,8 @@ type mockWebSocketConn struct {
 
 func newMockConn() *mockWebSocketConn {
 	return &mockWebSocketConn{
-		readBlock: make(chan struct{}),
+		readBlock:     make(chan struct{}),
+		clientWriteCh: make(chan struct{}, 1),
 	}
 }
 
@@ -84,14 +86,20 @@ func (c *mockWebSocketConn) ReadMessage() (int, []byte, error) {
 
 func (c *mockWebSocketConn) WriteMessage(messageType int, data []byte) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return errors.New("connection closed")
 	}
 	if c.writeErr != nil {
+		c.mu.Unlock()
 		return c.writeErr
 	}
 	c.clientMessages = append(c.clientMessages, data)
+	c.mu.Unlock()
+	select {
+	case c.clientWriteCh <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
