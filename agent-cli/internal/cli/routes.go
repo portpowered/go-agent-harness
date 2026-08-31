@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/spf13/cobra"
 )
@@ -9,6 +13,8 @@ import (
 // Router defines the routes and wiring for all agent CLI commands.
 type Router struct {
 	Flags *flags.GlobalFlags
+
+	pathResolver *pathResolver
 
 	deviceRegistry audio.DeviceRegistry
 
@@ -87,6 +93,7 @@ func NewRouter(
 	}
 	return &Router{
 		Flags:                     flags,
+		pathResolver:              newPathResolver(),
 		deviceRegistry:            deviceRegistry,
 		RootCommand:               rootCommand,
 		AskCommand:                askCommand,
@@ -111,6 +118,29 @@ func NewRouter(
 		ConfigAddLocalCommand:     configAddLocalCommand,
 		WebMCPCommand:             NewWebMCPCommand(flags),
 	}
+}
+
+// resolveConfigDir performs the CLI-owned config path preflight. It runs
+// before any command-specific config, model, session, logging, or WebMCP
+// storage can be selected, giving all consumers one effective directory.
+func (r *Router) resolveConfigDir() error {
+	if r == nil || r.Flags == nil {
+		return nil
+	}
+	value := r.Flags.ConfigDirPath
+	if value == "" {
+		value = filepath.Join("~", config.ConfigDirName)
+	}
+	resolver := r.pathResolver
+	if resolver == nil {
+		resolver = newPathResolver()
+	}
+	resolved, err := resolver.Resolve(value)
+	if err != nil {
+		return fmt.Errorf("resolve --config-dir: %w", err)
+	}
+	r.Flags.ConfigDirPath = resolved
+	return nil
 }
 
 // BuildRoot defines the overall routing structure and returns the root cobra command.
@@ -180,6 +210,9 @@ func (r *Router) BuildRoot() *cobra.Command {
 	cmd.PersistentFlags().CountVarP(&r.Flags.VerboseMode, "verbose", "v", "Enable verbose output (use -v for info, -vv for debug)")
 	cmd.PersistentFlags().StringVarP(&r.Flags.ConfigDirPath, "config-dir", "C", r.Flags.ConfigDirPath, "Directory for agent CLI config (default: ~/.agent-cli)")
 	cmd.PersistentFlags().BoolVar(&r.Flags.LogToStdout, "log-to-stdout", false, "Log to stdout/stderr instead of file (default: logs to file in config directory)")
+	cmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		return r.resolveConfigDir()
+	}
 
 	return cmd
 }
