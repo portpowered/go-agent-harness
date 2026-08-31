@@ -16,6 +16,25 @@ Use `agent session --record` to capture live Grok realtime or OpenAI Realtime se
 
 Replay mode does not require live provider credentials. It reads provider traffic from the capture file and installs a replay dialer instead of a live WebSocket dialer.
 
+## List Saved Sessions
+
+Session history is stored as metadata files under `~/.agent-cli/sessions/` (or
+the directory passed with `--config-dir`). List output is capped at the 100
+newest sessions by default:
+
+```bash
+agent session list
+agent session list --limit 20
+agent session list --since 2026-08-31T00:00:00Z --filter billing
+agent session list --limit 10 --since 2026-08-31T00:00:00Z --filter customer
+```
+
+`--limit` accepts 1 through 1000. `--since` uses an RFC3339 timestamp and
+includes files modified at or after that instant. `--filter` is a
+case-insensitive literal substring match on the session ID; the three options
+compose after newest-first ordering. Listing reads file metadata only and
+does not load conversation bodies.
+
 Replay accepts only the protected version-2 capture envelope. Every capture
 produced by the recorder includes an integrity object with `algorithm: "sha256"`,
 the fixed coverage contract

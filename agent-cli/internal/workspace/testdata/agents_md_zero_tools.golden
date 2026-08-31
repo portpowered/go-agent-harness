@@ -75,8 +75,10 @@ agent tool <tool-id> "key=value" ...
 
 # Session management
 agent session list
+agent session list --limit 20 --since 2026-08-31T00:00:00Z --filter billing
 agent session show <session-id>
 agent session delete <session-id>
+# session list defaults to the newest 100; --limit accepts 1-1000
 
 # Override config at runtime
 agent ask "..." --api-key <key> --model <model-id> --provider <provider>

@@ -995,16 +995,27 @@ func NewSessionListCommand(flags *flags.GlobalFlags) *SessionListCommand {
 
 // Generate returns the cobra command for session list.
 func (c *SessionListCommand) Generate() *cobra.Command {
-	return &cobra.Command{
+	limitValue := session.DefaultSessionListLimit
+	sinceValue := ""
+	filterValue := ""
+	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all sessions",
-		Long:  "List session IDs with last modified time, newest first.",
+		Short: "List saved sessions",
+		Long: fmt.Sprintf("List session IDs with last modified time, newest first. By default, the %d newest\n"+
+			"matching sessions are shown. Use --limit, --since, and --filter together to narrow the\n"+
+			"result set.", session.DefaultSessionListLimit),
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options, err := parseSessionListOptions(limitValue, sinceValue, filterValue)
+			if err != nil {
+				return err
+			}
 			storage, err := getSessionStorage(c.flags)
 			if err != nil {
 				return err
 			}
-			infos, err := storage.List()
+			infos, err := storage.ListWithOptions(options)
 			if err != nil {
 				return err
 			}
@@ -1020,6 +1031,33 @@ func (c *SessionListCommand) Generate() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().IntVar(&limitValue, "limit", limitValue, fmt.Sprintf("Maximum number of sessions to print (1-%d; default %d)", session.MaxSessionListLimit, session.DefaultSessionListLimit))
+	cmd.Flags().StringVar(&sinceValue, "since", sinceValue, "Include sessions modified at or after this RFC3339 timestamp")
+	cmd.Flags().StringVar(&filterValue, "filter", filterValue, "Case-insensitive literal substring to match in session IDs")
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		if strings.Contains(err.Error(), "--limit") {
+			return fmt.Errorf("--limit must be an integer between 1 and %d: %w", session.MaxSessionListLimit, err)
+		}
+		return err
+	})
+	return cmd
+}
+
+func parseSessionListOptions(limitValue int, sinceValue, filterValue string) (session.SessionListOptions, error) {
+	if limitValue < 1 || limitValue > session.MaxSessionListLimit {
+		return session.SessionListOptions{}, fmt.Errorf("--limit must be between 1 and %d: got %d", session.MaxSessionListLimit, limitValue)
+	}
+
+	var since *time.Time
+	if sinceValue != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, sinceValue)
+		if parseErr != nil {
+			return session.SessionListOptions{}, fmt.Errorf("--since must be an RFC3339 timestamp (for example 2026-08-31T00:00:00Z): %q", sinceValue)
+		}
+		since = &parsed
+	}
+
+	return session.SessionListOptions{Limit: limitValue, Since: since, Filter: filterValue}, nil
 }
 
 // SessionDeleteCommand wraps the session delete subcommand.
