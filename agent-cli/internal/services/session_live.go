@@ -238,6 +238,12 @@ type sessionLoopOptions struct {
 	// self-play coordinator uses this to bind an io.Pipe reader to the peer's
 	// session audio inbox without exposing the loop through SessionRunOptions.
 	loopReady chan<- *agentloop.AgentLoop
+
+	// quiesceUpstream stops an owner outside the session loop from producing new
+	// outbound events while the shared terminal boundary performs its bounded
+	// provider drain. Room replay uses this for its mixer; ordinary sessions
+	// leave it nil.
+	quiesceUpstream func() error
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -450,7 +456,11 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	}
 	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, deadline, loop, opts.observer, msg); err != nil {
 		if errors.Is(err, errSessionMaxDurationExpired) {
-			return state, true, terminate(err)
+			// The caller owns the clean terminal transition for a stop result.
+			// Returning the internal deadline sentinel here would both expose an
+			// implementation detail and make the caller skip its single shared
+			// termination boundary.
+			return state, true, nil
 		}
 		return state, false, terminate(err)
 	}
@@ -500,10 +510,10 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	}
 	if opts.AudioIn != nil {
 		if shouldStopAudioInputSessionLoop(msg, opts, state.closeSent, awaitingResponse) {
-			return state, true, terminate(nil)
+			return state, true, nil
 		}
 	} else if shouldStopSessionLoop(msg, opts, state.closeSent) {
-		return state, true, terminate(nil)
+		return state, true, nil
 	}
 	return state, false, nil
 }
@@ -681,6 +691,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
 	termination := sessionTerminationBoundary{
+		quiesceUpstream: opts.quiesceUpstream,
 		waitForStragglers: func(quiet time.Duration) error {
 			return waitForSessionLoopStragglers(out, loop, quiet, opts.observer)
 		},
@@ -803,6 +814,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		case <-observedInferencer.Done():
 			if connectErr := observedInferencer.connectFailure(); connectErr != nil {
 				return terminate(fmt.Errorf("session connect: %w", connectErr))
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if awaitingResponse {
+					return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctxErr))
+				}
+				return sessionRunTerminationError(ctx, terminate(nil))
 			}
 			return terminate(nil)
 		case err := <-runErrCh:

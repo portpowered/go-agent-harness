@@ -17,11 +17,13 @@ const sessionStragglerDrainQuietPeriod = 25 * time.Millisecond
 // boundary owns the ordering of terminal cleanup.
 //
 // Every terminal signal follows this order, even when the initiating path has
-// an error: wait for stragglers during the bounded quiet period, cancel and
-// stop owned resources, then flush messages already buffered after the stop.
-// Waiting first is essential because cancellation makes provider messages that
-// have not reached the consumer-facing delta buffer unrecoverable.
+// an error: quiesce external producers, wait for stragglers during the bounded
+// quiet period, cancel and stop owned resources, then flush messages already
+// buffered after the stop. Quiescing is separate from stopping the session so
+// room-owned mixer producers cannot create new outbound transport events while
+// the session's provider output is being drained.
 type sessionTerminationBoundary struct {
+	quiesceUpstream    func() error
 	waitForStragglers  func(time.Duration) error
 	stopOwnedResources func() error
 	flushBuffered      func() error
@@ -30,7 +32,10 @@ type sessionTerminationBoundary struct {
 // terminate applies the shared terminal-drain contract and joins cleanup
 // failures with the initiating error without masking either one.
 func (b sessionTerminationBoundary) terminate(primary error) error {
-	var waitErr, stopErr, flushErr error
+	var quiesceErr, waitErr, stopErr, flushErr error
+	if b.quiesceUpstream != nil {
+		quiesceErr = b.quiesceUpstream()
+	}
 	if b.waitForStragglers != nil {
 		waitErr = b.waitForStragglers(sessionStragglerDrainQuietPeriod)
 	}
@@ -40,5 +45,5 @@ func (b sessionTerminationBoundary) terminate(primary error) error {
 	if b.flushBuffered != nil {
 		flushErr = b.flushBuffered()
 	}
-	return errors.Join(primary, waitErr, stopErr, flushErr)
+	return errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr)
 }

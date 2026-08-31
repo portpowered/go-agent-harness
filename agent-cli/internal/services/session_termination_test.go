@@ -11,11 +11,16 @@ import (
 func TestSessionTerminationBoundaryRendersBothDrainPhasesAndPreservesErrors(t *testing.T) {
 	var rendered bytes.Buffer
 	primaryErr := errors.New("initiating terminal failure")
+	quiesceErr := errors.New("upstream quiesce failed")
 	waitErr := errors.New("straggler wait failed")
 	stopErr := errors.New("owned resource stop failed")
 	flushErr := errors.New("buffered flush failed")
 
 	boundary := sessionTerminationBoundary{
+		quiesceUpstream: func() error {
+			rendered.WriteString("upstream producers quiesced\n")
+			return quiesceErr
+		},
 		waitForStragglers: func(quiet time.Duration) error {
 			if quiet != sessionStragglerDrainQuietPeriod {
 				t.Fatalf("straggler quiet period = %s, want %s", quiet, sessionStragglerDrainQuietPeriod)
@@ -37,7 +42,7 @@ func TestSessionTerminationBoundaryRendersBothDrainPhasesAndPreservesErrors(t *t
 	if gotErr == nil {
 		t.Fatal("termination returned nil error")
 	}
-	for _, wantErr := range []error{primaryErr, waitErr, stopErr, flushErr} {
+	for _, wantErr := range []error{primaryErr, quiesceErr, waitErr, stopErr, flushErr} {
 		if !errors.Is(gotErr, wantErr) {
 			t.Fatalf("termination error = %v, want errors.Is(..., %v)", gotErr, wantErr)
 		}
@@ -49,9 +54,10 @@ func TestSessionTerminationBoundaryRendersBothDrainPhasesAndPreservesErrors(t *t
 			t.Fatalf("rendered termination output = %q, missing %q", output, want)
 		}
 	}
-	if strings.Index(output, "delayed accepted provider delta") > strings.Index(output, "owned resources stopped") ||
+	if strings.Index(output, "upstream producers quiesced") > strings.Index(output, "delayed accepted provider delta") ||
+		strings.Index(output, "delayed accepted provider delta") > strings.Index(output, "owned resources stopped") ||
 		strings.Index(output, "owned resources stopped") > strings.Index(output, "already-buffered provider delta") {
-		t.Fatalf("termination output order = %q, want wait, stop, flush", output)
+		t.Fatalf("termination output order = %q, want quiesce, wait, stop, flush", output)
 	}
 }
 

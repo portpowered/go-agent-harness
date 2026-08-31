@@ -380,7 +380,10 @@ func waitForSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLoop, quie
 	defer idle.Stop()
 	for {
 		select {
-		case msg := <-loop.Deltas().Chan():
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
 			if obs != nil {
 				obs.observe(msg)
 			}
@@ -405,6 +408,13 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
 			return true
 		}
+	}
+	// A terminal provider error is itself an authoritative terminal signal. It
+	// must not wait for a follow-up SESSION.CLOSE before entering the shared
+	// termination boundary; non-terminal provider diagnostics are excluded by
+	// isTerminalErrorMessage.
+	if isTerminalErrorMessage(msg) {
+		return true
 	}
 	if opts.CloseAfterOpen {
 		return closeSent && msg.Type == messages.StreamTypeSessionClose
