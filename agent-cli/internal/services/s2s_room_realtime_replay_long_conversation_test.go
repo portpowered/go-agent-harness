@@ -195,10 +195,12 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	}
 
 	terminalCount := 0
+	terminalParticipants := make(map[string]struct{}, len(manifest.Participants))
 	for terminalCount < len(manifest.Participants) {
 		select {
 		case terminal := <-participantTerminals:
 			terminalCount++
+			terminalParticipants[terminal.ParticipantID] = struct{}{}
 			if terminal.Reason != ParticipantTerminationEnded || terminal.Error != "" {
 				t.Fatalf("long-conversation terminal callback = %+v, want clean ended participant", terminal)
 			}
@@ -208,11 +210,15 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	}
 
 	failureCount := 0
+	boundDiagnostics := make(map[string]SessionDiagnosticRecord, len(manifest.Participants))
 	for {
 		select {
 		case diagnostic := <-diagnostics:
-			if diagnostic.record.Event == SessionDiagnosticEventFailure {
+			switch diagnostic.record.Event {
+			case SessionDiagnosticEventFailure:
 				failureCount++
+			case SessionDiagnosticEventRoomBound:
+				boundDiagnostics[diagnostic.participantID] = diagnostic.record
 			}
 		default:
 			if failureCount != 0 {
@@ -223,6 +229,21 @@ func TestRunRoomWithResult_LongConversationEndsBothParticipantsCleanly(t *testin
 	}
 
 diagnosticsDrained:
+	for _, participantID := range []string{alphaID, betaID} {
+		if _, ok := terminalParticipants[participantID]; !ok {
+			t.Fatalf("long-conversation terminal callback missing participant %q", participantID)
+		}
+		diagnostic, ok := boundDiagnostics[participantID]
+		if !ok {
+			t.Fatalf("long-conversation terminal diagnostic missing participant %q", participantID)
+		}
+		for field, want := range participantTerminalFields(outcome.result.Participants[participantID]) {
+			if got := diagnostic.Fields[field]; got != want {
+				t.Fatalf("long-conversation terminal diagnostic %q field %q = %q, want %q", participantID, field, got, want)
+			}
+		}
+	}
+
 	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
 	var evidenceManifest roomEvidenceManifest
 	if err := json.Unmarshal(manifestData, &evidenceManifest); err != nil {
