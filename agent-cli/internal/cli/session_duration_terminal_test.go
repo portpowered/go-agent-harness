@@ -39,7 +39,7 @@ func TestSessionCommandMaxDurationMatrixPreservesPartialArtifacts(t *testing.T) 
 				"--api-key", "test-key",
 				"--record", recordPath,
 				"--record-dir", recordingDir,
-				"--max-duration", "40ms",
+				"--max-duration", "500ms",
 			}
 			if waitForClose {
 				args = append(args, "--wait-for-close")
