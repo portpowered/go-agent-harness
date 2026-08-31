@@ -642,10 +642,8 @@ func TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence(t *testin
 	}
 	assertRoomSpeechOverlapAppend(t, harness.participant(aliceID), bobPCM)
 	assertRoomSpeechOverlapAppend(t, harness.participant(bobID), alicePCM)
-	awaitRoomBidirectionalID(t, vadStarted, aliceID)
-	awaitRoomBidirectionalID(t, vadStarted, bobID)
-	awaitRoomBidirectionalID(t, messageEnds, aliceID)
-	awaitRoomBidirectionalID(t, messageEnds, bobID)
+	awaitRoomBidirectionalIDs(t, vadStarted, aliceID, bobID)
+	awaitRoomBidirectionalIDs(t, messageEnds, aliceID, bobID)
 
 	// The next idle frame is a real post-interruption turn for both sessions.
 	aliceCadence.Advance()
@@ -807,18 +805,22 @@ func awaitRoomBidirectionalFanouts(t *testing.T, fanouts <-chan roomSpeechOverla
 	}
 }
 
-func awaitRoomBidirectionalID(t *testing.T, ids <-chan string, want string) {
+func awaitRoomBidirectionalIDs(t *testing.T, ids <-chan string, wants ...string) {
 	t.Helper()
+	pending := make(map[string]struct{}, len(wants))
+	for _, want := range wants {
+		pending[want] = struct{}{}
+	}
 	timer := time.NewTimer(roomRealtimeReplayTestTimeout)
 	defer timer.Stop()
-	for {
+	for len(pending) > 0 {
 		select {
 		case id := <-ids:
-			if id == want {
-				return
+			if _, ok := pending[id]; ok {
+				delete(pending, id)
 			}
 		case <-timer.C:
-			t.Fatalf("bidirectional participant %q event was not observed", want)
+			t.Fatalf("bidirectional participant events were not observed for %v", pending)
 		}
 	}
 }
