@@ -264,11 +264,6 @@ func (f queryParityFixture) runLiveQueryWithoutTerminal(t *testing.T, callID str
 	return f.runLiveQueryWithInputAndTerminal(t, callID, `{}`, "", false)
 }
 
-func (f queryParityFixture) runLiveQueryWithTerminal(t *testing.T, callID, output string, releaseTerminal bool) queryParityLiveResult {
-	t.Helper()
-	return f.runLiveQueryWithInputAndTerminal(t, callID, `{}`, output, releaseTerminal)
-}
-
 func (f queryParityFixture) runLiveQueryWithInput(t *testing.T, callID, input, output string) queryParityLiveResult {
 	t.Helper()
 	return f.runLiveQueryWithInputAndTerminal(t, callID, input, output, true)
@@ -357,11 +352,6 @@ func (f queryParityFixture) runDirectQueryWithInput(t *testing.T, callID, input,
 		t.Fatalf("direct query %q did not return: %v", callID, callContext.Err())
 		return directCommandResult{}
 	}
-}
-
-func (f queryParityFixture) assertInvocation(t *testing.T, invocation testkit.InvocationRecord) {
-	t.Helper()
-	f.assertInvocationInput(t, invocation, []byte(`{}`))
 }
 
 func (f queryParityFixture) assertInvocationInput(t *testing.T, invocation testkit.InvocationRecord, input []byte) {
