@@ -1,0 +1,27 @@
+{
+  "provider": {
+    "model": "room-bound-long-conversation-v1",
+    "name": "offline"
+  },
+  "records": [
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "session": {
+          "id": "agent-a-offline-session"
+        },
+        "type": "session.created"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 1,
+      "timestamp_ms": 0,
+      "type": "session.created"
+    }
+  ],
+  "session": {
+    "fixture_provenance": "synthetic",
+    "id": "agent-a-offline-session",
+    "started_at_utc": "2026-08-30T12:00:00Z"
+  },
+  "version": 1
+}
