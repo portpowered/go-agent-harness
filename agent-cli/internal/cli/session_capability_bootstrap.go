@@ -121,7 +121,18 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 						Reason:     "session_bootstrap",
 					})
 					if err != nil {
-						return sessionCapabilityError(err)
+						// A persisted record that no longer resolves is the
+						// ordinary drift case: the remembered tab was closed,
+						// reloaded, or is now one of several equally eligible
+						// pages. That must leave the browser connected but
+						// unselected -- the model then lists tabs, asks the
+						// customer, and selects an exact target, after which the
+						// page tools are published. Failing the whole capability
+						// here instead advertises no page tools, drops the
+						// connected-unselected grounding, and leaves the model
+						// free to tell the customer that browser access does not
+						// exist. Non-recoverable failures still fail closed.
+						return sessionRecoverRestoredSelection(ctx, browser, broker, err, mark)
 					}
 					return adoptSelection(ctx, selected, selection.ActivateTab)
 				}
@@ -135,6 +146,9 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 				})
 				if err == nil {
 					return adoptSelection(ctx, selected, selection.ActivateTab)
+				}
+				if sessionRecoverableRestoredSelectionError(err) {
+					return sessionRecoverRestoredSelection(ctx, browser, broker, err, mark)
 				}
 				if !sessionNoSelectionError(err) {
 					return sessionCapabilityError(err)
@@ -172,6 +186,43 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 		mark(webmcp.BrowserCapabilityConnectedUnselected)
 		return nil
 	}
+}
+
+// sessionRecoverRestoredSelection is the recovery used when a *persisted*
+// selection cannot be restored. It admits everything the shared recovery
+// admits, plus a retryable stale selection: a remembered tab that was closed,
+// reloaded, or replaced is ordinary drift, not an operator-named target that
+// must fail closed.
+func sessionRecoverRestoredSelection(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker, selectionErr error, mark func(webmcp.BrowserCapabilityState)) error {
+	if !sessionRecoverableRestoredSelectionError(selectionErr) {
+		return sessionCapabilityError(selectionErr)
+	}
+	if err := sessionVerifyEndpoint(ctx, browser, broker); err != nil {
+		return err
+	}
+	if mark != nil {
+		mark(webmcp.BrowserCapabilityConnectedUnselected)
+	}
+	return nil
+}
+
+// sessionRecoverableRestoredSelectionError reports whether a failed persisted
+// restore may leave the session connected but unselected. A stale record is
+// only recoverable while the failure is retryable; a hard identity or
+// lifecycle failure still fails closed.
+func sessionRecoverableRestoredSelectionError(err error) bool {
+	if sessionRecoverableSelectionError(err) {
+		return true
+	}
+	var discoveryErr *discovery.DiscoveryError
+	if errors.As(err, &discoveryErr) && discoveryErr != nil {
+		return discoveryErr.Code == discovery.CodeStaleSelection && discoveryErr.Retryable
+	}
+	var classified *webmcp.ClassifiedError
+	if errors.As(err, &classified) && classified != nil {
+		return classified.Code == webmcp.ErrorStaleSelection && classified.Retryable
+	}
+	return false
 }
 
 func sessionRecoverConnectedUnselected(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker, selectionErr error, mark func(webmcp.BrowserCapabilityState)) error {
