@@ -20,6 +20,22 @@ var ErrFilesystemAccessDenied = errors.New("filesystem access denied")
 // path belongs to a platform-protected system or credential location.
 var ErrProtectedFilesystemRead = errors.New("protected filesystem read")
 
+type filesystemAccessDeniedError struct {
+	message string
+}
+
+func (e *filesystemAccessDeniedError) Error() string {
+	return e.message
+}
+
+func (e *filesystemAccessDeniedError) Unwrap() error {
+	return ErrFilesystemAccessDenied
+}
+
+func newFilesystemAccessDenied(message string) error {
+	return &filesystemAccessDeniedError{message: message}
+}
+
 // FilesystemPolicy is the immutable set of roots available to filesystem
 // tools. The primary root is used to resolve relative tool paths; additional
 // roots authorize absolute paths beneath those roots.

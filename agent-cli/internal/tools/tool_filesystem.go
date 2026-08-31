@@ -567,6 +567,7 @@ type sandboxFs struct {
 	workspace            string
 	additionalWorkspaces []string
 	protectedReadRoots   []string
+	enforceCanonical     bool
 }
 
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
@@ -596,6 +597,7 @@ func newSandboxFs(policy *FilesystemPolicy) *sandboxFs {
 		workspace:            roots[0],
 		additionalWorkspaces: append([]string(nil), roots[1:]...),
 		protectedReadRoots:   policy.ProtectedReadRoots(),
+		enforceCanonical:     true,
 	}
 }
 
@@ -625,9 +627,13 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 		candidate = filepath.Join(roots[0], candidate)
 	}
 	candidate = filepath.Clean(candidate)
-	comparisonCandidate := candidate
-	if resolved, err := canonicalizeExistingPath(candidate); err == nil {
-		comparisonCandidate = resolved
+	comparisonCandidate, err := canonicalizeExistingPath(candidate)
+	if err != nil {
+		// A path that cannot be canonicalized is not safe to authorize. In
+		// particular, do not fall back to a lexical check when an existing
+		// symlink or ancestor cannot be resolved: the root operation would be
+		// making the authorization decision after the check.
+		return "", "", fmt.Errorf("%w: unable to resolve requested path", ErrFilesystemAccessDenied)
 	}
 	for _, rootPath := range roots {
 		relPath, err := filepath.Rel(rootPath, comparisonCandidate)
@@ -638,20 +644,42 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 			return rootPath, relPath, nil
 		}
 	}
-	// Keep a path that lexically sits beneath a root when its final or an
-	// intermediate symlink resolves outside it. The root operation then
-	// rejects that path with an access-denied error instead of treating the
-	// symlink itself as a safe replacement target.
+	// A legacy restricted tool may be given a root that has already been
+	// removed. Preserve its historical open-root diagnostic rather than
+	// misclassifying the missing root as an escaping symlink. Validated
+	// FilesystemPolicy roots always exist, so this fallback cannot widen a
+	// policy-backed customer surface.
 	for _, rootPath := range roots {
-		relPath, err := filepath.Rel(rootPath, candidate)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to calculate relative path: %w", err)
-		}
-		if filepath.IsLocal(relPath) {
-			return rootPath, relPath, nil
+		if _, statErr := os.Stat(rootPath); statErr != nil && os.IsNotExist(statErr) {
+			relPath, relErr := filepath.Rel(rootPath, candidate)
+			if relErr != nil {
+				return "", "", fmt.Errorf("failed to calculate relative path: %w", relErr)
+			}
+			if filepath.IsLocal(relPath) {
+				return rootPath, relPath, nil
+			}
 		}
 	}
-	return "", "", fmt.Errorf("path escapes workspace: %s", path)
+	for _, rootPath := range roots {
+		relPath, relErr := filepath.Rel(rootPath, candidate)
+		if relErr != nil {
+			return "", "", fmt.Errorf("failed to calculate relative path: %w", relErr)
+		}
+		if filepath.IsLocal(relPath) {
+			if !r.enforceCanonical {
+				// Legacy restricted constructors predate FilesystemPolicy and
+				// retain their os.Root-based symlink enforcement and diagnostics.
+				return rootPath, relPath, nil
+			}
+			// The lexical path is beneath a permitted root, but its canonical
+			// target is not. This is the symlink-specific refusal and is
+			// wrapped so callers can distinguish it without relying on text.
+			return "", "", newFilesystemAccessDenied(fmt.Sprintf("path escapes workspace: %s: %s", path, ErrFilesystemAccessDenied))
+		}
+	}
+	// Preserve the long-standing diagnostic for an ordinary absolute or
+	// traversal path that was never lexically beneath a configured root.
+	return "", "", newFilesystemAccessDenied(fmt.Sprintf("path escapes workspace: %s", path))
 }
 
 func (r *sandboxFs) resolveRead(path string) (string, string, error) {
@@ -697,11 +725,34 @@ func (r *sandboxFs) isProtectedRead(path string) bool {
 // correct when the platform exposes the same directory through a symlink
 // alias (for example /var versus /private/var on macOS).
 func canonicalizeExistingPath(path string) (string, error) {
+	// NUL is not a valid filesystem path component. Leave it for the actual
+	// os.Root operation to report so legacy tools retain their precise invalid
+	// path diagnostic; no valid symlink can be hidden behind a NUL component.
+	if strings.ContainsRune(path, '\x00') {
+		return filepath.Clean(path), nil
+	}
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", err
+	}
+	return canonicalizePathWithMissing(absolute, make(map[string]struct{}))
+}
+
+// canonicalizePathWithMissing resolves every existing path component,
+// including dangling symlinks, and then appends any missing descendants. A
+// plain EvalSymlinks call cannot resolve a dangling link, which would
+// otherwise make a link to a future outside target look like an ordinary new
+// in-root file.
+func canonicalizePathWithMissing(path string, seen map[string]struct{}) (string, error) {
 	current := filepath.Clean(path)
 	missing := make([]string, 0)
 	for {
-		resolved, err := filepath.EvalSymlinks(current)
+		info, err := os.Lstat(current)
 		if err == nil {
+			resolved, resolveErr := canonicalizeExistingNode(current, info, seen)
+			if resolveErr != nil {
+				return "", resolveErr
+			}
 			for index := len(missing) - 1; index >= 0; index-- {
 				resolved = filepath.Join(resolved, missing[index])
 			}
@@ -717,6 +768,30 @@ func canonicalizeExistingPath(path string) (string, error) {
 		missing = append(missing, filepath.Base(current))
 		current = parent
 	}
+}
+
+func canonicalizeExistingNode(path string, info os.FileInfo, seen map[string]struct{}) (string, error) {
+	if info.Mode()&os.ModeSymlink != 0 {
+		path = filepath.Clean(path)
+		if _, exists := seen[path]; exists {
+			return "", fmt.Errorf("resolve symlink %q: too many levels of symbolic links", path)
+		}
+		seen[path] = struct{}{}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		return canonicalizePathWithMissing(target, seen)
+	}
+
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(resolved)
 }
 
 func (r *sandboxFs) rootPaths() ([]string, error) {

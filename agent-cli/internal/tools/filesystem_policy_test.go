@@ -87,18 +87,14 @@ func TestFilesystemPolicy_ProtectsSystemReadsAndSymlinkAliases(t *testing.T) {
 func TestFilesystemPolicy_ProtectsCredentialReadsAndDoesNotOverrideOrdinaryReads(t *testing.T) {
 	primary := t.TempDir()
 	systemRoot := protectedSystemRoot(t)
-	policy, err := NewFilesystemPolicy(primary, systemRoot)
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		t.Skipf("user home is unavailable: %v", err)
+	}
+	credentialRoot := filepath.Join(home, ".ssh")
+	policy, err := NewFilesystemPolicy(primary, systemRoot, home)
 	if err != nil {
 		t.Fatalf("NewFilesystemPolicy: %v", err)
-	}
-
-	credentialRoot := existingCredentialRoot(policy)
-	if credentialRoot == "" {
-		t.Skip("no platform credential directory exists in this environment")
-	}
-	policy, err = NewFilesystemPolicy(primary, systemRoot, credentialRoot)
-	if err != nil {
-		t.Fatalf("NewFilesystemPolicy with credential root: %v", err)
 	}
 	readTool := NewReadFileToolWithPolicy(policy)
 	msgs, err := readTool.Execute(context.Background(), map[string]any{"path": credentialRoot})
@@ -334,6 +330,122 @@ func TestFilesystemPolicyAppliesToReadsListsAndAllMutationTools(t *testing.T) {
 	}
 }
 
+func TestFilesystemPolicyResolvesSymlinksBeforeEveryFilesystemOperation(t *testing.T) {
+	primary := t.TempDir()
+	outside := t.TempDir()
+	insideDir := filepath.Join(primary, "inside-dir")
+	insideFile := filepath.Join(primary, "inside.txt")
+	outsideFile := filepath.Join(outside, "outside.txt")
+	if err := os.Mkdir(insideDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(insideDir, "entry.txt"), []byte("inside entry"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(insideFile, []byte("inside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("OUTSIDE-SENTINEL"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	escapingFile := filepath.Join(primary, "escaping-file")
+	escapingDir := filepath.Join(primary, "escaping-dir")
+	danglingEscapingDir := filepath.Join(primary, "dangling-escaping-dir")
+	danglingOutsideDir := filepath.Join(outside, "future-outside-dir")
+	insideFileLink := filepath.Join(primary, "inside-file-link")
+	insideDirLink := filepath.Join(primary, "inside-dir-link")
+	for _, link := range []struct {
+		name   string
+		target string
+	}{
+		{name: escapingFile, target: outsideFile},
+		{name: escapingDir, target: outside},
+		{name: danglingEscapingDir, target: danglingOutsideDir},
+		{name: insideFileLink, target: insideFile},
+		{name: insideDirLink, target: insideDir},
+	} {
+		if err := os.Symlink(link.target, link.name); err != nil {
+			t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+		}
+	}
+
+	policy, err := NewFilesystemPolicy(primary)
+	if err != nil {
+		t.Fatalf("NewFilesystemPolicy: %v", err)
+	}
+	readTool := NewReadFileToolWithPolicy(policy)
+	listTool := NewListDirToolWithPolicy(policy)
+	writeTool := NewWriteFileToolWithPolicy(policy)
+	editTool := NewEditFileToolWithPolicy(policy)
+	appendTool := NewAppendFileToolWithPolicy(policy)
+	if err := policy.AuthorizeRead(escapingFile); !errors.Is(err, ErrFilesystemAccessDenied) {
+		t.Fatalf("escaping file authorization error = %v, want ErrFilesystemAccessDenied", err)
+	}
+	if err := policy.AuthorizeRead(filepath.Join(escapingDir, "new", "created.txt")); !errors.Is(err, ErrFilesystemAccessDenied) {
+		t.Fatalf("escaping descendant authorization error = %v, want ErrFilesystemAccessDenied", err)
+	}
+
+	denied := []struct {
+		name string
+		tool Tool
+		args map[string]any
+	}{
+		{name: "read escaping file link", tool: readTool, args: map[string]any{"path": escapingFile}},
+		{name: "list escaping directory link", tool: listTool, args: map[string]any{"path": escapingDir}},
+		{name: "write below escaping directory link", tool: writeTool, args: map[string]any{
+			"path": filepath.Join(escapingDir, "new", "created.txt"), "content": "must not write",
+		}},
+		{name: "write below dangling escaping directory link", tool: writeTool, args: map[string]any{
+			"path": filepath.Join(danglingEscapingDir, "created.txt"), "content": "must not write",
+		}},
+		{name: "edit escaping file link", tool: editTool, args: map[string]any{
+			"path": escapingFile, "old_text": "OUTSIDE-SENTINEL", "new_text": "changed",
+		}},
+		{name: "append escaping file link", tool: appendTool, args: map[string]any{
+			"path": escapingFile, "content": "must not append",
+		}},
+	}
+	for _, tc := range denied {
+		t.Run(tc.name, func(t *testing.T) {
+			msgs, err := tc.tool.Execute(context.Background(), tc.args)
+			got := requireToolTextContains(t, msgs, err, "path escapes workspace")
+			if strings.Contains(got, "OUTSIDE-SENTINEL") || strings.Contains(got, "must not") {
+				t.Fatalf("symlink denial leaked protected content or request data: %q", got)
+			}
+		})
+	}
+	if got, err := os.ReadFile(outsideFile); err != nil || string(got) != "OUTSIDE-SENTINEL" {
+		t.Fatalf("escaping symlink target = %q, %v; want unchanged", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "new", "created.txt")); !os.IsNotExist(err) {
+		t.Fatalf("escaping symlink write target = %v, want absent", err)
+	}
+	if _, err := os.Stat(filepath.Join(danglingOutsideDir, "created.txt")); !os.IsNotExist(err) {
+		t.Fatalf("dangling escaping symlink write target = %v, want absent", err)
+	}
+
+	if got := requireToolTextContains(t, mustToolExecute(t, readTool, map[string]any{"path": insideFileLink}), nil, "inside"); got == "" {
+		t.Fatal("in-root file symlink returned an empty result")
+	}
+	requireToolTextContains(t, mustToolExecute(t, listTool, map[string]any{"path": insideDirLink}), nil, "FILE: entry.txt\n")
+	requireToolTextContains(t, mustToolExecute(t, writeTool, map[string]any{
+		"path": filepath.Join(insideDirLink, "created.txt"), "content": "created through safe link",
+	}), nil, "File written")
+	requireToolTextContains(t, mustToolExecute(t, editTool, map[string]any{
+		"path": insideFileLink, "old_text": "inside", "new_text": "edited through safe link",
+	}), nil, "File edited")
+	requireToolTextContains(t, mustToolExecute(t, appendTool, map[string]any{
+		"path": insideFileLink, "content": " and appended",
+	}), nil, "Appended")
+	if got, err := os.ReadFile(insideFile); err != nil || string(got) != "edited through safe link and appended" {
+		t.Fatalf("in-root symlink file content = %q, %v", got, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(insideDir, "created.txt")); err != nil || string(got) != "created through safe link" {
+		t.Fatalf("in-root symlink directory content = %q, %v", got, err)
+	}
+}
+
 func mustToolExecute(t *testing.T, tool Tool, args map[string]any) []messages.Message {
 	t.Helper()
 	msgs, err := tool.Execute(context.Background(), args)
@@ -371,17 +483,4 @@ func protectedSystemRoot(t *testing.T) string {
 	t.Helper()
 	root, _ := protectedSystemFixture(t)
 	return root
-}
-
-func existingCredentialRoot(policy *FilesystemPolicy) string {
-	for _, root := range policy.ProtectedReadRoots() {
-		base := strings.ToLower(filepath.Base(root))
-		if base != ".ssh" && base != "credentials" && base != "keychains" && base != "gcloud" {
-			continue
-		}
-		if info, err := os.Stat(root); err == nil && info.IsDir() {
-			return root
-		}
-	}
-	return ""
 }
