@@ -46,6 +46,14 @@ var (
 	errAskLoopSummary   = errors.New("ask loop summary write failed")
 	errAskInput         = errors.New("ask input construction failed")
 	errAskFlagConflict  = errors.New("ask flag conflict")
+	// errAskLoopTotalFailure identifies a loop that ran to completion (no
+	// setup error) but never produced one successful iteration. Individual
+	// iteration failures stay isolated per-iteration inside RunIterativeLoop
+	// (the loop keeps trying fresh iterations, same as #321 keeps a room
+	// running when one participant fails) — this is a CLI-boundary check on
+	// top of that, so a run that accomplished nothing does not also print
+	// "Loop complete" and exit 0.
+	errAskLoopTotalFailure = errors.New("ask loop total failure")
 )
 
 type askCommandError struct {
@@ -71,6 +79,36 @@ func wrapAskError(kind error, prefix string, cause error) error {
 
 func tagAskError(kind error, cause error) error {
 	return newAskCommandError(kind, cause.Error(), cause)
+}
+
+// loopRanAndAllIterationsFailed reports whether every recorded iteration of a
+// completed loop run failed. An interrupted iteration (Ctrl+C) is not counted
+// as a failure here: it is a deliberate, already-announced stop rather than
+// the loop failing to do the requested work, and RunIterativeLoop reports it
+// separately via its own "[Interrupted...]" banner.
+func loopRanAndAllIterationsFailed(result agent.IterativeRunResult) bool {
+	if len(result.Iterations) == 0 {
+		return false
+	}
+	for _, iteration := range result.Iterations {
+		if iteration.Err == nil || errors.Is(iteration.Err, context.Canceled) {
+			return false
+		}
+	}
+	return true
+}
+
+// newAskLoopTotalFailureError names the problem for a loop that ran to
+// completion without one successful iteration: exit 0 must mean the
+// requested work actually happened, and a loop that only ever failed did not
+// do the work "Loop complete" would otherwise claim.
+func newAskLoopTotalFailureError(result agent.IterativeRunResult) error {
+	last := result.Iterations[len(result.Iterations)-1]
+	return newAskCommandError(
+		errAskLoopTotalFailure,
+		fmt.Sprintf("loop ran %d iteration(s) and every one failed; last error (iteration %d): %v", len(result.Iterations), last.Iteration, last.Err),
+		last.Err,
+	)
 }
 
 // NewAskCommand creates the AskCommand with the given dependencies.
@@ -139,6 +177,9 @@ func (c *AskCommand) Generate() *cobra.Command {
 				result, loopErr := c.executor.RunIterativeLoop(cmd.Context(), cfg, loopCfg, execInput, cmd.OutOrStdout())
 				if loopErr != nil {
 					return wrapAskError(errAskLoopExecution, "loop execution failed", loopErr)
+				}
+				if loopRanAndAllIterationsFailed(result) {
+					return newAskLoopTotalFailureError(result)
 				}
 				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n",
 					len(result.Iterations), result.Completed, result.TraceID); err != nil {

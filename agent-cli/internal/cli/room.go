@@ -294,6 +294,9 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	} else {
 		result, runErr = c.run(runContext, io.Discard, options)
 	}
+	if runErr == nil {
+		runErr = roomAllParticipantsFailedError(result)
+	}
 
 	var streamErr error
 	if eventServer != nil {
@@ -302,6 +305,32 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 
 	writeRoomResult(output, result)
 	return errors.Join(runErr, streamErr, output.err())
+}
+
+// roomAllParticipantsFailedError reports a non-nil error when a room run
+// reports success (runErr == nil) but every participant actually failed.
+// #321 fault isolation is untouched: it lives entirely inside services.RunRoom
+// and keeps one participant's failure from taking down a surviving peer. This
+// check runs only after that result comes back, purely to fix the exit code:
+// it fires exclusively when there is no surviving peer at all, so a genuine
+// partial failure (or full success) still exits 0 exactly as before.
+func roomAllParticipantsFailedError(result services.RoomResult) error {
+	if len(result.Participants) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(result.Participants))
+	for id, participant := range result.Participants {
+		if participant.TerminationReason != services.ParticipantTerminationError {
+			return nil
+		}
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	details := make([]string, 0, len(ids))
+	for _, id := range ids {
+		details = append(details, fmt.Sprintf("%s: %s", id, result.Participants[id].Error))
+	}
+	return fmt.Errorf("room run: all %d participant(s) failed (%s)", len(ids), strings.Join(details, "; "))
 }
 
 func resolveRoomReplayCommandOutputDir(requested string) string {

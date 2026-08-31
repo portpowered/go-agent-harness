@@ -120,7 +120,16 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	moduleDir := filepath.Clean(filepath.Join(filepath.Dir(testFile), "..", ".."))
 	// A bare session is now a live-device admission path. Keep this help smoke
 	// test on an explicit non-session-mode invocation so it never needs a host
-	// credential or audio device.
+	// credential or audio device. --browser-headless alone is never admitted
+	// (only --browser-tools is a standalone admission trigger), so it stays a
+	// safe, credential-free way to reach the help path.
+	//
+	// This used to be `--prompt=`: an explicit empty --prompt. That relied on
+	// the exit-code-must-mean-the-work-happened defect (session --prompt used
+	// to silently print help and exit 0 instead of doing the work); now that
+	// --prompt is correctly treated as an explicit session mode, `--prompt=`
+	// reaches real validation and fails with "requires --record or --replay"
+	// instead of printing help, so it no longer fits what this test checks.
 	binaryPath := filepath.Join(t.TempDir(), "agent")
 	build := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent")
 	build.Dir = moduleDir
@@ -128,7 +137,7 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build agent: %v\n%s", err, output)
 	}
-	for _, args := range [][]string{{"session", "--help"}, {"session", "--prompt="}} {
+	for _, args := range [][]string{{"session", "--help"}, {"session", "--browser-headless"}} {
 		cmd := exec.Command(binaryPath, args...)
 		cmd.Dir = moduleDir
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")

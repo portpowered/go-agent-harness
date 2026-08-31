@@ -519,3 +519,55 @@ func TestAskCommandS4PreservesExecutionIdentity(t *testing.T) {
 		t.Fatalf("error = %v, want CLI execution identity", err)
 	}
 }
+
+// TestAskCommandLoopTotalFailureExitsNonZeroWithoutSuccessBanner pins
+// Instance 2 of the exit-code-must-mean-the-work-happened defect family:
+// "--loop" used to print "Loop complete" and exit 0 even when every
+// iteration failed and nothing was accomplished. Per-iteration fault
+// isolation inside RunIterativeLoop is untouched (each iteration still runs
+// and its error is still recorded, same as before); only the CLI boundary
+// now refuses to report a run that never produced one successful iteration
+// as a success.
+func TestAskCommandLoopTotalFailureExitsNonZeroWithoutSuccessBanner(t *testing.T) {
+	sentinel := errors.New("inference unavailable")
+	inf := &askTestInferencer{err: sentinel}
+	stdout := &bytes.Buffer{}
+	err := runAskTestCommand(t, []string{"--loop", "--max-iterations", "2", "prompt"}, strings.NewReader(""), inf, stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatalf("loop with every iteration failing returned nil error; want a named non-zero failure instead of a silent success banner; stdout=%q", stdout.String())
+	}
+	if !errors.Is(err, errAskLoopTotalFailure) {
+		t.Fatalf("error = %v, want wrapped identity errAskLoopTotalFailure", err)
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("error = %v, want wrapped underlying inference error", err)
+	}
+	if !strings.Contains(err.Error(), "2 iteration") {
+		t.Fatalf("error = %q, want it to name the iteration count", err)
+	}
+	if strings.Contains(stdout.String(), "Loop complete") {
+		t.Fatalf("stdout = %q, must not print a success banner when every iteration failed", stdout.String())
+	}
+	inf.mu.Lock()
+	calls := inf.inferCalls
+	inf.mu.Unlock()
+	if calls != 2 {
+		t.Fatalf("inference calls = %d, want 2 (one per iteration, no early stop)", calls)
+	}
+}
+
+// TestAskCommandLoopAllIterationsSucceedStillPrintsLoopComplete asserts no
+// over-triggering from the total-failure fix: a loop that runs its full
+// iteration budget with every iteration succeeding (no stop word reached)
+// must still print the success banner and exit 0, exactly as before.
+func TestAskCommandLoopAllIterationsSucceedStillPrintsLoopComplete(t *testing.T) {
+	inf := &askTestInferencer{responses: []messages.InferenceResult{textInference("first"), textInference("second")}}
+	stdout := &bytes.Buffer{}
+	err := runAskTestCommand(t, []string{"--loop", "--max-iterations", "2", "prompt"}, strings.NewReader(""), inf, stdout, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("loop with every iteration succeeding returned an error: %v\nstdout=%q", err, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Loop complete: 2 iteration(s)") {
+		t.Fatalf("stdout = %q, want the success banner for a fully successful loop", stdout.String())
+	}
+}

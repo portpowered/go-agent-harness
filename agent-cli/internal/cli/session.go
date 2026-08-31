@@ -493,24 +493,60 @@ const sessionCommandLongHelp = "Run a bidirectional session inference capture or
 	"Input transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\n" +
 	"Session history management remains available through the show, list, and delete subcommands."
 
+// sessionModeFlagNames lists the non-browser flags whose presence names an
+// explicit session action. Pure browser flags are deliberately excluded: they
+// keep their own dedicated non-admission contract via hasSessionBrowserFlag
+// and browserToolsAdmission, tested by TestSessionBrowserNonAdmissionReturnsHelpWithoutSetup.
+var sessionModeFlagNames = []string{
+	"record",
+	"record-dir",
+	"replay",
+	"prompt",
+	"system-prompt",
+	"audio-in",
+	"audio-out",
+	"audio-in-turn",
+	"audio-in-turn-barge",
+	"audio-interrupt",
+	"audio-interrupt-on-tool",
+	"image",
+}
+
+// sessionHasExplicitMode reports whether the invocation names a concrete
+// session action: positional prompt words, an attached image, or one of
+// sessionModeFlagNames.
+//
+// This is the fix for "session --prompt exits 0 and prints a help dump
+// instead of doing the work": the gate below used to treat only a narrow
+// subset of these flags (record/replay/record-dir/audio-in-turn/
+// audio-interrupt) as "has session mode", so --prompt, --audio-in,
+// --system-prompt, --audio-out, positional args, and other entries in this
+// list fell through to cmd.Help() with a nil error — including
+// --audio-in pointing at a file that does not exist, since the file-open
+// validation that would have reported it never ran. Folding the complete
+// list in here routes those invocations to real validation instead (e.g.
+// "agent session requires --record or --replay", or the actual --audio-in
+// file-not-found error).
+func sessionHasExplicitMode(cmd *cobra.Command, args []string, imagePaths []string) bool {
+	if len(args) > 0 || len(imagePaths) > 0 {
+		return true
+	}
+	if cmd == nil {
+		return false
+	}
+	for _, name := range sessionModeFlagNames {
+		if cmd.Flags().Changed(name) {
+			return true
+		}
+	}
+	return false
+}
+
 func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode bool, imagePaths []string) bool {
 	if cmd == nil || hasSessionMode || len(args) > 0 || len(imagePaths) > 0 || hasSessionBrowserFlag(cmd) {
 		return false
 	}
-	for _, name := range []string{
-		"record",
-		"record-dir",
-		"replay",
-		"prompt",
-		"system-prompt",
-		"audio-in",
-		"audio-out",
-		"audio-in-turn",
-		"audio-in-turn-barge",
-		"audio-interrupt",
-		"audio-interrupt-on-tool",
-		"image",
-	} {
+	for _, name := range sessionModeFlagNames {
 		if cmd.Flags().Changed(name) {
 			return false
 		}
@@ -597,7 +633,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
-			hasSessionMode := c.askFlags.RecordCapturePath != "" || c.askFlags.ReplayCapturePath != "" || recordDirPath != "" || len(audioInTurns) > 0 || len(audioInterrupts) > 0
+			hasSessionMode := sessionHasExplicitMode(cmd, args, c.imagePaths)
 			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
 			if err != nil {
 				return err
