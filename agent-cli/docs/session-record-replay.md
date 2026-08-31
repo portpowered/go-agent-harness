@@ -16,6 +16,42 @@ Use `agent session --record` to capture live Grok realtime or OpenAI Realtime se
 
 Replay mode does not require live provider credentials. It reads provider traffic from the capture file and installs a replay dialer instead of a live WebSocket dialer.
 
+## List Saved Sessions
+
+Session history is stored as metadata files under `~/.agent-cli/sessions/` (or
+the directory passed with `--config-dir`). List output is capped at the 100
+newest sessions by default:
+
+```bash
+agent session list
+agent session list --limit 20
+agent session list --since 2026-08-31T00:00:00Z --filter billing
+agent session list --limit 10 --since 2026-08-31T00:00:00Z --filter customer
+```
+
+`--limit` accepts 1 through 1000. `--since` uses an RFC3339 timestamp and
+includes files modified at or after that instant. `--filter` is a
+case-insensitive literal substring match on the session ID; the three options
+compose after newest-first ordering. Listing reads file metadata only and
+does not load conversation bodies.
+
+New captures use the protected version-2 envelope. Every capture produced by
+the recorder includes an integrity object with `algorithm: "sha256"`, the fixed
+coverage contract
+`session_capture.v2:json(version,provider,session,records,ends_with_disconnect)`,
+and a lowercase SHA-256 digest over the replay-relevant envelope fields (the
+integrity object itself is excluded). Loading validates the envelope, event
+sequence, directions, payload types, payload JSON, and digest before creating
+a replay transport, session loop, or derived artifact sink. A changed v2
+capture, missing v2 integrity metadata, or malformed v2 structure fails closed.
+
+The shipped replay command also retains compatibility with older, unprotected
+version-1 captures so existing paid-session evidence remains replayable. It
+validates the legacy event structure before setup, prints one warning that
+integrity was unavailable and replay has reduced guarantees, and never rewrites
+the source capture. Legacy captures cannot provide corruption detection; to
+obtain the protected guarantee, record a new v2 capture from a trusted source.
+
 ## Configure Grok for Recording
 
 Set Grok as the session provider in `~/.agent-cli/config.yaml`:
@@ -122,6 +158,13 @@ directory. The final bundle contains the JSONL artifacts and `manifest.json`;
 the manifest records the terminal classification and hashes of the finalized
 artifacts. Temporary staging content is removed, so a Ctrl-C does not leave a
 partial bundle that looks complete.
+
+Before a session starts, `--record-dir` validates and exclusively claims the
+cleaned destination. A non-empty or invalid destination, including a symlink,
+fails before provider work; concurrent commands targeting one directory leave
+one claimant and report the path plus non-secret holder identity to the loser.
+The claim remains active through atomic bundle publication, and failed runs
+remove only their private staging and claim state.
 
 The clean-cancellation classification applies only to the CLI-owned SIGINT
 intent. Parent-context cancellation, an unexpected provider close, malformed
@@ -270,6 +313,18 @@ payloads report the zero-based byte offset instead of a JSON pointer. This
 keeps the same strict post-handshake replay contract useful for both prompt
 and spoken-turn diagnosis.
 
+If the capture was changed without recomputing its digest, replay fails before
+provider setup with an `integrity_checksum_mismatch` error that names the
+capture path, `algorithm=sha256`, and bounded stored-versus-computed digests.
+Legacy version-1 envelopes and event arrays are unprotected and are accepted
+only through the compatibility loader: they are structurally validated, marked
+unverified, and replay emits one warning that integrity was unavailable. They
+cannot be silently treated as verified. Malformed legacy captures remain
+rejected before replay. Regenerate a trusted capture with the current recorder
+(or migrate a reviewed fixture explicitly with the gateway package's
+`SealSessionCapture`) before relying on the protected guarantee. The shipped
+CLI has no integrity bypass.
+
 ## Sanitize Before Committing
 
 Before promoting a local recording into a test fixture:
@@ -296,7 +351,7 @@ Session captures use a versioned JSON envelope:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "openai",
     "model": "gpt-realtime"
@@ -306,7 +361,12 @@ Session captures use a versioned JSON envelope:
     "started_at_utc": "2026-04-11T00:00:00Z",
     "fixture_provenance": "synthetic"
   },
-  "records": []
+  "records": [],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "<64 lowercase hexadecimal characters>"
+  }
 }
 ```
 

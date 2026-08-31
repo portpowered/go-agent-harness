@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v6c-error-rate-limit"
@@ -39,5 +39,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "c5b03b10928807111e289a9fde4b37b6470622747d22e7c3385a2d539c7b70d7"
+  },
   "ends_with_disconnect": true
 }

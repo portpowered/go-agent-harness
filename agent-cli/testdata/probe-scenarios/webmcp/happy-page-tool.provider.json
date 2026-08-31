@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "fixture-provider",
     "model": "fixture-model"
@@ -40,5 +40,10 @@
         "type": "response.done"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "4a4f98618bc8bb74b1a6efa57aa7073dbbd43a4287b51aef2bcc4fc18bf11674"
+  }
 }

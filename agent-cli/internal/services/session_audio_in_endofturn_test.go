@@ -80,24 +80,22 @@ func TestSessionCommandAudioInputRecordsPostCommitResponse(t *testing.T) {
 		appendChunk(pcm[start:end])
 	}
 
-	records = append(records,
-		gwtesting.CapturedSessionEvent{
-			Sequence:    len(records) + 1,
-			Direction:   gwtesting.DirectionClientToServer,
-			TimestampMs: int64(len(records)),
-			Type:        "input_audio_buffer.commit",
-			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-			Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
-		},
-		gwtesting.CapturedSessionEvent{
-			Sequence:    len(records) + 1,
-			Direction:   gwtesting.DirectionClientToServer,
-			TimestampMs: int64(len(records)),
-			Type:        "response.create",
-			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-			Payload:     json.RawMessage(`{"type":"response.create"}`),
-		},
-	)
+	records = append(records, gwtesting.CapturedSessionEvent{
+		Sequence:    len(records) + 1,
+		Direction:   gwtesting.DirectionClientToServer,
+		TimestampMs: int64(len(records)),
+		Type:        "input_audio_buffer.commit",
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
+	})
+	records = append(records, gwtesting.CapturedSessionEvent{
+		Sequence:    len(records) + 1,
+		Direction:   gwtesting.DirectionClientToServer,
+		TimestampMs: int64(len(records)),
+		Type:        "response.create",
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(`{"type":"response.create"}`),
+	})
 
 	serverEvent := func(eventType string, payload string) gwtesting.CapturedSessionEvent {
 		return gwtesting.CapturedSessionEvent{
@@ -118,21 +116,19 @@ func TestSessionCommandAudioInputRecordsPostCommitResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal audio delta: %v", err)
 	}
-	records = append(records,
-		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_1"}}`),
-		serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Hello there."}`),
-		gwtesting.CapturedSessionEvent{
-			Sequence:    len(records) + 1,
-			Direction:   gwtesting.DirectionServerToClient,
-			TimestampMs: int64(len(records)),
-			Type:        "response.output_audio.delta",
-			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-			Payload:     audioDeltaPayload,
-		},
-		serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`),
-		serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_1","status":"completed"}}`),
-		serverEvent("session.closed", `{"type":"session.closed","session_id":"sess_audio_record_fixture","reason":"fixture_complete"}`),
-	)
+	records = append(records, serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_1"}}`))
+	records = append(records, serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Hello there."}`))
+	records = append(records, gwtesting.CapturedSessionEvent{
+		Sequence:    len(records) + 1,
+		Direction:   gwtesting.DirectionServerToClient,
+		TimestampMs: int64(len(records)),
+		Type:        "response.output_audio.delta",
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     audioDeltaPayload,
+	})
+	records = append(records, serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`))
+	records = append(records, serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_1","status":"completed"}}`))
+	records = append(records, serverEvent("session.closed", `{"type":"session.closed","session_id":"sess_audio_record_fixture","reason":"fixture_complete"}`))
 
 	baseCapture.Session.ID = "sess_audio_record_fixture"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic

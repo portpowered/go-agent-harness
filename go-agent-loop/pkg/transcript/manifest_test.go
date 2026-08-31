@@ -756,6 +756,30 @@ func TestRecordingBundleRejectsUnsafeCredentialInputs(t *testing.T) {
 	})
 }
 
+func TestRecordingBundleBeforeCommitGuardLeavesDestinationUntouched(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	guardErr := errors.New("recording owner changed")
+	config := testRecordingConfig(destination)
+	config.BeforeCommit = func() error { return guardErr }
+
+	err := WriteRecordingBundle(config)
+	if !errors.Is(err, guardErr) || !errors.Is(err, ErrRecordingDestination) {
+		t.Fatalf("WriteRecordingBundle = %v, want destination guard and cause", err)
+	}
+	if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("guarded destination = %v, want absent", statErr)
+	}
+	entries, readErr := os.ReadDir(filepath.Dir(destination))
+	if readErr != nil {
+		t.Fatalf("read destination parent: %v", readErr)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".recording.staging-") {
+			t.Fatalf("private staging directory remains after guard failure: %s", entry.Name())
+		}
+	}
+}
+
 func TestRecordingWriter(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "recording")
 	writer, err := NewRecordingWriter(testRecordingConfig(destination))

@@ -218,6 +218,14 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	opts.ClientOwnsAudioTurnBoundaries = true
 	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
@@ -260,6 +268,14 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	// This source owns the explicit end-of-turn marker below. Ask the provider
 	// runtime to disable server-side VAD before the session is connected so a
 	// finite stream cannot be auto-committed and then committed again at EOF.

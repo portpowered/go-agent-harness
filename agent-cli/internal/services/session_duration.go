@@ -84,6 +84,11 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
@@ -130,6 +135,11 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
+	claim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = claim.release() }()
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
@@ -192,6 +202,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	if plan.replayIntegrityWarning != "" {
+		if _, err := fmt.Fprintln(out, plan.replayIntegrityWarning); err != nil {
+			return err
+		}
+	}
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
 	if err != nil {
 		return err

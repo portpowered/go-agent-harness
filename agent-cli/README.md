@@ -91,9 +91,13 @@ agent session --record capture.json --provider grok --model <session-model> --ap
 agent session "hello" --record openai.session.json --provider openai --model gpt-realtime --api-key <openai-api-key>
 agent session --replay capture.json
 agent session show <session-id>
-agent session list
+agent session list                                      # newest 100 (default)
+agent session list --limit 20 --since 2026-08-31T00:00:00Z --filter billing
 agent session delete <session-id>
 ```
+
+`agent session list` accepts composable `--limit` (1–1000), `--since` (RFC3339
+file modification time), and case-insensitive literal `--filter` (session ID).
 
 Run `agent --help` or `agent <command> --help` for the full flag surface.
 

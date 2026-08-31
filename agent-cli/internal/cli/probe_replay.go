@@ -222,7 +222,11 @@ func injectReplayCorpusAudio(capture gatewaytesting.SessionCapture, corpusID str
 	if err := validateInjectedReplayAudio(injected, frames); err != nil {
 		return gatewaytesting.SessionCapture{}, err
 	}
-	return injected, nil
+	sealed, err := gatewaytesting.SealSessionCapture(injected)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("seal injected replay capture: %w", err)
+	}
+	return sealed, nil
 }
 
 func replayPCMFrames(samples []int16) [][]byte {

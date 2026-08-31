@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "synthetic",
     "model": "session-replay"
@@ -264,5 +264,10 @@
         }
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "6630f2d614281f80ad2d079af33cb452044c64d4012f05dbd3e9510928afc660"
+  }
 }

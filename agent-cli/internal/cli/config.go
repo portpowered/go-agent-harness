@@ -75,7 +75,6 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 		}
 		configDir = filepath.Join(home, config.ConfigDirName)
 	}
-	configPath := filepath.Join(configDir, config.ConfigFileName)
 
 	// Load existing config (or create default)
 	storage, err := config.NewDefaultConfigStorage(configDir)
@@ -85,6 +84,10 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	cfg, err := storage.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+	expectedRevision, err := storage.Revision()
+	if err != nil {
+		return fmt.Errorf("read config revision: %w", err)
 	}
 
 	// Probe the server URL to check reachability
@@ -97,18 +100,15 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	}
 	cfg.Model.Provider = "local"
 
-	// Write back to YAML
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
 	redactEnvironmentAPIKeys(cfg)
 	data, err := yamlv3.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("write config: %w", err)
+	if err := storage.Commit(expectedRevision, data); err != nil {
+		return fmt.Errorf("commit config: %w", err)
 	}
+	configPath := storage.Path()
 
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Local provider added to %s\n", configPath); err != nil {
 		return fmt.Errorf("write config summary: %w", err)

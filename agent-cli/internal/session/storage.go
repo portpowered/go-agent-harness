@@ -21,6 +21,15 @@ const (
 	traceSuffix    = ".json"
 )
 
+const (
+	// DefaultSessionListLimit is the default number of sessions returned by a
+	// bounded metadata query.
+	DefaultSessionListLimit = 100
+	// MaxSessionListLimit is the largest number of sessions returned by a
+	// bounded metadata query.
+	MaxSessionListLimit = 1000
+)
+
 // storedContentPart is the JSON-friendly shape for one content part (type discriminator + fields).
 // Used so we can unmarshal session JSON into concrete types; messages.ContentPart is an interface.
 type storedContentPart struct {
@@ -155,8 +164,34 @@ type SessionInfo struct {
 	ModTime time.Time
 }
 
+// SessionListOptions controls a metadata-only session query. A zero Limit
+// uses DefaultSessionListLimit. Since, when non-nil, includes sessions whose
+// file modification time is equal to or newer than the supplied instant.
+// Filter is a literal, case-insensitive substring matched against the ID.
+type SessionListOptions struct {
+	Limit  int
+	Since  *time.Time
+	Filter string
+}
+
 // List returns all sessions with mod time, sorted by mod time descending.
 func (s *Storage) List() ([]SessionInfo, error) {
+	return s.listSessionMetadata(SessionListOptions{}, false)
+}
+
+// ListWithOptions returns a bounded session metadata query, sorted newest
+// first. It never loads session message bodies.
+func (s *Storage) ListWithOptions(options SessionListOptions) ([]SessionInfo, error) {
+	if options.Limit == 0 {
+		options.Limit = DefaultSessionListLimit
+	}
+	if options.Limit < 1 || options.Limit > MaxSessionListLimit {
+		return nil, fmt.Errorf("session list limit must be between 1 and %d", MaxSessionListLimit)
+	}
+	return s.listSessionMetadata(options, true)
+}
+
+func (s *Storage) listSessionMetadata(options SessionListOptions, bounded bool) ([]SessionInfo, error) {
 	entries, err := os.ReadDir(s.sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -165,6 +200,7 @@ func (s *Storage) List() ([]SessionInfo, error) {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
 	var infos []SessionInfo
+	filter := strings.ToLower(options.Filter)
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -182,9 +218,24 @@ func (s *Storage) List() ([]SessionInfo, error) {
 		if err != nil {
 			continue
 		}
-		infos = append(infos, SessionInfo{ID: id, ModTime: info.ModTime()})
+		modTime := info.ModTime()
+		if options.Since != nil && modTime.Before(*options.Since) {
+			continue
+		}
+		if filter != "" && !strings.Contains(strings.ToLower(id), filter) {
+			continue
+		}
+		infos = append(infos, SessionInfo{ID: id, ModTime: modTime})
 	}
-	sort.Slice(infos, func(i, j int) bool { return infos[i].ModTime.After(infos[j].ModTime) })
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].ModTime.Equal(infos[j].ModTime) {
+			return infos[i].ID < infos[j].ID
+		}
+		return infos[i].ModTime.After(infos[j].ModTime)
+	})
+	if bounded && len(infos) > options.Limit {
+		infos = infos[:options.Limit]
+	}
 	return infos, nil
 }
 

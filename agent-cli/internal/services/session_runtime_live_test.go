@@ -141,8 +141,8 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 			if err := plan.run(context.Background(), &out); err != nil {
 				t.Fatalf("run browser recording plan: %v", err)
 			}
-			if recordingDialer.flushCalls != 1 || recordingDialer.path != recordPath {
-				t.Fatalf("%s recording flush = calls:%d path:%q, want one flush to %q", testCase.provider, recordingDialer.flushCalls, recordingDialer.path, recordPath)
+			if recordingDialer.flushCalls != 1 || filepath.Dir(recordingDialer.path) != filepath.Dir(recordPath) || !strings.HasPrefix(filepath.Base(recordingDialer.path), "."+filepath.Base(recordPath)+".tmp-") {
+				t.Fatalf("%s recording flush = calls:%d path:%q, want one private same-directory temporary artifact for %q", testCase.provider, recordingDialer.flushCalls, recordingDialer.path, recordPath)
 			}
 			capture, err := gwtesting.LoadSessionCapture(recordPath)
 			if err != nil {

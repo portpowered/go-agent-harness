@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-failure-disconnect"
@@ -67,5 +67,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "d90bdbba8d2fb8fb25ceaa3525704a08a99e2e7bd7120b67cb17db6f965dd8d6"
+  },
   "ends_with_disconnect": true
 }

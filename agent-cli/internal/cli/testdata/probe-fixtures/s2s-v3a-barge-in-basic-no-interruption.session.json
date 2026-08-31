@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-synthetic-v3a-no-interruption"
@@ -7,8 +7,7 @@
   "session": {
     "id": "sess_v3a_no_interruption",
     "started_at_utc": "2026-08-26T00:00:00Z",
-    "fixture_provenance": "synthetic",
-    "description": "Barge-in basic negative control: the assistant audio response streams to completion with no user audio arriving, so the session plays through without any RESPONSE.CANCEL on the client-to-provider path."
+    "fixture_provenance": "synthetic"
   },
   "records": [
     {
@@ -99,5 +98,10 @@
         "reason": "fixture_complete"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "81e8548c52182038f349f74724aa5bfc33e2b31ed1ee6192a5185bcebe6285c5"
+  }
 }

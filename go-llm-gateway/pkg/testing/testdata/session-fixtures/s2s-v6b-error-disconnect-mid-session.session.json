@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v6b-midstream-disconnect"
@@ -77,5 +77,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "9bdf3924534fb972ccf6163142410467ebf73a26b97def015118e65a502d4a34"
+  },
   "ends_with_disconnect": true
 }

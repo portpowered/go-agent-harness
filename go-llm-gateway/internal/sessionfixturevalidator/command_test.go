@@ -101,6 +101,18 @@ func validSyntheticCapture() gatewaytesting.SessionCapture {
 
 func writeCapture(t *testing.T, path string, capture gatewaytesting.SessionCapture) {
 	t.Helper()
+	// Shape-validation fixtures focus on payload semantics, so fill the
+	// envelope-only event fields that the replay loader requires before writing
+	// them as protected captures.
+	capture.Records = append([]gatewaytesting.CapturedSessionEvent(nil), capture.Records...)
+	for index := range capture.Records {
+		if capture.Records[index].Sequence <= 0 {
+			capture.Records[index].Sequence = index + 1
+		}
+		if capture.Records[index].Direction == "" {
+			capture.Records[index].Direction = gatewaytesting.DirectionServerToClient
+		}
+	}
 
 	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {

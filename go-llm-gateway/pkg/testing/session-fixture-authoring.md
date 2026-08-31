@@ -23,11 +23,23 @@ When a CLI fixture becomes broadly useful for replay or hygiene validation acros
 
 ## Required Metadata
 
-Every committed `.session.json` capture must use the versioned `SessionCapture` envelope and include `session.fixture_provenance`.
+Every committed `.session.json` capture must use the protected version-2
+`SessionCapture` envelope, include `session.fixture_provenance`, and carry the
+SHA-256 `integrity` object emitted by the current recorder.
+
+The digest covers the deterministic JSON serialization of `version`,
+`provider`, `session`, `records`, and `ends_with_disconnect`; the integrity
+object is excluded from its own coverage. The required coverage value is
+`session_capture.v2:json(version,provider,session,records,ends_with_disconnect)`.
+Replay validates the envelope and digest before opening a transport or any
+derived artifact sink. Version-1 or array captures are not integrity-verified;
+the shipped replay path structurally validates them, emits a reduced-guarantee
+warning, and preserves the source bytes for backward compatibility. New or
+regenerated committed fixtures must use version 2 and `SealSessionCapture`.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-realtime"
@@ -37,7 +49,12 @@ Every committed `.session.json` capture must use the versioned `SessionCapture` 
     "started_at_utc": "2026-04-11T00:00:00Z",
     "fixture_provenance": "synthetic"
   },
-  "records": []
+  "records": [],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "<64 lowercase hexadecimal characters>"
+  }
 }
 ```
 
@@ -109,10 +126,11 @@ Do not encode provider wire records as `payload_type: "stream_message"`. That ma
 Before committing a `.session.json` fixture:
 
 1. Confirm the file uses the `SessionCapture` envelope with `version`, `provider`, `session`, and `records`.
-2. Confirm `session.fixture_provenance` is present and set to `synthetic` or `provider_recorded`.
-3. Confirm synthetic fixtures contain no raw audio fields or credential-like keys anywhere under `records[*].payload`.
-4. Confirm provider-recorded fixtures have sanitized provider session IDs, request IDs, account values, user content, credentials, cookies, and raw audio.
-5. Confirm normalized gateway records use `payload_type: "stream_message"`.
-6. Confirm raw provider WebSocket records use `payload_type: "websocket_message"`.
-7. Confirm the fixture can be replayed without live provider credentials, network calls, microphones, or audio devices.
-8. Confirm replay divergence errors identify expected and actual event types without printing raw sensitive payloads.
+2. Confirm `integrity` is present, uses `sha256`, the required coverage contract, and a lowercase 64-character digest.
+3. Confirm `session.fixture_provenance` is present and set to `synthetic` or `provider_recorded`.
+4. Confirm synthetic fixtures contain no raw audio fields or credential-like keys anywhere under `records[*].payload`.
+5. Confirm provider-recorded fixtures have sanitized provider session IDs, request IDs, account values, user content, credentials, cookies, and raw audio.
+6. Confirm normalized gateway records use `payload_type: "stream_message"`.
+7. Confirm raw provider WebSocket records use `payload_type: "websocket_message"`.
+8. Confirm the fixture can be replayed without live provider credentials, network calls, microphones, or audio devices.
+9. Confirm integrity failures identify the capture path and bounded expected/actual digest or structural location without printing raw sensitive payloads.

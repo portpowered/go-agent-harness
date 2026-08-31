@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // v3bFixtureDir holds the recorded barge-in-during-tool-call session fixtures
@@ -178,9 +179,21 @@ func writeMutatedV3BFixture(t *testing.T, source, recordType string, mutate func
 	if !found {
 		t.Fatalf("source fixture has no %q record", recordType)
 	}
-	mutated, err := json.MarshalIndent(capture, "", "  ")
+	mutated, err := json.Marshal(capture)
 	if err != nil {
 		t.Fatalf("encode mutated fixture: %v", err)
+	}
+	var mutatedCapture gwtesting.SessionCapture
+	if err := json.Unmarshal(mutated, &mutatedCapture); err != nil {
+		t.Fatalf("decode mutated capture: %v", err)
+	}
+	sealed, err := gwtesting.SealSessionCapture(mutatedCapture)
+	if err != nil {
+		t.Fatalf("seal mutated capture: %v", err)
+	}
+	mutated, err = json.MarshalIndent(sealed, "", "  ")
+	if err != nil {
+		t.Fatalf("encode sealed mutated fixture: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "mutated.session.json")
 	if err := os.WriteFile(path, mutated, 0o644); err != nil {

@@ -425,7 +425,7 @@ func TestLoadReplaySessionConfigurationRejectsMissingOrMalformedHandshake(t *tes
 				Sequence: 3, Direction: gwtesting.DirectionClientToServer, Type: sessionUpdateEventType,
 				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 			}},
-			wantReason: "has no payload",
+			wantReason: "at /records/0/payload",
 		},
 		{
 			name: "malformed payload",

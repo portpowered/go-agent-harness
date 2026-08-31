@@ -39,10 +39,11 @@ type replaySessionConfiguration struct {
 // fail with a capture-specific setup error rather than opening a session and
 // later reporting a misleading outbound mismatch.
 func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, error) {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return replaySessionConfiguration{}, fmt.Errorf("load replay session capture %s: %w", path, err)
 	}
+	capture := loaded.Capture
 
 	for _, record := range capture.Records {
 		if record.Direction != gwtesting.DirectionClientToServer || record.Type != sessionUpdateEventType {
@@ -131,10 +132,11 @@ type replayCapturedPrompt struct {
 // to reach the strict replay dialer so changed, missing, or extra outbound
 // frames retain their existing mismatch errors.
 func loadReplaySessionPrompt(path string) (*replayCapturedPrompt, error) {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, fmt.Errorf("load replay session capture %s: %w", path, err)
 	}
+	capture := loaded.Capture
 
 	clientActions := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
 	for _, record := range capture.Records {
@@ -207,10 +209,11 @@ func loadReplaySessionPrompt(path string) (*replayCapturedPrompt, error) {
 // strict replay dialer for its own outbound validation instead of this
 // reconstruction.
 func loadReplaySessionAudioTurns(path string) ([]ScheduledAudioInput, error) {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, fmt.Errorf("load replay session capture %s: %w", path, err)
 	}
+	capture := loaded.Capture
 
 	clientActions := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
 	for _, record := range capture.Records {
@@ -547,10 +550,11 @@ func drainSessionReplayMessages(out io.Writer, replayer *gwtesting.SessionReplay
 }
 
 func grokReplayCaptureHasSessionClose(path string) bool {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return false
 	}
+	capture := loaded.Capture
 	for _, record := range capture.Records {
 		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
 			return true
@@ -560,10 +564,11 @@ func grokReplayCaptureHasSessionClose(path string) bool {
 }
 
 func usesWebSocketCapture(path string) bool {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return false
 	}
+	capture := loaded.Capture
 	for _, record := range capture.Records {
 		if record.PayloadType == gwtesting.SessionPayloadTypeWebSocketMessage {
 			return true
@@ -573,18 +578,20 @@ func usesWebSocketCapture(path string) bool {
 }
 
 func usesOpenAIWebSocketCapture(path string) bool {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return false
 	}
+	capture := loaded.Capture
 	return strings.EqualFold(capture.Provider.Name, sessionProviderOpenAI)
 }
 
 func captureHasEvent(path string, eventType string) bool {
-	capture, err := gwtesting.LoadSessionCapture(path)
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return false
 	}
+	capture := loaded.Capture
 	for _, record := range capture.Records {
 		if record.Type == eventType {
 			return true

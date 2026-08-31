@@ -118,7 +118,9 @@ type sessionRuntimePlan struct {
 	inferencer             messages.SessionInferencer
 	loop                   sessionLoopOptions
 	announce               string
+	replayIntegrityWarning string
 	flushCapture           func() error
+	flushCaptureTo         func(string) error
 	finalize               func(context.Context, io.Writer) error
 	replayCompletion       func(*sessionTerminalReporter)
 	diagnostics            SessionDiagnosticSink
@@ -136,6 +138,8 @@ type sessionRuntimePlan struct {
 	mediaSource            string
 	rtcDeviceRequest       RTCDeviceBindingRequest
 	capabilityCoordinator  *SessionCapabilityCoordinator
+	captureClaim           *sessionRecordingClaim
+	captureClaimWired      bool
 	interactivePolicy      *InteractiveToolPolicy
 }
 
@@ -171,6 +175,11 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		}
 		runErr = errors.Join(runErr, reporter.publish(out, runErr))
 	}()
+	if p.replayIntegrityWarning != "" {
+		if _, err := fmt.Fprintln(out, p.replayIntegrityWarning); err != nil {
+			return err
+		}
+	}
 
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
 	if err != nil {
@@ -230,10 +239,17 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 }
 
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+	recordingClaim, err := ensureSessionRecordingClaim(&opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	var capabilityCoordinator *SessionCapabilityCoordinator
 	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
+		if planErr != nil && recordingClaim != nil {
+			_ = recordingClaim.release()
+		}
 		if planErr != nil {
 			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
 		}
@@ -309,7 +325,43 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
 	plan.capabilityCoordinator = capabilityCoordinator
+	plan = wireSessionRecordingClaim(plan, recordingClaim)
 	return plan, nil
+}
+
+// wireSessionRecordingClaim redirects one recording plan's capture flush
+// through its destination claim. It is kept separate from planning because an
+// injected session can add its fixture recorder after the generic runtime plan
+// has been built.
+func wireSessionRecordingClaim(plan sessionRuntimePlan, claim *sessionRecordingClaim) sessionRuntimePlan {
+	if claim == nil {
+		return plan
+	}
+	plan.captureClaim = claim
+	if plan.captureClaimWired || plan.flushCapture == nil {
+		return plan
+	}
+	flushTo := plan.flushCaptureTo
+	published := false
+	plan.flushCapture = func() error {
+		if flushTo == nil {
+			return fmt.Errorf("recording plan does not support private capture publication")
+		}
+		err := claim.publish(flushTo)
+		if err == nil {
+			published = true
+		}
+		return err
+	}
+	originalFinalize := plan.finalize
+	plan.finalize = func(ctx context.Context, out io.Writer) error {
+		if !published || originalFinalize == nil {
+			return nil
+		}
+		return originalFinalize(ctx, out)
+	}
+	plan.captureClaimWired = true
+	return plan
 }
 
 func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
@@ -412,22 +464,39 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 		}, nil
 	}
 
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+	}
+	replayIntegrityWarning := loaded.IntegrityWarning(opts.ReplayPath)
+
 	if _, err := os.Stat(opts.ReplayPath); err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 
 	if usesWebSocketCapture(opts.ReplayPath) {
 		if usesOpenAIWebSocketCapture(opts.ReplayPath) {
-			return planOpenAIReplayRuntime(opts, factory)
+			plan, err := planOpenAIReplayRuntime(opts, factory)
+			if err != nil {
+				return sessionRuntimePlan{}, err
+			}
+			plan.replayIntegrityWarning = replayIntegrityWarning
+			return plan, nil
 		}
-		return planGrokReplayRuntime(opts, factory)
+		plan, err := planGrokReplayRuntime(opts, factory)
+		if err != nil {
+			return sessionRuntimePlan{}, err
+		}
+		plan.replayIntegrityWarning = replayIntegrityWarning
+		return plan, nil
 	}
 
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeReplayGeneric,
-		capturePath: opts.ReplayPath,
-		loopOut:     io.Discard,
-		inferencer:  factory.newReplayInferencer(opts.ReplayPath),
+		mode:                   sessionRuntimeModeReplayGeneric,
+		capturePath:            opts.ReplayPath,
+		replayIntegrityWarning: replayIntegrityWarning,
+		loopOut:                io.Discard,
+		inferencer:             factory.newReplayInferencer(opts.ReplayPath),
 		loop: sessionLoopOptions{
 			Prompt:      opts.Prompt,
 			MaxDuration: 200 * time.Millisecond,

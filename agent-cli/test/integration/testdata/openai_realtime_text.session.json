@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "openai",
     "model": "gpt-realtime"
@@ -109,5 +109,10 @@
         "type": "response.done"
       }
     }
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "3a442efd4679e1cc897f12a6329c800c8d9e92b1fe0792bcb8df49f9e13e2c83"
+  }
 }

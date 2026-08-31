@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -54,15 +55,25 @@ func TestRunSessionReplayProbeFullPassOverRecordedFixture(t *testing.T) {
 
 func TestRunSessionReplayProbeRejectsInvalidFixtureBeforeAnyObservation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "invalid.session.json")
-	invalid := `{
-	  "version": 1,
-	  "provider": {"name": "grok", "model": "grok-realtime"},
-	  "records": [
-	    {"sequence": 1, "direction": "server_to_client", "timestamp_ms": 0, "type": "response.audio.delta", "payload_type": "websocket_message",
-	     "payload": {"type": "response.audio.delta", "api_key": "sk-should-not-be-here"}}
-	  ]
-	}`
-	if err := os.WriteFile(path, []byte(invalid), 0o644); err != nil {
+	invalidCapture := SessionCapture{
+		Version:  SessionCaptureVersion,
+		Provider: SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Records: []CapturedSessionEvent{
+			{
+				Sequence:    1,
+				Direction:   DirectionServerToClient,
+				TimestampMs: 0,
+				Type:        "response.audio.delta",
+				PayloadType: SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"response.audio.delta","api_key":"sk-should-not-be-here"}`),
+			},
+		},
+	}
+	invalid, err := json.MarshalIndent(invalidCapture, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, invalid, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

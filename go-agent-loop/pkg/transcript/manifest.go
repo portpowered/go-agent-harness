@@ -347,6 +347,10 @@ type RecordingConfig struct {
 	// WriteFile is optional. It is called with the private staging path, so a
 	// failed write cannot expose a partial bundle at Destination.
 	WriteFile RecordingWriteFile
+	// BeforeCommit is optional. It runs after the private bundle has been
+	// staged and verified, immediately before publication at Destination. A
+	// failed guard leaves the destination untouched.
+	BeforeCommit func() error
 }
 
 // RecordingManifest is the deterministic, versioned JSON representation
@@ -510,6 +514,11 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	if err := scanForCredentials(staging, redactor.values); err != nil {
 		return recordingError(ErrRecordingUnsafeArtifact, "verify credential redaction", destination, err, redactor)
 	}
+	if normalized.beforeCommit != nil {
+		if err := normalized.beforeCommit(); err != nil {
+			return recordingError(ErrRecordingDestination, "verify destination claim", destination, err, redactor)
+		}
+	}
 	if err := commitRecording(staging, destination, existingEmpty); err != nil {
 		return recordingErrorForDestination(err, destination, redactor)
 	}
@@ -531,6 +540,7 @@ type normalizedRecording struct {
 	artifactPaths    []string
 	expectedPaths    []string
 	writeFile        RecordingWriteFile
+	beforeCommit     func() error
 	manifestVersion  int
 	browser          *normalizedBrowserArtifact
 	additional       []normalizedRecordingArtifact
@@ -653,6 +663,7 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		artifactPaths:    artifactPaths,
 		expectedPaths:    expectedPaths,
 		writeFile:        writeFile,
+		beforeCommit:     config.BeforeCommit,
 		manifestVersion:  manifestVersion,
 		browser:          browser,
 		additional:       additional,

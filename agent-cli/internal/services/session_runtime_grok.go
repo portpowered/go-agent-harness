@@ -49,6 +49,9 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		flushCapture: func() error {
 			return recordingDialer.FlushToFile(opts.RecordPath)
 		},
+		flushCaptureTo: func(path string) error {
+			return recordingDialer.FlushToFile(path)
+		},
 		finalize: func(_ context.Context, out io.Writer) error {
 			_, err := fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
 			return err

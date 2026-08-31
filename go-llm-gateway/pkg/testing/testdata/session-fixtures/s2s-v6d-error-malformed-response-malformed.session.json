@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "provider": {
     "name": "grok",
     "model": "grok-4-v6d-malformed-response"
@@ -57,5 +57,10 @@
       }
     }
   ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "cb3464eaa1870524fb34ca699f44f08adec947f62d989c418b975bc0e3439318"
+  },
   "ends_with_disconnect": true
 }

@@ -167,17 +167,32 @@ func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 		}),
 	}
 
-	fixture := map[string]any{
-		"version":  1,
-		"provider": map[string]any{"name": "grok", "model": "grok-synthetic"},
-		"session": map[string]any{
-			"id":                 "sess_metrics_reconcile",
-			"started_at_utc":     "2026-08-25T00:00:00Z",
-			"fixture_provenance": gwtesting.SessionFixtureProvenanceSynthetic,
-		},
-		"records": records,
+	recordData, err := json.Marshal(records)
+	if err != nil {
+		t.Fatalf("marshal metrics reconciliation records: %v", err)
 	}
-	data, err := json.MarshalIndent(fixture, "", "  ")
+	var typedRecords []gwtesting.CapturedSessionEvent
+	if err := json.Unmarshal(recordData, &typedRecords); err != nil {
+		t.Fatalf("decode metrics reconciliation records: %v", err)
+	}
+	capture := gwtesting.SessionCapture{
+		Version: gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{
+			Name:  "grok",
+			Model: "grok-synthetic",
+		},
+		Session: gwtesting.SessionMetadata{
+			ID:                "sess_metrics_reconcile",
+			StartedAtUTC:      "2026-08-25T00:00:00Z",
+			FixtureProvenance: gwtesting.SessionFixtureProvenanceSynthetic,
+		},
+		Records: typedRecords,
+	}
+	capture, err = gwtesting.SealSessionCapture(capture)
+	if err != nil {
+		t.Fatalf("seal metrics reconciliation fixture: %v", err)
+	}
+	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal metrics reconciliation fixture: %v", err)
 	}

@@ -160,6 +160,12 @@ func (r *SessionRecorder) Capture() SessionCapture {
 
 	capture := r.capture
 	capture.Records = events
+	// Capture is part of the public recording result, so expose the same
+	// protected envelope that FlushToFile writes. The recorder only emits JSON
+	// payloads; an unexpected serialization failure is surfaced by FlushToFile.
+	if sealed, err := SealSessionCapture(capture); err == nil {
+		capture = sealed
+	}
 	return capture
 }
 

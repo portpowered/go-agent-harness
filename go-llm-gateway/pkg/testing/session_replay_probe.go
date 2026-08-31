@@ -56,6 +56,9 @@ func RunSessionReplayProbe(ctx context.Context, fixturePath string) (SessionRepl
 // example by injecting real PCM into placeholder append records), and then
 // need the same deterministic replay observations.
 func RunSessionReplayProbeFromCapture(ctx context.Context, capture SessionCapture) (SessionReplayProbeReport, error) {
+	if err := validateSessionCaptureEnvelope("<in-memory>", capture); err != nil {
+		return SessionReplayProbeReport{}, fmt.Errorf("validate in-memory replay capture: %w", err)
+	}
 	return runSessionReplayProbe(ctx, "<in-memory>", capture)
 }
 
