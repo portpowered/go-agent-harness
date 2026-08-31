@@ -710,11 +710,6 @@ func (m *PCM16Mixer) run() {
 	}
 }
 
-func (m *PCM16Mixer) mixFrame() ([]byte, error) {
-	frame, _, err := m.mixFrameWithSources()
-	return frame, err
-}
-
 func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	frame := make([]byte, m.frameBytes)
 	m.mu.Lock()
