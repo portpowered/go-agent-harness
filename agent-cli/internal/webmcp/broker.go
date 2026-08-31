@@ -853,12 +853,14 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	if event.TargetID != "" && event.TargetID != selected.context.Key.TargetID {
 		return
 	}
-	if event.Sequence != 0 {
-		if event.Sequence <= selected.lastBrowserEventSequence {
-			return
-		}
-		selected.lastBrowserEventSequence = event.Sequence
+	if event.Sequence == 0 {
+		// Derive local order when an adapter omits transport sequence.
+		event.Sequence = selected.lastBrowserEventSequence + 1
 	}
+	if event.Sequence <= selected.lastBrowserEventSequence {
+		return
+	}
+	selected.lastBrowserEventSequence = event.Sequence
 	b.emitBrowserEventLocked(event)
 	// Direct cancellation has to observe the same target-local stream as the
 	// normal invocation coordinator. Register this before the ordinary
@@ -896,17 +898,14 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	}
 }
 
-// observeBrowserInvocationLocked turns a protocol invocation initiated by a
-// different command-scoped broker into a safe lifecycle observation. Direct
-// CLI commands intentionally create a fresh broker for every process, while
-// Chrome broadcasts target events to every attached DevTools session. The
-// invoking broker already owns its ID and is therefore ignored here; a watch
-// broker records only the opaque invocation ID and the catalog-bound ref.
+// observeBrowserInvocationLocked consumes owned events as a provenance barrier
+// and records protocol invocations initiated by other command-scoped brokers.
 func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
 	if selected == nil || event.InvocationID == "" {
 		return
 	}
-	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+	if invocation, owned := b.browserInvocations[event.InvocationID]; owned {
+		b.observeOwnedBrowserInvocationLocked(selected, event, invocation)
 		return
 	}
 	if _, observed := selected.observedInvocations[event.InvocationID]; observed {

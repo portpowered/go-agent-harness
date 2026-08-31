@@ -45,6 +45,30 @@ func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
 	}
 }
 
+func TestDirectInvocationResultErrorPropagatesFreshnessRetryability(t *testing.T) {
+	err := directInvocationResultError(webmcp.InvokeResult{
+		InvocationID:        "broker-invocation",
+		BrowserInvocationID: "browser-invocation",
+		State:               webmcp.InvocationError,
+		ErrorCode:           string(webmcp.ErrorInvocationFailed),
+		ErrorDetails: map[string]any{
+			"phase":          "result_freshness",
+			"safe_retryable": true,
+			"recovery":       "refresh and retry",
+		},
+	}, "webmcp.tool-ref.v1:test")
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		t.Fatalf("freshness error = %v, want classified error", err)
+	}
+	if !classified.Retryable || classified.Details["phase"] != "result_freshness" || classified.Details["invocation_id"] != "browser-invocation" {
+		t.Fatalf("freshness classified error = %#v, want retryable browser-correlated failure", classified)
+	}
+	if _, leaked := classified.Details["safe_retryable"]; leaked {
+		t.Fatalf("internal retry marker leaked into direct error details: %#v", classified.Details)
+	}
+}
+
 func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
 	command := NewWebMCPCommand(flags.NewGlobalFlags()).Generate()
 	watch, _, err := command.Find([]string{"watch"})
