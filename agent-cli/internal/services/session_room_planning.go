@@ -87,17 +87,34 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			WebSocketDialer: opts.WebSocketDialer,
 			WaitForClose:    true,
 		}
+		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
+		plans = append(plans, plan)
+		markStartupFailure := func(err error) {
+			if err == nil {
+				return
+			}
+			plan.startupErr = roomParticipantFailure(participant.ID, err, []string{value})
+		}
 		var staticCapabilities RoomParticipantToolCapabilities
 		if len(participant.Tools) > 0 {
 			if toolFactory == nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantToolsUnavailable, []string{value})
+				markStartupFailure(ErrRoomParticipantToolsUnavailable)
+				continue
 			}
 			capabilities, capabilityErr := toolFactory(participant)
 			if capabilityErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure participant tools: %w", capabilityErr), []string{value})
+				markStartupFailure(fmt.Errorf("configure participant tools: %w", capabilityErr))
+				continue
 			}
 			if capabilityErr := validateRoomParticipantToolCapabilities(participant, capabilities); capabilityErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+				if errors.Is(capabilityErr, ErrRoomParticipantToolMismatch) {
+					// A mismatched advertised tool surface violates the room's
+					// manifest/session contract. It is not a runtime failure that
+					// can be isolated after admission.
+					return plans, secrets, fmt.Errorf("room participant %q capability contract: %w", participant.ID, capabilityErr)
+				}
+				markStartupFailure(capabilityErr)
+				continue
 			}
 			staticCapabilities = capabilities
 			sessionOptions.ToolExecutor = staticCapabilities.Executor
@@ -106,27 +123,35 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		if opts.WebSocketDialerFactory != nil {
 			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
 		}
-		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
 		if participant.BrowserTools != nil {
 			if opts.BrowserCapabilitiesFactory == nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantBrowserToolsUnavailable, []string{value})
+				markStartupFailure(ErrRoomParticipantBrowserToolsUnavailable)
+				continue
 			}
 			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
 			if capabilityErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure browser tools: %w", capabilityErr), []string{value})
+				markStartupFailure(fmt.Errorf("configure browser tools: %w", capabilityErr))
+				continue
 			}
 			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
-			plans = append(plans, plan)
 			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+				if errors.Is(capabilityErr, ErrRoomParticipantBrowserToolMismatch) {
+					// Invalid browser definitions are a composition contract
+					// failure. Do not admit a room whose advertised capability
+					// surface cannot be routed safely.
+					return plans, secrets, fmt.Errorf("room participant %q browser capability contract: %w", participant.ID, capabilityErr)
+				}
+				markStartupFailure(capabilityErr)
+				continue
 			}
 			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
 			if capabilityErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+				return plans, secrets, fmt.Errorf("room participant %q browser composition contract: %w", participant.ID, capabilityErr)
 			}
 			if composed.Initialize != nil {
 				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
-					return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("initialize browser tools: %w", initializeErr), []string{value})
+					markStartupFailure(fmt.Errorf("initialize browser tools: %w", initializeErr))
+					continue
 				}
 			}
 			if composed.RefreshToolDefinitions != nil {
@@ -134,7 +159,8 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				if refreshErr == nil {
 					composed.Definitions = cloneRoomToolDefinitions(refreshed)
 				} else if ctx.Err() != nil {
-					return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("refresh browser tools: %w", refreshErr), []string{value})
+					markStartupFailure(fmt.Errorf("refresh browser tools: %w", refreshErr))
+					continue
 				}
 			}
 			sessionOptions.ToolExecutor = composed.Executor
@@ -148,23 +174,23 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
 			if nilInterface(inferencer) {
-				return plans, secrets, roomParticipantFailure(participant.ID, errors.New("injected session inferencer is nil"), []string{value})
+				markStartupFailure(errors.New("injected session inferencer is nil"))
+				continue
 			}
 			plan.inferencer = inferencer
 		} else {
 			inferencer, factoryErr := factory(participant, sessionOptions)
 			if factoryErr != nil {
-				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("construct live session: %w", factoryErr), []string{value})
+				markStartupFailure(fmt.Errorf("construct live session: %w", factoryErr))
+				continue
 			}
 			if nilInterface(inferencer) {
-				return plans, secrets, roomParticipantFailure(participant.ID, errors.New("session factory returned a nil inferencer"), []string{value})
+				markStartupFailure(errors.New("session factory returned a nil inferencer"))
+				continue
 			}
 			plan.inferencer = inferencer
 		}
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
-		if participant.BrowserTools == nil {
-			plans = append(plans, plan)
-		}
 	}
 	return plans, secrets, nil
 }
@@ -250,13 +276,12 @@ func awaitRoomParticipantConnections(
 	}
 	byTracker := make(map[*roomConnectTrackingInferencer]*roomParticipantPlan, len(plans))
 	for _, plan := range plans {
-		if plan != nil && plan.tracker != nil {
+		if plan != nil && plan.startupErr == nil && plan.tracker != nil {
 			byTracker[plan.tracker] = plan
 		}
 	}
 	remaining := len(byTracker)
 	seen := make(map[*roomConnectTrackingInferencer]struct{}, remaining)
-	var firstErr error
 	ctxDone := ctx.Done()
 	timerDone := timerChannel(timer)
 	admissionTimer := time.NewTimer(roomAdmissionTimeout)
@@ -278,39 +303,33 @@ func awaitRoomParticipantConnections(
 			if plan.participant != nil && plan.participant.lifecycle != nil {
 				plan.participant.lifecycle.markConnected(outcome.err)
 			}
-			if outcome.err != nil && firstErr == nil {
-				firstErr = roomParticipantFailure(plan.manifest.ID, fmt.Errorf("connect live session: %w", outcome.err), append(secretsForPlan(plan), secrets...))
+			if outcome.err != nil {
+				// A provider connection belongs to this participant. Retire only
+				// its runtime and let any sibling that completed admission start.
+				coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, fmt.Errorf("connect live session: %w", outcome.err), append(secretsForPlan(plan), secrets...)))
 			}
 		case <-ctxDone:
 			// A cancellation must still drain all already-admitted connection
 			// attempts. Well-behaved inferencers observe the cancelled room
 			// context and publish their explicit context-cancelled outcome.
-			if firstErr != nil {
-				coordinator.fail(firstErr)
-			} else {
-				coordinator.stop(RoomTerminationStopped, nil)
-			}
+			coordinator.stop(RoomTerminationStopped, nil)
 			ctxDone = nil
 		case <-timerDone:
-			if firstErr != nil {
-				coordinator.fail(firstErr)
-			} else {
-				coordinator.stop(RoomTerminationMaxDurationReached, nil)
-			}
+			coordinator.stop(RoomTerminationMaxDurationReached, nil)
 			timerDone = nil
 		case <-admissionDone:
-			if firstErr != nil {
-				coordinator.fail(firstErr)
-			} else {
-				outstanding := make([]string, 0, remaining)
-				for tracker, plan := range byTracker {
-					if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
-						continue
-					}
-					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
+			outstanding := make([]string, 0, remaining)
+			for tracker, plan := range byTracker {
+				if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
+					continue
 				}
-				coordinator.fail(newRoomLifecycleWorkError(outstanding...))
+				outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
 			}
+			// An admission timeout means the room-owned startup barrier itself
+			// could not establish a safe participant set. Preserve that
+			// room-level lifecycle diagnostic; a non-cooperative connection may
+			// not have a bounded participant result to collect.
+			coordinator.fail(newRoomLifecycleWorkError(outstanding...))
 			admissionDone = nil
 			cleanup.start()
 		case <-roomDone:
@@ -338,9 +357,6 @@ func awaitRoomParticipantConnections(
 		default:
 		}
 	}
-	if firstErr != nil {
-		return firstErr
-	}
 	if coordinator.isStopping() {
 		return nil
 	}
@@ -353,12 +369,16 @@ func awaitRoomParticipantConnections(
 			if plan == nil || plan.participant == nil {
 				continue
 			}
+			if !coordinator.isActive(plan.manifest.ID) {
+				continue
+			}
 			if roomParticipantIsHuman(plan) {
 				if plan.participant.lifecycle.deviceHasReady() {
 					continue
 				}
 				if plan.participant.lifecycle.runHasFinished() || coordinator.isStopping() {
-					return roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), append(secretsForPlan(plan), secrets...))
+					coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), append(secretsForPlan(plan), secrets...)))
+					continue
 				}
 				allOpened = false
 				continue
@@ -368,10 +388,14 @@ func awaitRoomParticipantConnections(
 				continue
 			}
 			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
+				failure := error(nil)
 				if _, terminalErr, terminalObserved := plan.participant.lifecycle.terminal(); terminalObserved && terminalErr != nil {
-					return roomParticipantFailure(plan.manifest.ID, terminalErr, append(secretsForPlan(plan), secrets...))
+					failure = terminalErr
+				} else {
+					failure = errors.New("session ended before SESSION.OPEN")
 				}
-				return roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), append(secretsForPlan(plan), secrets...))
+				coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, failure, append(secretsForPlan(plan), secrets...)))
+				continue
 			}
 			allOpened = false
 		}
@@ -396,18 +420,26 @@ func awaitRoomParticipantConnections(
 				if plan == nil || plan.participant == nil {
 					continue
 				}
+				if !coordinator.isActive(plan.manifest.ID) {
+					continue
+				}
 				if roomParticipantIsHuman(plan) {
 					if !plan.participant.lifecycle.deviceHasReady() {
-						outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "devices"))
+						coordinator.failParticipant(plan.manifest.ID, roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), append(secretsForPlan(plan), secrets...)))
 					}
 					continue
 				}
 				_, opened, _, _, _, _, _ := plan.participant.lifecycle.snapshot()
 				if !opened {
-					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "session.open"))
+					outstanding = append(outstanding, plan.manifest.ID)
 				}
 			}
-			return newRoomLifecycleWorkError(outstanding...)
+			for _, participantID := range outstanding {
+				coordinator.failParticipant(participantID, roomParticipantFailure(participantID, errors.New("session did not become ready before admission deadline"), secrets))
+			}
+			if coordinator.isStopping() {
+				return nil
+			}
 		case <-coordinator.progress:
 		}
 	}

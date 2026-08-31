@@ -361,6 +361,62 @@ func TestRunRoom_HumanDeviceReadFailureFailsOnlyParticipant(t *testing.T) {
 	}
 }
 
+func TestRunRoom_HumanDeviceStartupFailureFailsOnlyParticipant(t *testing.T) {
+	registry := newRoomHumanTestRegistry(t)
+	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
+	opts := newRoomHumanRunOptions(registry, inferencer)
+	// The input opens successfully, but the selected output device is missing.
+	// This exercises participant setup failure before the provider connection
+	// barrier and proves that the later provider participant still starts.
+	opts.Manifest.Participants[0].OutputDevice = "missing-output-device"
+
+	terminated := make(chan RoomParticipantResult, 2)
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) { terminated <- result }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		resultCh <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	var failed RoomParticipantResult
+	select {
+	case failed = <-terminated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("human startup failure did not terminate independently")
+	}
+	if failed.ParticipantID != "customer" || failed.Reason != ParticipantTerminationError || !stringsContainsAny(failed.Error, "missing-output-device") {
+		t.Fatalf("human startup failure participant = %+v, want customer/error with device cause", failed)
+	}
+
+	session := waitRoomHumanTestSession(t, inferencer)
+	if session.closeCallsSnapshot() != 0 || session.doneSnapshot() {
+		t.Fatalf("viable provider participant was stopped by human setup failure: close_calls=%d done=%v", session.closeCallsSnapshot(), session.doneSnapshot())
+	}
+	cancel()
+	select {
+	case outcome := <-resultCh:
+		if outcome.err != nil || outcome.result.Reason != RoomTerminationStopped || len(outcome.result.ActiveParticipants) != 0 {
+			t.Fatalf("human startup failure room result=%+v err=%v, want clean stopped room", outcome.result, outcome.err)
+		}
+		if customer := outcome.result.Participants["customer"]; customer.Reason != ParticipantTerminationError || !stringsContainsAny(customer.Error, "missing-output-device") {
+			t.Fatalf("customer startup result = %+v, want isolated device error", customer)
+		}
+		if agent := outcome.result.Participants["agent"]; !agent.Connected || agent.Reason != ParticipantTerminationEnded || agent.Error != "" {
+			t.Fatalf("viable provider result = %+v, want clean ended result", agent)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after stopping viable provider")
+	}
+	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 0 {
+		t.Fatalf("startup device close calls = input:%d output:%d, want input once/output never opened", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
+	}
+	if session.closeCallsSnapshot() != 1 {
+		t.Fatalf("viable provider close calls = %d, want exactly once", session.closeCallsSnapshot())
+	}
+}
+
 func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 	registry := newRoomHumanTestRegistry(t)
 	providerErr := errors.New("provider transport failed after secret-room-key")

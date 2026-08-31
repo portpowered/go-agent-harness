@@ -139,6 +139,25 @@ func runRoomParticipant(
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, participantEvidence, secrets)
 	}()
 
+	if startupErr := runtime.plan.startupErr; startupErr != nil {
+		// Setup failures are already retired from the coordinator's active set.
+		// Still use the ordinary result path so participant cleanup, evidence
+		// finalization, and the terminal observer remain exactly once.
+		if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
+			startupErr = errors.Join(startupErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
+		}
+		runtime.lifecycle.markParticipantFailure(startupErr)
+		runtime.lifecycle.markRunDone(startupErr)
+		results <- roomParticipantRunResult{
+			plan:       runtime.plan,
+			runtime:    runtime,
+			err:        startupErr,
+			connected:  false,
+			connectErr: nil,
+		}
+		return
+	}
+
 	participantStream := RoomParticipantEventSink{}
 	if opts.Stream != nil {
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)

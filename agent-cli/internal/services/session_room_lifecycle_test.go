@@ -648,9 +648,13 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 				t.Fatalf("viable sibling %q connection error = %v, want successful admission outcome", id, err)
 			}
 		}
+		run.stop()
 		outcome := run.waitResult(t)
-		if outcome.result.Reason != RoomTerminationFailed {
-			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
+		if outcome.err != nil {
+			t.Fatalf("room after isolated connection failure: %v", outcome.err)
+		}
+		if outcome.result.Reason != RoomTerminationStopped {
+			t.Fatalf("room reason = %q, want stopped after explicit stop", outcome.result.Reason)
 		}
 		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()
@@ -681,9 +685,13 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 		if err := run.waitOutcome(t, "observer"); err != nil {
 			t.Fatalf("viable observer connection error = %v, want successful admission outcome", err)
 		}
+		run.stop()
 		outcome := run.waitResult(t)
-		if outcome.result.Reason != RoomTerminationFailed {
-			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
+		if outcome.err != nil {
+			t.Fatalf("room after isolated connection failure: %v", outcome.err)
+		}
+		if outcome.result.Reason != RoomTerminationStopped {
+			t.Fatalf("room reason = %q, want stopped after explicit stop", outcome.result.Reason)
 		}
 		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()

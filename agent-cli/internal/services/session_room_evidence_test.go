@@ -157,6 +157,17 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 	}
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.OutputDir = filepath.Join(t.TempDir(), "failed-room")
+	// Keep this regression on the room-fatal contract path. A participant
+	// connection failure is intentionally local now, so use an invalid
+	// advertised capability surface to exercise failed-room evidence and
+	// credential redaction.
+	opts.Manifest.Participants[0].Tools = []string{"requested_tool"}
+	opts.ToolCapabilitiesFactory = func(room.Participant) (RoomParticipantToolCapabilities, error) {
+		return RoomParticipantToolCapabilities{
+			Executor:    &roomBrowserCapabilityTestExecutor{participantID: "evidence"},
+			Definitions: []messages.ToolDefinition{{Name: "unexpected_tool"}},
+		}, nil
+	}
 
 	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
 	if err == nil {

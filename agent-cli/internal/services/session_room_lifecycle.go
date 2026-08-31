@@ -33,6 +33,7 @@ type roomParticipantPlan struct {
 	manifest              room.Participant
 	options               SessionRunOptions
 	inferencer            messages.SessionInferencer
+	startupErr            error
 	replay                bool
 	replayLoop            sessionLoopOptions
 	secret                string
@@ -143,7 +144,10 @@ func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	}
 	id := runtime.plan.manifest.ID
 	outstanding := make([]string, 0, 6)
-	if roomParticipantIsHuman(runtime.plan) {
+	if runtime.plan.startupErr != nil {
+		// Setup failure owns the participant's terminal result; the missing
+		// device or mixer is not outstanding work after that result is queued.
+	} else if roomParticipantIsHuman(runtime.plan) {
 		if runtime.lifecycle == nil || !runtime.lifecycle.deviceHasReady() {
 			outstanding = append(outstanding, roomLifecycleWorkLabel(id, "devices"))
 		}
@@ -873,6 +877,22 @@ func (c *roomCoordinator) blockEmptyStop() {
 	c.mu.Lock()
 	c.emptyStopBlocked = true
 	c.mu.Unlock()
+}
+
+// unblockEmptyStop releases the setup barrier used while participant-local
+// startup failures are being admitted. If setup leaves no viable participant,
+// the room still completes through its clean empty-room taxonomy.
+func (c *roomCoordinator) unblockEmptyStop() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.emptyStopBlocked = false
+	empty := len(c.active) == 0 && c.reason == ""
+	c.mu.Unlock()
+	if empty {
+		c.stop(RoomTerminationStopped, nil)
+	}
 }
 
 func (c *roomCoordinator) failedParticipantID() string {

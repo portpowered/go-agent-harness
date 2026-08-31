@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -430,7 +431,7 @@ func TestRunRoom_BoundsBlockedRoomObserverWithLifecycleDiagnostic(t *testing.T) 
 	}
 }
 
-func TestRunRoom_StartupFailureAbortsAllParticipants(t *testing.T) {
+func TestRunRoom_StartupParticipantFailurePreservesViableParticipants(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	secret := "room-secret-value"
 	inferencers := map[string]*roomTestInferencer{
@@ -456,22 +457,35 @@ func TestRunRoom_StartupFailureAbortsAllParticipants(t *testing.T) {
 		}
 	}
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err == nil {
-		t.Fatal("startup failure returned nil error")
-	}
-	if result.Reason != RoomTerminationFailed {
-		t.Fatalf("room reason = %q, want %q", result.Reason, RoomTerminationFailed)
-	}
-	if strings.Contains(result.Error, secret) || strings.Contains(err.Error(), secret) {
-		t.Fatalf("startup error leaked credential: result=%q err=%q", result.Error, err)
-	}
-	if !strings.Contains(result.Error, `room participant "a"`) {
-		t.Fatalf("startup error = %q, want participant identity", result.Error)
+	ready := make(chan string, len(ids))
+	terminated := make(chan RoomParticipantResult, len(ids))
+	opts.OnParticipantReady = func(result RoomParticipantReady) { ready <- result.ParticipantID }
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) { terminated <- result }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	readyIDs := make(map[string]struct{}, 2)
+	for len(readyIDs) < 2 {
+		select {
+		case id := <-ready:
+			if id == "a" {
+				t.Fatal("failed participant was published as ready")
+			}
+			readyIDs[id] = struct{}{}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("viable participants were not admitted: %v", readyIDs)
+		}
 	}
 	if len(factoryCalls) != len(ids) {
 		t.Fatalf("factory calls = %d, want %d", len(factoryCalls), len(ids))
 	}
+
 	firstConnect := len(order)
 	for index, item := range order {
 		if strings.HasPrefix(item, "connect:") {
@@ -489,8 +503,122 @@ func TestRunRoom_StartupFailureAbortsAllParticipants(t *testing.T) {
 	}
 	for _, id := range []string{"b", "c"} {
 		sessions := inferencers[id].sessionsSnapshot()
-		if len(sessions) != 1 || sessions[0].closeCallsSnapshot() == 0 {
-			t.Fatalf("viable participant %s was not aborted: sessions=%d", id, len(sessions))
+		if len(sessions) != 1 {
+			t.Fatalf("viable participant %s sessions = %d, want one live session", id, len(sessions))
+		}
+		if sessions[0].closeCallsSnapshot() != 0 || sessions[0].doneSnapshot() {
+			t.Fatalf("viable participant %s was stopped by sibling startup failure: close_calls=%d done=%v", id, sessions[0].closeCallsSnapshot(), sessions[0].doneSnapshot())
+		}
+	}
+
+	cancel()
+	select {
+	case got := <-outcome:
+		if got.err != nil {
+			t.Fatalf("room after participant startup failure: %v", got.err)
+		}
+		if got.result.Reason != RoomTerminationStopped {
+			t.Fatalf("room reason = %q, want %q", got.result.Reason, RoomTerminationStopped)
+		}
+		failed := got.result.Participants["a"]
+		if failed.Reason != ParticipantTerminationError || failed.Connected || !strings.Contains(failed.Error, `room participant "a"`) {
+			t.Fatalf("failed participant result = %+v, want isolated causal error", failed)
+		}
+		if strings.Contains(got.result.Error, secret) || strings.Contains(failed.Error, secret) {
+			t.Fatalf("startup error leaked credential: result=%q participant=%q", got.result.Error, failed.Error)
+		}
+		for _, id := range []string{"b", "c"} {
+			participant := got.result.Participants[id]
+			if !participant.Connected || participant.Reason != ParticipantTerminationEnded || participant.Error != "" {
+				t.Fatalf("viable participant %s result = %+v, want clean ended result", id, participant)
+			}
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not terminate after explicit cancellation")
+	}
+	terminalIDs := make(map[string]int, len(ids))
+	for len(terminalIDs) < len(ids) {
+		select {
+		case result := <-terminated:
+			terminalIDs[result.ParticipantID]++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("participant terminal callbacks = %v, want one per participant", terminalIDs)
+		}
+	}
+	for _, id := range ids {
+		if terminalIDs[id] != 1 {
+			t.Fatalf("participant %s terminal callbacks = %d, want exactly one", id, terminalIDs[id])
+		}
+	}
+}
+
+func TestRunRoom_SessionConstructionFailurePreservesViableParticipant(t *testing.T) {
+	ids := []string{"a", "b"}
+	inferencers := map[string]*roomTestInferencer{
+		"a": {},
+		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
+	}
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	baseFactory := opts.SessionFactory
+	opts.SessionFactory = func(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
+		if participant.ID == "a" {
+			return nil, errors.New("participant construction failed")
+		}
+		return baseFactory(participant, options)
+	}
+	ready := make(chan string, len(ids))
+	terminated := make(chan RoomParticipantResult, len(ids))
+	opts.OnParticipantReady = func(result RoomParticipantReady) { ready <- result.ParticipantID }
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) { terminated <- result }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcomeCh := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcomeCh <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	select {
+	case id := <-ready:
+		if id != "b" {
+			t.Fatalf("ready participant = %q, want viable b", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("viable participant did not become ready")
+	}
+	session := inferencers["b"].sessionsSnapshot()[0]
+	if session.closeCallsSnapshot() != 0 || session.doneSnapshot() {
+		t.Fatalf("viable participant was stopped by construction failure: close_calls=%d done=%v", session.closeCallsSnapshot(), session.doneSnapshot())
+	}
+	cancel()
+	select {
+	case outcome := <-outcomeCh:
+		if outcome.err != nil || outcome.result.Reason != RoomTerminationStopped {
+			t.Fatalf("construction failure room result=%+v err=%v, want clean stopped room", outcome.result, outcome.err)
+		}
+		failed := outcome.result.Participants["a"]
+		if failed.Reason != ParticipantTerminationError || !strings.Contains(failed.Error, "participant construction failed") {
+			t.Fatalf("failed construction result = %+v, want isolated participant error", failed)
+		}
+		viable := outcome.result.Participants["b"]
+		if !viable.Connected || viable.Reason != ParticipantTerminationEnded || viable.Error != "" {
+			t.Fatalf("viable construction result = %+v, want clean ended participant", viable)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after stopping viable participant")
+	}
+	terminalIDs := make(map[string]int, len(ids))
+	for len(terminalIDs) < len(ids) {
+		select {
+		case result := <-terminated:
+			terminalIDs[result.ParticipantID]++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("terminal callbacks = %v, want one per participant", terminalIDs)
+		}
+	}
+	for _, id := range ids {
+		if terminalIDs[id] != 1 {
+			t.Fatalf("participant %s terminal callbacks = %d, want exactly one", id, terminalIDs[id])
 		}
 	}
 }
