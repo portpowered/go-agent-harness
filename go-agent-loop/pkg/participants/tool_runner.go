@@ -31,6 +31,13 @@ type ToolRunner struct {
 
 	currentPassID int // LoopPassID from the current ToolBatchRequest
 
+	// admittedCallIDs is scoped to this runner, which is scoped to one agent
+	// loop/session. A provider may surface the same function call again after a
+	// delayed or lost result; once admitted, that call ID must never reach the
+	// executor a second time.
+	admissionMu     sync.Mutex
+	admittedCallIDs map[string]struct{}
+
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 
@@ -41,9 +48,10 @@ type ToolRunner struct {
 
 func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunner {
 	return &ToolRunner{
-		executor:    executor,
-		Inbox:       messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
-		DeltaOutbox: messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		executor:        executor,
+		admittedCallIDs: make(map[string]struct{}),
+		Inbox:           messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
+		DeltaOutbox:     messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
 	}
 }
 
@@ -112,7 +120,9 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 		})
 		return nil
 	}
-	r.emitResultDeltas(ctx, r.currentPassID, results)
+	if len(results) > 0 {
+		r.emitResultDeltas(ctx, r.currentPassID, results)
+	}
 	return nil
 }
 
@@ -233,6 +243,11 @@ func mustStreamID(prefix string) string {
 // before the threshold never cause an acknowledgement and a batch emits at
 // most one acknowledgement request.
 func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall) ([]messages.ToolCallResponse, error) {
+	calls = r.admitCalls(calls)
+	if len(calls) == 0 {
+		return nil, nil
+	}
+
 	results := make([]messages.ToolCallResponse, len(calls))
 	errs := make([]error, len(calls))
 	type executionResult struct {
@@ -307,4 +322,32 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 	}
 
 	return results, nil
+}
+
+// admitCalls records provider call IDs before execution starts and removes
+// repeated IDs from the batch. The map belongs to the ToolRunner rather than
+// the provider adapter so every execution entry point shares one session-scoped
+// exactly-once boundary. Empty IDs remain executable for compatibility, but
+// cannot participate in correlation or duplicate suppression.
+func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
+	if r == nil || len(calls) == 0 {
+		return calls
+	}
+	r.admissionMu.Lock()
+	defer r.admissionMu.Unlock()
+	if r.admittedCallIDs == nil {
+		r.admittedCallIDs = make(map[string]struct{})
+	}
+
+	admitted := make([]messages.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		if call.ID != "" {
+			if _, seen := r.admittedCallIDs[call.ID]; seen {
+				continue
+			}
+			r.admittedCallIDs[call.ID] = struct{}{}
+		}
+		admitted = append(admitted, call)
+	}
+	return admitted
 }

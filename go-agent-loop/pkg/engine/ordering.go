@@ -221,6 +221,13 @@ func (o *GlobalOrdering) consumeModelDelta(ts *state.LoopState, delta messages.S
 
 	assigned := o.assignStreamOrdering(ts, delta, messages.Model)
 	ts.Inputs.ModelInputDelta = append(ts.Inputs.ModelInputDelta, assigned)
+	if assigned.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		// Acknowledgement audio is customer-visible, but it is not a new
+		// assistant turn. In particular, reconstructing it from the current
+		// model-delta window would repeat the preceding tool call and could
+		// dispatch that provider call a second time.
+		return nil
+	}
 
 	switch assigned.Value.(type) {
 	case *messages.ReasoningEndValue:
@@ -329,16 +336,24 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 	// Truncation (removing stale entries past the current response boundary) is only
 	// applied when model deltas are actually written this tick — otherwise it would
 	// incorrectly cut off tool/user deltas that were appended in earlier ticks.
-	for i, msg := range ts.Inputs.ModelInputDelta {
-		idx := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount + i
+	writtenModelDeltaCount := 0
+	for _, msg := range ts.Inputs.ModelInputDelta {
+		if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+			// Keep acknowledgement deltas on the kernel-facing input path, but
+			// do not persist them in the conversation delta history. They are
+			// progress output for an in-flight tool, not model context.
+			continue
+		}
+		idx := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount + writtenModelDeltaCount
 		if idx < len(ts.History.ConversationDeltaBuffer) {
 			ts.History.ConversationDeltaBuffer[idx] = msg
 		} else {
 			ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
 		}
+		writtenModelDeltaCount++
 	}
-	if len(ts.Inputs.ModelInputDelta) > 0 {
-		ts.History.CurrentModelDeltaCount += len(ts.Inputs.ModelInputDelta)
+	if writtenModelDeltaCount > 0 {
+		ts.History.CurrentModelDeltaCount += writtenModelDeltaCount
 		newLen := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount
 		if newLen < len(ts.History.ConversationDeltaBuffer) {
 			ts.History.ConversationDeltaBuffer = ts.History.ConversationDeltaBuffer[:newLen]
