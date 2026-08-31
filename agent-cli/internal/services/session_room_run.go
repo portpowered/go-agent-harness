@@ -533,24 +533,6 @@ func collectRoomParticipantResults(
 	return nil
 }
 
-func roomPlansHaveHumanParticipant(plans []*roomParticipantPlan) bool {
-	for _, plan := range plans {
-		if roomParticipantIsHuman(plan) {
-			return true
-		}
-	}
-	return false
-}
-
-func roomPlansHaveReplayParticipant(plans []*roomParticipantPlan) bool {
-	for _, plan := range plans {
-		if plan != nil && plan.replay && !roomParticipantIsHuman(plan) {
-			return true
-		}
-	}
-	return false
-}
-
 func waitRoomParticipantWork(
 	runWG *sync.WaitGroup,
 	mixerWG *sync.WaitGroup,
