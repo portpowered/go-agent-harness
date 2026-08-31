@@ -449,16 +449,12 @@ func runSessionWithRecordingDirectory(
 	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 
-// finalizeSessionDirectoryRecording preserves a provider, cancellation, or
-// runtime failure when finalization cannot validate the captured recording. A
-// clean run still returns any recording validation error, so an incomplete
-// recording can never look successful.
+// finalizeSessionDirectoryRecording joins provider, cancellation, or runtime
+// failures with every recording validation and persistence failure. A caller
+// can therefore distinguish a failed session from a recording that was not
+// published, even when both failures happen during the same shutdown.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
-	recordingErr := recording.Finalize()
-	if runErr != nil && errors.Is(recordingErr, transcript.ErrInvalidRecording) {
-		return runErr
-	}
-	return errors.Join(runErr, recordingErr)
+	return errors.Join(runErr, recording.Finalize())
 }
 
 func validateSessionRecordingOptions(opts SessionRunOptions) error {
@@ -863,8 +859,8 @@ func (r *sessionDirectoryRecording) observeToolResult(call messages.ToolCall, re
 	}
 	r.mu.Lock()
 	imageEvidence, artifactErr := r.recordCaptureArtifactLocked(call, response, failed)
-	if artifactErr != nil && r.recordErr == nil {
-		r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "validate captured image", r.destination, artifactErr)
+	if artifactErr != nil {
+		r.latchRecordErrLocked(recordingDestinationError(transcript.ErrRecordingWrite, "validate captured image", r.destination, artifactErr))
 	}
 	if imageEvidence == nil {
 		r.conversation.observeToolResult(call, response, failed)
@@ -978,9 +974,9 @@ func (r *sessionDirectoryRecording) observePayloadLocked(msg messages.StreamMess
 	agent, agentErr := transcript.Encode(transcript.NewRecord(r.tick, timestamp, transcript.PeerAgent, agentDirection, transcript.StreamWebSocket, payload))
 	if clientErr != nil || agentErr != nil {
 		if clientErr != nil {
-			r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode client transcript", r.destination, clientErr)
+			r.latchRecordErrLocked(recordingDestinationError(transcript.ErrRecordingWrite, "encode client transcript", r.destination, clientErr))
 		} else {
-			r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode agent transcript", r.destination, agentErr)
+			r.latchRecordErrLocked(recordingDestinationError(transcript.ErrRecordingWrite, "encode agent transcript", r.destination, agentErr))
 		}
 		return
 	}
@@ -1013,10 +1009,14 @@ func (r *sessionDirectoryRecording) fail(err error) {
 		return
 	}
 	r.mu.Lock()
-	if r.recordErr == nil {
+	r.latchRecordErrLocked(err)
+	r.mu.Unlock()
+}
+
+func (r *sessionDirectoryRecording) latchRecordErrLocked(err error) {
+	if err != nil && r.recordErr == nil {
 		r.recordErr = err
 	}
-	r.mu.Unlock()
 }
 
 func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
@@ -1031,9 +1031,7 @@ func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.Rec
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.setTerminalSummaryLocked(summary); err != nil {
-		if r.recordErr == nil {
-			r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "capture terminal summary", r.destination, err)
-		}
+		r.latchRecordErrLocked(recordingDestinationError(transcript.ErrRecordingWrite, "capture terminal summary", r.destination, err))
 		return err
 	}
 	return nil
@@ -1058,16 +1056,22 @@ func (r *sessionDirectoryRecording) Finalize() error {
 		r.eventMu.Lock()
 		defer r.eventMu.Unlock()
 		r.mu.Lock()
-		if r.recordErr != nil {
-			r.finalizeErr = r.recordErr
+		latchedRecordErr := r.recordErr
+		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
+		if sessionLogErr != nil {
+			r.finalizeErr = errors.Join(
+				latchedRecordErr,
+				recordingDestinationError(transcript.ErrRecordingWrite, "encode session log", r.destination, sessionLogErr),
+			)
 			r.mu.Unlock()
 			return
 		}
-		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
-		if sessionLogErr != nil {
-			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode session log", r.destination, sessionLogErr)
-			r.mu.Unlock()
-			return
+		var recordingStatus *transcript.RecordingStatus
+		if latchedRecordErr != nil {
+			recordingStatus = &transcript.RecordingStatus{
+				State:  transcript.RecordingStatusPartial,
+				Reason: latchedRecordErr.Error(),
+			}
 		}
 		config := transcript.RecordingConfig{
 			Destination:         r.destination,
@@ -1077,6 +1081,7 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			OutputSegments:      copySessionRecordingSegments(r.output),
 			SessionLog:          sessionLog,
 			Metadata:            r.metadata,
+			RecordingStatus:     recordingStatus,
 			Credentials:         append([]string(nil), r.credentials...),
 			Terminal:            cloneSessionRecordingTerminalSummary(r.terminal),
 			AdditionalArtifacts: copySessionRecordingArtifacts(r.imageArtifacts),
@@ -1084,8 +1089,9 @@ func (r *sessionDirectoryRecording) Finalize() error {
 		}
 		timings := r.conversation.timingEntries()
 		r.mu.Unlock()
-		r.finalizeErr = transcript.WriteRecordingBundle(config)
-		if r.finalizeErr != nil || len(timings) == 0 {
+		bundleErr := transcript.WriteRecordingBundle(config)
+		r.finalizeErr = errors.Join(latchedRecordErr, bundleErr)
+		if bundleErr != nil || len(timings) == 0 {
 			return
 		}
 		// timing.json is a run-specific diagnostic beside the deterministic,
@@ -1094,17 +1100,31 @@ func (r *sessionDirectoryRecording) Finalize() error {
 		// covered by the comparability contract.
 		timingBytes, timingErr := json.Marshal(timings)
 		if timingErr != nil {
-			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode timing diagnostic", r.destination, timingErr)
+			r.finalizeErr = errors.Join(
+				latchedRecordErr,
+				recordingDestinationError(transcript.ErrRecordingWrite, "encode timing diagnostic", r.destination, timingErr),
+			)
 			return
 		}
+		timingData := append(timingBytes, 0x0a)
+		var written int
 		var writeErr error
 		if r.writeFile != nil {
-			_, writeErr = r.writeFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+			written, writeErr = r.writeFile(filepath.Join(r.destination, "timing.json"), timingData, 0o644)
 		} else {
-			writeErr = os.WriteFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+			writeErr = os.WriteFile(filepath.Join(r.destination, "timing.json"), timingData, 0o644)
+			if writeErr == nil {
+				written = len(timingData)
+			}
+		}
+		if writeErr == nil && written != len(timingData) {
+			writeErr = io.ErrShortWrite
 		}
 		if writeErr != nil {
-			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "write timing diagnostic", r.destination, writeErr)
+			r.finalizeErr = errors.Join(
+				latchedRecordErr,
+				recordingDestinationError(transcript.ErrRecordingWrite, "write timing diagnostic", r.destination, writeErr),
+			)
 		}
 	})
 	return r.finalizeErr

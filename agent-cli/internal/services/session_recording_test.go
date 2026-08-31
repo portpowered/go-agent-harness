@@ -262,6 +262,91 @@ func TestSessionDirectoryRecordingPersistsOneAuthoritativeTerminalSummary(t *tes
 	}
 }
 
+func TestSessionDirectoryRecordingFinalizesBufferedEvidenceAfterRecordingError(t *testing.T) {
+	const credential = "session-recording-secret"
+	destination := filepath.Join(t.TempDir(), "partial-recording")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+		Model:  "gpt-realtime",
+		APIKey: credential,
+	})
+	recording.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("response buffered before recording degraded"),
+	}, false)
+
+	recording.mu.Lock()
+	wantClient := append([]byte(nil), recording.client.Bytes()...)
+	wantAgent := append([]byte(nil), recording.agent.Bytes()...)
+	recording.mu.Unlock()
+	if len(wantClient) == 0 || len(wantAgent) == 0 {
+		t.Fatal("pre-error transcript evidence is empty")
+	}
+
+	firstCause := errors.New("recording sink " + credential + " became unavailable")
+	firstRecordingErr := recordingDestinationError(transcript.ErrRecordingWrite, "capture transcript", destination, firstCause)
+	recording.fail(firstRecordingErr)
+	recording.fail(errors.New("later recording failure must not replace the first failure"))
+
+	firstFinalizeErr := recording.Finalize()
+	if !errors.Is(firstFinalizeErr, firstRecordingErr) || !errors.Is(firstFinalizeErr, firstCause) {
+		t.Fatalf("first finalize error = %v, want first recording error identities", firstFinalizeErr)
+	}
+
+	for _, testCase := range []struct {
+		name string
+		want []byte
+	}{
+		{name: "client.transcript.jsonl", want: wantClient},
+		{name: "agent.transcript.jsonl", want: wantAgent},
+	} {
+		got, err := os.ReadFile(filepath.Join(destination, testCase.name))
+		if err != nil {
+			t.Fatalf("read %s: %v", testCase.name, err)
+		}
+		if !bytes.Equal(got, testCase.want) {
+			t.Fatalf("%s = %q, want exact pre-error evidence %q", testCase.name, got, testCase.want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(destination, "session-log.jsonl")); err != nil {
+		t.Fatalf("session log was not persisted with pre-error evidence: %v", err)
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read partial manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode partial manifest: %v", err)
+	}
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("recording status = %+v, want partial", manifest.RecordingStatus)
+	}
+	wantReason := strings.ReplaceAll(firstRecordingErr.Error(), credential, transcript.RecordingRedactionMarker)
+	if manifest.RecordingStatus.Reason != wantReason {
+		t.Fatalf("partial reason = %q, want %q", manifest.RecordingStatus.Reason, wantReason)
+	}
+	if bytes.Contains(manifestBytes, []byte(credential)) {
+		t.Fatal("partial manifest contains the configured recording credential")
+	}
+
+	entriesBeforeRepeat := recordingEntries(t, destination)
+	secondFinalizeErr := recording.Finalize()
+	if !errors.Is(secondFinalizeErr, firstRecordingErr) || !reflect.DeepEqual(recordingEntries(t, destination), entriesBeforeRepeat) {
+		t.Fatalf("repeated finalize changed the published partial bundle: err=%v", secondFinalizeErr)
+	}
+	parentEntries, err := os.ReadDir(filepath.Dir(destination))
+	if err != nil {
+		t.Fatalf("read recording parent: %v", err)
+	}
+	for _, entry := range parentEntries {
+		if strings.HasPrefix(entry.Name(), "."+filepath.Base(destination)+".staging-") {
+			t.Fatalf("staging directory %q remained after partial publication", entry.Name())
+		}
+	}
+}
+
 func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	if err := os.MkdirAll(destination, 0o755); err != nil {
@@ -291,7 +376,7 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 	}
 }
 
-func TestRunSessionWithRecordingDirectoryPreservesProviderErrorOverEmptyRecording(t *testing.T) {
+func TestRunSessionWithRecordingDirectoryPreservesProviderAndRecordingErrorsOverEmptyRecording(t *testing.T) {
 	authErr := errors.New("openai realtime authentication failed")
 	destination := filepath.Join(t.TempDir(), "auth-failure")
 	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
@@ -304,8 +389,11 @@ func TestRunSessionWithRecordingDirectoryPreservesProviderErrorOverEmptyRecordin
 	if !errors.Is(err, authErr) {
 		t.Fatalf("error = %v, want provider authentication error", err)
 	}
-	if errors.Is(err, transcript.ErrInvalidRecording) || strings.Contains(err.Error(), "at least one segment is required") {
-		t.Fatalf("empty recording validation masked provider error: %v", err)
+	if !errors.Is(err, transcript.ErrInvalidRecording) {
+		t.Fatalf("error = %v, want empty-recording validation error alongside provider error", err)
+	}
+	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+		t.Fatalf("empty recording destination stat error = %v, want not exist", statErr)
 	}
 }
 
@@ -875,6 +963,125 @@ func TestSessionDirectoryRecordingFinalizePreservesWriteFailureAndNoPartialBundl
 	}
 	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
 		t.Fatalf("failed destination stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestFinalizeSessionDirectoryRecordingJoinsRunLatchedAndBundleWriteErrors(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "capture")
+	runErr := errors.New("session provider failed")
+	latchedCause := errors.New("recording sink failed before finalization")
+	latchedRecordErr := recordingDestinationError(transcript.ErrRecordingWrite, "capture transcript", destination, latchedCause)
+	bundleWriteErr := errors.New("recording bundle write failed")
+
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording.client.WriteString("client\n")
+	recording.agent.WriteString("agent\n")
+	recording.fail(latchedRecordErr)
+	recording.writeFile = func(string, []byte, os.FileMode) (int, error) {
+		return 0, bundleWriteErr
+	}
+
+	err := finalizeSessionDirectoryRecording(runErr, recording)
+	for _, want := range []error{runErr, latchedRecordErr, latchedCause, bundleWriteErr, transcript.ErrRecordingWrite} {
+		if !errors.Is(err, want) {
+			t.Fatalf("joined error = %v, want errors.Is(..., %v)", err, want)
+		}
+	}
+	var recordingErr *transcript.RecordingError
+	if !errors.As(err, &recordingErr) || recordingErr != latchedRecordErr {
+		t.Fatalf("joined error recording cause = %#v, want latched recording error %#v", recordingErr, latchedRecordErr)
+	}
+	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+		t.Fatalf("failed destination stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestFinalizeSessionDirectoryRecordingReportsRecordingFailureWhenBundleIsNotPublished(t *testing.T) {
+	writeErr := errors.New("bundle write failed")
+	tests := []struct {
+		name      string
+		prepare   func(*sessionDirectoryRecording)
+		wantError error
+	}{
+		{
+			name:      "empty evidence",
+			wantError: transcript.ErrInvalidRecording,
+		},
+		{
+			name: "one-sided evidence",
+			prepare: func(recording *sessionDirectoryRecording) {
+				recording.client.WriteString("client\n")
+			},
+			wantError: transcript.ErrInvalidRecording,
+		},
+		{
+			name: "bundle write failure",
+			prepare: func(recording *sessionDirectoryRecording) {
+				recording.client.WriteString("client\n")
+				recording.agent.WriteString("agent\n")
+				recording.writeFile = func(string, []byte, os.FileMode) (int, error) {
+					return 0, writeErr
+				}
+			},
+			wantError: transcript.ErrRecordingWrite,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "capture")
+			recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+			if testCase.prepare != nil {
+				testCase.prepare(recording)
+			}
+			runErr := errors.New("session failed while recording")
+
+			err := finalizeSessionDirectoryRecording(runErr, recording)
+			if !errors.Is(err, runErr) {
+				t.Fatalf("error = %v, want session error", err)
+			}
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("error = %v, want recording error identity %v", err, testCase.wantError)
+			}
+			if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+				t.Fatalf("unpublished destination stat error = %v, want not exist", statErr)
+			}
+		})
+	}
+}
+
+func TestSessionDirectoryRecordingReportsTimingShortWrite(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "capture")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording.client.WriteString("client\n")
+	recording.agent.WriteString("agent\n")
+	recording.conversation.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{0x01}),
+	}, true, -1, -1)
+	recording.conversation.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, true, -1, -1)
+	recording.writeFile = func(path string, data []byte, mode os.FileMode) (int, error) {
+		if filepath.Base(path) == "timing.json" {
+			if err := os.WriteFile(path, data, mode); err != nil {
+				return 0, err
+			}
+			return len(data) - 1, nil
+		}
+		if err := os.WriteFile(path, data, mode); err != nil {
+			return 0, err
+		}
+		return len(data), nil
+	}
+
+	err := recording.Finalize()
+	if !errors.Is(err, io.ErrShortWrite) || !errors.Is(err, transcript.ErrRecordingWrite) {
+		t.Fatalf("finalize error = %v, want short-write and recording-write identities", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(destination, "manifest.json")); statErr != nil {
+		t.Fatalf("bundle manifest missing after timing diagnostic failure: %v", statErr)
 	}
 }
 

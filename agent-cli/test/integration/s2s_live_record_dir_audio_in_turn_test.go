@@ -9,7 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"io"
 	"os"
@@ -329,9 +328,6 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 	if !strings.Contains(err.Error(), "invalid API key") && !strings.Contains(err.Error(), "invalid_api_key") {
 		timeline, outbound, _ := server.snapshots()
 		t.Fatalf("provider authentication error was not preserved: %v; timeline=%v outbound=%v", err, timeline, audioLengthsFromOutbound(outbound))
-	}
-	if errors.Is(err, transcript.ErrInvalidRecording) || strings.Contains(err.Error(), "at least one segment is required") {
-		t.Fatalf("recording validation masked provider authentication error: %v", err)
 	}
 }
 
