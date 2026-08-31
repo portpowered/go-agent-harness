@@ -1,27 +1,32 @@
 {
+  "version": 2,
   "provider": {
-    "model": "room-bound-long-conversation-v1",
-    "name": "offline"
+    "name": "offline",
+    "model": "room-bound-long-conversation-v1"
+  },
+  "session": {
+    "id": "agent-a-offline-session",
+    "started_at_utc": "2026-08-30T12:00:00Z",
+    "fixture_provenance": "synthetic"
   },
   "records": [
     {
+      "sequence": 1,
       "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "session.created",
+      "payload_type": "websocket_message",
       "payload": {
         "session": {
           "id": "agent-a-offline-session"
         },
         "type": "session.created"
-      },
-      "payload_type": "websocket_message",
-      "sequence": 1,
-      "timestamp_ms": 0,
-      "type": "session.created"
+      }
     }
   ],
-  "session": {
-    "fixture_provenance": "synthetic",
-    "id": "agent-a-offline-session",
-    "started_at_utc": "2026-08-30T12:00:00Z"
-  },
-  "version": 1
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "f043d0b07a62a47c53f593fa9d1ead109f5086616551c38b620ce74bd8fde4fa"
+  }
 }

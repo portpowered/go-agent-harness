@@ -70,8 +70,8 @@
       },
       "capture": {
         "path": "participants/agent-a/capture.session.json",
-        "size": 579,
-        "sha256": "b114a24393c5eea50870aa8a9154649292d389f249964f413df79b8a264774e3"
+        "size": 807,
+        "sha256": "9bd7885070143d18e52909b18b7d8aedeb81a1f8e3e2c8888befe5892cc034b1"
       },
       "classification": "",
       "completed_turns": 4,
@@ -303,8 +303,8 @@
       },
       "capture": {
         "path": "participants/agent-b/capture.session.json",
-        "size": 579,
-        "sha256": "279cf87dbe3a8e8f8e9f9780d4e19c95f380ec510fc4a6b2dc53e60f2e215777"
+        "size": 807,
+        "sha256": "18c0083584b95ba7ac8223cb743db620d36aaee090f82010b84df6ac8e8d6400"
       },
       "classification": "",
       "completed_turns": 4,
