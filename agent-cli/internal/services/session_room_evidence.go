@@ -823,16 +823,16 @@ type roomEvidenceManifest struct {
 	// RoomMix and RoomTimeline are the two room-level (not per-participant)
 	// artifacts: the composite "fly on the wall" mix and the ordered,
 	// wall-clock-stamped log of the conversation's shape.
-	RoomMix      string            `json:"room_mix"`
-	RoomTimeline string            `json:"room_timeline"`
+	RoomMix      string `json:"room_mix"`
+	RoomTimeline string `json:"room_timeline"`
 	// RoomLatency names the room-level latency artifact. It is deliberately a
 	// dedicated field rather than an Artifacts/ArtifactIntegrity entry: those
 	// two maps are the replay reader's artifact inventory, and it rejects any
 	// entry there that no declared participant or room artifact role claims
 	// ("orphan integrity entry") -- latency has no such role, since replay
 	// admission never consumes it.
-	RoomLatency  string            `json:"room_latency,omitempty"`
-	Artifacts    map[string]string `json:"artifacts"`
+	RoomLatency string            `json:"room_latency,omitempty"`
+	Artifacts   map[string]string `json:"artifacts"`
 	// ArtifactIntegrity declares the size and sha256 digest of every artifact
 	// this manifest references, keyed by the artifact's own bundle-relative
 	// path (not its role name) -- the replay reader's artifact-metadata merge
