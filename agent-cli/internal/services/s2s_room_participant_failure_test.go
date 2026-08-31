@@ -2,6 +2,7 @@ package services
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -218,6 +220,152 @@ func TestRunRoom_ParticipantFailurePublishesEventAndPreservesSurvivor(t *testing
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, RoomEvidenceManifestPath)); err != nil {
 		t.Fatalf("room evidence manifest: %v", err)
+	}
+}
+
+func TestRunRoom_ParticipantFailureDrainsSurvivorOutput(t *testing.T) {
+	const (
+		failedParticipant   = "a"
+		survivorParticipant = "b"
+		survivorTranscript  = "survivor output remains authoritative"
+	)
+	survivorPCM := roomPCM16(3200, 10)
+	inferencers := map[string]*roomTestInferencer{
+		failedParticipant:   {events: []messages.StreamMessage{roomTestSessionOpen(failedParticipant)}},
+		survivorParticipant: {events: []messages.StreamMessage{roomTestSessionOpen(survivorParticipant)}},
+	}
+
+	outputDir := filepath.Join(t.TempDir(), "room-run")
+	opens := make(chan string, 2)
+	audioRenderStarted := make(chan struct{})
+	releaseAudioRender := make(chan struct{})
+	renderedAudio := make(chan []byte, 1)
+	survivorText := make(chan string, 1)
+	terminated := make(chan RoomParticipantResult, 2)
+	var audioRenderOnce sync.Once
+
+	opts, _ := newRoomTestRunOptions([]string{failedParticipant, survivorParticipant}, inferencers)
+	opts.OutputDir = outputDir
+	opts.onParticipantSessionOpen = func(participantID string) { opens <- participantID }
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) { terminated <- result }
+	opts.OnAudioOutput = func(participantID string, pcm []byte) error {
+		if participantID != survivorParticipant {
+			return nil
+		}
+		audioRenderOnce.Do(func() { close(audioRenderStarted) })
+		<-releaseAudioRender
+		renderedAudio <- append([]byte(nil), pcm...)
+		return nil
+	}
+	opts.onParticipantStream = func(participantID string, msg messages.StreamMessage) {
+		if participantID != survivorParticipant || msg.Type != messages.StreamTypeTextDelta {
+			return
+		}
+		value, ok := msg.Value.(*messages.TextDeltaValue)
+		if ok && value != nil {
+			survivorText <- value.Content
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	for range []string{failedParticipant, survivorParticipant} {
+		select {
+		case <-opens:
+		case <-time.After(2 * time.Second):
+			t.Fatal("both room participants did not become live")
+		}
+	}
+	aSession := inferencers[failedParticipant].sessionsSnapshot()[0]
+	bSession := inferencers[survivorParticipant].sessionsSnapshot()[0]
+
+	// B's provider output is accepted by the room observer before A fails, but
+	// its render callback is held so the transcript behind that output remains
+	// pending at the failure boundary. A room-local failure must not cancel B's
+	// session or route A's error through B's done-error callback.
+	survivorEvents := append([]messages.StreamMessage{
+		{
+			Type:  messages.StreamTypeAudioDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewAudioDeltaValue(survivorPCM),
+		},
+	}, roomTestResponse(survivorTranscript)...)
+	bSession.publish(survivorEvents...)
+	select {
+	case <-audioRenderStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("survivor audio did not reach the room render boundary")
+	}
+
+	aSession.fail(errors.New("survivor drain transport failure"))
+	var failedResult RoomParticipantResult
+	for failedResult.ParticipantID != failedParticipant {
+		select {
+		case result := <-terminated:
+			if result.ParticipantID == failedParticipant {
+				failedResult = result
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("failed participant did not finalize")
+		}
+	}
+	if bSession.doneSnapshot() || bSession.closeCallsSnapshot() != 0 {
+		t.Fatalf("survivor session after sibling failure = done=%v close_calls=%d", bSession.doneSnapshot(), bSession.closeCallsSnapshot())
+	}
+	select {
+	case <-renderedAudio:
+		t.Fatal("survivor audio rendered before the failure boundary was released")
+	default:
+	}
+
+	close(releaseAudioRender)
+	select {
+	case got := <-renderedAudio:
+		if !bytes.Equal(got, survivorPCM) {
+			t.Fatalf("rendered survivor audio = %v, want %v", got, survivorPCM)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("survivor audio was not rendered after sibling failure")
+	}
+	select {
+	case got := <-survivorText:
+		if got != survivorTranscript {
+			t.Fatalf("survivor transcript = %q, want %q", got, survivorTranscript)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("survivor transcript was not delivered after sibling failure")
+	}
+
+	cancel()
+	var got roomTestRunOutcome
+	select {
+	case got = <-outcome:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after explicit stop")
+	}
+	if got.err != nil {
+		t.Fatalf("room after isolated failure and stop: %v", got.err)
+	}
+	if got.result.Reason != RoomTerminationStopped {
+		t.Fatalf("room reason = %q, want %q", got.result.Reason, RoomTerminationStopped)
+	}
+	if failedResult.Reason != ParticipantTerminationDisconnected && failedResult.Reason != ParticipantTerminationError {
+		t.Fatalf("failed participant result = %+v, want disconnected or error", failedResult)
+	}
+	survivorResult := got.result.Participants[survivorParticipant]
+	if survivorResult.Reason != ParticipantTerminationEnded || survivorResult.Error != "" {
+		t.Fatalf("survivor result = %+v, want clean ended result", survivorResult)
+	}
+
+	deltaData := readRoomEvidenceFile(t, filepath.Join(outputDir, "agent-"+survivorParticipant+".deltas.jsonl"))
+	if !bytes.Contains(deltaData, []byte(survivorTranscript)) {
+		t.Fatalf("survivor transcript evidence omitted %q: %s", survivorTranscript, deltaData)
 	}
 }
 
