@@ -24,6 +24,14 @@ import (
 //     two into a single commit/turn, recording only 14 frames.
 
 func TestMain(m *testing.M) {
+	// os.Exit skips deferred calls, so the build directory is cleaned up in
+	// runIntegrationTests before the exit code reaches os.Exit here. Inlining
+	// the defer into this function would leak the 44MB agent binary on every
+	// run of this package.
+	os.Exit(runIntegrationTests(m))
+}
+
+func runIntegrationTests(m *testing.M) int {
 	dir, err := os.MkdirTemp("", "s2s-v2d-agent-binary")
 	if err != nil {
 		panic(err)
@@ -37,8 +45,7 @@ func TestMain(m *testing.M) {
 		panic("build agent binary: " + err.Error())
 	}
 	agentBinaryPath = binary
-	code := m.Run()
-	os.Exit(code)
+	return m.Run()
 }
 
 var agentBinaryPath string
