@@ -11,11 +11,15 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/spf13/cobra"
+	yamlv3 "gopkg.in/yaml.v3"
 )
 
 var updateGoldens = flag.Bool("update", false, "update CLI golden files")
@@ -224,8 +228,155 @@ func TestConfigAddLocalUsesIsolatedDefaultHome(t *testing.T) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		t.Fatalf("config path escaped isolated home: %q", configPath)
 	}
-	if _, err := os.Stat(configPath); err != nil {
+	info, err := os.Stat(configPath)
+	if err != nil {
 		t.Fatalf("config was not written below isolated home: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("new config mode = %o, want 600", got)
+	}
+}
+
+func TestConfigAddLocalConcurrentUpdatesCommitExactlyOneRevision(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, config.ConfigFileName)
+	if err := os.WriteFile(configPath, []byte(nonDefaultConfig), 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	probesReady := make(chan struct{})
+	releaseProbes := make(chan struct{})
+	var probeCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if probeCount.Add(1) == 2 {
+			close(probesReady)
+		}
+		<-releaseProbes
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	results := make(chan cliResult, 2)
+	var group sync.WaitGroup
+	for _, model := range []string{"first-winner-candidate", "second-winner-candidate"} {
+		model := model
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			results <- executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", model)
+		}()
+	}
+
+	select {
+	case <-probesReady:
+	case <-time.After(5 * time.Second):
+		close(releaseProbes)
+		t.Fatal("both add-local commands did not reach the probe")
+	}
+	close(releaseProbes)
+	group.Wait()
+	close(results)
+
+	successes := 0
+	conflicts := 0
+	winner := ""
+	for result := range results {
+		if result.err == nil {
+			successes++
+			for _, model := range []string{"first-winner-candidate", "second-winner-candidate"} {
+				if strings.Contains(result.stdout, "  model: "+model+"\n") {
+					winner = model
+				}
+			}
+			continue
+		}
+		if errors.Is(result.err, config.ErrConfigRevisionConflict) {
+			conflicts++
+			if strings.Contains(result.stdout, "Local provider added") {
+				t.Fatalf("conflicting command printed success: %q", result.stdout)
+			}
+			if !strings.Contains(result.err.Error(), filepath.Clean(configPath)) {
+				t.Fatalf("conflict error = %v, want config path", result.err)
+			}
+			continue
+		}
+		t.Fatalf("unexpected add-local error: %v", result.err)
+	}
+	if successes != 1 || conflicts != 1 || winner == "" {
+		t.Fatalf("successes=%d conflicts=%d winner=%q, want one success and one conflict", successes, conflicts, winner)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read final config: %v", err)
+	}
+	var final config.Config
+	if err := yamlv3.Unmarshal(data, &final); err != nil {
+		t.Fatalf("parse final config: %v", err)
+	}
+	if final.Model.Provider != config.ProviderLocal || final.Model.Local == nil || final.Model.Local.Model != winner {
+		t.Fatalf("final config local provider = %#v, want winner %q", final.Model.Local, winner)
+	}
+}
+
+func TestConfigAddLocalRejectsExternalRevisionDuringProbe(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, config.ConfigFileName)
+	original := []byte(nonDefaultConfig)
+	newer := []byte("model:\n  provider: openrouter\n  openrouter:\n    model: external-winner\n")
+	if err := os.WriteFile(configPath, original, 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	probeStarted := make(chan struct{})
+	releaseProbe := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			http.NotFound(w, r)
+			return
+		}
+		close(probeStarted)
+		<-releaseProbe
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	result := make(chan cliResult, 1)
+	go func() {
+		result <- executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", "should-not-commit")
+	}()
+	select {
+	case <-probeStarted:
+	case <-time.After(5 * time.Second):
+		close(releaseProbe)
+		t.Fatal("add-local command did not reach the probe")
+	}
+	if err := os.WriteFile(configPath, newer, 0o600); err != nil {
+		close(releaseProbe)
+		t.Fatalf("write external revision: %v", err)
+	}
+	close(releaseProbe)
+
+	got := <-result
+	if got.err == nil || !errors.Is(got.err, config.ErrConfigRevisionConflict) {
+		t.Fatalf("command error = %v, want config revision conflict", got.err)
+	}
+	if strings.Contains(got.stdout, "Local provider added") {
+		t.Fatalf("conflicting command printed success: %q", got.stdout)
+	}
+	if !strings.Contains(got.err.Error(), filepath.Clean(configPath)) {
+		t.Fatalf("conflict error = %v, want config path", got.err)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read external revision: %v", err)
+	}
+	if string(data) != string(newer) {
+		t.Fatalf("external revision changed to %q, want unchanged bytes", data)
 	}
 }
 

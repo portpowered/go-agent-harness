@@ -23,6 +23,10 @@ type ConfigStorage struct {
 	configPath string
 	mu         sync.RWMutex
 	cached     *Config
+
+	// atomicWriter is a test seam for exercising commit cleanup. Production
+	// commits use writeConfigAtomically.
+	atomicWriter configAtomicWriter
 }
 
 type browserConfigValueKind uint8
@@ -187,7 +191,7 @@ func (s *ConfigStorage) Load() (*Config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal default config: %w", err)
 			}
-			if err := os.WriteFile(s.configPath, data, 0644); err != nil {
+			if err := writeConfigIfAbsentAtomically(s.configPath, data, 0o600); err != nil {
 				return nil, fmt.Errorf("failed to create config file %s: %w", s.configPath, err)
 			}
 		}
