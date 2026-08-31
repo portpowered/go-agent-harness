@@ -149,6 +149,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		terminationPlanned = planned
 		terminationErr := termination.terminate(preferredErr)
 		durationTerminalWritten = terminalState.terminalWritten
+		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
 		sessionErr := observedInferencer.sessionFailure()
 		runtimeErr := admittedInferencer.runtimeError()
 		closeErr := admittedInferencer.closeError()
@@ -211,70 +212,6 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	closeSent := false
 	closeAfterOpenPending := false
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
-	var runErr error
-	runDone := false
-	waitRun := func() error {
-		if !runDone {
-			runErr = <-runErrCh
-			runDone = true
-		}
-		return runErr
-	}
-
-	var terminationPlanned bool
-	termination := sessionTerminationBoundary{
-		quiesceUpstream: opts.quiesceUpstream,
-		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
-			return waitForDurationSessionLoopStragglers(out, loop, policy, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-		},
-		stopOwnedResources: func() error {
-			cancel()
-			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
-			admittedInferencer.waitForClose()
-			return errors.Join(providerErr, runTerminationErr, bindingErr)
-		},
-		flushBuffered: func() error {
-			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-			if terminationPlanned && !terminalState.terminalWritten {
-				flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
-			}
-			return flushErr
-		},
-	}
-
-	finish := func(planned bool, preferredErr error) error {
-		terminationPlanned = planned
-		terminationErr := termination.terminate(preferredErr)
-		durationTerminalWritten = terminalState.terminalWritten
-		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
-		sessionErr := observedInferencer.sessionFailure()
-		runtimeErr := admittedInferencer.runtimeError()
-		closeErr := admittedInferencer.closeError()
-		lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, nil)
-		transportErr := sessionTransportError(sessionErr)
-		if terminationErr != nil {
-			return errors.Join(terminationErr, lifecycleErr, transportErr)
-		}
-		if lifecycleErr != nil {
-			return lifecycleErr
-		}
-		if sessionErr != nil {
-			return sessionTransportError(sessionErr)
-		}
-		if runErr != nil && !errors.Is(runErr, context.Canceled) {
-			return fmt.Errorf("session error: %w", runErr)
-		}
-		if planned && !terminalState.terminalWritten {
-			if err := writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
-				return err
-			}
-			terminalState.terminalWritten = true
-			durationTerminalWritten = true
-		}
-		return nil
-	}
 
 	expire := func() error {
 		if durationExpired {
