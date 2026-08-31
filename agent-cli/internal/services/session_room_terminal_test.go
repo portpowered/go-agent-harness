@@ -175,6 +175,63 @@ func TestRoomParticipantLifecycle_BoundFirstRejectsLateFailure(t *testing.T) {
 	}
 }
 
+func TestRoomParticipantLifecycle_BoundCancellationSendsResponseCancelOnce(t *testing.T) {
+	admissionClosed := make(chan struct{})
+	close(admissionClosed)
+	inner := newRoomTestSession()
+	lifecycle := &roomParticipantLifecycle{admissionClosed: admissionClosed}
+	tracked := &roomTrackedSession{Session: inner, lifecycle: lifecycle, admissionClosed: admissionClosed}
+	lifecycle.setOwnedSession(tracked)
+	lifecycle.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-active",
+		Value:      messages.NewMessageStartValue(),
+	})
+	lifecycle.markCoordinatorStopping(true, RoomTerminationMaxTurnsReached)
+	lifecycle.markBoundCancellation()
+	lifecycle.cancelActiveResponse()
+	lifecycle.cancelActiveResponse()
+
+	if got := inner.sentTypeCountSnapshot(messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("response cancellations = %d, want exactly one", got)
+	}
+	inner.mu.Lock()
+	sent := append([]messages.StreamMessage(nil), inner.sent...)
+	inner.mu.Unlock()
+	if len(sent) != 1 || sent[0].Value == nil {
+		t.Fatalf("sent cancellation messages = %+v, want one valued RESPONSE.CANCEL", sent)
+	}
+	if _, ok := sent[0].Value.(*messages.ResponseCancelValue); !ok {
+		t.Fatalf("RESPONSE.CANCEL value = %T, want *messages.ResponseCancelValue", sent[0].Value)
+	}
+}
+
+func TestRoomParticipantLifecycle_BoundCancellationRejectsLateCompletion(t *testing.T) {
+	lifecycle := &roomParticipantLifecycle{}
+	lifecycle.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-active",
+		Value:      messages.NewMessageStartValue(),
+	})
+	lifecycle.markCoordinatorStopping(true, RoomTerminationMaxTurnsReached)
+	lifecycle.markBoundCancellation()
+
+	if lifecycle.observeTerminal(sessionTerminalObservation{
+		ResponseID:         "response-active",
+		TerminalReason:     string(messages.TerminalReasonProviderAuthoredCompletion),
+		TerminalProvenance: string(messages.TerminalProvenanceProvider),
+		OutputState:        string(messages.TerminalOutputComplete),
+	}) {
+		t.Fatal("late provider completion replaced bound cancellation")
+	}
+	observation := lifecycle.terminalObservationSnapshot()
+	if observation.terminationTrigger != ParticipantTerminationTriggerMaxTurnsReachedMidResponse || observation.terminationDisposition != ParticipantTerminationDispositionCancelledAfterGrace || observation.classification != RoomBoundCancelledClassification || observation.terminalReason != string(messages.TerminalReasonCancellation) || observation.terminalProvenance != string(messages.TerminalProvenanceRoom) {
+		t.Fatalf("bound cancellation after late completion = %+v", observation)
+	}
+}
+
 func TestRoomParticipantLifecycle_BoundAdmissionAllowsOnlyExistingToolContinuation(t *testing.T) {
 	admissionClosed := make(chan struct{})
 	inner := newRoomTestSession()
