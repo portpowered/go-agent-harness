@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
@@ -16,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/spf13/cobra"
 )
 
 type chatTestToolExecutor struct{}
@@ -52,7 +54,7 @@ type chatRun struct {
 func executeChat(t *testing.T, args []string, input string, inferencer messages.Inferencer) chatRun {
 	t.Helper()
 	agentCLI := newTestAgentCLI(t, inferencer)
-	return executeRoot(t, agentCLI, args, input)
+	return executeInteractiveRoot(t, agentCLI, args, input)
 }
 
 func executeRoot(t *testing.T, agentCLI *AgentCLI, args []string, input string) chatRun {
@@ -60,6 +62,14 @@ func executeRoot(t *testing.T, agentCLI *AgentCLI, args []string, input string) 
 	return executeRootWithMicrophone(t, agentCLI, args, input, func() (audio.AudioSource, error) {
 		return audio.NewSliceSource(nil), nil
 	})
+}
+
+func executeInteractiveRoot(t *testing.T, agentCLI *AgentCLI, args []string, input string) chatRun {
+	t.Helper()
+	original := chatInputIsInteractive
+	chatInputIsInteractive = func(*cobra.Command) bool { return true }
+	t.Cleanup(func() { chatInputIsInteractive = original })
+	return executeRoot(t, agentCLI, args, input)
 }
 
 func executeRootWithMicrophone(t *testing.T, agentCLI *AgentCLI, args []string, input string, factory func() (audio.AudioSource, error)) chatRun {
@@ -202,6 +212,39 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 	}
 }
 
+func TestChatCommandRejectsNonInteractiveInputBeforeSetup(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "text chat", args: []string{"chat"}},
+		{name: "loop chat", args: []string{"chat", "--loop"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inf := &chatTestInferencer{response: "must not run"}
+			started := time.Now()
+			got := executeRoot(t, newTestAgentCLI(t, inf), tt.args, "input that must not be consumed\n")
+			if elapsed := time.Since(started); elapsed >= time.Second {
+				t.Fatalf("non-interactive chat took %s, want less than one second", elapsed)
+			}
+			if got.exitCode != 1 || got.err == nil {
+				t.Fatalf("exit code=%d error=%v, want immediate command failure", got.exitCode, got.err)
+			}
+			if got.err.Error() != chatInteractiveTerminalMessage {
+				t.Fatalf("error = %q, want %q", got.err, chatInteractiveTerminalMessage)
+			}
+			if got.stdout != "" || got.stderr != "" {
+				t.Fatalf("output = stdout %q stderr %q, want both empty", got.stdout, got.stderr)
+			}
+			if inf.calls != 0 {
+				t.Fatalf("inferencer calls = %d, want zero before terminal admission", inf.calls)
+			}
+		})
+	}
+}
+
 func normalizeTraceIDs(output string) string {
 	return regexp.MustCompile(`(Trace ID: |trace: )\d+`).ReplaceAllString(output, `${1}<trace>`)
 }
@@ -239,6 +282,7 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 		wantOutput      string
 		wantOutputParts []string
 		wantErrorPart   string
+		wantFlagParse   bool
 		wantInferCalls  int
 		checkFlags      func(*testing.T, *flags.ChatFlags, *flags.LoopFlags)
 	}{
@@ -279,11 +323,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:       "max iterations alone",
-			args:       []string{"chat", "--max-iterations", "2"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: textCancelOutput,
+			name:          "max iterations alone",
+			args:          []string{"chat", "--max-iterations", "2"},
+			input:         "\x03",
+			wantExit:      1,
+			wantErrorPart: "--max-iterations requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if loopFlags.MaxIterations != 2 {
 					t.Fatalf("MaxIterations = %d, want 2", loopFlags.MaxIterations)
@@ -291,11 +335,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:       "stop word alone",
-			args:       []string{"chat", "--stop-word", "DONE"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: textCancelOutput,
+			name:          "stop word alone",
+			args:          []string{"chat", "--stop-word", "DONE"},
+			input:         "\x03",
+			wantExit:      1,
+			wantErrorPart: "--stop-word requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if loopFlags.StopWord != "DONE" {
 					t.Fatalf("StopWord = %q, want %q", loopFlags.StopWord, "DONE")
@@ -303,11 +347,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:       "context pressure threshold alone",
-			args:       []string{"chat", "--context-pressure-threshold", "0.4"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: textCancelOutput,
+			name:          "context pressure threshold alone",
+			args:          []string{"chat", "--context-pressure-threshold", "0.4"},
+			input:         "\x03",
+			wantExit:      1,
+			wantErrorPart: "--context-pressure-threshold requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if loopFlags.ContextPressureThreshold != 0.4 {
 					t.Fatalf("ContextPressureThreshold = %v, want 0.4", loopFlags.ContextPressureThreshold)
@@ -315,11 +359,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:       "context pressure message alone",
-			args:       []string{"chat", "--context-pressure-message", "warning"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: textCancelOutput,
+			name:          "context pressure message alone",
+			args:          []string{"chat", "--context-pressure-message", "warning"},
+			input:         "\x03",
+			wantExit:      1,
+			wantErrorPart: "--context-pressure-message requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if loopFlags.ContextPressureMessage != "warning" {
 					t.Fatalf("ContextPressureMessage = %q, want %q", loopFlags.ContextPressureMessage, "warning")
@@ -327,11 +371,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:       "trace id alone",
-			args:       []string{"chat", "--trace-id", "ignored-trace"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: textCancelOutput,
+			name:          "trace id alone",
+			args:          []string{"chat", "--trace-id", "ignored-trace"},
+			input:         "\x03",
+			wantExit:      1,
+			wantErrorPart: "--trace-id requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if loopFlags.TraceID != "ignored-trace" {
 					t.Fatalf("TraceID = %q, want %q", loopFlags.TraceID, "ignored-trace")
@@ -339,12 +383,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:            "loop takes precedence over audio input",
-			args:            []string{"chat", "--loop", "--max-iterations", "1", "--activate-audio-in"},
-			input:           "task\n",
-			wantExit:        0,
-			wantOutputParts: []string{"Port OS Agent Loop Chat (up to 1 iterations)", "Loop complete: 1 iteration(s)"},
-			wantInferCalls:  1,
+			name:          "loop rejects audio input",
+			args:          []string{"chat", "--loop", "--max-iterations", "1", "--activate-audio-in"},
+			input:         "task\n",
+			wantExit:      1,
+			wantErrorPart: "--activate-audio-in cannot be combined with --loop",
 			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, loopFlags *flags.LoopFlags) {
 				if !chatFlags.ActivateAudioIn || !loopFlags.Loop || loopFlags.MaxIterations != 1 {
 					t.Fatalf("flags = chat=%+v loop=%+v, want audio input, loop, max iterations 1", *chatFlags, *loopFlags)
@@ -355,48 +398,56 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			name:          "boolean audio input rejects wrong type",
 			args:          []string{"chat", "--activate-audio-in=maybe"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: `invalid argument "maybe" for "--activate-audio-in" flag`,
 		},
 		{
 			name:          "boolean audio output rejects wrong type",
 			args:          []string{"chat", "--activate-audio-out=maybe"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: `invalid argument "maybe" for "--activate-audio-out" flag`,
 		},
 		{
 			name:          "boolean loop rejects wrong type",
 			args:          []string{"chat", "--loop=maybe"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: `invalid argument "maybe" for "--loop" flag`,
 		},
 		{
 			name:          "integer rejects wrong type",
 			args:          []string{"chat", "--max-iterations", "many"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: `invalid argument "many" for "--max-iterations" flag`,
 		},
 		{
 			name:          "float rejects wrong type",
 			args:          []string{"chat", "--context-pressure-threshold", "many"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: `invalid argument "many" for "--context-pressure-threshold" flag`,
 		},
 		{
 			name:          "stop word requires a value",
 			args:          []string{"chat", "--stop-word"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: "flag needs an argument: --stop-word",
 		},
 		{
 			name:          "context message requires a value",
 			args:          []string{"chat", "--context-pressure-message"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: "flag needs an argument: --context-pressure-message",
 		},
 		{
 			name:          "trace id requires a value",
 			args:          []string{"chat", "--trace-id"},
 			wantExit:      1,
+			wantFlagParse: true,
 			wantErrorPart: "flag needs an argument: --trace-id",
 		},
 	}
@@ -405,7 +456,7 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			inf := &chatTestInferencer{response: "matrix response"}
 			agentCLI, chatFlags, loopFlags := newTestAgentCLIAtWithFlags(t, inf, t.TempDir())
-			got := executeRoot(t, agentCLI, tt.args, tt.input)
+			got := executeInteractiveRoot(t, agentCLI, tt.args, tt.input)
 			if got.exitCode != tt.wantExit {
 				t.Fatalf("exit code = %d, want %d (err=%v)", got.exitCode, tt.wantExit, got.err)
 			}
@@ -435,6 +486,15 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 
 			if got.err == nil || !strings.Contains(got.err.Error(), tt.wantErrorPart) {
 				t.Fatalf("error = %v, want substring %q", got.err, tt.wantErrorPart)
+			}
+			if !tt.wantFlagParse {
+				if got.stdout != "" || got.stderr != "" {
+					t.Fatalf("local validation output = stdout %q stderr %q, want both empty", got.stdout, got.stderr)
+				}
+				if tt.checkFlags != nil {
+					tt.checkFlags(t, chatFlags, loopFlags)
+				}
+				return
 			}
 			var typed *chatFlagParseError
 			if !errors.As(got.err, &typed) {
@@ -580,7 +640,7 @@ func TestChatCommand_ResumesStoredTraces(t *testing.T) {
 				t.Fatalf("SaveTrace() error = %v", err)
 			}
 			inf := &chatTestInferencer{response: "resume response"}
-			got := executeRoot(t, newTestAgentCLIAt(t, inf, configDir), []string{"chat", "--loop", "--trace-id", "trace-resume"}, tt.input)
+			got := executeInteractiveRoot(t, newTestAgentCLIAt(t, inf, configDir), []string{"chat", "--loop", "--trace-id", "trace-resume"}, tt.input)
 			if got.exitCode != 0 || got.err != nil {
 				t.Fatalf("exit code=%d error=%v stdout=%q", got.exitCode, got.err, got.stdout)
 			}
@@ -612,6 +672,9 @@ func (w *failAfterWriter) Write(p []byte) (int, error) {
 
 func executeChatWithWriters(t *testing.T, agentCLI *AgentCLI, args []string, input string, out, errOut io.Writer) error {
 	t.Helper()
+	original := chatInputIsInteractive
+	chatInputIsInteractive = func(*cobra.Command) bool { return true }
+	t.Cleanup(func() { chatInputIsInteractive = original })
 	root := agentCLI.Generate()
 	root.SetIn(strings.NewReader(input))
 	root.SetOut(out)

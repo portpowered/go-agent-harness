@@ -25,6 +25,11 @@ import (
 // Returns an error if no prompt and no content (file paths or binary stdin) are provided.
 func BuildExecuteInput(stdin io.Reader, argPrompt string, filePaths []string) (agentloop.ExecuteInput, error) {
 	prompt := argPrompt
+	fileParts, err := input.LoadAskContentParts(filePaths)
+	if err != nil {
+		return agentloop.ExecuteInput{}, err
+	}
+
 	var stdinPart messages.ContentPart
 	if stdin != nil {
 		stdinContent, err := input.ReadStdinContent(stdin)
@@ -49,13 +54,7 @@ func BuildExecuteInput(stdin io.Reader, argPrompt string, filePaths []string) (a
 	if stdinPart != nil {
 		execInput.ContentParts = append(execInput.ContentParts, stdinPart)
 	}
-	for _, path := range filePaths {
-		part, err := input.LoadContentPart(path)
-		if err != nil {
-			return agentloop.ExecuteInput{}, fmt.Errorf("load file %s: %w", path, err)
-		}
-		execInput.ContentParts = append(execInput.ContentParts, part)
-	}
+	execInput.ContentParts = append(execInput.ContentParts, fileParts...)
 	return execInput, nil
 }
 

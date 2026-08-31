@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -66,7 +67,7 @@ func TestBuildExecuteInput_ReachableErrors(t *testing.T) {
 			stdin:      strings.NewReader("read this file"),
 			argPrompt:  "inspect it",
 			filePaths:  []string{missingPath},
-			wantPrefix: "load file " + missingPath + ": ",
+			wantPrefix: "attachment \"" + missingPath + "\": missing file",
 			assertIdentity: func(t *testing.T, err error) {
 				t.Helper()
 				var pathErr *os.PathError
@@ -91,6 +92,22 @@ func TestBuildExecuteInput_ReachableErrors(t *testing.T) {
 			}
 			test.assertIdentity(t, err)
 		})
+	}
+}
+
+func TestBuildExecuteInput_RejectsAttachmentBeforeReadingStdin(t *testing.T) {
+	missingPath := filepath.Join(t.TempDir(), "missing.txt")
+	stdinErr := errors.New("stdin must not be read")
+
+	_, err := BuildExecuteInput(failingReader{err: stdinErr}, "inspect this", []string{missingPath})
+	if err == nil {
+		t.Fatal("BuildExecuteInput() error = nil, want missing attachment error")
+	}
+	if !strings.Contains(err.Error(), missingPath) || !strings.Contains(err.Error(), input.AttachmentReasonMissing) {
+		t.Fatalf("error = %q, want missing attachment path and reason", err)
+	}
+	if errors.Is(err, stdinErr) {
+		t.Fatalf("error = %q, want attachment validation to precede stdin read", err)
 	}
 }
 

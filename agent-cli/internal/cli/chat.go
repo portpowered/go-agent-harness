@@ -41,9 +41,41 @@ var newMicrophoneSource = func() (audio.AudioSource, error) {
 	return audio.NewMicrophoneSource()
 }
 
+//lint:ignore ST1005 the terminal admission message is an exact customer-facing CLI contract.
+var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage)
+
 // NewChatCommand creates the ChatCommand with the given dependencies.
 func NewChatCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags) *ChatCommand {
 	return &ChatCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
+}
+
+func validateChatFlags(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags) error {
+	if !loopFlags.Loop {
+		for _, flag := range []string{"max-iterations", "stop-word", "context-pressure-threshold", "context-pressure-message", "trace-id"} {
+			if cmd.Flags().Changed(flag) {
+				return fmt.Errorf("--%s requires --loop", flag)
+			}
+		}
+	}
+
+	if loopFlags.Loop && chatFlags.ActivateAudioIn {
+		return errors.New("--activate-audio-in cannot be combined with --loop because loop steering requires an interactive terminal")
+	}
+	return nil
+}
+
+func validateChatInvocation(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags) error {
+	if err := validateChatFlags(cmd, loopFlags, chatFlags); err != nil {
+		return err
+	}
+
+	// Audio-only chat does not consume keyboard input. Every other chat flow,
+	// including loop steering, must prove terminal input before constructing a
+	// session or starting Bubble Tea.
+	if !chatFlags.ActivateAudioIn && !chatInputIsInteractive(cmd) {
+		return errChatRequiresInteractiveTerminal
+	}
+	return nil
 }
 
 // Generate returns the cobra command for chat.
@@ -53,6 +85,14 @@ func (c *ChatCommand) Generate() *cobra.Command {
 		Short: "Start an interactive chat session with the agent",
 		Long:  "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags); err != nil {
+				// Chat preflight failures are already actionable. Leave final
+				// process rendering to the CLI entrypoint without Cobra's usage
+				// dump or a second error prefix.
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
+				return err
+			}
 			if c.loopFlags.Loop {
 				return c.runLoopChat(cmd)
 			}
