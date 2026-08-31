@@ -378,11 +378,12 @@ func TestRouterPreRunNormalizesProbeRunPathsAndWritesUnderExpandedHomes(t *testi
 	owner := NewProbeRunCommand()
 	command := owner.Generate()
 	root := newProbePathPreflightRoot(command, testPathResolver(currentHome, namedHome))
+	firstScenarioArg := "~/" + filepath.Base(firstScenario)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
 	root.SetArgs([]string{
-		"probe", "run", "~/home-scenario-one.scenario.json",
+		"probe", "run", firstScenarioArg,
 		"--scenario", "~alice/home-scenario-two.scenario.json",
 		"--replay", "~/session.session.json",
 		"--out", "~alice/results.jsonl",
@@ -408,8 +409,8 @@ func TestRouterPreRunNormalizesProbeRunPathsAndWritesUnderExpandedHomes(t *testi
 	if owner.RecordingRoot != filepath.Join(namedHome, "evidence") {
 		t.Fatalf("--evidence-root = %q, want expanded named-home path", owner.RecordingRoot)
 	}
-	if !equalStringSlices(owner.Scenarios, []string{firstScenario, secondScenario}) {
-		t.Fatalf("--scenario values = %#v, want expanded paths", owner.Scenarios)
+	if !equalStringSlices(owner.Scenarios, []string{secondScenario}) {
+		t.Fatalf("--scenario values = %#v, want the expanded flag path", owner.Scenarios)
 	}
 	assertFlagString(t, command, "browser-user-data-dir", filepath.Join(currentHome, "browser", "profile"))
 	assertFlagString(t, command, "browser-replay", filepath.Join(namedHome, "browser", "replay.json"))
