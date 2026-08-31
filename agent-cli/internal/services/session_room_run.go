@@ -325,9 +325,10 @@ func observeRoomParticipantStream(
 		if participantEvidence == nil {
 			return
 		}
-		if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil && evidence != nil {
-			evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
-		}
+		// A recording sink is observational. Its failure is retained by the
+		// participant evidence status, but never changes this participant's
+		// runtime outcome or cancellation context.
+		_ = participantEvidence.observeDelta(msg)
 	}
 	runtime.lifecycle.observe(msg)
 	recordRoomTimelineEvent(evidence, plan.manifest.ID, msg)
@@ -370,11 +371,7 @@ func observeRoomParticipantStream(
 		// critical path: they are offset-anchored, so deferring them past the
 		// handoff would misplace this participant's audio in the room mix.
 		// The WAV write, which nothing else is ordered against, moves below.
-		if evidenceErr := participantEvidence.observeSentStream(pcm); evidenceErr != nil {
-			if evidence != nil {
-				evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
-			}
-		}
+		_ = participantEvidence.observeSentStream(pcm)
 	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
@@ -414,11 +411,7 @@ func observeRoomParticipantStream(
 	if participantEvidence != nil {
 		// Durable WAV I/O only. A slow filesystem here must not delay the
 		// provider-to-peer handoff above.
-		if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
-			if evidence != nil {
-				evidence.recordError(plan.manifest.ID, fmt.Errorf("write WAV audio: %w", evidenceErr))
-			}
-		}
+		_ = participantEvidence.observeAudio(pcm)
 	}
 }
 
@@ -717,10 +710,10 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		// reached this participant, independent of whether the downstream
 		// session accepted it.
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
-				coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
-				return
-			}
+			// received.pcm is an observation of the frame, not part of the
+			// participant's delivery contract. A degraded artifact must not
+			// interrupt the live mixer or session.
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
@@ -792,11 +785,8 @@ func runRoomHumanCapture(
 		}
 		pcm := encodeRoomPCM16(roomSamples)
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
-				failure := roomParticipantFailure(participantID, fmt.Errorf("record human input audio: %w", evidenceErr), secrets)
-				coordinator.failParticipant(participantID, failure)
-				return failure
-			}
+			// Evidence is best-effort and independent of human capture/fan-out.
+			_ = participantEvidence.observeSentAudio(pcm)
 		}
 		for _, target := range coordinator.activeExcept(participantID) {
 			if target == nil || target.mixer == nil {
@@ -846,10 +836,7 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			return
 		}
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
-				coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
-				return
-			}
+			_ = participantEvidence.observeReceivedAudio(frame)
 		}
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {

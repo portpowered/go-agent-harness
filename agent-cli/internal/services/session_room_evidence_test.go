@@ -15,6 +15,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
@@ -248,6 +249,64 @@ func TestRoomEvidence_RedactsJSONStringsWithoutCorruptingDeltas(t *testing.T) {
 	manifestData := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))
 	if !json.Valid(manifestData) || bytes.Contains(manifestData, []byte(secret)) {
 		t.Fatalf("redacted manifest is invalid or contains secret: %s", manifestData)
+	}
+}
+
+func TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure(t *testing.T) {
+	const secret = "room-evidence-health-secret"
+	manifest := room.Manifest{
+		SchemaVersion: room.SchemaVersion,
+		Room:          room.Room{MaxTurns: 1},
+		Participants: []room.Participant{{
+			ID:        "participant",
+			Provider:  "provider",
+			Model:     "model",
+			APIKeyEnv: "ROOM_KEY",
+			Tools:     []string{},
+		}},
+	}
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), []string{secret}, time.Now())
+	if err != nil {
+		t.Fatalf("newRoomEvidence: %v", err)
+	}
+	paths := evidence.participant("participant").artifacts
+	first := fmt.Errorf("recording sink unavailable for %s", secret)
+	evidence.recordError("participant", paths.Deltas, first)
+	evidence.recordError("participant", paths.WAV, errors.New("later recording failure"))
+
+	roomStatus, degradedArtifacts, participantStatuses, participantArtifacts := evidence.recordingHealth()
+	if roomStatus == nil || roomStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("room recording status = %+v, want partial", roomStatus)
+	}
+	if roomStatus.Reason == "" || strings.Contains(roomStatus.Reason, secret) || !strings.Contains(roomStatus.Reason, "REDACTED") {
+		t.Fatalf("room recording reason = %q, want first sanitized failure", roomStatus.Reason)
+	}
+	if !strings.Contains(roomStatus.Reason, "recording sink unavailable") || strings.Contains(roomStatus.Reason, "later recording failure") {
+		t.Fatalf("room recording reason = %q, want first failure only", roomStatus.Reason)
+	}
+	if participantStatuses["participant"] == nil || participantStatuses["participant"].Reason != roomStatus.Reason {
+		t.Fatalf("participant recording status = %+v, want same first sanitized reason", participantStatuses["participant"])
+	}
+	if got := degradedArtifacts[paths.Deltas]; strings.Contains(got, secret) || got == "" {
+		t.Fatalf("degraded delta artifact reason = %q, want non-empty sanitized reason", got)
+	}
+	if got := participantArtifacts["participant"][paths.Deltas]; got == "" || strings.Contains(got, secret) {
+		t.Fatalf("participant degraded delta artifact reason = %q, want sanitized reason", got)
+	}
+	if _, ok := participantArtifacts["participant"][paths.WAV]; !ok {
+		t.Fatal("participant degraded artifacts omitted later WAV failure")
+	}
+
+	if err := evidence.finalize(RoomResult{
+		TerminationReason: RoomTerminationStopped,
+		Participants: map[string]RoomParticipantResult{
+			"participant": {ID: "participant", TerminationReason: ParticipantTerminationEnded},
+		},
+	}, nil, time.Now()); err == nil {
+		// Evidence failures are surfaced through recording_status, not as a
+		// room runtime error. The finalizer's direct return still preserves the
+		// private diagnostic for callers that inspect it.
+		t.Fatal("finalize unexpectedly discarded the private recording diagnostic")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -58,6 +59,10 @@ type RoomParticipantResult struct {
 	TurnsCompleted    int                          `json:"turns_completed"`
 	Connected         bool                         `json:"connected"`
 	Error             string                       `json:"error,omitempty"`
+	// RecordingStatus is nil for a healthy evidence bundle and partial when
+	// one or more participant-owned recording artifacts degraded. It is
+	// independent from the participant runtime termination reason.
+	RecordingStatus *transcript.RecordingStatus `json:"recording_status,omitempty"`
 }
 
 // RoomResult contains the room outcome and every participant outcome. The map
@@ -68,6 +73,10 @@ type RoomResult struct {
 	Participants       map[string]RoomParticipantResult `json:"participants"`
 	ActiveParticipants []string                         `json:"active_participants,omitempty"`
 	Error              string                           `json:"error,omitempty"`
+	// RecordingStatus reports evidence health separately from the room's live
+	// termination taxonomy. Recording failures never change TerminationReason.
+	RecordingStatus   *transcript.RecordingStatus `json:"recording_status,omitempty"`
+	DegradedArtifacts map[string]string           `json:"degraded_artifacts,omitempty"`
 }
 
 // RoomRunResult is the descriptive result name used by callers that model a
@@ -210,6 +219,10 @@ type RoomRunOptions struct {
 	// tests to gate the next deterministic input on a specific normalized
 	// provider event. It does not replace the real stream observer.
 	onParticipantStream func(participantID string, msg messages.StreamMessage)
+	// onRoomEvidenceReady is an internal deterministic test seam. It runs after
+	// all room evidence sinks are opened and before participant work starts, so
+	// package tests can inject a sink failure without changing live APIs.
+	onRoomEvidenceReady func(*roomEvidence)
 	// Stream optionally receives the room's diagnostic, transcript, and
 	// lifecycle projections. The broker is observational and never carries raw
 	// audio. Callers that expose it over HTTP own the listener lifecycle.

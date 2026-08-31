@@ -88,16 +88,18 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			publishStreamTermination(result)
 			return result, err
 		}
+		if opts.onRoomEvidenceReady != nil {
+			opts.onRoomEvidenceReady(evidence)
+		}
 	}
 	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
 		if evidence != nil {
-			finalizeErr := evidence.finalize(result, runErr, roomClock.Now().UTC())
-			if finalizeErr != nil {
-				runErr = errors.Join(runErr, finalizeErr)
-				if result.Error == "" {
-					result.Error = sanitizeRoomError(finalizeErr, evidenceSecrets)
-				}
-			}
+			// Evidence finalization may report a degraded sink, but it is not a
+			// room runtime failure. The status projection is applied to the
+			// returned result after all close/mix/manifest callbacks have had a
+			// chance to latch their first error.
+			_ = evidence.finalize(result, runErr, roomClock.Now().UTC())
+			evidence.applyRecordingHealth(&result)
 		}
 		publishStreamTermination(result)
 		return result, runErr
@@ -178,11 +180,6 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		cleanup.start()
 		defer cleanup.stop()
 		return errors.Join(cleanupRoomParticipantSetup(runtimes, mesh, cleanup), closeRoomParticipantPlanCapabilities(plans))
-	}
-	if evidence != nil {
-		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
-			coordinator.fail(roomParticipantFailure(participantID, fmt.Errorf("record room evidence: %w", evidenceErr), secrets))
-		})
 	}
 	for _, plan := range plans {
 		participantCtx, participantCancel := context.WithCancel(roomCtx)
@@ -408,6 +405,8 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 		Participants:       result.Participants,
 		ActiveParticipants: append([]string(nil), result.ActiveParticipants...),
 		Error:              result.Error,
+		RecordingStatus:    cloneRoomRecordingStatus(result.RecordingStatus),
+		DegradedArtifacts:  cloneRoomStringMap(result.DegradedArtifacts),
 	}
 	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(*observerResult) }, nil)
 	observerCleanup.stop()
