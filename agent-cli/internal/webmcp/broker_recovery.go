@@ -2,12 +2,24 @@ package webmcp
 
 func staleSelectionForSession(selected *brokerSession, reason string) error {
 	if selected == nil {
+		if reason == "selection_not_connected" {
+			return noPageSelectedError()
+		}
 		return staleSelectionError("", "", 0, reason)
 	}
 	if failure := sessionLifecycleFailure(selected); failure != nil {
 		return failure
 	}
 	return staleSelectionError(selected.context.Key.BrowserID, selected.context.Key.TargetID, selected.context.Generation, reason)
+}
+
+func noPageSelectedError() error {
+	return classified(ErrorStaleSelection, "no page is selected", map[string]any{
+		"browser_id":          "",
+		"target_id":           "",
+		"selected_generation": uint64(0),
+		"reason":              "selection_not_connected",
+	}, ErrStaleSelection)
 }
 
 // reconcileTargetLossLocked preserves the lifecycle outcome that raced with

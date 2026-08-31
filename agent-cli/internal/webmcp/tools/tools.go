@@ -302,7 +302,7 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 	case webmcp.GetContextToolName:
 		selected, err := s.selected(ctx, boolValue(args, "refresh"))
 		if err != nil {
-			return brokerFailure(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "selected"})
+			return brokerContextFailure(err)
 		}
 		return webmcp.EncodeToolResult(contextDataFrom(selected), nil)
 
@@ -582,6 +582,53 @@ func disabledEnvelope() ([]byte, error) {
 func brokerFailure(err error, fallback webmcp.ErrorCode, details map[string]any) ([]byte, error) {
 	resultError := webmcp.ResultErrorFor(err, fallback, details)
 	return webmcp.EncodeToolResult(nil, &resultError)
+}
+
+func brokerContextFailure(err error) ([]byte, error) {
+	resultError := webmcp.ResultErrorFor(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "selected"})
+	if resultError.Code == string(webmcp.ErrorStaleSelection) && noPageSelectedDetails(resultError.Details) {
+		resultError.Message = "no page is selected"
+	}
+	return webmcp.EncodeToolResult(nil, &resultError)
+}
+
+func noPageSelectedDetails(details map[string]any) bool {
+	if details == nil {
+		return false
+	}
+	browserID, browserOK := details["browser_id"].(string)
+	targetID, targetOK := details["target_id"].(string)
+	if !browserOK || !targetOK || browserID != "" || targetID != "" {
+		return false
+	}
+	switch generation := details["selected_generation"].(type) {
+	case uint64:
+		return generation == 0
+	case uint:
+		return generation == 0
+	case uint32:
+		return generation == 0
+	case uint16:
+		return generation == 0
+	case uint8:
+		return generation == 0
+	case int:
+		return generation == 0
+	case int64:
+		return generation == 0
+	case int32:
+		return generation == 0
+	case int16:
+		return generation == 0
+	case int8:
+		return generation == 0
+	case float64:
+		return generation == 0
+	case float32:
+		return generation == 0
+	default:
+		return false
+	}
 }
 
 func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]byte, error) {

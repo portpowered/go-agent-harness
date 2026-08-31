@@ -363,12 +363,14 @@ func safeDetails(details map[string]any) map[string]any {
 
 func noSelectionError() error {
 	return &discovery.DiscoveryError{
-		Code:      discovery.CodeNoEligibleTab,
-		Message:   "no selected browser tab is available",
+		Code:      discovery.CodeStaleSelection,
+		Message:   "no page is selected",
 		Retryable: true,
 		Details: map[string]any{
-			"filters":         map[string]any{"selection": "current"},
-			"candidate_count": 0,
+			"browser_id":          "",
+			"target_id":           "",
+			"selected_generation": uint64(0),
+			"reason":              "selection_not_connected",
 		},
 	}
 }

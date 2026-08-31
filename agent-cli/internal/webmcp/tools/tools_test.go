@@ -284,6 +284,69 @@ func TestShowPagePreservesCancellationAndDeadlineClassification(t *testing.T) {
 	}
 }
 
+func TestGetContextReportsNoPageSelectedBeforeStaleSelection(t *testing.T) {
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
+	defer func() { _ = broker.Close() }()
+
+	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "no-page-call",
+		Name:      webmcp.GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("get context without selection: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode no-page context: %v", err)
+	}
+	assertNoPageSelectedContextError(t, envelope)
+
+	staleBroker := &recordingBroker{
+		selectedErr: webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, webmcp.DefaultErrorMessage(webmcp.ErrorStaleSelection), map[string]any{
+			"browser_id":          "browser-a",
+			"target_id":           "target-a",
+			"selected_generation": uint64(3),
+			"reason":              "generation_changed",
+		}),
+	}
+	response, err = NewBrokerToolSet(staleBroker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "stale-page-call",
+		Name:      webmcp.GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("get context with stale selection: %v", err)
+	}
+	envelope, err = webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode stale context: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+		t.Fatalf("stale context envelope = %+v, want stale_selection", envelope)
+	}
+	if envelope.Error.Message != webmcp.DefaultErrorMessage(webmcp.ErrorStaleSelection) {
+		t.Fatalf("stale context message = %q, want %q", envelope.Error.Message, webmcp.DefaultErrorMessage(webmcp.ErrorStaleSelection))
+	}
+	if details := envelope.Error.Details; details["browser_id"] != "browser-a" || details["target_id"] != "target-a" || details["selected_generation"] != float64(3) || details["reason"] != "generation_changed" {
+		t.Fatalf("stale context details = %#v, want retained stale identity", details)
+	}
+}
+
+func assertNoPageSelectedContextError(t *testing.T, envelope webmcp.ToolResultEnvelope) {
+	t.Helper()
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+		t.Fatalf("no-page context envelope = %+v, want stale_selection failure", envelope)
+	}
+	if envelope.Error.Message != "no page is selected" {
+		t.Fatalf("no-page context message = %q, want exact no-selection message", envelope.Error.Message)
+	}
+	details := envelope.Error.Details
+	if details["browser_id"] != "" || details["target_id"] != "" || details["selected_generation"] != float64(0) || details["reason"] != "selection_not_connected" {
+		t.Fatalf("no-page context details = %#v, want empty identity at generation zero", details)
+	}
+}
+
 func TestShowPageNamespaceIsPreflightedWithStaticTools(t *testing.T) {
 	err := cliTools.ValidateToolDefinitionNamespaces(
 		[]messages.ToolDefinition{{Name: webmcp.ShowPageToolName}},
@@ -605,6 +668,7 @@ func TestToolSetRegistryPreservesShowPageImageProjection(t *testing.T) {
 
 type recordingBroker struct {
 	selected      webmcp.PageContext
+	selectedErr   error
 	targets       []webmcp.Target
 	catalog       webmcp.ToolCatalogSnapshot
 	invokeResult  webmcp.InvokeResult
@@ -632,7 +696,7 @@ func (b *recordingBroker) Select(context.Context, webmcp.TargetSelector) (webmcp
 
 func (b *recordingBroker) Selected(context.Context) (webmcp.PageContext, error) {
 	b.calls = append(b.calls, "selected")
-	return b.selected, nil
+	return b.selected, b.selectedErr
 }
 
 func (b *recordingBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
@@ -685,7 +749,7 @@ func (b *recordingBroker) SelectWithOptions(_ context.Context, _ webmcp.TargetSe
 
 func (b *recordingBroker) SelectedWithRefresh(_ context.Context, _ bool) (webmcp.PageContext, error) {
 	b.calls = append(b.calls, "selected_with_refresh")
-	return b.selected, nil
+	return b.selected, b.selectedErr
 }
 
 func assertTextualResponse(t *testing.T, response messages.ToolCallResponse, callID, name string) {
