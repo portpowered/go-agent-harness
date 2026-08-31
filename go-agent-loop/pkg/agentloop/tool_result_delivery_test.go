@@ -72,6 +72,12 @@ func (e *cannedExecutor) Execute(_ context.Context, call messages.ToolCall) (mes
 	return resp, nil
 }
 
+func (e *cannedExecutor) callCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.calls)
+}
+
 func waitForSentCount(t *testing.T, s *recordingToolSession, typ messages.StreamMessageType, n int) []messages.StreamMessage {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -145,7 +151,8 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 		{ID: "tc-2", Name: "get_time", Arguments: `{}`},
 	})
 
-	sent := waitForSentCount(t, session, messages.StreamTypeToolCallEnd, 2)
+	waitForSentCount(t, session, messages.StreamTypeToolCallEnd, 2)
+	sent := waitForSentCount(t, session, messages.StreamTypeResponseCreate, 1)
 
 	var forwards []*messages.ToolCallEndValue
 	for _, msg := range sent {
@@ -161,6 +168,21 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 	if len(forwards) != 2 {
 		t.Fatalf("observed %d TOOLCALL.END forwards, want exactly 2", len(forwards))
 	}
+	responseCreateIndex := -1
+	for index, msg := range sent {
+		if msg.Type == messages.StreamTypeResponseCreate {
+			responseCreateIndex = index
+			break
+		}
+	}
+	if responseCreateIndex < 0 {
+		t.Fatal("missing response.create after tool results")
+	}
+	for index, msg := range sent {
+		if msg.Type == messages.StreamTypeToolCallEnd && index > responseCreateIndex {
+			t.Fatalf("tool result at index %d was sent after response.create at index %d", index, responseCreateIndex)
+		}
+	}
 	want := []messages.ToolCallEndValue{
 		{Type: "tool_use_end", ToolCallID: "tc-1", Name: "get_weather", Arguments: `{"forecast":"sunny"}`},
 		{Type: "tool_use_end", ToolCallID: "tc-2", Name: "get_time", Arguments: `{"time":"noon"}`},
@@ -169,6 +191,19 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 		if *v != want[i] {
 			t.Fatalf("forward[%d] = %+v, want %+v", i, *v, want[i])
 		}
+	}
+
+	// A provider that re-surfaces the same call ID must not cause another
+	// executor admission or another provider result item.
+	scriptModelToolCalls(session, ctx, []messages.ToolCall{
+		{ID: "tc-1", Name: "get_weather", Arguments: `{"city":"NYC"}`},
+	})
+	time.Sleep(150 * time.Millisecond)
+	if got := executor.callCount(); got != 2 {
+		t.Fatalf("executor call count after duplicate provider call = %d, want exactly 2 original admissions", got)
+	}
+	if got := countSentType(session, messages.StreamTypeToolCallEnd); got != 2 {
+		t.Fatalf("tool result count after duplicate provider call = %d, want exactly 2", got)
 	}
 
 	// Quiesce and confirm no duplicate delivery of the same tool call IDs.

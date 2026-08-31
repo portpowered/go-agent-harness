@@ -248,6 +248,9 @@ type SessionRunOptions struct {
 	// BrowserWatch supplies an independent subscription to semantic broker
 	// selection/catalog/generation events for this session.
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
+	// BrowserEventWatch supplies the adapter-owned semantic browser events used
+	// only by the optional recording observer. It never owns session delivery.
+	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
 	// BrowserCapabilityState is the session-owned browser state used to compose
 	// model-facing selection grounding. It must not be inferred from the
 	// presence or absence of dynamic page definitions.

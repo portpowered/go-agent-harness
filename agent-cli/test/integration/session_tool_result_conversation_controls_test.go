@@ -386,33 +386,27 @@ func TestSessionToolCallConversationWrongArgumentsAreRejected(t *testing.T) {
 	t.Logf("wrong-arguments control rejected as expected: %v", identityErr)
 }
 
-// TestSessionToolCallConversationDuplicateCallIsRejected duplicates only the
-// provider call records. The live executor must observe two calls, and the
-// single-result replay gate rejects the second result before follow-up speech.
-func TestSessionToolCallConversationDuplicateCallIsRejected(t *testing.T) {
+// TestSessionToolCallConversationDuplicateCallIsDeduplicated duplicates only
+// the provider call records. The live executor must observe one call and the
+// one accepted result must still unlock the normal follow-up speech.
+func TestSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateConversationCall(t, capture)
 	})
 	executor := &conversationResultExecutor{result: toolResultPositive}
 	started := time.Now()
 	stdout, _, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
-	assertConversationResultGateFailure(t, "duplicate-call", runErr, time.Since(started))
-	calls, returned := executor.snapshot()
-	if len(calls) != 2 {
-		t.Fatalf("duplicate-call control executor observed %d calls %v, want exactly two duplicate invocations", len(calls), calls)
+	if runErr != nil {
+		t.Fatalf("duplicate-call control should complete after suppressing the duplicate: %v\nstdout:\n%s", runErr, stdout)
 	}
-	for index, call := range calls {
-		if call.ID != toolConversationCallID || call.Name != toolCallScenarioName || call.Arguments != toolCallScenarioArguments {
-			t.Fatalf("duplicate-call control invocation %d = %#v, want ID=%q name=%q args=%q", index, call, toolConversationCallID, toolCallScenarioName, toolCallScenarioArguments)
-		}
+	assertConversationOneCall(t, executor)
+	if elapsed := time.Since(started); elapsed > 4*time.Second {
+		t.Fatalf("duplicate-call control took %s; deduplicated result should unlock the follow-up promptly", elapsed)
 	}
-	if len(returned) != 2 {
-		t.Fatalf("duplicate-call control returned %d results from its two executor invocations, want both attempted before the strict gate", len(returned))
+	if !strings.Contains(stdout, "24 degrees") || !strings.Contains(stdout, "clear skies") {
+		t.Fatalf("duplicate-call control did not preserve the grounded follow-up transcript:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "24 degrees") || strings.Contains(stdout, "clear skies") {
-		t.Fatalf("duplicate-call control leaked follow-up transcript after the second result was rejected:\n%s", stdout)
-	}
-	t.Logf("duplicate-call control rejected as expected: %v", runErr)
+	t.Logf("duplicate-call control ignored the repeated provider event and completed with one result")
 }
 
 // TestSessionToolCallConversationMissingResultIsRejectedAtGate removes only

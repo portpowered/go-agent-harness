@@ -56,19 +56,24 @@ type SessionToolCapabilities struct {
 	// opt-in live session input boundary. It is nil for non-browser capability
 	// sets; callers must use the returned context to stop the watch.
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
+	// BrowserEventWatch exposes the richer adapter-owned semantic browser event
+	// stream to the opt-in recording observer. It is independent from
+	// BrowserWatch and never participates in tool execution or continuation.
+	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
 }
 
 type resolvedSessionToolSurface struct {
-	executor        messages.ToolExecutor
-	definitions     []messages.ToolDefinition
-	base            []messages.ToolDefinition
-	browserState    webmcp.BrowserCapabilityState
-	refresh         func(context.Context) ([]messages.ToolDefinition, error)
-	browserWatch    func(context.Context) <-chan webmcp.BrokerEvent
-	capabilityClose func() error
+	executor          messages.ToolExecutor
+	definitions       []messages.ToolDefinition
+	base              []messages.ToolDefinition
+	browserState      webmcp.BrowserCapabilityState
+	refresh           func(context.Context) ([]messages.ToolDefinition, error)
+	browserWatch      func(context.Context) <-chan webmcp.BrokerEvent
+	browserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
+	capabilityClose   func() error
 }
 
 func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
@@ -79,12 +84,13 @@ func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapa
 		_ = capabilities.Initialize(ctx)
 	}
 	result := resolvedSessionToolSurface{
-		executor:     capabilities.Executor,
-		definitions:  append([]messages.ToolDefinition(nil), capabilities.Definitions...),
-		base:         append([]messages.ToolDefinition(nil), capabilities.Definitions...),
-		browserState: capabilities.BrowserCapabilityState,
-		refresh:      capabilities.RefreshDefinitionsWithError,
-		browserWatch: capabilities.BrowserWatch,
+		executor:          capabilities.Executor,
+		definitions:       append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		base:              append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		browserState:      capabilities.BrowserCapabilityState,
+		refresh:           capabilities.RefreshDefinitionsWithError,
+		browserWatch:      capabilities.BrowserWatch,
+		browserEventWatch: capabilities.BrowserEventWatch,
 	}
 	if capabilities.Status != nil {
 		status := capabilities.Status()
@@ -600,9 +606,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Present: cmd.Flags().Changed("prompt"),
 			}
 			audioInput := sessionAudioInputFromCommand(cmd, audioIn)
-			// Validate command-only combinations before constructing the browser
-			// capability. Once construction succeeds, ownership transfers to the
-			// service coordinator and every remaining error is finalized there.
+			// Validate command-only combinations before browser setup; ownership transfers to the service coordinator after construction.
 			if len(audioInTurns) > 0 {
 				if audioInput.Present || audioInput.DevicePresent {
 					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
@@ -623,6 +627,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			var refreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 			var capabilityClose func() error
 			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
+			var browserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
 			browserCapabilityState := webmcp.BrowserCapabilityDisabled
 			if c.sessionToolCapabilities != nil && !bareSession {
 				if loadedConfig == nil {
@@ -640,7 +645,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				toolDefinitions = surface.definitions
 				toolDefinitionBase = surface.base
 				refreshDefinitionsWithError = surface.refresh
-				browserWatch = surface.browserWatch
+				browserWatch, browserEventWatch = surface.browserWatch, surface.browserEventWatch
 				if surface.browserState != "" {
 					browserCapabilityState = surface.browserState
 				}
@@ -675,6 +680,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ToolDefinitionBase:     toolDefinitionBase,
 				RefreshToolDefinitions: refreshDefinitionsWithError,
 				BrowserWatch:           browserWatch,
+				BrowserEventWatch:      browserEventWatch,
 				BrowserCapabilityState: browserCapabilityState,
 				AudioInterruptions:     audioInterruptions,
 				CapabilityClose:        capabilityClose,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -235,6 +236,103 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}
 	if responseCreates != 2 {
 		t.Fatalf("response.create count = %d, want exactly 2 (tool continuation and plain-text turn)", responseCreates)
+	}
+}
+
+func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.T) {
+	// The service-layer timeout adapter has separate bounded-deadline tests.
+	// Inject its normalized 20s payload here so this transport proof remains
+	// hermetic and fast instead of sleeping for the production deadline.
+	const (
+		callID     = "call_composed_timeout"
+		toolName   = "lookup_weather"
+		timeoutOut = `tool "lookup_weather" failed (classification=interactive_tool_timeout): tool execution timed out after 20s`
+	)
+
+	conn := newMockWebSocketConn()
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(&mockWebSocketDialer{conn: conn}),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	al, err := agentloop.New(
+		agentloop.WithMode(engine.DuplexSession),
+		agentloop.WithSessionInferencer(composedSessionInferencer{session: session.(*realtimeSession)}),
+		agentloop.WithToolExecutor(composedToolExecutor{responses: map[string]messages.ToolCallResponse{
+			callID: {ToolCallID: callID, Name: toolName, Content: timeoutOut},
+		}}),
+		agentloop.WithTools([]messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}}),
+	)
+	if err != nil {
+		t.Fatalf("agentloop.New: %v", err)
+	}
+	go func() { _ = al.Run(ctx) }()
+	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
+		t.Fatalf("SendAudioInput: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	waitForFrameCount(t, conn, 2, deadline)
+
+	addServerEvent(conn, "response.created", nil)
+	addServerEvent(conn, "response.output_item.added", map[string]any{
+		"item": map[string]any{"type": "function_call", "id": "item_timeout", "call_id": callID, "name": toolName, "arguments": ""},
+	})
+	addServerEvent(conn, "response.function_call_arguments.done", map[string]any{
+		"call_id": callID, "name": toolName, "arguments": `{"city":"Paris"}`,
+	})
+	addServerEvent(conn, "response.done", nil)
+
+	frames := waitForFrameCount(t, conn, 4, deadline)
+	outputs := findFunctionCallOutput(frames)
+	if len(outputs) != 1 {
+		t.Fatalf("observed %d timeout function_call_output frames, want exactly one", len(outputs))
+	}
+	outputIndex := outputs[0]
+	if outputIndex+1 >= len(frames) || frames[outputIndex+1].Type != "response.create" {
+		t.Fatalf("timeout output index = %d in wire sequence %#v, want response.create immediately after it", outputIndex, frames)
+	}
+	item := frames[outputIndex].Item
+	if got, _ := item["call_id"].(string); got != callID {
+		t.Fatalf("timeout function_call_output call_id = %q, want %q", got, callID)
+	}
+	if got, _ := item["output"].(string); got != timeoutOut {
+		t.Fatalf("timeout function_call_output output = %q, want %q", got, timeoutOut)
+	}
+	if !strings.Contains(timeoutOut, "classification=interactive_tool_timeout") || !strings.Contains(timeoutOut, "tool execution timed out after 20s") {
+		t.Fatalf("timeout output = %q, want stable classification and 20s detail", timeoutOut)
+	}
+
+	// Replay the same provider call after its terminal result. The admission
+	// guard must keep the wire at one correlated output and one continuation.
+	addServerEvent(conn, "response.created", nil)
+	addServerEvent(conn, "response.output_item.added", map[string]any{
+		"item": map[string]any{"type": "function_call", "id": "item_timeout_duplicate", "call_id": callID, "name": toolName, "arguments": ""},
+	})
+	addServerEvent(conn, "response.function_call_arguments.done", map[string]any{
+		"call_id": callID, "name": toolName, "arguments": `{"city":"Paris"}`,
+	})
+	addServerEvent(conn, "response.done", nil)
+	time.Sleep(150 * time.Millisecond)
+	frames = parseWireFrames(t, conn.getClientMessages())
+	if got := len(findFunctionCallOutput(frames)); got != 1 {
+		t.Fatalf("duplicate timeout provider event produced %d function_call_output frames, want one", got)
+	}
+	responseCreates := 0
+	for _, frame := range frames {
+		if frame.Type == "response.create" {
+			responseCreates++
+		}
+	}
+	if responseCreates != 1 {
+		t.Fatalf("duplicate timeout provider event produced %d response.create frames, want one", responseCreates)
 	}
 }
 

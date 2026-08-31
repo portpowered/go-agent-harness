@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,24 @@ func (t *testToolExecutor) Execute(ctx context.Context, call messages.ToolCall) 
 		ToolCallID: call.ID,
 		Content:    content,
 	}, nil
+}
+
+type countingToolExecutor struct {
+	mu    sync.Mutex
+	calls []messages.ToolCall
+}
+
+func (e *countingToolExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	e.mu.Lock()
+	e.calls = append(e.calls, call)
+	e.mu.Unlock()
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "ok"}, nil
+}
+
+func (e *countingToolExecutor) callCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.calls)
 }
 
 // drainToolDeltas reads from DeltaOutbox until MESSAGE.END or ERROR.
@@ -230,6 +249,31 @@ func TestExecuteBatch_AllSucceed(t *testing.T) {
 		if results[i].Content != exp {
 			t.Errorf("result[%d]: expected %q, got %q", i, exp, results[i].Content)
 		}
+	}
+}
+
+func TestExecuteBatch_DuplicateCallIDIsAdmittedOnce(t *testing.T) {
+	exec := &countingToolExecutor{}
+	runner := NewToolRunner(exec, 10)
+	call := messages.ToolCall{ID: "provider-call-1", Name: "lookup"}
+
+	first, err := runner.executeBatch(context.Background(), []messages.ToolCall{call})
+	if err != nil {
+		t.Fatalf("first executeBatch error = %v", err)
+	}
+	if len(first) != 1 || first[0].ToolCallID != call.ID {
+		t.Fatalf("first results = %#v, want one result for %q", first, call.ID)
+	}
+
+	second, err := runner.executeBatch(context.Background(), []messages.ToolCall{call})
+	if err != nil {
+		t.Fatalf("duplicate executeBatch error = %v", err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("duplicate results = %#v, want no second result", second)
+	}
+	if got := exec.callCount(); got != 1 {
+		t.Fatalf("executor call count = %d, want exactly one admission", got)
 	}
 }
 

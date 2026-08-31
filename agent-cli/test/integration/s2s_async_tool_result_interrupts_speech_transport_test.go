@@ -221,9 +221,12 @@ func (c *asyncCollisionReplayConn) ReadMessage() (int, []byte, error) {
 			waitFor = c.control.continuationRequested
 			phase = c.groups.continuation
 		case 3:
-			// Only after the grounded continuation reaches MESSAGE.END may
-			// the scheduled audio turn reach the provider.
-			waitFor = c.control.continuationCompleted
+			// The scheduled audio is admitted only after the grounded
+			// continuation reaches MESSAGE.END. Once admitted, wait for its
+			// own response.create write before releasing the server response;
+			// otherwise the independent provider read/write loops can publish
+			// collision audio before the client has requested that response.
+			waitFor = c.control.signals.laterResponseReady
 			phase = c.groups.collisionHead
 		case 4:
 			phase = c.groups.collisionTail

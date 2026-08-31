@@ -45,6 +45,15 @@ type ModelRunner struct {
 	// isolated caller that still needs to request one.
 	sessionToolContinuation sessionToolContinuationState
 
+	// sessionToolEventMu protects the count of tool-result boundary events that
+	// have been accepted into UserEventInbox but not yet consumed by the
+	// session runner. The coordinator can enqueue the follow-up inference
+	// request immediately after the forwarder returns, so the count closes the
+	// race where that request would otherwise send a bare RESPONSE.CREATE
+	// before the queued TOOLCALL.END and continuation.
+	sessionToolEventMu       sync.Mutex
+	pendingSessionToolEvents int
+
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
@@ -173,10 +182,41 @@ func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.Stre
 	}
 	select {
 	case r.UserEventInbox <- msg:
+		r.markSessionToolEventQueued(msg)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func isSessionToolEvent(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeToolCallEnd || msg.Type == messages.StreamTypeResponseCreate
+}
+
+func (r *ModelRunner) markSessionToolEventQueued(msg messages.StreamMessage) {
+	if !isSessionToolEvent(msg) {
+		return
+	}
+	r.sessionToolEventMu.Lock()
+	r.pendingSessionToolEvents++
+	r.sessionToolEventMu.Unlock()
+}
+
+func (r *ModelRunner) markSessionToolEventConsumed(msg messages.StreamMessage) {
+	if !isSessionToolEvent(msg) {
+		return
+	}
+	r.sessionToolEventMu.Lock()
+	if r.pendingSessionToolEvents > 0 {
+		r.pendingSessionToolEvents--
+	}
+	r.sessionToolEventMu.Unlock()
+}
+
+func (r *ModelRunner) hasPendingSessionToolEvents() bool {
+	r.sessionToolEventMu.Lock()
+	defer r.sessionToolEventMu.Unlock()
+	return r.pendingSessionToolEvents > 0
 }
 
 func (r *ModelRunner) markAudioInputPending() {

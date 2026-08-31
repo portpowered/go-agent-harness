@@ -595,4 +595,17 @@ func (b *sessionBrowserBroker) Watch(ctx context.Context) <-chan webmcp.BrokerEv
 	return b.Broker.Watch(ctx)
 }
 
+// WatchBrowserEvents forwards the adapter-owned semantic stream without
+// making the recording observer a second consumer of TargetSession.Events.
+func (b *sessionBrowserBroker) WatchBrowserEvents(ctx context.Context) <-chan webmcp.BrowserEvent {
+	if b == nil || b.Broker == nil {
+		return nil
+	}
+	watcher, ok := b.Broker.(webmcp.BrowserEventWatcher)
+	if !ok {
+		return nil
+	}
+	return watcher.WatchBrowserEvents(ctx)
+}
+
 var _ SessionCapabilityInitializer = (*sessionBrowserBroker)(nil)
