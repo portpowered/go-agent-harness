@@ -61,6 +61,12 @@ type FilesystemPolicy struct {
 	protectedReadRoots []string
 }
 
+// FilesystemScopeStartupNotice is the stable customer-facing explanation
+// printed alongside a resolved session scope. Shell-command deny patterns are
+// intentionally described separately so disabling them cannot be mistaken for
+// disabling filesystem confinement or for an operating-system sandbox.
+const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
+
 // ResolveFilesystemPolicy captures and validates one immutable filesystem
 // scope for a run. An empty primary root means the process current working
 // directory. Relative additional roots are resolved against that captured

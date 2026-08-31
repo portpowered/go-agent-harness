@@ -221,10 +221,11 @@ func appendFilesystemScopeAnnouncement(announcement string, policy *tools.Filesy
 		return announcement
 	}
 	scope := "Filesystem scope: " + policy.ScopeDescription()
+	policyNotice := tools.FilesystemScopeStartupNotice
 	if announcement == "" {
-		return scope
+		return scope + "\n" + policyNotice
 	}
-	return scope + "\n" + announcement
+	return scope + "\n" + policyNotice + "\n" + announcement
 }
 
 // configureLoopObserver installs the shared stream observer for every session

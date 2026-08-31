@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -431,6 +432,9 @@ func TestSessionCommand_DisclosesOneEffectiveFilesystemScope(t *testing.T) {
 	scope := "Filesystem scope: workdir=" + canonical + "; additional_allowed_roots=none"
 	if !strings.Contains(out.String(), scope) {
 		t.Fatalf("startup output = %q, want effective scope %q", out.String(), scope)
+	}
+	if !strings.Contains(out.String(), tools.FilesystemScopeStartupNotice) || strings.Contains(out.String(), "All commands will be allowed") {
+		t.Fatalf("startup output does not truthfully describe filesystem and shell boundaries: %q", out.String())
 	}
 	events := inferencer.sentEvents()
 	var instructions string

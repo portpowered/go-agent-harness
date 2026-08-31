@@ -125,6 +125,13 @@ func NewExecTool(workingDir string, restrict bool) *ExecTool {
 }
 
 func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Config) *ExecTool {
+	return newExecToolWithDiagnosticWriter(workingDir, restrict, config, os.Stdout)
+}
+
+func newExecToolWithDiagnosticWriter(workingDir string, restrict bool, config *config.Config, diagnosticWriter io.Writer) *ExecTool {
+	if diagnosticWriter == nil {
+		diagnosticWriter = io.Discard
+	}
 	denyPatterns := make([]*regexp.Regexp, 0)
 	if config == nil {
 		denyPatterns = append(denyPatterns, defaultDenyPatterns...)
@@ -132,11 +139,11 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		execConfig := config.Tools.Exec
 		if execConfig.EnableDenyPatterns {
 			if len(execConfig.CustomDenyPatterns) > 0 {
-				fmt.Printf("Using custom deny patterns: %v\n", execConfig.CustomDenyPatterns)
+				_, _ = fmt.Fprintf(diagnosticWriter, "Using custom deny patterns: %v\n", execConfig.CustomDenyPatterns)
 				for _, pattern := range execConfig.CustomDenyPatterns {
 					re, err := regexp.Compile(pattern)
 					if err != nil {
-						fmt.Printf("Invalid custom deny pattern %q: %v\n", pattern, err)
+						_, _ = fmt.Fprintf(diagnosticWriter, "Invalid custom deny pattern %q: %v\n", pattern, err)
 						continue
 					}
 					denyPatterns = append(denyPatterns, re)
@@ -145,8 +152,9 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 				denyPatterns = append(denyPatterns, defaultDenyPatterns...)
 			}
 		} else {
-			// If deny patterns are disabled, we won't add any patterns, allowing all commands.
-			fmt.Println("Warning: deny patterns are disabled. All commands will be allowed.")
+			// If deny patterns are disabled, shell commands are not filtered by
+			// this pattern policy. Filesystem tools retain their own boundary.
+			_, _ = fmt.Fprintln(diagnosticWriter, "Warning: shell-command deny patterns are disabled. This affects shell-command policy only; filesystem tools remain confined to the effective filesystem scope, and the process is not running inside an operating-system sandbox.")
 		}
 	}
 	return &ExecTool{

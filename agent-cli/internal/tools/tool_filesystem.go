@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	_ "golang.org/x/image/webp"
@@ -770,7 +771,11 @@ func canonicalizePathWithMissing(path string, seen map[string]struct{}) (string,
 			}
 			return filepath.Clean(resolved), nil
 		}
-		if !os.IsNotExist(err) {
+		// A missing descendant below an existing file reports ENOTDIR from
+		// Lstat rather than ENOENT. Treat that as a missing path component so
+		// the actual os.Root operation can return the accurate file/directory
+		// shape diagnostic instead of misclassifying it as a scope escape.
+		if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
 			return "", err
 		}
 		parent := filepath.Dir(current)
