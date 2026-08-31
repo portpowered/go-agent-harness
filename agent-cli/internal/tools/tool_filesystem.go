@@ -5,6 +5,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -234,13 +235,13 @@ type ReadFileTool struct {
 }
 
 func NewReadFileTool(workspace string, restrict bool) *ReadFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &ReadFileTool{fs: fs}
+	return &ReadFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewReadFileToolWithPolicy constructs a read tool confined to the supplied
+// filesystem policy.
+func NewReadFileToolWithPolicy(policy *FilesystemPolicy) *ReadFileTool {
+	return &ReadFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *ReadFileTool) Name() string {
@@ -314,13 +315,13 @@ type WriteFileTool struct {
 }
 
 func NewWriteFileTool(workspace string, restrict bool) *WriteFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &WriteFileTool{fs: fs}
+	return &WriteFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewWriteFileToolWithPolicy constructs a write tool confined to the supplied
+// filesystem policy.
+func NewWriteFileToolWithPolicy(policy *FilesystemPolicy) *WriteFileTool {
+	return &WriteFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *WriteFileTool) Name() string {
@@ -370,13 +371,13 @@ type ListDirTool struct {
 }
 
 func NewListDirTool(workspace string, restrict bool) *ListDirTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &ListDirTool{fs: fs}
+	return &ListDirTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewListDirToolWithPolicy constructs a directory-list tool confined to the
+// supplied filesystem policy.
+func NewListDirToolWithPolicy(policy *FilesystemPolicy) *ListDirTool {
+	return &ListDirTool{fs: newSandboxFs(policy)}
 }
 
 func (t *ListDirTool) Name() string {
@@ -432,6 +433,13 @@ type fileSystem interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, data []byte) error
 	ReadDir(path string) ([]os.DirEntry, error)
+}
+
+func newLegacyFileSystem(workspace string, restrict bool) fileSystem {
+	if restrict {
+		return &sandboxFs{workspace: workspace}
+	}
+	return &hostFs{}
 }
 
 // hostFs is an unrestricted fileReadWriter that operates directly on the host filesystem.
@@ -553,39 +561,147 @@ func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, er
 
 // sandboxFs is a sandboxed fileSystem that operates within a strictly defined workspace using os.Root.
 type sandboxFs struct {
-	workspace string
+	workspace            string
+	additionalWorkspaces []string
 }
 
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
-	if r.workspace == "" {
-		return fmt.Errorf("workspace is not defined")
+	rootPath, relPath, err := r.resolve(path)
+	if err != nil {
+		return err
 	}
 
-	root, err := os.OpenRoot(r.workspace)
+	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return fmt.Errorf("failed to open workspace: %w", err)
 	}
 	defer func() { _ = root.Close() }()
 
-	relPath, err := getSafeRelPath(r.workspace, path)
+	return fn(root, relPath)
+}
+
+func newSandboxFs(policy *FilesystemPolicy) *sandboxFs {
+	if policy == nil {
+		return &sandboxFs{}
+	}
+	roots := policy.WritableRoots()
+	if len(roots) == 0 {
+		return &sandboxFs{}
+	}
+	return &sandboxFs{
+		workspace:            roots[0],
+		additionalWorkspaces: append([]string(nil), roots[1:]...),
+	}
+}
+
+func (r *sandboxFs) resolve(path string) (string, string, error) {
+	roots, err := r.rootPaths()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
-	return fn(root, relPath)
+	candidate := path
+	if !filepath.IsAbs(candidate) {
+		candidate = filepath.Join(roots[0], candidate)
+	}
+	candidate = filepath.Clean(candidate)
+	comparisonCandidate := candidate
+	if resolved, err := canonicalizeExistingPath(candidate); err == nil {
+		comparisonCandidate = resolved
+	}
+	for _, rootPath := range roots {
+		relPath, err := filepath.Rel(rootPath, comparisonCandidate)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to calculate relative path: %w", err)
+		}
+		if filepath.IsLocal(relPath) {
+			return rootPath, relPath, nil
+		}
+	}
+	// Keep a path that lexically sits beneath a root when its final or an
+	// intermediate symlink resolves outside it. The root operation then
+	// rejects that path with an access-denied error instead of treating the
+	// symlink itself as a safe replacement target.
+	for _, rootPath := range roots {
+		relPath, err := filepath.Rel(rootPath, candidate)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to calculate relative path: %w", err)
+		}
+		if filepath.IsLocal(relPath) {
+			return rootPath, relPath, nil
+		}
+	}
+	return "", "", fmt.Errorf("path escapes workspace: %s", path)
+}
+
+// canonicalizeExistingPath resolves the existing portion of a path and then
+// appends its missing descendants. This keeps lexical containment comparisons
+// correct when the platform exposes the same directory through a symlink
+// alias (for example /var versus /private/var on macOS).
+func canonicalizeExistingPath(path string) (string, error) {
+	current := filepath.Clean(path)
+	missing := make([]string, 0)
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			for index := len(missing) - 1; index >= 0; index-- {
+				resolved = filepath.Join(resolved, missing[index])
+			}
+			return filepath.Clean(resolved), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+		missing = append(missing, filepath.Base(current))
+		current = parent
+	}
+}
+
+func (r *sandboxFs) rootPaths() ([]string, error) {
+	if r == nil || strings.TrimSpace(r.workspace) == "" {
+		return nil, fmt.Errorf("workspace is not defined")
+	}
+	rawRoots := make([]string, 0, 1+len(r.additionalWorkspaces))
+	rawRoots = append(rawRoots, r.workspace)
+	rawRoots = append(rawRoots, r.additionalWorkspaces...)
+	roots := make([]string, 0, len(rawRoots))
+	for _, rawRoot := range rawRoots {
+		rootPath, err := filepath.Abs(rawRoot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve workspace path: %w", err)
+		}
+		roots = append(roots, filepath.Clean(rootPath))
+	}
+	return roots, nil
+}
+
+func isSandboxAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, fs.ErrPermission) || os.IsPermission(err) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "escapes from parent") ||
+		strings.Contains(message, "outside root") ||
+		strings.Contains(message, "outside of root") ||
+		strings.Contains(message, "cross-device link")
 }
 
 func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 	var content []byte
 	err := r.execute(path, func(root *os.Root, relPath string) error {
-		fileContent, err := os.ReadFile(relPath)
+		fileContent, err := root.ReadFile(relPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if os.IsNotExist(err) || errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("failed to read file: file not found: %w", err)
 			}
-			// os.Root returns "escapes from parent" for paths outside the root
-			if os.IsPermission(err) || strings.Contains(err.Error(), "escapes from parent") ||
-				strings.Contains(err.Error(), "permission denied") {
+			if isSandboxAccessDenied(err) {
 				return fmt.Errorf("failed to read file: access denied: %w", err)
 			}
 			return fmt.Errorf("failed to read file: %w", err)
@@ -598,9 +714,32 @@ func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 
 func (r *sandboxFs) WriteFile(path string, data []byte) error {
 	return r.execute(path, func(root *os.Root, relPath string) error {
+		// Stat the target before creating the temporary file. Besides keeping
+		// authorization ahead of side effects, this makes an existing symlink
+		// to an external target fail closed instead of being replaced by an
+		// otherwise-safe rename.
+		if _, err := root.Stat(relPath); err != nil && !os.IsNotExist(err) && !errors.Is(err, fs.ErrNotExist) {
+			if isSandboxAccessDenied(err) {
+				return fmt.Errorf("failed to authorize file: access denied: %w", err)
+			}
+		} else if err == nil {
+			if info, lstatErr := root.Lstat(relPath); lstatErr == nil && info.Mode()&os.ModeSymlink != 0 {
+				if err := root.WriteFile(relPath, data, 0o644); err != nil {
+					if isSandboxAccessDenied(err) {
+						return fmt.Errorf("failed to write file: access denied: %w", err)
+					}
+					return fmt.Errorf("failed to write file: %w", err)
+				}
+				return nil
+			}
+		}
+
 		dir := filepath.Dir(relPath)
 		if dir != "." && dir != "/" {
 			if err := root.MkdirAll(dir, 0o755); err != nil {
+				if isSandboxAccessDenied(err) {
+					return fmt.Errorf("failed to create parent directories: access denied: %w", err)
+				}
 				return fmt.Errorf("failed to create parent directories: %w", err)
 			}
 		}
@@ -623,6 +762,10 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 		}
 
 		if err := root.Rename(tmpRelPath, relPath); err != nil {
+			_ = root.Remove(tmpRelPath)
+			if isSandboxAccessDenied(err) {
+				return fmt.Errorf("failed to rename temp file over target: access denied: %w", err)
+			}
 			return fmt.Errorf("failed to rename temp file over target: %w", err)
 		}
 		return nil
@@ -632,7 +775,7 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 func (r *sandboxFs) ReadDir(path string) ([]os.DirEntry, error) {
 	var entries []os.DirEntry
 	err := r.execute(path, func(root *os.Root, relPath string) error {
-		dirEntries, err := fs.ReadDir(root.FS(), relPath)
+		dirEntries, err := fs.ReadDir(root.FS(), filepath.ToSlash(relPath))
 		if err != nil {
 			return err
 		}

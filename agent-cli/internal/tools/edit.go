@@ -18,13 +18,13 @@ type EditFileTool struct {
 
 // NewEditFileTool creates a new EditFileTool with optional directory restriction.
 func NewEditFileTool(workspace string, restrict bool) *EditFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &EditFileTool{fs: fs}
+	return &EditFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewEditFileToolWithPolicy constructs an edit tool confined to the supplied
+// filesystem policy.
+func NewEditFileToolWithPolicy(policy *FilesystemPolicy) *EditFileTool {
+	return &EditFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *EditFileTool) Name() string {
@@ -83,13 +83,13 @@ type AppendFileTool struct {
 }
 
 func NewAppendFileTool(workspace string, restrict bool) *AppendFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &AppendFileTool{fs: fs}
+	return &AppendFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewAppendFileToolWithPolicy constructs an append tool confined to the
+// supplied filesystem policy.
+func NewAppendFileToolWithPolicy(policy *FilesystemPolicy) *AppendFileTool {
+	return &AppendFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *AppendFileTool) Name() string {
