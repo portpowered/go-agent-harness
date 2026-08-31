@@ -661,6 +661,12 @@ func runBrowserConversationSession(ctx context.Context, out io.Writer, request B
 	sessionOptions.RecordPath = ""
 	sessionOptions.ReplayPath = ""
 	sessionOptions.BrowserToolsEnabled = true
+	// BrowserCapabilityState composes the model-facing grounding alongside
+	// BrowserToolsEnabled (see composeSessionInstructions). Leaving it at its
+	// zero value here used to silently drop the connected/unselected
+	// grounding block regardless of the fixture broker's real selection
+	// state; derive it the same way the production CLI session does.
+	sessionOptions.BrowserCapabilityState = browserConversationCapabilityState(ctx, request.Broker)
 	sessionOptions.ToolExecutor = request.ToolExecutor
 	sessionOptions.ToolDefinitions = append([]messages.ToolDefinition(nil), request.ToolDefinitions...)
 	sessionOptions.AudioInputs = cloneScheduledAudioInputs(request.AudioInputs)
@@ -683,6 +689,29 @@ func runBrowserConversationSession(ctx context.Context, out io.Writer, request B
 		}
 	}
 	return RunSession(ctx, out, sessionOptions)
+}
+
+// browserConversationCapabilityState mirrors the production CLI session's
+// sessionInitialBrowserCapabilityState so the hermetic scenario runner
+// composes the same state-dependent grounding a live session would: the
+// fixture broker always has a target selected by the time a session starts
+// (prepareBrowserConversationFixture selects one), but a scenario or a
+// future fixture that leaves the broker connected without a selection must
+// still surface BrowserCapabilityConnectedUnselected instead of silently
+// falling back to the zero value, which composeSessionInstructions treats as
+// "no state" and skips proactive selection grounding for entirely.
+func browserConversationCapabilityState(ctx context.Context, broker webmcp.Broker) webmcp.BrowserCapabilityState {
+	if broker == nil {
+		return webmcp.BrowserCapabilityUnavailable
+	}
+	selected, err := broker.Selected(ctx)
+	if err != nil {
+		return webmcp.BrowserCapabilityConnectedUnselected
+	}
+	if selected.Connected && selected.Key.BrowserID != "" && selected.Key.TargetID != "" {
+		return webmcp.BrowserCapabilitySelected
+	}
+	return webmcp.BrowserCapabilityConnectedUnselected
 }
 
 func combineBrowserConversationStreamObservers(observers ...SessionStreamObserver) SessionStreamObserver {

@@ -375,13 +375,35 @@ const sessionWebMCPAmbiguityPolicy = `WebMCP ambiguity recovery:
 - Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.
 - After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.`
 
+// sessionWebMCPTabSelectionCalibration is the proactive counterpart to
+// sessionWebMCPAmbiguityPolicy above. The ambiguity-recovery policy only
+// takes effect after a WebMCP tool call has already failed with an ambiguous
+// result, so it never fires when the model never attempts a tool call in the
+// first place -- the model then has nothing telling it a tab switch is
+// something it can act on, and it wrongly reports the capability as absent.
+// This block is unconditional on browser capability state (unlike
+// sessionConnectedUnselectedBrowserGrounding, which only applies before any
+// selection has ever succeeded) so a later "switch tabs" request, made after
+// a page is already selected, still carries proactive selection guidance.
+const sessionWebMCPTabSelectionCalibration = `WebMCP tab selection calibration:
+- A customer request to switch, open, or select a browser tab or page is real page work, even when a page is already selected. Call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.
+- Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for "the document editor" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.
+- Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example "Okay, you're on <title> now."
+- Two or more eligible tabs: ask exactly one concise question naming every eligible candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.`
+
 // composeSessionInstructions preserves the selected customer instructions and
 // adds the provider-neutral grounding contract exactly once for tool-enabled
-// sessions. Browser-enabled sessions additionally receive the ambiguity
-// recovery contract, which makes the retryable WebMCP result a customer-input
-// boundary rather than an invitation to repeat a selector-free call. The
-// no-tools path remains byte-for-byte unchanged, and callers that already
-// supplied either policy do not receive a duplicate copy.
+// sessions. Browser-enabled sessions additionally receive the tab-selection
+// calibration contract (act immediately on one clear match, ask only when
+// genuinely ambiguous, never deny the capability) and the ambiguity recovery
+// contract, which makes a retryable WebMCP result a customer-input boundary
+// rather than an invitation to repeat a selector-free call. The calibration
+// contract is unconditional on browser capability state so it still applies
+// once a page has already been selected and the customer asks to switch; the
+// recovery contract only ever matters after a tool call has already been
+// attempted and failed. The no-tools path remains byte-for-byte unchanged,
+// and callers that already supplied any of these policies do not receive a
+// duplicate copy.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
 	if len(opts.ToolDefinitions) == 0 {
 		return instructions
@@ -392,6 +414,9 @@ func composeSessionInstructions(opts SessionRunOptions, instructions string) str
 	}
 	if !strings.Contains(instructions, sessionToolGroundingPolicy) {
 		blocks = append(blocks, sessionToolGroundingPolicy)
+	}
+	if opts.BrowserToolsEnabled && !strings.Contains(instructions, sessionWebMCPTabSelectionCalibration) {
+		blocks = append(blocks, sessionWebMCPTabSelectionCalibration)
 	}
 	if opts.BrowserToolsEnabled && !strings.Contains(instructions, sessionWebMCPAmbiguityPolicy) {
 		blocks = append(blocks, sessionWebMCPAmbiguityPolicy)
