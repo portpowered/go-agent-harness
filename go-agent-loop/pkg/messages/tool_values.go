@@ -1,5 +1,7 @@
 package messages
 
+import "encoding/json"
+
 // Tool definitions, parameters, and stream values for model tool calls live in this file.
 
 // ToolCall represents a request from the model to invoke a tool.
@@ -14,6 +16,10 @@ type ToolDefinition struct {
 	Name        string
 	Description string
 	Parameters  []ToolParameter
+	// ParameterSchema optionally carries the complete JSON Schema object for
+	// provider adapters that can publish nested constraints. Parameters remains
+	// the backward-compatible flat view used by the agent-loop contract.
+	ParameterSchema json.RawMessage `json:"-"`
 	// ParametersClosed asks provider adapters that reconstruct JSON Schema to
 	// emit `additionalProperties: false`. It is transport metadata for the
 	// small flat contract and is intentionally omitted from direct JSON

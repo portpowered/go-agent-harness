@@ -614,6 +614,25 @@ func TestSessionDynamicToolPublisher_NoOpRefreshKeepsLastSuccessfulState(t *test
 	}
 }
 
+func TestSessionToolDefinitionDigestIncludesCompleteParameterSchema(t *testing.T) {
+	first := dynamicPublisherTestDefinition("page_tool", "page")
+	first.ParameterSchema = json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}}}`)
+	second := first
+	second.ParameterSchema = json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"integer"}}}}`)
+
+	firstDigest, err := sessionToolDefinitionDigest([]messages.ToolDefinition{first})
+	if err != nil {
+		t.Fatalf("digest first definition: %v", err)
+	}
+	secondDigest, err := sessionToolDefinitionDigest([]messages.ToolDefinition{second})
+	if err != nil {
+		t.Fatalf("digest second definition: %v", err)
+	}
+	if firstDigest == secondDigest {
+		t.Fatalf("schema-only definition change did not change digest: %s", firstDigest)
+	}
+}
+
 func TestSessionDynamicToolPublisher_RefreshFailureRetainsLastSuccessfulState(t *testing.T) {
 	base := []messages.ToolDefinition{dynamicPublisherTestDefinition("stable_tool", "stable")}
 	pageA := []messages.ToolDefinition{dynamicPublisherTestDefinition("page_a", "page A")}

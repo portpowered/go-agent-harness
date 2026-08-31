@@ -375,7 +375,7 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 			update["modalities"] = append([]string(nil), v.Modalities...)
 		}
 		if len(v.Tools) > 0 {
-			update["tools"] = v.Tools
+			update["tools"] = grokToolDefinitions(v.Tools)
 		}
 		data, _ := json.Marshal(map[string]any{
 			"session": update,

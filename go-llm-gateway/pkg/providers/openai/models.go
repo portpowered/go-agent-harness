@@ -1,7 +1,10 @@
 package openai
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -216,6 +219,9 @@ func toolsToParams(tools []models.ToolDefinition) []chatTool {
 
 // buildParameters converts tool parameters to OpenAI function parameters (JSON Schema).
 func buildParameters(tool models.ToolDefinition) map[string]interface{} {
+	if schema, ok := completeToolParameterSchema(tool.ParameterSchema); ok {
+		return schema
+	}
 	if len(tool.Parameters) == 0 {
 		parameters := map[string]interface{}{
 			"type":       "object",
@@ -247,6 +253,27 @@ func buildParameters(tool models.ToolDefinition) map[string]interface{} {
 		parameters["additionalProperties"] = false
 	}
 	return parameters
+}
+
+// completeToolParameterSchema preserves a dynamic page tool's complete JSON
+// Schema when the provider supports arbitrary nested parameter constraints.
+// Invalid or non-object schemas fall back to the legacy flat representation so
+// static tools retain their existing behavior.
+func completeToolParameterSchema(raw json.RawMessage) (map[string]interface{}, bool) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var schema map[string]interface{}
+	if err := decoder.Decode(&schema); err != nil || schema == nil {
+		return nil, false
+	}
+	var extra interface{}
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, false
+	}
+	return schema, true
 }
 
 // responseToMessage converts an OpenAI chat completion message to a gateway message.

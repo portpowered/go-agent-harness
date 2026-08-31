@@ -154,6 +154,10 @@ func toolsToParams(tools []models.ToolDefinition) []anthropic.ToolUnionParam {
 }
 
 func mapToolToInputSchema(tool models.ToolDefinition) anthropic.ToolInputSchemaParam {
+	if schema, ok := completeToolInputSchema(tool.ParameterSchema); ok {
+		return schema
+	}
+
 	properties := map[string]any{}
 	required := []string{}
 	for _, p := range tool.Parameters {
@@ -170,6 +174,36 @@ func mapToolToInputSchema(tool models.ToolDefinition) anthropic.ToolInputSchemaP
 		Properties: properties,
 		Required:   required,
 	}
+}
+
+// completeToolInputSchema retains nested JSON Schema fields for dynamic page
+// tools. The Anthropic SDK exposes root-level extension fields through
+// ExtraFields while Properties keeps the nested property tree intact.
+func completeToolInputSchema(raw json.RawMessage) (anthropic.ToolInputSchemaParam, bool) {
+	var parsed struct {
+		Type       string         `json:"type"`
+		Properties map[string]any `json:"properties"`
+		Required   []string       `json:"required"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &parsed) != nil || (parsed.Type != "" && parsed.Type != "object") {
+		return anthropic.ToolInputSchemaParam{}, false
+	}
+	var all map[string]any
+	if err := json.Unmarshal(raw, &all); err != nil || all == nil {
+		return anthropic.ToolInputSchemaParam{}, false
+	}
+	delete(all, "type")
+	delete(all, "properties")
+	delete(all, "required")
+	if parsed.Properties == nil {
+		parsed.Properties = map[string]any{}
+	}
+	return anthropic.ToolInputSchemaParam{
+		Type:        constant.Object("object"),
+		Properties:  parsed.Properties,
+		Required:    parsed.Required,
+		ExtraFields: all,
+	}, true
 }
 
 // responseToMessage converts an Anthropic Message to a gateway message.

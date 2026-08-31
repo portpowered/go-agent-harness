@@ -12,7 +12,12 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-const directNormalizedIDMaxLength = 64
+const (
+	directNormalizedIDMaxLength  = 64
+	directMaxAmbiguityCandidates = 32
+	directMaxAmbiguityTitle      = 160
+	directMaxAmbiguityOrigin     = 256
+)
 
 // normalizeDirectOpaqueID accepts the same bounded public-ID alphabet used by
 // discovery. Direct commands receive normalized IDs from their broker, but
@@ -79,6 +84,220 @@ func directTargetCandidateIDs(targets []webmcp.Target) []string {
 		ids = append(ids, string(target.ID))
 	}
 	return sortedUniqueDirectIDs(ids)
+}
+
+func directAmbiguityTargetIDs(targets []webmcp.Target) []string {
+	ids := directTargetCandidateIDs(targets)
+	if len(ids) > directMaxAmbiguityCandidates {
+		return ids[:directMaxAmbiguityCandidates]
+	}
+	return ids
+}
+
+func directCandidateChoicesForTargets(browserID string, targets []webmcp.Target) []map[string]any {
+	ordered := append([]webmcp.Target(nil), targets...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		leftID := normalizeDirectOpaqueID(string(ordered[i].ID))
+		rightID := normalizeDirectOpaqueID(string(ordered[j].ID))
+		if leftID != rightID {
+			return leftID < rightID
+		}
+		leftOrigin := directCandidateOrigin(ordered[i])
+		rightOrigin := directCandidateOrigin(ordered[j])
+		if leftOrigin != rightOrigin {
+			return leftOrigin < rightOrigin
+		}
+		return directCandidateTitle(ordered[i].Title) < directCandidateTitle(ordered[j].Title)
+	})
+
+	choices := make([]map[string]any, 0, len(ordered))
+	seen := make(map[string]struct{}, len(ordered))
+	for _, target := range ordered {
+		targetID := normalizeDirectOpaqueID(string(target.ID))
+		if targetID == "" {
+			continue
+		}
+		if _, exists := seen[targetID]; exists {
+			continue
+		}
+		seen[targetID] = struct{}{}
+		choice := map[string]any{
+			"browser_id": normalizeDirectOpaqueID(browserID),
+			"target_id":  targetID,
+		}
+		if title := directCandidateTitle(target.Title); title != "" {
+			choice["title"] = title
+		}
+		if origin := directCandidateOrigin(target); origin != "" {
+			choice["origin"] = origin
+		}
+		choices = append(choices, choice)
+		if len(choices) == directMaxAmbiguityCandidates {
+			break
+		}
+	}
+	return choices
+}
+
+func directSafeCandidateChoices(value any, fallbackBrowserID string, candidateIDs []string) []map[string]any {
+	type metadata struct {
+		browserID string
+		targetID  string
+		title     string
+		origin    string
+	}
+	items := make([]metadata, 0)
+	appendMap := func(choice map[string]any) {
+		targetID := normalizeDirectOpaqueID(stringValue(choice["target_id"]))
+		if targetID == "" {
+			return
+		}
+		browserID := normalizeDirectOpaqueID(stringValue(choice["browser_id"]))
+		if browserID == "" {
+			browserID = normalizeDirectOpaqueID(fallbackBrowserID)
+		}
+		items = append(items, metadata{
+			browserID: browserID,
+			targetID:  targetID,
+			title:     directSafeCandidateTitle(stringValue(choice["title"])),
+			origin:    directSafeCandidateOrigin(stringValue(choice["origin"])),
+		})
+	}
+	switch choices := value.(type) {
+	case []map[string]any:
+		for _, choice := range choices {
+			appendMap(choice)
+		}
+	case []any:
+		for _, value := range choices {
+			if choice, ok := value.(map[string]any); ok {
+				appendMap(choice)
+			}
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].targetID != items[j].targetID {
+			return items[i].targetID < items[j].targetID
+		}
+		if items[i].browserID != items[j].browserID {
+			return items[i].browserID < items[j].browserID
+		}
+		if items[i].title != items[j].title {
+			return items[i].title < items[j].title
+		}
+		return items[i].origin < items[j].origin
+	})
+
+	ids := append([]string(nil), candidateIDs...)
+	if len(ids) == 0 {
+		for _, item := range items {
+			ids = append(ids, item.targetID)
+		}
+	}
+	ids = sortedUniqueDirectIDs(ids)
+	if len(ids) > directMaxAmbiguityCandidates {
+		ids = ids[:directMaxAmbiguityCandidates]
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	byID := make(map[string]metadata, len(items))
+	for _, item := range items {
+		if _, exists := byID[item.targetID]; !exists {
+			byID[item.targetID] = item
+		}
+	}
+	result := make([]map[string]any, 0, len(ids))
+	for _, targetID := range ids {
+		item := byID[targetID]
+		browserID := item.browserID
+		if browserID == "" {
+			browserID = normalizeDirectOpaqueID(fallbackBrowserID)
+		}
+		choice := map[string]any{"browser_id": browserID, "target_id": targetID}
+		if item.title != "" {
+			choice["title"] = item.title
+		}
+		if item.origin != "" {
+			choice["origin"] = item.origin
+		}
+		result = append(result, choice)
+	}
+	return result
+}
+
+func directCandidateTitle(value string) string {
+	value = boundedDoctorText(value, directMaxAmbiguityTitle)
+	if value == "" {
+		return ""
+	}
+	if directContainsControl(value) || strings.Contains(value, "://") || strings.ContainsAny(value, "?#@") {
+		return "redacted"
+	}
+	return value
+}
+
+func directSafeCandidateTitle(value string) string {
+	return directCandidateTitle(value)
+}
+
+func directCandidateOrigin(target webmcp.Target) string {
+	for _, value := range []string{target.Origin, target.URL} {
+		if origin := directCanonicalCandidateOrigin(value); origin != "" {
+			return origin
+		}
+	}
+	return ""
+}
+
+func directSafeCandidateOrigin(value string) string {
+	return directCanonicalCandidateOrigin(value)
+}
+
+func directCanonicalCandidateOrigin(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || len(raw) > 4096 || directContainsControl(raw) {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil || parsed.User != nil {
+		return ""
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" || parsed.Hostname() == "" {
+		return ""
+	}
+	port := parsed.Port()
+	if port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return ""
+		}
+		if scheme == "http" && port == "80" || scheme == "https" && port == "443" {
+			port = ""
+		}
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port != "" {
+		host += ":" + port
+	}
+	origin := scheme + "://" + host
+	if len(origin) > directMaxAmbiguityOrigin {
+		return ""
+	}
+	return origin
+}
+
+func directContainsControl(value string) bool {
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeDirectBrowserCandidates(candidates []webmcp.BrowserCandidate) []webmcp.BrowserCandidate {

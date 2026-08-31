@@ -43,9 +43,20 @@ func TestSelectTargetRequiresExactIDsAndPreservesPriorSelectionOnFailure(t *test
 		targetDescriptor("raw-b", "B", "https://b.test/orders?secret=removed", 2),
 		targetDescriptor("raw-a", "A", "https://a.test/", 1),
 	}
+	recorder := &eventRecorder{}
+	activator := &selectionActivator{}
+	attachCalls := 0
+	listCalls := 0
 	service := New(Options{
-		Clock: selectionClock{now: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)},
+		Clock:     selectionClock{now: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)},
+		EventSink: recorder,
+		Activator: activator,
+		TargetAttacher: TargetAttacherFunc(func(context.Context, BrowserCandidate, Target) (TargetDetacher, error) {
+			attachCalls++
+			return &selectionDetacher{}, nil
+		}),
 		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+			listCalls++
 			return append([]TargetDescriptor(nil), descriptors...), nil
 		}),
 	})
@@ -57,6 +68,47 @@ func TestSelectTargetRequiresExactIDsAndPreservesPriorSelectionOnFailure(t *test
 	ambiguous := assertDiscoveryError(t, err, CodeAmbiguousTab)
 	if ids, ok := ambiguous.Details["candidate_target_ids"].([]string); !ok || len(ids) != 2 || !strings.HasPrefix(ids[0], "target-") || ids[0] >= ids[1] {
 		t.Fatalf("ambiguous target IDs = %#v", ambiguous.Details["candidate_target_ids"])
+	}
+	choices, ok := ambiguous.Details["candidate_choices"].([]map[string]any)
+	if !ok || len(choices) != 2 {
+		t.Fatalf("ambiguous candidate choices = %#v", ambiguous.Details["candidate_choices"])
+	}
+	if choices[0]["target_id"] != ambiguous.Details["candidate_target_ids"].([]string)[0] || choices[1]["target_id"] != ambiguous.Details["candidate_target_ids"].([]string)[1] {
+		t.Fatalf("candidate choices are not ID ordered: %#v", choices)
+	}
+	for _, choice := range choices {
+		if choice["browser_id"] != browser.ID {
+			t.Fatalf("candidate browser identity = %#v, want %q", choice["browser_id"], browser.ID)
+		}
+		if _, ok := choice["url"]; ok {
+			t.Fatalf("candidate choice exposed URL: %#v", choice)
+		}
+		if _, ok := choice["title"].(string); !ok {
+			t.Fatalf("candidate choice omitted title: %#v", choice)
+		}
+		origin, ok := choice["origin"].(string)
+		if !ok || origin != "https://a.test" && origin != "https://b.test" {
+			t.Fatalf("candidate origin = %#v", choice["origin"])
+		}
+	}
+	recovery, ok := ambiguous.Details["recovery"].(map[string]any)
+	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" {
+		t.Fatalf("ambiguity recovery = %#v", ambiguous.Details["recovery"])
+	}
+	if attachCalls != 0 || activator.calls != 0 {
+		t.Fatalf("ambiguous selection caused side effects: attach=%d activate=%d", attachCalls, activator.calls)
+	}
+	if listCalls != 1 {
+		t.Fatalf("target list calls = %d, want one without an unchanged retry", listCalls)
+	}
+	snapshotEvents := 0
+	for _, event := range recorder.events {
+		if event.Type == EventTargetsSnapshot {
+			snapshotEvents++
+		}
+	}
+	if snapshotEvents != 1 {
+		t.Fatalf("target snapshots = %d, want one", snapshotEvents)
 	}
 	if _, ok := service.Selected(); ok {
 		t.Fatal("ambiguous selection mutated current selection")
@@ -79,6 +131,32 @@ func TestSelectTargetRequiresExactIDsAndPreservesPriorSelectionOnFailure(t *test
 	current, ok := service.Selected()
 	if !ok || current.TargetID != selected.TargetID || current.Generation != selected.Generation {
 		t.Fatalf("failed exact selection replaced prior state: current=%#v ok=%v prior=%#v", current, ok, selected)
+	}
+}
+
+func TestAmbiguousTabChoicesRedactPageDataAndKeepIDs(t *testing.T) {
+	failure := newAmbiguousTabForTargets("browser-safe", []Target{
+		{ID: "target-b", Title: "Billing", URL: "https://billing.example.test/invoices?token=secret#fragment"},
+		{ID: "target-a", Title: "https://orders.example.test/private", URL: "https://user:pass@orders.example.test/private"},
+	})
+	choices, ok := failure.Details["candidate_choices"].([]map[string]any)
+	if !ok || len(choices) != 2 {
+		t.Fatalf("candidate choices = %#v", failure.Details["candidate_choices"])
+	}
+	if choices[0]["target_id"] != "target-a" || choices[1]["target_id"] != "target-b" {
+		t.Fatalf("candidate choice order = %#v", choices)
+	}
+	if choices[0]["title"] != "redacted" {
+		t.Fatalf("unsafe title = %#v", choices[0]["title"])
+	}
+	if _, exists := choices[0]["origin"]; exists {
+		t.Fatalf("credential-bearing origin was emitted: %#v", choices[0])
+	}
+	if choices[1]["origin"] != "https://billing.example.test" {
+		t.Fatalf("canonical origin = %#v", choices[1]["origin"])
+	}
+	if strings.Contains(failure.Message, "secret") {
+		t.Fatalf("ambiguity message leaked page data: %q", failure.Message)
 	}
 }
 

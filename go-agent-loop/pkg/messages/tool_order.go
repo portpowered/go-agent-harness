@@ -1,6 +1,9 @@
 package messages
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // CanonicalToolDefinitions returns an independently owned tool-definition
 // snapshot in deterministic order. Both the tool list and each tool's
@@ -18,6 +21,9 @@ func CanonicalToolDefinitions(definitions []ToolDefinition) []ToolDefinition {
 		if definition.Parameters != nil {
 			canonical[index].Parameters = make([]ToolParameter, len(definition.Parameters))
 			copy(canonical[index].Parameters, definition.Parameters)
+		}
+		if definition.ParameterSchema != nil {
+			canonical[index].ParameterSchema = append(json.RawMessage(nil), definition.ParameterSchema...)
 		}
 	}
 

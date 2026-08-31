@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -210,6 +211,376 @@ func TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce(t *testing.T) {
 	if responseCreates != 2 {
 		t.Fatalf("provider response.create count = %d, want exactly one per result batch", responseCreates)
 	}
+}
+
+func TestWebMCPAmbiguitySessionForwardsOneResultAndAsksOneQuestion(t *testing.T) {
+	const (
+		callID   = "call_ambiguous_context"
+		question = "Which page should I use: Orders (https://orders.example.test) or Billing (https://billing.example.test)?"
+	)
+	ambiguity := webMCPAmbiguitySessionResult(t)
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(out, question, "",
+		scriptedTurn{events: toolCallEvents(callID, webmcp.GetContextToolName, `{}`)},
+	)
+	inferencer.followUpEvents = []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(question)},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{1, 2, 3})},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	}
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	calls := 0
+	executor := sessionToolExecutorFunc(func(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+		calls++
+		if call.ID != callID || call.Name != webmcp.GetContextToolName || call.Arguments != `{}` {
+			return messages.ToolCallResponse{}, fmt.Errorf("unexpected ambiguity call: %#v", call)
+		}
+		return messages.ToolCallResponse{Content: ambiguity}, nil
+	})
+
+	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:     2 * time.Second,
+		WaitForClose:    true,
+		ToolExecutor:    executor,
+		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}},
+		observer:        observer,
+	})
+	if err != nil {
+		t.Fatalf("run ambiguous WebMCP session: %v\noutput:\n%s", err, out.String())
+	}
+	if calls != 1 {
+		t.Fatalf("ambiguous WebMCP executor calls = %d, want exactly one", calls)
+	}
+	if strings.Count(out.String(), question) != 1 {
+		t.Fatalf("assistant disambiguation question count = %d, want one\noutput:\n%s", strings.Count(out.String(), question), out.String())
+	}
+	observer.toolStateMu.Lock()
+	outputAudioBytes := observer.responseOutputAudioBytes
+	observer.toolStateMu.Unlock()
+	if outputAudioBytes == 0 {
+		t.Fatal("assistant disambiguation response had no spoken audio")
+	}
+
+	session := inferencer.sessionSnapshot()
+	if session == nil {
+		t.Fatal("scripted inferencer did not retain its session")
+	}
+	var resultEnds, responseCreates int
+	var resultPayload string
+	for _, msg := range session.sentSnapshot() {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			resultEnds++
+			result, ok := msg.Value.(*messages.ToolCallEndValue)
+			if !ok || result == nil {
+				t.Fatalf("tool result value = %T, want *messages.ToolCallEndValue", msg.Value)
+			}
+			if result.ToolCallID != callID || result.Name != webmcp.GetContextToolName {
+				t.Fatalf("tool result correlation = (%q, %q), want (%q, %q)", result.ToolCallID, result.Name, callID, webmcp.GetContextToolName)
+			}
+			resultPayload = result.Arguments
+		case messages.StreamTypeResponseCreate:
+			responseCreates++
+		}
+	}
+	if resultEnds != 1 || responseCreates != 1 {
+		t.Fatalf("ambiguity provider boundaries = result:%d response.create:%d, want one of each", resultEnds, responseCreates)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(resultPayload))
+	if err != nil {
+		t.Fatalf("decode provider ambiguity result: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorAmbiguousTab) || !envelope.Error.Retryable {
+		t.Fatalf("provider ambiguity envelope = %#v, want retryable ambiguous_tab failure", envelope)
+	}
+	var details struct {
+		CandidateChoices []struct {
+			TargetID string `json:"target_id"`
+			Title    string `json:"title"`
+			Origin   string `json:"origin"`
+		} `json:"candidate_choices"`
+		Recovery struct {
+			Action      string `json:"action"`
+			RetryAfter  string `json:"retry_after"`
+			Instruction string `json:"instruction"`
+		} `json:"recovery"`
+	}
+	detailsJSON, err := json.Marshal(envelope.Error.Details)
+	if err != nil {
+		t.Fatalf("marshal ambiguity details: %v", err)
+	}
+	if err := json.Unmarshal(detailsJSON, &details); err != nil {
+		t.Fatalf("decode ambiguity details: %v", err)
+	}
+	if len(details.CandidateChoices) != 2 {
+		t.Fatalf("candidate choices = %#v, want both pages", details.CandidateChoices)
+	}
+	for _, choice := range details.CandidateChoices {
+		if choice.TargetID == "" || choice.Title == "" || choice.Origin == "" {
+			t.Fatalf("candidate choice = %#v, want target ID, title, and origin", choice)
+		}
+		if !strings.Contains(question, choice.Title) || !strings.Contains(question, choice.Origin) {
+			t.Fatalf("question %q omitted candidate label %#v", question, choice)
+		}
+	}
+	if details.Recovery.Action != "ask_customer" || details.Recovery.RetryAfter != "customer_input" || !strings.Contains(details.Recovery.Instruction, "do not repeat") {
+		t.Fatalf("ambiguity recovery = %#v, want bounded ask-customer guidance", details.Recovery)
+	}
+}
+
+func TestWebMCPAmbiguitySessionRejectsSilentContinuation(t *testing.T) {
+	ambiguity := webMCPAmbiguitySessionResult(t)
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(out, "", "",
+		scriptedTurn{events: toolCallEvents("call_silent_ambiguity", webmcp.GetContextToolName, `{}`)},
+	)
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:  2 * time.Second,
+		WaitForClose: true,
+		ToolExecutor: sessionToolExecutorFunc(func(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+			return messages.ToolCallResponse{Content: ambiguity}, nil
+		}),
+		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}},
+		observer:        observer,
+	})
+	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
+		t.Fatalf("silent ambiguity continuation error = %v, want ErrSessionAudioResponseIncomplete", err)
+	}
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) {
+		t.Fatalf("silent ambiguity continuation error = %v, want ErrSessionToolContinuationIncomplete", err)
+	}
+}
+
+func TestWebMCPAmbiguitySessionUsesExactChoiceBeforePageWork(t *testing.T) {
+	const (
+		ambiguityCallID = "call_choice_ambiguity"
+		selectCallID    = "call_choice_select"
+		pageCallID      = "call_choice_page"
+		question        = "Which page should I use: Orders (https://orders.example.test) or Billing (https://billing.example.test)?"
+	)
+	ambiguity := webMCPAmbiguitySessionResult(t)
+	out := newSignalingBuffer()
+	inferencer := newWebMCPChoiceInferencer(out, question)
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	var (
+		mu          sync.Mutex
+		calls       []messages.ToolCall
+		selected    bool
+		pageTargets []string
+	)
+	executor := sessionToolExecutorFunc(func(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+		mu.Lock()
+		calls = append(calls, call)
+		mu.Unlock()
+		switch call.ID {
+		case ambiguityCallID:
+			if call.Name != webmcp.GetContextToolName || call.Arguments != `{}` {
+				return messages.ToolCallResponse{}, fmt.Errorf("unexpected ambiguity call: %#v", call)
+			}
+			return messages.ToolCallResponse{Content: ambiguity}, nil
+		case selectCallID:
+			if call.Name != webmcp.SelectTabToolName {
+				return messages.ToolCallResponse{}, fmt.Errorf("unexpected selection tool: %#v", call)
+			}
+			var selection struct {
+				BrowserID string `json:"browser_id"`
+				TargetID  string `json:"target_id"`
+			}
+			if err := json.Unmarshal([]byte(call.Arguments), &selection); err != nil {
+				return messages.ToolCallResponse{}, fmt.Errorf("decode exact selection: %w", err)
+			}
+			if selection.BrowserID != "browser-session" || selection.TargetID != "target-orders" {
+				return messages.ToolCallResponse{}, fmt.Errorf("selection = %#v, want exact Orders candidate", selection)
+			}
+			mu.Lock()
+			selected = true
+			mu.Unlock()
+			return webMCPChoiceSuccess(t, map[string]any{
+				"browser_id": selection.BrowserID,
+				"target_id":  selection.TargetID,
+			}), nil
+		case pageCallID:
+			if call.Name != "orders_action" {
+				return messages.ToolCallResponse{}, fmt.Errorf("unexpected page tool: %#v", call)
+			}
+			mu.Lock()
+			pageTargets = append(pageTargets, "target-orders")
+			wasSelected := selected
+			mu.Unlock()
+			if !wasSelected {
+				return messages.ToolCallResponse{}, errors.New("page work arrived before exact customer choice")
+			}
+			return webMCPChoiceSuccess(t, map[string]any{"target_id": "target-orders", "status": "completed"}), nil
+		default:
+			return messages.ToolCallResponse{}, fmt.Errorf("unexpected tool call: %#v", call)
+		}
+	})
+
+	err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:     2 * time.Second,
+		WaitForClose:    true,
+		ToolExecutor:    executor,
+		ToolDefinitions: []messages.ToolDefinition{{Name: webmcp.GetContextToolName}, {Name: webmcp.SelectTabToolName}, {Name: "orders_action"}},
+		observer:        observer,
+	})
+	if err != nil {
+		t.Fatalf("run choice WebMCP session: %v\noutput:\n%s", err, out.String())
+	}
+	if strings.Count(out.String(), question) != 1 {
+		t.Fatalf("choice question count = %d, want one\noutput:\n%s", strings.Count(out.String(), question), out.String())
+	}
+	mu.Lock()
+	gotCalls := append([]messages.ToolCall(nil), calls...)
+	gotPageTargets := append([]string(nil), pageTargets...)
+	wasSelected := selected
+	mu.Unlock()
+	if !wasSelected || len(gotPageTargets) != 1 || gotPageTargets[0] != "target-orders" {
+		t.Fatalf("choice state selected=%t page_targets=%v, want one chosen Orders page action", wasSelected, gotPageTargets)
+	}
+	if len(gotCalls) != 3 || gotCalls[0].ID != ambiguityCallID || gotCalls[1].ID != selectCallID || gotCalls[2].ID != pageCallID {
+		t.Fatalf("choice tool calls = %#v, want ambiguity then exact selection then chosen page", gotCalls)
+	}
+
+	sent := inferencer.sessionSnapshot().sentSnapshot()
+	resultEnds, responseCreates := 0, 0
+	for _, msg := range sent {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			resultEnds++
+		case messages.StreamTypeResponseCreate:
+			responseCreates++
+		}
+	}
+	if resultEnds != 3 || responseCreates != 3 {
+		t.Fatalf("choice provider boundaries = result:%d response.create:%d, want one correlated continuation per completed call", resultEnds, responseCreates)
+	}
+}
+
+type webMCPChoiceInferencer struct {
+	out      *signalingBuffer
+	question string
+
+	sessionMu sync.Mutex
+	session   *roundTripSession
+}
+
+func newWebMCPChoiceInferencer(out *signalingBuffer, question string) *webMCPChoiceInferencer {
+	return &webMCPChoiceInferencer{out: out, question: question}
+}
+
+func (i *webMCPChoiceInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := newRoundTripSession()
+	i.sessionMu.Lock()
+	i.session = session
+	i.sessionMu.Unlock()
+	go func() {
+		if !session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeSessionOpen,
+			Value: messages.NewSessionOpenValue("choice-session", "session"),
+		}) {
+			return
+		}
+		if !session.recv.Write(ctx, toolCallEvents("call_choice_ambiguity", webmcp.GetContextToolName, `{}`)[0]) {
+			return
+		}
+		for _, event := range toolCallEvents("call_choice_ambiguity", webmcp.GetContextToolName, `{}`)[1:] {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return
+		}
+
+		questionEvents := []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(i.question)},
+			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{4, 5, 6})},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		}
+		for _, event := range questionEvents {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		if i.out != nil && !i.out.waitForOutput(i.question, 5*time.Second) {
+			return
+		}
+		for _, event := range []messages.StreamMessage{
+			{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("Orders")},
+			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("Orders")},
+		} {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		for _, event := range toolCallEvents("call_choice_select", webmcp.SelectTabToolName, `{"browser_id":"browser-session","target_id":"target-orders"}`) {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return
+		}
+		for _, event := range toolCallEvents("call_choice_page", "orders_action", `{"move":"R"}`) {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return
+		}
+		for _, event := range []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("Done on Orders.")},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("choice-session", "choice complete")},
+		} {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+	}()
+	return session, nil
+}
+
+func (i *webMCPChoiceInferencer) sessionSnapshot() *roundTripSession {
+	i.sessionMu.Lock()
+	defer i.sessionMu.Unlock()
+	return i.session
+}
+
+func webMCPChoiceSuccess(t *testing.T, data any) messages.ToolCallResponse {
+	t.Helper()
+	encoded, err := webmcp.EncodeToolResult(data, nil)
+	if err != nil {
+		t.Fatalf("encode choice success: %v", err)
+	}
+	return messages.ToolCallResponse{Content: string(encoded)}
+}
+
+func webMCPAmbiguitySessionResult(t *testing.T) string {
+	t.Helper()
+	resultError := webmcp.ResultErrorFor(
+		webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible pages matched", map[string]any{
+			"browser_id":           "browser-session",
+			"candidate_target_ids": []string{"target-orders", "target-billing"},
+			"candidate_choices": []map[string]any{
+				{"browser_id": "browser-session", "target_id": "target-orders", "title": "Orders", "origin": "https://orders.example.test"},
+				{"browser_id": "browser-session", "target_id": "target-billing", "title": "Billing", "origin": "https://billing.example.test"},
+			},
+		}),
+		webmcp.ErrorInvocationFailed,
+		nil,
+	)
+	encoded, err := webmcp.EncodeToolResult(nil, &resultError)
+	if err != nil {
+		t.Fatalf("encode ambiguity session result: %v", err)
+	}
+	return string(encoded)
 }
 
 func TestWebMCPMutationTimeoutIsTerminalAndNotRetried(t *testing.T) {

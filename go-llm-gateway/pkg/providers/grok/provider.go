@@ -130,7 +130,7 @@ func buildSessionUpdate(config models.SessionConfig) (models.SessionEvent, error
 		update["turn_detection"] = config.TurnDetection
 	}
 	if len(config.Tools) > 0 {
-		update["tools"] = config.Tools
+		update["tools"] = grokToolDefinitions(config.Tools)
 	}
 
 	data, err := json.Marshal(map[string]any{

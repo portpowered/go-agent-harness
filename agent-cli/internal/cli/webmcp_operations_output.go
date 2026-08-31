@@ -539,10 +539,24 @@ func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResul
 	}
 	switch webmcp.ErrorCode(result.Code) {
 	case webmcp.ErrorAmbiguousBrowser:
-		result.Details["candidate_browser_ids"] = directSafeIDList(result.Details["candidate_browser_ids"])
+		ids := directSafeIDList(result.Details["candidate_browser_ids"])
+		if len(ids) > directMaxAmbiguityCandidates {
+			ids = ids[:directMaxAmbiguityCandidates]
+		}
+		result.Details["candidate_browser_ids"] = ids
 	case webmcp.ErrorAmbiguousTab:
-		result.Details["browser_id"] = normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
-		result.Details["candidate_target_ids"] = directSafeIDList(result.Details["candidate_target_ids"])
+		browserID := normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
+		ids := directSafeIDList(result.Details["candidate_target_ids"])
+		if len(ids) > directMaxAmbiguityCandidates {
+			ids = ids[:directMaxAmbiguityCandidates]
+		}
+		result.Details["browser_id"] = browserID
+		result.Details["candidate_target_ids"] = ids
+		if choices := directSafeCandidateChoices(result.Details["candidate_choices"], browserID, ids); len(choices) > 0 {
+			result.Details["candidate_choices"] = choices
+		} else {
+			delete(result.Details, "candidate_choices")
+		}
 	}
 	return result
 }

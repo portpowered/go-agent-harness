@@ -1051,7 +1051,8 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		case len(matches) > 1:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
 				"browser_id":           normalizeDirectOpaqueID(browserID),
-				"candidate_target_ids": directTargetCandidateIDs(matches),
+				"candidate_target_ids": directAmbiguityTargetIDs(matches),
+				"candidate_choices":    directCandidateChoicesForTargets(browserID, matches),
 			})
 		case browser.Selection.AutoSelect == config.BrowserAutoSelectPersisted:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{

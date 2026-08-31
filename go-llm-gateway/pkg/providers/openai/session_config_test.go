@@ -51,6 +51,46 @@ func TestBuildRealtimeSessionUpdateCanonicalizesToolOrder(t *testing.T) {
 	}
 }
 
+func TestBuildRealtimeSessionUpdatePreservesCompletePageToolSchema(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]},"turns":{"type":"integer","minimum":1}},"required":["face","turns"],"additionalProperties":false}}},"required":["moves"],"additionalProperties":false}`)
+	event, err := (&OpenAIProvider{}).buildRealtimeSessionUpdate(models.SessionConfig{
+		Tools: []models.ToolDefinition{{
+			Name:            "queue_cube_moves",
+			Description:     "Queue cube rotations.",
+			ParameterSchema: schema,
+			Parameters:      []models.ToolParameter{{Name: "moves", Type: "array", Required: true}},
+		}},
+	}, "gpt-realtime")
+	if err != nil {
+		t.Fatalf("build realtime session.update: %v", err)
+	}
+
+	var envelope struct {
+		Session struct {
+			Tools []struct {
+				Parameters json.RawMessage `json:"parameters"`
+			} `json:"tools"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(event.Data, &envelope); err != nil {
+		t.Fatalf("decode session.update: %v", err)
+	}
+	if len(envelope.Session.Tools) != 1 {
+		t.Fatalf("serialized tools = %#v, want one page tool", envelope.Session.Tools)
+	}
+
+	var want, got any
+	if err := json.Unmarshal(schema, &want); err != nil {
+		t.Fatalf("decode expected schema: %v", err)
+	}
+	if err := json.Unmarshal(envelope.Session.Tools[0].Parameters, &got); err != nil {
+		t.Fatalf("decode serialized parameters: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("serialized page schema = %#v, want complete schema %#v", got, want)
+	}
+}
+
 func TestBuildRealtimeSessionUpdateInputAudioTranscriptionUsesSelectedWireContract(t *testing.T) {
 	policy := &models.InputAudioTranscriptionConfig{Enabled: true}
 	cases := []struct {

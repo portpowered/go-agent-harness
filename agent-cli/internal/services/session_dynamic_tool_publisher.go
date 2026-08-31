@@ -386,6 +386,7 @@ func sessionToolDefinitionDigest(definitions []messages.ToolDefinition) (string,
 			Name:             definition.Name,
 			Description:      definition.Description,
 			Parameters:       definition.Parameters,
+			ParameterSchema:  string(definition.ParameterSchema),
 			ParametersClosed: definition.ParametersClosed,
 		})
 	}
@@ -401,5 +402,6 @@ type sessionToolDefinitionDigestEntry struct {
 	Name             string                   `json:"name"`
 	Description      string                   `json:"description"`
 	Parameters       []messages.ToolParameter `json:"parameters"`
+	ParameterSchema  string                   `json:"parameter_schema,omitempty"`
 	ParametersClosed bool                     `json:"parameters_closed"`
 }

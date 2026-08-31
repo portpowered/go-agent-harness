@@ -40,7 +40,7 @@ const (
 var sessionPageToolsSwitchVoiceSystemPrompt = `You are a concise voice operator controlling two already-open WebMCP pages.
 
 Follow this protocol exactly:
-- Start by using the currently selected Cubecade page. Read its current cube state with its directly advertised page tool. Do not move the cube.
+- Startup may have no selected page because two eligible pages are present. For the first request, use webmcp_list_tabs, identify Cubecade by its safe title/origin, and call webmcp_select_tab with its exact listed browser_id and target_id. Then read its current cube state with its directly advertised page tool. Do not move the cube.
 - When the customer says to switch to the document editor, use webmcp_list_tabs, find the eligible Margin Editor page, and call webmcp_select_tab with its exact browser_id and target_id. Do not reconnect or use exec.
 - After the switch, use the directly advertised Margin page tools. Preserve the exact title and exact content dictated by the customer, create one document, and read it back with get_document.
 - When the customer says to switch back, use webmcp_list_tabs and webmcp_select_tab for the eligible Cubecade page, then read the cube state with its directly advertised page tool.
@@ -92,7 +92,7 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 	title := "voice switch " + token
 	content := "dynamic session " + token
 	turns := []string{
-		"Read the cube state.",
+		"Choose the Cubecade page, then read the cube state.",
 		"Now switch to the document editor tab.",
 		fmt.Sprintf("Create a document with the exact title %s and the exact content %s, then read it back.", title, content),
 		"Switch back to the cube.",
@@ -120,10 +120,7 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 		"--voice", "marin",
 		"--browser-tools", "webmcp",
 		"--browser-cdp-url", cdpURL,
-		"--browser-browser", cubeTarget.BrowserID,
-		"--browser-tab", cubeTarget.TargetID,
-		"--browser-origin", sessionPageToolsLiveCubecadeOrigin,
-		"--browser-auto-select", "off",
+		"--browser-auto-select", "single",
 		"--browser-activate-tab", "false",
 		"--browser-persist-selection", "false",
 		"--browser-allowed-origin", sessionPageToolsLiveCubecadeOrigin,
@@ -206,7 +203,7 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 	t.Logf("oracle Cubecade before: %s", truncateLiveJSON(beforeCubeState.Data, 1200))
 	t.Logf("oracle Margin get_document: %s", truncateLiveJSON(directDocument.Data, 1600))
 	t.Logf("oracle Cubecade after: %s", truncateLiveJSON(afterCubeState.Data, 1200))
-	t.Logf("voice evidence: model=%s max_duration=%s key_source=%s provider_connections=%d definition_transitions=Cubecade(2)->Margin(10)->Cubecade(2) title=%q content=%q recording=<artifact>/recording capture=<artifact>/%s", sessionPageToolsSwitchVoiceModel, sessionPageToolsSwitchVoiceMaxDuration, keySource, observation.SessionCreated, title, content, sessionPageToolsSwitchVoiceCaptureFilename)
+	t.Logf("voice evidence: model=%s max_duration=%s key_source=%s browser_auto_select=single pinned_browser_tab=<none> origin_filter=<none> provider_connections=%d definition_transitions=Cubecade(2)->Margin(10)->Cubecade(2) title=%q content=%q recording=<artifact>/recording capture=<artifact>/%s", sessionPageToolsSwitchVoiceModel, sessionPageToolsSwitchVoiceMaxDuration, keySource, observation.SessionCreated, title, content, sessionPageToolsSwitchVoiceCaptureFilename)
 	t.Logf("voice artifacts retained outside source control: %s", artifactRoot)
 }
 
@@ -691,7 +688,7 @@ func validateSessionPageToolsSwitchVoiceObservation(observation sessionPageTools
 			return "", fmt.Errorf("voice tool %q failed: %+v", output.CallID, output.Envelope.Error)
 		}
 	}
-	marginSelected, cubeSelected := false, false
+	initialCubeSelected, marginSelected, cubeSelected := false, false, false
 	cubeReadsBefore, cubeReadsAfter := 0, 0
 	pageCallCount := map[string]int{}
 	var documentID string
@@ -714,6 +711,8 @@ func validateSessionPageToolsSwitchVoiceObservation(observation sessionPageTools
 			switch {
 			case args.BrowserID == marginTarget.BrowserID && args.TargetID == marginTarget.TargetID && !marginSelected:
 				marginSelected = true
+			case args.BrowserID == cubeTarget.BrowserID && args.TargetID == cubeTarget.TargetID && !marginSelected && !initialCubeSelected:
+				initialCubeSelected = true
 			case args.BrowserID == cubeTarget.BrowserID && args.TargetID == cubeTarget.TargetID && marginSelected && !cubeSelected:
 				cubeSelected = true
 			default:
@@ -767,8 +766,8 @@ func validateSessionPageToolsSwitchVoiceObservation(observation sessionPageTools
 			}
 		}
 	}
-	if !marginSelected || !cubeSelected {
-		return "", fmt.Errorf("selection calls margin=%t cube=%t, want both directions", marginSelected, cubeSelected)
+	if !initialCubeSelected || !marginSelected || !cubeSelected {
+		return "", fmt.Errorf("selection calls initial_cube=%t margin=%t return_cube=%t, want exact startup selection and both directions", initialCubeSelected, marginSelected, cubeSelected)
 	}
 	if cubeReadsBefore == 0 || cubeReadsAfter == 0 || pageCallCount["create_document"] != 1 || pageCallCount["get_document"] < 1 {
 		return "", fmt.Errorf("page call counts=%v cube_reads_before=%d cube_reads_after=%d, want cube reads on both sides and one create/get", pageCallCount, cubeReadsBefore, cubeReadsAfter)
