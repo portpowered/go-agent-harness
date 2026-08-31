@@ -190,6 +190,7 @@ func newSessionToolCapabilitiesFactory(
 			},
 			RefreshDefinitionsWithError: refreshDefinitions,
 			BrowserWatch:                broker.Watch,
+			BrowserEventWatch:           browserEventWatchFromBroker(broker),
 			Close:                       capabilityCoordinator.Close,
 		}
 		if initializer, ok := broker.(SessionCapabilityInitializer); ok {
@@ -198,6 +199,14 @@ func newSessionToolCapabilitiesFactory(
 		}
 		return capabilities, nil
 	}
+}
+
+func browserEventWatchFromBroker(broker webmcp.Broker) func(context.Context) <-chan webmcp.BrowserEvent {
+	watcher, ok := broker.(webmcp.BrowserEventWatcher)
+	if !ok {
+		return nil
+	}
+	return watcher.WatchBrowserEvents
 }
 
 func sessionPageCatalogIsUnselected(broker webmcp.Broker, err error) bool {

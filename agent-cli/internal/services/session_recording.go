@@ -283,6 +283,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		plan.loop.RequireTerminalAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
+	recording.browser.start(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -366,6 +367,7 @@ func runSessionWithRecordingDirectory(
 	}
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
+	recording.browser.start(ctx)
 	plan.loop.toolLifecycleObserver = recording
 	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
@@ -593,6 +595,7 @@ type sessionDirectoryRecording struct {
 	terminal       *transcript.RecordingTerminalSummary
 	conversation   sessionConversationCollector
 	imageArtifacts []transcript.RecordingArtifact
+	browser        *sessionBrowserRecording
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -619,6 +622,7 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 			WallClockStart: time.Now().UTC().Format(time.RFC3339Nano),
 		},
 		credentials: sessionRecordingCredentials(opts, plan),
+		browser:     newSessionBrowserRecording(opts, plan),
 	}
 }
 
@@ -1053,10 +1057,24 @@ func (r *sessionDirectoryRecording) setTerminalSummaryLocked(summary transcript.
 
 func (r *sessionDirectoryRecording) Finalize() error {
 	r.finalizeOnce.Do(func() {
+		if r.browser != nil {
+			r.browser.stop()
+		}
+		var browserArtifact *transcript.BrowserArtifact
+		var browserErr error
+		if r.browser != nil {
+			browserArtifact, browserErr = r.browser.artifact()
+		}
 		r.eventMu.Lock()
 		defer r.eventMu.Unlock()
 		r.mu.Lock()
 		latchedRecordErr := r.recordErr
+		if browserErr != nil {
+			latchedRecordErr = errors.Join(
+				latchedRecordErr,
+				recordingDestinationError(transcript.ErrRecordingWrite, "finalize browser events", r.destination, browserErr),
+			)
+		}
 		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
 		if sessionLogErr != nil {
 			r.finalizeErr = errors.Join(
@@ -1084,6 +1102,7 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			RecordingStatus:     recordingStatus,
 			Credentials:         append([]string(nil), r.credentials...),
 			Terminal:            cloneSessionRecordingTerminalSummary(r.terminal),
+			BrowserArtifact:     browserArtifact,
 			AdditionalArtifacts: copySessionRecordingArtifacts(r.imageArtifacts),
 			WriteFile:           r.writeFile,
 		}

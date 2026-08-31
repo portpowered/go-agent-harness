@@ -95,13 +95,14 @@ type StatefulBroker struct {
 	earlyTerminals       map[InvocationID]terminalObservation
 	earlyTerminalOrder   []InvocationID
 
-	eventSequence uint64
-	watchers      map[*brokerWatcher]struct{}
-	closed        bool
-	closedCh      chan struct{}
-	closeDone     chan struct{}
-	closeErr      error
-	wg            sync.WaitGroup
+	eventSequence   uint64
+	watchers        map[*brokerWatcher]struct{}
+	browserWatchers map[*browserEventWatcher]struct{}
+	closed          bool
+	closedCh        chan struct{}
+	closeDone       chan struct{}
+	closeErr        error
+	wg              sync.WaitGroup
 }
 
 type browserState struct {
@@ -276,6 +277,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		browserTerminalSeen: make(map[InvocationID]struct{}),
 		earlyTerminals:      make(map[InvocationID]terminalObservation),
 		watchers:            make(map[*brokerWatcher]struct{}),
+		browserWatchers:     make(map[*browserEventWatcher]struct{}),
 		closedCh:            make(chan struct{}),
 		closeDone:           make(chan struct{}),
 	}
@@ -299,6 +301,7 @@ func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, 
 
 var _ Broker = (*StatefulBroker)(nil)
 var _ DirectCanceller = (*StatefulBroker)(nil)
+var _ BrowserEventWatcher = (*StatefulBroker)(nil)
 
 // Discover obtains candidates from the injected discovery seam and retains
 // their normalized identity for exact later selection.
@@ -687,6 +690,10 @@ func (b *StatefulBroker) Close() error {
 		delete(b.watchers, watcher)
 		close(watcher.events)
 	}
+	for watcher := range b.browserWatchers {
+		delete(b.browserWatchers, watcher)
+		close(watcher.events)
+	}
 	b.mu.Unlock()
 
 	var joined error
@@ -852,6 +859,7 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 		}
 		selected.lastBrowserEventSequence = event.Sequence
 	}
+	b.emitBrowserEventLocked(event)
 	// Direct cancellation has to observe the same target-local stream as the
 	// normal invocation coordinator. Register this before the ordinary
 	// reconciliation switch so a fresh cancel process can prove its exact
@@ -1289,19 +1297,4 @@ func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, 
 		return ref, nil
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
-}
-
-func staleSelectionError(browserID BrowserID, targetID TargetID, generation uint64, reason string) error {
-	return classified(ErrorStaleSelection, "the selected browser target is no longer current", map[string]any{
-		"browser_id":          string(browserID),
-		"target_id":           string(targetID),
-		"selected_generation": generation,
-		"reason":              reason,
-	}, ErrStaleSelection)
-}
-
-func classified(code ErrorCode, message string, details map[string]any, cause error) error {
-	err := NewClassifiedError(code, message, details)
-	err.Cause = cause
-	return err
 }

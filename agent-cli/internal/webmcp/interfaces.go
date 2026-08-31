@@ -86,6 +86,15 @@ type Broker interface {
 	Close() error
 }
 
+// BrowserEventWatcher is an optional broker extension for callers that need
+// the adapter-owned semantic browser events, including invocation inputs and
+// outputs. The base Broker interface intentionally remains limited to broker
+// lifecycle observations; event consumers must use the returned context to
+// release this independent subscription.
+type BrowserEventWatcher interface {
+	WatchBrowserEvents(context.Context) <-chan BrowserEvent
+}
+
 // DirectCanceller is an optional broker extension for a fresh direct CLI
 // process. It cancels only the supplied browser invocation ID against the
 // already exact-selected target and does not consult the local invocation
