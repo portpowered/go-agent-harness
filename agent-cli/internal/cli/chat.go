@@ -56,6 +56,8 @@ func validateChatFlags(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags
 				return fmt.Errorf("--%s requires --loop", flag)
 			}
 		}
+	} else if err := validateLoopFlagRanges(loopFlags); err != nil {
+		return err
 	}
 
 	if loopFlags.Loop && chatFlags.ActivateAudioIn {

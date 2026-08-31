@@ -477,6 +477,42 @@ func validateRoomHasOpener(participants []Participant) error {
 	)
 }
 
+// manifestDecodeTypeLabels maps this package's unexported decode-target
+// struct names to the user-facing manifest section they represent. yaml.v3's
+// KnownFields(true) rejects an unrecognized field with an error like `field
+// bogus not found in type room.manifestParticipant` -- a Go type name never
+// belongs in customer/operator-facing text, so sanitizeManifestDecodeError
+// rewrites it to the section a manifest author actually wrote.
+var manifestDecodeTypeLabels = map[string]string{
+	"manifestDocument":          "the manifest",
+	"manifestRoomDocument":      "room",
+	"manifestRecordingDocument": "room.recording",
+	"manifestParticipant":       "a participant",
+	"manifestBrowserTools":      "a participant's browserTools",
+}
+
+// manifestDecodeTypePattern matches yaml.v3's "type room.<Name>" fragment
+// so it can be replaced with the label above.
+var manifestDecodeTypePattern = regexp.MustCompile(`type room\.(\w+)`)
+
+// sanitizeManifestDecodeError rewrites a yaml.v3 decode error's internal Go
+// type name(s) into the corresponding manifest section name(s), so a
+// validation error only ever names things the manifest author actually
+// wrote (schema_version, room, participants, ...), never an internal
+// implementation type.
+func sanitizeManifestDecodeError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return manifestDecodeTypePattern.ReplaceAllStringFunc(err.Error(), func(match string) string {
+		name := strings.TrimPrefix(match, "type room.")
+		if label, ok := manifestDecodeTypeLabels[name]; ok {
+			return label
+		}
+		return "the manifest"
+	})
+}
+
 // ParseManifest strictly decodes one JSON or YAML manifest and returns its
 // normalized credential-free form. The optional argument keeps the default
 // call ergonomic while allowing a composition root to provide registries.
@@ -491,14 +527,14 @@ func ParseManifest(data []byte, options ...ValidationOptions) (Manifest, error) 
 	decoder := yamlv3.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&raw); err != nil {
-		return Manifest{}, validation("document", "", "must be one valid JSON or YAML object: "+err.Error(), ErrInvalidDocument)
+		return Manifest{}, validation("document", "", "must be one valid JSON or YAML object: "+sanitizeManifestDecodeError(err), ErrInvalidDocument)
 	}
 	var extra yamlv3.Node
 	if err := decoder.Decode(&extra); err != io.EOF {
 		if err == nil {
 			return Manifest{}, validation("document", "", "must contain exactly one document", ErrInvalidDocument)
 		}
-		return Manifest{}, validation("document", "", "must contain exactly one document: "+err.Error(), ErrInvalidDocument)
+		return Manifest{}, validation("document", "", "must contain exactly one document: "+sanitizeManifestDecodeError(err), ErrInvalidDocument)
 	}
 	manifest, err := normalizeManifest(raw, normalizeValidationOptions(options))
 	if err != nil {

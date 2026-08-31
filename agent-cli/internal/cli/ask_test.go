@@ -154,6 +154,18 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 		{name: "record and replay conflict", args: []string{"--record", "capture", "--replay", "replay", "prompt"}, wantErr: "cannot use --record and --replay together", wantIs: errAskFlagConflict},
 		{name: "malformed numeric flag", args: []string{"--loop", "--max-iterations", "not-a-number", "prompt"}, wantErr: `invalid argument "not-a-number" for "--max-iterations"`},
 		{name: "conflicting session flags", args: []string{"--session-id", "session-1", "--continue-last-session", "prompt"}, wantErr: "cannot use session ID and continue last session together", wantIs: errAskFlagConflict},
+		// Regression guards for "out-of-range numeric flags are silently
+		// discarded": these values used to be accepted and then quietly
+		// ignored (a negative --max-iterations fell into the "<=0 -> default
+		// to 5" fallback; --context-pressure-threshold outside (0,1] either
+		// disabled the notifier or wired it up permanently inert). They must
+		// now be rejected before any inference call.
+		{name: "negative max-iterations is rejected", args: []string{"--loop", "--max-iterations", "-5", "prompt"}, wantErr: "--max-iterations must be a positive integer, got -5", wantIs: errAskFlagConflict},
+		{name: "negative context-pressure-threshold is rejected", args: []string{"--loop", "--context-pressure-threshold", "-3", "prompt"}, wantErr: "--context-pressure-threshold must be greater than 0 and at most 1", wantIs: errAskFlagConflict},
+		{name: "context-pressure-threshold above 1 is rejected", args: []string{"--loop", "--context-pressure-threshold", "5000", "prompt"}, wantErr: "--context-pressure-threshold must be greater than 0 and at most 1", wantIs: errAskFlagConflict},
+		// No-over-triggering guard: an in-range --context-pressure-threshold
+		// alongside a valid --max-iterations must still run normally.
+		{name: "in-range loop flags are accepted", args: []string{"--loop", "--max-iterations", "2", "--context-pressure-threshold", "0.5", "--stop-word", "DONE", "iterate"}, response: "DONE", wantOutput: "Trace ID:", wantSummary: "[Loop complete: 1 iteration(s), completed: true, trace: ", wantCalls: 1},
 	}
 
 	for _, tc := range tests {

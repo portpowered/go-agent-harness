@@ -376,6 +376,46 @@ func TestParseManifest_RejectsUnknownFieldsAndMultipleDocuments(t *testing.T) {
 	}
 }
 
+// TestParseManifest_UnknownParticipantFieldErrorNeverLeaksInternalTypeName
+// guards against a Go implementation type name reaching user-facing text.
+// yaml.v3's KnownFields(true) formats an unrecognized field as `field X not
+// found in type room.manifestParticipant` -- room.manifestParticipant is
+// this package's unexported decode-target struct, never something a
+// manifest author wrote or should ever see. sanitizeManifestDecodeError
+// must rewrite it to name the manifest section instead (here,
+// "a participant").
+func TestParseManifest_UnknownParticipantFieldErrorNeverLeaksInternalTypeName(t *testing.T) {
+	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
+	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
+	withUnknownParticipantField := strings.Replace(
+		string(validManifestYAML()),
+		"  - id: customer\n",
+		"  - id: customer\n    bogus_field: 1\n",
+		1,
+	)
+	_, err := ParseManifest([]byte(withUnknownParticipantField))
+	if err == nil || !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("unknown participant field error = %v, want ErrInvalidDocument", err)
+	}
+	if strings.Contains(err.Error(), "manifestParticipant") {
+		t.Fatalf("error leaked the internal Go type name: %v", err)
+	}
+	if !strings.Contains(err.Error(), "a participant") {
+		t.Fatalf("error = %v, want it to still name the manifest section (\"a participant\")", err)
+	}
+}
+
+// TestSanitizeManifestDecodeError_LeavesUnrelatedTextUnchanged is the
+// no-over-triggering guard for the same fix: an error with no internal
+// "type room.X" fragment (the overwhelming majority of manifest validation
+// errors) must pass through byte-for-byte.
+func TestSanitizeManifestDecodeError_LeavesUnrelatedTextUnchanged(t *testing.T) {
+	err := errors.New(`participants[0].api_key_env: environment variable is unset or empty`)
+	if got := sanitizeManifestDecodeError(err); got != err.Error() {
+		t.Fatalf("sanitizeManifestDecodeError(%q) = %q, want it unchanged", err.Error(), got)
+	}
+}
+
 func TestManifestValidate_RejectsNilToolsInDirectNormalizedValue(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: SchemaVersion,

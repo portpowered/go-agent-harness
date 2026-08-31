@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
 
@@ -168,6 +169,55 @@ func TestWriteRoomResultIncludesLivenessClassification(t *testing.T) {
 	})
 	if !strings.Contains(output.String(), `participant "silent": error turns=0 connected=false classification=`+services.SessionSilentProviderTimeoutClassification) {
 		t.Fatalf("room terminal output = %q, want typed participant classification", output.String())
+	}
+}
+
+// TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero is the
+// regression guard for the "no schema reference or example" defect: a
+// first-time user should not have to reverse-engineer the manifest shape one
+// validation error at a time. `--example` must print a real manifest that
+// room.ParseManifest accepts unmodified, and must never touch the runner or
+// require any of the command's other flags.
+func TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero(t *testing.T) {
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	var calls atomic.Int32
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		calls.Add(1)
+		return services.RoomResult{}, nil
+	})
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--example"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute room run --example: %v, want exit 0", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("runner calls = %d, want zero: --example must not run anything", calls.Load())
+	}
+	manifest, err := room.ParseManifest(output.Bytes(), room.ValidationOptions{
+		LookupCredential: func(name string) (string, bool) { return "x", name == "OPENAI_API_KEY" },
+	})
+	if err != nil {
+		t.Fatalf("--example output did not parse as a valid room manifest: %v\noutput:\n%s", err, output.String())
+	}
+	if len(manifest.Participants) < 2 {
+		t.Fatalf("--example manifest participants = %d, want at least 2", len(manifest.Participants))
+	}
+}
+
+// TestRoomRunCommandHelpNamesRequiredManifestFields guards the same defect
+// from the other direction: even without running --example, --help alone
+// must name the fields a probe spent thirteen rounds of trial and error
+// discovering (opening_prompt and the required `tools: []` in particular).
+func TestRoomRunCommandHelpNamesRequiredManifestFields(t *testing.T) {
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	cmd := command.Generate()
+	help := cmd.Long
+	for _, want := range []string{"opening_prompt", "tools", "system_prompt", "api_key_env", "input_device", "output_device", "--example"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("room run --help text missing %q:\n%s", want, help)
+		}
 	}
 }
 

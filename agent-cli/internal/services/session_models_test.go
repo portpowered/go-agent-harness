@@ -302,6 +302,38 @@ model:
 	}
 }
 
+// TestResolveOpenAIRealtimeSessionConfig_MissingAPIKeyRecommendsAPIKeyFlag
+// guards the shared session-config helper's ordinary behavior: session, ask,
+// and chat all expose --api-key, so their missing-credential error should
+// keep recommending it. Only room run's bare-launch wrapper
+// (bareRoomCredentialError in session_room_launch.go) substitutes
+// environment-only guidance, because `room run` has no --api-key flag to
+// recommend — see TestResolveBareRoomLaunchPlanMissingCredentialFailsBeforeDeviceAcquisition
+// for that half of the contract.
+func TestResolveOpenAIRealtimeSessionConfig_MissingAPIKeyRecommendsAPIKeyFlag(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv(SessionOpenAIAPIKeyEnv, "")
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: openai
+`)
+
+	_, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
+		Provider:  config.ProviderOpenAI,
+		ConfigDir: configDir,
+	})
+	if err == nil {
+		t.Fatal("resolveOpenAIRealtimeSessionConfig() = nil error, want a missing-credential error")
+	}
+	if !errors.Is(err, ErrOpenAIRealtimeAPIKeyMissing) {
+		t.Fatalf("error = %v, want ErrOpenAIRealtimeAPIKeyMissing", err)
+	}
+	if !strings.Contains(err.Error(), "--api-key") {
+		t.Fatalf("error = %v, want it to recommend --api-key", err)
+	}
+}
+
 func TestRunSession_OpenAIRealtimeExplicitEmptyModelRejectsBeforeDial(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, `

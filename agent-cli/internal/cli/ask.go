@@ -124,6 +124,9 @@ func validateAskFlags(cmd *cobra.Command, askFlags *flags.AskFlags, loopFlags *f
 		return newAskCommandError(errAskFlagConflict, "cannot use session ID and continue last session together", nil)
 	}
 	if loopFlags.Loop {
+		if err := validateLoopFlagRanges(loopFlags); err != nil {
+			return newAskCommandError(errAskFlagConflict, err.Error(), err)
+		}
 		return nil
 	}
 	for _, flag := range []string{"max-iterations", "stop-word", "context-pressure-threshold", "context-pressure-message", "trace-id"} {

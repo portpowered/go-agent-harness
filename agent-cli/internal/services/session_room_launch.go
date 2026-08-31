@@ -40,6 +40,19 @@ var (
 	ErrRoomLaunchPathConflict = errors.New("room launch config and manifest paths conflict")
 )
 
+// bareRoomCredentialError rewrites the shared OpenAI-credential-missing error
+// into a remedy `room run` actually accepts. `room run` has no --api-key
+// flag, so recommending one (as the shared session-config helper does for
+// commands that do accept it) sends the user in a circle. The environment
+// variable is also preferred over a hypothetical flag on principle: a key
+// passed via a CLI flag is visible to any local process via ps.
+func bareRoomCredentialError(err error) error {
+	if !errors.Is(err, ErrOpenAIRealtimeAPIKeyMissing) {
+		return err
+	}
+	return fmt.Errorf("%w: bare room requires an OpenAI API key; set the %s environment variable before running `agent room run`", ErrOpenAIRealtimeAPIKeyMissing, DefaultRoomCredentialEnv)
+}
+
 // RoomLaunchMode distinguishes synthesized bare startup from an explicit
 // room document. The latter is intentionally authoritative and is never
 // merged with the former.
@@ -152,7 +165,7 @@ func ResolveBareRoomLaunchPlan(options RoomLaunchOptions) (RoomLaunchPlan, error
 		LoadedConfig:  loadedConfig,
 	})
 	if err != nil {
-		return RoomLaunchPlan{}, err
+		return RoomLaunchPlan{}, bareRoomCredentialError(err)
 	}
 
 	input, err := resolveBareRoomDevice(options.DeviceRegistry, audio.DirectionInput)
