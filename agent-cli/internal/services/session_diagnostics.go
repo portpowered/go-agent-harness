@@ -280,7 +280,10 @@ type sessionProgressObserver struct {
 	usageReasoning  uint64
 	usageSeen       bool
 
-	failure *failureFacts
+	livenessMu       sync.Mutex
+	livenessErr      error
+	livenessObserver func(error)
+	failure          *failureFacts
 	// userCancelled is set once by finish after the explicit SIGINT marker has
 	// proved that all observed causes were cancellation-only.
 	userCancelled bool

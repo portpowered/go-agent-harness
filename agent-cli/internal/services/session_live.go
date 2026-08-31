@@ -435,6 +435,11 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	if err := writeSessionReplayMessage(out, msg); err != nil {
 		return state, false, errors.Join(err, stopAndDrain())
 	}
+	if opts.observer != nil {
+		if livenessErr := opts.observer.livenessFailure(); livenessErr != nil {
+			return state, false, errors.Join(livenessErr, stopAndDrain())
+		}
+	}
 	if msg.Type == messages.StreamTypeSessionCreated && opts.BareLive && opts.ListeningBanner != "" && !state.listeningReported {
 		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
 			return state, false, errors.Join(err, stopAndDrain())

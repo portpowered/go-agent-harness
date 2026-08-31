@@ -52,13 +52,17 @@ type RoomParticipantResult struct {
 	// ID and TerminationReason are the joined run-manifest names. The
 	// ParticipantID and Reason aliases keep the result convenient for runtime
 	// callers that use the same terminology as RoomParticipantEvent.
-	ID                string                       `json:"id"`
-	ParticipantID     string                       `json:"participant_id,omitempty"`
-	TerminationReason ParticipantTerminationReason `json:"termination_reason"`
-	Reason            ParticipantTerminationReason `json:"reason,omitempty"`
-	TurnsCompleted    int                          `json:"turns_completed"`
-	Connected         bool                         `json:"connected"`
-	Error             string                       `json:"error,omitempty"`
+	ID                 string                       `json:"id"`
+	ParticipantID      string                       `json:"participant_id,omitempty"`
+	TerminationReason  ParticipantTerminationReason `json:"termination_reason"`
+	Reason             ParticipantTerminationReason `json:"reason,omitempty"`
+	TurnsCompleted     int                          `json:"turns_completed"`
+	Connected          bool                         `json:"connected"`
+	Error              string                       `json:"error,omitempty"`
+	Classification     string                       `json:"classification,omitempty"`
+	TerminalReason     messages.TerminalReason      `json:"terminal_reason,omitempty"`
+	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance,omitempty"`
+	OutputState        messages.TerminalOutputState `json:"output_state,omitempty"`
 	// RecordingStatus is nil for a healthy evidence bundle and partial when
 	// one or more participant-owned recording artifacts degraded. It is
 	// independent from the participant runtime termination reason.

@@ -196,6 +196,9 @@ func (o *sessionProgressObserver) finish(err error) error {
 	if o == nil {
 		return err
 	}
+	if livenessErr := o.livenessFailure(); livenessErr != nil && !errors.Is(err, livenessErr) {
+		err = errors.Join(livenessErr, err)
+	}
 	if sessionSIGINTCleanForObserver(err, o.cancellationIntent, o) {
 		o.userCancelled = true
 		o.failure = nil

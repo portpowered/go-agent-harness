@@ -249,6 +249,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
+		toolObligation := o.responseHasToolLifecycleObligation()
 		candidate := false
 		if !acknowledgementResponse {
 			candidate = o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
@@ -276,6 +277,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
 		}
 		o.finishObservedResponse(responseLifecycleID)
+		if !acknowledgementResponse {
+			o.observeSilentProviderEmptyResponse(msg, v, outputPresent, toolObligation)
+		}
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
