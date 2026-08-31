@@ -70,29 +70,35 @@ func findFunctionCallOutput(frames []wireFrame) []int {
 
 func waitForFunctionCallOutput(t *testing.T, conn *mockWebSocketConn, deadline time.Time) []wireFrame {
 	t.Helper()
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
 	for {
 		frames := parseWireFrames(t, conn.getClientMessages())
 		if len(findFunctionCallOutput(frames)) > 0 {
 			return frames
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for function_call_output wire frame; got %v", frames)
+		select {
+		case <-conn.clientWriteCh:
+		case <-timer.C:
+			t.Fatalf("timed out waiting for function_call_output wire frame by %s; got %v", deadline.Format(time.RFC3339Nano), frames)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
 func waitForFrameCount(t *testing.T, conn *mockWebSocketConn, n int, deadline time.Time) []wireFrame {
 	t.Helper()
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
 	for {
 		payloads := conn.getClientMessages()
 		if len(payloads) >= n {
 			return parseWireFrames(t, payloads)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %d client frames, got %d", n, len(payloads))
+		select {
+		case <-conn.clientWriteCh:
+		case <-timer.C:
+			t.Fatalf("timed out waiting for %d client frames by %s, got %d", n, deadline.Format(time.RFC3339Nano), len(payloads))
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -320,7 +326,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		"call_id": callID, "name": toolName, "arguments": `{"city":"Paris"}`,
 	})
 	addServerEvent(conn, "response.done", nil)
-	time.Sleep(150 * time.Millisecond)
+	waitForQuietClientWire(t, conn, len(frames), 150*time.Millisecond, "duplicate timeout provider event")
 	frames = parseWireFrames(t, conn.getClientMessages())
 	if got := len(findFunctionCallOutput(frames)); got != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d function_call_output frames, want one", got)
@@ -333,6 +339,33 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 	}
 	if responseCreates != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d response.create frames, want one", responseCreates)
+	}
+}
+
+func waitForQuietClientWire(t *testing.T, conn *mockWebSocketConn, want int, quiet time.Duration, phase string) {
+	t.Helper()
+	for {
+		select {
+		case <-conn.clientWriteCh:
+			if got := len(conn.getClientMessages()); got > want {
+				t.Fatalf("%s wrote an unexpected client frame: got %d, want %d", phase, got, want)
+			}
+		default:
+			goto drained
+		}
+	}
+
+drained:
+	timer := time.NewTimer(quiet)
+	defer timer.Stop()
+	select {
+	case <-conn.clientWriteCh:
+		got := len(conn.getClientMessages())
+		t.Fatalf("%s wrote an unexpected client frame: got %d, want %d", phase, got, want)
+	case <-timer.C:
+		if got := len(conn.getClientMessages()); got != want {
+			t.Fatalf("%s settled at %d client frames, want %d", phase, got, want)
+		}
 	}
 }
 

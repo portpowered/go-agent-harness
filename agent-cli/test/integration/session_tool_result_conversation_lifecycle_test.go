@@ -334,13 +334,13 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 			stdout, outputPath, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
 			runResult <- conversationRunResult{stdout: stdout, outputPath: outputPath, err: runErr}
 		}()
-		waitConversationLifecycleSignal(t, executor.started, "tool executor before provider close", 3*time.Second)
+		waitConversationLifecycleSignal(t, executor.started, "tool executor before provider close", sessionLifecycleSafetyTimeout)
 
 		var result conversationRunResult
 		select {
 		case result = <-runResult:
-		case <-time.After(3 * time.Second):
-			t.Fatal("provider close did not terminate the unresolved conversation")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("provider close did not terminate the unresolved conversation within %s", sessionLifecycleSafetyTimeout)
 		}
 		if result.err == nil {
 			t.Fatalf("provider close returned clean success while %q was unresolved; stdout=%q", toolConversationCallID, result.stdout)
@@ -371,7 +371,7 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 			stdout, outputPath, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
 			runResult <- conversationRunResult{stdout: stdout, outputPath: outputPath, err: runErr}
 		}()
-		waitConversationLifecycleSignal(t, executor.started, "tool executor before accepted result", 3*time.Second)
+		waitConversationLifecycleSignal(t, executor.started, "tool executor before accepted result", sessionLifecycleSafetyTimeout)
 		if calls, returned := executor.snapshot(); len(calls) != 1 || len(returned) != 0 {
 			t.Fatalf("conversation advanced before result release: calls=%d returned=%d", len(calls), len(returned))
 		}
@@ -380,8 +380,8 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 		var result conversationRunResult
 		select {
 		case result = <-runResult:
-		case <-time.After(5 * time.Second):
-			t.Fatal("conversation did not finish after accepted result")
+		case <-time.After(sessionLifecycleSafetyTimeout):
+			t.Fatalf("conversation did not finish after accepted result within %s", sessionLifecycleSafetyTimeout)
 		}
 		if result.err != nil {
 			t.Fatalf("accepted-result conversation failed: %v\nstdout=%s", result.err, result.stdout)

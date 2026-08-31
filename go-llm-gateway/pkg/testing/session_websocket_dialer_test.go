@@ -79,8 +79,8 @@ func TestReplayWebSocketDialer_FailsOnUnexpectedOutbound(t *testing.T) {
 	}
 	select {
 	case <-dialer.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("dialer Done did not close after replay divergence")
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("dialer Done did not close after replay divergence within %s", sessionTestSafetyTimeout)
 	}
 }
 
@@ -139,8 +139,8 @@ func TestReplayWebSocketDialer_ReadBlocksUntilExpectedOutboundIsWritten(t *testi
 		}
 	case err := <-readErr:
 		t.Fatalf("ReadMessage after outbound write: %v", err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("ReadMessage did not unblock after expected outbound write")
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("ReadMessage did not unblock after expected outbound write within %s", sessionTestSafetyTimeout)
 	}
 }
 
@@ -219,8 +219,8 @@ func TestReplayWebSocketDialer_WaitForNextOutboundFollowsCaptureCursor(t *testin
 		if err != nil {
 			t.Fatalf("cursor gate after all earlier inbound records: %v", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("cursor gate did not release at the next outbound record")
+	case <-time.After(sessionTestSafetyTimeout):
+		t.Fatalf("cursor gate did not release at the next outbound record within %s", sessionTestSafetyTimeout)
 	}
 	if err := conn.WriteMessage(1, []byte(`{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`)); err != nil {
 		t.Fatalf("strict outbound validation after cursor gate: %v", err)

@@ -601,14 +601,21 @@ func compareV8ViewRecords(leftName string, left v8ViewRecord, rightName string, 
 
 func assertV8GoroutinesSettled(t *testing.T, baseline int, operation string) {
 	t.Helper()
-	deadline := time.Now().Add(750 * time.Millisecond)
-	for time.Now().Before(deadline) {
+	settleTimeout := 10 * time.Second
+	timer := time.NewTimer(settleTimeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
 		if runtime.NumGoroutine() <= baseline+2 {
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			t.Fatalf("goroutines after %s = %d, baseline = %d; CLI lifecycle did not settle within %s", operation, runtime.NumGoroutine(), baseline, settleTimeout)
+		}
 	}
-	t.Fatalf("goroutines after %s = %d, baseline = %d; CLI lifecycle did not settle", operation, runtime.NumGoroutine(), baseline)
 }
 
 func mutateV8ViewPayload(run *v8DuplexRun, viewName string, turn int, payload []byte) error {

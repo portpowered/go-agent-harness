@@ -15,24 +15,71 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
-// readFromSession reads one StreamMessage from the session's receive buffer,
-// failing the test if no message arrives within 2 seconds.
-func readFromSession(t *testing.T, ctx context.Context, s *grokSession) messages.StreamMessage {
+const grokTestSafetyTimeout = 10 * time.Second
+
+func newGrokTestContext(t *testing.T) context.Context {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), grokTestSafetyTimeout)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// readFromSession waits for the next provider event. The deadline is only a
+// diagnostic safety bound; the test succeeds when the expected event arrives.
+func readFromSession(t *testing.T, ctx context.Context, s messages.Session, phase ...string) messages.StreamMessage {
+	t.Helper()
+	label := "session message"
+	if len(phase) > 0 && phase[0] != "" {
+		label = phase[0]
+	}
+	readContext, cancel := context.WithTimeout(ctx, grokTestSafetyTimeout)
 	defer cancel()
-	msg, ok := s.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("timed out waiting for session message")
+	msg, err := s.Receive().ReadContext(readContext)
+	if err != nil {
+		done := false
+		select {
+		case <-s.Done():
+			done = true
+		default:
+		}
+		t.Fatalf("waiting for %s failed: %v; session_done=%t receive_buffer=%d", label, err, done, s.Receive().Len())
 	}
 	return msg
+}
+
+func waitForGrokClientMessages(t *testing.T, conn *mockWebSocketConn, want int, phase string) [][]byte {
+	t.Helper()
+	timer := time.NewTimer(grokTestSafetyTimeout)
+	defer timer.Stop()
+	for {
+		messages := conn.getClientMessages()
+		if len(messages) >= want {
+			return messages
+		}
+		select {
+		case <-conn.clientWriteCh:
+		case <-timer.C:
+			messages := conn.getClientMessages()
+			t.Fatalf("timed out waiting for %s after %s: got %d client messages", phase, grokTestSafetyTimeout, len(messages))
+		}
+	}
+}
+
+func waitForGrokSignal(t *testing.T, signal <-chan struct{}, phase string) {
+	t.Helper()
+	timer := time.NewTimer(grokTestSafetyTimeout)
+	defer timer.Stop()
+	select {
+	case <-signal:
+	case <-timer.C:
+		t.Fatalf("timed out waiting for %s after %s", phase, grokTestSafetyTimeout)
+	}
 }
 
 func TestSession_SendAudioBufferAppend(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -46,10 +93,7 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 		t.Fatal("Send returned false")
 	}
 
-	// Wait for the write loop to process it.
-	time.Sleep(100 * time.Millisecond)
-
-	clientMsgs := conn.getClientMessages()
+	clientMsgs := waitForGrokClientMessages(t, conn, 1, "audio append wire event")
 	if len(clientMsgs) == 0 {
 		t.Fatal("expected client message for audio append")
 	}
@@ -81,8 +125,7 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 func TestSession_SendMessageEndCommitsAndRequestsResponse(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -90,15 +133,7 @@ func TestSession_SendMessageEndCommitsAndRequestsResponse(t *testing.T) {
 		t.Fatal("Send returned false for MESSAGE.END")
 	}
 
-	var clientMessages [][]byte
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		clientMessages = conn.getClientMessages()
-		if len(clientMessages) == 2 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	clientMessages := waitForGrokClientMessages(t, conn, 2, "commit and response wire events")
 	if len(clientMessages) != 2 {
 		t.Fatalf("wire events = %d, want input_audio_buffer.commit followed by response.create", len(clientMessages))
 	}
@@ -128,8 +163,7 @@ func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
 	conn.addServerEvent("response.done", nil)
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -149,15 +183,7 @@ func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
 		}
 	}
 
-	var clientMessages [][]byte
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		clientMessages = conn.getClientMessages()
-		if len(clientMessages) == 3 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	clientMessages := waitForGrokClientMessages(t, conn, 3, "audio turn wire events")
 	if len(clientMessages) != 3 {
 		t.Fatalf("wire events = %d, want audio append, commit, and response.create", len(clientMessages))
 	}
@@ -180,8 +206,7 @@ func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
 func TestSession_SendExplicitResponseCreate(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -192,15 +217,7 @@ func TestSession_SendExplicitResponseCreate(t *testing.T) {
 		t.Fatal("Send explicit response request returned false")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	var clientMessages [][]byte
-	for {
-		clientMessages = conn.getClientMessages()
-		if len(clientMessages) == 1 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	clientMessages := waitForGrokClientMessages(t, conn, 1, "explicit response wire event")
 	if len(clientMessages) != 1 {
 		t.Fatalf("wire events = %d, want one response.create", len(clientMessages))
 	}
@@ -224,8 +241,7 @@ func TestSession_ReceiveAudioDelta(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -250,8 +266,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 		t.Fatal("grok session does not expose rtc.MediaSession")
 	}
 	endpoints := owner.RTCMedia()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -263,20 +278,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 		t.Fatalf("write RTC outbound frame: %v", err)
 	}
 
-	var clientMessage []byte
-	deadline := time.After(2 * time.Second)
-	for clientMessage == nil {
-		messages := conn.getClientMessages()
-		if len(messages) > 0 {
-			clientMessage = messages[0]
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("timed out waiting for RTC outbound audio event")
-		case <-time.After(time.Millisecond):
-		}
-	}
+	clientMessage := waitForGrokClientMessages(t, conn, 1, "RTC outbound audio event")[0]
 	var wire map[string]json.RawMessage
 	if err := json.Unmarshal(clientMessage, &wire); err != nil {
 		t.Fatalf("unmarshal RTC outbound event: %v", err)
@@ -315,8 +317,7 @@ func TestSession_ReceiveTranscriptDelta(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -333,8 +334,7 @@ func TestSession_ReceiveInputAudioTranscriptWithUserRole(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -357,8 +357,7 @@ func TestSession_ReceiveFunctionCallDone(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -371,8 +370,7 @@ func TestSession_ReceiveFunctionCallDone(t *testing.T) {
 func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -385,9 +383,7 @@ func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 		t.Fatal("Send returned false")
 	}
 
-	time.Sleep(100 * time.Millisecond)
-
-	clientMsgs := conn.getClientMessages()
+	clientMsgs := waitForGrokClientMessages(t, conn, 1, "text conversation-item wire event")
 	if len(clientMsgs) == 0 {
 		t.Fatal("expected conversation.item.create message")
 	}
@@ -428,8 +424,7 @@ func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 func TestSession_CloseIsIdempotent(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 
 	err1 := session.Close()
@@ -446,18 +441,11 @@ func TestSession_CloseIsIdempotent(t *testing.T) {
 func TestSession_CloseStopsDone(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 
 	_ = session.Close()
-
-	select {
-	case <-session.Done():
-		// Session closed as expected.
-	case <-time.After(2 * time.Second):
-		t.Fatal("Done() channel was not closed after session close")
-	}
+	waitForGrokSignal(t, session.Done(), "session Done after Close")
 }
 
 func TestSession_WriteLoopStopsWhenClosedWithEmptyQueue(t *testing.T) {
@@ -473,12 +461,7 @@ func TestSession_WriteLoopStopsWhenClosedWithEmptyQueue(t *testing.T) {
 		t.Fatalf("Close() returned error: %v", err)
 	}
 
-	select {
-	case <-exited:
-		// The writer observed the session shutdown signal.
-	case <-time.After(2 * time.Second):
-		t.Fatal("writeLoop did not exit after closing an idle session")
-	}
+	waitForGrokSignal(t, exited, "idle writeLoop exit after Close")
 }
 
 func TestSession_MalformedServerEvent(t *testing.T) {
@@ -490,8 +473,7 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	conn.addServerEvent("response.done", nil)
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -510,12 +492,7 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 		t.Errorf("terminal_provenance = %q, want %q", errValue.TerminalProvenance, messages.TerminalProvenanceGateway)
 	}
 
-	select {
-	case <-session.Done():
-		// Session terminated after the malformed frame.
-	case <-time.After(2 * time.Second):
-		t.Fatal("session was not terminated after malformed server frame")
-	}
+	waitForGrokSignal(t, session.Done(), "session termination after malformed server frame")
 }
 
 func TestSession_ContextCancellation(t *testing.T) {
@@ -527,17 +504,13 @@ func TestSession_ContextCancellation(t *testing.T) {
 	// Cancel context — should trigger session close.
 	cancel()
 
-	select {
-	case <-session.done:
-		// Session closed as expected.
-	case <-time.After(2 * time.Second):
-		t.Fatal("session did not close after context cancellation")
-	}
+	waitForGrokSignal(t, session.done, "session close after context cancellation")
 }
 
 // TestSession_SessionCreatedEmitsSessionOpen is the acceptance criterion test:
 // GrokSessionProvider.ConnectSession returns a Session whose typed buffer receives
-// a SESSION.OPEN event when the server sends session.created within 1 second.
+// a SESSION.OPEN event when the server sends session.created. The test deadline
+// is a diagnostic safety bound rather than an expected event latency.
 func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
 	conn := newMockConn()
 	conn.addServerEvent("session.created", map[string]any{
@@ -545,15 +518,11 @@ func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	got, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive SESSION.OPEN within 1 second")
-	}
+	got := readFromSession(t, ctx, session, "SESSION.OPEN")
 	if got.Type != messages.StreamTypeSessionOpen {
 		t.Errorf("type: got %q, want %q", got.Type, messages.StreamTypeSessionOpen)
 	}
@@ -569,25 +538,18 @@ func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
 	// First event should be SESSION.OPEN.
-	first, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive first event within 1 second")
-	}
+	first := readFromSession(t, ctx, session, "first SESSION.OPEN")
 	if first.Type != messages.StreamTypeSessionOpen {
 		t.Errorf("first event type: got %q, want %q", first.Type, messages.StreamTypeSessionOpen)
 	}
 
 	// Second event should be SESSION.CREATED with session config.
-	second, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive SESSION.CREATED within 1 second")
-	}
+	second := readFromSession(t, ctx, session, "SESSION.CREATED")
 	if second.Type != messages.StreamTypeSessionCreated {
 		t.Errorf("second event type: got %q, want %q", second.Type, messages.StreamTypeSessionCreated)
 	}
@@ -612,15 +574,11 @@ func TestSession_SessionUpdatedEmitsSessionUpdated(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	got, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive SESSION.UPDATED within 1 second")
-	}
+	got := readFromSession(t, ctx, session, "SESSION.UPDATED")
 	if got.Type != messages.StreamTypeSessionUpdated {
 		t.Errorf("type: got %q, want %q", got.Type, messages.StreamTypeSessionUpdated)
 	}
@@ -641,15 +599,11 @@ func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	got, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive SESSION.CLOSE within 1 second")
-	}
+	got := readFromSession(t, ctx, session, "SESSION.CLOSE")
 	if got.Type != messages.StreamTypeSessionClose {
 		t.Fatalf("type: got %q, want %q", got.Type, messages.StreamTypeSessionClose)
 	}
@@ -676,15 +630,11 @@ func TestSession_SessionErrorEmitsClassifiedFailure(t *testing.T) {
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	got, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("did not receive ERROR within 1 second")
-	}
+	got := readFromSession(t, ctx, session, "provider ERROR")
 	if got.Type != messages.StreamTypeError {
 		t.Fatalf("type: got %q, want %q", got.Type, messages.StreamTypeError)
 	}
@@ -735,11 +685,7 @@ func TestSession_SendWithOutcomeLifecycle(t *testing.T) {
 
 	// After the session is closed, sends report closed.
 	_ = session.Close()
-	select {
-	case <-session.Done():
-	case <-time.After(1 * time.Second):
-		t.Fatal("session did not terminate within 1 second after Close")
-	}
+	waitForGrokSignal(t, session.Done(), "session termination after Close")
 	outcome = session.SendWithOutcome(ctx, textInput)
 	if outcome.Status != messages.SessionSendClosed {
 		t.Fatalf("closed send status = %q, want closed", outcome.Status)

@@ -7,7 +7,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"testing"
-	"time"
 )
 
 func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
@@ -18,8 +17,7 @@ func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
 		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
 		WithWebSocketDialer(dialer),
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -163,8 +161,7 @@ func TestRealtimeSession_ToolCallEndSendsSingleFunctionCallOutput(t *testing.T) 
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -213,8 +210,7 @@ func TestRealtimeSession_ToolCallEndInvalidValueFailsWithoutFrames(t *testing.T)
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)

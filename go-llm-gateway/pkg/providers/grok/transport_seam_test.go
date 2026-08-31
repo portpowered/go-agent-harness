@@ -94,16 +94,15 @@ func TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket(t *testing.T) {
 		if envelope.Type != "session.update" {
 			t.Errorf("first client message type = %q, want session.update", envelope.Type)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for client-to-server session.update")
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for client-to-server session.update: %v", ctx.Err())
 	}
 
 	// Observe the server-to-client message through the session's inbound buffer.
 	recv := session.Receive()
-	done := session.Done()
 	sawOpen, sawCreated := false, false
 	for !(sawOpen && sawCreated) {
-		msg, ok := recv.ReadBlocking(done)
+		msg, ok := recv.ReadBlockingContext(ctx)
 		if !ok {
 			t.Fatal("session ended before SESSION.CREATED was delivered")
 		}
@@ -129,7 +128,7 @@ func TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket(t *testing.T) {
 	}
 	select {
 	case <-serverDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for server-side connection teardown")
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for server-side connection teardown: %v", ctx.Err())
 	}
 }

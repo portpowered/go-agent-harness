@@ -1,13 +1,12 @@
 package openai
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -58,8 +57,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -158,8 +156,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -201,8 +198,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -212,7 +208,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 	var initial struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn), &initial); err != nil {
+	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn, "initial session.update"), &initial); err != nil {
 		t.Fatalf("unmarshal initial client event: %v", err)
 	}
 	if initial.Type != string(models.SessionEventSessionUpdate) {
@@ -228,7 +224,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 	var cancelEvent struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn), &cancelEvent); err != nil {
+	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn, "response.cancel"), &cancelEvent); err != nil {
 		t.Fatalf("unmarshal response.cancel event: %v", err)
 	}
 	if cancelEvent.Type != string(models.SessionEventResponseCancel) {
@@ -244,10 +240,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 			"message":  "Can only cancel an active response.",
 		},
 	})
-	got, ok := session.Receive().ReadBlockingContext(ctx)
-	if !ok {
-		t.Fatal("timed out waiting for inactive-cancel diagnostic")
-	}
+	got := readRealtimeMessage(t, session, ctx, "inactive-cancel diagnostic")
 	if got.Type != messages.StreamTypeError {
 		t.Fatalf("diagnostic type = %q, want %q", got.Type, messages.StreamTypeError)
 	}
@@ -277,10 +270,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 		messages.StreamTypeMessageEnd,
 	}
 	for _, wantType := range wantTypes {
-		got, ok = session.Receive().ReadBlockingContext(ctx)
-		if !ok {
-			t.Fatalf("timed out waiting for %s after inactive-cancel diagnostic", wantType)
-		}
+		got = readRealtimeMessage(t, session, ctx, fmt.Sprintf("%s after inactive-cancel diagnostic", wantType))
 		if got.Type != wantType {
 			t.Fatalf("event after diagnostic = %q, want %q", got.Type, wantType)
 		}
@@ -303,8 +293,7 @@ func TestConnectSession_SurfacesUnexpectedWebSocketReadError(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
@@ -341,8 +330,7 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 		WithWebSocketDialer(replayDialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)

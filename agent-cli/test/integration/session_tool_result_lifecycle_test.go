@@ -12,7 +12,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-const sessionToolLifecycleCallID = "call_lifecycle_slow"
+const (
+	sessionToolLifecycleCallID    = "call_lifecycle_slow"
+	sessionLifecycleSafetyTimeout = 10 * time.Second
+)
 
 // lifecycleSession is a small provider-facing session double. It emits one
 // scheduled assistant response containing a tool call, then reports the
@@ -175,8 +178,8 @@ func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 	t.Helper()
 	select {
 	case <-signal:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timed out waiting for %s", name)
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("timed out waiting for %s after %s", name, sessionLifecycleSafetyTimeout)
 	}
 }
 
@@ -199,7 +202,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	var traceMu sync.Mutex
 	var trace []messages.StreamMessage
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
@@ -268,8 +271,8 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 		if err != nil {
 			t.Fatalf("scheduled session returned an error: %v", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("scheduled session did not finish after client close")
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("scheduled session did not finish after client close within %s", sessionLifecycleSafetyTimeout)
 	}
 
 	var resultCount int

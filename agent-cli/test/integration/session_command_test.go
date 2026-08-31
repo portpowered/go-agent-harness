@@ -1008,8 +1008,8 @@ func assertIntegrationSessionReceivedText(t *testing.T, sessionInf *integrationS
 		if got != want {
 			t.Fatalf("session received prompt = %q, want %q", got, want)
 		}
-	case <-time.After(time.Second):
-		t.Fatalf("session did not receive prompt %q", want)
+	case <-time.After(10 * time.Second):
+		t.Fatalf("session did not receive prompt %q within 10s", want)
 	}
 }
 

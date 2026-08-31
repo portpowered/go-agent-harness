@@ -172,8 +172,8 @@ func TestReplayWebSocketDialerSharedTransportContract(t *testing.T) {
 		}
 		select {
 		case <-dialer.Done():
-		case <-time.After(2 * time.Second):
-			t.Fatal("Done did not close after divergence")
+		case <-time.After(sessionTestSafetyTimeout):
+			t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
 		}
 	})
 
@@ -236,8 +236,8 @@ func TestReplayWebSocketDialerSharedTransportContract(t *testing.T) {
 		}
 		select {
 		case <-dialer.Done():
-		case <-time.After(2 * time.Second):
-			t.Fatal("Done did not close after divergence")
+		case <-time.After(sessionTestSafetyTimeout):
+			t.Fatalf("Done did not close after divergence within %s", sessionTestSafetyTimeout)
 		}
 		if err := conn.Close(); err != nil {
 			t.Fatalf("Close after divergence: %v", err)

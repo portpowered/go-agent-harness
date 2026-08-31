@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -26,8 +25,7 @@ func TestConnectSession_HappyPath(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{
 		Model: "grok-3-mini",
@@ -47,10 +45,7 @@ func TestConnectSession_HappyPath(t *testing.T) {
 	}
 
 	// Verify the provider sent a session.update as the first client message.
-	msgs := conn.getClientMessages()
-	if len(msgs) == 0 {
-		t.Fatal("expected at least one client message (session.update)")
-	}
+	msgs := waitForGrokClientMessages(t, conn, 1, "initial session.update")
 	var firstMsg map[string]json.RawMessage
 	if err := json.Unmarshal(msgs[0], &firstMsg); err != nil {
 		t.Fatalf("unmarshal first message: %v", err)
@@ -80,12 +75,7 @@ func TestConnectSession_HappyPath(t *testing.T) {
 	}
 
 	// Verify we can receive the queued session.created → SESSION.OPEN event.
-	recvCtx, recvCancel := context.WithTimeout(ctx, 2*time.Second)
-	defer recvCancel()
-	got, ok := session.Receive().ReadBlockingContext(recvCtx)
-	if !ok {
-		t.Fatal("timed out waiting for SESSION.OPEN event")
-	}
+	got := readFromSession(t, ctx, session, "SESSION.OPEN")
 	if got.Type != messages.StreamTypeSessionOpen {
 		t.Errorf("received event type: got %q, want %q", got.Type, messages.StreamTypeSessionOpen)
 	}
@@ -132,8 +122,7 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{
 		Model:             "grok-3-mini",
@@ -153,10 +142,7 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 	defer func() { _ = session.Close() }()
 
 	// Parse the session.update message and verify all config fields.
-	msgs := conn.getClientMessages()
-	if len(msgs) == 0 {
-		t.Fatal("expected session.update message")
-	}
+	msgs := waitForGrokClientMessages(t, conn, 1, "custom session.update")
 
 	var flat map[string]json.RawMessage
 	if err := json.Unmarshal(msgs[0], &flat); err != nil {
@@ -204,8 +190,7 @@ func TestConnectSession_DefaultBaseURL(t *testing.T) {
 		WithWebSocketDialer(dialer),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newGrokTestContext(t)
 
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "grok-3-mini"})
 	if err != nil {

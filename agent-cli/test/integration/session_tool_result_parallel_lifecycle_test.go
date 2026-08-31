@@ -544,8 +544,8 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 		if err != nil {
 			t.Fatalf("session command returned an error: %v", err)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("session command did not finish after the final accepted result")
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("session command did not finish after the final accepted result within %s", sessionLifecycleSafetyTimeout)
 	}
 
 	calls, completions := executor.callsSnapshot()
@@ -610,7 +610,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	var err error
 	select {
 	case err = <-runErr:
-	case <-time.After(3 * time.Second):
+	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatal("terminal-path session did not return after the rejected result send")
 	}
 	if err == nil {

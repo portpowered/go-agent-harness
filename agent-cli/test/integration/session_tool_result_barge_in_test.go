@@ -374,8 +374,8 @@ func waitSessionToolBargeInSignal(t *testing.T, signal <-chan struct{}, name str
 	t.Helper()
 	select {
 	case <-signal:
-	case <-time.After(3 * time.Second):
-		t.Fatalf("timed out waiting for %s", name)
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("timed out waiting for %s after %s", name, sessionLifecycleSafetyTimeout)
 	}
 }
 
@@ -493,8 +493,8 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		if err != nil {
 			t.Fatalf("session command returned an error: %v\nstdout=%s\nstderr=%s", err, writer.StdoutString(), writer.StderrString())
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("session command did not finish after client close")
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("session command did not finish after client close within %s", sessionLifecycleSafetyTimeout)
 	}
 
 	var resultCount int

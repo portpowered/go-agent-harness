@@ -55,19 +55,11 @@ func TestSessionRecorder_CapturesEventsInOrder(t *testing.T) {
 	}
 	fake.inbound.Write(ctx, serverMsg)
 
-	// Poll the recorder's Receive buffer until the relay goroutine forwards the message.
-	var got messages.StreamMessage
-	var ok bool
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		got, ok = rec.Receive().Read()
-		if ok {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	// Block until the relay goroutine forwards the message; the timeout is only
+	// a diagnostic safety bound.
+	got, ok := readRecordedMessage(t, rec)
 	if !ok {
-		t.Fatal("expected to read a message from recorder's Receive buffer")
+		t.Fatalf("expected to read a message from recorder's Receive buffer within %s", sessionTestSafetyTimeout)
 	}
 	delta, ok := got.Value.(*messages.TextDeltaValue)
 	if !ok {
@@ -269,16 +261,12 @@ func TestSessionRecorder_RelayStopsWhenOwnedContextCanceled(t *testing.T) {
 
 func readRecordedMessage(t *testing.T, rec *SessionRecorder) (messages.StreamMessage, bool) {
 	t.Helper()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		got, ok := rec.Receive().Read()
-		if ok {
-			return got, true
-		}
-		time.Sleep(5 * time.Millisecond)
+	ctx := newSessionTestContext(t)
+	got, err := rec.Receive().ReadContext(ctx)
+	if err != nil {
+		return messages.StreamMessage{}, false
 	}
-	return messages.StreamMessage{}, false
+	return got, true
 }
 
 func containsAnyJSONKey(data []byte, keys []string) bool {

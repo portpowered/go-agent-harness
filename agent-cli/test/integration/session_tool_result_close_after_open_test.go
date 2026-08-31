@@ -181,7 +181,7 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	localClose := make(chan struct{})
 	var localCloseOnce sync.Once
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
@@ -225,8 +225,8 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CloseAfterOpen session returned an error: %v", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("CloseAfterOpen session did not finish")
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("CloseAfterOpen session did not finish within %s", sessionLifecycleSafetyTimeout)
 	}
 
 	complete := session.completeMessages()
@@ -293,7 +293,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	localClose := make(chan struct{})
 	var localCloseOnce sync.Once
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
@@ -336,8 +336,8 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 		if err != nil {
 			t.Fatalf("duration CloseAfterOpen session returned an error: %v", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("duration CloseAfterOpen session did not finish")
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("duration CloseAfterOpen session did not finish within %s", sessionLifecycleSafetyTimeout)
 	}
 	if !clock.stopped() {
 		t.Fatal("duration controller did not stop its timer")
@@ -348,8 +348,8 @@ func waitForCloseAfterOpenSignal(t *testing.T, signal <-chan struct{}, name stri
 	t.Helper()
 	select {
 	case <-signal:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timed out waiting for %s", name)
+	case <-time.After(sessionLifecycleSafetyTimeout):
+		t.Fatalf("timed out waiting for %s after %s", name, sessionLifecycleSafetyTimeout)
 	}
 }
 

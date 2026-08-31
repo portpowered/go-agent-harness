@@ -1,12 +1,10 @@
 package openai
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -20,8 +18,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 		t.Fatal("OpenAI Realtime session does not expose rtc.MediaSession")
 	}
 	endpoints := owner.RTCMedia()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
@@ -33,20 +30,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 		t.Fatalf("write RTC outbound frame: %v", err)
 	}
 
-	var clientMessage []byte
-	deadline := time.After(2 * time.Second)
-	for clientMessage == nil {
-		messages := conn.getClientMessages()
-		if len(messages) > 0 {
-			clientMessage = messages[0]
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("timed out waiting for RTC outbound audio event")
-		case <-time.After(time.Millisecond):
-		}
-	}
+	clientMessage := waitForClientMessages(t, conn, 1, "RTC outbound audio event")[0]
 	var wire map[string]json.RawMessage
 	if err := json.Unmarshal(clientMessage, &wire); err != nil {
 		t.Fatalf("unmarshal RTC outbound event: %v", err)
