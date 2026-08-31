@@ -300,6 +300,22 @@ func (l *roomParticipantLifecycle) markTerminalLocked(reason ParticipantTerminat
 	l.terminalErr = err
 }
 
+// markParticipantFailure records a fault owned by this participant without
+// changing the room's terminal state. The first observed participant terminal
+// cause remains authoritative; a later cancellation or cleanup observation
+// must not replace it.
+func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if !l.roomStopping {
+		l.markTerminalLocked(ParticipantTerminationError, err)
+	}
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
 func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	if l == nil {
 		return 0
@@ -680,10 +696,6 @@ type roomCoordinator struct {
 	results  map[string]RoomParticipantResult
 	maxTurns int
 	progress chan struct{}
-	// completeWhenEmpty lets a finite replay room finish cleanly when every
-	// captured provider session reaches its own terminal boundary. Live rooms
-	// retain the historical failure-on-unexpected-empty behavior.
-	completeWhenEmpty bool
 	// emptyStopBlocked keeps participant completion from terminating a replay
 	// while its room-owned scheduler is still draining the final mixed frames.
 	emptyStopBlocked bool
@@ -743,6 +755,76 @@ func (c *roomCoordinator) fail(err error) {
 		err = errors.New("room failed")
 	}
 	c.stop(RoomTerminationFailed, err)
+}
+
+// failParticipant retires only the participant that owns err. Retirement is
+// intentionally atomic with respect to activeExcept: once this method returns,
+// later fan-out snapshots cannot include the failed participant. Cleanup and
+// terminal notification remain in finishParticipant, which is driven by the
+// participant's normal result path and therefore stays exactly-once.
+func (c *roomCoordinator) failParticipant(participantID string, err error) {
+	if c == nil || participantID == "" {
+		return
+	}
+	if err == nil {
+		err = errors.New("room participant failed")
+	}
+	runtime, empty, retired := c.retireParticipant(participantID, err)
+	if !retired {
+		return
+	}
+	if runtime.cancel != nil {
+		runtime.cancel()
+	}
+	if empty {
+		// A participant fault never becomes the room verdict. Once no viable
+		// participant remains, the room has completed normally at zero.
+		c.stop(RoomTerminationStopped, nil)
+	}
+}
+
+// retireParticipant marks a live participant terminal and removes it from the
+// active set under one coordinator lock. A room-level stop already in progress
+// wins the race, because the resulting participant cancellation is teardown,
+// not an independent participant fault.
+func (c *roomCoordinator) retireParticipant(participantID string, err error) (*roomParticipantRuntime, bool, bool) {
+	if c == nil || participantID == "" {
+		return nil, false, false
+	}
+	c.mu.Lock()
+	if c.reason != "" {
+		c.mu.Unlock()
+		return nil, false, false
+	}
+	runtime, ok := c.active[participantID]
+	if !ok || runtime == nil {
+		c.mu.Unlock()
+		return nil, false, false
+	}
+	if runtime.lifecycle != nil {
+		runtime.lifecycle.markParticipantFailure(err)
+	}
+	delete(c.active, participantID)
+	empty := len(c.active) == 0 && !c.emptyStopBlocked
+	c.mu.Unlock()
+	return runtime, empty, true
+}
+
+// removeParticipantForFinish performs the non-faulting half of the normal
+// participant terminal path. It also permits removal after a room-level stop,
+// when the room has already claimed the shared done signal.
+func (c *roomCoordinator) removeParticipantForFinish(participantID string) (bool, bool) {
+	if c == nil || participantID == "" {
+		return false, false
+	}
+	c.mu.Lock()
+	_, ok := c.active[participantID]
+	if ok {
+		delete(c.active, participantID)
+	}
+	empty := ok && len(c.active) == 0 && !c.emptyStopBlocked
+	c.mu.Unlock()
+	return ok, empty
 }
 
 func (c *roomCoordinator) blockEmptyStop() {
@@ -894,6 +976,12 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		return RoomParticipantResult{Reason: ParticipantTerminationError, Error: "room participant runtime is nil"}
 	}
 	id := runtime.plan.manifest.ID
+	c.mu.Lock()
+	if previous, alreadyFinished := c.results[id]; alreadyFinished {
+		c.mu.Unlock()
+		return previous
+	}
+	c.mu.Unlock()
 	connected, _, sessionClosed, closeReason, terminalReason, turns, connectErr := runtime.lifecycle.snapshot()
 	transportEnded := runtime.lifecycle.transportHasEnded()
 	_, _, _, sessionCloseErr := runtime.lifecycle.ownedSessionSnapshot()
@@ -920,33 +1008,22 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	} else if reason == "" {
 		reason = classifyRoomParticipantTermination(c.isStopping(), err, connected, transportEnded, sessionClosed, closeReason, terminalReason)
 	}
-	result := RoomParticipantResult{
-		ID:                id,
-		ParticipantID:     id,
-		TerminationReason: reason,
-		Reason:            reason,
-		TurnsCompleted:    turns,
-		Connected:         connected,
-		Error:             sanitizeRoomError(err, secrets),
-	}
 
-	c.mu.Lock()
-	if _, alreadyFinished := c.results[id]; alreadyFinished {
-		previous := c.results[id]
-		c.mu.Unlock()
-		return previous
-	}
-	c.results[id] = result
-	delete(c.active, id)
-	shouldFailEmpty := len(c.active) == 0 && c.reason == "" && !c.emptyStopBlocked
-	c.mu.Unlock()
+	// Remove the participant before touching any of its resources. A fault may
+	// already have retired it; normal completion removes it here. Either way,
+	// activeExcept below sees only viable survivors.
+	_, roomEmptyAfterRemoval := c.removeParticipantForFinish(id)
 
 	// Remove the source from every surviving inbound mixer before closing its
 	// own mixer. This discards only stale source bytes and keeps survivors live.
 	for _, survivor := range c.activeExcept(id) {
 		if survivor.mixer != nil {
 			if removeErr := survivor.mixer.RemoveInput(id); removeErr != nil && !errors.Is(removeErr, room.ErrMixerInputMissing) && !errors.Is(removeErr, room.ErrMixerClosed) {
-				c.fail(roomParticipantFailure(id, removeErr, secrets))
+				// The surviving mixer owns this failure. Retire only that
+				// participant; the source that is already leaving cannot turn a
+				// sibling's mixer fault into a room verdict.
+				survivorID := survivor.plan.manifest.ID
+				c.failParticipant(survivorID, roomParticipantFailure(survivorID, removeErr, secrets))
 			}
 		}
 	}
@@ -969,31 +1046,80 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		}
 	}
 	if cleanupErr != nil {
-		if c.isStopping() {
-			c.recordError(cleanupErr)
-		} else {
-			c.fail(roomParticipantFailure(id, cleanupErr, secrets))
+		// The participant has already been removed from active. Preserve its
+		// cleanup failure in its own result instead of promoting it to room
+		// failure or attempting a second terminal callback.
+		err = errors.Join(err, roomParticipantFailure(id, cleanupErr, secrets))
+	}
+	if cleanupErr != nil && runtime.lifecycle != nil {
+		runtime.lifecycle.markParticipantFailure(cleanupErr)
+	}
+	if terminalKind, terminalErr, terminalObserved := runtime.lifecycle.terminal(); terminalObserved {
+		reason = terminalKind
+		if terminalErr != nil {
+			err = errors.Join(err, terminalErr)
 		}
 	}
+
+	result := RoomParticipantResult{
+		ID:                id,
+		ParticipantID:     id,
+		TerminationReason: reason,
+		Reason:            reason,
+		TurnsCompleted:    turns,
+		Connected:         connected,
+		Error:             sanitizeRoomError(err, secrets),
+	}
+	c.mu.Lock()
+	if previous, alreadyFinished := c.results[id]; alreadyFinished {
+		c.mu.Unlock()
+		return previous
+	}
+	c.results[id] = result
+	c.mu.Unlock()
 	if c.onParticipant != nil {
 		if observerErr := boundedRoomObserver(cleanup, roomLifecycleWorkLabel(id, "observer"), func() { c.onParticipant(result) }, runtime.markObserverDone); observerErr != nil {
-			if c.isStopping() {
-				c.recordError(observerErr)
-			} else {
-				c.fail(roomParticipantFailure(id, observerErr, secrets))
-			}
+			// Observer failures are owned by the participant notification
+			// boundary. Do not stop a healthy sibling or invoke the observer a
+			// second time.
+			c.recordParticipantError(id, observerErr, secrets)
 		}
 	} else {
 		runtime.markObserverDone()
 	}
-	if shouldFailEmpty {
-		if c.completeWhenEmpty {
-			c.stop(RoomTerminationStopped, nil)
-		} else {
-			c.fail(fmt.Errorf("all room participants terminated"))
-		}
+	if roomEmptyAfterRemoval && !c.isStopping() {
+		c.stop(RoomTerminationStopped, nil)
 	}
-	return result
+	return c.participantResult(id, result)
+}
+
+func (c *roomCoordinator) recordParticipantError(participantID string, err error, secrets []string) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	result, ok := c.results[participantID]
+	if ok {
+		var previousErr error
+		if result.Error != "" {
+			previousErr = errors.New(result.Error)
+		}
+		result.Error = sanitizeRoomError(errors.Join(previousErr, err), secrets)
+		c.results[participantID] = result
+	}
+	c.mu.Unlock()
+}
+
+func (c *roomCoordinator) participantResult(participantID string, fallback RoomParticipantResult) RoomParticipantResult {
+	if c == nil {
+		return fallback
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if result, ok := c.results[participantID]; ok {
+		return result
+	}
+	return fallback
 }
 
 func (c *roomCoordinator) snapshot() (RoomTerminationReason, map[string]RoomParticipantResult, []string, error) {

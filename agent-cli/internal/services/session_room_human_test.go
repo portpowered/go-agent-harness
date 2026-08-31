@@ -305,22 +305,48 @@ customerAudioRecorded:
 	}
 }
 
-func TestRunRoom_HumanDeviceReadFailureFailsWholeRoom(t *testing.T) {
+func TestRunRoom_HumanDeviceReadFailureFailsOnlyParticipant(t *testing.T) {
 	registry := newRoomHumanTestRegistry(t)
 	readErr := errors.New("microphone lost after secret-room-key")
 	registry.inputHandle.readErr = readErr
 	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
 	opts := newRoomHumanRunOptions(registry, inferencer)
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err == nil || result.Reason != RoomTerminationFailed {
-		t.Fatalf("device failure result=%+v err=%v, want failed room", result, err)
+	terminated := make(chan RoomParticipantResult, 2)
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) {
+		terminated <- result
 	}
-	if stringsContainsAny(result.Error, "secret-room-key") || stringsContainsAny(err.Error(), "secret-room-key") {
-		t.Fatalf("device failure leaked provider secret: result=%q err=%q", result.Error, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		resultCh <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	select {
+	case participant := <-terminated:
+		if participant.ParticipantID != "customer" || participant.Reason != ParticipantTerminationError {
+			t.Fatalf("device failure participant = %+v, want customer/error", participant)
+		}
+		if !stringsContainsAny(participant.Error, "microphone lost") {
+			t.Fatalf("device failure participant = %+v, want causal error", participant)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("human participant failure did not terminate independently")
 	}
-	if !stringsContainsAny(result.Error, "microphone lost") || len(result.ActiveParticipants) != 0 {
-		t.Fatalf("device failure result = %+v, want redacted microphone failure and no active participants", result)
+	cancel()
+	var outcome roomTestRunOutcome
+	select {
+	case outcome = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after surviving participant was stopped")
+	}
+	if outcome.err != nil || outcome.result.Reason != RoomTerminationStopped || len(outcome.result.ActiveParticipants) != 0 {
+		t.Fatalf("device failure room result=%+v err=%v, want clean stopped room", outcome.result, outcome.err)
+	}
+	if stringsContainsAny(outcome.result.Participants["customer"].Error, "secret-room-key") {
+		t.Fatalf("device failure leaked provider secret: %+v", outcome.result.Participants["customer"])
 	}
 	calls := inferencer.sessionsSnapshot()
 	closeCalls := 0
@@ -328,32 +354,75 @@ func TestRunRoom_HumanDeviceReadFailureFailsWholeRoom(t *testing.T) {
 		closeCalls = calls[0].closeCallsSnapshot()
 	}
 	if len(calls) != 1 || closeCalls != 1 {
-		t.Fatalf("provider cleanup sessions=%d close_calls=%d, want one closed session; result=%+v err=%v", len(calls), closeCalls, result, err)
+		t.Fatalf("provider cleanup sessions=%d close_calls=%d, want one closed session; result=%+v err=%v", len(calls), closeCalls, outcome.result, outcome.err)
 	}
 	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
 		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
 	}
 }
 
-func TestRunRoom_HumanProviderFailureCancelsLocalParticipant(t *testing.T) {
+func TestRunRoom_HumanProviderFailureFailsOnlyParticipant(t *testing.T) {
 	registry := newRoomHumanTestRegistry(t)
 	providerErr := errors.New("provider transport failed after secret-room-key")
 	inferencer := &roomTestInferencer{
 		events:      []messages.StreamMessage{roomTestSessionOpen("agent")},
-		disconnect:  true,
 		terminalErr: providerErr,
 	}
 	opts := newRoomHumanRunOptions(registry, inferencer)
+	agentOpened := make(chan struct{}, 1)
+	opts.onParticipantSessionOpen = func(id string) {
+		if id == "agent" {
+			select {
+			case agentOpened <- struct{}{}:
+			default:
+			}
+		}
+	}
 
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err == nil || result.Reason != RoomTerminationFailed {
-		t.Fatalf("provider failure result=%+v err=%v, want failed room", result, err)
+	terminated := make(chan RoomParticipantResult, 2)
+	opts.OnParticipantTerminated = func(result RoomParticipantResult) { terminated <- result }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		resultCh <- roomTestRunOutcome{result: result, err: err}
+	}()
+	select {
+	case <-agentOpened:
+	case <-time.After(2 * time.Second):
+		t.Fatal("provider participant did not reach observed admission")
 	}
-	if stringsContainsAny(result.Error, "secret-room-key") || stringsContainsAny(err.Error(), "secret-room-key") {
-		t.Fatalf("provider failure leaked provider secret: result=%q err=%q", result.Error, err)
+	waitRoomHumanTestSession(t, inferencer).end()
+
+	var failed RoomParticipantResult
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	for failed.ParticipantID != "agent" {
+		select {
+		case failed = <-terminated:
+		case <-deadline.C:
+			t.Fatal("provider participant failure did not terminate independently")
+		}
 	}
-	if !stringsContainsAny(result.Error, "provider transport failed") || len(result.ActiveParticipants) != 0 {
-		t.Fatalf("provider failure result = %+v, want redacted provider failure and no active participants", result)
+	if failed.Reason != ParticipantTerminationError {
+		t.Fatalf("provider failure participant = %+v, want agent/error", failed)
+	}
+	if stringsContainsAny(failed.Error, "secret-room-key") {
+		t.Fatalf("provider failure leaked provider secret: %+v", failed)
+	}
+	if !stringsContainsAny(failed.Error, "provider transport failed") {
+		t.Fatalf("provider failure participant = %+v, want causal error", failed)
+	}
+	cancel()
+	var outcome roomTestRunOutcome
+	select {
+	case outcome = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after surviving participant was stopped")
+	}
+	if outcome.err != nil || outcome.result.Reason != RoomTerminationStopped || len(outcome.result.ActiveParticipants) != 0 {
+		t.Fatalf("provider failure room result=%+v err=%v, want clean stopped room", outcome.result, outcome.err)
 	}
 	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
 		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())

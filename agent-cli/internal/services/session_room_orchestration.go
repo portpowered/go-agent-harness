@@ -162,7 +162,6 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
-	coordinator.completeWhenEmpty = replayMode
 	if replaySchedule != nil {
 		coordinator.blockEmptyStop()
 	}
@@ -389,7 +388,14 @@ func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr erro
 	// caller wait, while still giving it the complete result.
 	observerCleanup := &roomCleanupWaiter{}
 	observerCleanup.start()
-	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(result) }, nil)
+	observerResult := &RoomResult{
+		TerminationReason:  result.TerminationReason,
+		Reason:             result.Reason,
+		Participants:       result.Participants,
+		ActiveParticipants: append([]string(nil), result.ActiveParticipants...),
+		Error:              result.Error,
+	}
+	observerErr := boundedRoomObserver(observerCleanup, "room observer", func() { observer(*observerResult) }, nil)
 	observerCleanup.stop()
 	if observerErr == nil {
 		return result, roomErr

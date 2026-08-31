@@ -241,6 +241,8 @@ func TestRunRoom_ParticipantCloseDoesNotStopViableRoom(t *testing.T) {
 			t.Fatalf("%s sessions = %d, want 1", id, len(sessions))
 		} else if calls := sessions[0].closeCallsSnapshot(); calls != 0 {
 			t.Fatalf("%s was closed when a ended; close calls = %d done=%v sent=%d", id, calls, sessions[0].doneSnapshot(), sessions[0].sentCountSnapshot())
+		} else if sessions[0].doneSnapshot() {
+			t.Fatalf("%s session ended when a terminated", id)
 		}
 	}
 	cancel()
@@ -536,7 +538,7 @@ func TestRunRoom_StopsAtMaxDuration(t *testing.T) {
 	}
 }
 
-func TestRunRoom_FailsWhenEveryParticipantTerminates(t *testing.T) {
+func TestRunRoom_CompletesWhenEveryParticipantTerminates(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	inferencers := make(map[string]*roomTestInferencer, len(ids))
 	for _, id := range ids {
@@ -549,11 +551,11 @@ func TestRunRoom_FailsWhenEveryParticipantTerminates(t *testing.T) {
 		opts, _ := newRoomTestRunOptions(ids, inferencers)
 		return opts
 	}())
-	if err == nil {
-		t.Fatal("room with no viable participants returned nil error")
+	if err != nil {
+		t.Fatalf("room with no viable participants: %v", err)
 	}
-	if result.Reason != RoomTerminationFailed {
-		t.Fatalf("room reason = %q, want %q", result.Reason, RoomTerminationFailed)
+	if result.Reason != RoomTerminationStopped {
+		t.Fatalf("room reason = %q, want %q", result.Reason, RoomTerminationStopped)
 	}
 	for _, id := range ids {
 		if participant := result.Participants[id]; participant.Reason != ParticipantTerminationEnded {
