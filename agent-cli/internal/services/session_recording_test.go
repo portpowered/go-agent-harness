@@ -262,6 +262,91 @@ func TestSessionDirectoryRecordingPersistsOneAuthoritativeTerminalSummary(t *tes
 	}
 }
 
+func TestSessionDirectoryRecordingFinalizesBufferedEvidenceAfterRecordingError(t *testing.T) {
+	const credential = "session-recording-secret"
+	destination := filepath.Join(t.TempDir(), "partial-recording")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+		Model:  "gpt-realtime",
+		APIKey: credential,
+	})
+	recording.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("response buffered before recording degraded"),
+	}, false)
+
+	recording.mu.Lock()
+	wantClient := append([]byte(nil), recording.client.Bytes()...)
+	wantAgent := append([]byte(nil), recording.agent.Bytes()...)
+	recording.mu.Unlock()
+	if len(wantClient) == 0 || len(wantAgent) == 0 {
+		t.Fatal("pre-error transcript evidence is empty")
+	}
+
+	firstCause := errors.New("recording sink " + credential + " became unavailable")
+	firstRecordingErr := recordingDestinationError(transcript.ErrRecordingWrite, "capture transcript", destination, firstCause)
+	recording.fail(firstRecordingErr)
+	recording.fail(errors.New("later recording failure must not replace the first failure"))
+
+	firstFinalizeErr := recording.Finalize()
+	if !errors.Is(firstFinalizeErr, firstRecordingErr) || !errors.Is(firstFinalizeErr, firstCause) {
+		t.Fatalf("first finalize error = %v, want first recording error identities", firstFinalizeErr)
+	}
+
+	for _, testCase := range []struct {
+		name string
+		want []byte
+	}{
+		{name: "client.transcript.jsonl", want: wantClient},
+		{name: "agent.transcript.jsonl", want: wantAgent},
+	} {
+		got, err := os.ReadFile(filepath.Join(destination, testCase.name))
+		if err != nil {
+			t.Fatalf("read %s: %v", testCase.name, err)
+		}
+		if !bytes.Equal(got, testCase.want) {
+			t.Fatalf("%s = %q, want exact pre-error evidence %q", testCase.name, got, testCase.want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(destination, "session-log.jsonl")); err != nil {
+		t.Fatalf("session log was not persisted with pre-error evidence: %v", err)
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read partial manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode partial manifest: %v", err)
+	}
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("recording status = %+v, want partial", manifest.RecordingStatus)
+	}
+	wantReason := strings.ReplaceAll(firstRecordingErr.Error(), credential, transcript.RecordingRedactionMarker)
+	if manifest.RecordingStatus.Reason != wantReason {
+		t.Fatalf("partial reason = %q, want %q", manifest.RecordingStatus.Reason, wantReason)
+	}
+	if bytes.Contains(manifestBytes, []byte(credential)) {
+		t.Fatal("partial manifest contains the configured recording credential")
+	}
+
+	entriesBeforeRepeat := recordingEntries(t, destination)
+	secondFinalizeErr := recording.Finalize()
+	if !errors.Is(secondFinalizeErr, firstRecordingErr) || !reflect.DeepEqual(recordingEntries(t, destination), entriesBeforeRepeat) {
+		t.Fatalf("repeated finalize changed the published partial bundle: err=%v", secondFinalizeErr)
+	}
+	parentEntries, err := os.ReadDir(filepath.Dir(destination))
+	if err != nil {
+		t.Fatalf("read recording parent: %v", err)
+	}
+	for _, entry := range parentEntries {
+		if strings.HasPrefix(entry.Name(), "."+filepath.Base(destination)+".staging-") {
+			t.Fatalf("staging directory %q remained after partial publication", entry.Name())
+		}
+	}
+}
+
 func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	if err := os.MkdirAll(destination, 0o755); err != nil {
