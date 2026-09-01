@@ -874,6 +874,9 @@ func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValu
 		if voiceFlag.err != nil {
 			return voiceFlag.err
 		}
+		if err != nil && err.Error() == "unknown flag: --audio-device-out" {
+			return fmt.Errorf("%w (did you mean --audio-out-device?)", err)
+		}
 		return err
 	})
 }
