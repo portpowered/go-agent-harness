@@ -1102,6 +1102,11 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 		return
 	}
 	output := roomHumanOutputBuffer{}
+	// A human participant is this room's actual customer-facing speaker.
+	// The filler covers both measured dead-air cases uniformly: a
+	// turn-transition pause and a tool-call round trip both surface here as
+	// "the mixer has nothing active right now" (see applyRoomHoldTone).
+	holdTone := audio.NewHoldToneFiller(audio.DefaultHoldToneConfig(), runtime.mixer.Format().SampleRate, time.Now())
 	for {
 		mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)
 		if err != nil {
@@ -1111,7 +1116,7 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
 			return
 		}
-		frame := mixed.PCM
+		frame := applyRoomHoldTone(holdTone, time.Now(), mixed.PCM)
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
 			if runtime.ingress != nil {
 				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonParticipantOutputRejected)

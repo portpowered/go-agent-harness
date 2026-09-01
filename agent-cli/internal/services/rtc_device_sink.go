@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -74,6 +75,17 @@ type RTCDeviceSink struct {
 	playbackMu         sync.Mutex
 	playbackGeneration uint64
 	playbackBlocked    bool
+
+	// holdToneConfig and holdToneTick configure the "still here" cue that
+	// fills a customer-facing gap once no real assistant audio has reached
+	// this device for longer than an ordinary conversational pause (see
+	// rtc_device_hold_tone.go). Tests may override both directly since this
+	// file and its tests share package services.
+	holdToneConfig audio.HoldToneConfig
+	holdToneTick   time.Duration
+
+	holdToneMu     sync.Mutex
+	holdToneFiller *audio.HoldToneFiller
 }
 
 // NewRTCDeviceSink opens an output device through the shared audio registry.
@@ -106,6 +118,8 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 		playbackObserver: playbackObserver,
 		lifeCtx:          lifeCtx,
 		lifeCancel:       lifeCancel,
+		holdToneConfig:   audio.DefaultHoldToneConfig(),
+		holdToneTick:     defaultRTCDeviceHoldToneTick,
 	}, nil
 }
 
@@ -213,6 +227,9 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		cancel(nil)
 	}()
 
+	stopHoldTone := s.startHoldTone(operationCtx)
+	defer stopHoldTone()
+
 	var pending rtcDevicePlaybackBuffer
 	for {
 		generation, blocked := s.playbackState()
@@ -240,6 +257,9 @@ func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *rtcDevi
 	// boundary.
 	converted, err := s.deviceFrame(providerFrame.Samples)
 	if err != nil {
+		return err
+	}
+	if err := s.observeHoldToneRealFrame(ctx, generation, blocked); err != nil {
 		return err
 	}
 	frames := pending.add(converted, generation, blocked)
