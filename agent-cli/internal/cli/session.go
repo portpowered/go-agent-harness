@@ -86,8 +86,8 @@ func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink
 	})
 }
 
-func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID) services.RTCDeviceBindingRequest {
-	return services.RTCDeviceBindingRequest{
+func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID, loadedConfig *config.Config, browserInteractive bool) services.RTCDeviceBindingRequest {
+	request := services.RTCDeviceBindingRequest{
 		Registry:              c.deviceRegistry,
 		InputDevice:           input,
 		OutputDevice:          output,
@@ -95,6 +95,18 @@ func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, outp
 		OutputPresent:         cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
 		FeedbackWarningWriter: cmd.ErrOrStderr(),
 	}
+	if !browserInteractive {
+		return request
+	}
+	if !request.InputPresent && request.InputDevice == "" && loadedConfig != nil && loadedConfig.Session != nil {
+		request.InputDevice = audio.DeviceID(loadedConfig.Session.InputDevice)
+	}
+	if !request.OutputPresent && request.OutputDevice == "" && loadedConfig != nil && loadedConfig.Session != nil {
+		request.OutputDevice = audio.DeviceID(loadedConfig.Session.OutputDevice)
+	}
+	request.InputPresent = true
+	request.OutputPresent = true
+	return request
 }
 
 func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
@@ -490,7 +502,7 @@ const sessionCommandLongHelp = "Run a bidirectional session inference capture or
 	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
 	"With no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `agent session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\n" +
 	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
-	"WebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\n" +
+	"WebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. With only --browser-tools and a provider, the command starts an interactive microphone session, prints Starting and Listening state, and waits for cancellation or provider termination. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\n" +
 	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
 	"Input transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\n" +
 	"Session history management remains available through the show, list, and delete subcommands.\n\n" +
@@ -653,6 +665,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return cmd.Help()
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
+			browserToolsInteractive := browserToolsAdmission(cmd) && !hasSessionMode
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
@@ -725,47 +738,48 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return err
 			}
 			sessionOptions := services.SessionRunOptions{
-				RecordPath:             c.askFlags.RecordCapturePath,
-				ReplayPath:             c.askFlags.ReplayCapturePath,
-				Provider:               c.askFlags.Provider,
-				ProviderProvided:       cmd.Flags().Changed("provider"),
-				Model:                  c.askFlags.Model,
-				ModelProvided:          cmd.Flags().Changed("model"),
-				NoInputTranscription:   noInputTranscription,
-				APIKey:                 c.askFlags.APIKey,
-				BaseURL:                c.askFlags.BaseURL,
-				ConfigDir:              c.globalFlags.ConfigDir(),
-				WorkDir:                filesystemPolicy.PrimaryRoot(),
-				AllowPaths:             filesystemPolicy.AdditionalRoots(),
-				FilesystemPolicy:       filesystemPolicy,
-				Prompt:                 strings.Join(args, " "),
-				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
-				Voice:                  voice,
-				Transport:              selectedTransport,
-				TransportProvided:      cmd.Flags().Changed("transport"),
-				Signaling:              signaling,
-				MediaSource:            mediaSource,
-				RTCRuntimeFactory:      c.rtcRuntimeFactory,
-				SessionInferencer:      c.sessionInferencerOverride,
-				ToolExecutor:           toolExecutor,
-				ToolDefinitions:        toolDefinitions,
-				ToolDefinitionBase:     toolDefinitionBase,
-				RefreshToolDefinitions: refreshDefinitionsWithError,
-				BrowserWatch:           browserWatch,
-				BrowserEventWatch:      browserEventWatch,
-				BrowserCapabilityState: browserCapabilityState,
-				AudioInterruptions:     audioInterruptions,
-				CapabilityClose:        capabilityClose,
-				CancellationIntent:     cancellationIntent,
-				LoadedConfig:           loadedConfig,
-				BrowserToolsEnabled:    !bareSession && browserConfigEnablesTools(loadedConfig),
-				ToolDiagnostics:        sessionToolDiagnosticSink(cmd.ErrOrStderr()),
-				WaitForClose:           waitForClose,
-				StreamObserver:         c.streamObserver,
-				Clock:                  c.clockSource,
-				RuntimeObserver:        c.runtimeObserver,
-				AudioInTurnBarge:       audioInTurnBarge,
-				RTCDeviceBinding:       c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice),
+				RecordPath:              c.askFlags.RecordCapturePath,
+				ReplayPath:              c.askFlags.ReplayCapturePath,
+				Provider:                c.askFlags.Provider,
+				ProviderProvided:        cmd.Flags().Changed("provider"),
+				Model:                   c.askFlags.Model,
+				ModelProvided:           cmd.Flags().Changed("model"),
+				NoInputTranscription:    noInputTranscription,
+				APIKey:                  c.askFlags.APIKey,
+				BaseURL:                 c.askFlags.BaseURL,
+				ConfigDir:               c.globalFlags.ConfigDir(),
+				WorkDir:                 filesystemPolicy.PrimaryRoot(),
+				AllowPaths:              filesystemPolicy.AdditionalRoots(),
+				FilesystemPolicy:        filesystemPolicy,
+				Prompt:                  strings.Join(args, " "),
+				PromptProvided:          cmd.Flags().Changed("prompt") || len(args) > 0,
+				Voice:                   voice,
+				Transport:               selectedTransport,
+				TransportProvided:       cmd.Flags().Changed("transport"),
+				Signaling:               signaling,
+				MediaSource:             mediaSource,
+				RTCRuntimeFactory:       c.rtcRuntimeFactory,
+				SessionInferencer:       c.sessionInferencerOverride,
+				ToolExecutor:            toolExecutor,
+				ToolDefinitions:         toolDefinitions,
+				ToolDefinitionBase:      toolDefinitionBase,
+				RefreshToolDefinitions:  refreshDefinitionsWithError,
+				BrowserWatch:            browserWatch,
+				BrowserEventWatch:       browserEventWatch,
+				BrowserCapabilityState:  browserCapabilityState,
+				AudioInterruptions:      audioInterruptions,
+				CapabilityClose:         capabilityClose,
+				CancellationIntent:      cancellationIntent,
+				LoadedConfig:            loadedConfig,
+				BrowserToolsEnabled:     !bareSession && browserConfigEnablesTools(loadedConfig),
+				BrowserToolsInteractive: browserToolsInteractive,
+				ToolDiagnostics:         sessionToolDiagnosticSink(cmd.ErrOrStderr()),
+				WaitForClose:            waitForClose,
+				StreamObserver:          c.streamObserver,
+				Clock:                   c.clockSource,
+				RuntimeObserver:         c.runtimeObserver,
+				AudioInTurnBarge:        audioInTurnBarge,
+				RTCDeviceBinding:        c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive),
 			}
 			if bareSession {
 				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)

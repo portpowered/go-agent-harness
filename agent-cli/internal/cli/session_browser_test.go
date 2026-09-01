@@ -11,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 	"github.com/spf13/cobra"
 )
 
@@ -336,6 +338,10 @@ browser:
 	globalFlags.ConfigDirPath = configDir
 	inferencer := newBrowserAdmissionInferencer()
 	defer inferencer.Close()
+	deviceRegistry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual device registry: %v", err)
+	}
 	toolCapabilityCalls := 0
 	capabilityCloseCalls := 0
 	var resolvedBrowser config.BrowserConfig
@@ -356,7 +362,7 @@ browser:
 				},
 			}, nil
 		},
-		nil,
+		deviceRegistry,
 	)
 	command := owner.Generate()
 	var out bytes.Buffer
@@ -427,11 +433,16 @@ func (i *browserAdmissionInferencer) ConnectSession(ctx context.Context) (messag
 	session := &browserAdmissionSession{
 		receive: messages.NewTypedBuffer[messages.StreamMessage](16),
 		done:    make(chan struct{}),
+		media:   newBrowserAdmissionMedia(),
 	}
 	i.session = session
 	session.receive.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("browser-admission", "session"),
+	})
+	session.receive.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValue("browser-admission", "fixture-complete"),
 	})
 	return session, nil
 }
@@ -445,6 +456,7 @@ func (i *browserAdmissionInferencer) Close() {
 type browserAdmissionSession struct {
 	receive   *messages.TypedBuffer[messages.StreamMessage]
 	done      chan struct{}
+	media     *browserAdmissionMedia
 	closeOnce sync.Once
 }
 
@@ -460,7 +472,54 @@ func (s *browserAdmissionSession) Receive() *messages.TypedBuffer[messages.Strea
 
 func (s *browserAdmissionSession) Done() <-chan struct{} { return s.done }
 
+func (s *browserAdmissionSession) RTCMedia() rtc.MediaEndpoints {
+	if s == nil || s.media == nil {
+		return rtc.MediaEndpoints{}
+	}
+	return rtc.MediaEndpoints{Inbound: s.media, Outbound: s.media}
+}
+
 func (s *browserAdmissionSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
+	s.closeOnce.Do(func() {
+		close(s.done)
+		if s.media != nil {
+			_ = s.media.Close()
+		}
+	})
 	return nil
 }
+
+type browserAdmissionMedia struct {
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newBrowserAdmissionMedia() *browserAdmissionMedia {
+	return &browserAdmissionMedia{closed: make(chan struct{})}
+}
+
+func (m *browserAdmissionMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, error) {
+	select {
+	case <-m.closed:
+		return rtc.PCMFrame{}, rtc.ErrPeerClosed
+	case <-ctx.Done():
+		return rtc.PCMFrame{}, ctx.Err()
+	}
+}
+
+func (m *browserAdmissionMedia) WriteFrame(ctx context.Context, _ rtc.PCMFrame) error {
+	select {
+	case <-m.closed:
+		return rtc.ErrPeerClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *browserAdmissionMedia) Close() error {
+	m.once.Do(func() { close(m.closed) })
+	return nil
+}
+
+var _ rtc.InboundMedia = (*browserAdmissionMedia)(nil)
+var _ rtc.OutboundMedia = (*browserAdmissionMedia)(nil)

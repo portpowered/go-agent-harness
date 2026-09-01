@@ -46,12 +46,20 @@ func planBareLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFa
 	}, nil
 }
 
+func browserToolsInteractiveLive(opts SessionRunOptions) bool {
+	return opts.BrowserToolsInteractive && opts.BrowserToolsEnabled &&
+		opts.RecordPath == "" && opts.ReplayPath == "" &&
+		!opts.PromptProvided && strings.TrimSpace(opts.Prompt) == "" &&
+		len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries
+}
+
 // planBrowserLiveSessionRuntime plans an explicitly browser-enabled live
 // session without wrapping its provider transport in a capture recorder. The
 // browser capability is still carried by opts.ToolDefinitions and
 // opts.ToolExecutor; this planner only supplies the non-recording provider
 // runtime that the new admission path needs.
 func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	interactive := browserToolsInteractiveLive(opts)
 	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
 	var (
 		openAISessionCfg config.OpenAIConfig
@@ -85,7 +93,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 	switch provider {
 	case sessionProviderOpenAI:
 		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, clientOwnedAudio)
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, interactive || clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
 		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
@@ -104,9 +112,10 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 		inferencer: inferencer,
 		loop: sessionLoopOptions{
 			Prompt:                   opts.Prompt,
-			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
-			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+			CloseAfterOpen:           !interactive && !opts.WaitForClose && len(opts.AudioInputs) == 0,
+			WaitForClose:             interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
+			BrowserToolsInteractive:  interactive,
 			// The provider-backed constructor receives the stable definitions in
 			// its initial Realtime session configuration. Do not send a second
 			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;

@@ -235,6 +235,8 @@ type runtimeRTCSession struct {
 	done  chan struct{}
 	media services.RTCMediaEndpoints
 
+	mu         sync.Mutex
+	sent       []messages.StreamMessage
 	doneOnce   sync.Once
 	closeCalls atomic.Int32
 }
@@ -252,6 +254,9 @@ func (s *runtimeRTCSession) Send(ctx context.Context, msg messages.StreamMessage
 		return false
 	default:
 	}
+	s.mu.Lock()
+	s.sent = append(s.sent, msg)
+	s.mu.Unlock()
 	return true
 }
 
@@ -268,6 +273,12 @@ func (s *runtimeRTCSession) Close() error {
 func (s *runtimeRTCSession) finish() { _ = s.Close() }
 
 func (s *runtimeRTCSession) RTCMedia() services.RTCMediaEndpoints { return s.media }
+
+func (s *runtimeRTCSession) sentMessages() []messages.StreamMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]messages.StreamMessage(nil), s.sent...)
+}
 
 var (
 	_ messages.SessionInferencer = (*runtimeRTCSessionInferencer)(nil)

@@ -289,6 +289,12 @@ type SessionRunOptions struct {
 	// the legacy provider-recording flag while keeping ordinary sessions on
 	// their existing validation path.
 	BrowserToolsEnabled bool
+	// BrowserToolsInteractive marks the explicit browser-only live invocation:
+	// browser capability is enabled, but no prompt, capture, replay, image, or
+	// finite audio driver selected a more specific session mode. It is resolved
+	// by the CLI admission boundary and keeps browser capability separate from
+	// the bare-session identity.
+	BrowserToolsInteractive bool
 	// LoadedConfig is the config snapshot used to derive session capabilities.
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.

@@ -106,6 +106,11 @@ type sessionLoopOptions struct {
 	// BareLive keeps a default-device voice session open until its owner
 	// cancels it instead of applying the ordinary single-turn close policy.
 	BareLive bool
+	// BrowserToolsInteractive keeps a no-driver WebMCP live session open until
+	// provider termination or explicit cancellation and selects its readiness
+	// banner. It is intentionally distinct from BareLive so the session remains
+	// truthfully identified as browser-enabled rather than bare.
+	BrowserToolsInteractive bool
 	// ListeningBanner is emitted after the provider's SESSION.CREATED event.
 	// The enclosing plan fills it only after both local devices are open.
 	ListeningBanner string
@@ -471,7 +476,7 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 			return state, false, terminate(livenessErr)
 		}
 	}
-	if msg.Type == messages.StreamTypeSessionCreated && opts.BareLive && opts.ListeningBanner != "" && !state.listeningReported {
+	if msg.Type == messages.StreamTypeSessionCreated && (opts.BareLive || opts.BrowserToolsInteractive) && opts.ListeningBanner != "" && !state.listeningReported {
 		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
 			return state, false, terminate(err)
 		}
