@@ -83,6 +83,17 @@ type RTCDeviceBindingRequest struct {
 	OutputDevice  audio.DeviceID
 	InputPresent  bool
 	OutputPresent bool
+	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
+	// the legacy device rate for callers that do not carry a session contract.
+	OutputSampleRate int
+	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
+	// cannot open this rate may be opened at another supported rate and
+	// converted once by RTCDeviceSource before provider transmission.
+	InputSampleRate int
+	// PlaybackObserver receives one final queue snapshot when a selected output
+	// device closes. It is called outside the native device callback and may be
+	// used to publish cumulative overflow diagnostics.
+	PlaybackObserver RTCDevicePlaybackObserver
 }
 
 func (r RTCDeviceBindingRequest) inputSelected() bool {
@@ -172,7 +183,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 
 	binding := &RTCDeviceBinding{}
 	if request.inputSelected() {
-		source, err := NewRTCDeviceSource(request.Registry, normalizeRTCDeviceSelector(request.InputDevice))
+		source, err := NewRTCDeviceSourceAtRate(request.Registry, normalizeRTCDeviceSelector(request.InputDevice), request.InputSampleRate)
 		if err != nil {
 			return nil, &RTCDeviceBindingError{
 				Flag:      "--" + SessionAudioInDeviceFlag,
@@ -185,7 +196,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	if request.outputSelected() {
-		sink, err := NewRTCDeviceSink(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice))
+		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(&RTCDeviceBindingError{

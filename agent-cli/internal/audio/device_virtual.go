@@ -67,6 +67,27 @@ func virtualID(ref string) (DeviceID, error) {
 func compatible(a, b []VirtualCapability) bool {
 	return slices.ContainsFunc(a, func(c VirtualCapability) bool { return slices.Contains(b, c) })
 }
+
+func virtualDeviceFormats(capabilities []VirtualCapability) []DeviceFormat {
+	formats := make([]DeviceFormat, 0, len(capabilities))
+	for _, capability := range capabilities {
+		encoding := capability.Format
+		if encoding == "" {
+			encoding = DeviceEncodingPCM16
+		}
+		formats = append(formats, DeviceFormat{
+			SampleRate: capability.SampleRate,
+			Channels:   capability.Channels,
+			BitDepth:   capability.BitDepth,
+			Encoding:   encoding,
+		})
+	}
+	return formats
+}
+
+func containsDeviceFormat(formats []DeviceFormat, want DeviceFormat) bool {
+	return slices.ContainsFunc(formats, func(format DeviceFormat) bool { return format.equal(want) })
+}
 func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 	id, err := virtualID(s.ID)
 	if err != nil {
@@ -92,10 +113,11 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 }
 
 type virtualPair struct {
-	open    [2]int
-	seen    [2]bool
-	queue   [][]byte
-	changed chan struct{}
+	open     [2]int
+	seen     [2]bool
+	queue    [][]byte
+	playback *PlaybackQueue
+	changed  chan struct{}
 }
 
 func (p *virtualPair) signal() { close(p.changed); p.changed = make(chan struct{}) }
@@ -184,11 +206,29 @@ func (r *VirtualRegistry) Default(d Direction) (Device, error) {
 func side(d Direction) int                                 { return map[Direction]int{DirectionOutput: 1}[d] }
 func fail(mu *sync.Mutex, err error) (*virtualPair, error) { mu.Unlock(); return nil, err }
 func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openWithFormat(id, DefaultDeviceFormat())
+}
+
+// OpenWithFormat opens an exact virtual endpoint at the requested PCM
+// format. Virtual capabilities are intentionally exact so a loopback can
+// prove that no hidden sample-rate conversion occurred.
+func (r *VirtualRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openWithFormat(id, format)
+}
+
+func (r *VirtualRegistry) openWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v := r.devices[id]
 	if v == nil {
 		return nil, NewDeviceNotFoundError(id)
+	}
+	available := virtualDeviceFormats(v.spec.Capabilities)
+	if !containsDeviceFormat(available, format) {
+		return nil, &DeviceFormatError{ID: id, Direction: v.Direction, Requested: format, Available: available}
 	}
 	if v.spec.Exclusive && v.opened != 0 {
 		return nil, NewDeviceInUseError(id)
@@ -200,7 +240,7 @@ func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		p.open[i]++
 		p.seen[i] = true
 	}
-	return &VirtualStream{registry: r, device: v}, nil
+	return &VirtualStream{registry: r, device: v, format: format}, nil
 }
 func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
@@ -224,7 +264,16 @@ func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 type VirtualStream struct {
 	registry *VirtualRegistry
 	device   *virtualDevice
+	format   DeviceFormat
 	closed   bool
+}
+
+// DeviceFormat reports the exact virtual capability selected at open time.
+func (s *VirtualStream) DeviceFormat() DeviceFormat {
+	if s == nil {
+		return DeviceFormat{}
+	}
+	return s.format
 }
 
 func (s *VirtualStream) lock(op string) (*virtualPair, error) {
@@ -262,6 +311,27 @@ func (s *VirtualStream) Write(ctx context.Context, frame []byte) error {
 	p.signal()
 	return nil
 }
+
+// WriteFrame is the typed PCM16 path used by DeviceSink. The raw Write
+// method remains available for transport/loopback tests that intentionally
+// exercise arbitrary byte payloads.
+func (s *VirtualStream) WriteFrame(ctx context.Context, frame []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("write", frame); err != nil {
+		return err
+	}
+	p, err := s.lock("write")
+	if err != nil {
+		return err
+	}
+	defer s.registry.mu.Unlock()
+	p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+	p.playback.Enqueue(frame)
+	p.signal()
+	return nil
+}
 func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -288,6 +358,81 @@ func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 		case <-changed:
 		}
 	}
+}
+
+// ReadFrame is the typed PCM16 path paired with WriteFrame. It waits for a
+// complete legacy frame so DeviceSource preserves its existing frame API.
+func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("read", frame); err != nil {
+		return err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if err := contextError(ctx); err != nil {
+			return err
+		}
+		p, err := s.lock("read")
+		if err != nil {
+			return err
+		}
+		p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+		if p.playback.Snapshot().QueuedSamples >= len(frame) {
+			p.playback.ReadInto(frame)
+			s.registry.mu.Unlock()
+			return nil
+		}
+		changed := p.changed
+		s.registry.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return contextError(ctx)
+		case <-changed:
+		}
+	}
+}
+
+func ensureVirtualPlaybackQueue(queue *PlaybackQueue, format DeviceFormat) *PlaybackQueue {
+	if queue != nil {
+		return queue
+	}
+	queue, _ = playbackQueueForFormat(format)
+	return queue
+}
+
+// PlaybackStats exposes the typed playback queue used by DeviceSink. Raw
+// byte writes intentionally do not participate in this PCM observation.
+func (s *VirtualStream) PlaybackStats() PlaybackQueueStats {
+	if s == nil || s.registry == nil || s.device == nil {
+		return PlaybackQueueStats{}
+	}
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	if s.device.pair == nil {
+		return emptyPlaybackQueueStats(s.format)
+	}
+	if s.device.pair.playback == nil {
+		return emptyPlaybackQueueStats(s.format)
+	}
+	return s.device.pair.playback.Snapshot()
+}
+
+// DiscardPlayback removes typed PCM samples waiting for the virtual device's
+// paired read callback.
+func (s *VirtualStream) DiscardPlayback() int {
+	if s == nil || s.registry == nil || s.device == nil {
+		return 0
+	}
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	if s.device.pair == nil || s.device.pair.playback == nil {
+		return 0
+	}
+	return s.device.pair.playback.Discard()
 }
 func (s *VirtualStream) Close() error {
 	r := s.registry

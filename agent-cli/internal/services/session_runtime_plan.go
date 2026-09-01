@@ -114,6 +114,8 @@ type sessionRuntimePlan struct {
 	mode                   sessionRuntimeMode
 	provider               string
 	model                  string
+	inputAudioSampleRate   int
+	outputAudioSampleRate  int
 	capturePath            string
 	loopOut                io.Writer
 	inferencer             messages.SessionInferencer
@@ -345,6 +347,17 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
+	configureSessionAudioOutput(opts, &plan)
+	if plan.rtcDeviceRequest.outputSelected() && plan.outputAudioSampleRate > 0 {
+		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
+	}
+	if plan.rtcDeviceRequest.inputSelected() && plan.inputAudioSampleRate > 0 {
+		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
+	}
+	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
+		plan.rtcDeviceRequest.PlaybackObserver,
+		sessionPlaybackDiagnosticObserver(plan.diagnostics),
+	)
 	plan.selection = selection
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint

@@ -25,6 +25,40 @@ func coreAudioPortableFixture() DeviceRegistryConformanceFixture {
 		Observations: state.observations,
 	}
 }
+
+func TestCoreAudioPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
+	const providerRate = 24000
+	handle := &coreAudioHandle{direction: DirectionOutput, format: PCM16DeviceFormat(providerRate)}
+	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+		frame := make([]int16, FrameSize)
+		for sampleIndex := range frame {
+			frame[sampleIndex] = int16(frameIndex*FrameSize + sampleIndex)
+		}
+		if err := handle.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatalf("WriteFrame(%d): %v", frameIndex, err)
+		}
+	}
+
+	stats := handle.PlaybackStats()
+	if stats.Format != PCM16DeviceFormat(providerRate) || stats.CapacitySamples != 6000 || stats.QueuedSamples != 6000 {
+		t.Fatalf("CoreAudio playback stats before callback = %+v, want 24 kHz/6000 samples", stats)
+	}
+	if stats.DroppedSamples != 1680 || stats.OverflowEvents != 4 {
+		t.Fatalf("CoreAudio overflow stats = %+v, want 1680 samples across 4 events", stats)
+	}
+
+	output := make([]byte, FrameSize*2)
+	handle.onData(output, nil, FrameSize)
+	decoded := make([]int16, FrameSize)
+	decodePCM16(decoded, output)
+	if decoded[0] != 1680 || decoded[len(decoded)-1] != 2159 {
+		t.Fatalf("CoreAudio callback output starts at %d and ends at %d, want 1680..2159", decoded[0], decoded[len(decoded)-1])
+	}
+	if got := handle.PlaybackStats().QueuedSamples; got != 5520 {
+		t.Fatalf("CoreAudio queued samples after callback = %d, want 5520", got)
+	}
+}
+
 func coreAudioTestEndpoint(uid, name string, direction Direction, defaulted bool) coreAudioEndpoint {
 	device, _ := NewDevice(coreAudioBackend, coreAudioNativeID(uid, direction), name, direction)
 	return coreAudioEndpoint{device: device, defaultDevice: defaulted}

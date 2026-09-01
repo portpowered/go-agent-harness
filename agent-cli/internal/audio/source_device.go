@@ -111,16 +111,32 @@ type DeviceSource struct {
 	adapter     *deviceAdapter
 	frameReader deviceFrameReader
 	byteReader  deviceByteReader
+	format      DeviceFormat
 }
 
 var _ AudioSource = (*DeviceSource)(nil)
 
 func NewDeviceSource(registry DeviceRegistry, id DeviceID) (*DeviceSource, error) {
+	return NewDeviceSourceWithFormat(registry, id, DefaultDeviceFormat())
+}
+
+// NewDeviceSourceAtRate opens a capture device as mono PCM16 at rate.
+func NewDeviceSourceAtRate(registry DeviceRegistry, id DeviceID, rate int) (*DeviceSource, error) {
+	return NewDeviceSourceWithFormat(registry, id, PCM16DeviceFormat(rate))
+}
+
+// NewDeviceSourceWithFormat opens a capture device using an explicit format.
+// Registries that do not expose DeviceFormatOpener retain compatibility for
+// the default format but cannot safely claim support for another rate.
+func NewDeviceSourceWithFormat(registry DeviceRegistry, id DeviceID, format DeviceFormat) (*DeviceSource, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	resolvedID, err := resolveDeviceIDForOpen(registry, id, DirectionInput)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := acquireDevice(registry, resolvedID, DirectionInput)
+	handle, err := acquireDeviceWithFormat(registry, resolvedID, DirectionInput, format)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +146,7 @@ func NewDeviceSource(registry DeviceRegistry, id DeviceID) (*DeviceSource, error
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSource{newDeviceAdapter(handle, resolvedID, DirectionInput), frames, bytes}, nil
+	return &DeviceSource{adapter: newDeviceAdapter(handle, resolvedID, DirectionInput), frameReader: frames, byteReader: bytes, format: format}, nil
 }
 
 // DeviceID returns the stable ID acquired by the source. When the source was
@@ -141,6 +157,20 @@ func (s *DeviceSource) DeviceID() DeviceID {
 		return ""
 	}
 	return s.adapter.id
+}
+
+// DeviceFormat reports the format selected when the source was opened.
+func (s *DeviceSource) DeviceFormat() DeviceFormat {
+	if s == nil {
+		return DeviceFormat{}
+	}
+	return s.format
+}
+
+// SampleRate reports the selected capture rate for callers that only need
+// the pacing contract.
+func (s *DeviceSource) SampleRate() int {
+	return s.DeviceFormat().SampleRate
 }
 
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
@@ -175,27 +205,6 @@ func (s *DeviceSource) Close() error {
 		return nil
 	}
 	return s.adapter.close()
-}
-
-func acquireDevice(registry DeviceRegistry, id DeviceID, direction Direction) (OpenedDevice, error) {
-	if nilInterface(registry) {
-		return nil, &DeviceRegistryError{ID: id, Direction: direction, Err: ErrNilDeviceRegistry}
-	}
-	handle, err := registry.Open(id)
-	if err != nil {
-		if !nilInterface(handle) {
-			_ = handle.Close()
-		}
-		return nil, err
-	}
-	if nilInterface(handle) {
-		return nil, &DeviceRegistryError{ID: id, Direction: direction, Err: ErrNilOpenedDevice}
-	}
-	if got, ok := openedDeviceDirection(handle); ok && got != direction {
-		_ = handle.Close()
-		return nil, &DeviceDirectionError{ID: id, Direction: direction, Want: direction, Got: got, Kind: ErrDeviceDirectionMismatch}
-	}
-	return handle, nil
 }
 
 func nilInterface(value any) bool {

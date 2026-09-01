@@ -122,6 +122,40 @@ func TestLinuxHardwareAndPositiveAudio(t *testing.T) {
 		t.Fatal("render sink consumed no positive PCM energy")
 	}
 }
+
+func TestLinuxPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
+	const providerRate = 24000
+	writer := &linuxOpenedDevice{direction: DirectionOutput, format: PCM16DeviceFormat(providerRate)}
+	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+		frame := make([]int16, FrameSize)
+		for sampleIndex := range frame {
+			frame[sampleIndex] = int16(frameIndex*FrameSize + sampleIndex)
+		}
+		if err := writer.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatalf("WriteFrame(%d): %v", frameIndex, err)
+		}
+	}
+
+	stats := writer.PlaybackStats()
+	if stats.Format != PCM16DeviceFormat(providerRate) || stats.CapacitySamples != 6000 || stats.QueuedSamples != 6000 {
+		t.Fatalf("Linux playback stats before callback = %+v, want 24 kHz/6000 samples", stats)
+	}
+	if stats.DroppedSamples != 1680 || stats.OverflowEvents != 4 {
+		t.Fatalf("Linux overflow stats = %+v, want 1680 samples across 4 events", stats)
+	}
+
+	output := make([]byte, FrameSize*2)
+	writer.onData(output, nil, FrameSize)
+	decoded := make([]int16, FrameSize)
+	decodePCM16(decoded, output)
+	if decoded[0] != 1680 || decoded[len(decoded)-1] != 2159 {
+		t.Fatalf("Linux callback output starts at %d and ends at %d, want 1680..2159", decoded[0], decoded[len(decoded)-1])
+	}
+	if got := writer.PlaybackStats().QueuedSamples; got != 5520 {
+		t.Fatalf("Linux queued samples after callback = %d, want 5520", got)
+	}
+}
+
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
 	device, _ := NewDevice(backend, direction.String()+":"+nativeID, name, direction)
 	return linuxDeviceRecord{Device: device, defaulted: defaulted}

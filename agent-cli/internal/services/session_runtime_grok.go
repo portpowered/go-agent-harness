@@ -88,10 +88,11 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	}
 	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
 	return sessionRuntimePlan{
-		mode:       sessionRuntimeModeReplayGrok,
-		provider:   sessionProviderGrok,
-		model:      model,
-		inferencer: sessionInferencer,
+		mode:                  sessionRuntimeModeReplayGrok,
+		provider:              sessionProviderGrok,
+		model:                 model,
+		outputAudioSampleRate: configuration.outputAudioSampleRate,
+		inferencer:            sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
 			WaitForClose: opts.WaitForClose || grokReplayCaptureHasSessionClose(opts.ReplayPath),

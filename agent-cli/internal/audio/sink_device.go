@@ -6,16 +6,32 @@ type DeviceSink struct {
 	adapter     *deviceAdapter
 	frameWriter deviceFrameWriter
 	byteWriter  deviceByteWriter
+	format      DeviceFormat
 }
 
 var _ AudioSink = (*DeviceSink)(nil)
 
 func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
+	return NewDeviceSinkWithFormat(registry, id, DefaultDeviceFormat())
+}
+
+// NewDeviceSinkAtRate opens a playback device as mono PCM16 at rate.
+func NewDeviceSinkAtRate(registry DeviceRegistry, id DeviceID, rate int) (*DeviceSink, error) {
+	return NewDeviceSinkWithFormat(registry, id, PCM16DeviceFormat(rate))
+}
+
+// NewDeviceSinkWithFormat opens a playback device using an explicit format.
+// Registries that do not expose DeviceFormatOpener retain compatibility for
+// the default format but cannot safely claim support for another rate.
+func NewDeviceSinkWithFormat(registry DeviceRegistry, id DeviceID, format DeviceFormat) (*DeviceSink, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	resolvedID, err := resolveDeviceIDForOpen(registry, id, DirectionOutput)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := acquireDevice(registry, resolvedID, DirectionOutput)
+	handle, err := acquireDeviceWithFormat(registry, resolvedID, DirectionOutput, format)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +41,7 @@ func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSink{newDeviceAdapter(handle, resolvedID, DirectionOutput), frames, bytes}, nil
+	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, byteWriter: bytes, format: format}, nil
 }
 
 // DeviceID returns the stable ID acquired by the sink. When the sink was
@@ -36,6 +52,48 @@ func (s *DeviceSink) DeviceID() DeviceID {
 		return ""
 	}
 	return s.adapter.id
+}
+
+// DeviceFormat reports the format selected when the sink was opened.
+func (s *DeviceSink) DeviceFormat() DeviceFormat {
+	if s == nil {
+		return DeviceFormat{}
+	}
+	return s.format
+}
+
+// SampleRate reports the selected playback rate for callers that only need
+// the pacing contract.
+func (s *DeviceSink) SampleRate() int {
+	return s.DeviceFormat().SampleRate
+}
+
+// PlaybackStats returns a consistent observation of samples queued for the
+// device. Backends that do not expose a queue retain a zeroed, format-aware
+// snapshot so callers can keep the optional capability source-compatible.
+func (s *DeviceSink) PlaybackStats() PlaybackQueueStats {
+	if s == nil {
+		return PlaybackQueueStats{}
+	}
+	if s.adapter != nil {
+		if provider, ok := s.adapter.handle.(PlaybackStatsProvider); ok {
+			return provider.PlaybackStats()
+		}
+	}
+	return emptyPlaybackQueueStats(s.format)
+}
+
+// DiscardPlayback removes samples queued for future device callbacks and
+// returns the exact number removed. Audio already submitted to the device is
+// outside this operation's recall boundary.
+func (s *DeviceSink) DiscardPlayback() int {
+	if s == nil || s.adapter == nil {
+		return 0
+	}
+	if discarder, ok := s.adapter.handle.(PlaybackDiscarder); ok {
+		return discarder.DiscardPlayback()
+	}
+	return 0
 }
 
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
