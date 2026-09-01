@@ -6,7 +6,7 @@ This repository is a multi-module Go workspace. A root `go.work` file is committ
 
 - **Local cross-module edits**: `agent-cli` depends on `go-agent-loop` and `go-llm-gateway`. A workspace lets those dependencies resolve to the sibling directories in this checkout.
 - **Single validation surface**: Root tooling (`make ci`, future CI) can run `go` commands from the repository root and see every module.
-- **One CI contract**: GitHub Actions delegates to the same root `make ci` pipeline contributors run locally, so workflow YAML does not drift from module validation behavior.
+- **One CI contract**: GitHub Actions delegates to the same root Makefile targets contributors run locally (individually, or together via `make ci`), so workflow YAML does not drift from module validation behavior.
 - **Reproducible onboarding**: New contributors clone once, run `go work sync` if needed, and work from the root with no manual module-path setup.
 
 `AGENTS.md` describes this layout; the committed `go.work` is the canonical expression of that decision.
@@ -93,11 +93,25 @@ Repository CI lives in `.github/workflows/ci.yml`. It:
 
 - Triggers on pull requests and pushes to `main`.
 - Installs Go 1.24.2 plus pinned `golangci-lint` and `staticcheck` versions that match the root Makefile guidance, so the CI toolchain does not drift under the same commit.
-- Runs the focused `make test-rtc-race` acceptance step on Ubuntu with the
-  runner's CGO toolchain.
-- Runs `make ci` as the single validation entrypoint instead of duplicating per-module build or test commands in workflow YAML.
+- Splits the `make ci` step list (`fmt vet lint staticcheck test-tools
+  test-factory-scripts test-integration test-regressions build coverage`)
+  plus the two race-acceptance steps across five parallel Ubuntu jobs —
+  `static`, `unit`, `integration`, `coverage`, `race` — so the ~14-minute
+  strictly serial pipeline runs concurrently instead. Every job invokes the
+  same root Makefile targets `make ci` composes locally, just grouped
+  differently and run on separate runners, so nothing is duplicated or
+  reimplemented in workflow YAML. None of these jobs `needs:` another, so a
+  failure in one (for example a `gofmt` or lint failure in `static`) does not
+  prevent the others from completing and reporting their own results in the
+  same run. Only `static` installs `golangci-lint`/`staticcheck`, since it is
+  the only job that runs `lint`/`staticcheck`.
+- Contributors still run the complete pipeline locally in one command with
+  `make ci`; the Makefile itself is unchanged.
 
-The focused RTC race step is separate from `make ci`, so both outcomes are
-required for the job to pass. It is intentionally Linux-only: the current
-Windows `runtime/cgo: cgo.exe: exit status 2` failure is an environment
-limitation, and Ubuntu CI is the authoritative reproduction environment.
+`hermetic` (`make test-hermetic`) and `webmcp-chrome` remain separate
+required jobs alongside the five `make ci`-derived jobs above, so all
+required outcomes must pass for the workflow to succeed. `webmcp-chrome` is
+intentionally macOS-only to match its locked mac-arm64 Chrome artifact; the
+race-detector steps are intentionally Linux-only, since the current Windows
+`runtime/cgo: cgo.exe: exit status 2` failure is an environment limitation
+and Ubuntu CI is the authoritative reproduction environment.

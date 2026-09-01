@@ -10,9 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  # Fast static checks: no build artifacts, no test binaries. This is the
+  # only job that needs the pinned golangci-lint/staticcheck binaries, so it
+  # is the only job that installs them. Each check step below runs with
+  # `if: always()` so a gofmt failure does not hide a lint or staticcheck
+  # failure that would otherwise run later in the same job — every static
+  # result is visible in one run instead of stopping at the first failure.
+  static:
+    name: CI (static)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -45,14 +52,142 @@ jobs:
           STATICCHECK_VERSION: 2026.1
         run: bash scripts/install-ci-analyzer.sh staticcheck
 
+      - name: Run gofmt check
+        if: always()
+        run: make fmt
+
+      - name: Run go vet
+        if: always()
+        run: make vet
+
+      - name: Run golangci-lint
+        if: always()
+        run: make lint
+
+      - name: Run staticcheck
+        if: always()
+        run: make staticcheck
+
+  # Fast unit-level checks and the compile gate. No analyzer binaries needed.
+  unit:
+    name: CI (unit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run repository helper module tests
+        if: always()
+        run: make test-tools
+
+      - name: Run factory script tests
+        if: always()
+        run: make test-factory-scripts
+
+      - name: Build agent-cli binary and library packages
+        if: always()
+        run: make build
+
+  # The long pole: deterministic integration tests plus committed
+  # replay/fixture regression tests. Kept as its own job (not split further)
+  # so both suites stay on one runner together rather than adding more
+  # concurrent load-sensitive test processes across additional runners.
+  integration:
+    name: CI (integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run deterministic integration tests
+        if: always()
+        run: make test-integration
+
+      - name: Run committed replay and fixture regression tests
+        if: always()
+        run: make test-regressions
+
+  # Per-module coverage profiles plus the coverage gate. No analyzer
+  # binaries needed.
+  coverage:
+    name: CI (coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run coverage profiles and coverage gate
+        run: make coverage
+
+  # Focused race-detector acceptance tests. Kept together on one runner
+  # (rather than split further) to avoid adding more concurrent
+  # load-sensitive test processes across additional runners.
+  race:
+    name: CI (race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
       - name: Run focused RTC race acceptance
+        if: always()
         run: make test-rtc-race
 
       - name: Run concurrent session capacity race acceptance
+        if: always()
         run: make test-sessions-race
-
-      - name: Run root CI pipeline
-        run: make ci
 
   hermetic:
     name: CI (hermetic)

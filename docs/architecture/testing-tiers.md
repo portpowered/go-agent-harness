@@ -57,8 +57,8 @@ module, which is the narrowly scoped module-level consequence of one
 `GO_TEST_TIMEOUT`. The composite `make ci` inherits these same settings from
 the targets it composes.
 
-The integration budget is distinct from the GitHub job's 45-minute limit and
-must remain finite. It does not replace command-level deadlines inside the
+The integration budget is distinct from the GitHub `integration` job's
+30-minute limit and must remain finite. It does not replace command-level deadlines inside the
 integration tests. Override `AGENT_CLI_INTEGRATION_TIMEOUT` only for local
 diagnostics, keeping the value finite when exercising the root contract. Full
 repetition logs, JSON inventories, and CI status belong in review
@@ -84,8 +84,10 @@ runner and reports its executed fixture test.
 
 ## Microphone build configurations
 
-The ordinary Linux CI leg runs `make ci` without a `nomicrophone` tag, so its Go
-tests compile the CGO/malgo microphone implementation. The separate hermetic
+The ordinary Linux CI legs (the parallel `static`, `unit`, `integration`,
+`coverage`, and `race` jobs, which together run the same steps as
+`make ci`) run without a `nomicrophone` tag, so their Go tests compile the
+CGO/malgo microphone implementation. The separate hermetic
 Linux leg runs `make test-hermetic`; that target invokes each workspace module
 with `CGO_ENABLED=0` and `-tags=nomicrophone`. The target prints the module and
 the hermetic environment before each invocation, making a failed module
