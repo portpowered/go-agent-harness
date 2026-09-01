@@ -42,10 +42,13 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if configurer, ok := sessionInferencer.(interface {
 		SetSessionTurnDetection(*models.TurnDetectionConfig)
 	}); ok {
-		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
-		if turnDetection == nil && opts.RTCDeviceBinding.inputSelected() && !clientOwnedAudio {
-			turnDetection = &models.TurnDetectionConfig{Type: "server_vad"}
-		}
+		// Keep the record planner's post-construction configuration aligned with
+		// every other live construction boundary. Applying only opts.TurnDetection
+		// here would overwrite the inferencer's shared default with nil for an
+		// ordinary record-only session. Client-owned scheduled audio still becomes
+		// an explicit wire null in the provider, where that ownership contract is
+		// enforced independently of this default.
+		turnDetection := cloneSessionTurnDetection(resolveEffectiveTurnDetection(opts))
 		configurer.SetSessionTurnDetection(turnDetection)
 	}
 
