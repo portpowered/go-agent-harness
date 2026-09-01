@@ -127,8 +127,8 @@ case so a successful run is visibly distinguishable from an empty test match.
 The current Windows runtime/CGO failure (`runtime/cgo: cgo.exe: exit status 2`)
 is an environment limitation, not a reason to retry the focused tests. Run the
 gate on supported Linux; Ubuntu CI is authoritative. The CI workflow runs this
-focused step separately from the unchanged full `make ci` pipeline, and both
-steps must succeed.
+focused step in its own `race` job, parallel to the other jobs that together
+cover the same steps as `make ci`, and all of them must succeed.
 
 If you are working inside a single module, its README also documents the
 package-local commands.
