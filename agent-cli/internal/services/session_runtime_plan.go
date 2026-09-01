@@ -191,11 +191,15 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		p.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
 	}
+	// The filesystem-scope disclosure is best-effort: it is new, unconditional
+	// startup output on every session, and a write failure here must not
+	// masquerade as (or pre-empt) the session's own run/drain failure below,
+	// which is what a broken writer is actually expected to surface as.
+	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
 	announcement := p.announce
 	if p.loop.BareLive {
 		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
 	}
-	announcement = appendFilesystemScopeAnnouncement(announcement, p.filesystemPolicy)
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return err
@@ -216,16 +220,12 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	return nil
 }
 
-func appendFilesystemScopeAnnouncement(announcement string, policy *tools.FilesystemPolicy) string {
+func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPolicy) {
 	if policy == nil {
-		return announcement
+		return
 	}
-	scope := "Filesystem scope: " + policy.ScopeDescription()
-	policyNotice := tools.FilesystemScopeStartupNotice
-	if announcement == "" {
-		return scope + "\n" + policyNotice
-	}
-	return scope + "\n" + policyNotice + "\n" + announcement
+	_, _ = fmt.Fprintln(out, "Filesystem scope: "+policy.ScopeDescription())
+	_, _ = fmt.Fprintln(out, tools.FilesystemScopeStartupNotice)
 }
 
 // configureLoopObserver installs the shared stream observer for every session

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -608,7 +609,8 @@ func defaultFilesystemScopePrefix(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("canonicalize test working directory: %v", err)
 	}
-	return "Filesystem scope: workdir=" + canonical + "; additional_allowed_roots=none\n"
+	return "Filesystem scope: workdir=" + canonical + "; additional_allowed_roots=none\n" +
+		tools.FilesystemScopeStartupNotice + "\n"
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *testing.T) {

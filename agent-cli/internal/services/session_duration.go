@@ -215,11 +215,13 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		plan.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
 	}
+	// Best-effort, same as the non-duration run path: this disclosure write
+	// must not pre-empt or masquerade as the session's own run/drain failure.
+	writeFilesystemScopeAnnouncement(out, plan.filesystemPolicy)
 	announcement := plan.announce
 	if plan.loop.BareLive {
 		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
 	}
-	announcement = appendFilesystemScopeAnnouncement(announcement, plan.filesystemPolicy)
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return wrapSessionRuntimeError(plan, err)
