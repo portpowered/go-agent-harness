@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
@@ -264,6 +266,19 @@ func newFeedbackBypassSessionInferencer(media *rtc.SessionMedia) *feedbackBypass
 		media:     media,
 		connected: make(chan *feedbackBypassSession, 1),
 	}
+}
+
+// Request declares this seam's native PCM rate explicitly so the shared
+// session audio contract resolver does not substitute the realtime provider
+// default. The virtual device topology in these tests is fixed at the
+// package's compatibility rate; declaring it here keeps device and provider
+// rates identical, matching the resampling contract at the RTC device sink
+// boundary (no conversion needed when both sides already agree).
+func (i *feedbackBypassSessionInferencer) Request() inference.SessionRequest {
+	return inference.SessionRequest{Config: models.SessionConfig{
+		InputAudioSampleRate:  models.SampleRate(audio.SampleRate),
+		OutputAudioSampleRate: models.SampleRate(audio.SampleRate),
+	}}
 }
 
 func (i *feedbackBypassSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
