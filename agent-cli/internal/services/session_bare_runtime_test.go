@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -86,6 +87,117 @@ func TestBareSessionCommandUsesRegistryDefaultsAndReportsListening(t *testing.T)
 	}
 	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
 		t.Fatalf("bare device observations after close = %+v, want two opens and two releases", got)
+	}
+}
+
+func TestBrowserToolsMinimalInvocationStartsInteractiveLiveSession(t *testing.T) {
+	registry := newRTCDeviceRoundtripRegistry(t)
+	peer := newLoopbackRTCTrackPeer(1)
+	inferencer := newRuntimeRTCSessionInferencer(peer)
+	t.Cleanup(func() {
+		if session := inferencer.sessionValue(); session != nil {
+			_ = session.Close()
+		}
+		_ = peer.Close()
+	})
+
+	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "browser-test-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	capabilityCloseCalls := 0
+	command := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
+		flags.NewAskFlags(),
+		globalFlags,
+		nil,
+		inferencer,
+		nil,
+		nil,
+		func(cfg *config.Config) (cli.SessionToolCapabilities, error) {
+			if cfg == nil || cfg.Model.Provider != config.DefaultModelProvider {
+				t.Fatalf("capability factory config provider = %#v, want default config provider", cfg)
+			}
+			return cli.SessionToolCapabilities{
+				Executor:    &messages.DefaultToolExecutor{},
+				Definitions: []messages.ToolDefinition{{Name: "browser_test", Description: "browser fixture"}},
+				Close: func() error {
+					capabilityCloseCalls++
+					return nil
+				},
+			}, nil
+		},
+		registry,
+	).Generate()
+	var output synchronizedBareSessionOutput
+	command.SetOut(&output)
+	command.SetArgs([]string{"--browser-tools", "webmcp", "--provider", "openai"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- command.ExecuteContext(ctx) }()
+
+	var session *runtimeRTCSession
+	select {
+	case session = <-inferencer.connected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("minimal browser session did not connect")
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 0 {
+		t.Fatalf("minimal browser device observations before session.created = %+v, want two opens and no releases", got)
+	}
+	if strings.Contains(output.String(), "Listening:") {
+		t.Fatalf("minimal browser session reported listening before session.created: %q", output.String())
+	}
+	if !session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("browser-session", "gpt-realtime-2.1-mini"),
+	}) {
+		t.Fatal("minimal browser session did not accept session.created")
+	}
+	waitForBareSessionOutput(t, &output, "Listening:")
+	text := output.String()
+	for _, want := range []string{
+		"Starting WebMCP browser live session:",
+		"provider=openai",
+		"model=gpt-realtime-2.1-mini",
+		"transport=ws",
+		"input-device=virtual:mic-in",
+		"output-device=virtual:speaker-out",
+		"Listening:",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("minimal browser startup output missing %q: %q", want, text)
+		}
+	}
+	if strings.Contains(text, "Starting bare live session") || strings.Contains(text, "browser-test-key") {
+		t.Fatalf("minimal browser startup output is mislabeled or leaked credentials: %q", text)
+	}
+	waitForRuntimeSessionToolDefinition(t, session, "browser_test")
+	for _, sent := range session.sentMessages() {
+		if sent.Type == messages.StreamTypeSessionClose {
+			t.Fatalf("minimal browser session sent SESSION.CLOSE before explicit provider termination")
+		}
+	}
+	select {
+	case err := <-runErr:
+		t.Fatalf("minimal browser session closed before explicit provider termination: %v", err)
+	default:
+	}
+
+	session.finish()
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("minimal browser session after provider close: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("minimal browser session did not finish after provider close")
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("minimal browser device observations after close = %+v, want two opens and two releases", got)
+	}
+	if capabilityCloseCalls != 1 {
+		t.Fatalf("minimal browser capability close calls = %d, want one", capabilityCloseCalls)
 	}
 }
 
@@ -312,6 +424,35 @@ func waitForBareSessionOutput(t *testing.T, output *synchronizedBareSessionOutpu
 		select {
 		case <-deadline.C:
 			t.Fatalf("timed out waiting for %q in output: %q", want, output.String())
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForRuntimeSessionToolDefinition(t *testing.T, session *runtimeRTCSession, want string) {
+	t.Helper()
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		for _, sent := range session.sentMessages() {
+			if sent.Type != messages.StreamTypeSessionUpdate {
+				continue
+			}
+			update, ok := sent.Value.(*messages.SessionUpdateValue)
+			if !ok {
+				continue
+			}
+			for _, definition := range update.Tools {
+				if definition.Name == want {
+					return
+				}
+			}
+		}
+		select {
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for session.update tool %q; sent=%#v", want, session.sentMessages())
 		case <-ticker.C:
 		}
 	}
