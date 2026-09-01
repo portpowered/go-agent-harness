@@ -622,6 +622,45 @@ func shouldDispatchScheduledAudioForMessage(msg messages.StreamMessage, policy S
 	}
 }
 
+// newSessionLiveTerminationBoundary builds the shared termination boundary
+// for the live session loop. It is factored out of runAgentLoopSessionStream
+// so that function's select loop — which owns a dozen distinct terminal exit
+// paths — stays under the enforced length limit; the boundary itself is what
+// keeps every one of those paths consistent (see sessionTerminationBoundary's
+// doc comment).
+func newSessionLiveTerminationBoundary(
+	ctx context.Context,
+	quiesceUpstream func() error,
+	stopOwnedResources func() error,
+	out io.Writer,
+	loop *agentloop.AgentLoop,
+	opts sessionLoopOptions,
+	observedInferencer *observedSessionInferencer,
+) sessionTerminationBoundary {
+	return sessionTerminationBoundary{
+		ctx:             ctx,
+		quiesceUpstream: quiesceUpstream,
+		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
+			return waitForSessionLoopStragglers(out, loop, policy, opts.observer)
+		},
+		stopOwnedResources: stopOwnedResources,
+		flushBuffered: func() error {
+			flushErr := flushBufferedSessionLoopMessages(out, loop, opts.observer)
+			if opts.observer != nil {
+				// The engine may have committed a provider tool delta to conversation
+				// history before cancellation prevented the consumer-facing outbox from
+				// delivering it. Recover only provider tool lifecycle identity after the
+				// hot loop is stopped, avoiding duplicate output accounting.
+				opts.observer.observeBufferedProviderToolLifecycle(loop.GetConversationDeltas())
+			}
+			if sessionErr := observedInferencer.sessionFailure(); sessionErr != nil {
+				flushErr = errors.Join(flushErr, fmt.Errorf("session transport: %w", sessionErr))
+			}
+			return flushErr
+		},
+	}
+}
+
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
 	reporter := opts.terminalReporter
 	ownsReporter := reporter == nil
@@ -741,27 +780,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
-	termination := sessionTerminationBoundary{
-		quiesceUpstream: quiesceUpstream,
-		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
-			return waitForSessionLoopStragglers(out, loop, policy, opts.observer)
-		},
-		stopOwnedResources: stopOwnedResources,
-		flushBuffered: func() error {
-			flushErr := flushBufferedSessionLoopMessages(out, loop, opts.observer)
-			if opts.observer != nil {
-				// The engine may have committed a provider tool delta to conversation
-				// history before cancellation prevented the consumer-facing outbox from
-				// delivering it. Recover only provider tool lifecycle identity after the
-				// hot loop is stopped, avoiding duplicate output accounting.
-				opts.observer.observeBufferedProviderToolLifecycle(loop.GetConversationDeltas())
-			}
-			if sessionErr := observedInferencer.sessionFailure(); sessionErr != nil {
-				flushErr = errors.Join(flushErr, fmt.Errorf("session transport: %w", sessionErr))
-			}
-			return flushErr
-		},
-	}
+	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate
 
 	var sessionUpdatedTimer *time.Timer
