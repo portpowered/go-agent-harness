@@ -86,6 +86,33 @@ func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink
 	})
 }
 
+// sessionAudioDiagnosticSink surfaces the local playback queue's cumulative
+// drop accounting (see agent-cli/internal/audio/device_playback.go) at
+// output-device teardown. Without this sink, DroppedSamples/OverflowEvents
+// are computed correctly by every live session but are never observable
+// anywhere (not stdout, not stderr, not a recording artifact); this is the
+// only wiring in the CLI that reads SessionDiagnosticEventPlaybackOverflow.
+// Only the playback-overflow event is printed; every other diagnostic event
+// this generic sink may receive (turn, terminal, tool-continuation, ...)
+// is intentionally left silent, matching prior CLI behavior.
+func sessionAudioDiagnosticSink(out io.Writer) services.SessionDiagnosticSink {
+	return services.SessionDiagnosticFunc(func(record services.SessionDiagnosticRecord) {
+		if record.Event != services.SessionDiagnosticEventPlaybackOverflow {
+			return
+		}
+		_, _ = fmt.Fprintf(out, "playback diagnostic: event=%q device=%q sample_rate=%s dropped_samples=%s overflow_events=%s peak_queued_samples=%s capacity_samples=%s latency_target_ms=%s\n",
+			record.Event,
+			record.Fields[services.SessionDiagnosticFieldPlaybackDeviceID],
+			record.Fields[services.SessionDiagnosticFieldPlaybackSampleRate],
+			record.Fields[services.SessionDiagnosticFieldPlaybackDroppedSamples],
+			record.Fields[services.SessionDiagnosticFieldPlaybackOverflowEvents],
+			record.Fields[services.SessionDiagnosticFieldPlaybackPeakQueuedSamples],
+			record.Fields[services.SessionDiagnosticFieldPlaybackCapacitySamples],
+			record.Fields[services.SessionDiagnosticFieldPlaybackLatencyTargetMillis],
+		)
+	})
+}
+
 // sessionRTCDeviceBinding resolves which audio devices the session should
 // open. interactiveDevices covers both live-session shapes that get implicit
 // default microphone/speaker devices: a --browser-tools interactive session
@@ -804,6 +831,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				BrowserToolsEnabled:     !bareSession && browserConfigEnablesTools(loadedConfig),
 				BrowserToolsInteractive: browserToolsInteractive,
 				ToolDiagnostics:         sessionToolDiagnosticSink(cmd.ErrOrStderr()),
+				Diagnostics:             sessionAudioDiagnosticSink(cmd.ErrOrStderr()),
 				// A record-only-live invocation gets the same
 				// keep-open-until-provider-closes semantics as bare mode: it is
 				// an interactive microphone conversation, not a scripted
@@ -911,8 +939,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		audioInTurns: &audioInTurns, audioInTurnBarge: &audioInTurnBarge,
 		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
 		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
-		audioOutDevice: &audioOutDevice, mediaSource: &mediaSource,
-		transport: &transport, signaling: &signaling,
+		audioOutDevice: &audioOutDevice, mediaSource: &mediaSource, transport: &transport, signaling: &signaling,
 	})
 	return cmd
 }

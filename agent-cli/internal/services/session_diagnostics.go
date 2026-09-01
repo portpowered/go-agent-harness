@@ -128,6 +128,19 @@ type SessionDiagnosticSink interface {
 	RecordSessionDiagnostic(SessionDiagnosticRecord)
 }
 
+// SessionDiagnosticFunc adapts a plain function to SessionDiagnosticSink,
+// following the established SessionToolDiagnosticFunc precedent so callers
+// can wire a sink without declaring a named type.
+type SessionDiagnosticFunc func(SessionDiagnosticRecord)
+
+// RecordSessionDiagnostic implements SessionDiagnosticSink.
+func (f SessionDiagnosticFunc) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if f == nil {
+		return
+	}
+	f(record)
+}
+
 // SessionStreamObserver receives every stream delta consumed by a session
 // runner, including tool-result deltas emitted after the session tool adapter
 // has normalized their call identity. It is an optional observation seam and
