@@ -1,10 +1,61 @@
 package audio
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestDeviceFormatValidationAndErrorDetails(t *testing.T) {
+	valid := PCM16DeviceFormat(24000)
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid device format rejected: %v", err)
+	}
+	for _, invalid := range []DeviceFormat{
+		{},
+		{SampleRate: 24000, Channels: 2, BitDepth: DeviceBitDepthPCM16, Encoding: DeviceEncodingPCM16},
+		{SampleRate: 24000, Channels: Channels, BitDepth: 8, Encoding: DeviceEncodingPCM16},
+		{SampleRate: 24000, Channels: Channels, BitDepth: DeviceBitDepthPCM16, Encoding: "g711"},
+	} {
+		if err := invalid.Validate(); !errors.Is(err, ErrInvalidDeviceFormat) {
+			t.Fatalf("invalid format %v error = %v, want ErrInvalidDeviceFormat", invalid, err)
+		}
+	}
+	if got := (DeviceFormat{SampleRate: 24000, Channels: Channels, BitDepth: DeviceBitDepthPCM16}).String(); !strings.Contains(got, "unknown") {
+		t.Fatalf("format with no encoding = %q, want unknown encoding", got)
+	}
+	if got := defaultDeviceFormatAvailability(); len(got) != 1 || !got[0].equal(DefaultDeviceFormat()) {
+		t.Fatalf("default format availability = %#v, want the legacy default", got)
+	}
+
+	cause := errors.New("backend rejected requested rate")
+	formatErr := &DeviceFormatError{
+		ID:        "virtual:output",
+		Direction: DirectionOutput,
+		Requested: valid,
+		Available: []DeviceFormat{DefaultDeviceFormat(), PCM16DeviceFormat(48000)},
+		Err:       cause,
+	}
+	message := formatErr.Error()
+	for _, want := range []string{"virtual:output", "24000 Hz", "16000 Hz", "48000 Hz", cause.Error()} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("format error %q does not contain %q", message, want)
+		}
+	}
+	if !errors.Is(formatErr, ErrUnsupportedDeviceFormat) || !errors.Is(formatErr, cause) {
+		t.Fatalf("format error = %v, want unsupported and backend causes", formatErr)
+	}
+	withoutCause := &DeviceFormatError{ID: "virtual:output", Direction: DirectionOutput, Requested: valid}
+	if !errors.Is(withoutCause, ErrUnsupportedDeviceFormat) || withoutCause.Unwrap() != ErrUnsupportedDeviceFormat {
+		t.Fatalf("cause-free format error unwrap = %v, want ErrUnsupportedDeviceFormat", withoutCause.Unwrap())
+	}
+	var nilFormatErr *DeviceFormatError
+	if nilFormatErr.Error() != "<nil>" || nilFormatErr.Unwrap() != nil {
+		t.Fatalf("nil format error = %q/%v, want <nil>/nil", nilFormatErr.Error(), nilFormatErr.Unwrap())
+	}
+}
 
 func TestPlaybackQueueCapacityUsesResolvedFormatAndLatency(t *testing.T) {
 	format := PCM16DeviceFormat(24000)
@@ -109,6 +160,55 @@ func TestPlaybackQueueDiscardCountsOnlyQueuedSamples(t *testing.T) {
 	}
 	if got := q.Discard(); got != 0 {
 		t.Fatalf("empty Discard removed %d samples, want 0", got)
+	}
+}
+
+func TestPlaybackQueueHandlesInvalidInputsAndPCM16Callbacks(t *testing.T) {
+	if _, err := NewPlaybackQueueWithLatency(DeviceFormat{}, time.Second); !errors.Is(err, ErrInvalidPlaybackQueue) {
+		t.Fatalf("invalid queue format error = %v, want ErrInvalidPlaybackQueue", err)
+	}
+	if _, err := PlaybackQueueCapacity(DefaultDeviceFormat(), 0); !errors.Is(err, ErrInvalidPlaybackQueue) {
+		t.Fatalf("zero latency error = %v, want ErrInvalidPlaybackQueue", err)
+	}
+	if _, err := PlaybackQueueCapacity(PCM16DeviceFormat(24000), time.Duration(1<<62)); !errors.Is(err, ErrInvalidPlaybackQueue) {
+		t.Fatalf("overflowing latency error = %v, want ErrInvalidPlaybackQueue", err)
+	}
+
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(24000), time.Millisecond)
+	if err != nil {
+		t.Fatalf("single-sample queue: %v", err)
+	}
+	if q.Enqueue(nil) != 0 || q.Dequeue(0) != nil || q.ReadInto(nil) != 0 || q.readPCM16([]byte{0}) != 0 || q.Discard() != 0 {
+		t.Fatal("empty and zero-length queue operations changed state")
+	}
+	q.Enqueue([]int16{101, -202})
+	bytes := make([]byte, 4)
+	if got := q.readPCM16(bytes); got != 2 {
+		t.Fatalf("readPCM16 count = %d, want 2", got)
+	}
+	decoded := make([]int16, 2)
+	decodePCM16(decoded, bytes)
+	if !reflect.DeepEqual(decoded, []int16{101, -202}) {
+		t.Fatalf("readPCM16 decoded = %v, want [101 -202]", decoded)
+	}
+	q.Enqueue([]int16{7, 8})
+	partial := make([]int16, 1)
+	if got := q.ReadInto(partial); got != 1 || partial[0] != 7 {
+		t.Fatalf("ReadInto = %d/%v, want one sample [7]", got, partial)
+	}
+	if got := q.Dequeue(10); !reflect.DeepEqual(got, []int16{8}) {
+		t.Fatalf("Dequeue after ReadInto = %v, want [8]", got)
+	}
+
+	var nilQueue *PlaybackQueue
+	if nilQueue.Enqueue([]int16{1}) != 0 || nilQueue.Dequeue(1) != nil || nilQueue.ReadInto(make([]int16, 1)) != 0 || nilQueue.readPCM16(make([]byte, 2)) != 0 || nilQueue.Discard() != 0 || nilQueue.Snapshot() != (PlaybackQueueStats{}) {
+		t.Fatal("nil queue operation returned a non-zero result")
+	}
+	if got := emptyPlaybackQueueStats(DeviceFormat{}); got.Format != DefaultDeviceFormat() || got.CapacitySamples != 4000 {
+		t.Fatalf("empty stats fallback = %+v, want legacy default and 4000 samples", got)
+	}
+	if fallback, err := playbackQueueForFormat(DeviceFormat{}); err != nil || fallback.Snapshot().Format != DefaultDeviceFormat() {
+		t.Fatalf("invalid playbackQueueForFormat fallback = %+v/%v", fallback.Snapshot(), err)
 	}
 }
 

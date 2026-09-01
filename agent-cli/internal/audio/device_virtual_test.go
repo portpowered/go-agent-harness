@@ -192,6 +192,44 @@ func TestVirtualTypedPlaybackQueueMatchedRateDoesNotDrop(t *testing.T) {
 	require.Equal(t, uint64(0), stats.OverflowEvents)
 }
 
+func TestVirtualTypedPlaybackDiscardAndUnpairedStats(t *testing.T) {
+	r, out, in := openPair()
+	t.Cleanup(func() {
+		require.NoError(t, out.Close())
+		require.NoError(t, in.Close())
+	})
+
+	frame := make([]int16, audio.FrameSize)
+	frame[0] = 1234
+	require.NoError(t, out.WriteFrame(context.Background(), frame))
+	require.Equal(t, audio.FrameSize, out.PlaybackStats().QueuedSamples)
+	require.Equal(t, audio.FrameSize, out.DiscardPlayback())
+	stats := out.PlaybackStats()
+	require.Equal(t, 0, stats.QueuedSamples)
+	require.Equal(t, uint64(audio.FrameSize), stats.DiscardedSamples)
+	require.Equal(t, uint64(1), stats.DiscardEvents)
+	require.Equal(t, 0, out.DiscardPlayback())
+
+	var nilStream *audio.VirtualStream
+	require.Equal(t, audio.DeviceFormat{}, nilStream.DeviceFormat())
+	require.Equal(t, audio.PlaybackQueueStats{}, nilStream.PlaybackStats())
+	require.Equal(t, 0, nilStream.DiscardPlayback())
+
+	unpaired, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices:  []audio.VirtualDeviceConfig{{ID: "output", Name: "Unpaired output", Direction: audio.DirectionOutput}},
+		Defaults: map[audio.Direction]string{audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+	opened, err := unpaired.Open("virtual:output")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, opened.Close()) })
+	unpairedStream := opened.(*audio.VirtualStream)
+	require.Equal(t, audio.DefaultDeviceFormat(), unpairedStream.PlaybackStats().Format)
+	require.Equal(t, 0, unpairedStream.DiscardPlayback())
+
+	_ = r
+}
+
 func TestVirtualUnsupportedExplicitRateNamesAvailableCapability(t *testing.T) {
 	registry := registry(audio.DefaultVirtualBackendConfig())
 	_, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", 24000)

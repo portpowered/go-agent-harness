@@ -137,6 +137,46 @@ func TestSessionGatewayInferencer_WithSessionInputAudioTranscriptionDefensivelyC
 	}
 }
 
+func TestSessionGatewayInferencer_SetSessionAudioFormatsAndRates(t *testing.T) {
+	sess := newMockSession()
+	gw := &mockSessionGateway{session: sess}
+	si := NewSessionGatewayInferencer(gw, WithSessionRequest(SessionRequest{
+		Config: models.SessionConfig{Modalities: []models.SessionModality{models.SessionModalityText}},
+	}))
+
+	si.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate24000)
+	// The output setter adds audio to a text-only request. The input setter then
+	// exercises the existing-audio path while completing the provider contract.
+	si.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate24000)
+
+	configured := si.Request().Config
+	if configured.OutputAudioFormat != models.AudioFormatPCM16 || configured.OutputAudioSampleRate != models.SampleRate24000 {
+		t.Fatalf("configured output audio = %q/%d, want pcm16/24000", configured.OutputAudioFormat, configured.OutputAudioSampleRate)
+	}
+	if configured.InputAudioFormat != models.AudioFormatPCM16 || configured.InputAudioSampleRate != models.SampleRate24000 {
+		t.Fatalf("configured input audio = %q/%d, want pcm16/24000", configured.InputAudioFormat, configured.InputAudioSampleRate)
+	}
+	if len(configured.Modalities) != 2 || configured.Modalities[0] != models.SessionModalityText || configured.Modalities[1] != models.SessionModalityAudio {
+		t.Fatalf("configured modalities = %#v, want text and audio once", configured.Modalities)
+	}
+
+	connected, err := si.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = connected.Close() }()
+	if gw.capturedConfig.InputAudioSampleRate != models.SampleRate24000 || gw.capturedConfig.OutputAudioSampleRate != models.SampleRate24000 {
+		t.Fatalf("provider audio rates = %d/%d, want 24000/24000", gw.capturedConfig.InputAudioSampleRate, gw.capturedConfig.OutputAudioSampleRate)
+	}
+	if len(gw.capturedConfig.Modalities) != 2 || gw.capturedConfig.Modalities[1] != models.SessionModalityAudio {
+		t.Fatalf("provider modalities = %#v, want audio enabled once", gw.capturedConfig.Modalities)
+	}
+
+	var nilInferencer *SessionGatewayInferencer
+	nilInferencer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate24000)
+	nilInferencer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate24000)
+}
+
 func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *testing.T) {
 	sess := newMockSession()
 	gw := &mockSessionGateway{session: sess}
