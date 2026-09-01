@@ -74,6 +74,15 @@ type roomParticipantRuntime struct {
 	input           *audio.DeviceSource
 	output          *audio.DeviceSink
 	lifecycle       *roomParticipantLifecycle
+	// diagnosticSink is the combined per-participant SessionDiagnosticSink
+	// (evidence, stream, and RoomRunOptions.OnDiagnostic). It is set once, at
+	// the top of runRoomParticipant, before that goroutine's result can reach
+	// the coordinator, so reading it from finishParticipant is race-free. A
+	// human participant has no SessionRunOptions/RTCDeviceBinding to carry a
+	// playback observer, so the coordinator uses this field directly to name
+	// which participant's speaker queue overflowed; see
+	// emitRoomParticipantPlaybackOverflowDiagnostic.
+	diagnosticSink SessionDiagnosticSink
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {

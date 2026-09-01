@@ -383,9 +383,12 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if plan.rtcDeviceRequest.inputSelected() && plan.inputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
 	}
+	// The playback-overflow observer's sink is resolved (never trusted as-is)
+	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
+	// device overflow invisible; see resolvePlaybackDiagnosticSink.
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
-		sessionPlaybackDiagnosticObserver(plan.diagnostics),
+		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
 	)
 	plan.selection = selection
 	plan.transport = selection.Transport
