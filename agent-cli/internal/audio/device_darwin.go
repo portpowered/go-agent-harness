@@ -26,8 +26,9 @@ var coreAudioBackends = []malgo.Backend{malgo.BackendCoreaudio}
 
 // CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints.
 type CoreAudioDeviceRegistry struct {
-	enumerate func() ([]coreAudioEndpoint, error)
-	open      func(coreAudioEndpoint) (OpenedDevice, error)
+	enumerate  func() ([]coreAudioEndpoint, error)
+	open       func(coreAudioEndpoint) (OpenedDevice, error)
+	openFormat func(coreAudioEndpoint, DeviceFormat) (OpenedDevice, error)
 }
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
@@ -38,7 +39,7 @@ var (
 )
 
 func NewCoreAudioDeviceRegistry() *CoreAudioDeviceRegistry {
-	return &CoreAudioDeviceRegistry{enumerate: enumerateCoreAudioDevices, open: openCoreAudioDevice}
+	return &CoreAudioDeviceRegistry{enumerate: enumerateCoreAudioDevices, open: openCoreAudioDevice, openFormat: openCoreAudioDeviceWithFormat}
 }
 
 type coreAudioEndpoint struct {
@@ -77,6 +78,18 @@ func (r *CoreAudioDeviceRegistry) Default(direction Direction) (Device, error) {
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
 func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openAtFormat(id, DefaultDeviceFormat(), false)
+}
+
+// OpenWithFormat opens a CoreAudio endpoint at an explicit PCM format.
+func (r *CoreAudioDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openAtFormat(id, format, true)
+}
+
+func (r *CoreAudioDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	backend, _, err := ParseDeviceID(id)
 	if err != nil {
 		return nil, err
@@ -95,9 +108,20 @@ func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		if endpoint.device.ID != id {
 			continue
 		}
-		opened, err := r.open(endpoint)
+		var opened OpenedDevice
+		if r.openFormat != nil {
+			opened, err = r.openFormat(endpoint, format)
+		} else if format.equal(DefaultDeviceFormat()) {
+			opened, err = r.open(endpoint)
+		} else {
+			return nil, &DeviceFormatError{ID: id, Direction: endpoint.device.Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: errors.New("CoreAudio registry does not support explicit device formats")}
+		}
 		if err != nil {
-			return nil, mapCoreAudioOpenError(id, err)
+			mapped := mapCoreAudioOpenError(id, err)
+			if wrapFormatErrors {
+				return nil, &DeviceFormatError{ID: id, Direction: endpoint.device.Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: mapped}
+			}
+			return nil, mapped
 		}
 		return opened, nil
 	}
@@ -119,11 +143,15 @@ func enumerateCoreAudioDevices() ([]coreAudioEndpoint, error) {
 	return enumerateCoreAudioEndpoints(ctx)
 }
 func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {
+	return openCoreAudioDeviceWithFormat(endpoint, DefaultDeviceFormat())
+}
+
+func openCoreAudioDeviceWithFormat(endpoint coreAudioEndpoint, format DeviceFormat) (OpenedDevice, error) {
 	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := openCoreAudioEndpoint(ctx, endpoint)
+	handle, err := openCoreAudioEndpoint(ctx, endpoint, format)
 	if err != nil {
 		return nil, errors.Join(err, releaseCoreAudioContext(ctx))
 	}
@@ -172,23 +200,38 @@ func coreAudioUID(id malgo.DeviceID) string { return strings.TrimRight(string(id
 func coreAudioNativeID(uid string, direction Direction) string {
 	return url.PathEscape(uid) + ":" + direction.String()
 }
-func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoint) (*coreAudioHandle, error) {
+func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoint, formats ...DeviceFormat) (*coreAudioHandle, error) {
+	format := DefaultDeviceFormat()
+	if len(formats) > 0 {
+		format = formats[0]
+	}
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
+	var playback *PlaybackQueue
+	if direction := endpoint.device.Direction; direction == DirectionOutput {
+		var queueErr error
+		playback, queueErr = NewPlaybackQueue(format)
+		if queueErr != nil {
+			return nil, queueErr
+		}
+	}
 	direction := endpoint.device.Direction
 	kind := malgo.Capture
 	if direction == DirectionOutput {
 		kind = malgo.Playback
 	}
 	config := malgo.DefaultDeviceConfig(kind)
-	config.SampleRate, config.PerformanceProfile = uint32(SampleRate), malgo.LowLatency
+	config.SampleRate, config.PerformanceProfile = uint32(format.SampleRate), malgo.LowLatency
 	// Keep the native callback close to the fixed RTC frame size. The default
 	// CoreAudio period can leave several hundred milliseconds between a queued
 	// frame and the render callback, which makes local self-hearing timestamps
 	// stale even when the application queue is empty.
 	config.PeriodSizeInFrames, config.Periods = uint32(FrameSize), 1
 	if direction == DirectionInput {
-		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(Channels)
+		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(format.Channels)
 	} else {
-		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(Channels)
+		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(format.Channels)
 	}
 	nativeID := endpoint.native.Pointer()
 	defer C.free(nativeID)
@@ -197,7 +240,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	} else {
 		config.Playback.DeviceID = nativeID
 	}
-	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, playbackWake: make(chan struct{})}
+	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format, playback: playback, playbackWake: make(chan struct{})}
 	if direction == DirectionInput {
 		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
 	}
@@ -234,15 +277,23 @@ type coreAudioHandle struct {
 	context      *malgo.AllocatedContext
 	device       *malgo.Device
 	direction    Direction
+	format       DeviceFormat
 	capture      *MicrophoneSource
 	mu           sync.Mutex
 	closeOnce    sync.Once
 	closeErr     error
 	closed       atomic.Bool
-	playback     []int16
+	playback     *PlaybackQueue
 	playbackWake chan struct{}
 	nonZero      atomic.Uint64
 	release      func()
+}
+
+func (h *coreAudioHandle) DeviceFormat() DeviceFormat {
+	if h == nil {
+		return DeviceFormat{}
+	}
+	return h.format
 }
 
 func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
@@ -258,15 +309,13 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 		return
 	}
 	clear(output)
-	n := min(len(output)/2, len(h.playback))
-	encodePCM16(output[:n*2], h.playback[:n])
-	for _, sample := range h.playback[:n] {
-		if sample != 0 {
+	n := h.ensurePlaybackQueueLocked().readPCM16(output)
+	for _, value := range output[:n*2] {
+		if value != 0 {
 			h.nonZero.Add(1)
 		}
 	}
-	h.playback = h.playback[n:]
-	if n > 0 && len(h.playback) == 0 {
+	if n > 0 && h.playback != nil && h.playback.Snapshot().QueuedSamples == 0 {
 		h.signalPlaybackLocked()
 	}
 }
@@ -306,11 +355,44 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	if h.closed.Load() {
 		return &ClosedError{Operation: "write", Path: string(h.id)}
 	}
-	h.playback = append(h.playback, frame...)
-	if len(h.playback) > FrameSize*64 {
-		h.playback = h.playback[len(h.playback)-FrameSize*64:]
-	}
+	h.ensurePlaybackQueueLocked().Enqueue(frame)
 	return nil
+}
+
+func (h *coreAudioHandle) ensurePlaybackQueueLocked() *PlaybackQueue {
+	if h.playback == nil {
+		h.playback, _ = playbackQueueForFormat(h.format)
+	}
+	return h.playback
+}
+
+// PlaybackStats reports the format-aware queue state without requiring a
+// hardware callback or exposing CoreAudio-specific queue details.
+func (h *coreAudioHandle) PlaybackStats() PlaybackQueueStats {
+	if h == nil {
+		return PlaybackQueueStats{}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.playback == nil {
+		return emptyPlaybackQueueStats(h.format)
+	}
+	return h.playback.Snapshot()
+}
+
+// DiscardPlayback removes samples that have not yet been handed to the
+// CoreAudio callback. In-flight callback output is intentionally outside this
+// boundary.
+func (h *coreAudioHandle) DiscardPlayback() int {
+	if h == nil {
+		return 0
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.playback == nil {
+		return 0
+	}
+	return h.playback.Discard()
 }
 
 // WaitForPlayback waits until the native render callback has consumed all
@@ -330,7 +412,11 @@ func (h *coreAudioHandle) WaitForPlayback(ctx context.Context) error {
 			h.mu.Unlock()
 			return &ClosedError{Operation: "wait for playback", Path: string(h.id)}
 		}
-		if len(h.playback) == 0 {
+		queued := 0
+		if h.playback != nil {
+			queued = h.playback.Snapshot().QueuedSamples
+		}
+		if queued == 0 {
 			h.mu.Unlock()
 			return nil
 		}
@@ -355,7 +441,6 @@ func (h *coreAudioHandle) signalPlaybackLocked() {
 	close(h.playbackWake)
 	h.playbackWake = make(chan struct{})
 }
-
 func (h *coreAudioHandle) Close() error {
 	if h == nil {
 		return nil

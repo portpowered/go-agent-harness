@@ -231,8 +231,15 @@ func TestRoomRunCommandBareMissingCredentialDoesNotCallRunnerOrOpenDevices(t *te
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"--out", filepath.Join(t.TempDir(), "evidence")})
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "OpenAI API key is required for live realtime session mode") {
-		t.Fatalf("error = %v, want shared OpenAI credential error", err)
+	// `room run` accepts no --api-key flag, so its missing-credential error
+	// must recommend only a remedy the command actually accepts: the
+	// environment variable, never --api-key (which `room run` would then
+	// reject as an unknown flag, sending the user in a circle).
+	if err == nil || !strings.Contains(err.Error(), services.DefaultRoomCredentialEnv) {
+		t.Fatalf("error = %v, want it to name %s", err, services.DefaultRoomCredentialEnv)
+	}
+	if err != nil && strings.Contains(err.Error(), "--api-key") {
+		t.Fatalf("error = %v, want no --api-key mention: room run has no such flag", err)
 	}
 	if runnerCalls != 0 || registry.defaultCalls != 0 || registry.openCalls != 0 {
 		t.Fatalf("side effects runner=%d defaults=%d opens=%d", runnerCalls, registry.defaultCalls, registry.openCalls)

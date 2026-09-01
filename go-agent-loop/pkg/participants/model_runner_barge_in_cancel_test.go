@@ -300,3 +300,109 @@ func TestSessionModelRunner_EndOfTurnNotDeferredWhenResponseActiveWithNoCancel(t
 		t.Fatalf("deferredSessionEvents = %d, want none -- a response with no outstanding cancel must not block the customer's own end-of-turn boundary", len(state.deferredSessionEvents))
 	}
 }
+
+// Requirement 5 (the room-participant-dies-in-tool-continuation-seconds-in
+// defect): a response that is itself the awaited continuation of an already
+// accepted tool result (state.awaitingContinuation) must never be barge-in
+// cancelled by ordinary peer/room audio. Unlike an ordinary spoken response
+// or a tool acknowledgement, a cancelled tool continuation is never
+// re-requested by anything: its MESSAGE.END is rewritten with
+// TerminalReasonPartialOutput and the tool's obligation is left permanently
+// unresolved, so the session later fails closed with an unresolved
+// tool_continuation.
+//
+// This reproduces, at the model_runner unit level, the exact wire sequence
+// decoded from two independent live room captures (participants "bob" and
+// "alice", provider openai/gpt-realtime-2.1-mini): response.created for the
+// tool continuation, one contentful input_audio_buffer.append from the other
+// room participant's audio 557ms (bob) / 213ms (alice) later, then a client
+// response.cancel and a response.done with status=cancelled and zero output.
+// Both participants died with classification=tool_continuation,
+// failing_event=SESSION.RUN within 2.9s-4.4s of the room starting, and both
+// had produced not one byte of their own audio (sent.pcm was 0 bytes) --
+// before this fix, incoming room audio (not a deliberate interrupt of this
+// participant's own turn) reliably killed a participant the moment it tried
+// to speak after calling a tool.
+func TestSessionModelRunner_ToolContinuationSurvivesPeerAudioBargeIn(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	state := newInFlightRunState(t, session, runner, "resp-continuation")
+	state.awaitingContinuation = true
+
+	// Ordinary room/peer audio with real signal arrives while the tool
+	// continuation is still open.
+	runner.UserAudioInbox <- []byte{7, 7, 7}
+	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
+		t.Fatalf("drainSessionAudioWithState: %v", err)
+	}
+	if state.responseCancelSent {
+		t.Fatalf("state after peer audio during tool continuation = %+v, want no RESPONSE.CANCEL: cancelling strands the continuation forever since nothing re-requests it", state)
+	}
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("sent = %#v, want exactly the forwarded AUDIO.DELTA and no RESPONSE.CANCEL", sent)
+	}
+
+	// Left uninterrupted, the continuation is free to complete normally
+	// instead of being stranded cancelled-with-no-output.
+	runner.forwardSessionMessageState(ctx, session, state, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-continuation",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if !state.responseCompleted || state.responseInFlight || state.responseCancelSent {
+		t.Fatalf("state after continuation completed = %+v, want a normal completed response, not cancelled/failed", state)
+	}
+}
+
+// Requirement 6, paired with Requirement 5: the recovered tool continuation
+// must actually deliver the participant's own audio output -- the observed
+// defect was invisible in aggregate room metrics precisely because the dying
+// participant's sent.pcm was empty. This pins that the continuation's own
+// AUDIO.DELTA reaches DeltaOutbox (the source recordings write sent.pcm
+// from) once peer audio no longer cancels it out from under it.
+func TestSessionModelRunner_ToolContinuationAfterPeerAudioStillProducesAudio(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	state := newInFlightRunState(t, session, runner, "resp-continuation")
+	state.awaitingContinuation = true
+
+	runner.UserAudioInbox <- []byte{7, 7, 7}
+	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
+		t.Fatalf("drainSessionAudioWithState: %v", err)
+	}
+	if state.responseCancelSent {
+		t.Fatalf("setup: peer audio must not have cancelled the continuation: %+v", state)
+	}
+
+	// The continuation now produces its own spoken audio for the tool result.
+	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeAudioDelta,
+		ResponseID: "resp-continuation",
+		Value:      messages.NewAudioDeltaValue([]byte{9, 9, 9, 9}),
+	}, state)
+	runner.forwardSessionMessageState(ctx, session, state, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-continuation",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	var deliveredAudio []byte
+	for {
+		msg, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			break
+		}
+		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
+			deliveredAudio = append(deliveredAudio, value.Content...)
+		}
+	}
+	if len(deliveredAudio) == 0 {
+		t.Fatalf("no audio reached DeltaOutbox for the recovered tool continuation -- this is exactly the empty-sent.pcm shape of the defect")
+	}
+	if !state.responseCompleted || state.responseCancelSent {
+		t.Fatalf("state after continuation completed = %+v, want a normal completed response with output, not cancelled/failed", state)
+	}
+}

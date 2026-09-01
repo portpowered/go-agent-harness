@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -123,6 +124,7 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 	var replayPath string
 	var outputDir string
 	var streamAddress string
+	var example bool
 
 	cmd := &cobra.Command{
 		Use:   "run [--config <file>] [--replay <bundle>]",
@@ -132,9 +134,20 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 			"An explicit --config is authoritative and overrides bare defaults. Validate a complete room manifest, start one isolated live session per participant, " +
 			"and write redacted evidence to an empty output directory; bare rooms choose a fresh child of the effective config directory when --out is omitted. " +
 			"With --replay <bundle>, admit a finalized room evidence directory and run every provider participant offline from its recorded session capture; the bundle is authoritative and cannot be combined with --config or --manifest. An optional HTTP " +
-			"listener exposes forward-only JSON events at /events.",
+			"listener exposes forward-only JSON events at /events.\n\n" +
+			"A room config/manifest is a schema-version-1 JSON or YAML document with two top-level keys: " +
+			"\"room\" (an object naming at least one of max_turns/max_duration; interactive rooms may omit both) and " +
+			"\"participants\" (a list of at least two). Every participant requires id, system_prompt, and tools " +
+			"(a list; use [] for none); an all-agent room additionally needs opening_prompt set on at least one " +
+			"participant so somebody speaks first. An agent participant also requires provider, model, and " +
+			"api_key_env (naming the environment variable holding its credential); a human participant instead " +
+			"requires input_device and output_device. Run `agent room run --example` to print a complete, valid " +
+			"two-participant example manifest.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if example {
+				return writeRoomExampleManifest(cmd.OutOrStdout())
+			}
 			return c.execute(cmd, configPath, manifestPath, replayPath, outputDir, streamAddress)
 		},
 	}
@@ -143,7 +156,56 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&replayPath, "replay", "", "Replay a finalized room evidence bundle offline without credentials, host audio devices, or live provider connections")
 	cmd.Flags().StringVar(&outputDir, "out", DefaultRoomOutputDir, "Empty directory for redacted room evidence (bare default: fresh child under the effective config directory)")
 	cmd.Flags().StringVar(&streamAddress, "stream", "", "Optional TCP listen address for GET /events (for example 127.0.0.1:8080)")
+	cmd.Flags().BoolVar(&example, "example", false, "Print a complete, valid example room manifest to stdout and exit")
 	return cmd
+}
+
+// roomExampleManifest is a complete, schema-valid two-participant room
+// manifest. A first-time user reverse-engineering the manifest shape one
+// validation error at a time (opening_prompt and the required `tools: []`
+// are easy to miss because neither is obvious from the field names alone)
+// is exactly the friction `agent room run --example` exists to remove: this
+// is real JSON that passes room.ParseManifest unmodified, not a schema
+// description.
+const roomExampleManifest = `{
+  "schema_version": 1,
+  "room": {
+    "max_turns": 6,
+    "max_duration": "120s"
+  },
+  "participants": [
+    {
+      "id": "alice",
+      "kind": "agent",
+      "system_prompt": "You are Alice. Speak briefly and address Bob by name.",
+      "opening_prompt": "Greet Bob and ask what he would like to discuss.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "cedar",
+      "tools": []
+    },
+    {
+      "id": "bob",
+      "kind": "agent",
+      "system_prompt": "You are Bob. Respond to Alice briefly and stay on topic.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "marin",
+      "tools": []
+    }
+  ]
+}
+`
+
+// writeRoomExampleManifest prints roomExampleManifest to w for `agent room
+// run --example`. Every provider participant needs its own credential
+// available at run time: this example names OPENAI_API_KEY for both, so
+// `OPENAI_API_KEY=... agent room run --config example.json` runs it as-is.
+func writeRoomExampleManifest(w io.Writer) error {
+	_, err := io.WriteString(w, roomExampleManifest)
+	return err
 }
 
 func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, replayPath, outputDir, streamAddress string) error {
@@ -151,11 +213,17 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if parent == nil {
 		parent = context.Background()
 	}
+	filesystemPolicy, err := cliTools.ResolveFilesystemPolicy(
+		globalWorkDir(roomRunGlobalFlags(c)),
+		globalAllowPaths(roomRunGlobalFlags(c))...,
+	)
+	if err != nil {
+		return fmt.Errorf("resolve filesystem scope: %w", err)
+	}
 	replayPath = strings.TrimSpace(replayPath)
 	var launchPlan services.RoomLaunchPlan
 	var replayPlan services.RoomReplayPlan
 	var replayMode bool
-	var err error
 	if replayPath != "" {
 		if strings.TrimSpace(configPath) != "" || strings.TrimSpace(manifestPath) != "" {
 			return fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", services.ErrRoomReplaySourceConflict)
@@ -257,13 +325,16 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
-		Manifest:   roomManifest,
-		ReplayPath: replayPath,
-		OutputDir:  outputDir,
-		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
-		ReplayPlan: nil,
-		LaunchPlan: nil,
-		Stream:     broker,
+		Manifest:         roomManifest,
+		ReplayPath:       replayPath,
+		OutputDir:        outputDir,
+		ConfigDir:        roomConfigDir(roomRunGlobalFlags(c)),
+		WorkDir:          filesystemPolicy.PrimaryRoot(),
+		AllowPaths:       filesystemPolicy.AdditionalRoots(),
+		FilesystemPolicy: filesystemPolicy,
+		ReplayPlan:       nil,
+		LaunchPlan:       nil,
+		Stream:           broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},

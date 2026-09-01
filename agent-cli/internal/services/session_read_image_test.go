@@ -31,8 +31,8 @@ func TestPlanSessionRuntime_BindsReadImageWithSessionScopedPreparation(t *testin
 	pathOne := writeSessionReadImagePNG(t, dirOne, "one.png", color.RGBA{R: 255, A: 255})
 	pathTwo := writeSessionReadImagePNG(t, dirTwo, "two.png", color.RGBA{B: 255, A: 255})
 
-	planOne := planReadImageTestSession(t, dirOne, sharedExecutor, definitions)
-	planTwo := planReadImageTestSession(t, dirTwo, sharedExecutor, definitions)
+	planOne := planReadImageTestSession(t, dirOne, dirOne, sharedExecutor, definitions)
+	planTwo := planReadImageTestSession(t, dirTwo, dirTwo, sharedExecutor, definitions)
 
 	responseOne := executePlannedReadImage(t, planOne, pathOne, "call-one")
 	responseTwo := executePlannedReadImage(t, planTwo, pathTwo, "call-two")
@@ -51,7 +51,7 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 	imagePath := writeSessionReadImagePNG(t, dir, "loop.png", color.RGBA{G: 255, A: 255})
 	registry := tools.NewToolRegistryFromConfig(nil)
 	executor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, dir, executor, registry.ToAgentLoopDefs())
+	plan := planReadImageTestSession(t, dir, dir, executor, registry.ToAgentLoopDefs())
 	arguments, err := json.Marshal(map[string]string{"path": imagePath})
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testi
 	imagePath := writeSessionReadImagePNG(t, dir, "failed.png", color.RGBA{B: 255, A: 255})
 	registry := tools.NewToolRegistryFromConfig(nil)
 	executor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), executor, registry.ToAgentLoopDefs())
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, executor, registry.ToAgentLoopDefs())
 	arguments, err := json.Marshal(map[string]string{"path": imagePath})
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ models:
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			plan := planReadImageTestSession(t, tc.configDir, sharedExecutor, definitions)
+			plan := planReadImageTestSession(t, tc.configDir, dir, sharedExecutor, definitions)
 			response := executeReadImageFailure(t, plan.loop.ToolExecutor, tc.args, "invalid-"+strings.ReplaceAll(tc.name, " ", "-"))
 			assertReadImageFailure(t, response, "invalid-"+strings.ReplaceAll(tc.name, " ", "-"), tc.wantText)
 		})
@@ -230,7 +230,7 @@ func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
 	missing := filepath.Join(dir, "missing.png")
 	registry := tools.NewToolRegistryFromConfig(nil)
 	sharedExecutor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), sharedExecutor, registry.ToAgentLoopDefs())
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, sharedExecutor, registry.ToAgentLoopDefs())
 	arguments, err := json.Marshal(map[string]string{"path": missing})
 	if err != nil {
 		t.Fatal(err)
@@ -409,7 +409,7 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 	return session, nil
 }
 
-func planReadImageTestSession(t *testing.T, configDir string, executor messages.ToolExecutor, definitions []messages.ToolDefinition) sessionRuntimePlan {
+func planReadImageTestSession(t *testing.T, configDir, workDir string, executor messages.ToolExecutor, definitions []messages.ToolDefinition) sessionRuntimePlan {
 	t.Helper()
 	plan, err := planSessionRuntime(SessionRunOptions{
 		ReplayPath:           "synthetic.json",
@@ -417,6 +417,7 @@ func planReadImageTestSession(t *testing.T, configDir string, executor messages.
 		Model:                "gpt-realtime",
 		ModelProvided:        true,
 		ConfigDir:            configDir,
+		WorkDir:              workDir,
 		SessionInferencer:    stubPlanSessionInferencer{},
 		ToolExecutor:         executor,
 		ToolDefinitions:      definitions,

@@ -350,7 +350,6 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		}
 		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		sawContentfulAudio := false
-		sawCancel := false
 		for !sawContentfulAudio {
 			msg, ok := sessions[0].nextSent(waitCtx)
 			if !ok {
@@ -359,11 +358,8 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 			}
 			switch msg.Type {
 			case messages.StreamTypeResponseCancel:
-				if sawCancel {
-					waitCancel()
-					t.Fatalf("%s provider session received duplicate response cancel", id)
-				}
-				sawCancel = true
+				waitCancel()
+				t.Fatalf("%s peer audio caused an ordinary response cancellation", id)
 			case messages.StreamTypeAudioDelta:
 				value, ok := msg.Value.(*messages.AudioDeltaValue)
 				if !ok || value == nil {
@@ -372,10 +368,6 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 				}
 				if bytes.Equal(value.Content, want[id]) {
 					sawContentfulAudio = true
-					if !sawCancel {
-						waitCancel()
-						t.Fatalf("%s peer audio arrived without ordered response cancel", id)
-					}
 				}
 			case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd:
 				// A scripted session can echo a setup/user text turn while the

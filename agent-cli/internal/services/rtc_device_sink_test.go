@@ -60,6 +60,66 @@ func TestRTCDeviceSinkDefaultPumpsInboundFramesToOutput(t *testing.T) {
 	}
 }
 
+func TestRTCDeviceSinkPublishesCumulativePlaybackOverflow(t *testing.T) {
+	const providerRate = 24000
+	capability := audio.VirtualCapability{SampleRate: providerRate, Channels: 1, BitDepth: 16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+	source, err := audio.NewDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	if err != nil {
+		t.Fatalf("new virtual source: %v", err)
+	}
+	defer func() { _ = source.Close() }()
+	diagnostics := &diagnosticRecordSink{}
+	sink, err := newRTCDeviceSinkAtRate(registry, "virtual:output", providerRate, sessionPlaybackDiagnosticObserver(diagnostics))
+	if err != nil {
+		t.Fatalf("new RTC device sink: %v", err)
+	}
+
+	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+		frame := make([]int16, audio.FrameSize)
+		for sampleIndex := range frame {
+			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
+		}
+		if err := sink.sink.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatalf("write frame %d: %v", frameIndex, err)
+		}
+	}
+	if got := sink.PlaybackStats().DroppedSamples; got != 1680 {
+		t.Fatalf("dropped samples before close = %d, want 1680", got)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("close sink: %v", err)
+	}
+	records := diagnostics.events(SessionDiagnosticEventPlaybackOverflow)
+	if len(records) != 1 {
+		t.Fatalf("playback overflow diagnostics = %d, want one: %v", len(records), diagnostics.all())
+	}
+	fields := records[0].Fields
+	for field, want := range map[string]string{
+		SessionDiagnosticFieldPlaybackDeviceID:            "virtual:output",
+		SessionDiagnosticFieldPlaybackSampleRate:          "24000",
+		SessionDiagnosticFieldPlaybackCapacitySamples:     "6000",
+		SessionDiagnosticFieldPlaybackQueuedSamples:       "6000",
+		SessionDiagnosticFieldPlaybackPeakQueuedSamples:   "6000",
+		SessionDiagnosticFieldPlaybackDroppedSamples:      "1680",
+		SessionDiagnosticFieldPlaybackOverflowEvents:      "4",
+		SessionDiagnosticFieldPlaybackLatencyTargetMillis: "250",
+	} {
+		if fields[field] != want {
+			t.Fatalf("playback overflow field %q = %q, want %q (fields=%v)", field, fields[field], want, fields)
+		}
+	}
+}
+
 func TestRTCDeviceSinkPreservesRegistryErrorIdentity(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {

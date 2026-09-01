@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
@@ -64,6 +65,12 @@ var (
 	// ErrSessionRuntimeSelectionConflict identifies two aliases carrying
 	// different signaling endpoint values.
 	ErrSessionRuntimeSelectionConflict = errors.New("conflicting session signaling endpoints")
+	// ErrOpenAIRealtimeAPIKeyMissing classifies the preflight error returned
+	// when an OpenAI realtime session has no credential. Callers that do not
+	// expose an --api-key flag (for example `room run`) should catch this
+	// with errors.Is and substitute a remedy their command actually accepts
+	// instead of surfacing the --api-key wording below.
+	ErrOpenAIRealtimeAPIKeyMissing = errors.New("openai realtime api key is missing")
 )
 
 // SessionRuntimeSelection is the opaque, service-owned transport selection
@@ -181,7 +188,13 @@ type SessionRunOptions struct {
 	APIKey                  string
 	BaseURL                 string
 	ConfigDir               string
-	Prompt                  string
+	// WorkDir and AllowPaths are the canonical customer filesystem scope for
+	// this session. FilesystemPolicy is the immutable snapshot supplied to all
+	// filesystem tools; the string fields remain useful to non-tool runtimes.
+	WorkDir          string
+	AllowPaths       []string
+	FilesystemPolicy *tools.FilesystemPolicy
+	Prompt           string
 	// PromptProvided distinguishes an explicitly supplied empty prompt from an
 	// omitted prompt. Replay uses the distinction to opt into capture-derived
 	// prompt planning only when the caller did not provide a prompt.
@@ -192,7 +205,12 @@ type SessionRunOptions struct {
 	// retain independent configuration.
 	Voice             string
 	SessionInferencer messages.SessionInferencer
-	WebSocketDialer   transport.Dialer
+	// AudioOutputRequested tells realtime planning that assistant PCM will be
+	// consumed by a local file/device output boundary. It is set by the audio
+	// entry points before provider construction so the provider's declared
+	// output rate is available before any sink or device is opened.
+	AudioOutputRequested bool
+	WebSocketDialer      transport.Dialer
 	// RecordSessionCapturePath, when non-empty, makes NewLiveSessionInferencer
 	// wrap the resolved websocket dialer (WebSocketDialer, or the provider's
 	// real default dialer when that is unset) with a raw-traffic recorder,
@@ -583,7 +601,7 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		active.Model = openAIRealtimeModel
 	}
 	if strings.TrimSpace(active.APIKey) == "" {
-		return config.OpenAIConfig{}, fmt.Errorf("OpenAI API key is required for live realtime session mode (set %s, pass --api-key, or configure model.openai.api_key in %s)", SessionOpenAIAPIKeyEnv, config.ConfigFileName)
+		return config.OpenAIConfig{}, fmt.Errorf("%w: OpenAI API key is required for live realtime session mode (set %s, pass --api-key, or configure model.openai.api_key in %s)", ErrOpenAIRealtimeAPIKeyMissing, SessionOpenAIAPIKeyEnv, config.ConfigFileName)
 	}
 	if strings.TrimSpace(active.Model) == "" {
 		if active.Model == "" && !opts.ModelProvided && opts.Model == "" {

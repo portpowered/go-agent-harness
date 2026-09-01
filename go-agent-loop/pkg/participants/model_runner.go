@@ -18,7 +18,8 @@ type ModelRunner struct {
 	// When contentful audio arrives while the model is streaming an audio
 	// response, the model runner sends RESPONSE.CANCEL (barge-in) before
 	// forwarding the audio. Zero-filled cadence frames are forwarded without
-	// cancelling the response.
+	// cancelling the response. Direct writes to this legacy channel use the
+	// interrupting-by-default policy.
 	UserAudioInbox chan []byte
 	// UserEventInbox receives pre-built outbound StreamMessages from the user
 	// side in session mode. Each message is forwarded to the provider session
@@ -26,6 +27,11 @@ type ModelRunner struct {
 	// such as MESSAGE.END (input_audio_buffer.commit + response.create on the
 	// OpenAI Realtime wire).
 	UserEventInbox chan messages.StreamMessage
+
+	// sessionAudioInputInbox carries audio admitted through the explicit
+	// session helper API. UserAudioInbox remains available for legacy direct
+	// writers, whose unspecified origin defaults to interrupting.
+	sessionAudioInputInbox chan messages.SessionAudioInput
 
 	// sessionInputMu establishes a FIFO boundary for the public session input
 	// helpers. A control event sent after audio must not enter the event inbox
@@ -137,30 +143,43 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
 func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, config *messages.SessionUpdateConfig) *ModelRunner {
 	return &ModelRunner{
-		sessionInferencer: si,
-		sessionConfig:     config,
-		Inbox:             messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
-		DeltaOutbox:       messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
-		UserAudioInbox:    make(chan []byte, 64),
-		UserEventInbox:    make(chan messages.StreamMessage, 8),
+		sessionInferencer:      si,
+		sessionConfig:          config,
+		Inbox:                  messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
+		DeltaOutbox:            messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		UserAudioInbox:         make(chan []byte, 64),
+		UserEventInbox:         make(chan messages.StreamMessage, 8),
+		sessionAudioInputInbox: make(chan messages.SessionAudioInput, 64),
 	}
 }
 
-// EnqueueSessionAudioInput queues raw PCM for the session and records it as
-// pending until the session runner forwards it to the provider. The pending
-// state lets EnqueueSessionEvent preserve ordering across the two input
-// channels without changing the legacy exported channels used by callers and
-// tests.
+// EnqueueSessionAudioInput queues raw PCM for the session with the legacy
+// interrupting-by-default policy.
 func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
-	if r == nil || r.UserAudioInbox == nil {
-		return fmt.Errorf("EnqueueSessionAudioInput: not in session mode")
+	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
+}
+
+// EnqueueSessionAudioInputWithPolicy queues raw PCM with an explicit
+// interruption policy and records it as pending until the session runner
+// forwards it to the provider. The pending state lets EnqueueSessionEvent
+// preserve ordering across the helper API's audio and event boundaries.
+func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
+}
+
+func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
+	if r == nil || r.UserAudioInbox == nil || r.sessionAudioInputInbox == nil {
+		return fmt.Errorf("%s: not in session mode", operation)
 	}
 
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
 	r.markAudioInputPending()
 	select {
-	case r.UserAudioInbox <- pcm:
+	case r.sessionAudioInputInbox <- messages.SessionAudioInput{
+		PCM:                pcm,
+		InterruptionPolicy: policy,
+	}:
 		return nil
 	case <-ctx.Done():
 		r.completeAudioInput()
@@ -330,6 +349,13 @@ func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session me
 	state.ensureMaps()
 	for {
 		select {
+		case input, ok := <-r.sessionAudioInputInbox:
+			if !ok {
+				return nil
+			}
+			if err := r.forwardSessionAudioInputWithState(ctx, session, input, state); err != nil {
+				return err
+			}
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return nil
@@ -344,6 +370,10 @@ func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session me
 }
 
 func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
+	return r.forwardSessionAudioWithPolicyWithState(ctx, session, pcm, messages.SessionAudioInputPolicyDefault, state)
+}
+
+func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context, session messages.Session, pcm []byte, policy messages.SessionAudioInputPolicy, state *sessionResponseState) error {
 	defer r.completeAudioInput()
 	state.ensureMaps()
 	if sessionAdmissionClosed(session) {
@@ -357,7 +387,24 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
-	if (state.responseInFlight || state.acknowledgementOutstanding) && !state.responseCancelSent && hasPCM16Signal(pcm) {
+	//
+	// A response that is itself the requested continuation of an already
+	// accepted tool result (state.awaitingContinuation) is deliberately
+	// excluded. Unlike an ordinary spoken response or a tool acknowledgement,
+	// nothing re-requests a cancelled tool continuation: MESSAGE.END for a
+	// cancelled response is rewritten with TerminalReasonPartialOutput and no
+	// further response.create is ever queued for that call, so the tool's
+	// obligation is left permanently unresolved and the session later fails
+	// closed with an unresolved tool_continuation -- even though the
+	// interrupting audio was ordinary room/peer input, not a deliberate
+	// interrupt of this participant's own turn. A room participant observed
+	// this exactly: it received one peer audio frame with signal 557ms into
+	// its tool continuation response, sent RESPONSE.CANCEL against it,
+	// and died with classification=tool_continuation at t=2.9s having never
+	// produced a single sample of its own audio (sent.pcm was 0 bytes). Held
+	// off, the continuation is free to complete and deliver the tool result;
+	// the participant's next ordinary response remains fully interruptible.
+	if policy.InterruptsResponse() && (state.responseInFlight || state.acknowledgementOutstanding) && !state.awaitingContinuation && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),

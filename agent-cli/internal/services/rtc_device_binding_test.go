@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -172,7 +173,7 @@ func TestPrepareRTCDeviceBindingsNoSelectionDoesNotTouchRegistry(t *testing.T) {
 	}
 }
 
-func TestValidateSessionAudioDeviceConflictsPreservesSharedAndSessionErrors(t *testing.T) {
+func TestValidateSessionAudioDeviceConflictsPreservesInputErrorAndAllowsIndependentOutputs(t *testing.T) {
 	inputErr := services.ValidateSessionAudioDeviceConflicts(true, false, true, false)
 	if inputErr == nil || !errors.Is(inputErr, services.ErrSessionAudioInputConflict) || !errors.Is(inputErr, audio.ErrDeviceSelectionConflict) {
 		t.Fatalf("input conflict = %v, want session and shared conflict identities", inputErr)
@@ -182,9 +183,8 @@ func TestValidateSessionAudioDeviceConflictsPreservesSharedAndSessionErrors(t *t
 		t.Fatalf("input conflict = %v, want typed shared conflict", inputErr)
 	}
 
-	outputErr := services.ValidateSessionAudioDeviceConflicts(false, true, false, true)
-	if outputErr == nil || !errors.Is(outputErr, services.ErrSessionAudioOutputConflict) || !errors.Is(outputErr, audio.ErrDeviceSelectionConflict) {
-		t.Fatalf("output conflict = %v, want session and shared conflict identities", outputErr)
+	if outputErr := services.ValidateSessionAudioDeviceConflicts(false, true, false, true); outputErr != nil {
+		t.Fatalf("independent file/device outputs = %v, want no conflict", outputErr)
 	}
 }
 
@@ -211,22 +211,23 @@ func TestSessionCommandWiresBothRTCDeviceSelectorsBeforeProviderConnect(t *testi
 	}
 }
 
-func TestSessionCommandRejectsAudioOutputFileAndDeviceConflictBeforeProviderConnect(t *testing.T) {
+func TestSessionCommandAllowsAudioOutputFileAndDeviceToReachDevicePreflight(t *testing.T) {
 	inferencer := &countingSessionInferencer{}
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetOut(io.Discard)
+	audioOutPath := filepath.Join(t.TempDir(), "response.raw")
 	cmd.SetArgs([]string{
 		"--replay", "synthetic.json",
-		"--audio-out", "response.raw",
+		"--audio-out", audioOutPath,
 		"--audio-out-device", "virtual:output",
 	})
 
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil || !errors.Is(err, services.ErrSessionAudioOutputConflict) || !errors.Is(err, audio.ErrDeviceSelectionConflict) {
-		t.Fatalf("command error = %v, want typed output selection conflict", err)
+	if err == nil || errors.Is(err, services.ErrSessionAudioOutputConflict) || !errors.Is(err, audio.ErrNilDeviceRegistry) {
+		t.Fatalf("command error = %v, want device preflight after output validation", err)
 	}
 	if inferencer.connects != 0 {
-		t.Fatalf("provider connects = %d, want zero for an early output conflict", inferencer.connects)
+		t.Fatalf("provider connects = %d, want zero for failed device preflight", inferencer.connects)
 	}
 }
 

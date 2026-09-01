@@ -3,6 +3,7 @@ package services_test
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	functional "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional"
 )
@@ -142,7 +144,15 @@ func TestSessionCommandPromptKeepsPCMOutOfTextOutput(t *testing.T) {
 	inf := functional.NewMockSessionInferencer()
 	t.Cleanup(inf.Close)
 	output := &recordingSessionOutput{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inf).Generate()
+	workDir := t.TempDir()
+	canonicalWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		t.Fatalf("canonicalize test workdir: %v", err)
+	}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	globalFlags.WorkDirPath = workDir
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, nil, inf).Generate()
 	cmd.SetOut(output)
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--wait-for-close", "--prompt", "distinctive text seed"})
 	result := make(chan error, 1)
@@ -183,7 +193,9 @@ func TestSessionCommandPromptKeepsPCMOutOfTextOutput(t *testing.T) {
 
 	writes := output.Writes()
 	got := string(bytes.Join(writes, nil))
-	want := "Assistant: " + transcript + "\n[session closed: provider_closed]\n" +
+	want := "Filesystem scope: workdir=" + canonicalWorkDir + "; additional_allowed_roots=none\n" +
+		tools.FilesystemScopeStartupNotice + "\n" +
+		"Assistant: " + transcript + "\n[session closed: provider_closed]\n" +
 		"[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\n"
 	if got != want {
 		t.Fatalf("text output = %q, want %q", got, want)

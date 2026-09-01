@@ -20,6 +20,7 @@ func executorTestConfig(t *testing.T, dir string) *Config {
 	t.Helper()
 	return &Config{
 		ConfigDir:           dir,
+		WorkDir:             dir,
 		SystemPrompt:        "none",
 		NoSystemInformation: true,
 	}
@@ -190,8 +191,13 @@ func TestExecutorRun_BuildLoopUsesInjectedDependenciesAndDefaults(t *testing.T) 
 	defs := []messages.ToolDefinition{{Name: "lookup", Description: "lookup value"}}
 	exec := NewExecutor(tool, defs, inf, true)
 	history := messages.NewTextMessage(messages.RoleUser, "history")
+	effectiveWorkDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	runData, err := exec.BuildLoop(context.Background(), &Config{
 		ConfigDir:           dir,
+		WorkDir:             dir,
 		NoSystemInformation: true,
 		SessionID:           "explicit-session",
 		InitialHistory:      []messages.Message{history},
@@ -200,7 +206,7 @@ func TestExecutorRun_BuildLoopUsesInjectedDependenciesAndDefaults(t *testing.T) 
 		t.Fatalf("BuildLoop() error = %v", err)
 	}
 	defer runData.CloseLogger()
-	if runData.SessionID != "explicit-session" || runData.Models == nil || runData.SessionManager.WorkspaceDir() != dir {
+	if runData.SessionID != "explicit-session" || runData.Models == nil || runData.SessionManager.WorkspaceDir() != effectiveWorkDir {
 		t.Fatalf("RunData = session=%q models=%v workspace=%q", runData.SessionID, runData.Models != nil, runData.SessionManager.WorkspaceDir())
 	}
 
@@ -266,6 +272,7 @@ func TestExecutorRun_BuildLoopConstructsConfiguredProvidersOffline(t *testing.T)
 			exec := NewExecutor(nil, nil, nil, true)
 			data, err := exec.BuildLoop(context.Background(), &Config{
 				ConfigDir:           dir,
+				WorkDir:             dir,
 				SystemPrompt:        "none",
 				NoSystemInformation: true,
 				ModelConfig:         `{"temperature":0}`,

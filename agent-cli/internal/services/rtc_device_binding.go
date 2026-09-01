@@ -21,8 +21,10 @@ const (
 	SessionAudioOutDeviceFlag = "audio-out-device"
 )
 
-// ErrSessionAudioOutputConflict identifies the mutually exclusive file and
-// device forms of --audio-out.
+// ErrSessionAudioOutputConflict is retained for source compatibility with
+// callers that classified the old output-selection conflict. File capture
+// and RTC device playback are now independent observations and are allowed
+// together, so new validation does not return this error.
 var ErrSessionAudioOutputConflict = errors.New("--audio-out and --audio-out-device (audio device output) cannot be used together")
 
 // SessionAudioDeviceConflictError describes a file/device selection conflict
@@ -54,23 +56,18 @@ func (e *SessionAudioDeviceConflictError) Unwrap() error {
 	})
 }
 
-// ValidateSessionAudioDeviceConflicts rejects a file and registry-backed
-// device selector being supplied for the same direction. It is intentionally
-// independent of transport selection so the RTC transport can consume this
-// validation before dialing or constructing a peer.
+// ValidateSessionAudioDeviceConflicts rejects a file and registry-backed input
+// device selector being supplied for the same direction. File assistant
+// capture and RTC output-device playback intentionally remain independent so
+// both can observe one provider response in the same session. This validation
+// is intentionally independent of transport selection so the RTC transport
+// can consume it before dialing or constructing a peer.
 func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
 	if audioInFile && audioInDevice {
 		return &SessionAudioDeviceConflictError{
 			FileFlag:   "--audio-in",
 			DeviceFlag: "--" + SessionAudioInDeviceFlag,
 			Err:        ErrSessionAudioInputConflict,
-		}
-	}
-	if audioOutFile && audioOutDevice {
-		return &SessionAudioDeviceConflictError{
-			FileFlag:   "--audio-out",
-			DeviceFlag: "--" + SessionAudioOutDeviceFlag,
-			Err:        ErrSessionAudioOutputConflict,
 		}
 	}
 	return nil
@@ -97,6 +94,17 @@ type RTCDeviceBindingRequest struct {
 	// BypassSelfHearing keeps device I/O active while explicitly disabling the
 	// local feedback controller for replay, file, or room-owned topologies.
 	BypassSelfHearing bool
+	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
+	// the legacy device rate for callers that do not carry a session contract.
+	OutputSampleRate int
+	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
+	// cannot open this rate may be opened at another supported rate and
+	// converted once by RTCDeviceSource before provider transmission.
+	InputSampleRate int
+	// PlaybackObserver receives one final queue snapshot when a selected output
+	// device closes. It is called outside the native device callback and may be
+	// used to publish cumulative overflow diagnostics.
+	PlaybackObserver RTCDevicePlaybackObserver
 }
 
 func (r RTCDeviceBindingRequest) inputSelected() bool {
@@ -194,7 +202,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 
 	binding := &RTCDeviceBinding{}
 	if request.inputSelected() {
-		source, err := NewRTCDeviceSource(request.Registry, normalizeRTCDeviceSelector(request.InputDevice))
+		source, err := NewRTCDeviceSourceAtRate(request.Registry, normalizeRTCDeviceSelector(request.InputDevice), request.InputSampleRate)
 		if err != nil {
 			return nil, &RTCDeviceBindingError{
 				Flag:      "--" + SessionAudioInDeviceFlag,
@@ -207,7 +215,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	if request.outputSelected() {
-		sink, err := NewRTCDeviceSink(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice))
+		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(&RTCDeviceBindingError{

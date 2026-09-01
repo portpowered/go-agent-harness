@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -77,6 +78,69 @@ func TestDeviceSinkFrameHandleConformance(t *testing.T) {
 		if frame[0] != int16(i+1) || frame[FrameSize-1] != int16(32766-i) {
 			t.Fatalf("native frame %d = (%d,%d), want (%d,%d)", i, frame[0], frame[FrameSize-1], i+1, 32766-i)
 		}
+	}
+}
+
+func TestDeviceSinkFormatCapabilitiesAndExplicitFormatFailures(t *testing.T) {
+	legacyHandle := &adapterFrameHandle{direction: DirectionOutput}
+	sink, err := NewDeviceSink(&adapterTestRegistryStub{handle: legacyHandle}, "output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats := sink.PlaybackStats()
+	if stats.Format != DefaultDeviceFormat() || stats.CapacitySamples != 4000 {
+		t.Fatalf("legacy sink playback stats = %+v, want default format and 4000 samples", stats)
+	}
+	if got := sink.DiscardPlayback(); got != 0 {
+		t.Fatalf("legacy sink DiscardPlayback = %d, want 0", got)
+	}
+	if got := sink.SampleRate(); got != SampleRate {
+		t.Fatalf("legacy sink SampleRate = %d, want %d", got, SampleRate)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	unsupportedHandle := &adapterFrameHandle{direction: DirectionOutput}
+	_, err = NewDeviceSinkAtRate(&adapterTestRegistryStub{handle: unsupportedHandle}, "output", 24000)
+	var formatErr *DeviceFormatError
+	if !errors.As(err, &formatErr) || !errors.Is(err, ErrUnsupportedDeviceFormat) || !strings.Contains(err.Error(), "24000 Hz") {
+		t.Fatalf("explicit format without opener error = %v, want typed 24000 Hz mismatch", err)
+	}
+	if unsupportedHandle.closed {
+		t.Fatalf("unsupported format path opened legacy handle, want no open")
+	}
+
+	var nilSink *DeviceSink
+	if nilSink.DeviceFormat() != (DeviceFormat{}) || nilSink.SampleRate() != 0 || nilSink.PlaybackStats() != (PlaybackQueueStats{}) || nilSink.DiscardPlayback() != 0 {
+		t.Fatal("nil sink format/playback methods returned non-zero state")
+	}
+}
+
+func TestDeviceSinkExplicitOpenerValidatesOpenedFormat(t *testing.T) {
+	want := PCM16DeviceFormat(24000)
+	goodHandle := &adapterFormatHandle{adapterFrameHandle: &adapterFrameHandle{direction: DirectionOutput}, format: want}
+	goodRegistry := &adapterFormatRegistryStub{handle: goodHandle}
+	sink, err := NewDeviceSinkAtRate(goodRegistry, "output", want.SampleRate)
+	if err != nil {
+		t.Fatalf("matching explicit format open: %v", err)
+	}
+	if goodRegistry.requested != want || sink.DeviceFormat() != want {
+		t.Fatalf("explicit opener request/sink format = %v/%v, want %v", goodRegistry.requested, sink.DeviceFormat(), want)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	actual := DefaultDeviceFormat()
+	mismatchHandle := &adapterFormatHandle{adapterFrameHandle: &adapterFrameHandle{direction: DirectionOutput}, format: actual}
+	_, err = NewDeviceSinkAtRate(&adapterFormatRegistryStub{handle: mismatchHandle}, "output", want.SampleRate)
+	var formatErr *DeviceFormatError
+	if !errors.As(err, &formatErr) || formatErr.Requested != want || len(formatErr.Available) != 1 || formatErr.Available[0] != actual {
+		t.Fatalf("opened format mismatch error = %v, want requested/actual formats", err)
+	}
+	if mismatchHandle.closeCount != 1 {
+		t.Fatalf("mismatched opened handle close count = %d, want 1", mismatchHandle.closeCount)
 	}
 }
 
@@ -182,6 +246,33 @@ type blockingDeviceHandle struct {
 	released  chan struct{}
 	startOnce sync.Once
 	closeOnce sync.Once
+}
+
+type adapterFormatHandle struct {
+	*adapterFrameHandle
+	format     DeviceFormat
+	closeCount int
+}
+
+func (h *adapterFormatHandle) DeviceFormat() DeviceFormat { return h.format }
+func (h *adapterFormatHandle) Close() error {
+	h.closeCount++
+	return h.adapterFrameHandle.Close()
+}
+
+type adapterFormatRegistryStub struct {
+	handle    OpenedDevice
+	requested DeviceFormat
+}
+
+func (r *adapterFormatRegistryStub) List() ([]Device, error) { return nil, nil }
+func (r *adapterFormatRegistryStub) Default(Direction) (Device, error) {
+	return Device{ID: "output", Direction: DirectionOutput}, nil
+}
+func (r *adapterFormatRegistryStub) Open(DeviceID) (OpenedDevice, error) { return r.handle, nil }
+func (r *adapterFormatRegistryStub) OpenWithFormat(_ DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	r.requested = format
+	return r.handle, nil
 }
 
 func newBlockingDeviceHandle(direction Direction) *blockingDeviceHandle {

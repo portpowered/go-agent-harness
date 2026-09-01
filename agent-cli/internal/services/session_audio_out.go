@@ -24,8 +24,12 @@ const (
 )
 
 // RunSessionWithAudioOut runs a session and writes assistant AUDIO.DELTA
-// samples to path as they arrive. An empty path preserves the normal session
-// output behavior. A path of "-" writes raw little-endian PCM16 to out.
+// samples to path as they arrive. The capture observes provider assistant
+// PCM upstream of the RTC device path; when --audio-out-device is also
+// selected, the independent device pump observes the same session through
+// its provider-owned inbound media endpoint. An empty path preserves the
+// normal session output behavior. A path of "-" writes raw little-endian
+// PCM16 to out.
 func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunOptions, path string) (runErr error) {
 	return RunSessionWithAudioOutAndTextSeed(ctx, out, opts, path, SessionTextSeed{})
 }
@@ -50,6 +54,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		opts.Prompt = seed.Value
 		opts.PromptProvided = true
 	}
+	opts.AudioOutputRequested = true
 
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
@@ -64,7 +69,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		return err
 	}
 
-	sink, err := newSessionAudioSink(path, out)
+	sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
@@ -125,6 +130,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	if seed.Present {
 		opts.Prompt = seed.Value
 	}
+	opts.AudioOutputRequested = true
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
@@ -138,7 +144,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 		return err
 	}
 
-	sink, err := newSessionAudioSink(path, out)
+	sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
@@ -208,18 +214,23 @@ type sessionAudioSamplesWriter interface {
 	WriteSamples(context.Context, []int16) error
 }
 
-// newSessionAudioSink keeps the existing frame-oriented audio sink in the
-// write path while adding a bounded tail writer and an incremental WAV
-// container for session output. The audio package's WAV sink intentionally
-// buffers samples for its generic file-sink contract; session output needs a
-// streaming container because deltas can be consumed before the session ends.
-func newSessionAudioSink(path string, out io.Writer) (audio.AudioSink, error) {
+// newSessionAudioSinkAtRate creates the streaming session artifact sink at
+// the provider's declared output rate. A raw stream has no header, but keeping
+// the rate on the sink makes the same constructor safe for WAV output and
+// keeps the rate decision at the session boundary.
+func newSessionAudioSinkAtRate(path string, out io.Writer, sampleRate int) (audio.AudioSink, error) {
+	if sampleRate <= 0 {
+		return nil, fmt.Errorf("audio output sample rate must be positive; got %d Hz", sampleRate)
+	}
+	if uint64(sampleRate)*2 > uint64(^uint32(0)) {
+		return nil, fmt.Errorf("audio output sample rate %d Hz exceeds WAV header limits", sampleRate)
+	}
 	if path == "-" {
 		raw, err := audio.NewFileSink(path, out)
 		if err != nil {
 			return nil, err
 		}
-		return &sessionAudioSink{path: path, raw: raw, writer: out}, nil
+		return &sessionAudioSink{path: path, raw: raw, writer: out, sampleRate: sampleRate}, nil
 	}
 
 	// Use the established sink as the format/open preflight so its typed path
@@ -243,11 +254,12 @@ func newSessionAudioSink(path string, out io.Writer) (audio.AudioSink, error) {
 	}
 
 	sink := &sessionAudioSink{
-		path:   path,
-		raw:    raw,
-		writer: file,
-		file:   file,
-		wav:    strings.EqualFold(filepath.Ext(path), ".wav"),
+		path:       path,
+		raw:        raw,
+		writer:     file,
+		file:       file,
+		wav:        strings.EqualFold(filepath.Ext(path), ".wav"),
+		sampleRate: sampleRate,
 	}
 	if sink.wav {
 		if err := sink.updateWAVHeaderLocked(); err != nil {
@@ -272,6 +284,9 @@ type sessionAudioSink struct {
 	writer io.Writer
 	file   *os.File
 	wav    bool
+	// sampleRate is the provider output rate represented by this artifact.
+	// It is not inferred from the legacy audio package default.
+	sampleRate int
 
 	samples  uint64
 	closed   bool
@@ -395,8 +410,8 @@ func (s *sessionAudioSink) updateWAVHeaderLocked() error {
 	binary.LittleEndian.PutUint32(header[16:20], 16)
 	binary.LittleEndian.PutUint16(header[20:22], 1)
 	binary.LittleEndian.PutUint16(header[22:24], audio.Channels)
-	binary.LittleEndian.PutUint32(header[24:28], audio.SampleRate)
-	binary.LittleEndian.PutUint32(header[28:32], audio.SampleRate*2)
+	binary.LittleEndian.PutUint32(header[24:28], uint32(s.sampleRate))
+	binary.LittleEndian.PutUint32(header[28:32], uint32(s.sampleRate*2))
 	binary.LittleEndian.PutUint16(header[32:34], 2)
 	binary.LittleEndian.PutUint16(header[34:36], 16)
 	copy(header[36:40], "data")

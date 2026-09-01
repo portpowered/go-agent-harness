@@ -18,13 +18,13 @@ type EditFileTool struct {
 
 // NewEditFileTool creates a new EditFileTool with optional directory restriction.
 func NewEditFileTool(workspace string, restrict bool) *EditFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &EditFileTool{fs: fs}
+	return &EditFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewEditFileToolWithPolicy constructs an edit tool confined to the supplied
+// filesystem policy.
+func NewEditFileToolWithPolicy(policy *FilesystemPolicy) *EditFileTool {
+	return &EditFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *EditFileTool) Name() string {
@@ -73,7 +73,7 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]any) ([]mess
 	}
 
 	if err := editFile(t.fs, path, oldText, newText); err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, fmt.Sprintf("File edited: %s", path))}, nil
 }
@@ -83,13 +83,13 @@ type AppendFileTool struct {
 }
 
 func NewAppendFileTool(workspace string, restrict bool) *AppendFileTool {
-	var fs fileSystem
-	if restrict {
-		fs = &sandboxFs{workspace: workspace}
-	} else {
-		fs = &hostFs{}
-	}
-	return &AppendFileTool{fs: fs}
+	return &AppendFileTool{fs: newLegacyFileSystem(workspace, restrict)}
+}
+
+// NewAppendFileToolWithPolicy constructs an append tool confined to the
+// supplied filesystem policy.
+func NewAppendFileToolWithPolicy(policy *FilesystemPolicy) *AppendFileTool {
+	return &AppendFileTool{fs: newSandboxFs(policy)}
 }
 
 func (t *AppendFileTool) Name() string {
@@ -129,7 +129,7 @@ func (t *AppendFileTool) Execute(ctx context.Context, args map[string]any) ([]me
 	}
 
 	if err := appendFile(t.fs, path, content); err != nil {
-		return ErrorAsToolMessage(err)
+		return filesystemErrorAsToolMessage(t.fs, t.Name(), path, err)
 	}
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, fmt.Sprintf("Appended to %s", path))}, nil
 }

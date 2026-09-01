@@ -90,7 +90,7 @@ fail fast):
 $ go build -o /tmp/agent ./cmd/agent
 
 $ /tmp/agent --config-dir /tmp/agent-cfg tool --list
-Warning: deny patterns are disabled. All commands will be allowed.
+Warning: shell-command deny patterns are disabled. This affects shell-command policy only; filesystem tools remain confined to the effective filesystem scope, and the process is not running inside an operating-system sandbox.
 append_file
 ...
 read_file             # active registry contains read_file ...

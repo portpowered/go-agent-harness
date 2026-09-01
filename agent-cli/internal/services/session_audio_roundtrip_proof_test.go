@@ -26,6 +26,10 @@ import (
 // measure ~2000; digital silence measures 0.
 const roundtripRMSThreshold = 500.0
 
+// roundtripOutputSampleRate is the provider-declared rate carried by the
+// OpenAI replay session and written to the --audio-out WAV container.
+const roundtripOutputSampleRate = wavio.Rate24kHz
+
 // roundtripResponseWindowSamples is the length of the scripted spoken reply
 // carried by the replay fixture: a real voiced window of the input fixture,
 // so the recorded output is consistent with a genuine spoken response.
@@ -90,6 +94,10 @@ func buildAudioRoundtripFixture(t *testing.T, wavPath string, replySamples []int
 		t.Fatalf("load replay base fixture: %v", err)
 	}
 	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	// Make the generated capture's provider contract explicit. The production
+	// replay planner must read this 24 kHz declaration rather than falling back
+	// to the harness-wide 16 kHz compatibility rate.
+	records[0].Payload = json.RawMessage(`{"session":{"model":"gpt-realtime","type":"realtime","audio":{"input":{"format":{"type":"audio/pcm","rate":24000}},"output":{"format":{"type":"audio/pcm","rate":24000}}}},"type":"session.update"}`)
 
 	clientEvent := func(eventType string, payload json.RawMessage) {
 		records = append(records, gwtesting.CapturedSessionEvent{
@@ -195,13 +203,12 @@ func recordedWAVSpeechViolation(outputPath string, wantSamples int) error {
 	if err != nil {
 		return fmt.Errorf("parse recorded output WAV: %w", err)
 	}
-	if rate != audio.SampleRate {
-		return fmt.Errorf("recorded output WAV rate = %d, want %d", rate, audio.SampleRate)
+	if rate != roundtripOutputSampleRate {
+		return fmt.Errorf("recorded output WAV rate = %d, want provider rate %d", rate, roundtripOutputSampleRate)
 	}
-	minSamples, maxSamples := wantSamples/2, wantSamples*2
-	if len(samples) < minSamples || len(samples) > maxSamples {
-		return fmt.Errorf("recorded duration %d samples (%.3fs) outside plausible bounds [%d, %d] derived from the scripted %.3fs reply",
-			len(samples), float64(len(samples))/float64(rate), minSamples, maxSamples, float64(wantSamples)/float64(rate))
+	if len(samples) != wantSamples {
+		return fmt.Errorf("recorded duration %d samples (%.3fs), want exactly %d samples (%.3fs) at the declared provider rate",
+			len(samples), float64(len(samples))/float64(rate), wantSamples, float64(wantSamples)/float64(rate))
 	}
 	var energy float64
 	for _, sample := range samples {

@@ -144,11 +144,22 @@ type rtcDeviceBoundSession struct {
 	binding *RTCDeviceBinding
 }
 
+// Send keeps the legacy bool-only session path on the same cancellation
+// boundary as SendWithOutcome. Without this explicit method, the promoted
+// messages.Session.Send method would bypass the local playback flush.
+func (s *rtcDeviceBoundSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
 func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
-	return messages.RequestSessionResponse(ctx, s.Session)
+	outcome := messages.RequestSessionResponse(ctx, s.Session)
+	if outcome.OK() && s.binding != nil && s.binding.Sink != nil {
+		s.binding.Sink.resumePlayback()
+	}
+	return outcome
 }
 
 func (s *rtcDeviceBoundSession) SupportsResponseRequests() bool {
@@ -188,7 +199,19 @@ func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg message
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(msg) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
-	return messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	if outcome.OK() && s.binding != nil && s.binding.Sink != nil {
+		switch msg.Type {
+		case messages.StreamTypeResponseCancel:
+			// The provider-facing cancellation is the accepted local boundary.
+			// The playback generation and device queue lock make a racing pump
+			// frame either get discarded here or stale before local admission.
+			s.binding.Sink.DiscardPlayback()
+		case messages.StreamTypeResponseCreate:
+			s.binding.Sink.resumePlayback()
+		}
+	}
+	return outcome
 }
 
 func (s *rtcDeviceBoundSession) SessionAdmissionClosed() bool {

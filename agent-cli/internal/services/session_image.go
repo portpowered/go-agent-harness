@@ -138,6 +138,9 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	if opts.AudioOutPath != "" {
+		opts.SessionRunOptions.AudioOutputRequested = true
+	}
 	var imageCleanup func()
 	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
 	if err != nil {
@@ -219,6 +222,9 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	// provider-side turn detection before planning the live runtime so that
 	// this path owns the single commit and response boundary.
 	opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
+	if opts.AudioOutPath != "" {
+		opts.SessionRunOptions.AudioOutputRequested = true
+	}
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
 	if err != nil {
 		return err
@@ -293,7 +299,7 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
 	if opts.AudioOutPath != "" {
-		sink, err := newSessionAudioSink(opts.AudioOutPath, out)
+		sink, err := newSessionAudioSinkAtRate(opts.AudioOutPath, out, plan.outputAudioSampleRate)
 		if err != nil {
 			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
 		}

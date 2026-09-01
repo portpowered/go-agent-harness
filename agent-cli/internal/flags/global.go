@@ -2,9 +2,11 @@ package flags
 
 // GlobalFlags holds persistent CLI flags for the agent CLI.
 type GlobalFlags struct {
-	VerboseMode   int    // Verbosity level: 0 = none, 1 = info, 2+ = debug
-	ConfigDirPath string // Override directory for agent CLI config (default: ~/.agent-cli)
-	LogToStdout   bool   // Override default file logging and log to stdout/stderr instead
+	VerboseMode   int      // Verbosity level: 0 = none, 1 = info, 2+ = debug
+	ConfigDirPath string   // Override directory for agent CLI config (default: ~/.agent-cli)
+	LogToStdout   bool     // Override default file logging and log to stdout/stderr instead
+	WorkDirPath   string   // Filesystem-tool workdir (default: process current directory)
+	AllowPathList []string // Additional filesystem-tool roots (repeatable)
 }
 
 // NewGlobalFlags returns default global flags.
@@ -13,12 +15,35 @@ func NewGlobalFlags() *GlobalFlags {
 		VerboseMode:   0,
 		ConfigDirPath: "",
 		LogToStdout:   false,
+		WorkDirPath:   "",
+		AllowPathList: nil,
 	}
 }
 
 // ConfigDir returns the config directory override (empty means use default ~/.agent-cli).
 func (f *GlobalFlags) ConfigDir() string {
+	if f == nil {
+		return ""
+	}
 	return f.ConfigDirPath
+}
+
+// WorkDir returns the requested filesystem-tool workdir. An empty value means
+// the process current working directory and is resolved at run startup.
+func (f *GlobalFlags) WorkDir() string {
+	if f == nil {
+		return ""
+	}
+	return f.WorkDirPath
+}
+
+// AllowPaths returns a copy of the additional filesystem-tool roots supplied
+// on the command line.
+func (f *GlobalFlags) AllowPaths() []string {
+	if f == nil {
+		return nil
+	}
+	return append([]string(nil), f.AllowPathList...)
 }
 
 // AskFlags holds flags specific to the ask command (overrides config).

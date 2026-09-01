@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 func TestRTCDeviceSourceDefaultPumpsFixedFramesToOutboundMedia(t *testing.T) {
@@ -58,6 +60,135 @@ func TestRTCDeviceSourceDefaultPumpsFixedFramesToOutboundMedia(t *testing.T) {
 	}
 	if !reflect.DeepEqual(outbound.frames[0].Samples, want) {
 		t.Fatal("outbound frame differs from the registry-backed input frame")
+	}
+}
+
+func TestRTCDeviceSourceConvertsSupportedCaptureRateToProviderRate(t *testing.T) {
+	const providerRate = wavio.Rate24kHz
+	capability := audio.VirtualCapability{
+		SampleRate: audio.SampleRate,
+		Channels:   audio.Channels,
+		BitDepth:   audio.DeviceBitDepthPCM16,
+		Format:     audio.DeviceEncodingPCM16,
+	}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := NewRTCDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	if err != nil {
+		t.Fatalf("open 16 kHz fallback source for 24 kHz provider: %v", err)
+	}
+	defer func() { _ = source.Close() }()
+	if source.SourceSampleRate() != audio.SampleRate || source.ProviderSampleRate() != providerRate {
+		t.Fatalf("source rates = %d -> %d, want %d -> %d", source.SourceSampleRate(), source.ProviderSampleRate(), audio.SampleRate, providerRate)
+	}
+
+	feed, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", audio.SampleRate)
+	if err != nil {
+		t.Fatalf("open capture feed: %v", err)
+	}
+	defer func() { _ = feed.Close() }()
+	wantCapture := make([]int16, audio.FrameSize)
+	for index := range wantCapture {
+		wantCapture[index] = int16(index*19 - 3000) //nolint:gosec // bounded test signal
+	}
+	if err := feed.WriteFrame(context.Background(), wantCapture); err != nil {
+		t.Fatalf("feed capture frame: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outbound := &recordingRTCOutboundMedia{cancelAfterFirst: cancel}
+	if err := source.Pump(ctx, outbound); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Pump error = %v, want context.Canceled after one frame", err)
+	}
+	if len(outbound.frames) != 1 {
+		t.Fatalf("outbound frame count = %d, want 1", len(outbound.frames))
+	}
+	wantProvider, err := wavio.Resample(wantCapture, audio.SampleRate, providerRate)
+	if err != nil {
+		t.Fatalf("reference resample: %v", err)
+	}
+	if !reflect.DeepEqual(outbound.frames[0].Samples, wantProvider) {
+		t.Fatalf("provider frame differs from one boundary conversion: got %d samples, want %d", len(outbound.frames[0].Samples), len(wantProvider))
+	}
+	if got, want := len(outbound.frames[0].Samples)*audio.SampleRate, len(wantCapture)*providerRate; got != want {
+		t.Fatalf("provider duration ratio = %d, want %d", got, want)
+	}
+}
+
+func TestRTCDeviceSourceKeepsMatchedProviderRateIdentity(t *testing.T) {
+	const providerRate = wavio.Rate24kHz
+	capability := audio.VirtualCapability{SampleRate: providerRate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := NewRTCDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	if err != nil {
+		t.Fatalf("open matched-rate source: %v", err)
+	}
+	defer func() { _ = source.Close() }()
+	feed, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", providerRate)
+	if err != nil {
+		t.Fatalf("open matched-rate feed: %v", err)
+	}
+	defer func() { _ = feed.Close() }()
+
+	want := make([]int16, audio.FrameSize)
+	for index := range want {
+		want[index] = int16(1200 - index*7) //nolint:gosec // bounded test signal
+	}
+	if err := feed.WriteFrame(context.Background(), want); err != nil {
+		t.Fatalf("feed matched-rate frame: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outbound := &recordingRTCOutboundMedia{cancelAfterFirst: cancel}
+	if err := source.Pump(ctx, outbound); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Pump error = %v, want context.Canceled after one frame", err)
+	}
+	if len(outbound.frames) != 1 || !reflect.DeepEqual(outbound.frames[0].Samples, want) {
+		t.Fatalf("matched-rate provider frame = %d samples, want exact %d-sample identity frame", len(outbound.frames[0].Samples), len(want))
+	}
+}
+
+func TestRTCDeviceSourceRejectsUnsupportedCaptureConversionBeforeOpen(t *testing.T) {
+	const observedRate = 44100
+	capability := audio.VirtualCapability{SampleRate: observedRate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = NewRTCDeviceSourceAtRate(registry, "virtual:input", wavio.Rate24kHz)
+	var rateErr *RTCDeviceSourceRateError
+	if !errors.As(err, &rateErr) || rateErr.SourceRate != observedRate || rateErr.ProviderRate != wavio.Rate24kHz {
+		t.Fatalf("unsupported conversion error = %T %v, want observed %d and provider %d", err, err, observedRate, wavio.Rate24kHz)
+	}
+	for _, fragment := range []string{"44100", "24000"} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("unsupported conversion error %q missing %q", err, fragment)
+		}
+	}
+	if got := registry.Observations().OpenCount; got != 0 {
+		t.Fatalf("unsupported conversion opened %d devices, want zero", got)
 	}
 }
 

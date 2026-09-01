@@ -221,6 +221,8 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 	globalFlags := &flags.GlobalFlags{
 		VerboseMode:   2,
 		ConfigDirPath: filepath.Join(t.TempDir(), "config"),
+		WorkDirPath:   filepath.Join(t.TempDir(), "workspace"),
+		AllowPathList: []string{filepath.Join(t.TempDir(), "allowed")},
 		LogToStdout:   true,
 	}
 	askFlags := &flags.AskFlags{
@@ -259,6 +261,8 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 		RecordCapturePath:     askFlags.RecordCapturePath,
 		ReplayCapturePath:     askFlags.ReplayCapturePath,
 		ConfigDir:             globalFlags.ConfigDirPath,
+		WorkDir:               globalFlags.WorkDirPath,
+		AllowPaths:            globalFlags.AllowPathList,
 		Verbose:               true,
 		VerbosityLevel:        globalFlags.VerboseMode,
 		LogToStdout:           globalFlags.LogToStdout,
@@ -267,6 +271,23 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 	got := BuildAgentConfigFromFlags(globalFlags, askFlags, initialHistory, "call-session")
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("BuildAgentConfigFromFlags() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildAgentConfigFromFlags_DefaultWorkDirUsesLaunchDirectory(t *testing.T) {
+	launchDir := t.TempDir()
+	t.Chdir(launchDir)
+
+	cfg := BuildAgentConfigFromFlags(
+		&flags.GlobalFlags{ConfigDirPath: t.TempDir()},
+		flags.NewAskFlags(),
+		nil,
+		"",
+	)
+	if got, err := os.Getwd(); err != nil {
+		t.Fatalf("get launch directory: %v", err)
+	} else if cfg.WorkDir != got {
+		t.Fatalf("default WorkDir = %q, want launch directory %q", cfg.WorkDir, got)
 	}
 }
 

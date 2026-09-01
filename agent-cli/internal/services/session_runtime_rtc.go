@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -431,6 +432,24 @@ type sessionRTCRuntimeInferencer struct {
 }
 
 var _ messages.SessionInferencer = (*sessionRTCRuntimeInferencer)(nil)
+
+func (i *sessionRTCRuntimeInferencer) SetSessionAudioOutput(format models.AudioFormat, rate models.SampleRate) {
+	if i == nil || i.inner == nil {
+		return
+	}
+	if configurer, ok := i.inner.(sessionAudioOutputConfigurer); ok {
+		configurer.SetSessionAudioOutput(format, rate)
+	}
+}
+
+func (i *sessionRTCRuntimeInferencer) SetSessionAudioInput(format models.AudioFormat, rate models.SampleRate) {
+	if i == nil || i.inner == nil {
+		return
+	}
+	if configurer, ok := i.inner.(sessionAudioInputConfigurer); ok {
+		configurer.SetSessionAudioInput(format, rate)
+	}
+}
 
 func (i *sessionRTCRuntimeInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	if i == nil || i.runtime == nil {

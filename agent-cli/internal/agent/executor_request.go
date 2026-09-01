@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -116,20 +117,33 @@ func (e *Executor) GetSessionStorage(cfg *Config) (*session.Storage, error) {
 
 // getSessionStorage returns a session storage instance.
 func (e *Executor) getSessionStorage(cfg *Config) (*session.Storage, error) {
-	configDir := cfg.ConfigDir
-	workspaceDir := configDir
-	if workspaceDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get workspace dir: %w", err)
-		}
-		workspaceDir = filepath.Join(home, config.ConfigDirName)
+	if cfg == nil {
+		return nil, fmt.Errorf("get session storage: config is nil")
 	}
-	workspaceDir, err := filepath.Abs(workspaceDir)
+	filesystemPolicy, err := tools.ResolveFilesystemPolicy(cfg.WorkDir, cfg.AllowPaths...)
 	if err != nil {
-		return nil, fmt.Errorf("get workspace dir: %w", err)
+		return nil, fmt.Errorf("resolve filesystem scope: %w", err)
 	}
-	return session.NewStorage(workspaceDir), nil
+	return e.getSessionStorageWithPolicy(cfg, filesystemPolicy)
+}
+
+func (e *Executor) getSessionStorageWithPolicy(cfg *Config, filesystemPolicy *tools.FilesystemPolicy) (*session.Storage, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("get session storage: config is nil")
+	}
+	if filesystemPolicy == nil {
+		return nil, fmt.Errorf("get session storage: filesystem scope is nil")
+	}
+	configStorage, err := config.NewDefaultConfigStorage(cfg.ConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("get config storage: %w", err)
+	}
+	configDir := filepath.Dir(configStorage.Path())
+	if info, statErr := os.Stat(configDir); statErr == nil && !info.IsDir() {
+		return nil, fmt.Errorf("config directory %q is not a directory", configDir)
+	}
+
+	return session.NewStorageWithWorkspace(configDir, filesystemPolicy.PrimaryRoot()), nil
 }
 
 // getInitialHistory resolves the session ID and loads initial history based on config.

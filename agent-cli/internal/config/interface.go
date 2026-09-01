@@ -45,6 +45,11 @@ type Config struct {
 	// session capability factory uses it to bind selection persistence to the
 	// same -C directory as the effective browser configuration.
 	ConfigDir string `koanf:"-" yaml:"-" json:"-"`
+	// FilesystemWorkDir and FilesystemAllowPaths are request-scoped metadata
+	// supplied by the CLI. They are excluded from persisted configuration so
+	// the process launch directory remains the default for each run.
+	FilesystemWorkDir    string   `koanf:"-" yaml:"-" json:"-"`
+	FilesystemAllowPaths []string `koanf:"-" yaml:"-" json:"-"`
 	// ConfigPath is runtime metadata identifying the file that produced this
 	// snapshot. It is excluded from persisted configuration so prerequisite
 	// errors can name the effective file without guessing its location.

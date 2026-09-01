@@ -26,6 +26,10 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	filesystemPolicy, err := tools.ResolveFilesystemPolicy(cfg.WorkDir, cfg.AllowPaths...)
+	if err != nil {
+		return nil, fmt.Errorf("resolve filesystem scope: %w", err)
+	}
 
 	loadedCfg, err := e.loadConfigAllowingInferencerOverride(cfg)
 	if err != nil {
@@ -84,7 +88,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	}
 
 	// Get session storage
-	sessionStorage, err := e.getSessionStorage(cfg)
+	sessionStorage, err := e.getSessionStorageWithPolicy(cfg, filesystemPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("get workspace dir: %w", err)
 	}
@@ -119,9 +123,18 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	// directly so that mock tool executors are discoverable by the agent loop.
 	var loopExecutor messages.ToolExecutor
 	var loopToolDefs []messages.ToolDefinition
-	registry := tools.NewToolRegistryFromConfig(loadedCfg)
+	// Config is cached by ConfigStorage, so keep request-scoped filesystem
+	// metadata on a copy instead of mutating the cached configuration.
+	loadedCfgCopy := *loadedCfg
+	loadedCfgCopy.FilesystemWorkDir = filesystemPolicy.PrimaryRoot()
+	loadedCfgCopy.FilesystemAllowPaths = filesystemPolicy.AdditionalRoots()
+	loadedCfg = &loadedCfgCopy
+	registry := tools.NewToolRegistryFromConfigWithPolicy(loadedCfg, filesystemPolicy)
 	if e.inferencerOverride != nil && e.executor != nil {
-		loopExecutor = e.executor
+		// Test and embedded callers may inject the executor while still using
+		// the production filesystem registry. Re-scope registry-backed
+		// executors so the override path cannot silently bypass the run policy.
+		loopExecutor = tools.ApplyFilesystemPolicy(e.executor, filesystemPolicy)
 		loopToolDefs = e.toolDefs
 	} else {
 		// dispatch_agent requires the inferencer, so it is registered after the inferencer is built.

@@ -80,6 +80,20 @@ func (r *LinuxDeviceRegistry) Default(direction Direction) (Device, error) {
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
 func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openAtFormat(id, DefaultDeviceFormat(), false)
+}
+
+// OpenWithFormat opens a Linux endpoint at an explicit PCM format. The
+// backend is configured with the requested rate rather than silently using
+// the legacy 16 kHz default.
+func (r *LinuxDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openAtFormat(id, format, true)
+}
+
+func (r *LinuxDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	if _, _, err := ParseDeviceID(id); err != nil {
 		return nil, err
 	}
@@ -98,10 +112,14 @@ func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	}
 	r.inUse[id] = struct{}{}
 	r.mu.Unlock()
-	opened, err := r.openNative(records[i])
+	opened, err := r.openNative(records[i], format)
 	if err != nil {
 		r.release(id)
-		return nil, mapLinuxOpenError(id, err)
+		mapped := mapLinuxOpenError(id, err)
+		if wrapFormatErrors {
+			return nil, &DeviceFormatError{ID: id, Direction: records[i].Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: mapped}
+		}
+		return nil, mapped
 	}
 	opened.release = func() { r.release(id) }
 	return opened, nil
@@ -207,7 +225,22 @@ func newLinuxDeviceRecord(backend malgo.Backend, name string, direction Directio
 	}
 	return linuxDeviceRecord{Device: device, nativeID: info.ID, backend: backend, defaulted: info.IsDefault != 0}, nil
 }
-func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord) (*linuxOpenedDevice, error) {
+func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord, formats ...DeviceFormat) (*linuxOpenedDevice, error) {
+	format := DefaultDeviceFormat()
+	if len(formats) > 0 {
+		format = formats[0]
+	}
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
+	var playback *PlaybackQueue
+	if record.Direction == DirectionOutput {
+		var err error
+		playback, err = NewPlaybackQueue(format)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ctx, err := malgo.InitContext([]malgo.Backend{record.backend}, malgo.ContextConfig{Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1}}, nil)
 	if err != nil {
 		return nil, err
@@ -216,16 +249,16 @@ func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord) (*linuxOpened
 	if record.Direction == DirectionInput {
 		config = malgo.DefaultDeviceConfig(malgo.Capture)
 	}
-	config.SampleRate, config.Alsa.NoMMap = uint32(SampleRate), 1
+	config.SampleRate, config.Alsa.NoMMap = uint32(format.SampleRate), 1
 	config.PeriodSizeInFrames, config.Periods = uint32(FrameSize), 1
 	nativeID := record.nativeID.Pointer()
 	defer C.free(nativeID)
 	if record.Direction == DirectionInput {
-		config.Capture.Format, config.Capture.Channels, config.Capture.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
+		config.Capture.Format, config.Capture.Channels, config.Capture.DeviceID = malgo.FormatS16, uint32(format.Channels), nativeID
 	} else {
-		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
+		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(format.Channels), nativeID
 	}
-	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, playbackWake: make(chan struct{})}
+	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, format: format, playback: playback, playbackWake: make(chan struct{})}
 	callbacks := malgo.DeviceCallbacks{Data: handle.onData}
 	if record.Direction == DirectionInput {
 		handle.microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
@@ -266,15 +299,23 @@ type linuxOpenedDevice struct {
 	closeOnce    sync.Once
 	id           DeviceID
 	direction    Direction
+	format       DeviceFormat
 	context      *malgo.AllocatedContext
 	device       *malgo.Device
 	microphone   *MicrophoneSource
-	playback     []int16
+	playback     *PlaybackQueue
 	playbackWake chan struct{}
 	closed       bool
 	positive     bool
 	closeErr     error
 	release      func()
+}
+
+func (d *linuxOpenedDevice) DeviceFormat() DeviceFormat {
+	if d == nil {
+		return DeviceFormat{}
+	}
+	return d.format
 }
 
 func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {
@@ -284,13 +325,17 @@ func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {
 		return
 	}
 	clear(output)
-	n := min(len(output)/2, len(d.playback))
-	encodePCM16(output[:n*2], d.playback[:n])
-	if !d.positive && slices.ContainsFunc(d.playback[:n], func(sample int16) bool { return sample != 0 }) {
-		d.positive = true
+	queue := d.ensurePlaybackQueueLocked()
+	n := queue.readPCM16(output)
+	if !d.positive {
+		for _, value := range output[:n*2] {
+			if value != 0 {
+				d.positive = true
+				break
+			}
+		}
 	}
-	d.playback = d.playback[n:]
-	if n > 0 && len(d.playback) == 0 {
+	if n > 0 && d.playback != nil && d.playback.Snapshot().QueuedSamples == 0 {
 		d.signalPlaybackLocked()
 	}
 }
@@ -324,11 +369,44 @@ func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error
 	if d.closed {
 		return &ClosedError{Operation: "write", Path: string(d.id)}
 	}
-	d.playback = append(d.playback, frame...)
-	if len(d.playback) > FrameSize*64 {
-		d.playback = d.playback[len(d.playback)-FrameSize*64:]
-	}
+	d.ensurePlaybackQueueLocked().Enqueue(frame)
 	return nil
+}
+
+func (d *linuxOpenedDevice) ensurePlaybackQueueLocked() *PlaybackQueue {
+	if d.playback == nil {
+		d.playback, _ = playbackQueueForFormat(d.format)
+	}
+	return d.playback
+}
+
+// PlaybackStats reports the format-aware queue state without requiring a
+// hardware callback or exposing backend-specific queue details.
+func (d *linuxOpenedDevice) PlaybackStats() PlaybackQueueStats {
+	if d == nil {
+		return PlaybackQueueStats{}
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.playback == nil {
+		return emptyPlaybackQueueStats(d.format)
+	}
+	return d.playback.Snapshot()
+}
+
+// DiscardPlayback removes samples that have not yet been handed to the
+// Linux device callback. In-flight callback output is intentionally outside
+// this boundary.
+func (d *linuxOpenedDevice) DiscardPlayback() int {
+	if d == nil {
+		return 0
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.playback == nil {
+		return 0
+	}
+	return d.playback.Discard()
 }
 
 // WaitForPlayback waits until the native render callback has consumed all
@@ -347,7 +425,11 @@ func (d *linuxOpenedDevice) WaitForPlayback(ctx context.Context) error {
 			d.mu.Unlock()
 			return &ClosedError{Operation: "wait for playback", Path: string(d.id)}
 		}
-		if len(d.playback) == 0 {
+		queued := 0
+		if d.playback != nil {
+			queued = d.playback.Snapshot().QueuedSamples
+		}
+		if queued == 0 {
 			d.mu.Unlock()
 			return nil
 		}
@@ -372,7 +454,6 @@ func (d *linuxOpenedDevice) signalPlaybackLocked() {
 	close(d.playbackWake)
 	d.playbackWake = make(chan struct{})
 }
-
 func (d *linuxOpenedDevice) PositiveAudioEvidence() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()

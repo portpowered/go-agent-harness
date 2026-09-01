@@ -111,6 +111,7 @@ tools:
 			root.SetErr(io.Discard)
 			root.SetArgs([]string{
 				"--config-dir", configDir,
+				"--workdir", filepath.Dir(toolInput),
 				"session",
 				"--replay", filepath.Join(configDir, "deterministic.session.json"),
 				"--wait-for-close",

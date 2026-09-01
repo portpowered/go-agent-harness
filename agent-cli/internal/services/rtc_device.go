@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 var (
@@ -45,13 +46,43 @@ func (e *RTCDeviceSourceError) Unwrap() error {
 	return e.Err
 }
 
+// RTCDeviceSourceRateError describes a capture-rate conversion that cannot
+// be satisfied at the session media boundary. SourceRate is the rate the
+// local device actually supplies; ProviderRate is the rate declared by the
+// provider session.
+type RTCDeviceSourceRateError struct {
+	DeviceID     audio.DeviceID
+	SourceRate   int
+	ProviderRate int
+	Err          error
+}
+
+func (e *RTCDeviceSourceRateError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.SourceRate > 0 {
+		return fmt.Sprintf("RTC device source %q cannot convert captured audio from %d Hz to provider input rate %d Hz: %v", e.DeviceID, e.SourceRate, e.ProviderRate, e.Err)
+	}
+	return fmt.Sprintf("RTC device source %q cannot provide provider input rate %d Hz: %v", e.DeviceID, e.ProviderRate, e.Err)
+}
+
+func (e *RTCDeviceSourceRateError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
 // RTCDeviceSource owns a registry-backed input device and pumps its fixed-size
 // PCM frames into an outgoing RTC media endpoint. The RTC endpoint remains
 // caller-owned; Close only stops this source and releases its device.
 type RTCDeviceSource struct {
-	source *audio.DeviceSource
-	id     audio.DeviceID
-	filter rtcDeviceCaptureFilter
+	source       *audio.DeviceSource
+	id           audio.DeviceID
+	filter       rtcDeviceCaptureFilter
+	sourceRate   int
+	providerRate int
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelCauseFunc
@@ -68,17 +99,87 @@ type RTCDeviceSource struct {
 // An empty id selects the registry's input default; a non-empty id is passed
 // through as an exact stable device ID.
 func NewRTCDeviceSource(registry audio.DeviceRegistry, id audio.DeviceID) (*RTCDeviceSource, error) {
-	source, err := audio.NewDeviceSource(registry, id)
+	return NewRTCDeviceSourceAtRate(registry, id, audio.SampleRate)
+}
+
+// NewRTCDeviceSourceAtRate opens an input device for mono PCM16 at rate. A
+// zero rate retains the compatibility default used by NewRTCDeviceSource.
+func NewRTCDeviceSourceAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int) (*RTCDeviceSource, error) {
+	if rate == 0 {
+		rate = audio.SampleRate
+	}
+	if _, err := wavio.Resample(nil, rate, rate); err != nil {
+		return nil, &RTCDeviceSourceRateError{DeviceID: id, ProviderRate: rate, Err: err}
+	}
+	source, sourceRate, err := openRTCDeviceSourceAtRate(registry, id, rate)
 	if err != nil {
 		return nil, err
 	}
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	return &RTCDeviceSource{
-		source:     source,
-		id:         source.DeviceID(),
-		lifeCtx:    lifeCtx,
-		lifeCancel: lifeCancel,
+		source:       source,
+		id:           source.DeviceID(),
+		sourceRate:   sourceRate,
+		providerRate: rate,
+		lifeCtx:      lifeCtx,
+		lifeCancel:   lifeCancel,
 	}, nil
+}
+
+// openRTCDeviceSourceAtRate first requests the provider rate natively. If a
+// device reports a different supported PCM16 rate, it opens that rate and
+// leaves one conversion for RTCDeviceSource.Pump. This keeps device setup
+// honest while allowing a 16 kHz-only microphone to feed a 24 kHz provider.
+func openRTCDeviceSourceAtRate(registry audio.DeviceRegistry, id audio.DeviceID, providerRate int) (*audio.DeviceSource, int, error) {
+	source, err := audio.NewDeviceSourceAtRate(registry, id, providerRate)
+	if err == nil {
+		return source, source.SampleRate(), nil
+	}
+
+	var formatErr *audio.DeviceFormatError
+	if !errors.As(err, &formatErr) {
+		return nil, 0, err
+	}
+
+	var fallbackErrs []error
+	observedRate := 0
+	for _, available := range formatErr.Available {
+		if observedRate == 0 && available.SampleRate > 0 {
+			observedRate = available.SampleRate
+		}
+		if available.SampleRate == providerRate {
+			continue
+		}
+		if formatErr := available.Validate(); formatErr != nil {
+			fallbackErrs = append(fallbackErrs, formatErr)
+			continue
+		}
+		if _, resampleErr := wavio.Resample(nil, available.SampleRate, providerRate); resampleErr != nil {
+			fallbackErrs = append(fallbackErrs, &RTCDeviceSourceRateError{
+				DeviceID:     id,
+				SourceRate:   available.SampleRate,
+				ProviderRate: providerRate,
+				Err:          resampleErr,
+			})
+			continue
+		}
+
+		fallback, fallbackErr := audio.NewDeviceSourceWithFormat(registry, id, available)
+		if fallbackErr == nil {
+			return fallback, fallback.SampleRate(), nil
+		}
+		fallbackErrs = append(fallbackErrs, fallbackErr)
+	}
+	if len(fallbackErrs) == 0 {
+		return nil, 0, err
+	}
+
+	return nil, 0, &RTCDeviceSourceRateError{
+		DeviceID:     id,
+		SourceRate:   observedRate,
+		ProviderRate: providerRate,
+		Err:          errors.Join(err, errors.Join(fallbackErrs...)),
+	}
 }
 
 // NewDefaultRTCDeviceSource opens the directional input default from registry.
@@ -94,10 +195,29 @@ func (s *RTCDeviceSource) DeviceID() audio.DeviceID {
 	return s.id
 }
 
-// Pump reads audio.FrameSize samples at audio.SampleRate from the device and
-// synchronously hands an owned copy of each frame to outbound. A finite source
-// ending with io.EOF is a clean pump completion. The method does not close the
-// RTC endpoint because that endpoint belongs to its caller.
+// SourceSampleRate reports the rate supplied by the opened capture device.
+func (s *RTCDeviceSource) SourceSampleRate() int {
+	if s == nil {
+		return 0
+	}
+	return s.sourceRate
+}
+
+// ProviderSampleRate reports the rate used for frames handed to the provider
+// media endpoint.
+func (s *RTCDeviceSource) ProviderSampleRate() int {
+	if s == nil {
+		return 0
+	}
+	return s.providerRate
+}
+
+// Pump reads audio.FrameSize samples at the device's selected rate and
+// synchronously hands provider-rate samples to outbound. When the device and
+// provider rates differ, each frame is converted once while retaining its
+// wall-clock duration. A finite source ending with io.EOF is a clean pump
+// completion. The method does not close the RTC endpoint because that endpoint
+// belongs to its caller.
 func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) error {
 	if s == nil {
 		return ErrRTCDeviceSourceClosed
@@ -149,14 +269,42 @@ func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) 
 			if len(samples) == 0 {
 				continue
 			}
+			providerSamples, resampleErr := s.providerFrame(samples)
+			if resampleErr != nil {
+				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "resample", Err: resampleErr}
+			}
 			// OutboundMedia's contract makes the caller responsible for the frame
 			// storage only until WriteFrame returns. The filter returns owned
 			// storage, and the unfiltered path copied the source buffer above.
-			if err := outbound.WriteFrame(operationCtx, rtc.PCMFrame{Samples: samples}); err != nil {
+			if err := outbound.WriteFrame(operationCtx, rtc.PCMFrame{Samples: providerSamples}); err != nil {
 				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "write", Err: err}
 			}
 		}
 	}
+}
+
+func (s *RTCDeviceSource) providerFrame(frame []int16) ([]int16, error) {
+	if s.sourceRate <= 0 || s.providerRate <= 0 {
+		return nil, &RTCDeviceSourceRateError{
+			DeviceID:     s.id,
+			SourceRate:   s.sourceRate,
+			ProviderRate: s.providerRate,
+			Err:          errors.New("capture and provider rates must be positive"),
+		}
+	}
+	if s.sourceRate == s.providerRate {
+		return append([]int16(nil), frame...), nil
+	}
+	converted, err := wavio.Resample(frame, s.sourceRate, s.providerRate)
+	if err != nil {
+		return nil, &RTCDeviceSourceRateError{
+			DeviceID:     s.id,
+			SourceRate:   s.sourceRate,
+			ProviderRate: s.providerRate,
+			Err:          err,
+		}
+	}
+	return converted, nil
 }
 
 // Run is an alias for Pump for callers that model the binding as a lifecycle
