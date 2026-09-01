@@ -78,6 +78,51 @@ func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 	}
 }
 
+func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
+	warning := make(chan string, 1)
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning))
+	if err != nil {
+		t.Fatalf("new local feedback gate: %v", err)
+	}
+	defer gate.Close()
+
+	// A live microphone is already pumping while the provider is preparing its
+	// first response. Those frames are ordinary input and must not make the
+	// first later speaker frame look unrelated on the gate's logical timeline.
+	for frameIndex := 0; frameIndex < 20; frameIndex++ {
+		released, filterErr := gate.FilterCapture(context.Background(), feedbackSignal(frameIndex, 73))
+		if filterErr != nil {
+			t.Fatalf("filter pre-playback capture frame %d: %v", frameIndex, filterErr)
+		}
+		if len(released) != 1 {
+			t.Fatalf("pre-playback capture frame %d released %d frames, want one", frameIndex, len(released))
+		}
+	}
+
+	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+		playback := feedbackSignal(frameIndex, 17)
+		if err := gate.WritePlayback(context.Background(), playback, func() error { return nil }); err != nil {
+			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
+		}
+		released, filterErr := gate.FilterCapture(context.Background(), playback)
+		if filterErr != nil {
+			t.Fatalf("filter looped capture frame %d: %v", frameIndex, filterErr)
+		}
+		if len(released) != 0 {
+			t.Fatalf("looped capture frame %d released %d frames, want none", frameIndex, len(released))
+		}
+	}
+
+	select {
+	case got := <-warning:
+		if !strings.Contains(got, "Acoustic feedback detected") {
+			t.Fatalf("warning = %q, want acoustic-feedback diagnosis", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pre-playback capture lead prevented feedback confirmation")
+	}
+}
+
 func TestLocalFeedbackGateReleasesIndependentCaptureOnceInOrder(t *testing.T) {
 	warning := make(chan string, 1)
 	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning))

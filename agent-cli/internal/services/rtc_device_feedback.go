@@ -90,6 +90,14 @@ func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer
 		probeEvidence = probeConfig.AnalysisWindow
 	}
 	probeConfig.MinimumEvidence = probeEvidence
+	// Once the full detector has confirmed a loop, the probe classifies one
+	// device frame at a time. Use a lower floor for that short frame because
+	// the acoustic path can reshape a frame even though the startup window was
+	// strongly correlated; independent speech still has to clear the same
+	// active-evidence and lag checks.
+	if probeConfig.CorrelationThreshold > 0.20 {
+		probeConfig.CorrelationThreshold = 0.20
+	}
 	probe, err := audio.NewPCM16SelfHearingDetector(probeConfig)
 	if err != nil {
 		_ = detector.Close()
@@ -129,6 +137,20 @@ func (g *localFeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 	if err := write(); err != nil {
 		return err
 	}
+	if g.captureNeedsReanchorLocked() {
+		// Capture starts before the first assistant response in a normal live
+		// session, so its local media cursor can be seconds ahead of the first
+		// playback cursor. Re-anchor the comparison window at the first accepted
+		// speaker frame; otherwise playbackIsRelevantLocked would bypass the
+		// actual echo as stale pre-playback capture. A long idle gap between
+		// responses needs the same treatment, while a modest capture lead remains
+		// within the configured correlation window.
+		g.playbackPosition = g.capturePosition
+		g.lastPlaybackEnd = g.playbackPosition
+		g.pending = nil
+		g.resetCaptureEvidenceLocked()
+		g.state = localFeedbackGateIdle
+	}
 	if err := g.detector.ObservePlaybackContext(ctx, audio.PCM16TimedFrame{
 		Samples:    samples,
 		SampleRate: audio.SampleRate,
@@ -151,6 +173,20 @@ func (g *localFeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 		g.suppressUntil = g.playbackTailEndLocked()
 	}
 	return nil
+}
+
+func (g *localFeedbackGate) captureNeedsReanchorLocked() bool {
+	if !g.playbackSeen {
+		return true
+	}
+	leadBound := g.config.AnalysisWindow
+	if lag := g.config.CorrelationLagWindow.Min; lag < 0 && -lag > leadBound {
+		leadBound = -lag
+	}
+	if lag := g.config.CorrelationLagWindow.Max; lag > leadBound {
+		leadBound = lag
+	}
+	return g.capturePosition > addFeedbackDuration(g.playbackPosition, leadBound)
 }
 
 // FilterCapture observes raw microphone PCM before provider delivery. Frames

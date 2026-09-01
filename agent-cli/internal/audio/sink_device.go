@@ -2,10 +2,15 @@ package audio
 
 import "context"
 
+type devicePlaybackWaiter interface {
+	WaitForPlayback(context.Context) error
+}
+
 type DeviceSink struct {
-	adapter     *deviceAdapter
-	frameWriter deviceFrameWriter
-	byteWriter  deviceByteWriter
+	adapter        *deviceAdapter
+	frameWriter    deviceFrameWriter
+	byteWriter     deviceByteWriter
+	playbackWaiter devicePlaybackWaiter
 }
 
 var _ AudioSink = (*DeviceSink)(nil)
@@ -25,7 +30,8 @@ func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSink{newDeviceAdapter(handle, resolvedID, DirectionOutput), frames, bytes}, nil
+	waiter, _ := handle.(devicePlaybackWaiter)
+	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, byteWriter: bytes, playbackWaiter: waiter}, nil
 }
 
 // DeviceID returns the stable ID acquired by the sink. When the sink was
@@ -57,6 +63,19 @@ func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	encoded := make([]byte, rawFrameBytes)
 	encodePCM16(encoded, frame)
 	return s.adapter.finish("write", s.byteWriter.Write(ctx, encoded))
+}
+
+// WaitForPlayback waits for an output backend that exposes physical drain
+// progress. Backends without that optional capability retain their existing
+// asynchronous write behavior.
+func (s *DeviceSink) WaitForPlayback(ctx context.Context) error {
+	if s == nil || s.playbackWaiter == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.adapter.finish("wait for playback", s.playbackWaiter.WaitForPlayback(ctx))
 }
 
 func (s *DeviceSink) Close() error {

@@ -180,6 +180,11 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	}
 	config := malgo.DefaultDeviceConfig(kind)
 	config.SampleRate, config.PerformanceProfile = uint32(SampleRate), malgo.LowLatency
+	// Keep the native callback close to the fixed RTC frame size. The default
+	// CoreAudio period can leave several hundred milliseconds between a queued
+	// frame and the render callback, which makes local self-hearing timestamps
+	// stale even when the application queue is empty.
+	config.PeriodSizeInFrames, config.Periods = uint32(FrameSize), 1
 	if direction == DirectionInput {
 		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(Channels)
 	} else {
@@ -192,7 +197,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	} else {
 		config.Playback.DeviceID = nativeID
 	}
-	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction}
+	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, playbackWake: make(chan struct{})}
 	if direction == DirectionInput {
 		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
 	}
@@ -225,18 +230,19 @@ func isCoreAudioUnavailable(err error) bool {
 }
 
 type coreAudioHandle struct {
-	id        DeviceID
-	context   *malgo.AllocatedContext
-	device    *malgo.Device
-	direction Direction
-	capture   *MicrophoneSource
-	mu        sync.Mutex
-	closeOnce sync.Once
-	closeErr  error
-	closed    atomic.Bool
-	playback  []int16
-	nonZero   atomic.Uint64
-	release   func()
+	id           DeviceID
+	context      *malgo.AllocatedContext
+	device       *malgo.Device
+	direction    Direction
+	capture      *MicrophoneSource
+	mu           sync.Mutex
+	closeOnce    sync.Once
+	closeErr     error
+	closed       atomic.Bool
+	playback     []int16
+	playbackWake chan struct{}
+	nonZero      atomic.Uint64
+	release      func()
 }
 
 func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
@@ -260,6 +266,9 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 		}
 	}
 	h.playback = h.playback[n:]
+	if n > 0 && len(h.playback) == 0 {
+		h.signalPlaybackLocked()
+	}
 }
 func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionInput {
@@ -303,12 +312,59 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	}
 	return nil
 }
+
+// WaitForPlayback waits until the native render callback has consumed all
+// queued samples. It is an optional drain boundary for RTC output so the
+// self-hearing observer compares capture with audio that is at the speaker,
+// not audio still buffered ahead of it.
+func (h *coreAudioHandle) WaitForPlayback(ctx context.Context) error {
+	if h == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		h.mu.Lock()
+		if h.closed.Load() {
+			h.mu.Unlock()
+			return &ClosedError{Operation: "wait for playback", Path: string(h.id)}
+		}
+		if len(h.playback) == 0 {
+			h.mu.Unlock()
+			return nil
+		}
+		if h.playbackWake == nil {
+			h.playbackWake = make(chan struct{})
+		}
+		wake := h.playbackWake
+		h.mu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (h *coreAudioHandle) signalPlaybackLocked() {
+	if h.playbackWake == nil {
+		h.playbackWake = make(chan struct{})
+	}
+	close(h.playbackWake)
+	h.playbackWake = make(chan struct{})
+}
+
 func (h *coreAudioHandle) Close() error {
 	if h == nil {
 		return nil
 	}
 	h.closeOnce.Do(func() {
+		h.mu.Lock()
 		h.closed.Store(true)
+		h.signalPlaybackLocked()
+		h.mu.Unlock()
 		switch {
 		case h.capture != nil:
 			h.closeErr = h.capture.Close()

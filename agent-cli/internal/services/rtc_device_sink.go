@@ -138,7 +138,16 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		// ReadFrame returns. Keep a private copy at this boundary so the device
 		// adapter can never observe storage owned by the RTC implementation.
 		samples := append([]int16(nil), frame.Samples...)
-		write := func() error { return s.sink.WriteFrame(operationCtx, samples) }
+		write := func() error {
+			if err := s.sink.WriteFrame(operationCtx, samples); err != nil {
+				return err
+			}
+			// Some native output backends accept frames into a queue before the
+			// speaker consumes them. Wait for the optional drain boundary before
+			// the feedback gate timestamps this frame, otherwise a fast provider
+			// response can outrun the physical speaker by seconds.
+			return s.sink.WaitForPlayback(operationCtx)
+		}
 		var writeErr error
 		if s.observer != nil {
 			writeErr = s.observer.WritePlayback(operationCtx, samples, write)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -22,10 +23,12 @@ const (
 	// microphone signal occurs after the speaker signal.
 	PCM16SelfHearingDefaultLagMin = -100 * time.Millisecond
 	PCM16SelfHearingDefaultLagMax = 100 * time.Millisecond
-	// PCM16SelfHearingDefaultCorrelationThreshold requires strong normalized
-	// absolute correlation. The inclusive comparison is intentional so a
-	// measurement exactly on the configured boundary is confirmed.
-	PCM16SelfHearingDefaultCorrelationThreshold = 0.80
+	// PCM16SelfHearingDefaultCorrelationThreshold accounts for the gain and
+	// frequency shaping introduced by a colocated laptop speaker/microphone
+	// path while still requiring a materially correlated signal. The inclusive
+	// comparison is intentional so a measurement exactly on the configured
+	// boundary is confirmed.
+	PCM16SelfHearingDefaultCorrelationThreshold = 0.50
 	// PCM16SelfHearingDefaultSilenceFloorDBFS is shared with the room analysis
 	// contract so digital silence and low-level noise do not become evidence.
 	PCM16SelfHearingDefaultSilenceFloorDBFS = PCM16AnalysisSilenceFloorDBFS
@@ -558,7 +561,7 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 	foundAbsolute := false
 	bestEvidenceSamples := 0
 	anyEvidenceSamples := 0
-	forEachNormalizedPCM16CorrelationCandidate(
+	forEachStreamingPCM16CorrelationCandidate(
 		minLagSamples,
 		maxLagSamples,
 		func(lagSamples int, coefficient float64, compared int) {
@@ -620,6 +623,72 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 	}
 	observation.Classification = PCM16SelfHearingConfirmed
 	return observation
+}
+
+// streamingPCM16CorrelationCandidate is a cheap first-pass lag estimate used
+// by the synchronous device gate. The full room-analysis primitive still
+// visits every sample lag; the live gate refines the strongest bounded set so
+// detector work cannot starve the microphone pump while a response is being
+// rendered.
+type streamingPCM16CorrelationCandidate struct {
+	lag         int
+	coefficient float64
+	compared    int
+}
+
+const (
+	streamingPCM16LagStride       = 4
+	streamingPCM16RefinementCount = 8
+)
+
+func forEachStreamingPCM16CorrelationCandidate(
+	minLagSamples, maxLagSamples int,
+	visit func(lagSamples int, coefficient float64, compared int),
+	measure func(lagSamples int) (float64, int),
+) {
+	if visit == nil || measure == nil || maxLagSamples < minLagSamples {
+		return
+	}
+	coarse := make([]streamingPCM16CorrelationCandidate, 0, (maxLagSamples-minLagSamples)/streamingPCM16LagStride+1)
+	for lag := minLagSamples; ; lag += streamingPCM16LagStride {
+		coefficient, compared := measure(lag)
+		visit(lag, coefficient, compared)
+		coarse = append(coarse, streamingPCM16CorrelationCandidate{lag: lag, coefficient: coefficient, compared: compared})
+		if lag > maxLagSamples-streamingPCM16LagStride {
+			if lag != maxLagSamples {
+				coefficient, compared = measure(maxLagSamples)
+				visit(maxLagSamples, coefficient, compared)
+				coarse = append(coarse, streamingPCM16CorrelationCandidate{lag: maxLagSamples, coefficient: coefficient, compared: compared})
+			}
+			break
+		}
+	}
+	sort.Slice(coarse, func(i, j int) bool {
+		left, right := math.Abs(coarse[i].coefficient), math.Abs(coarse[j].coefficient)
+		if left != right {
+			return left > right
+		}
+		return coarse[i].compared > coarse[j].compared
+	})
+	seen := make(map[int]struct{}, streamingPCM16RefinementCount*streamingPCM16LagStride*2)
+	for index := 0; index < len(coarse) && index < streamingPCM16RefinementCount; index++ {
+		center := coarse[index].lag
+		start, end := center-streamingPCM16LagStride, center+streamingPCM16LagStride
+		if start < minLagSamples {
+			start = minLagSamples
+		}
+		if end > maxLagSamples {
+			end = maxLagSamples
+		}
+		for lag := start; lag <= end; lag++ {
+			if _, ok := seen[lag]; ok {
+				continue
+			}
+			seen[lag] = struct{}{}
+			coefficient, compared := measure(lag)
+			visit(lag, coefficient, compared)
+		}
+	}
 }
 
 func pairedNonSilentSamples(source, received []int16, receivedStart int, threshold float64) int {
