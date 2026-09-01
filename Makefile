@@ -168,7 +168,8 @@ test-tools: ## Run tests for standalone repository helper modules.
 test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, and RTC audio regressions.
 	@set -euo pipefail; \
 	(cd go-llm-gateway && $(GO) test ./pkg/wavio -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
-	(cd agent-cli && $(GO) test ./internal/audio ./internal/services -count=1 -timeout "$(GO_TEST_TIMEOUT)")
+	(cd agent-cli && $(GO) test ./internal/audio ./internal/services -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
+	(cd agent-cli && $(GO) test ./test/integration -run '^TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
 test-audio-stability-race: ## Run callback, cancellation, queue, and replay audio paths under the race detector.
 	@set -euo pipefail; \

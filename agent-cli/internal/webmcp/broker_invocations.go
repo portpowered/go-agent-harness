@@ -451,6 +451,17 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		b.mu.Unlock()
 		return
 	}
+	// Bind broker-owned replay IDs before the target can synchronously publish
+	// terminal events. Opaque production IDs retain the post-return path below.
+	provisionalID := InvocationID("")
+	if _, deterministic := session.(targetSessionInvokerWithID); deterministic {
+		candidateID := invocation.invocation.ID
+		if _, externallyObserved := selected.observedInvocations[candidateID]; !externallyObserved {
+			provisionalID = candidateID
+			invocation.browserID = provisionalID
+			b.browserInvocations[provisionalID] = invocation
+		}
+	}
 	b.mu.Unlock()
 
 	id, invokeErr := invokeWebMCP(ctx, session, invocation.invocation.ID, descriptor.FrameID, descriptor.Name, cloneJSON(invocation.invocation.Arguments))
@@ -458,6 +469,10 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	b.mu.Lock()
 	invokeErr = reconcileTargetLossLocked(invocation, invokeErr)
 	if id == "" {
+		if provisionalID != "" {
+			delete(b.browserInvocations, provisionalID)
+			invocation.browserID = ""
+		}
 		if b.selected == selected && (isBrowserEndpointLossError(invokeErr) || isBrowserDisconnectedTransportError(session.Err())) {
 			if failure := b.browserDisconnectedLocked(selected, "invoke", invokeErr); failure != nil {
 				invokeErr = failure
@@ -468,6 +483,23 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
+	}
+	if invocation.terminalized {
+		if provisionalID != "" && provisionalID != id {
+			delete(b.browserInvocations, provisionalID)
+		}
+		invocation.browserID = id
+		invocation.finalResult.BrowserInvocationID = id
+		b.recordBrowserTerminalIDLocked(id)
+		b.takeEarlyTerminalLocked(id, 0)
+		b.rebindTerminalInvocationLocked(invocation)
+		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
+		b.mu.Unlock()
+		return
+	}
+	if provisionalID != "" && provisionalID != id {
+		delete(b.browserInvocations, provisionalID)
+		invocation.browserID = ""
 	}
 
 	if existing, ok := b.browserInvocations[id]; ok && existing != invocation {
@@ -508,15 +540,6 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	}
 	invocation.browserID = id
 
-	if invocation.terminalized {
-		invocation.finalResult.BrowserInvocationID = id
-		b.recordBrowserTerminalIDLocked(id)
-		b.takeEarlyTerminalLocked(id, 0)
-		b.rebindTerminalInvocationLocked(invocation)
-		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
-		b.mu.Unlock()
-		return
-	}
 	invocation.invocation.State = InvocationDispatched
 	invocation.invocation.DispatchedAt = b.clock.Now()
 	b.browserInvocations[id] = invocation

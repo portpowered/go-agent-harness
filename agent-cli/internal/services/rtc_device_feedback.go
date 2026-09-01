@@ -565,7 +565,13 @@ func pcm16DeviceDurationAtRate(samples, rate int) time.Duration {
 	if samples <= 0 || rate <= 0 {
 		return 0
 	}
-	return time.Duration(samples) * time.Second / time.Duration(rate)
+	// Match audio.PCM16TimedFrame's nearest-nanosecond conversion exactly.
+	// Flooring here while the detector rounded made the next frame start one
+	// nanosecond before the prior detector end for ordinary non-integral device
+	// quanta (for example 480 samples at 44.1 kHz or 683 at 48 kHz). Native
+	// CoreAudio callbacks therefore failed a healthy stream as "media position
+	// moved backwards" even though the sample cursor itself was monotonic.
+	return time.Duration((int64(samples)*int64(time.Second) + int64(rate)/2) / int64(rate))
 }
 
 func addFeedbackDuration(start, duration time.Duration) time.Duration {

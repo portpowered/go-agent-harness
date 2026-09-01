@@ -110,7 +110,7 @@ type SimulatedDuplexRegistry struct {
 	captureCapacity                 int
 	captureStats                    CaptureQueueStats
 	captureRemainder                int
-	rendered, acoustic              []int16
+	rendered, captured, acoustic    []int16
 	acousticHistory                 []int16
 	trace                           []DeviceTraceEvent
 	renderCallback, captureCallback uint64
@@ -540,6 +540,11 @@ func (r *SimulatedDuplexRegistry) advanceCaptureLocked() error {
 		block[i] = saturatingAdd(block[i], stemSample(r.scenario.Acoustic.Background, &r.noisePosition))
 	}
 	before := len(r.capture)
+	// Retain the exact device-produced capture tap independently of the live
+	// queue. Reads are destructive by design, so a replay/debug artifact built
+	// from the queue would otherwise lose the very microphone samples that
+	// reached (or were dropped before reaching) the provider.
+	r.captured = append(r.captured, block...)
 	r.enqueueCaptureLocked(block)
 	flags, faultID := faultFlags(faults)
 	r.trace = append(r.trace, traceFor("capture", callback, r.captureEpoch, r.format.SampleRate, r.capturePosition, block, before, len(r.capture), jitter(r.scenario.Capture, callback), flags, faultID))
@@ -664,6 +669,15 @@ func (r *SimulatedDuplexRegistry) RenderedSamples() []int16 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]int16(nil), r.rendered...)
+}
+
+// CapturedSamples returns the immutable capture-device tap in callback order.
+// Unlike the live capture queue this history is not consumed by stream reads,
+// making it suitable for failure capsules and deterministic replay evidence.
+func (r *SimulatedDuplexRegistry) CapturedSamples() []int16 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]int16(nil), r.captured...)
 }
 func (r *SimulatedDuplexRegistry) CaptureStats() CaptureQueueStats {
 	r.mu.Lock()

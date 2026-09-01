@@ -78,6 +78,39 @@ func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 	}
 }
 
+func TestLocalFeedbackGateNonIntegralDeviceQuantumStaysMonotonic(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		rate    int
+		samples int
+	}{
+		{name: "coreaudio_44k1", rate: 44100, samples: 480},
+		{name: "coreaudio_48k_variable_quantum", rate: 48000, samples: 683},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), io.Discard, test.rate, test.rate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = gate.Close() }()
+			frame := make([]int16, test.samples)
+			seed := feedbackSignal(0, 113)
+			for index := range frame {
+				frame[index] = seed[index%len(seed)]
+			}
+			for index := 0; index < 64; index++ {
+				if err := gate.WritePlayback(context.Background(), frame, func() error { return nil }); err != nil {
+					t.Fatalf("playback callback %d: %v", index, err)
+				}
+			}
+			want := time.Duration((int64(test.samples)*int64(time.Second)+int64(test.rate)/2)/int64(test.rate)) * 64
+			if gate.playbackPosition != want {
+				t.Fatalf("playback position=%s, want rounded sample cursor %s", gate.playbackPosition, want)
+			}
+		})
+	}
+}
+
 // TestLocalFeedbackGateFeedbackConfirmedTracksWarningState pins the exact
 // contract rtc_device_hold_tone.go relies on to stop re-arming itself once
 // local hardware has demonstrated real speaker->mic coupling: false before

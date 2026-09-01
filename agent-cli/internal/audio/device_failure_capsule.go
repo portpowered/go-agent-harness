@@ -13,9 +13,18 @@ import (
 	"time"
 )
 
-const DuplexCapsuleSchemaVersion = 1
+const DuplexCapsuleSchemaVersion = 2
 
 var duplexCapsuleArtifacts = []string{
+	"audio/provider-in.pcm",
+	"audio/playback-rendered.pcm",
+	"audio/capture-generated.pcm",
+	"audio/source-near-end.pcm",
+	"audio/source-background.pcm",
+	"events.jsonl",
+}
+
+var duplexCapsuleV1Artifacts = []string{
 	"audio/provider-in.pcm",
 	"audio/playback-rendered.pcm",
 	"audio/source-near-end.pcm",
@@ -36,9 +45,9 @@ type DuplexFailureCapsuleManifest struct {
 	Artifacts     map[string]CapsuleArtifact `json:"artifacts"`
 }
 type DuplexFailureCapsule struct {
-	Manifest                                     DuplexFailureCapsuleManifest
-	ProviderInput, Rendered, NearEnd, Background []int16
-	Events                                       []DeviceTraceEvent
+	Manifest                                               DuplexFailureCapsuleManifest
+	ProviderInput, Rendered, Captured, NearEnd, Background []int16
+	Events                                                 []DeviceTraceEvent
 }
 
 // WriteDuplexFailureCapsule atomically finalizes a deterministic multi-tap
@@ -59,9 +68,11 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	defer os.RemoveAll(tmp)
 	events := registry.Trace()
 	rendered := registry.RenderedSamples()
+	captured := registry.CapturedSamples()
 	artifacts := map[string][]byte{
 		"audio/provider-in.pcm":       encodeSamples(providerInput),
 		"audio/playback-rendered.pcm": encodeSamples(rendered),
+		"audio/capture-generated.pcm": encodeSamples(captured),
 		"audio/source-near-end.pcm":   encodeSamples(scenario.Acoustic.NearEnd),
 		"audio/source-background.pcm": encodeSamples(scenario.Acoustic.Background),
 	}
@@ -113,22 +124,26 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		return nil, err
 	}
-	if manifest.SchemaVersion != DuplexCapsuleSchemaVersion {
+	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != DuplexCapsuleSchemaVersion {
 		return nil, fmt.Errorf("unsupported audio capsule schema %d", manifest.SchemaVersion)
 	}
 	if !manifest.Finalized {
 		return nil, fmt.Errorf("audio capsule is not finalized")
 	}
-	if len(manifest.Artifacts) != len(duplexCapsuleArtifacts) {
-		return nil, fmt.Errorf("audio capsule artifact inventory has %d entries; want %d", len(manifest.Artifacts), len(duplexCapsuleArtifacts))
+	requiredArtifacts := duplexCapsuleArtifacts
+	if manifest.SchemaVersion == 1 {
+		requiredArtifacts = duplexCapsuleV1Artifacts
 	}
-	for _, name := range duplexCapsuleArtifacts {
+	if len(manifest.Artifacts) != len(requiredArtifacts) {
+		return nil, fmt.Errorf("audio capsule artifact inventory has %d entries; want %d", len(manifest.Artifacts), len(requiredArtifacts))
+	}
+	for _, name := range requiredArtifacts {
 		if _, ok := manifest.Artifacts[name]; !ok {
 			return nil, fmt.Errorf("audio capsule is missing required artifact %s", name)
 		}
 	}
 	data := map[string][]byte{}
-	for _, name := range duplexCapsuleArtifacts {
+	for _, name := range requiredArtifacts {
 		want := manifest.Artifacts[name]
 		value, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name)))
 		if err != nil {
@@ -158,6 +173,13 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	if err != nil {
 		return nil, err
 	}
+	var captured []int16
+	if manifest.SchemaVersion >= 2 {
+		captured, err = decode("audio/capture-generated.pcm")
+		if err != nil {
+			return nil, err
+		}
+	}
 	near, err := decode("audio/source-near-end.pcm")
 	if err != nil {
 		return nil, err
@@ -180,7 +202,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	}
 	manifest.Scenario.Acoustic.NearEnd = near
 	manifest.Scenario.Acoustic.Background = background
-	return &DuplexFailureCapsule{Manifest: manifest, ProviderInput: provider, Rendered: rendered, NearEnd: near, Background: background, Events: events}, nil
+	return &DuplexFailureCapsule{Manifest: manifest, ProviderInput: provider, Rendered: rendered, Captured: captured, NearEnd: near, Background: background, Events: events}, nil
 }
 
 func ReplayDuplexFailureCapsule(dir string) (*SimulatedDuplexRegistry, error) {
@@ -205,6 +227,9 @@ func ReplayDuplexFailureCapsule(dir string) (*SimulatedDuplexRegistry, error) {
 	}
 	if got := encodeSamples(registry.RenderedSamples()); !bytes.Equal(got, encodeSamples(capsule.Rendered)) {
 		return nil, fmt.Errorf("replayed rendered PCM hash differs from capsule")
+	}
+	if capsule.Manifest.SchemaVersion >= 2 && !bytes.Equal(encodeSamples(registry.CapturedSamples()), encodeSamples(capsule.Captured)) {
+		return nil, fmt.Errorf("replayed captured PCM hash differs from capsule")
 	}
 	return registry, nil
 }
