@@ -331,6 +331,82 @@ func TestWebMCPDirectSeparateCommandsRejectStaleSelectionWithoutFallback(t *test
 	}
 }
 
+func TestWebMCPDirectStaleSelectionRendersOnceAndOffersSelectRecovery(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "human"},
+		{name: "json", json: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			configDir := writeDirectConfig(t, "")
+			store := NewFileWebMCPSelectionStore(configDir)
+			if err := store.Save(WebMCPSelection{
+				Version:    WebMCPSelectionVersion,
+				EndpointID: "browser-a",
+				BrowserID:  "browser-a",
+				TargetID:   "missing-tab",
+				Origin:     "https://fixture.test",
+				SelectedAt: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC),
+			}); err != nil {
+				t.Fatalf("seed selection: %v", err)
+			}
+
+			page, _, candidate, _ := directFixture()
+			otherTarget := webmcp.Target{
+				BrowserID: candidate.ID,
+				ID:        "other-tab",
+				Type:      "page",
+				Title:     "Fallback must not be used",
+				URL:       "https://fixture.test/other",
+				Origin:    "https://fixture.test",
+				Eligible:  true,
+			}
+			broker := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    []webmcp.Target{otherTarget},
+				selected:   page,
+			}
+			args := []string{"context"}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			result := executeDirectCommandThroughAgentRoot(t, configDir, store, directFactory(broker), args...)
+			if result.err == nil {
+				t.Fatal("context unexpectedly succeeded with stale selection")
+			}
+			if result.stderr != "" {
+				t.Fatalf("Cobra added a second diagnostic: %q", result.stderr)
+			}
+
+			if testCase.json {
+				envelope := decodeDirectEnvelope(t, result.stdout)
+				if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+					t.Fatalf("stale JSON envelope = %+v", envelope)
+				}
+				recovery, ok := envelope.Error.Details["recovery"].(map[string]any)
+				if !ok || recovery["command"] != directSelectionRecoveryCommand {
+					t.Fatalf("stale JSON recovery = %#v", envelope.Error.Details["recovery"])
+				}
+				if strings.Contains(result.stdout, "Error:") {
+					t.Fatalf("JSON output included a human diagnostic: %q", result.stdout)
+				}
+				return
+			}
+
+			if strings.Count(result.stdout, "Error:") != 1 {
+				t.Fatalf("human diagnostic count = %d, output=%q", strings.Count(result.stdout, "Error:"), result.stdout)
+			}
+			for _, want := range []string{"stale_selection", directSelectionRecoveryCommand} {
+				if !strings.Contains(result.stdout, want) {
+					t.Fatalf("human output omitted %q: %q", want, result.stdout)
+				}
+			}
+		})
+	}
+}
+
 func TestWebMCPDirectDefaultSelectionDoesNotChooseAConvenientTab(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	page, target, candidate, _ := directFixture()
@@ -1982,6 +2058,23 @@ type directCommandResult struct {
 
 func executeDirectCommand(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
 	return executeDirectCommandContext(t, context.Background(), configDir, store, factory, args...)
+}
+
+func executeDirectCommandThroughAgentRoot(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
+	t.Helper()
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	operations := NewWebMCPOperationsCommand(globalFlags, factory)
+	operations.SelectionStore = store
+	webmcpCommand := &WebMCPCommand{OperationsCommand: operations}
+	root := &cobra.Command{Use: "agent"}
+	root.AddCommand(NewPath("webmcp", webmcpCommand.Generate()).CreateCommand())
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(append([]string{"webmcp"}, args...))
+	err := root.ExecuteContext(context.Background())
+	return directCommandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
 func executeDirectCommandContext(t *testing.T, ctx context.Context, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {

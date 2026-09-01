@@ -30,6 +30,7 @@ const (
 
 	webmcpDirectInvocationReceiptVersion  = "webmcp.invoke-receipt.v1"
 	webmcpDirectInvocationReceiptMaxBytes = 1024
+	directSelectionRecoveryCommand        = "agent webmcp select"
 )
 
 const webmcpWatchHelp = `Watch the selected target's semantic WebMCP stream.
@@ -205,7 +206,7 @@ func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 	if c == nil || parent == nil {
 		return
 	}
-	parent.AddCommand(
+	commands := []*cobra.Command{
 		c.browsersCommand(),
 		c.tabsCommand(),
 		c.selectCommand(),
@@ -215,7 +216,15 @@ func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 		c.invokeCommand(),
 		c.cancelCommand(),
 		c.watchCommand(),
-	)
+	}
+	// Direct operations render their own stable result envelope or human
+	// diagnostic. Cobra must not render the returned classified error again,
+	// otherwise human output is duplicated and JSON mode is contaminated with
+	// a second, non-JSON stderr line.
+	for _, command := range commands {
+		command.SilenceErrors = true
+	}
+	parent.AddCommand(commands...)
 }
 
 func newWebMCPDirectFlags() *webmcpDirectFlags {
@@ -954,15 +963,17 @@ func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context
 	if allowPersisted && targetID == "" && !directFlagChanged(cmd, "tab", "browser-tab") && !directBrowserFlagChanged(cmd) {
 		selection, err := c.loadDirectSelection()
 		if err != nil {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser selection could not be read", map[string]any{
-				"reason": "persisted_selection_invalid",
-			})
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, directPersistedSelectionError(
+				"persisted browser selection could not be read",
+				"persisted_selection_invalid",
+			)
 		}
 		if selection.BrowserID != "" || selection.TargetID != "" {
 			if selection.BrowserID == "" || selection.TargetID == "" {
-				return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser selection is incomplete", map[string]any{
-					"reason": "persisted_selection_incomplete",
-				})
+				return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, directPersistedSelectionError(
+					"persisted browser selection is incomplete",
+					"persisted_selection_incomplete",
+				)
 			}
 			storedCopy := selection
 			stored = &storedCopy
@@ -1168,7 +1179,7 @@ func stalePersistedSelectionErrorAtGeneration(browserID, targetID string, genera
 		"selected_generation": generation,
 		"reason":              reason,
 	}
-	err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, stalePersistedSelectionMessage(reason), details)
+	err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, stalePersistedSelectionMessage(reason), withDirectSelectionRecovery(details))
 	err.Cause = cause
 	return err
 }
@@ -1176,10 +1187,29 @@ func stalePersistedSelectionErrorAtGeneration(browserID, targetID string, genera
 func stalePersistedSelectionMessage(reason string) string {
 	switch reason {
 	case "browser_instance_changed", "endpoint_changed":
-		return "the selected browser was replaced; rediscover and explicitly select a browser target"
+		return "the selected browser was replaced; run agent webmcp select with a live browser target to replace the persisted selection"
 	default:
-		return "the persisted browser target selection is no longer current"
+		return "the persisted browser target selection is no longer current; run agent webmcp select with a live target to replace it"
 	}
+}
+
+func directPersistedSelectionError(message, reason string) error {
+	return webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, message+"; run "+directSelectionRecoveryCommand+" to replace it", withDirectSelectionRecovery(map[string]any{
+		"reason": reason,
+	}))
+}
+
+func withDirectSelectionRecovery(details map[string]any) map[string]any {
+	result := make(map[string]any, len(details)+1)
+	for key, value := range details {
+		result[key] = value
+	}
+	result["recovery"] = map[string]any{
+		"action":      "replace_stale_selection",
+		"command":     directSelectionRecoveryCommand,
+		"instruction": "Run agent webmcp select with a live browser or target selector to replace the stale persisted selection.",
+	}
+	return result
 }
 
 func persistedSelectionGeneration(selection *WebMCPSelection) uint64 {
