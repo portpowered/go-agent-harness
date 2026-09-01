@@ -102,6 +102,11 @@ func TestSessionCommandAudioOutputMatrix(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatalf("session command timed out (registry=%+v)", registry.Observations())
 			}
+			select {
+			case <-inferencer.sessionClosed:
+			case <-time.After(time.Second):
+				t.Fatal("provider session did not finish closing after the command returned")
+			}
 
 			if got := inferencer.connects.Load(); got != 1 {
 				t.Fatalf("provider session connects = %d, want exactly one", got)
@@ -163,14 +168,16 @@ type cliAudioOutputInferencer struct {
 	connects          atomic.Int32
 	sessionCloseCount atomic.Int32
 	closeGate         chan struct{}
+	sessionClosed     chan struct{}
 	closeGateOnce     sync.Once
 }
 
 func newCLIAudioOutputInferencer(samples []int16, holdClose bool) *cliAudioOutputInferencer {
 	inferencer := &cliAudioOutputInferencer{
-		audioPCM:  cliPCM16Bytes(samples),
-		deviceOut: holdClose,
-		closeGate: make(chan struct{}),
+		audioPCM:      cliPCM16Bytes(samples),
+		deviceOut:     holdClose,
+		closeGate:     make(chan struct{}),
+		sessionClosed: make(chan struct{}),
 	}
 	if !holdClose {
 		inferencer.releaseClose()
@@ -185,6 +192,7 @@ func (i *cliAudioOutputInferencer) ConnectSession(ctx context.Context) (messages
 		done:       make(chan struct{}),
 		audioPCM:   append([]byte(nil), i.audioPCM...),
 		closeGate:  i.closeGate,
+		closeDone:  i.sessionClosed,
 		closeCount: &i.sessionCloseCount,
 	}
 	if !session.receive.Write(ctx, messages.StreamMessage{
@@ -205,6 +213,7 @@ type cliAudioOutputSession struct {
 	done       chan struct{}
 	audioPCM   []byte
 	closeGate  <-chan struct{}
+	closeDone  chan<- struct{}
 	closeCount *atomic.Int32
 
 	audioOnce sync.Once
@@ -258,6 +267,9 @@ func (s *cliAudioOutputSession) Close() error {
 	s.closeOnce.Do(func() {
 		s.closeCount.Add(1)
 		close(s.done)
+		if s.closeDone != nil {
+			close(s.closeDone)
+		}
 	})
 	return nil
 }
