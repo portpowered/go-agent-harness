@@ -79,7 +79,7 @@ func TestRTCDeviceSinkPublishesCumulativePlaybackOverflow(t *testing.T) {
 	}
 	defer func() { _ = source.Close() }()
 	diagnostics := &diagnosticRecordSink{}
-	sink, err := newRTCDeviceSinkAtRate(registry, "virtual:output", providerRate, sessionPlaybackDiagnosticObserver(diagnostics))
+	sink, err := newRTCDeviceSinkAtRate(registry, "virtual:output", providerRate, "", sessionPlaybackDiagnosticObserver(diagnostics))
 	if err != nil {
 		t.Fatalf("new RTC device sink: %v", err)
 	}

@@ -83,6 +83,12 @@ type roomParticipantRuntime struct {
 	// which participant's speaker queue overflowed; see
 	// emitRoomParticipantPlaybackOverflowDiagnostic.
 	diagnosticSink SessionDiagnosticSink
+	// outboundLoudness applies this participant's fixed, voice-specific gain
+	// (see VoiceLoudnessGainDB) to its own synthesized audio before it
+	// reaches evidence, any peer mixer, or a local monitor, so --voice
+	// selection does not leave one room participant audibly quieter than
+	// another.
+	outboundLoudness *audio.LoudnessNormalizer
 }
 
 func (r *roomParticipantRuntime) markObserverDone() {

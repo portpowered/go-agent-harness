@@ -195,21 +195,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			result := roomFailureResult(roomErr, secrets)
 			return finalizeEvidence(result, roomErr)
 		}
-		runtime := &roomParticipantRuntime{
-			plan:            plan,
-			ctx:             participantCtx,
-			cancel:          participantCancel,
-			admissionCtx:    admissionCtx,
-			admissionCancel: admissionCancel,
-			loopReady:       make(chan *agentloop.AgentLoop, 1),
-			participantDone: make(chan struct{}),
-			mixerDone:       make(chan struct{}),
-			observerDone:    make(chan struct{}),
-			replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
-			mixer:           mixer,
-			ingress:         newRoomParticipantIngress(plan, opts, evidence),
-			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
-		}
+		runtime := newRoomParticipantRuntime(plan, participantCtx, participantCancel, admissionCtx, admissionCancel, mixer, replaySchedule, opts, evidence, coordinator)
 		plan.participant = runtime
 		if plan.tracker != nil {
 			plan.tracker.lifecycle = runtime.lifecycle
@@ -363,6 +349,40 @@ func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerC
 		config.CadenceFactory = nil
 	}
 	return config
+}
+
+// newRoomParticipantRuntime assembles one participant's runtime state,
+// including its fixed per-voice outbound loudness gain (see
+// VoiceLoudnessGainDB), which is why plan.manifest.Voice is required here
+// rather than left to a caller default.
+func newRoomParticipantRuntime(
+	plan *roomParticipantPlan,
+	participantCtx context.Context,
+	participantCancel context.CancelFunc,
+	admissionCtx context.Context,
+	admissionCancel context.CancelFunc,
+	mixer *room.PCM16Mixer,
+	replaySchedule *roomReplaySchedule,
+	opts RoomRunOptions,
+	evidence *roomEvidence,
+	coordinator *roomCoordinator,
+) *roomParticipantRuntime {
+	return &roomParticipantRuntime{
+		plan:             plan,
+		ctx:              participantCtx,
+		cancel:           participantCancel,
+		admissionCtx:     admissionCtx,
+		admissionCancel:  admissionCancel,
+		loopReady:        make(chan *agentloop.AgentLoop, 1),
+		participantDone:  make(chan struct{}),
+		mixerDone:        make(chan struct{}),
+		observerDone:     make(chan struct{}),
+		replayFrameAcks:  roomReplayFrameAckChannel(replaySchedule, plan),
+		mixer:            mixer,
+		ingress:          newRoomParticipantIngress(plan, opts, evidence),
+		lifecycle:        &roomParticipantLifecycle{stateChanged: coordinator.progress, admissionClosed: coordinator.admissionDone()},
+		outboundLoudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(plan.manifest.Voice)}),
+	}
 }
 
 func roomReplayFrameAckChannel(schedule *roomReplaySchedule, plan *roomParticipantPlan) chan struct{} {
