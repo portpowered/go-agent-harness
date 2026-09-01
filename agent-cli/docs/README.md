@@ -4,6 +4,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 
 ## CLI Users
 
+- [Local speaker-feedback manual check](../../docs/MANUAL-UX-TESTING.md) documents the repaired paired-live-device requirement, bounded MacBook recipe, warning, bypasses, and room distinction.
 - [PNIG interaction replay](interaction-replay.md) explains how to replay normalized interaction fixtures as NDJSON without provider credentials or live network calls.
 - [Agent session record and replay](session-record-replay.md) explains how to record live Grok and OpenAI Realtime sessions, replay captures without provider network calls, and interpret replay divergence errors.
 - [Live audio-in round-trip proof](session-audio-in-live.md) documents the bounded spoken-audio proof and the per-session input-transcription cost policy.

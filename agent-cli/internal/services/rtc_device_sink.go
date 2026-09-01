@@ -56,6 +56,7 @@ func (e *RTCDeviceSinkError) Unwrap() error {
 type RTCDeviceSink struct {
 	sink             *audio.DeviceSink
 	id               audio.DeviceID
+	observer         rtcDevicePlaybackObserver
 	playbackObserver RTCDevicePlaybackObserver
 
 	lifeCtx    context.Context
@@ -115,6 +116,17 @@ func (s *RTCDeviceSink) DeviceID() audio.DeviceID {
 		return ""
 	}
 	return s.id
+}
+
+// SampleRate reports the negotiated PCM16 rate the output device was opened
+// at. Callers that must declare the true rate of frames accepted by this sink
+// (rather than assume the provider's requested rate) should use this instead
+// of the request's OutputSampleRate, since device negotiation can differ.
+func (s *RTCDeviceSink) SampleRate() int {
+	if s == nil || s.sink == nil {
+		return 0
+	}
+	return s.sink.SampleRate()
 }
 
 // PlaybackStats returns the current synchronized local playback observation.
@@ -195,8 +207,17 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		// ReadFrame returns. Keep a private copy at this boundary so the device
 		// adapter can never observe storage owned by the RTC implementation.
 		samples := append([]int16(nil), frame.Samples...)
-		if err := s.writePlayback(operationCtx, samples, generation, blocked); err != nil {
-			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
+		write := func() error {
+			return s.writePlayback(operationCtx, samples, generation, blocked)
+		}
+		var writeErr error
+		if s.observer != nil {
+			writeErr = s.observer.WritePlayback(operationCtx, samples, write)
+		} else {
+			writeErr = write()
+		}
+		if writeErr != nil {
+			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: writeErr}
 		}
 	}
 }
@@ -213,17 +234,29 @@ func (s *RTCDeviceSink) playbackState() (uint64, bool) {
 // writePlayback admits a frame only if the playback boundary is unchanged
 // since its inbound read. Holding playbackMu across the device enqueue makes
 // cancel and enqueue linearizable: cancellation either removes this frame or
-// marks it stale before it can reach the local queue.
+// marks it stale before it can reach the local queue. The optional physical
+// drain wait runs after the enqueue decision is settled and the mutex is
+// released, so a concurrent barge-in cancel is never held up behind a slow
+// native backend's playback pacing.
 func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked bool) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
 	}
 	s.playbackMu.Lock()
-	defer s.playbackMu.Unlock()
 	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
+		s.playbackMu.Unlock()
 		return nil
 	}
-	return s.sink.WriteFrame(ctx, samples)
+	err := s.sink.WriteFrame(ctx, samples)
+	s.playbackMu.Unlock()
+	if err != nil {
+		return err
+	}
+	// Some native output backends accept frames into a queue before the
+	// speaker consumes them. Wait for the optional drain boundary before the
+	// feedback gate timestamps this frame, otherwise a fast provider response
+	// can outrun the physical speaker by seconds.
+	return s.sink.WaitForPlayback(ctx)
 }
 
 // Run is an alias for Pump for callers that model the binding as a lifecycle

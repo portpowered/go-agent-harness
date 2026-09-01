@@ -282,7 +282,7 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		id     string
 		record SessionDiagnosticRecord
 	}, 128)
-	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts, factoryCalls := newRoomTestRunOptions(ids, inferencers)
 	opts.onParticipantSessionOpen = func(id string) { opened <- id }
 	opts.onParticipantStream = func(id string, msg messages.StreamMessage) {
 		switch msg.Type {
@@ -336,6 +336,14 @@ func TestRunRoom_DeliversPeerPCMToEachProviderSession(t *testing.T) {
 		"bob":   roomPCM16(values["alice"], 10),
 	}
 	for _, id := range ids {
+		factoryOptions, ok := factoryCalls[id]
+		if !ok {
+			t.Fatalf("%s missing provider factory options", id)
+		}
+		if binding := factoryOptions.RTCDeviceBinding; binding.Registry != nil || binding.InputDevice != "" || binding.OutputDevice != "" || binding.InputPresent || binding.OutputPresent || binding.BypassSelfHearing {
+			t.Fatalf("%s room provider received local-device feedback binding = %+v, want room-owned peer ingress without local policy", id, binding)
+		}
+
 		sessions := inferencers[id].sessionsSnapshot()
 		if len(sessions) != 1 {
 			t.Fatalf("%s sessions = %d, want one", id, len(sessions))

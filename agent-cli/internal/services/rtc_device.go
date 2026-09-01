@@ -80,6 +80,7 @@ func (e *RTCDeviceSourceRateError) Unwrap() error {
 type RTCDeviceSource struct {
 	source       *audio.DeviceSource
 	id           audio.DeviceID
+	filter       rtcDeviceCaptureFilter
 	sourceRate   int
 	providerRate int
 
@@ -242,6 +243,9 @@ func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) 
 		stopLifeHook()
 		cancel(nil)
 	}()
+	if s.filter != nil {
+		defer s.filter.DiscardHeld()
+	}
 
 	frame := make([]int16, audio.FrameSize)
 	for {
@@ -253,12 +257,28 @@ func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) 
 			return &RTCDeviceSourceError{DeviceID: s.id, Operation: "read", Err: err}
 		}
 
-		samples, resampleErr := s.providerFrame(frame)
-		if resampleErr != nil {
-			return &RTCDeviceSourceError{DeviceID: s.id, Operation: "resample", Err: resampleErr}
+		samplesToSend := [][]int16{append([]int16(nil), frame...)}
+		if s.filter != nil {
+			var filterErr error
+			samplesToSend, filterErr = s.filter.FilterCapture(operationCtx, frame)
+			if filterErr != nil {
+				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "filter", Err: filterErr}
+			}
 		}
-		if err := outbound.WriteFrame(operationCtx, rtc.PCMFrame{Samples: samples}); err != nil {
-			return &RTCDeviceSourceError{DeviceID: s.id, Operation: "write", Err: err}
+		for _, samples := range samplesToSend {
+			if len(samples) == 0 {
+				continue
+			}
+			providerSamples, resampleErr := s.providerFrame(samples)
+			if resampleErr != nil {
+				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "resample", Err: resampleErr}
+			}
+			// OutboundMedia's contract makes the caller responsible for the frame
+			// storage only until WriteFrame returns. The filter returns owned
+			// storage, and the unfiltered path copied the source buffer above.
+			if err := outbound.WriteFrame(operationCtx, rtc.PCMFrame{Samples: providerSamples}); err != nil {
+				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "write", Err: err}
+			}
 		}
 	}
 }

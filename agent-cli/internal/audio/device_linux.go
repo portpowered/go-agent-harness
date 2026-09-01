@@ -250,6 +250,7 @@ func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord, formats ...De
 		config = malgo.DefaultDeviceConfig(malgo.Capture)
 	}
 	config.SampleRate, config.Alsa.NoMMap = uint32(format.SampleRate), 1
+	config.PeriodSizeInFrames, config.Periods = uint32(FrameSize), 1
 	nativeID := record.nativeID.Pointer()
 	defer C.free(nativeID)
 	if record.Direction == DirectionInput {
@@ -257,7 +258,7 @@ func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord, formats ...De
 	} else {
 		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(format.Channels), nativeID
 	}
-	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, format: format, playback: playback}
+	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, format: format, playback: playback, playbackWake: make(chan struct{})}
 	callbacks := malgo.DeviceCallbacks{Data: handle.onData}
 	if record.Direction == DirectionInput {
 		handle.microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
@@ -294,19 +295,20 @@ func mapLinuxOpenError(id DeviceID, err error) error {
 }
 
 type linuxOpenedDevice struct {
-	mu         sync.Mutex
-	closeOnce  sync.Once
-	id         DeviceID
-	direction  Direction
-	format     DeviceFormat
-	context    *malgo.AllocatedContext
-	device     *malgo.Device
-	microphone *MicrophoneSource
-	playback   *PlaybackQueue
-	closed     bool
-	positive   bool
-	closeErr   error
-	release    func()
+	mu           sync.Mutex
+	closeOnce    sync.Once
+	id           DeviceID
+	direction    Direction
+	format       DeviceFormat
+	context      *malgo.AllocatedContext
+	device       *malgo.Device
+	microphone   *MicrophoneSource
+	playback     *PlaybackQueue
+	playbackWake chan struct{}
+	closed       bool
+	positive     bool
+	closeErr     error
+	release      func()
 }
 
 func (d *linuxOpenedDevice) DeviceFormat() DeviceFormat {
@@ -332,6 +334,9 @@ func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {
 				break
 			}
 		}
+	}
+	if n > 0 && d.playback != nil && d.playback.Snapshot().QueuedSamples == 0 {
+		d.signalPlaybackLocked()
 	}
 }
 func (d *linuxOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error {
@@ -403,6 +408,52 @@ func (d *linuxOpenedDevice) DiscardPlayback() int {
 	}
 	return d.playback.Discard()
 }
+
+// WaitForPlayback waits until the native render callback has consumed all
+// queued samples. It keeps a fast provider response from outrunning the
+// physical speaker before the local self-hearing observer records playback.
+func (d *linuxOpenedDevice) WaitForPlayback(ctx context.Context) error {
+	if d == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		d.mu.Lock()
+		if d.closed {
+			d.mu.Unlock()
+			return &ClosedError{Operation: "wait for playback", Path: string(d.id)}
+		}
+		queued := 0
+		if d.playback != nil {
+			queued = d.playback.Snapshot().QueuedSamples
+		}
+		if queued == 0 {
+			d.mu.Unlock()
+			return nil
+		}
+		if d.playbackWake == nil {
+			d.playbackWake = make(chan struct{})
+		}
+		wake := d.playbackWake
+		d.mu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (d *linuxOpenedDevice) signalPlaybackLocked() {
+	if d.playbackWake == nil {
+		d.playbackWake = make(chan struct{})
+	}
+	close(d.playbackWake)
+	d.playbackWake = make(chan struct{})
+}
 func (d *linuxOpenedDevice) PositiveAudioEvidence() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -415,6 +466,7 @@ func (d *linuxOpenedDevice) Close() error {
 	d.closeOnce.Do(func() {
 		d.mu.Lock()
 		d.closed = true
+		d.signalPlaybackLocked()
 		device, ctx := d.device, d.context
 		d.mu.Unlock()
 		if d.microphone != nil {

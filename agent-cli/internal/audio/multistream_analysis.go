@@ -369,24 +369,29 @@ func NormalizedPCM16CrossCorrelation(source, received PCM16TimedStream, interval
 	}
 	found := false
 	absoluteFound := false
-	for lagSamples := minLagSamples; lagSamples <= maxLagSamples; lagSamples++ {
-		receivedStart := receivedIntervalStart + lagSamples
-		coefficient, compared := normalizedCorrelationAtLag(source.Samples[sourceStart:sourceEnd], sourceActivity, received.Samples, receivedStart, threshold)
-		if compared == 0 {
-			continue
-		}
-		if !found || coefficient > measurement.BestCorrelation {
-			measurement.BestCorrelation = coefficient
-			measurement.BestLag = samplesToSignedDuration(lagSamples, source.SampleRate)
-			measurement.ComparedSamples = compared
-			found = true
-		}
-		if !absoluteFound || math.Abs(coefficient) > measurement.BestAbsoluteCorrelation {
-			measurement.BestAbsoluteCorrelation = math.Abs(coefficient)
-			measurement.BestAbsoluteLag = samplesToSignedDuration(lagSamples, source.SampleRate)
-			absoluteFound = true
-		}
-	}
+	forEachNormalizedPCM16CorrelationCandidate(
+		minLagSamples,
+		maxLagSamples,
+		func(lagSamples int, coefficient float64, compared int) {
+			if compared == 0 {
+				return
+			}
+			if !found || coefficient > measurement.BestCorrelation {
+				measurement.BestCorrelation = coefficient
+				measurement.BestLag = samplesToSignedDuration(lagSamples, source.SampleRate)
+				measurement.ComparedSamples = compared
+				found = true
+			}
+			if !absoluteFound || math.Abs(coefficient) > measurement.BestAbsoluteCorrelation {
+				measurement.BestAbsoluteCorrelation = math.Abs(coefficient)
+				measurement.BestAbsoluteLag = samplesToSignedDuration(lagSamples, source.SampleRate)
+				absoluteFound = true
+			}
+		},
+		func(lagSamples int) (float64, int) {
+			return normalizedCorrelationAtLag(source.Samples[sourceStart:sourceEnd], sourceActivity, received.Samples, receivedIntervalStart+lagSamples, threshold)
+		},
+	)
 	return measurement, nil
 }
 
@@ -964,6 +969,28 @@ func samplesToSignedDuration(samples, sampleRate int) time.Duration {
 		return -duration
 	}
 	return duration
+}
+
+// forEachNormalizedPCM16CorrelationCandidate visits the same lag candidates
+// used by NormalizedPCM16CrossCorrelation without allocating one result per
+// lag. Streaming detectors use this shared primitive to ignore high
+// correlations that only have a short overlap and to require a minimum
+// evidence duration before classifying feedback.
+func forEachNormalizedPCM16CorrelationCandidate(
+	minLagSamples, maxLagSamples int,
+	visit func(lagSamples int, coefficient float64, compared int),
+	measure func(lagSamples int) (float64, int),
+) {
+	if visit == nil || measure == nil || maxLagSamples < minLagSamples {
+		return
+	}
+	for lagSamples := minLagSamples; ; lagSamples++ {
+		coefficient, compared := measure(lagSamples)
+		visit(lagSamples, coefficient, compared)
+		if lagSamples == maxLagSamples {
+			return
+		}
+	}
 }
 
 func normalizedCorrelationAtLag(source []int16, sourceActivity []bool, received []int16, receivedStart int, threshold float64) (float64, int) {

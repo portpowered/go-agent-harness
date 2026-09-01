@@ -88,11 +88,12 @@ func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink
 
 func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID, loadedConfig *config.Config, browserInteractive bool) services.RTCDeviceBindingRequest {
 	request := services.RTCDeviceBindingRequest{
-		Registry:      c.deviceRegistry,
-		InputDevice:   input,
-		OutputDevice:  output,
-		InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-		OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+		Registry:              c.deviceRegistry,
+		InputDevice:           input,
+		OutputDevice:          output,
+		InputPresent:          cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+		OutputPresent:         cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+		FeedbackWarningWriter: cmd.ErrOrStderr(),
 	}
 	if !browserInteractive {
 		return request

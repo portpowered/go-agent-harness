@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -83,6 +84,16 @@ type RTCDeviceBindingRequest struct {
 	OutputDevice  audio.DeviceID
 	InputPresent  bool
 	OutputPresent bool
+	// SelfHearingConfig is used only when both local directions are selected.
+	// Zero fields use the documented audio default profile.
+	SelfHearingConfig audio.PCM16SelfHearingConfig
+	// FeedbackWarningWriter receives the one-time local acoustic-feedback
+	// warning. The CLI supplies command stderr; nil disables presentation while
+	// retaining the audio gate.
+	FeedbackWarningWriter io.Writer
+	// BypassSelfHearing keeps device I/O active while explicitly disabling the
+	// local feedback controller for replay, file, or room-owned topologies.
+	BypassSelfHearing bool
 	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
 	// the legacy device rate for callers that do not carry a session contract.
 	OutputSampleRate int
@@ -113,8 +124,9 @@ func (r RTCDeviceBindingRequest) selected() bool {
 // provider-owned media endpoints; this object owns only the selected local
 // devices and releases them exactly once.
 type RTCDeviceBinding struct {
-	Source *RTCDeviceSource
-	Sink   *RTCDeviceSink
+	Source   *RTCDeviceSource
+	Sink     *RTCDeviceSink
+	feedback *localFeedbackGate
 
 	closeOnce sync.Once
 	closeErr  error
@@ -128,13 +140,20 @@ func (b *RTCDeviceBinding) Close() error {
 	}
 	b.closeOnce.Do(func() {
 		var sourceErr, sinkErr error
-		if b.Source != nil {
-			sourceErr = b.Source.Close()
-		}
+		// Stop the sink first. A playback observation serializes the physical
+		// write with capture classification; closing the sink releases a device
+		// write before the source can be waiting on that shared boundary.
 		if b.Sink != nil {
 			sinkErr = b.Sink.Close()
 		}
-		b.closeErr = errors.Join(sourceErr, sinkErr)
+		if b.Source != nil {
+			sourceErr = b.Source.Close()
+		}
+		feedbackErr := error(nil)
+		if b.feedback != nil {
+			feedbackErr = b.feedback.Close()
+		}
+		b.closeErr = errors.Join(sourceErr, sinkErr, feedbackErr)
 	})
 	return b.closeErr
 }
@@ -207,6 +226,20 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 			}, closeErr)
 		}
 		binding.Sink = sink
+	}
+	if binding.Source != nil && binding.Sink != nil && !request.BypassSelfHearing {
+		// Declare the gate's timing to the true negotiated device rates, not the
+		// caller's requested rates: a capture device that cannot honor the
+		// requested rate falls back to another supported one (see
+		// openRTCDeviceSourceAtRate) and hands the gate raw, pre-resample PCM.
+		feedback, feedbackErr := newLocalFeedbackGate(request.SelfHearingConfig, request.FeedbackWarningWriter, binding.Sink.SampleRate(), binding.Source.SourceSampleRate())
+		if feedbackErr != nil {
+			closeErr := binding.Close()
+			return nil, errors.Join(feedbackErr, closeErr)
+		}
+		binding.feedback = feedback
+		binding.Source.filter = feedback
+		binding.Sink.observer = feedback
 	}
 
 	return binding, nil
