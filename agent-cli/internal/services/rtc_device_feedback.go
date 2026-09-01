@@ -39,6 +39,18 @@ type rtcDeviceCaptureFilter interface {
 // classified before the corresponding speaker frame is recorded.
 type rtcDevicePlaybackObserver interface {
 	WritePlayback(context.Context, []int16, func() error) error
+	// FeedbackConfirmed reports whether this observer has ever classified
+	// captured audio as confirmed acoustic feedback during its lifetime. A
+	// caller that periodically generates its own playback content (see
+	// rtc_device_hold_tone.go) uses this to stop re-arming itself once local
+	// hardware has demonstrated real speaker->mic coupling: continuing to
+	// inject fresh self-generated audio into an already-confirmed loop only
+	// gives the gate more repeated "still consistent with ongoing echo"
+	// classifications to reclassify against, which -- unlike one sustained
+	// continuous playback signal -- can keep discarding held, genuinely
+	// independent capture before it accumulates enough evidence to release
+	// (see classifySuppressedCaptureLocked's pending-discard default case).
+	FeedbackConfirmed() bool
 }
 
 type heldLocalCaptureFrame struct {
@@ -464,6 +476,20 @@ func (g *localFeedbackGate) playbackIsRelevantLocked(captureStart time.Duration)
 
 func (g *localFeedbackGate) playbackTailEndLocked() time.Duration {
 	return addFeedbackDuration(g.lastPlaybackEnd, g.config.PostPlaybackAcousticTail)
+}
+
+// FeedbackConfirmed reports whether this gate has ever classified captured
+// audio as confirmed acoustic feedback (see rtcDevicePlaybackObserver). It
+// is monotonic and never resets for the lifetime of a gate: warningSent is
+// itself set exactly once, exactly when feedback is first confirmed (see
+// warnOnceLocked), guarded by the same mutex as every other gate field.
+func (g *localFeedbackGate) FeedbackConfirmed() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.warningSent
 }
 
 func (g *localFeedbackGate) warnOnceLocked() {

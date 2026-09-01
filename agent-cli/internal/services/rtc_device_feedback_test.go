@@ -78,6 +78,61 @@ func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 	}
 }
 
+// TestLocalFeedbackGateFeedbackConfirmedTracksWarningState pins the exact
+// contract rtc_device_hold_tone.go relies on to stop re-arming itself once
+// local hardware has demonstrated real speaker->mic coupling: false before
+// any loop has been confirmed, true from the moment the one-time warning
+// fires onward (monotonic, never resets), and false for a nil gate (a sink
+// with no paired local feedback gate at all).
+func TestLocalFeedbackGateFeedbackConfirmedTracksWarningState(t *testing.T) {
+	var nilGate *localFeedbackGate
+	if nilGate.FeedbackConfirmed() {
+		t.Fatal("nil gate FeedbackConfirmed() = true, want false")
+	}
+
+	warning := make(chan string, 1)
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("new local feedback gate: %v", err)
+	}
+	defer func() { _ = gate.Close() }()
+
+	if gate.FeedbackConfirmed() {
+		t.Fatal("FeedbackConfirmed() = true before any loop was ever observed")
+	}
+
+	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+		loop := feedbackSignal(frameIndex, 31)
+		if err := gate.WritePlayback(context.Background(), loop, func() error { return nil }); err != nil {
+			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
+		}
+		if _, err := gate.FilterCapture(context.Background(), loop); err != nil {
+			t.Fatalf("filter looped capture frame %d: %v", frameIndex, err)
+		}
+	}
+	select {
+	case <-warning:
+	case <-time.After(time.Second):
+		t.Fatal("feedback was never confirmed")
+	}
+	if !gate.FeedbackConfirmed() {
+		t.Fatal("FeedbackConfirmed() = false immediately after the loop was confirmed")
+	}
+
+	// The independent, uncorrelated capture below eventually drains the
+	// gate back to idle, but FeedbackConfirmed must stay true: it records
+	// that this hardware pairing has coupling, not the gate's current
+	// suppressing/idle state.
+	for frameIndex := 5; frameIndex < 15; frameIndex++ {
+		if _, err := gate.FilterCapture(context.Background(), feedbackSignal(frameIndex, 71)); err != nil {
+			t.Fatalf("filter independent capture frame %d: %v", frameIndex, err)
+		}
+	}
+	if !gate.FeedbackConfirmed() {
+		t.Fatal("FeedbackConfirmed() = false after the gate drained back to idle, want it to stay true for the gate's lifetime")
+	}
+}
+
 func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 	warning := make(chan string, 1)
 	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
