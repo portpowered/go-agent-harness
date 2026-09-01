@@ -237,7 +237,7 @@ func TestAskLoadsAGENTSMDFromConfigDir(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"ask", "--config-dir", tmpDir, "hello"})
+	rootCmd.SetArgs([]string{"ask", "--config-dir", tmpDir, "--workdir", tmpDir, "hello"})
 
 	ctx := context.Background()
 	if err := rootCmd.ExecuteContext(ctx); err != nil {

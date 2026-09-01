@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
@@ -187,7 +188,13 @@ type SessionRunOptions struct {
 	APIKey                  string
 	BaseURL                 string
 	ConfigDir               string
-	Prompt                  string
+	// WorkDir and AllowPaths are the canonical customer filesystem scope for
+	// this session. FilesystemPolicy is the immutable snapshot supplied to all
+	// filesystem tools; the string fields remain useful to non-tool runtimes.
+	WorkDir          string
+	AllowPaths       []string
+	FilesystemPolicy *tools.FilesystemPolicy
+	Prompt           string
 	// PromptProvided distinguishes an explicitly supplied empty prompt from an
 	// omitted prompt. Replay uses the distinction to opt into capture-derived
 	// prompt planning only when the caller did not provide a prompt.

@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -172,8 +173,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				if !errors.As(err, &pathErr) {
 					t.Fatalf("prompt-resolution error = %v, want wrapped *os.PathError", err)
 				}
-				if !strings.Contains(err.Error(), "initialize AGENTS.md") {
-					t.Fatalf("prompt-resolution error = %v, want AGENTS.md initialization context", err)
+				if !strings.Contains(err.Error(), "invalid filesystem root") {
+					t.Fatalf("prompt-resolution error = %v, want filesystem-scope validation context", err)
 				}
 				if inferencer.wasConnected() {
 					t.Fatal("inaccessible workspace connected a session before returning its prompt error")
@@ -346,6 +347,7 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	inferencer := newSessionInstructionsTestInferencer()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = workspaceDir
+	globalFlags.WorkDirPath = workspaceDir
 	askFlags := flags.NewAskFlags()
 	cmd := cli.NewSessionCommand(askFlags, globalFlags, nil, inferencer).Generate()
 	var out bytes.Buffer
@@ -368,7 +370,7 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	if !strings.Contains(flag.Usage, "literal text") {
 		t.Fatalf("--system-prompt help = %q, want path and literal-text contract", flag.Usage)
 	}
-	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker, 1)
+	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker+sessionScopeSuffix(t, workspaceDir), 1)
 }
 
 func TestSessionCommand_SystemPromptFlagForwardsLongLiteralUnchanged(t *testing.T) {
@@ -381,6 +383,7 @@ func TestSessionCommand_SystemPromptFlagForwardsLongLiteralUnchanged(t *testing.
 	inferencer := newSessionInstructionsTestInferencer()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = workspaceDir
+	globalFlags.WorkDirPath = workspaceDir
 	askFlags := flags.NewAskFlags()
 	cmd := cli.NewSessionCommand(askFlags, globalFlags, nil, inferencer).Generate()
 	var out bytes.Buffer
@@ -396,7 +399,66 @@ func TestSessionCommand_SystemPromptFlagForwardsLongLiteralUnchanged(t *testing.
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("session command with long --system-prompt: %v", err)
 	}
-	assertSessionInstructionEvents(t, inferencer, longPrompt, 1)
+	assertSessionInstructionEvents(t, inferencer, longPrompt+sessionScopeSuffix(t, workspaceDir), 1)
+}
+
+func TestSessionCommand_DisclosesOneEffectiveFilesystemScope(t *testing.T) {
+	workspaceDir := t.TempDir()
+	configDir := t.TempDir()
+	inferencer := newSessionInstructionsTestInferencer()
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	globalFlags.WorkDirPath = workspaceDir
+	askFlags := flags.NewAskFlags()
+	cmd := cli.NewSessionCommand(askFlags, globalFlags, nil, inferencer).Generate()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{
+		"--replay", filepath.Join(configDir, "session.json"),
+		"--system-prompt", rawInstructionsMarker,
+		userTurnMarker,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("session command: %v", err)
+	}
+
+	canonical, err := filepath.EvalSymlinks(workspaceDir)
+	if err != nil {
+		t.Fatalf("resolve effective workdir: %v", err)
+	}
+	scope := "Filesystem scope: workdir=" + canonical + "; additional_allowed_roots=none"
+	if !strings.Contains(out.String(), scope) {
+		t.Fatalf("startup output = %q, want effective scope %q", out.String(), scope)
+	}
+	if !strings.Contains(out.String(), tools.FilesystemScopeStartupNotice) || strings.Contains(out.String(), "All commands will be allowed") {
+		t.Fatalf("startup output does not truthfully describe filesystem and shell boundaries: %q", out.String())
+	}
+	events := inferencer.sentEvents()
+	var instructions string
+	for _, event := range events {
+		if event.Type != messages.StreamTypeSessionUpdate {
+			continue
+		}
+		value, ok := event.Value.(*messages.SessionUpdateValue)
+		if ok && value != nil {
+			instructions = value.Instructions
+		}
+	}
+	if !strings.Contains(instructions, scope) {
+		t.Fatalf("session instructions = %q, want effective scope %q", instructions, scope)
+	}
+}
+
+func sessionScopeSuffix(t *testing.T, workspaceDir string) string {
+	t.Helper()
+	canonical, err := filepath.EvalSymlinks(workspaceDir)
+	if err != nil {
+		t.Fatalf("resolve workspace symlinks: %v", err)
+	}
+	return "\n\nFilesystem scope: workdir=" + canonical + "; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir."
 }
 
 func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T) {

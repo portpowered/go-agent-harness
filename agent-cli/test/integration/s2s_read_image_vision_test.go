@@ -283,6 +283,7 @@ func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string,
 	prompt := "Please inspect the image at " + imagePath + " without relying on its filename."
 	rootCmd.SetArgs([]string{
 		"--config-dir", configDir,
+		"--workdir", filepath.Dir(imagePath),
 		"session",
 		"--replay", fixturePath,
 		"--provider", "openai",

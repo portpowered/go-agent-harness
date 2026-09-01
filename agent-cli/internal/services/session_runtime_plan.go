@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -141,6 +142,7 @@ type sessionRuntimePlan struct {
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
 	interactivePolicy      *InteractiveToolPolicy
+	filesystemPolicy       *tools.FilesystemPolicy
 }
 
 func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
@@ -189,6 +191,11 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		p.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
 	}
+	// The filesystem-scope disclosure is best-effort: it is new, unconditional
+	// startup output on every session, and a write failure here must not
+	// masquerade as (or pre-empt) the session's own run/drain failure below,
+	// which is what a broken writer is actually expected to surface as.
+	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
 	announcement := p.announce
 	if p.loop.BareLive {
 		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
@@ -211,6 +218,14 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		}
 	}
 	return nil
+}
+
+func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPolicy) {
+	if policy == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(out, "Filesystem scope: "+policy.ScopeDescription())
+	_, _ = fmt.Fprintln(out, tools.FilesystemScopeStartupNotice)
 }
 
 // configureLoopObserver installs the shared stream observer for every session
@@ -244,6 +259,18 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{}, err
 	}
 	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	filesystemPolicy := opts.FilesystemPolicy
+	if filesystemPolicy == nil {
+		var err error
+		filesystemPolicy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
+		if err != nil {
+			return sessionRuntimePlan{}, fmt.Errorf("resolve filesystem scope: %w", err)
+		}
+	}
+	opts.FilesystemPolicy = filesystemPolicy
+	opts.WorkDir = filesystemPolicy.PrimaryRoot()
+	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
+	opts.ToolExecutor = tools.ApplyFilesystemPolicy(opts.ToolExecutor, filesystemPolicy)
 	var capabilityCoordinator *SessionCapabilityCoordinator
 	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
@@ -286,6 +313,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		plan.audioInputs = opts.AudioInputs
 	}
 	plan.scheduledAudioDispatch = scheduledAudioDispatch
+	plan.filesystemPolicy = opts.FilesystemPolicy
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime

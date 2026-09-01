@@ -216,6 +216,8 @@ func (r *Router) BuildRoot() *cobra.Command {
 		}
 		return r.resolveCommandPaths(command, args)
 	}
+	cmd.PersistentFlags().StringVar(&r.Flags.WorkDirPath, "workdir", r.Flags.WorkDirPath, "Filesystem-tool workdir (default: the process current directory)")
+	cmd.PersistentFlags().StringArrayVar(&r.Flags.AllowPathList, "allow-path", nil, "Additional filesystem-tool root (repeatable; relative to --workdir)")
 
 	return cmd
 }

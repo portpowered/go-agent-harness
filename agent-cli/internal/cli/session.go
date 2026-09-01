@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -491,7 +492,8 @@ const sessionCommandLongHelp = "Run a bidirectional session inference capture or
 	"WebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\n" +
 	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
 	"Input transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\n" +
-	"Session history management remains available through the show, list, and delete subcommands."
+	"Session history management remains available through the show, list, and delete subcommands.\n\n" +
+	filesystemPolicyHelp
 
 // sessionModeFlagNames lists the non-browser flags whose presence names an
 // explicit session action. Pure browser flags are deliberately excluded: they
@@ -634,6 +636,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
+			filesystemPolicy, err := cliTools.ResolveFilesystemPolicy(
+				globalWorkDir(c.globalFlags),
+				globalAllowPaths(c.globalFlags)...,
+			)
+			if err != nil {
+				return fmt.Errorf("resolve filesystem scope: %w", err)
+			}
 			hasSessionMode := sessionHasExplicitMode(cmd, args, c.imagePaths)
 			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
 			if err != nil {
@@ -642,6 +651,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if !hasSessionMode && !browserToolsAdmission(cmd) && !bareSession {
 				return cmd.Help()
 			}
+			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
@@ -691,6 +701,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					if err != nil {
 						return err
 					}
+					loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 				}
 				capabilities, err := c.sessionToolCapabilities(loadedConfig)
 				if err != nil {
@@ -707,6 +718,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				}
 				capabilityClose = surface.capabilityClose
 			}
+			toolExecutor = cliTools.ApplyFilesystemPolicy(toolExecutor, filesystemPolicy)
 			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)
 			if err != nil {
 				return err
@@ -722,6 +734,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				APIKey:                 c.askFlags.APIKey,
 				BaseURL:                c.askFlags.BaseURL,
 				ConfigDir:              c.globalFlags.ConfigDir(),
+				WorkDir:                filesystemPolicy.PrimaryRoot(),
+				AllowPaths:             filesystemPolicy.AdditionalRoots(),
+				FilesystemPolicy:       filesystemPolicy,
 				Prompt:                 strings.Join(args, " "),
 				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:                  voice,
@@ -838,35 +853,75 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
-	setSessionFlagErrorFunc(cmd, voiceFlag)
+	c.registerSessionFlags(cmd, sessionFlagTargets{
+		voiceFlag: voiceFlag, browserFlags: browserFlags,
+		recordDirPath: &recordDirPath, prompt: &prompt,
+		maxDuration: &maxDuration, waitForClose: &waitForClose,
+		noInputTranscription: &noInputTranscription, audioIn: &audioIn,
+		audioInTurns: &audioInTurns, audioInTurnBarge: &audioInTurnBarge,
+		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
+		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
+		audioOutDevice: &audioOutDevice, mediaSource: &mediaSource,
+		transport: &transport, signaling: &signaling,
+	})
+	return cmd
+}
+
+// sessionFlagTargets collects the local variables that (*SessionCommand).Generate's
+// flags bind into, so registerSessionFlags can wire them up in one place
+// without Generate itself growing past the funlen budget.
+type sessionFlagTargets struct {
+	voiceFlag            *sessionVoiceFlagValue
+	browserFlags         *flags.BrowserFlags
+	recordDirPath        *string
+	prompt               *string
+	maxDuration          *time.Duration
+	waitForClose         *bool
+	noInputTranscription *bool
+	audioIn              *string
+	audioInTurns         *[]string
+	audioInTurnBarge     *bool
+	audioInterrupts      *[]string
+	audioInterruptTool   *string
+	audioInDevice        *audio.DeviceID
+	audioOutPath         *string
+	audioOutDevice       *audio.DeviceID
+	mediaSource          *string
+	transport            *string
+	signaling            *string
+}
+
+// registerSessionFlags registers the `session` command's flags. It is a pure
+// extraction from Generate with no behaviour change.
+func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagTargets) {
+	setSessionFlagErrorFunc(cmd, t.voiceFlag)
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
-	cmd.Flags().StringVar(&recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
+	cmd.Flags().StringVar(t.recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
-	cmd.Flags().StringVar(&prompt, "prompt", "", "Seed the realtime session with text")
+	cmd.Flags().StringVar(t.prompt, "prompt", "", "Seed the realtime session with text")
 	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
-	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
-	cmd.Flags().BoolVar(&waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
+	cmd.Flags().DurationVar(t.maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
+	cmd.Flags().BoolVar(t.waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
-	cmd.Flags().BoolVar(&noInputTranscription, "no-input-transcription", false, "Disable customer-speech transcription for live OpenAI audio-input sessions")
-	cmd.Flags().Var(voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
+	cmd.Flags().BoolVar(t.noInputTranscription, "no-input-transcription", false, "Disable customer-speech transcription for live OpenAI audio-input sessions")
+	cmd.Flags().Var(t.voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
-	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
-	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
-	cmd.Flags().BoolVar(&audioInTurnBarge, "audio-in-turn-barge", false, "Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated")
-	cmd.Flags().StringArrayVar(&audioInterrupts, "audio-interrupt", nil, "Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)")
-	cmd.Flags().StringVar(&audioInterruptTool, "audio-interrupt-on-tool", "", "With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one")
-	cmd.Flags().StringVar(&audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
-	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
-	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
+	cmd.Flags().StringVar(t.audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
+	cmd.Flags().StringArrayVar(t.audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
+	cmd.Flags().BoolVar(t.audioInTurnBarge, "audio-in-turn-barge", false, "Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated")
+	cmd.Flags().StringArrayVar(t.audioInterrupts, "audio-interrupt", nil, "Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)")
+	cmd.Flags().StringVar(t.audioInterruptTool, "audio-interrupt-on-tool", "", "With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one")
+	cmd.Flags().StringVar(t.audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
+	cmd.Flags().StringVar(t.audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
+	cmd.Flags().StringVar(t.audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
-	cmd.Flags().StringVar(&mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")
-	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path)")
-	cmd.Flags().StringVar(&signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
-	registerSessionBrowserFlags(cmd, browserFlags)
+	cmd.Flags().StringVar(t.mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")
+	cmd.Flags().StringVar(t.transport, "transport", SessionTransportWebSocket, "Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path)")
+	cmd.Flags().StringVar(t.signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
+	registerSessionBrowserFlags(cmd, t.browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
-	return cmd
 }
 
 func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValue) {
@@ -956,19 +1011,45 @@ func validateSessionMediaSource(transport, source string, provided, audioInProvi
 
 // getSessionStorage resolves workspace from global flags and returns session storage.
 func getSessionStorage(globalFlags *flags.GlobalFlags) (*session.Storage, error) {
-	workspaceDir := globalFlags.ConfigDir()
+	configDir := globalFlags.ConfigDir()
+	workspaceDir := configDir
 	if workspaceDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("get workspace dir: %w", err)
 		}
-		workspaceDir = filepath.Join(home, config.ConfigDirName)
+		configDir = filepath.Join(home, config.ConfigDirName)
+		workspaceDir = configDir
 	}
-	workspaceDir, err := filepath.Abs(workspaceDir)
+	configDir, err := filepath.Abs(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("get workspace dir: %w", err)
+		return nil, fmt.Errorf("get config dir: %w", err)
 	}
-	return session.NewStorage(workspaceDir), nil
+	return session.NewStorageWithWorkspace(configDir, workspaceDir), nil
+}
+
+func globalWorkDir(globalFlags *flags.GlobalFlags) string {
+	if globalFlags == nil {
+		return ""
+	}
+	return globalFlags.WorkDir()
+}
+
+func globalAllowPaths(globalFlags *flags.GlobalFlags) []string {
+	if globalFlags == nil {
+		return nil
+	}
+	return globalFlags.AllowPaths()
+}
+
+func withFilesystemPolicyMetadata(cfg *config.Config, policy *cliTools.FilesystemPolicy) *config.Config {
+	if cfg == nil || policy == nil {
+		return cfg
+	}
+	copy := *cfg
+	copy.FilesystemWorkDir = policy.PrimaryRoot()
+	copy.FilesystemAllowPaths = policy.AdditionalRoots()
+	return &copy
 }
 
 // SessionShowCommand wraps the session show subcommand.

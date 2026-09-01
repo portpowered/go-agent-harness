@@ -35,10 +35,12 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
 	"  webmcp      Inspect WebMCP browser readiness\n\n" +
 	"Flags:\n" +
-	"  -C, --config-dir string   Directory for agent CLI config (default: ~/.agent-cli)\n" +
-	"  -h, --help                help for agent\n" +
-	"      --log-to-stdout       Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
-	"  -v, --verbose count       Enable verbose output (use -v for info, -vv for debug)\n\n" +
+	"      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n" +
+	"  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n" +
+	"  -h, --help                     help for agent\n" +
+	"      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
+	"  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n" +
+	"      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n" +
 	"Use \"agent [command] --help\" for more information about a command.\n"
 
 const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
@@ -57,10 +59,12 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
 	"  webmcp      Inspect WebMCP browser readiness\n\n" +
 	"Flags:\n" +
-	"  -C, --config-dir string   Directory for agent CLI config (default: ~/.agent-cli)\n" +
-	"  -h, --help                help for agent\n" +
-	"      --log-to-stdout       Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
-	"  -v, --verbose count       Enable verbose output (use -v for info, -vv for debug)\n\n" +
+	"      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n" +
+	"  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n" +
+	"  -h, --help                     help for agent\n" +
+	"      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
+	"  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n" +
+	"      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n" +
 	"Use \"agent [command] --help\" for more information about a command.\n"
 
 func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {

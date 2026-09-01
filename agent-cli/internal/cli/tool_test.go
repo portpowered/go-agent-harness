@@ -235,6 +235,205 @@ func TestToolCommandLoadsTemporaryConfig(t *testing.T) {
 	}
 }
 
+func TestToolCommandFilesystemScopeUsesLaunchCwdOrExplicitWorkdir(t *testing.T) {
+	launchDir := t.TempDir()
+	configDir := t.TempDir()
+	selectedDir := t.TempDir()
+
+	tests := []struct {
+		name        string
+		workdir     string
+		wantDir     string
+		unwantedDir string
+	}{
+		{name: "launch cwd default", wantDir: launchDir, unwantedDir: selectedDir},
+		{name: "explicit workdir", workdir: selectedDir, wantDir: selectedDir, unwantedDir: launchDir},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(launchDir)
+			fileName := strings.ReplaceAll(tt.name, " ", "-") + ".txt"
+			globalFlags := flags.NewGlobalFlags()
+			globalFlags.ConfigDirPath = configDir
+			globalFlags.WorkDirPath = tt.workdir
+			command := NewToolCommand(globalFlags)
+			command.registryLoader = func() (*tools.ToolRegistry, error) {
+				return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+			}
+
+			var out bytes.Buffer
+			err := runToolTestCommand(t, command, []string{"write_file", "path=" + fileName, "content=cwd-marker"}, &out)
+			if err != nil {
+				t.Fatalf("write_file: %v", err)
+			}
+			if got, err := os.ReadFile(filepath.Join(tt.wantDir, fileName)); err != nil || string(got) != "cwd-marker" {
+				t.Fatalf("effective workdir file = %q, %v; want cwd-marker in %s", got, err, tt.wantDir)
+			}
+			if _, err := os.Stat(filepath.Join(tt.unwantedDir, fileName)); !os.IsNotExist(err) {
+				t.Fatalf("relative write escaped into %s: stat error = %v", tt.unwantedDir, err)
+			}
+			if _, err := os.Stat(filepath.Join(configDir, fileName)); !os.IsNotExist(err) {
+				t.Fatalf("relative write used config dir: stat error = %v", err)
+			}
+		})
+	}
+}
+
+func TestToolCommandFilesystemScopeAllowsMultipleRootsAndRejectsOutside(t *testing.T) {
+	launchDir := t.TempDir()
+	allowedOne := t.TempDir()
+	allowedTwo := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(allowedOne, "readable.txt"), []byte("allowed content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(launchDir)
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	globalFlags.WorkDirPath = launchDir
+	globalFlags.AllowPathList = []string{allowedOne, allowedTwo, allowedOne}
+	command := NewToolCommand(globalFlags)
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	for _, root := range []string{allowedOne, allowedTwo} {
+		name := filepath.Join(root, "written.txt")
+		var out bytes.Buffer
+		if err := runToolTestCommand(t, command, []string{"write_file", "path=" + name, "content=allowed"}, &out); err != nil {
+			t.Fatalf("write in explicitly allowed root %q: %v", root, err)
+		}
+		if got, err := os.ReadFile(name); err != nil || string(got) != "allowed" {
+			t.Fatalf("allowed-root write = %q, %v; want allowed", got, err)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := runToolTestCommand(t, command, []string{"read_file", "path=" + filepath.Join(allowedOne, "readable.txt")}, &out); err != nil {
+		t.Fatalf("read in explicitly allowed root: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "allowed content") || strings.Contains(got, "path escapes workspace") {
+		t.Fatalf("allowed-root read output = %q, want content without denial", got)
+	}
+
+	deniedParent := filepath.Join(outside, "not-created", "nested")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=must-not-write"})
+	out.Reset()
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(&out)
+	cmd.SetErr(stderr)
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !errors.Is(err, errToolRefusal) || !errors.Is(err, tools.ErrFilesystemRefused) {
+		t.Fatalf("outside write error = %v, want stable refusal identity", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("outside write stdout = %q, want empty", out.String())
+	}
+	refusal, decodeErr := tools.DecodeFilesystemRefusal([]byte(strings.TrimSpace(stderr.String())))
+	if decodeErr != nil {
+		t.Fatalf("decode outside write refusal: %v; stderr=%q", decodeErr, stderr.String())
+	}
+	if refusal.Operation != "write_file" || refusal.Path != deniedTarget || refusal.Reason != tools.FilesystemRefusalOutsidePermittedRoots {
+		t.Fatalf("outside write refusal = %#v, want write/path/outside identity", refusal)
+	}
+	if strings.Contains(stderr.String(), "must-not-write") {
+		t.Fatalf("outside write refusal leaked mutation content: %q", stderr.String())
+	}
+	if _, err := os.Stat(deniedParent); !os.IsNotExist(err) {
+		t.Fatalf("outside write parent = %v, want absent", err)
+	}
+}
+
+func TestToolCommandFilesystemRefusalIsStderrAndNonZero(t *testing.T) {
+	workdir := t.TempDir()
+	outside := t.TempDir()
+	deniedParent := filepath.Join(outside, "not-created", "nested")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	canonicalWorkdir, err := filepath.EvalSymlinks(workdir)
+	if err != nil {
+		t.Fatalf("canonicalize workdir: %v", err)
+	}
+
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	globalFlags.WorkDirPath = workdir
+	command := NewToolCommand(globalFlags)
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=MUST-NOT-WRITE"})
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	err = cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("denied direct tool call unexpectedly succeeded")
+	}
+	if !errors.Is(err, errToolRefusal) || !errors.Is(err, tools.ErrFilesystemRefused) {
+		t.Fatalf("direct refusal error = %v, want stable refusal identity", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("denied direct tool stdout = %q, want empty", stdout.String())
+	}
+	refusal, decodeErr := tools.DecodeFilesystemRefusal([]byte(strings.TrimSpace(stderr.String())))
+	if decodeErr != nil {
+		t.Fatalf("decode stderr refusal: %v; stderr=%q", decodeErr, stderr.String())
+	}
+	if refusal.Operation != "write_file" || refusal.Path != deniedTarget || refusal.WorkDir != canonicalWorkdir || refusal.Reason != tools.FilesystemRefusalOutsidePermittedRoots {
+		t.Fatalf("stderr refusal = %#v, want write/path/workdir/outside identity", refusal)
+	}
+	if strings.Contains(stderr.String(), "MUST-NOT-WRITE") {
+		t.Fatalf("stderr refusal leaked mutation content: %q", stderr.String())
+	}
+	if _, statErr := os.Stat(deniedParent); !os.IsNotExist(statErr) {
+		t.Fatalf("denied parent = %v, want absent", statErr)
+	}
+}
+
+func TestToolCommandInvalidWorkdirFailsBeforeRegistryLoad(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.WorkDirPath = filepath.Join(t.TempDir(), "missing-workdir")
+	command := NewToolCommand(globalFlags)
+	loaderCalled := false
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		loaderCalled = true
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	err := runToolTestCommand(t, command, []string{"write_file", "path=relative.txt", "content=should-not-run"}, &bytes.Buffer{})
+	if err == nil || !errors.Is(err, tools.ErrInvalidFilesystemRoot) {
+		t.Fatalf("invalid workdir error = %v, want invalid filesystem root", err)
+	}
+	if loaderCalled {
+		t.Fatal("registry loaded after invalid workdir; scope validation must precede tool setup")
+	}
+}
+
+func TestToolCommandInvalidAllowPathFailsBeforeRegistryLoad(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.WorkDirPath = t.TempDir()
+	globalFlags.AllowPathList = []string{filepath.Join(t.TempDir(), "missing-allowed-root")}
+	command := NewToolCommand(globalFlags)
+	loaderCalled := false
+	command.registryLoader = func() (*tools.ToolRegistry, error) {
+		loaderCalled = true
+		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+	}
+
+	err := runToolTestCommand(t, command, []string{"write_file", "path=relative.txt", "content=should-not-run"}, &bytes.Buffer{})
+	if err == nil || !errors.Is(err, tools.ErrInvalidFilesystemRoot) {
+		t.Fatalf("invalid allow-path error = %v, want ErrInvalidFilesystemRoot", err)
+	}
+	if loaderCalled {
+		t.Fatal("registry loaded after invalid allow-path; scope validation must precede tool setup")
+	}
+}
+
 func TestToolCommandConfigLoadError(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, config.ConfigFileName), []byte("model: ["), 0600); err != nil {

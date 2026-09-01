@@ -99,7 +99,13 @@ func NewEmptyToolRegistry() *ToolRegistry {
 // NewToolRegistryFromConfig creates a registry with only tools that are enabled in config.
 // If cfg is nil or tools.list is empty, all tools are enabled. Use tools.list with enabled: false to disable tools.
 func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false)
+	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, nil, false)
+}
+
+// NewToolRegistryFromConfigWithPolicy creates a config-filtered registry whose
+// customer-facing filesystem tools all share one validated policy.
+func NewToolRegistryFromConfigWithPolicy(cfg *config.Config, policy *FilesystemPolicy) *ToolRegistry {
+	return newToolRegistryFromConfig(cfg, DisplayCapability{}, nil, false, policy, true)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapability creates the session-specific
@@ -119,10 +125,38 @@ func NewToolRegistryFromConfigWithDisplayCapability(
 	capability DisplayCapability,
 	surface DisplaySurface,
 ) *ToolRegistry {
-	return newToolRegistryFromConfig(cfg, capability, surface, true)
+	return newToolRegistryFromConfig(cfg, capability, surface, true, nil, false)
 }
 
-func newToolRegistryFromConfig(cfg *config.Config, displayCapability DisplayCapability, displaySurface DisplaySurface, gateDisplayTools bool) *ToolRegistry {
+// NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy is the session
+// capability-aware constructor with the same filesystem boundary as direct
+// and one-shot tool registries.
+func NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy(
+	cfg *config.Config,
+	capability DisplayCapability,
+	surface DisplaySurface,
+	policy *FilesystemPolicy,
+) *ToolRegistry {
+	return newToolRegistryFromConfig(cfg, capability, surface, true, policy, true)
+}
+
+func newToolRegistryFromConfig(
+	cfg *config.Config,
+	displayCapability DisplayCapability,
+	displaySurface DisplaySurface,
+	gateDisplayTools bool,
+	policy *FilesystemPolicy,
+	policyRequired bool,
+) *ToolRegistry {
+	if policyRequired && policy == nil {
+		// Policy-aware composition is fail-closed even when a caller omits the
+		// optional value. Resolve the ordinary default when possible, but never
+		// silently switch back to the legacy unrestricted host filesystem.
+		policy, _ = ResolveFilesystemPolicy("")
+		if policy == nil {
+			policy = &FilesystemPolicy{}
+		}
+	}
 	registry := &ToolRegistry{
 		tools: make(map[string]Tool),
 	}
@@ -140,22 +174,46 @@ func newToolRegistryFromConfig(cfg *config.Config, displayCapability DisplayCapa
 		}
 	}
 	if enabled("read_file") {
-		_ = registry.Register(NewReadFileTool("", false))
+		if policy != nil {
+			_ = registry.Register(NewReadFileToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewReadFileTool("", false))
+		}
 	}
 	if enabled(ReadImageToolID) {
-		_ = registry.Register(NewReadImageTool(nil))
+		if policy != nil {
+			_ = registry.Register(NewReadImageToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewReadImageTool(nil))
+		}
 	}
 	if enabled("write_file") {
-		_ = registry.Register(NewWriteFileTool("", false))
+		if policy != nil {
+			_ = registry.Register(NewWriteFileToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewWriteFileTool("", false))
+		}
 	}
 	if enabled("edit_file") {
-		_ = registry.Register(NewEditFileTool("", false))
+		if policy != nil {
+			_ = registry.Register(NewEditFileToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewEditFileTool("", false))
+		}
 	}
 	if enabled("append_file") {
-		_ = registry.Register(NewAppendFileTool("", false))
+		if policy != nil {
+			_ = registry.Register(NewAppendFileToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewAppendFileTool("", false))
+		}
 	}
 	if enabled("list_dir") {
-		_ = registry.Register(NewListDirTool("", false))
+		if policy != nil {
+			_ = registry.Register(NewListDirToolWithPolicy(policy))
+		} else {
+			_ = registry.Register(NewListDirTool("", false))
+		}
 	}
 	if enabled("web_fetch") {
 		_ = registry.Register(NewWebFetchTool(0))
@@ -199,6 +257,67 @@ func (r *ToolRegistry) cloneWithSessionImagePreparer(preparer ImagePartPreparer)
 			if readImage, ok := tool.(*ReadImageTool); ok {
 				tool = readImage.withSessionImagePreparer(preparer)
 			}
+		}
+		clone.tools[name] = tool
+	}
+	return clone
+}
+
+// cloneWithFilesystemPolicy returns a registry snapshot with every known
+// customer-facing filesystem tool rebuilt against the same policy. The
+// original registry remains untouched for callers that own a separate scope.
+func (r *ToolRegistry) cloneWithFilesystemPolicy(policy *FilesystemPolicy) *ToolRegistry {
+	clone := &ToolRegistry{tools: make(map[string]Tool)}
+	if r == nil {
+		return clone
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for name, tool := range r.tools {
+		switch name {
+		case "read_file":
+			tool = NewReadFileToolWithPolicy(policy)
+		case ReadImageToolID:
+			if readImage, ok := tool.(*ReadImageTool); ok {
+				tool = NewReadImageToolWithPolicy(policy, readImage.preparer)
+			} else {
+				tool = NewReadImageToolWithPolicy(policy)
+			}
+		case "write_file":
+			tool = NewWriteFileToolWithPolicy(policy)
+		case "edit_file":
+			tool = NewEditFileToolWithPolicy(policy)
+		case "append_file":
+			tool = NewAppendFileToolWithPolicy(policy)
+		case "list_dir":
+			tool = NewListDirToolWithPolicy(policy)
+		}
+		clone.tools[name] = tool
+	}
+
+	if dispatch, ok := clone.tools["dispatch_agent"].(*DispatchAgentTool); ok {
+		dispatch.registry = clone.cloneWithDispatchRegistry()
+	}
+	return clone
+}
+
+// WithFilesystemPolicy returns a policy-scoped registry snapshot. The source
+// registry and its tool instances remain untouched.
+func (r *ToolRegistry) WithFilesystemPolicy(policy *FilesystemPolicy) *ToolRegistry {
+	return r.cloneWithFilesystemPolicy(policy)
+}
+
+// cloneWithDispatchRegistry gives nested dispatch calls the same filesystem
+// policy without recursively rebuilding the dispatch tool itself.
+func (r *ToolRegistry) cloneWithDispatchRegistry() *ToolRegistry {
+	clone := &ToolRegistry{tools: make(map[string]Tool)}
+	if r == nil {
+		return clone
+	}
+	for name, tool := range r.tools {
+		if name == "dispatch_agent" {
+			continue
 		}
 		clone.tools[name] = tool
 	}

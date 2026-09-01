@@ -97,7 +97,17 @@ func newSessionToolCapabilitiesFactory(
 			staticDefinitions      []messages.ToolDefinition
 		)
 		if isRegistryExecutor || staticExecutor == nil {
-			registry := cliTools.NewToolRegistryFromConfigWithDisplayCapability(cfg, displayCapability, displaySurface)
+			var workdir string
+			var allowPaths []string
+			if cfg != nil {
+				workdir = cfg.FilesystemWorkDir
+				allowPaths = cfg.FilesystemAllowPaths
+			}
+			filesystemPolicy, policyErr := cliTools.ResolveFilesystemPolicy(workdir, allowPaths...)
+			if policyErr != nil {
+				return SessionToolCapabilities{}, fmt.Errorf("resolve filesystem scope: %w", policyErr)
+			}
+			registry := cliTools.NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy(cfg, displayCapability, displaySurface, filesystemPolicy)
 			resolvedStaticExecutor = cliTools.NewRegistryExecutor(registry)
 			staticDefinitions = registry.ToAgentLoopDefs()
 		} else {

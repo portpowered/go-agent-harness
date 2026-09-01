@@ -174,7 +174,7 @@ func TestChatCommands_ResolutionFailuresAndEmptySkillList(t *testing.T) {
 	harness.model = submitChatInput(harness.model, "/system")
 	harness.model = submitChatInput(harness.model, "/broken-skill")
 	history := harness.model.ViewHistory()
-	if !strings.Contains(history, "Error loading system prompt:") || !strings.Contains(history, `Skill "broken-skill" not found.`) {
+	if !strings.Contains(history, "Error loading system prompt:") || !strings.Contains(history, "Error loading skills:") {
 		t.Fatalf("resolution failures were not surfaced: %q", history)
 	}
 	if suggestions := harness.model.buildCmdSuggestions(); len(suggestions) != 3 {

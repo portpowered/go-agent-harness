@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 )
 
 func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
@@ -34,6 +35,17 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	filesystemPolicy := opts.FilesystemPolicy
+	if filesystemPolicy == nil {
+		var policyErr error
+		filesystemPolicy, policyErr = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
+		if policyErr != nil {
+			return nil, nil, fmt.Errorf("resolve filesystem scope: %w", policyErr)
+		}
+	}
+	opts.FilesystemPolicy = filesystemPolicy
+	opts.WorkDir = filesystemPolicy.PrimaryRoot()
+	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
 	defer func() {
 		if planErr != nil {
 			planErr = errors.Join(planErr, closeRoomParticipantPlanCapabilities(plans))
@@ -61,7 +73,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	}
 	toolFactory := opts.ToolCapabilitiesFactory
 	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
-		defaultFactory, factoryErr := newDefaultRoomParticipantToolCapabilitiesFactory(opts.ConfigDir)
+		defaultFactory, factoryErr := newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(opts.ConfigDir, filesystemPolicy)
 		if factoryErr != nil {
 			return plans, secrets, fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, factoryErr)
 		}
@@ -88,18 +100,21 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			Provider:        participant.Provider,
-			Model:           participant.Model,
-			ModelProvided:   true,
-			APIKey:          value,
-			BaseURL:         opts.BaseURL,
-			ConfigDir:       opts.ConfigDir,
-			Clock:           opts.Clock,
-			LivenessClock:   opts.LivenessClock,
-			Prompt:          participant.OpeningPrompt,
-			Voice:           participant.Voice,
-			WebSocketDialer: opts.WebSocketDialer,
-			WaitForClose:    true,
+			Provider:         participant.Provider,
+			Model:            participant.Model,
+			ModelProvided:    true,
+			APIKey:           value,
+			BaseURL:          opts.BaseURL,
+			ConfigDir:        opts.ConfigDir,
+			Clock:            opts.Clock,
+			LivenessClock:    opts.LivenessClock,
+			WorkDir:          opts.WorkDir,
+			AllowPaths:       append([]string(nil), opts.AllowPaths...),
+			FilesystemPolicy: filesystemPolicy,
+			Prompt:           participant.OpeningPrompt,
+			Voice:            participant.Voice,
+			WebSocketDialer:  opts.WebSocketDialer,
+			WaitForClose:     true,
 		}
 		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
 		plans = append(plans, plan)
@@ -130,6 +145,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				markStartupFailure(capabilityErr)
 				continue
 			}
+			capabilities.Executor = tools.ApplyFilesystemPolicy(capabilities.Executor, filesystemPolicy)
 			staticCapabilities = capabilities
 			sessionOptions.ToolExecutor = staticCapabilities.Executor
 			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(staticCapabilities.Definitions)

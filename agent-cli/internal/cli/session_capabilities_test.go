@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
@@ -588,6 +591,36 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 	}
 	if len(capabilities.Definitions) == 0 {
 		t.Fatal("disabled composition dropped the static definitions")
+	}
+}
+
+func TestSessionToolCapabilitiesFactoryUsesDefaultFilesystemPolicyWithoutMetadata(t *testing.T) {
+	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, &sessionDisplaySurfaceFake{
+		capability: cliTools.UnavailableDisplayCapability("headless test"),
+	})
+
+	capabilities, err := factory(&config.Config{Browser: config.DefaultBrowserConfig()})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if capabilities.Executor == nil {
+		t.Fatal("factory returned a nil executor")
+	}
+
+	outsideTarget := filepath.Join(t.TempDir(), "outside-session.txt")
+	response, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "scope-call",
+		Name:      "write_file",
+		Arguments: fmt.Sprintf(`{"path":%q,"content":"must-not-write"}`, outsideTarget),
+	})
+	if err != nil {
+		t.Fatalf("outside write: %v", err)
+	}
+	if !strings.Contains(response.Content, "path escapes workspace") {
+		t.Fatalf("outside write response = %q, want default-cwd confinement denial", response.Content)
+	}
+	if _, err := os.Stat(outsideTarget); !os.IsNotExist(err) {
+		t.Fatalf("outside target = %v, want absent", err)
 	}
 }
 

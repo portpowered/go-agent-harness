@@ -314,7 +314,7 @@ func assertReadImageFailedContinuationFixture(t *testing.T, fixturePath string) 
 	}
 }
 
-func runSpokenReadImageSession(t *testing.T, fixturePath, configDir, wavPath string) readImageSpokenRun {
+func runSpokenReadImageSession(t *testing.T, fixturePath, configDir, imagePath, wavPath string) readImageSpokenRun {
 	t.Helper()
 	agentCLI, err := wire.InitializeAgentCLI()
 	if err != nil {
@@ -330,6 +330,7 @@ func runSpokenReadImageSession(t *testing.T, fixturePath, configDir, wavPath str
 	rootCmd.SetErr(stderr)
 	rootCmd.SetArgs([]string{
 		"--config-dir", configDir,
+		"--workdir", filepath.Dir(imagePath),
 		"session",
 		"--replay", fixturePath,
 		"--provider", "openai",
@@ -496,7 +497,7 @@ func TestReadImageSpokenProductionComposition(t *testing.T) {
 	fixture := buildSpokenReadImageFixture(t, materialized, wavPath, false)
 	assertSpokenReadImageWireContract(t, fixture, wavPath, imagePath, imageBytes)
 
-	run := runSpokenReadImageSession(t, fixture, configDir, wavPath)
+	run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 	if run.err != nil {
 		t.Fatalf("spoken read_image composition failed: %v\nstdout:\n%s\nstderr:\n%s", run.err, run.stdout, run.stderr)
 	}
@@ -526,7 +527,7 @@ func TestReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 	assertSpokenReadImageWireContract(t, fixture, wavPath, imagePath, imageBytes)
 	assertReadImageFailedContinuationFixture(t, fixture)
 
-	run := runSpokenReadImageSession(t, fixture, configDir, wavPath)
+	run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 	assertReadImageContinuationFailure(t, run)
 	assertReadImageSpokenFailureLifecycle(t, run.events)
 }
@@ -566,7 +567,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			fixture := rewriteReadImageCapture(t, validFixture, testCase.mutate)
-			run := runSpokenReadImageSession(t, fixture, configDir, wavPath)
+			run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 			if run.err == nil {
 				t.Fatalf("strict replay control completed cleanly; malformed provider transaction was accepted\nstdout:\n%s", run.stdout)
 			}

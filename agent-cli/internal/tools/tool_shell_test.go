@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -311,6 +312,30 @@ func TestExecTool_ValidationGuardsAndConfiguration(t *testing.T) {
 	msgs, err = disabledTool.Execute(ctx, map[string]any{"command": "rm -rf target"})
 	if err != nil || len(msgs) != 1 || msgs[0].TextContent() != "deny disabled" {
 		t.Fatalf("disabled deny command = %#v, %v", msgs, err)
+	}
+}
+
+func TestExecTool_DisabledDenyWarningDescribesShellPolicyOnly(t *testing.T) {
+	var diagnostics bytes.Buffer
+	tool := newExecToolWithDiagnosticWriter("", false, &config.Config{Tools: config.ToolsConfig{
+		Exec: config.ExecConfig{EnableDenyPatterns: false},
+	}}, &diagnostics)
+	if tool == nil {
+		t.Fatal("disabled deny-pattern tool is nil")
+	}
+	warning := diagnostics.String()
+	for _, want := range []string{
+		"shell-command deny patterns are disabled",
+		"shell-command policy only",
+		"filesystem tools remain confined",
+		"not running inside an operating-system sandbox",
+	} {
+		if !strings.Contains(warning, want) {
+			t.Errorf("warning = %q, want %q", warning, want)
+		}
+	}
+	if strings.Contains(warning, "All commands will be allowed") || strings.Contains(warning, "filesystem tools are unrestricted") {
+		t.Fatalf("warning overstates the disabled shell policy: %q", warning)
 	}
 }
 

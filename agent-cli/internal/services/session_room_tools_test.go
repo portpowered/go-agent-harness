@@ -144,6 +144,102 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 	}
 }
 
+func TestBuildRoomParticipantPlans_DefaultRegistryUsesFilesystemPolicy(t *testing.T) {
+	workdir := t.TempDir()
+	additional := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(additional, "existing.txt"), []byte("additional"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "sentinel.txt"), []byte("SENTINEL-CONTENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, _ := newRoomTestRunOptions([]string{"assistant"}, map[string]*roomTestInferencer{
+		"assistant": {},
+	})
+	opts.ConfigDir = t.TempDir()
+	opts.WorkDir = workdir
+	opts.AllowPaths = []string{additional, additional}
+	opts.Manifest.Participants[0].Tools = []string{"read_file", "write_file", "edit_file", "append_file", "list_dir"}
+
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
+	}
+	if len(plans) != 1 || plans[0].options.ToolExecutor == nil {
+		t.Fatalf("plans = %#v, want one scoped participant executor", plans)
+	}
+	policy := plans[0].options.FilesystemPolicy
+	canonicalWorkdir, err := filepath.EvalSymlinks(workdir)
+	if err != nil {
+		t.Fatalf("canonicalize workdir: %v", err)
+	}
+	canonicalAdditional, err := filepath.EvalSymlinks(additional)
+	if err != nil {
+		t.Fatalf("canonicalize additional root: %v", err)
+	}
+	if policy == nil || policy.PrimaryRoot() != canonicalWorkdir || len(policy.AdditionalRoots()) != 1 || policy.AdditionalRoots()[0] != canonicalAdditional {
+		t.Fatalf("participant filesystem policy = %#v, want workdir %q and one additional root %q", policy, canonicalWorkdir, canonicalAdditional)
+	}
+
+	execute := func(name, arguments string) messages.ToolCallResponse {
+		t.Helper()
+		response, executeErr := plans[0].options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
+			ID:        "room-" + name,
+			Name:      name,
+			Arguments: arguments,
+		})
+		if executeErr != nil {
+			t.Fatalf("room tool %q: %v", name, executeErr)
+		}
+		return response
+	}
+
+	workTarget := filepath.Join(workdir, "nested", "work.txt")
+	response := execute("write_file", fmt.Sprintf(`{"path":%q,"content":"work"}`, workTarget))
+	if !strings.Contains(response.Content, "File written") {
+		t.Fatalf("workdir write response = %q, want success", response.Content)
+	}
+	additionalTarget := filepath.Join(additional, "existing.txt")
+	response = execute("read_file", fmt.Sprintf(`{"path":%q}`, additionalTarget))
+	if response.Content != "additional" {
+		t.Fatalf("additional-root read response = %q, want content", response.Content)
+	}
+	response = execute("list_dir", fmt.Sprintf(`{"path":%q}`, additional))
+	if !strings.Contains(response.Content, "FILE: existing.txt") {
+		t.Fatalf("additional-root list response = %q, want entry", response.Content)
+	}
+	response = execute("edit_file", fmt.Sprintf(`{"path":%q,"old_text":"additional","new_text":"edited"}`, additionalTarget))
+	if !strings.Contains(response.Content, "File edited") {
+		t.Fatalf("additional-root edit response = %q, want success", response.Content)
+	}
+	response = execute("append_file", fmt.Sprintf(`{"path":%q,"content":"-appended"}`, additionalTarget))
+	if !strings.Contains(response.Content, "Appended") {
+		t.Fatalf("additional-root append response = %q, want success", response.Content)
+	}
+	if got, err := os.ReadFile(additionalTarget); err != nil || string(got) != "edited-appended" {
+		t.Fatalf("additional-root mutation = %q, %v", got, err)
+	}
+
+	deniedParent := filepath.Join(outside, "not-created", "nested")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	response = execute("write_file", fmt.Sprintf(`{"path":%q,"content":"must-not-write"}`, deniedTarget))
+	if !strings.Contains(response.Content, "path escapes workspace") || strings.Contains(response.Content, "must-not-write") {
+		t.Fatalf("outside write response = %q, want confinement denial without requested content", response.Content)
+	}
+	response = execute("read_file", fmt.Sprintf(`{"path":%q}`, filepath.Join(outside, "sentinel.txt")))
+	if !strings.Contains(response.Content, "path escapes workspace") || strings.Contains(response.Content, "SENTINEL-CONTENT") {
+		t.Fatalf("outside read response = %q, want confinement denial without sentinel", response.Content)
+	}
+	if _, err := os.Stat(deniedParent); !os.IsNotExist(err) {
+		t.Fatalf("outside write parent = %v, want absent", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(outside, "sentinel.txt")); err != nil || string(got) != "SENTINEL-CONTENT" {
+		t.Fatalf("outside sentinel = %q, %v; want unchanged", got, err)
+	}
+}
+
 func assertCompleteExecDefinition(t *testing.T, definition messages.ToolDefinition) {
 	t.Helper()
 	if definition.Name != "exec" {

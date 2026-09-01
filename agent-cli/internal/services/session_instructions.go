@@ -335,10 +335,18 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 // and path-or-literal precedence to the existing ask-path Executor contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
 	toolDefinitions := messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	workDir := opts.WorkDir
+	if workDir == "" && opts.FilesystemPolicy == nil {
+		// Preserve the direct service API's historical workspace behavior. CLI
+		// sessions always supply the launch-captured policy explicitly.
+		workDir = opts.ConfigDir
+	}
 	cfg := &agent.Config{
 		SystemPrompt:        systemPrompt,
 		NoSystemInformation: true,
 		ConfigDir:           opts.ConfigDir,
+		WorkDir:             workDir,
+		AllowPaths:          append([]string(nil), opts.AllowPaths...),
 	}
 	executor := agent.NewExecutor(nil, nil, nil, true)
 	storage, err := executor.GetSessionStorage(cfg)
@@ -349,13 +357,26 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
+	if opts.FilesystemPolicy != nil {
+		instructions = appendFilesystemScopeInstructions(instructions, opts.FilesystemPolicy)
+	}
 	return instructions, nil
+}
+
+func appendFilesystemScopeInstructions(instructions string, policy interface{ ScopeDescription() string }) string {
+	scope := "Filesystem scope: " + policy.ScopeDescription() + ". Relative filesystem-tool paths resolve from this workdir."
+	if instructions == "" {
+		return scope
+	}
+	return instructions + "\n\n" + scope
 }
 
 const sessionToolGroundingPolicy = `Tool-grounding requirements:
 - For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.
 - Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.
-- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.`
+- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.
+- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.
+- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.`
 
 const sessionSightGroundingPolicy = `Sight routing requirements:
 - For any question about the contents or rendered appearance of the selected browser page, use show_page. Its result is the authoritative page sight for both broad visual requests and literal follow-up questions.

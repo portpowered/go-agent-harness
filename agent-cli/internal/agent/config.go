@@ -44,10 +44,12 @@ type Config struct {
 	StderrWriter io.Writer // Writer for stderr output (refusals, warnings); defaults to os.Stderr when nil
 
 	// Global configuration
-	ConfigDir      string // Override directory for agent CLI config
-	Verbose        bool   // Enable verbose/debug output (deprecated, use VerbosityLevel)
-	VerbosityLevel int    // Verbosity level: 0 = none, 1 = info, 2+ = debug
-	LogToStdout    bool   // If true, log to stdout/stderr instead of file
+	ConfigDir      string   // Override directory for agent CLI config
+	WorkDir        string   // Filesystem-tool workdir; empty means process cwd
+	AllowPaths     []string // Additional filesystem-tool roots
+	Verbose        bool     // Enable verbose/debug output (deprecated, use VerbosityLevel)
+	VerbosityLevel int      // Verbosity level: 0 = none, 1 = info, 2+ = debug
+	LogToStdout    bool     // If true, log to stdout/stderr instead of file
 }
 
 // Stderr returns the configured stderr writer, defaulting to os.Stderr.

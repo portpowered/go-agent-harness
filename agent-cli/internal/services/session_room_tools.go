@@ -42,11 +42,15 @@ func roomManifestHasTools(manifest room.Manifest) bool {
 	return false
 }
 
-// newDefaultRoomParticipantToolCapabilitiesFactory loads the config once and
-// creates a fresh registry for every participant. A fresh full registry is
-// used as the source so selected tool objects, including any mutable callback
-// state, are never shared between room participants.
-func newDefaultRoomParticipantToolCapabilitiesFactory(configDir string) (RoomParticipantToolCapabilitiesFactory, error) {
+// newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy loads the config
+// once and creates a fresh registry for every participant, scoped to the
+// given filesystem policy. A fresh full registry is used as the source so
+// selected tool objects, including any mutable callback state, are never
+// shared between room participants.
+func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir string, policy *tools.FilesystemPolicy) (RoomParticipantToolCapabilitiesFactory, error) {
+	if policy == nil {
+		return nil, fmt.Errorf("resolve filesystem scope: policy is nil")
+	}
 	storage, err := config.NewDefaultConfigStorage(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("initialize room tool config: %w", err)
@@ -57,7 +61,7 @@ func newDefaultRoomParticipantToolCapabilitiesFactory(configDir string) (RoomPar
 	}
 
 	return func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
-		available := tools.NewToolRegistryFromConfig(cfg)
+		available := tools.NewToolRegistryFromConfigWithPolicy(cfg, policy)
 		selected := tools.NewEmptyToolRegistry()
 		for _, name := range participant.Tools {
 			tool, ok := available.Get(name)

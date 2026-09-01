@@ -70,6 +70,24 @@ func newSessionFileToolSurface(t *testing.T, workspace string) (messages.ToolExe
 	return surface.Executor, surface.Definitions
 }
 
+func newPolicySessionWriteToolSurface(t *testing.T, workspace string) (messages.ToolExecutor, []messages.ToolDefinition, *tools.FilesystemPolicy) {
+	t.Helper()
+	policy, err := tools.ResolveFilesystemPolicy(workspace)
+	if err != nil {
+		t.Fatalf("resolve filesystem policy: %v", err)
+	}
+	registry := tools.NewEmptyToolRegistry()
+	if err := registry.Register(tools.NewWriteFileToolWithPolicy(policy)); err != nil {
+		t.Fatalf("register write_file: %v", err)
+	}
+	staticExecutor := tools.NewRegistryExecutor(registry)
+	surface, err := tools.ComposeToolSurface(staticExecutor, registry.ToAgentLoopDefs(), nil, nil)
+	if err != nil {
+		t.Fatalf("compose policy-backed write surface: %v", err)
+	}
+	return surface.Executor, surface.Definitions, policy
+}
+
 func marshalSessionFileArguments(t *testing.T, args map[string]string) string {
 	t.Helper()
 	encoded, err := json.Marshal(args)
@@ -462,5 +480,68 @@ func TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndCompositi
 	}
 	if !strings.Contains(out.String(), "permission failure session terminated") || !strings.Contains(out.String(), "[session closed: test complete]") {
 		t.Fatalf("session did not reach its scripted terminal response after denial:\n%s", out.String())
+	}
+}
+
+// TestRunAgentLoopSession_FilesystemRefusalIsHonestAndRecoverable drives the
+// policy-backed production route with a scripted live-shaped provider. The
+// provider must receive the structured refusal before it is allowed to emit an
+// honest customer-facing denial, and the requested outside tree must remain
+// absent.
+func TestRunAgentLoopSession_FilesystemRefusalIsHonestAndRecoverable(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	target := filepath.Join(outside, "not-created", "nested", "refused.txt")
+	const callID = "filesystem-refusal-call"
+	arguments := marshalSessionFileArguments(t, map[string]string{
+		"path": target, "content": "MUST-NOT-WRITE",
+	})
+
+	executor, definitions, policy := newPolicySessionWriteToolSurface(t, root)
+	recordingExecutor := &fileRoundTripExecutor{inner: executor, target: target}
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(
+		out,
+		"The write was refused and not performed.",
+		tools.FilesystemRefusalVersion,
+		scriptedTurn{events: toolCallEvents(callID, "write_file", arguments)},
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+		MaxDuration:              4 * time.Second,
+		WaitForClose:             true,
+		ToolExecutor:             recordingExecutor,
+		ToolDefinitions:          definitions,
+		ToolExecutionTimeout:     2 * time.Second,
+		AdvertiseToolDefinitions: true,
+	}); err != nil {
+		t.Fatalf("filesystem refusal session: %v\noutput:\n%s", err, out.String())
+	}
+
+	gotCalls, checkpoints := recordingExecutor.snapshots()
+	if len(gotCalls) != 1 || len(checkpoints) != 1 {
+		t.Fatalf("filesystem refusal calls/checkpoints = %d/%d, want one each", len(gotCalls), len(checkpoints))
+	}
+	checkpoint := checkpoints[0]
+	if checkpoint.diskExists || checkpoint.diskErr != nil {
+		t.Fatalf("refused target checkpoint = exists=%v err=%v, want absent", checkpoint.diskExists, checkpoint.diskErr)
+	}
+	refusal, err := tools.DecodeFilesystemRefusal([]byte(checkpoint.response.Content))
+	if err != nil {
+		t.Fatalf("decode session refusal: %v; content=%q", err, checkpoint.response.Content)
+	}
+	if refusal.Operation != "write_file" || refusal.Path != target || refusal.WorkDir != policy.PrimaryRoot() || refusal.Reason != tools.FilesystemRefusalOutsidePermittedRoots {
+		t.Fatalf("session refusal = %#v, want write/path/workdir/outside identity", refusal)
+	}
+	if strings.Contains(checkpoint.response.Content, "MUST-NOT-WRITE") || strings.Contains(checkpoint.response.Content, "File written") {
+		t.Fatalf("session refusal was contaminated with request/success text: %q", checkpoint.response.Content)
+	}
+	if !strings.Contains(out.String(), tools.FilesystemRefusalVersion) || !strings.Contains(out.String(), "refused and not performed") {
+		t.Fatalf("session did not expose refusal before honest customer response:\n%s", out.String())
+	}
+	if _, statErr := os.Stat(filepath.Dir(target)); !os.IsNotExist(statErr) {
+		t.Fatalf("refused parent = %v, want absent", statErr)
 	}
 }

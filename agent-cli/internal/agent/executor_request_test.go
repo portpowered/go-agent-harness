@@ -157,12 +157,15 @@ func TestExecutorRequest_SessionStorageAndInitialHistoryBranches(t *testing.T) {
 
 func TestExecutorRequest_StorageExportsUseConfiguredWorkspace(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "configured")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	exec := NewExecutor(nil, nil, stubInferencer{}, true)
-	storage, err := exec.GetSessionStorage(&Config{ConfigDir: dir})
+	storage, err := exec.GetSessionStorage(&Config{ConfigDir: dir, WorkDir: dir})
 	if err != nil {
 		t.Fatalf("GetSessionStorage() error = %v", err)
 	}
-	absDir, err := filepath.Abs(dir)
+	absDir, err := filepath.EvalSymlinks(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +173,7 @@ func TestExecutorRequest_StorageExportsUseConfiguredWorkspace(t *testing.T) {
 		t.Fatalf("workspace = %q, want %q", storage.WorkspaceDir(), absDir)
 	}
 
-	newID, err := exec.NewChatSessionID(&Config{ConfigDir: dir})
+	newID, err := exec.NewChatSessionID(&Config{ConfigDir: dir, WorkDir: dir})
 	if err != nil || newID == "" {
 		t.Fatalf("NewChatSessionID() = %q, %v; want non-empty ID", newID, err)
 	}

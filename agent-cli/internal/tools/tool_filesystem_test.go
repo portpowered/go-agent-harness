@@ -352,8 +352,6 @@ func TestS6_FilesystemSandboxRealFilesystem(t *testing.T) {
 	editTool := NewEditFileTool(workspace, true)
 	appendTool := NewAppendFileTool(workspace, true)
 	t.Run("restricted read/write/edit/append success", func(t *testing.T) {
-		t.Skip("baseline sandboxFs validates paths but then uses process-relative os.ReadFile/os.WriteFile; the production correction is outside this test-only lease")
-
 		msgs, err := readTool.Execute(ctx, map[string]any{"path": insidePath})
 		requireToolText(t, msgs, err, "inside\n")
 
@@ -383,7 +381,7 @@ func TestS6_FilesystemSandboxRealFilesystem(t *testing.T) {
 
 	listTool := NewListDirTool(workspace, true)
 	msgs, err := listTool.Execute(ctx, map[string]any{"path": workspace})
-	requireToolText(t, msgs, err, "FILE: inside.txt\nDIR:  nested\n")
+	requireToolText(t, msgs, err, "FILE: inside.txt\nDIR:  nested\nFILE: written.txt\n")
 
 	missing := filepath.Join(workspace, filepath.Base(workspace)+"-missing.txt")
 	msgs, err = readTool.Execute(ctx, map[string]any{"path": missing})
@@ -444,7 +442,6 @@ func TestS6_FilesystemSandboxRealFilesystem(t *testing.T) {
 		if _, err := validatePath(linkPath, workspace, true); err == nil || !strings.Contains(err.Error(), "symlink resolves outside workspace") {
 			t.Fatalf("external symlink validation error = %v", err)
 		}
-		t.Skip("public sandbox symlink I/O is intentionally skipped: the baseline uses process-relative os.ReadFile after validation, so exercising it would require an out-of-scope production correction")
 		msgs, err := readTool.Execute(ctx, map[string]any{"path": linkPath})
 		got := requireToolTextContains(t, msgs, err, "access denied")
 		if !strings.Contains(got, "outside") && !strings.Contains(got, "escapes") {
@@ -475,6 +472,104 @@ func TestS6_FilesystemSandboxRealFilesystem(t *testing.T) {
 			t.Fatalf("permission error = %q, want access-denied contract", err)
 		}
 	})
+}
+
+func TestFilesystemPolicyWriteRootsConstrainAllWriteLikeTools(t *testing.T) {
+	ctx := context.Background()
+	primary := t.TempDir()
+	additional := t.TempDir()
+	outside := t.TempDir()
+	policy, err := NewFilesystemPolicy(primary, additional)
+	if err != nil {
+		t.Fatalf("construct policy: %v", err)
+	}
+
+	additionalTarget := filepath.Join(additional, "nested", "allowed.txt")
+	fileTools := []Tool{
+		NewWriteFileToolWithPolicy(policy),
+		NewEditFileToolWithPolicy(policy),
+		NewAppendFileToolWithPolicy(policy),
+	}
+	if msgs, err := fileTools[0].Execute(ctx, map[string]any{"path": additionalTarget, "content": "initial"}); err != nil {
+		t.Fatalf("write in additional root: %v", err)
+	} else {
+		requireToolText(t, msgs, err, "File written: "+additionalTarget)
+	}
+	if msgs, err := fileTools[1].Execute(ctx, map[string]any{
+		"path": additionalTarget, "old_text": "initial", "new_text": "edited",
+	}); err != nil {
+		t.Fatalf("edit in additional root: %v", err)
+	} else {
+		requireToolText(t, msgs, err, "File edited: "+additionalTarget)
+	}
+	if msgs, err := fileTools[2].Execute(ctx, map[string]any{"path": additionalTarget, "content": "-appended"}); err != nil {
+		t.Fatalf("append in additional root: %v", err)
+	} else {
+		requireToolText(t, msgs, err, "Appended to "+additionalTarget)
+	}
+	if got, err := os.ReadFile(additionalTarget); err != nil || string(got) != "edited-appended" {
+		t.Fatalf("additional-root content = %q, %v", got, err)
+	}
+	relativeTarget := filepath.Join(primary, "nested", "relative.txt")
+	if msgs, err := NewWriteFileToolWithPolicy(policy).Execute(ctx, map[string]any{"path": "nested/relative.txt", "content": "relative"}); err != nil {
+		t.Fatalf("write relative to primary root: %v", err)
+	} else {
+		requireToolText(t, msgs, err, "File written: nested/relative.txt")
+	}
+	if got, err := os.ReadFile(relativeTarget); err != nil || string(got) != "relative" {
+		t.Fatalf("relative-primary content = %q, %v", got, err)
+	}
+
+	deniedParent := filepath.Join(outside, "missing", "tree")
+	deniedTarget := filepath.Join(deniedParent, "denied.txt")
+	for _, fileTool := range fileTools {
+		t.Run(fileTool.Name()+" absolute outside root", func(t *testing.T) {
+			args := map[string]any{"path": deniedTarget}
+			switch fileTool.Name() {
+			case "write_file":
+				args["content"] = "must not write"
+			case "edit_file":
+				args["old_text"], args["new_text"] = "outside", "changed"
+			case "append_file":
+				args["content"] = "must not append"
+			}
+			msgs, err := fileTool.Execute(ctx, args)
+			got := requireToolTextContains(t, msgs, err, "path escapes workspace")
+			if strings.Contains(got, "must not") {
+				t.Fatalf("denial leaked requested content: %q", got)
+			}
+			if _, statErr := os.Stat(deniedParent); !os.IsNotExist(statErr) {
+				t.Fatalf("denied parent = %v, want absent", statErr)
+			}
+		})
+	}
+
+	traversalTarget := filepath.Join(primary, "..", filepath.Base(outside), "traversal.txt")
+	msgs, err := fileTools[0].Execute(ctx, map[string]any{"path": traversalTarget, "content": "must not write"})
+	requireToolTextContains(t, msgs, err, "path escapes workspace")
+	if _, statErr := os.Stat(filepath.Join(outside, "traversal.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("traversal target = %v, want absent", statErr)
+	}
+
+	linkParent := filepath.Join(primary, "external")
+	if err := os.Symlink(outside, linkParent); err != nil {
+		t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+	}
+	linkTarget := filepath.Join(linkParent, "created.txt")
+	msgs, err = fileTools[0].Execute(ctx, map[string]any{"path": linkTarget, "content": "must not write"})
+	if err != nil || len(msgs) != 1 {
+		t.Fatalf("symlink denial result = msgs:%#v err:%v, want one tool message", msgs, err)
+	}
+	got := msgs[0].TextContent()
+	if !strings.Contains(got, "path escapes workspace") && !strings.Contains(got, "access denied") {
+		t.Fatalf("symlink denial = %q, want a confinement refusal", got)
+	}
+	if strings.Contains(got, "must not write") {
+		t.Fatalf("symlink denial leaked requested content: %q", got)
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "created.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("symlink target = %v, want absent", statErr)
+	}
 }
 
 func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
