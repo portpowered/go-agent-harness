@@ -74,7 +74,7 @@ func TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem(t *testing.T) {
 	if err == nil {
 		t.Fatal("session --prompt alone returned a nil error; want a named failure instead of a silent help dump")
 	}
-	for _, want := range []string{"live sessions require provider", "openai", "grok"} {
+	for _, want := range []string{"openai realtime api key is missing", "AGENT_MODEL__OPENAI__API_KEY"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %q, want it to name %q as the live-session problem", err, want)
 		}
