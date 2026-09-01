@@ -82,6 +82,18 @@ type localFeedbackGate struct {
 	warningSent      bool
 	closed           bool
 	pending          []heldLocalCaptureFrame
+
+	// probeIndependentEvidence accumulates the duration of consecutive
+	// PCM16SelfHearingNonFeedback probe classifications while suppressing or
+	// draining. A single ~1-frame probe window is short enough that ordinary
+	// acoustic-path noise (reverb tail, a word/pause boundary, AGC artifacts)
+	// can push one frame's correlation below threshold even though it is
+	// still the same ongoing echo; requiring config.AnalysisWindow of
+	// sustained independent classification before releasing anything mirrors
+	// the confidence bar the primary detector already applies to confirming
+	// feedback in the first place. Any other classification resets it to
+	// zero and discards the frames held while it accumulated.
+	probeIndependentEvidence time.Duration
 }
 
 // newLocalFeedbackGate constructs the gate for one paired local-device
@@ -249,26 +261,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		return append(released, owned), nil
 	}
 	if g.state == localFeedbackGateSuppressing || g.state == localFeedbackGateDraining {
-		// Once a full analysis window has confirmed feedback, classify each new
-		// frame independently. This prevents a short final echo frame from being
-		// released with an unrelated user frame while preserving headphone speech
-		// that is not correlated with the current speaker PCM.
-		g.probe.ResetCapture()
-		probeObservation, probeErr := g.probe.ObserveCaptureContext(ctx, audio.PCM16TimedFrame{
-			Samples:    owned,
-			SampleRate: g.captureRate,
-			Start:      start,
-		})
-		if probeErr != nil {
-			return nil, probeErr
-		}
-		if probeObservation.Confirmed() {
-			g.suppressUntil = g.playbackTailEndLocked()
-			return nil, nil
-		}
-		g.resetCaptureEvidenceLocked()
-		g.state = localFeedbackGateSuppressing
-		return [][]int16{owned}, nil
+		return g.classifySuppressedCaptureLocked(ctx, owned, start, end)
 	}
 	observation, err := g.detector.ObserveCaptureContext(ctx, audio.PCM16TimedFrame{
 		Samples:    owned,
@@ -315,6 +308,70 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	return g.releaseExpiredLocked(end), nil
 }
 
+// classifySuppressedCaptureLocked re-classifies one already-confirmed-loop
+// capture frame against the probe detector. It is called while the gate is
+// suppressing or draining, i.e. after the primary detector has already
+// confirmed feedback at least once.
+//
+// A single ~1-frame probe window is short enough that ordinary acoustic-path
+// noise (a word/pause boundary in the assistant's own speech, reverb
+// smearing, AGC/noise-suppression artifacts) routinely produces a
+// non-Confirmed classification for a frame that is still part of the same
+// ongoing echo. Releasing on any non-Confirmed result (the original
+// behavior) leaked exactly these ambiguous frames straight to the provider,
+// which is what let the assistant hear fragments of itself throughout a
+// response after its one-time warning had already fired.
+//
+// Only a PCM16SelfHearingNonFeedback classification (real paired evidence
+// that is specifically uncorrelated) is treated as possible independent
+// speech, and even then only after it has held for config.AnalysisWindow
+// in a row -- the same confidence bar the primary detector requires before
+// confirming feedback in the first place. PCM16SelfHearingNoEvidence means
+// the probe found nothing to compare (typically because the acoustic tail
+// has genuinely run out of playback to correlate against); it is safe to
+// release immediately and also flushes any partially accumulated evidence.
+// Every other classification (Confirmed, insufficient evidence, or a rate
+// mismatch) keeps the frame suppressed and discards whatever independent
+// evidence had been accumulating, because it is still consistent with
+// ongoing echo.
+func (g *localFeedbackGate) classifySuppressedCaptureLocked(ctx context.Context, owned []int16, start, end time.Duration) ([][]int16, error) {
+	g.probe.ResetCapture()
+	probeObservation, probeErr := g.probe.ObserveCaptureContext(ctx, audio.PCM16TimedFrame{
+		Samples:    owned,
+		SampleRate: g.captureRate,
+		Start:      start,
+	})
+	if probeErr != nil {
+		return nil, probeErr
+	}
+
+	switch probeObservation.Classification {
+	case audio.PCM16SelfHearingNonFeedback:
+		g.pending = append(g.pending, heldLocalCaptureFrame{samples: owned, start: start})
+		g.probeIndependentEvidence += end - start
+		if g.probeIndependentEvidence < g.config.AnalysisWindow {
+			return nil, nil
+		}
+		g.state = localFeedbackGateDraining
+		g.probeIndependentEvidence = 0
+		return g.releaseAllLocked(), nil
+	case audio.PCM16SelfHearingNoEvidence:
+		g.pending = nil
+		g.probeIndependentEvidence = 0
+		g.state = localFeedbackGateDraining
+		return [][]int16{owned}, nil
+	default:
+		// Confirmed, insufficient evidence, or a rate mismatch: still
+		// consistent with ongoing echo. Extend the acoustic tail and drop
+		// any independent-speech evidence that had been accumulating.
+		g.pending = nil
+		g.probeIndependentEvidence = 0
+		g.suppressUntil = g.playbackTailEndLocked()
+		g.state = localFeedbackGateSuppressing
+		return nil, nil
+	}
+}
+
 // DiscardHeld applies the terminal policy for source cancellation, device
 // loss, and provider termination. It deliberately does not close the shared
 // gate because the sibling playback pump may still be unwinding.
@@ -324,6 +381,7 @@ func (g *localFeedbackGate) DiscardHeld() {
 	}
 	g.mu.Lock()
 	g.pending = nil
+	g.probeIndependentEvidence = 0
 	g.mu.Unlock()
 }
 
