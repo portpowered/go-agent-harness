@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -37,6 +38,10 @@ const (
 	PortClock = "clock"
 	// PortSessionRuntimeObserver is the optional command-runtime evidence sink.
 	PortSessionRuntimeObserver = "session-runtime-observer"
+	// PortMetricSampler is the required, defaulted application metrics seam.
+	PortMetricSampler = "metric-sampler"
+	// PortLogger is the required, defaulted structured logging seam.
+	PortLogger = "logger"
 
 	// The *PortName constants make the port contract discoverable to callers
 	// that prefer a name-oriented vocabulary.
@@ -49,6 +54,8 @@ const (
 	AudioSinkPortName              = PortAudioSink
 	ClockPortName                  = PortClock
 	SessionRuntimeObserverPortName = PortSessionRuntimeObserver
+	MetricSamplerPortName          = PortMetricSampler
+	LoggerPortName                 = PortLogger
 )
 
 var (
@@ -155,6 +162,8 @@ type compositionOptions struct {
 	inferencer           messages.Inferencer
 	sessionInferencer    messages.SessionInferencer
 	runtimeObserver      SessionRuntimeObserver
+	metricSampler        MetricSampler
+	logger               Logger
 	rtcComponents        services.SessionRTCComponents
 	rtcComponentsSet     bool
 	relaxModelValidation bool
@@ -182,6 +191,24 @@ func WithSessionInferencer(inferencer messages.SessionInferencer) CompositionOpt
 func WithSessionRuntimeObserver(observer SessionRuntimeObserver) CompositionOption {
 	return func(options *compositionOptions) error {
 		options.runtimeObserver = observer
+		return nil
+	}
+}
+
+// WithMetricSampler supplies the application metrics seam to direct
+// composition callers. Nil is normalized to the no-op implementation.
+func WithMetricSampler(sampler MetricSampler) CompositionOption {
+	return func(options *compositionOptions) error {
+		options.metricSampler = observability.EnsureMetricSampler(sampler)
+		return nil
+	}
+}
+
+// WithLogger supplies the structured application logger to direct
+// composition callers. Nil is normalized to the no-op implementation.
+func WithLogger(logger Logger) CompositionOption {
+	return func(options *compositionOptions) error {
+		options.logger = observability.EnsureLogger(logger)
 		return nil
 	}
 }
@@ -241,6 +268,8 @@ func ComposeAgentCLI(
 		audioSink:         audioSink,
 		clockSource:       clockSource,
 		runtimeObserver:   compositionOptions.runtimeObserver,
+		metricSampler:     observability.EnsureMetricSampler(compositionOptions.metricSampler),
+		logger:            observability.EnsureLogger(compositionOptions.logger),
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
 		rtcComponents:     effectiveSessionRTCComponents(compositionOptions),
@@ -261,6 +290,8 @@ func ComposeAgentCLI(
 		values.audioSink,
 		values.clockSource,
 		values.runtimeObserver,
+		values.metricSampler,
+		values.logger,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -342,6 +373,8 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		values.audioSink,
 		values.clockSource,
 		values.runtimeObserver,
+		values.metricSampler,
+		values.logger,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -413,6 +446,8 @@ type compositionValues struct {
 	audioSink         AudioSink
 	clockSource       Clock
 	runtimeObserver   SessionRuntimeObserver
+	metricSampler     MetricSampler
+	logger            Logger
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
 	rtcComponents     services.SessionRTCComponents
@@ -437,6 +472,38 @@ type portDefinition struct {
 // public discovery, and mock swapping all iterate this function's result.
 func livePortDefinitions() []portDefinition {
 	return []portDefinition{
+		{
+			descriptor: PortDescriptor{
+				Name:     PortMetricSampler,
+				Required: true,
+				Type:     reflect.TypeOf((*MetricSampler)(nil)).Elem(),
+			},
+			value:        func(values *compositionValues) any { return values.metricSampler },
+			defaultValue: func(*tools.ToolRegistry) any { return observability.NewNoopMetricSampler() },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.metricSampler = nil
+					return
+				}
+				values.metricSampler = value.(MetricSampler)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortLogger,
+				Required: true,
+				Type:     reflect.TypeOf((*Logger)(nil)).Elem(),
+			},
+			value:        func(values *compositionValues) any { return values.logger },
+			defaultValue: func(*tools.ToolRegistry) any { return observability.NewNoopLogger() },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.logger = nil
+					return
+				}
+				values.logger = value.(Logger)
+			},
+		},
 		{
 			descriptor: PortDescriptor{
 				Name:     PortToolExecutor,

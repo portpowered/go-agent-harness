@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 )
 
 const (
@@ -110,6 +111,12 @@ type RTCDeviceBindingRequest struct {
 	// device closes. It is called outside the native device callback and may be
 	// used to publish cumulative overflow diagnostics.
 	PlaybackObserver RTCDevicePlaybackObserver
+	// CaptureObserver receives one final capture queue snapshot after the input
+	// device has stopped, outside its native callback.
+	CaptureObserver RTCDeviceCaptureObserver
+	// Observability is populated by the application composition root so local
+	// device snapshots cannot lose their metric/logger path at a command seam.
+	Observability observability.Dependencies
 }
 
 func (r RTCDeviceBindingRequest) inputSelected() bool {
@@ -217,6 +224,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 			}
 		}
 		binding.Source = source
+		binding.Source.captureObserver = request.CaptureObserver
 	}
 
 	if request.outputSelected() {

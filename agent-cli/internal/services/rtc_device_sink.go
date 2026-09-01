@@ -37,6 +37,10 @@ type RTCDeviceSinkError struct {
 // device callback and is therefore suitable for session diagnostics.
 type RTCDevicePlaybackObserver func(audio.DeviceID, audio.PlaybackQueueStats)
 
+// RTCDeviceCaptureObserver receives the corresponding input queue snapshot at
+// source teardown, outside the native callback.
+type RTCDeviceCaptureObserver func(audio.DeviceID, audio.CaptureQueueStats)
+
 func (e *RTCDeviceSinkError) Error() string {
 	if e == nil {
 		return "<nil>"

@@ -392,6 +392,13 @@ func (h *coreAudioHandle) PlaybackStats() PlaybackQueueStats {
 	return h.playback.Snapshot()
 }
 
+func (h *coreAudioHandle) CaptureStats() CaptureQueueStats {
+	if h == nil || h.capture == nil {
+		return CaptureQueueStats{}
+	}
+	return h.capture.CaptureStats()
+}
+
 // DiscardPlayback removes samples that have not yet been handed to the
 // CoreAudio callback. In-flight callback output is intentionally outside this
 // boundary.

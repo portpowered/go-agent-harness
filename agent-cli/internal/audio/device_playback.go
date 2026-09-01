@@ -355,6 +355,12 @@ type PlaybackStatsProvider interface {
 	PlaybackStats() PlaybackQueueStats
 }
 
+// CaptureStatsProvider is the optional device capability for synchronized
+// native capture queue and loss counters.
+type CaptureStatsProvider interface {
+	CaptureStats() CaptureQueueStats
+}
+
 // PlaybackDiscarder exposes cancellation-scoped removal of queued samples.
 // It is optional for compatibility with non-queueing device implementations.
 type PlaybackDiscarder interface {

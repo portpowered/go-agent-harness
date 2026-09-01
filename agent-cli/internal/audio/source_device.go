@@ -176,6 +176,18 @@ func (s *DeviceSource) SampleRate() int {
 	return s.DeviceFormat().SampleRate
 }
 
+// CaptureStats returns a synchronized capture snapshot when the selected
+// backend exposes one. Other backends retain a format-neutral zero value.
+func (s *DeviceSource) CaptureStats() CaptureQueueStats {
+	if s == nil || s.adapter == nil {
+		return CaptureQueueStats{}
+	}
+	if provider, ok := s.adapter.handle.(CaptureStatsProvider); ok {
+		return provider.CaptureStats()
+	}
+	return CaptureQueueStats{}
+}
+
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := contextError(ctx); err != nil {
 		return err

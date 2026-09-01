@@ -13,10 +13,63 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
+
+func TestSessionRTCRuntimeObservabilityCoversSuccessFailureAndClose(t *testing.T) {
+	var samples []observability.MetricSample
+	var logs []observability.LogRecord
+	sampler := observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
+		samples = append(samples, sample)
+		return errors.New("ignored metric error")
+	})
+	logger := observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+		logs = append(logs, record)
+		return errors.New("ignored log error")
+	})
+	components := SessionRTCComponents{
+		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) { return &testRTCSignaling{}, nil },
+		NewDataPlane:     func(context.Context, rtc.Signaling) (SessionRTCDataPlane, error) { return &testRTCDataPlane{}, nil },
+		OpenMediaSource:  func(context.Context, string) (rtc.InboundMedia, error) { return &testRTCInboundMedia{}, nil },
+	}
+	factory := NewSessionRTCRuntimeFactoryWithObservability(components, sampler, logger)
+	runtime, err := factory(SessionRuntimeSelection{Transport: SessionTransportWebRTC})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	failing := components
+	failing.ResolveSignaling = func(context.Context, string) (rtc.Signaling, error) { return nil, errors.New("offline") }
+	runtime, err = NewSessionRTCRuntimeFactoryWithObservability(failing, sampler, logger)(SessionRuntimeSelection{Transport: SessionTransportWebRTC})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Start(context.Background()); err == nil {
+		t.Fatal("failing runtime start returned nil error")
+	}
+
+	var events []string
+	for _, sample := range samples {
+		if sample.Name == "session.rtc.lifecycle" {
+			events = append(events, sample.Fields["event"])
+		}
+	}
+	if !reflect.DeepEqual(events, []string{"started", "closed", "start_failed"}) {
+		t.Fatalf("lifecycle events = %v", events)
+	}
+	if len(logs) != 3 || logs[2].Level != "error" || logs[2].Fields["phase"] != "resolve signaling" {
+		t.Fatalf("lifecycle logs = %+v", logs)
+	}
+}
 
 func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t *testing.T) {
 	const (
