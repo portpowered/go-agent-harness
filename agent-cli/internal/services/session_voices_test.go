@@ -54,6 +54,33 @@ func TestValidateOpenAIRealtimeVoiceReturnsStableTypedError(t *testing.T) {
 	}
 }
 
+// TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections pins the fixed
+// per-voice loudness gain table: alloy (the measured reference) and verse
+// (the measured ~7.3 dB deficit) are the only two voices with an
+// independent loudness measurement, and every other documented voice --
+// plus the empty/unset default -- must resolve to exactly 0 dB. That 0 dB
+// default is what keeps normalization from disturbing any existing test
+// that does not explicitly configure a corrected voice.
+func TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections(t *testing.T) {
+	if got := VoiceLoudnessGainDB("alloy"); got != 0 {
+		t.Fatalf("VoiceLoudnessGainDB(alloy) = %v, want 0", got)
+	}
+	if got := VoiceLoudnessGainDB("verse"); got != 7.3 {
+		t.Fatalf("VoiceLoudnessGainDB(verse) = %v, want 7.3", got)
+	}
+	for _, voice := range append([]string{""}, SupportedOpenAIRealtimeVoices()...) {
+		if voice == "alloy" || voice == "verse" {
+			continue
+		}
+		if got := VoiceLoudnessGainDB(voice); got != 0 {
+			t.Fatalf("VoiceLoudnessGainDB(%q) = %v, want 0 (unmeasured voices default to no adjustment)", voice, got)
+		}
+	}
+	if got := VoiceLoudnessGainDB("not-a-real-voice"); got != 0 {
+		t.Fatalf("VoiceLoudnessGainDB(unknown) = %v, want 0", got)
+	}
+}
+
 func TestRunSession_InvalidVoiceFailsBeforeReplayConsumption(t *testing.T) {
 	err := RunSession(context.Background(), io.Discard, SessionRunOptions{
 		ReplayPath: filepath.Join(t.TempDir(), "missing.session.json"),

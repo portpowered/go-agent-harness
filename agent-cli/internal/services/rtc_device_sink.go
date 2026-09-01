@@ -60,6 +60,15 @@ type RTCDeviceSink struct {
 	providerRate     int
 	deviceRate       int
 	playbackObserver RTCDevicePlaybackObserver
+	// loudness applies this session's fixed, voice-specific gain (see
+	// VoiceLoudnessGainDB) to synthesized audio before it reaches the
+	// feedback-gate observer or the device, so --voice selection does not
+	// change local playback volume. This sink only ever plays one
+	// participant's own un-mixed provider audio (a room's human participant
+	// plays the room mix through a separate audio.DeviceSink, not this
+	// type), so per-voice gain here can never double-apply to already-mixed
+	// content.
+	loudness *audio.LoudnessNormalizer
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelCauseFunc
@@ -80,16 +89,19 @@ type RTCDeviceSink struct {
 // An empty id selects the registry's output default; a non-empty id is passed
 // through as an exact stable device ID.
 func NewRTCDeviceSink(registry audio.DeviceRegistry, id audio.DeviceID) (*RTCDeviceSink, error) {
-	return newRTCDeviceSinkAtRate(registry, id, audio.SampleRate, nil)
+	return newRTCDeviceSinkAtRate(registry, id, audio.SampleRate, "", nil)
 }
 
 // NewRTCDeviceSinkAtRate opens an output device for mono PCM16 at rate. A
 // zero rate retains the compatibility default used by NewRTCDeviceSink.
 func NewRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int) (*RTCDeviceSink, error) {
-	return newRTCDeviceSinkAtRate(registry, id, rate, nil)
+	return newRTCDeviceSinkAtRate(registry, id, rate, "", nil)
 }
 
-func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int, playbackObserver RTCDevicePlaybackObserver) (*RTCDeviceSink, error) {
+// newRTCDeviceSinkAtRate opens the sink's output device. voice selects the
+// fixed per-voice loudness gain applied to every frame this sink plays (see
+// LoudnessNormalizer); an empty voice is the documented 0 dB no-op.
+func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int, voice string, playbackObserver RTCDevicePlaybackObserver) (*RTCDeviceSink, error) {
 	if rate == 0 {
 		rate = audio.SampleRate
 	}
@@ -104,6 +116,7 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 		providerRate:     rate,
 		deviceRate:       deviceRate,
 		playbackObserver: playbackObserver,
+		loudness:         audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(voice)}),
 		lifeCtx:          lifeCtx,
 		lifeCancel:       lifeCancel,
 	}, nil
@@ -235,10 +248,18 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 
 func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *rtcDevicePlaybackBuffer, providerFrame rtc.PCMFrame, generation uint64, blocked bool) error {
 	// InboundMedia returns receiver-owned storage that may be reused after
-	// ReadFrame returns. Resampling to the device rate below always produces a
-	// private copy, so no additional defensive copy is needed at this
-	// boundary.
-	converted, err := s.deviceFrame(providerFrame.Samples)
+	// ReadFrame returns. Normalizing (when enabled) and resampling to the
+	// device rate below always produce a private copy, so no additional
+	// defensive copy is needed at this boundary.
+	samples := providerFrame.Samples
+	if s.loudness != nil {
+		// Normalize at the provider's own rate, before resampling, so the
+		// feedback-suppression gate (which observes exactly what this sink
+		// writes to the device) sees the same corrected audio a listener
+		// actually hears.
+		samples = s.loudness.Process(samples)
+	}
+	converted, err := s.deviceFrame(samples)
 	if err != nil {
 		return err
 	}

@@ -97,6 +97,11 @@ type RTCDeviceBindingRequest struct {
 	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
 	// the legacy device rate for callers that do not carry a session contract.
 	OutputSampleRate int
+	// OutputVoice selects the fixed per-voice output loudness gain applied
+	// to this session's own audio before it reaches the device (see
+	// audio.LoudnessNormalizer / VoiceLoudnessGainDB). An empty value is the
+	// documented 0 dB no-op, matching the provider-selected default voice.
+	OutputVoice string
 	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
 	// cannot open this rate may be opened at another supported rate and
 	// converted once by RTCDeviceSource before provider transmission.
@@ -215,7 +220,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	if request.outputSelected() {
-		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.PlaybackObserver)
+		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.OutputVoice, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(&RTCDeviceBindingError{

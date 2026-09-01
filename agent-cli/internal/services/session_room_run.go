@@ -489,6 +489,18 @@ func observeRoomParticipantStream(
 		return
 	}
 	pcm := append([]byte(nil), value.Content...)
+	if runtime.outboundLoudness != nil {
+		// Apply this participant's fixed, voice-specific gain (see
+		// VoiceLoudnessGainDB) before anything downstream observes it, so
+		// --voice selection cannot leave one room participant audibly
+		// quieter than another. msg.Value is updated to the same bytes so
+		// the recorded delta (below, via recordParticipantDelta) stays
+		// byte-identical to the WAV/mix artifacts derived from pcm -- a
+		// replay bundle must be able to reconstruct its WAV from its
+		// recorded deltas.
+		pcm = runtime.outboundLoudness.ProcessBytes(pcm)
+		msg.Value = messages.NewAudioDeltaValueWithMediaType(pcm, value.MediaType)
+	}
 	targets := coordinator.activeExcept(plan.manifest.ID)
 	targetIDs := make([]string, 0, len(targets))
 	for _, target := range targets {
