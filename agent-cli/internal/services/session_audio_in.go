@@ -1054,58 +1054,6 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (audio.AudioSource, e
 	}
 }
 
-// sessionDecodedWAVSource serves a fully decoded, harness-rate sample buffer
-// through the AudioSource contract. It mirrors sessionWAVSource semantics:
-// ReadFrame zero-pads a final short frame and returns io.EOF once the payload
-// is exhausted.
-type sessionDecodedWAVSource struct {
-	path     string
-	samples  []int16
-	position int
-	done     bool
-	closed   bool
-	mu       sync.Mutex
-}
-
-var _ audio.AudioSource = (*sessionDecodedWAVSource)(nil)
-
-func (s *sessionDecodedWAVSource) ReadFrame(ctx context.Context, buf []int16) error {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-	}
-	if len(buf) != audio.FrameSize {
-		return &audio.FrameSizeError{Operation: "read", Got: len(buf), Want: audio.FrameSize}
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return &audio.ClosedError{Operation: "read", Path: s.path}
-	}
-	if s.done {
-		return io.EOF
-	}
-	clear(buf)
-	copy(buf, s.samples[s.position:])
-	s.position += audio.FrameSize
-	if s.position >= len(s.samples) {
-		s.done = true
-	}
-	return nil
-}
-
-// Close marks the decoded source closed. It is safe to call more than once.
-func (s *sessionDecodedWAVSource) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	s.done = true
-	return nil
-}
-
 // ReadFrame fills buf with the next data-chunk frame, zero-padding a final
 // short frame. Once the payload is exhausted it returns io.EOF. Each call
 // consumes at most FrameSize*2 payload bytes, never the remaining file.
