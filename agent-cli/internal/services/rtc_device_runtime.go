@@ -144,6 +144,13 @@ type rtcDeviceBoundSession struct {
 	binding *RTCDeviceBinding
 }
 
+// Send keeps the legacy bool-only session path on the same cancellation
+// boundary as SendWithOutcome. Without this explicit method, the promoted
+// messages.Session.Send method would bypass the local playback flush.
+func (s *rtcDeviceBoundSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
 func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
@@ -188,7 +195,16 @@ func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg message
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(msg) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
-	return messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	if outcome.OK() && msg.Type == messages.StreamTypeResponseCancel && s.binding != nil && s.binding.Sink != nil {
+		// The provider-facing cancellation is the accepted local boundary. The
+		// queue discard shares the device callback's lock, so a callback either
+		// drains a bounded already-submitted fragment before this point or sees
+		// the queue empty; queued samples present at the boundary cannot survive
+		// into a subsequent response.
+		s.binding.Sink.DiscardPlayback()
+	}
+	return outcome
 }
 
 func (s *rtcDeviceBoundSession) SessionAdmissionClosed() bool {
