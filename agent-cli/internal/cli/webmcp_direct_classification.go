@@ -319,12 +319,26 @@ func normalizeDirectBrowserCandidates(candidates []webmcp.BrowserCandidate) []we
 	return normalized
 }
 
+// directPageTargetCandidates is the shared direct-CLI discovery boundary.
+// Chrome exposes browser-owned UI surfaces through the same CDP target list
+// as documents, but only an exact page target is selectable by this CLI.
+func directPageTargetCandidates(targets []webmcp.Target) []webmcp.Target {
+	pages := make([]webmcp.Target, 0, len(targets))
+	for _, target := range targets {
+		if target.Type != "page" {
+			continue
+		}
+		pages = append(pages, target)
+	}
+	return pages
+}
+
 func directEligibleTargetMatches(targets []webmcp.Target, browser config.BrowserConfig) []webmcp.Target {
 	matches := make([]webmcp.Target, 0, len(targets))
 	seen := make(map[string]struct{}, len(targets))
-	for _, possible := range targets {
+	for _, possible := range directPageTargetCandidates(targets) {
 		id := normalizeDirectOpaqueID(string(possible.ID))
-		if id == "" || (possible.Type != "" && !strings.EqualFold(possible.Type, "page")) || !possible.Eligible {
+		if id == "" || !possible.Eligible {
 			continue
 		}
 		if browser.Selection.Origin != "" && safeOrigin(possible.Origin) != safeOrigin(browser.Selection.Origin) {
@@ -345,9 +359,9 @@ func directEligibleTargetMatches(targets []webmcp.Target, browser config.Browser
 }
 
 // directNoEligibleTabError keeps the direct selection path aligned with the
-// C0 no_eligible_tab envelope. The broker target list is the complete
+// C0 no_eligible_tab envelope. The direct page candidate list is the complete
 // enumeration at this boundary, so its length is the useful candidate count
-// even when eligibility filtering removes every target.
+// even when eligibility filtering removes every page.
 func directNoEligibleTabError(browserID string, browser config.BrowserConfig, candidateCount int, reason string) error {
 	if candidateCount < 0 {
 		candidateCount = 0

@@ -178,6 +178,126 @@ func TestWebMCPDirectSelectionPersistsRedactedOpaqueIDs(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectSelectReplacesStalePersistedSelectionAndActivateRestoresIt(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	_, oldTarget, oldCandidate, _ := directFixture()
+	oldCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	oldSelection := WebMCPSelection{
+		Version:           WebMCPSelectionVersion,
+		EndpointID:        string(oldCandidate.ID),
+		BrowserID:         string(oldCandidate.ID),
+		BrowserInstanceID: oldCandidate.BrowserInstanceID,
+		TargetID:          string(oldTarget.ID),
+		Origin:            oldTarget.Origin,
+		ContinuityMarker:  "old-document",
+		Generation:        4,
+		SelectedAt:        time.Unix(4, 0).UTC(),
+	}
+	if err := store.Save(oldSelection); err != nil {
+		t.Fatalf("save stale selection: %v", err)
+	}
+
+	page, target, candidate, tool := directFixture()
+	candidate.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-new-"))
+	candidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	target.BrowserID = candidate.ID
+	target.ID = webmcp.TargetID(randomizedWebMCPTestID(t, "target-new-"))
+	target.ContinuityMarker = "new-document"
+	target.Generation = 9
+	page.Key = webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}
+	page.Generation = target.Generation
+	page.Origin = target.Origin
+	catalog := webmcp.ToolCatalogSnapshot{
+		Context:    page,
+		Generation: page.Generation,
+		Tools:      []webmcp.ToolDescriptor{tool},
+	}
+	replacement := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		catalog:    catalog,
+	}
+
+	// Supplying the endpoint and single-selection policy is the documented
+	// recovery shape after a browser restart. The stale file must not be
+	// loaded as a prerequisite for this explicit select operation.
+	selected := executeDirectCommand(t, configDir, store, directFactory(replacement),
+		"select", "--cdp-url", "http://127.0.0.1:9222", "--auto-select", "single", "--json")
+	requireDirectSuccess(t, selected)
+	updated, err := store.Load()
+	if err != nil {
+		t.Fatalf("load replacement selection: %v", err)
+	}
+	if updated.BrowserID != string(candidate.ID) || updated.BrowserInstanceID != candidate.BrowserInstanceID ||
+		updated.TargetID != string(target.ID) || updated.Generation != target.Generation || updated.ContinuityMarker != target.ContinuityMarker {
+		t.Fatalf("replacement selection = %+v, want live identity over stale=%+v", updated, oldSelection)
+	}
+	if len(replacement.selectCalls) != 1 || replacement.selectCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("replacement select calls = %+v", replacement.selectCalls)
+	}
+
+	// A subsequent command with no IDs must consume the newly persisted exact
+	// target, just as it would in a fresh process after the recovery command.
+	activation := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	activated := executeDirectCommand(t, configDir, store, directFactory(activation), "activate", "--json")
+	requireDirectSuccess(t, activated)
+	if len(activation.activateCalls) != 1 || activation.activateCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("restored activation calls = %+v", activation.activateCalls)
+	}
+}
+
+func TestWebMCPDirectFailedReplacementPreservesStalePersistedSelection(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	_, target, oldCandidate, _ := directFixture()
+	oldCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	prior := WebMCPSelection{
+		Version:           WebMCPSelectionVersion,
+		EndpointID:        string(oldCandidate.ID),
+		BrowserID:         string(oldCandidate.ID),
+		BrowserInstanceID: oldCandidate.BrowserInstanceID,
+		TargetID:          string(target.ID),
+		Origin:            target.Origin,
+		ContinuityMarker:  "old-document",
+		Generation:        4,
+		SelectedAt:        time.Unix(4, 0).UTC(),
+	}
+	if err := store.Save(prior); err != nil {
+		t.Fatalf("save stale selection: %v", err)
+	}
+
+	_, replacementTarget, replacementCandidate, _ := directFixture()
+	replacementCandidate.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-new-"))
+	replacementCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	replacementTarget.BrowserID = replacementCandidate.ID
+	replacementTarget.ID = webmcp.TargetID(randomizedWebMCPTestID(t, "target-new-"))
+	replacementTarget.Generation = 9
+	broker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{replacementCandidate},
+		targets:    []webmcp.Target{replacementTarget},
+		selectErr:  errors.New("replacement attach failed"),
+	}
+	result := executeDirectCommand(t, configDir, store, directFactory(broker),
+		"select", "--auto-select", "single", "--json")
+	if result.err == nil {
+		t.Fatal("failed replacement unexpectedly succeeded")
+	}
+	if got, err := store.Load(); err != nil {
+		t.Fatalf("load selection after failed replacement: %v", err)
+	} else if !reflect.DeepEqual(got, prior) {
+		t.Fatalf("failed replacement changed persisted selection: got=%+v want=%+v", got, prior)
+	}
+	if len(broker.selectCalls) != 0 {
+		t.Fatalf("failed replacement recorded a successful selection: %+v", broker.selectCalls)
+	}
+}
+
 func TestWebMCPDirectSeparateCommandsRejectStaleSelectionWithoutFallback(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
@@ -211,6 +331,82 @@ func TestWebMCPDirectSeparateCommandsRejectStaleSelectionWithoutFallback(t *test
 	}
 }
 
+func TestWebMCPDirectStaleSelectionRendersOnceAndOffersSelectRecovery(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "human"},
+		{name: "json", json: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			configDir := writeDirectConfig(t, "")
+			store := NewFileWebMCPSelectionStore(configDir)
+			if err := store.Save(WebMCPSelection{
+				Version:    WebMCPSelectionVersion,
+				EndpointID: "browser-a",
+				BrowserID:  "browser-a",
+				TargetID:   "missing-tab",
+				Origin:     "https://fixture.test",
+				SelectedAt: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC),
+			}); err != nil {
+				t.Fatalf("seed selection: %v", err)
+			}
+
+			page, _, candidate, _ := directFixture()
+			otherTarget := webmcp.Target{
+				BrowserID: candidate.ID,
+				ID:        "other-tab",
+				Type:      "page",
+				Title:     "Fallback must not be used",
+				URL:       "https://fixture.test/other",
+				Origin:    "https://fixture.test",
+				Eligible:  true,
+			}
+			broker := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    []webmcp.Target{otherTarget},
+				selected:   page,
+			}
+			args := []string{"context"}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			result := executeDirectCommandThroughAgentRoot(t, configDir, store, directFactory(broker), args...)
+			if result.err == nil {
+				t.Fatal("context unexpectedly succeeded with stale selection")
+			}
+			if result.stderr != "" {
+				t.Fatalf("Cobra added a second diagnostic: %q", result.stderr)
+			}
+
+			if testCase.json {
+				envelope := decodeDirectEnvelope(t, result.stdout)
+				if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+					t.Fatalf("stale JSON envelope = %+v", envelope)
+				}
+				recovery, ok := envelope.Error.Details["recovery"].(map[string]any)
+				if !ok || recovery["command"] != directSelectionRecoveryCommand {
+					t.Fatalf("stale JSON recovery = %#v", envelope.Error.Details["recovery"])
+				}
+				if strings.Contains(result.stdout, "Error:") {
+					t.Fatalf("JSON output included a human diagnostic: %q", result.stdout)
+				}
+				return
+			}
+
+			if strings.Count(result.stdout, "Error:") != 1 {
+				t.Fatalf("human diagnostic count = %d, output=%q", strings.Count(result.stdout, "Error:"), result.stdout)
+			}
+			for _, want := range []string{"stale_selection", directSelectionRecoveryCommand} {
+				if !strings.Contains(result.stdout, want) {
+					t.Fatalf("human output omitted %q: %q", want, result.stdout)
+				}
+			}
+		})
+	}
+}
+
 func TestWebMCPDirectDefaultSelectionDoesNotChooseAConvenientTab(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	page, target, candidate, _ := directFixture()
@@ -229,6 +425,97 @@ func TestWebMCPDirectDefaultSelectionDoesNotChooseAConvenientTab(t *testing.T) {
 	}
 	if len(broker.selectCalls) != 0 {
 		t.Fatalf("context selected a tab without an explicit selector: %+v", broker.selectCalls)
+	}
+}
+
+func TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets(t *testing.T) {
+	page, target, candidate, _ := directFixture()
+	uiTarget := target
+	uiTarget.ID = "omnibox-popup"
+	uiTarget.Type = "browser_ui"
+	uiTarget.Title = "Omnibox Popup"
+	uiTarget.URL = "chrome://omnibox-popup"
+	nonExactPageTarget := target
+	nonExactPageTarget.ID = "capitalized-page"
+	nonExactPageTarget.Type = "Page"
+	targets := []webmcp.Target{uiTarget, nonExactPageTarget, target}
+
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "json", json: true},
+		{name: "human"},
+	} {
+		t.Run("tabs_"+testCase.name, func(t *testing.T) {
+			broker := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    targets,
+				selected:   page,
+			}
+			args := []string{"tabs", "--browser", string(candidate.ID)}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), args...)
+			if result.err != nil {
+				t.Fatalf("tabs: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
+			}
+			if testCase.json {
+				envelope := requireDirectSuccess(t, result)
+				var data WebMCPDirectTabsData
+				decodeDirectData(t, envelope.Data, &data)
+				if len(data.Tabs) != 1 || data.Tabs[0].TargetID != string(target.ID) || data.Tabs[0].Type != "page" {
+					t.Fatalf("page-only tabs = %+v", data.Tabs)
+				}
+			} else {
+				if !strings.Contains(result.stdout, string(target.ID)) || !strings.Contains(result.stdout, "Tabs:") {
+					t.Fatalf("human page-only tabs omitted the page: %q", result.stdout)
+				}
+				for _, forbidden := range []string{string(uiTarget.ID), uiTarget.Title, string(nonExactPageTarget.ID)} {
+					if strings.Contains(result.stdout, forbidden) {
+						t.Fatalf("human page-only tabs exposed %q: %q", forbidden, result.stdout)
+					}
+				}
+			}
+		})
+	}
+
+	selectBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    targets,
+		selected:   page,
+	}
+	selected := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(selectBroker), "select", "--browser", string(candidate.ID), "--auto-select", "single", "--json")
+	selectionEnvelope := requireDirectSuccess(t, selected)
+	var selectionData WebMCPDirectContext
+	decodeDirectData(t, selectionEnvelope.Data, &selectionData)
+	if selectionData.TargetID != string(target.ID) {
+		t.Fatalf("auto-selected target = %q, want %q", selectionData.TargetID, target.ID)
+	}
+	if len(selectBroker.selectCalls) != 1 || selectBroker.selectCalls[0].TargetID != target.ID {
+		t.Fatalf("auto-selection calls = %+v", selectBroker.selectCalls)
+	}
+
+	secondPage := target
+	secondPage.ID = "tab-b"
+	ambiguousBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{uiTarget, target, secondPage},
+	}
+	ambiguous := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(ambiguousBroker), "select", "--browser", string(candidate.ID), "--auto-select", "single", "--json")
+	if ambiguous.err == nil {
+		t.Fatal("auto-selection unexpectedly chose one of two page targets")
+	}
+	ambiguousEnvelope := decodeDirectEnvelope(t, ambiguous.stdout)
+	if ambiguousEnvelope.OK || ambiguousEnvelope.Error == nil || ambiguousEnvelope.Error.Code != string(webmcp.ErrorAmbiguousTab) {
+		t.Fatalf("multi-page ambiguity envelope = %+v", ambiguousEnvelope)
+	}
+	if ids := directSafeIDList(ambiguousEnvelope.Error.Details["candidate_target_ids"]); !reflect.DeepEqual(ids, []string{"tab-a", "tab-b"}) {
+		t.Fatalf("multi-page ambiguity candidates = %v", ids)
+	}
+	if len(ambiguousBroker.selectCalls) != 0 {
+		t.Fatalf("ambiguous page selection caused side effects: %+v", ambiguousBroker.selectCalls)
 	}
 }
 
@@ -1771,6 +2058,23 @@ type directCommandResult struct {
 
 func executeDirectCommand(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
 	return executeDirectCommandContext(t, context.Background(), configDir, store, factory, args...)
+}
+
+func executeDirectCommandThroughAgentRoot(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
+	t.Helper()
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	operations := NewWebMCPOperationsCommand(globalFlags, factory)
+	operations.SelectionStore = store
+	webmcpCommand := &WebMCPCommand{OperationsCommand: operations}
+	root := &cobra.Command{Use: "agent"}
+	root.AddCommand(NewPath("webmcp", webmcpCommand.Generate()).CreateCommand())
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(append([]string{"webmcp"}, args...))
+	err := root.ExecuteContext(context.Background())
+	return directCommandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
 func executeDirectCommandContext(t *testing.T, ctx context.Context, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
