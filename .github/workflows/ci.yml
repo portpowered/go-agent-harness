@@ -185,6 +185,10 @@ jobs:
         if: always()
         run: make test-rtc-race
 
+      - name: Run audio stability race corpus
+        if: always()
+        run: make test-audio-stability-race
+
       - name: Run concurrent session capacity race acceptance
         if: always()
         run: make test-sessions-race

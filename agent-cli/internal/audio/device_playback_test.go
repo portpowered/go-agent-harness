@@ -235,6 +235,40 @@ func TestPlaybackQueueHandlesInvalidInputsAndPCM16Callbacks(t *testing.T) {
 	}
 }
 
+func TestRenderCallbackReportsExactZeroFilledUnderrun(t *testing.T) {
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(48000), time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Enqueue([]int16{11, 22, 33})
+	rendered := []int16{9, 9, 9, 9, 9}
+	if got := q.RenderInto(rendered); got != 3 {
+		t.Fatalf("rendered source samples = %d, want 3", got)
+	}
+	if want := []int16{11, 22, 33, 0, 0}; !reflect.DeepEqual(rendered, want) {
+		t.Fatalf("rendered callback = %v, want %v", rendered, want)
+	}
+	stats := q.Snapshot()
+	if stats.CallbackCount != 1 || stats.RenderedSamples != 5 || stats.UnderflowEvents != 1 || stats.UnderflowSamples != 2 || stats.ZeroFilledSamples != 2 || stats.MinimumQueuedSamples != 3 {
+		t.Fatalf("callback stats = %+v", stats)
+	}
+}
+
+func TestPlaybackQueueRingWrapPreservesFIFO(t *testing.T) {
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(16000), time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Enqueue(int16Samples(0, 12))
+	if got := q.Dequeue(9); !reflect.DeepEqual(got, int16Samples(0, 9)) {
+		t.Fatalf("prefix = %v", got)
+	}
+	q.Enqueue(int16Samples(12, 13))
+	if got, want := q.Dequeue(16), int16Samples(9, 16); !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrapped FIFO = %v, want %v", got, want)
+	}
+}
+
 func int16Samples(start, count int) []int16 {
 	samples := make([]int16, count)
 	for index := range samples {

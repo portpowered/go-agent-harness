@@ -23,6 +23,7 @@ type MicrophoneSource struct {
 	mu       sync.Mutex
 	pending  []int16
 	closed   bool
+	stats    CaptureQueueStats
 }
 
 // NewMicrophoneSource opens the default capture device and begins recording.
@@ -37,6 +38,7 @@ func NewMicrophoneSource() (*MicrophoneSource, error) {
 		malgoCtx: malgoCtx,
 		// Buffer up to 64 frames (~1.9 s) before dropping.
 		frameCh: make(chan []int16, 64),
+		stats:   CaptureQueueStats{DropPolicy: "drop_oldest"},
 	}
 
 	cfg := malgo.DefaultDeviceConfig(malgo.Capture)
@@ -69,6 +71,12 @@ func NewMicrophoneSource() (*MicrophoneSource, error) {
 // onCapture is called by malgo's audio thread with raw captured bytes.
 // It assembles complete FrameSize frames and dispatches them to frameCh.
 func (m *MicrophoneSource) onCapture(raw []byte, frames int) {
+	if frames > len(raw)/2 {
+		frames = len(raw) / 2
+	}
+	if frames <= 0 {
+		return
+	}
 	samples := make([]int16, frames)
 	for i := 0; i < frames; i++ {
 		samples[i] = int16(binary.LittleEndian.Uint16(raw[i*2:]))
@@ -80,18 +88,46 @@ func (m *MicrophoneSource) onCapture(raw []byte, frames int) {
 	if m.closed {
 		return
 	}
+	m.stats.CapturedSamples += uint64(frames)
 
 	m.pending = append(m.pending, samples...)
 	for len(m.pending) >= FrameSize {
 		frame := make([]int16, FrameSize)
 		copy(frame, m.pending[:FrameSize])
 		m.pending = m.pending[FrameSize:]
+		m.stats.CompletedFrames++
 		select {
 		case m.frameCh <- frame:
 		default:
-			// Channel is full; drop the oldest-available frame.
+			// Preserve real-time freshness: evict one stale queued frame, then
+			// admit the newly completed frame. Every loss remains observable.
+			select {
+			case <-m.frameCh:
+			default:
+			}
+			m.frameCh <- frame
+			m.stats.DroppedFrames++
+			m.stats.DroppedSamples += FrameSize
+			m.stats.SequenceGaps++
+		}
+		m.stats.QueuedSamples = len(m.frameCh) * FrameSize
+		if m.stats.QueuedSamples > m.stats.HighWaterSamples {
+			m.stats.HighWaterSamples = m.stats.QueuedSamples
 		}
 	}
+}
+
+// CaptureStats returns the explicit native capture overflow policy and exact
+// cumulative loss counters.
+func (m *MicrophoneSource) CaptureStats() CaptureQueueStats {
+	if m == nil {
+		return CaptureQueueStats{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stats := m.stats
+	stats.QueuedSamples = len(m.frameCh) * FrameSize
+	return stats
 }
 
 // ReadFrame blocks until FrameSize samples are ready or ctx is cancelled.

@@ -30,31 +30,44 @@ var ErrInvalidPlaybackQueue = errors.New("invalid audio playback queue")
 // of the queue; the former counts overflow loss and the latter counts an
 // explicit cancellation/discard operation.
 type PlaybackQueueStats struct {
-	Format            DeviceFormat
-	LatencyTarget     time.Duration
-	CapacitySamples   int
-	QueuedSamples     int
-	PeakQueuedSamples int
-	DroppedSamples    uint64
-	OverflowEvents    uint64
-	DiscardedSamples  uint64
-	DiscardEvents     uint64
+	Format               DeviceFormat
+	LatencyTarget        time.Duration
+	CapacitySamples      int
+	QueuedSamples        int
+	PeakQueuedSamples    int
+	DroppedSamples       uint64
+	OverflowEvents       uint64
+	DiscardedSamples     uint64
+	DiscardEvents        uint64
+	CallbackCount        uint64
+	RenderedSamples      uint64
+	UnderflowEvents      uint64
+	UnderflowSamples     uint64
+	ZeroFilledSamples    uint64
+	MinimumQueuedSamples int
 }
 
 // PlaybackQueue is a bounded, drop-oldest PCM16 queue for a device callback.
 // All queue mutation and counters share one synchronization boundary so a
 // producer, callback, cancellation, and close can safely race.
 type PlaybackQueue struct {
-	mu             sync.Mutex
-	format         DeviceFormat
-	latencyTarget  time.Duration
-	capacity       int
-	samples        []int16
-	peakQueued     int
-	dropped        uint64
-	overflowEvents uint64
-	discarded      uint64
-	discardEvents  uint64
+	mu               sync.Mutex
+	format           DeviceFormat
+	latencyTarget    time.Duration
+	capacity         int
+	samples          []int16
+	head             int
+	size             int
+	peakQueued       int
+	dropped          uint64
+	overflowEvents   uint64
+	discarded        uint64
+	discardEvents    uint64
+	callbackCount    uint64
+	rendered         uint64
+	underflows       uint64
+	underflowSamples uint64
+	minimumQueued    int
 }
 
 // NewPlaybackQueue creates a queue using DefaultPlaybackLatencyTarget.
@@ -75,6 +88,8 @@ func NewPlaybackQueueWithLatency(format DeviceFormat, latency time.Duration) (*P
 		format:        format,
 		latencyTarget: latency,
 		capacity:      capacity,
+		samples:       make([]int16, capacity),
+		minimumQueued: capacity,
 	}, nil
 }
 
@@ -141,28 +156,20 @@ func (q *PlaybackQueue) Enqueue(samples []int16) int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	overflow := len(q.samples) + len(samples) - q.capacity
-	if overflow <= 0 {
-		q.samples = append(q.samples, samples...)
-	} else if len(samples) >= q.capacity {
-		// The incoming chunk is itself larger than the queue. Existing samples
-		// and the oldest part of this chunk are both older than its retained
-		// tail, so the tail is the exact drop-oldest result.
-		start := len(samples) - q.capacity
-		q.samples = append(q.samples[:0], samples[start:]...)
-	} else {
-		// With a smaller incoming chunk, overflow cannot exceed the existing
-		// queue length. Compact before appending so order remains exact.
-		remaining := len(q.samples) - overflow
-		copy(q.samples, q.samples[overflow:])
-		q.samples = append(q.samples[:remaining], samples...)
+	overflow := q.size + len(samples) - q.capacity
+	if len(samples) >= q.capacity {
+		samples = samples[len(samples)-q.capacity:]
+		q.head, q.size = 0, 0
+	} else if overflow > 0 {
+		q.consumeLocked(overflow)
 	}
+	q.writeLocked(samples)
 	if overflow > 0 {
 		q.dropped += uint64(overflow)
 		q.overflowEvents++
 	}
-	if len(q.samples) > q.peakQueued {
-		q.peakQueued = len(q.samples)
+	if q.size > q.peakQueued {
+		q.peakQueued = q.size
 	}
 	return maxIntValue(overflow, 0)
 }
@@ -175,12 +182,12 @@ func (q *PlaybackQueue) Dequeue(maxSamples int) []int16 {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	n := min(maxSamples, len(q.samples))
+	n := min(maxSamples, q.size)
 	if n == 0 {
 		return nil
 	}
-	out := append([]int16(nil), q.samples[:n]...)
-	q.consumeLocked(n)
+	out := make([]int16, n)
+	q.readIntoLocked(out)
 	return out
 }
 
@@ -192,9 +199,34 @@ func (q *PlaybackQueue) ReadInto(destination []int16) int {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	n := min(len(destination), len(q.samples))
-	copy(destination[:n], q.samples[:n])
-	q.consumeLocked(n)
+	n := min(len(destination), q.size)
+	q.readIntoLocked(destination[:n])
+	return n
+}
+
+// RenderInto is the callback-facing read. It always initializes destination,
+// records exact zero-fill loss, and performs work proportional only to the
+// callback quantum, independent of queued depth.
+func (q *PlaybackQueue) RenderInto(destination []int16) int {
+	if q == nil || len(destination) == 0 {
+		return 0
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	queuedBefore := q.size
+	n := min(len(destination), q.size)
+	q.readIntoLocked(destination[:n])
+	clear(destination[n:])
+	q.callbackCount++
+	q.rendered += uint64(len(destination))
+	missing := len(destination) - n
+	if missing > 0 {
+		q.underflows++
+		q.underflowSamples += uint64(missing)
+	}
+	if queuedBefore < q.minimumQueued {
+		q.minimumQueued = queuedBefore
+	}
 	return n
 }
 
@@ -207,11 +239,11 @@ func (q *PlaybackQueue) Discard() int {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	discarded := len(q.samples)
+	discarded := q.size
 	if discarded == 0 {
 		return 0
 	}
-	q.samples = nil
+	q.head, q.size = 0, 0
 	q.discarded += uint64(discarded)
 	q.discardEvents++
 	return discarded
@@ -229,15 +261,21 @@ func (q *PlaybackQueue) Snapshot() PlaybackQueueStats {
 
 func (q *PlaybackQueue) snapshotLocked() PlaybackQueueStats {
 	return PlaybackQueueStats{
-		Format:            q.format,
-		LatencyTarget:     q.latencyTarget,
-		CapacitySamples:   q.capacity,
-		QueuedSamples:     len(q.samples),
-		PeakQueuedSamples: q.peakQueued,
-		DroppedSamples:    q.dropped,
-		OverflowEvents:    q.overflowEvents,
-		DiscardedSamples:  q.discarded,
-		DiscardEvents:     q.discardEvents,
+		Format:               q.format,
+		LatencyTarget:        q.latencyTarget,
+		CapacitySamples:      q.capacity,
+		QueuedSamples:        q.size,
+		PeakQueuedSamples:    q.peakQueued,
+		DroppedSamples:       q.dropped,
+		OverflowEvents:       q.overflowEvents,
+		DiscardedSamples:     q.discarded,
+		DiscardEvents:        q.discardEvents,
+		CallbackCount:        q.callbackCount,
+		RenderedSamples:      q.rendered,
+		UnderflowEvents:      q.underflows,
+		UnderflowSamples:     q.underflowSamples,
+		ZeroFilledSamples:    q.underflowSamples,
+		MinimumQueuedSamples: q.minimumQueued,
 	}
 }
 
@@ -249,21 +287,58 @@ func (q *PlaybackQueue) readPCM16(destination []byte) int {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	n := min(len(destination)/2, len(q.samples))
-	encodePCM16(destination[:n*2], q.samples[:n])
+	requested := len(destination) / 2
+	queuedBefore := q.size
+	n := min(requested, q.size)
+	for index := 0; index < n; index++ {
+		value := uint16(q.samples[(q.head+index)%q.capacity])
+		destination[index*2] = byte(value)
+		destination[index*2+1] = byte(value >> 8)
+	}
+	clear(destination[n*2 : requested*2])
 	q.consumeLocked(n)
+	q.callbackCount++
+	q.rendered += uint64(requested)
+	if missing := requested - n; missing > 0 {
+		q.underflows++
+		q.underflowSamples += uint64(missing)
+	}
+	if queuedBefore < q.minimumQueued {
+		q.minimumQueued = queuedBefore
+	}
 	return n
 }
 
 func (q *PlaybackQueue) consumeLocked(n int) {
-	if n <= 0 {
+	if n <= 0 || q.size == 0 {
 		return
 	}
-	copy(q.samples, q.samples[n:])
-	q.samples = q.samples[:len(q.samples)-n]
-	if len(q.samples) == 0 {
-		q.samples = nil
+	if n > q.size {
+		n = q.size
 	}
+	q.head = (q.head + n) % q.capacity
+	q.size -= n
+	if q.size == 0 {
+		q.head = 0
+	}
+}
+
+func (q *PlaybackQueue) readIntoLocked(destination []int16) {
+	first := min(len(destination), q.capacity-q.head)
+	copy(destination[:first], q.samples[q.head:q.head+first])
+	copy(destination[first:], q.samples[:len(destination)-first])
+	q.consumeLocked(len(destination))
+}
+
+func (q *PlaybackQueue) writeLocked(samples []int16) {
+	if len(samples) == 0 {
+		return
+	}
+	tail := (q.head + q.size) % q.capacity
+	first := min(len(samples), q.capacity-tail)
+	copy(q.samples[tail:tail+first], samples[:first])
+	copy(q.samples[:len(samples)-first], samples[first:])
+	q.size += len(samples)
 }
 
 func maxIntValue(value, floor int) int {

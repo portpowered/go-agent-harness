@@ -36,7 +36,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -164,6 +164,17 @@ test-tools: ## Run tests for standalone repository helper modules.
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
 	echo "==> test tools/session-race-gate"; \
 	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
+
+test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, and RTC audio regressions.
+	@set -euo pipefail; \
+	(cd go-llm-gateway && $(GO) test ./pkg/wavio -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
+	(cd agent-cli && $(GO) test ./internal/audio ./internal/services -count=1 -timeout "$(GO_TEST_TIMEOUT)")
+
+test-audio-stability-race: ## Run callback, cancellation, queue, and replay audio paths under the race detector.
+	@set -euo pipefail; \
+	(cd agent-cli && CGO_ENABLED=1 $(GO) test -race -tags=nomicrophone ./internal/audio ./internal/services \
+		-run 'Test(SimulatedDuplex|SessionAudioFailureCapsule|FailureCapsule|VirtualPlaybackCapacityAdversarial|RTCDeviceSinkSerializes|RTCDeviceSinkDiscard|RTCDeviceBoundSessionDrops)' \
+		-count=1 -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
