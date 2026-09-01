@@ -213,7 +213,7 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 		t.Fatalf("write lock: %v", err)
 	}
 	transport := &chromeForTestingFixtureTransport{
-		manifest: []byte(`{"channels":{"Stable":{"channel":"Stable","version":"` + version + `","revision":"` + revision + `","downloads":{"chrome":[{"platform":"` + platform + `","url":"` + downloadURL + `"}]}}}}`),
+		manifest: []byte(`{"versions":[{"version":"` + version + `","revision":"` + revision + `","downloads":{"chrome":[{"platform":"` + platform + `","url":"` + downloadURL + `"}]}}]}`),
 		archive:  archive,
 	}
 	client := &http.Client{Transport: transport}

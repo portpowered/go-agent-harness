@@ -15,7 +15,11 @@ const (
 	// contract for callers that do not supply a negotiated provider rate.
 	DefaultSessionMediaSampleRate = 16000
 	sessionMediaFrameMillis       = 30
-	sessionMediaQueueLimit        = 256
+	// Five minutes of queued 30 ms frames is a defensive memory ceiling, not
+	// a latency target. Normal playback starts immediately and drains this
+	// backlog concurrently. Crossing the ceiling fails explicitly instead of
+	// corrupting audio by dropping an arbitrary part of the response.
+	sessionMediaMaxQueuedFrames = 10_000
 )
 
 var (
@@ -28,6 +32,9 @@ var (
 	// ErrSessionMediaNoWriter indicates that no provider media writer was
 	// supplied when the session media adapter was created.
 	ErrSessionMediaNoWriter = errors.New("RTC session media outbound writer is unavailable")
+	// ErrSessionMediaInboundBacklog indicates that a provider delivered more
+	// than the defensive five-minute lossless playback backlog can retain.
+	ErrSessionMediaInboundBacklog = errors.New("RTC session media inbound backlog limit exceeded")
 )
 
 // SessionMediaWriter sends one normalized PCM frame through a provider-owned
@@ -80,9 +87,11 @@ func (m *SessionMedia) Endpoints() MediaEndpoints {
 	}
 }
 
-// PushInbound appends PCM samples received from the provider. Complete
-// frames become available to the Inbound endpoint; a bounded queue drops the
-// oldest frames when no consumer is attached.
+// PushInbound appends PCM samples received from the provider. Complete frames
+// become available to the Inbound endpoint in lossless FIFO order. Providers
+// can deliver an entire response faster than a physical device can play it,
+// so this queue must retain that response backlog rather than silently
+// discard old audio before device-owned pacing can apply.
 func (m *SessionMedia) PushInbound(samples []int16) error {
 	if m == nil || m.inbound == nil {
 		return ErrSessionMediaClosed
@@ -242,6 +251,17 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.mu.Unlock()
 		return err
 	}
+	maximumInt := int(^uint(0) >> 1)
+	if len(samples) > maximumInt-len(m.pending) {
+		m.mu.Unlock()
+		return ErrSessionMediaInboundBacklog
+	}
+	completeFrames := (len(m.pending) + len(samples)) / m.frameSamples
+	availableFrames := sessionMediaMaxQueuedFrames - len(m.frames)
+	if availableFrames < 0 || completeFrames > availableFrames {
+		m.mu.Unlock()
+		return ErrSessionMediaInboundBacklog
+	}
 	m.pending = append(m.pending, samples...)
 	m.appendCompleteFramesLocked()
 	m.mu.Unlock()
@@ -259,6 +279,11 @@ func (m *sessionInboundMedia) flush() error {
 		err := m.terminal
 		m.mu.Unlock()
 		return err
+	}
+	needsBoundary := len(m.pending) > 0 || !m.padPartial
+	if needsBoundary && len(m.frames) >= sessionMediaMaxQueuedFrames {
+		m.mu.Unlock()
+		return ErrSessionMediaInboundBacklog
 	}
 	m.appendResponseBoundaryLocked(true)
 	m.mu.Unlock()
@@ -281,6 +306,12 @@ func (m *sessionInboundMedia) fail(err error) {
 
 func (m *sessionInboundMedia) appendResponseBoundaryLocked(includeEmpty bool) {
 	if len(m.pending) > 0 {
+		if len(m.frames) >= sessionMediaMaxQueuedFrames {
+			// The terminal error set by fail remains observable after existing
+			// audio drains; do not exceed the defensive allocation ceiling.
+			m.pending = nil
+			return
+		}
 		sampleCount := len(m.pending)
 		if m.padPartial {
 			sampleCount = m.frameSamples
@@ -295,7 +326,6 @@ func (m *sessionInboundMedia) appendResponseBoundaryLocked(includeEmpty bool) {
 		// can flush any rate-conversion remainder without inventing audio.
 		m.frames = append(m.frames, PCMFrame{EndOfResponse: true})
 	}
-	m.trimQueueLocked()
 }
 
 func (m *sessionInboundMedia) Close() error {
@@ -320,16 +350,6 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 		m.frames = append(m.frames, PCMFrame{Samples: samples})
 		m.pending = m.pending[m.frameSamples:]
 	}
-	m.trimQueueLocked()
-}
-
-func (m *sessionInboundMedia) trimQueueLocked() {
-	if len(m.frames) <= sessionMediaQueueLimit {
-		return
-	}
-	first := len(m.frames) - sessionMediaQueueLimit
-	copy(m.frames, m.frames[first:])
-	m.frames = m.frames[:sessionMediaQueueLimit]
 }
 
 func (m *sessionInboundMedia) notify() {

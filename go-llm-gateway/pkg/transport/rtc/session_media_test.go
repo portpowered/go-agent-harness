@@ -246,7 +246,7 @@ func TestSessionMediaInboundFailuresAndEndpointLifecycle(t *testing.T) {
 	}
 }
 
-func TestSessionMediaInboundQueueDropsOldestFrames(t *testing.T) {
+func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) {
 	media := rtc.NewSessionMedia(func(context.Context, rtc.PCMFrame) error { return nil })
 	const queuedFrames = 257
 	samples := make([]int16, queuedFrames*rtc.DefaultSessionMediaFrameSamples)
@@ -256,14 +256,45 @@ func TestSessionMediaInboundQueueDropsOldestFrames(t *testing.T) {
 	if err := media.PushInbound(samples); err != nil {
 		t.Fatalf("push queued inbound frames = %v", err)
 	}
-	frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
-	if err != nil {
-		t.Fatalf("read retained inbound frame = %v", err)
-	}
-	if got, want := frame.Samples[0], int16(2); got != want {
-		t.Fatalf("first retained frame marker = %d, want %d after dropping oldest", got, want)
+	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
+		frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
+		if err != nil {
+			t.Fatalf("read inbound frame %d: %v", frameIndex, err)
+		}
+		if got, want := frame.Samples[0], int16(frameIndex+1); got != want { //nolint:gosec // bounded test marker
+			t.Fatalf("inbound frame %d marker = %d, want %d", frameIndex, got, want)
+		}
 	}
 	if err := media.Close(); err != nil {
 		t.Fatalf("close queued media = %v", err)
+	}
+}
+
+func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) {
+	media := rtc.NewSessionMediaAtRate(func(context.Context, rtc.PCMFrame) error { return nil }, 24000)
+	defer func() { _ = media.Close() }()
+	frame := make([]int16, 720)
+	for frameIndex := 0; ; frameIndex++ {
+		err := media.PushInbound(frame)
+		if errors.Is(err, rtc.ErrSessionMediaInboundBacklog) {
+			if frameIndex < 590 {
+				t.Fatalf("backlog rejected frame %d before retaining the 590-frame eac8 response", frameIndex)
+			}
+			break
+		}
+		if err != nil {
+			t.Fatalf("push backlog frame %d: %v", frameIndex, err)
+		}
+		if frameIndex > 100_000 {
+			t.Fatal("inbound backlog has no defensive limit")
+		}
+	}
+
+	first, err := media.Endpoints().Inbound.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read retained frame after explicit backlog failure: %v", err)
+	}
+	if !reflect.DeepEqual(first.Samples, frame) {
+		t.Fatal("explicit backlog failure changed already retained PCM")
 	}
 }
