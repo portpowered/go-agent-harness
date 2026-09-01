@@ -26,7 +26,7 @@ import (
 // signal watcher, the provider session, the tool runner, and the recording
 // finalizer without credentials or a live provider.
 func TestShippedSessionSIGINTAfterToolResultAcceptedFinalizesCleanly(t *testing.T) {
-	fixture := newSIGINTRealtimeFixture(sigintToolContinuationFixture)
+	fixture := newSIGINTRealtimeFixture(sigintToolContinuationFixture, "")
 	defer fixture.Close()
 
 	workDir := t.TempDir()
@@ -55,11 +55,16 @@ func TestShippedSessionSIGINTAfterToolResultAcceptedFinalizesCleanly(t *testing.
 }
 
 func TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly(t *testing.T) {
-	fixture := newSIGINTRealtimeFixture(sigintInFlightToolFixture)
+	// The marker path must be set before the fixture's HTTP server starts
+	// accepting connections: the handler goroutine reads inFlightMarker from
+	// a request it can, in principle, start serving as soon as the server is
+	// live, and a field write racing that read after construction is a real
+	// data race (caught under -race), not just a theoretical one.
+	inFlightMarker := filepath.Join(t.TempDir(), "sigint-tool-started")
+	fixture := newSIGINTRealtimeFixture(sigintInFlightToolFixture, inFlightMarker)
 	defer fixture.Close()
 
 	workDir := t.TempDir()
-	fixture.inFlightMarker = filepath.Join(t.TempDir(), "sigint-tool-started")
 	recordDir := filepath.Join(t.TempDir(), "record")
 	result := runSIGINTAgent(t, fixture, workDir, recordDir, "exec")
 
@@ -82,7 +87,7 @@ func TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly(t *testing.T) {
 }
 
 func TestShippedSessionSIGINTWithoutToolFinalizesCleanly(t *testing.T) {
-	fixture := newSIGINTRealtimeFixture(sigintNoToolFixture)
+	fixture := newSIGINTRealtimeFixture(sigintNoToolFixture, "")
 	defer fixture.Close()
 
 	recordDir := filepath.Join(t.TempDir(), "record")
@@ -141,11 +146,17 @@ type sigintRealtimeFixtureSnapshot struct {
 	continuationResponseDone bool
 }
 
-func newSIGINTRealtimeFixture(mode sigintFixtureMode) *sigintRealtimeFixture {
+// newSIGINTRealtimeFixture starts the fixture's HTTP server only after every
+// field its handler can read is already set. inFlightMarker in particular
+// must be populated before the server accepts its first connection: setting
+// it on the returned fixture afterward is a genuine data race between the
+// caller's write and the handler goroutine's read, not just a theoretical one.
+func newSIGINTRealtimeFixture(mode sigintFixtureMode, inFlightMarker string) *sigintRealtimeFixture {
 	fixture := &sigintRealtimeFixture{
-		mode:     mode,
-		ready:    make(chan struct{}),
-		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		mode:           mode,
+		inFlightMarker: inFlightMarker,
+		ready:          make(chan struct{}),
+		upgrader:       websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture

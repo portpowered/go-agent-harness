@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -43,7 +44,18 @@ var errMissingSessionStragglerDrain = errors.New("session termination boundary r
 // buffered after the stop. Quiescing is separate from stopping the session so
 // room-owned mixer producers cannot create new outbound transport events while
 // the session's provider output is being drained.
+//
+// ctx is the caller-owned run context. The owning select loop can observe
+// ctx.Done() and a different, unrelated terminal channel (provider close, a
+// scheduled timer, a tool lifecycle transition, ...) as ready at the same
+// time; which case the runtime picks is not deterministic. Every terminal
+// path funnels through terminate, so it — not each of the loop's dozen call
+// sites — is the one place responsible for preserving a caller cancellation
+// that a differently-caused clean result would otherwise race out of the
+// returned error. See the trunk-flake and select-race postmortems this
+// boundary exists to prevent from recurring piecemeal.
 type sessionTerminationBoundary struct {
+	ctx                context.Context
 	quiesceUpstream    func() error
 	waitForStragglers  func(sessionStragglerDrainPolicy) error
 	stopOwnedResources func() error
@@ -53,7 +65,12 @@ type sessionTerminationBoundary struct {
 }
 
 // terminate applies the shared terminal-drain contract and joins cleanup
-// failures with the initiating error without masking either one.
+// failures with the initiating error without masking either one. It also
+// unconditionally joins the boundary's run-context error: when ctx was never
+// cancelled that is a no-op (errors.Join drops nil arguments), and when ctx
+// was cancelled or its deadline expired, the caller's cancellation survives
+// in the returned error regardless of which terminal channel the owning
+// select loop happened to observe first.
 func (b *sessionTerminationBoundary) terminate(primary error) error {
 	b.once.Do(func() {
 		var quiesceErr, waitErr, stopErr, flushErr error
@@ -74,7 +91,11 @@ func (b *sessionTerminationBoundary) terminate(primary error) error {
 		if b.flushBuffered != nil {
 			flushErr = b.flushBuffered()
 		}
-		b.result = errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr)
+		var ctxErr error
+		if b.ctx != nil {
+			ctxErr = b.ctx.Err()
+		}
+		b.result = errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr, ctxErr)
 	})
 	return b.result
 }

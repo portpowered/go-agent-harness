@@ -124,6 +124,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	var terminationPlanned bool
 	termination := sessionTerminationBoundary{
+		ctx:             ctx,
 		quiesceUpstream: opts.quiesceUpstream,
 		waitForStragglers: func(policy sessionStragglerDrainPolicy) error {
 			return waitForDurationSessionLoopStragglers(out, loop, policy, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
