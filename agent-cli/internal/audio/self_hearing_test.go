@@ -506,9 +506,11 @@ func TestPCM16SelfHearingRejectsSampleRateThatOverflowsBufferConversion(t *testi
 func TestPCM16SelfHearingContextNilIsTreatedAsUncancelled(t *testing.T) {
 	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
 	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 89), SampleRate: 1000}
+	//lint:ignore SA1012 deliberately exercising the documented nil-context fast path in ObservePlaybackContext.
 	if err := detector.ObservePlaybackContext(nil, frame); err != nil {
 		t.Fatalf("ObservePlaybackContext(nil, frame) = %v, want nil", err)
 	}
+	//lint:ignore SA1012 deliberately exercising the documented nil-context fast path in ObserveCaptureContext.
 	if _, err := detector.ObserveCaptureContext(nil, frame); err != nil {
 		t.Fatalf("ObserveCaptureContext(nil, frame) = %v, want nil", err)
 	}
