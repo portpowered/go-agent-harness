@@ -77,6 +77,29 @@ func TestPlaybackQueueCapacityUsesResolvedFormatAndLatency(t *testing.T) {
 	}
 }
 
+func TestPlaybackQueueWatermarksLeaveCallbackReserveBelowHardCapacity(t *testing.T) {
+	for _, rate := range []int{16000, 24000, 48000} {
+		format := PCM16DeviceFormat(rate)
+		low, high, err := PlaybackQueueWatermarks(format)
+		if err != nil {
+			t.Fatalf("PlaybackQueueWatermarks(%d Hz): %v", rate, err)
+		}
+		capacity, err := PlaybackQueueCapacity(format, DefaultPlaybackLatencyTarget)
+		if err != nil {
+			t.Fatalf("PlaybackQueueCapacity(%d Hz): %v", rate, err)
+		}
+		if want := rate * int(DefaultPlaybackLowWatermark/time.Millisecond) / 1000; low != want {
+			t.Fatalf("%d Hz low watermark = %d, want %d", rate, low, want)
+		}
+		if want := rate * int(DefaultPlaybackHighWatermark/time.Millisecond) / 1000; high != want {
+			t.Fatalf("%d Hz high watermark = %d, want %d", rate, high, want)
+		}
+		if !(0 < low && low < high && high < capacity) {
+			t.Fatalf("%d Hz watermarks = low:%d high:%d capacity:%d, want strict ordering", rate, low, high, capacity)
+		}
+	}
+}
+
 func TestPlaybackQueueSustainedMatchedRatePreservesOrderWithoutDrops(t *testing.T) {
 	format := PCM16DeviceFormat(24000)
 	q, err := NewPlaybackQueueWithLatency(format, 25*time.Millisecond)

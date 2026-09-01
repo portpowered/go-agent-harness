@@ -75,6 +75,12 @@ type RTCDeviceSink struct {
 	playbackMu         sync.Mutex
 	playbackGeneration uint64
 	playbackBlocked    bool
+	// pacingMu serializes producers across capacity admission and enqueue.
+	// The provider pump and hold-tone filler are independent goroutines; without
+	// this boundary they can both observe space below the high watermark and
+	// then over-admit. DiscardPlayback intentionally does not take pacingMu so
+	// cancellation can wake a producer blocked in capacity admission.
+	pacingMu sync.Mutex
 
 	// holdToneConfig and holdToneTick configure the "still here" cue that
 	// fills a customer-facing gap once no real assistant audio has reached
@@ -277,10 +283,15 @@ func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *rtcDevi
 func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *rtcDevicePlaybackBuffer) error {
 	generation, blocked := s.playbackState()
 	final := pending.flush(generation, blocked)
-	if len(final) == 0 {
-		return nil
+	if len(final) > 0 {
+		if err := s.observedWritePlayback(ctx, final, generation, blocked); err != nil {
+			return err
+		}
 	}
-	return s.observedWritePlayback(ctx, final, generation, blocked)
+	// A response boundary drains the final queued tail. Normal frames are
+	// paced by queue-capacity backpressure, so this is the only place that
+	// intentionally waits for an empty native queue.
+	return s.sink.WaitForPlayback(ctx)
 }
 
 // observedWritePlayback routes a device-rate playback chunk through the
@@ -316,6 +327,16 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
 	}
+	// Serialize producers across capacity admission and enqueue. Apply
+	// backpressure before taking playbackMu so a device callback or
+	// barge-in discard can keep draining while a provider burst is throttled.
+	// Revalidate the response generation after the wait before admitting the
+	// samples to the device queue.
+	s.pacingMu.Lock()
+	defer s.pacingMu.Unlock()
+	if err := s.sink.WaitForPlaybackCapacity(ctx, len(samples)); err != nil {
+		return err
+	}
 	s.playbackMu.Lock()
 	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
 		s.playbackMu.Unlock()
@@ -328,14 +349,7 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		err = s.sink.WriteSamples(ctx, samples)
 	}
 	s.playbackMu.Unlock()
-	if err != nil {
-		return err
-	}
-	// Some native output backends accept frames into a queue before the
-	// speaker consumes them. Wait for the optional drain boundary before the
-	// feedback gate timestamps this frame, otherwise a fast provider response
-	// can outrun the physical speaker by seconds.
-	return s.sink.WaitForPlayback(ctx)
+	return err
 }
 
 // Run is an alias for Pump for callers that model the binding as a lifecycle

@@ -127,6 +127,54 @@ func TestRTCDeviceBoundSessionRejectedCancelDoesNotDiscardPlayback(t *testing.T)
 	}
 }
 
+func TestRTCDeviceSinkDiscardUnblocksPacedProviderBurst(t *testing.T) {
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+	sink, err := NewRTCDeviceSink(registry, "virtual:output")
+	if err != nil {
+		t.Fatalf("open virtual RTC sink: %v", err)
+	}
+	defer func() { _ = sink.Close() }()
+
+	_, high, err := audio.PlaybackQueueWatermarks(audio.DefaultDeviceFormat())
+	if err != nil {
+		t.Fatalf("resolve playback watermarks: %v", err)
+	}
+	frames := make([]rtc.PCMFrame, high/audio.FrameSize+2)
+	for index := range frames {
+		frames[index] = rtc.PCMFrame{Samples: cancelPlaybackFrame(int16(100 + index))}
+	}
+	pumpErr := make(chan error, 1)
+	go func() {
+		pumpErr <- sink.Pump(context.Background(), &recordingRTCInboundMedia{frames: frames})
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for sink.PlaybackStats().QueuedSamples < high && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := sink.PlaybackStats().QueuedSamples; got != high {
+		t.Fatalf("paced burst queued %d samples, want high watermark %d", got, high)
+	}
+	if got := sink.DiscardPlayback(); got != high {
+		t.Fatalf("DiscardPlayback() = %d, want %d queued samples", got, high)
+	}
+	select {
+	case err := <-pumpErr:
+		if err != nil {
+			t.Fatalf("pump after discard: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("discard did not wake the blocked playback-capacity waiter")
+	}
+	stats := sink.PlaybackStats()
+	if stats.QueuedSamples != 0 || stats.DroppedSamples != 0 || stats.DiscardedSamples != uint64(high) {
+		t.Fatalf("playback after paced discard = %+v", stats)
+	}
+}
+
 func TestRTCDeviceBoundSessionDropsInFlightPlaybackAcrossCancelAndResume(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {

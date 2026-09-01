@@ -315,7 +315,7 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 			h.nonZero.Add(1)
 		}
 	}
-	if n > 0 && h.playback != nil && h.playback.Snapshot().QueuedSamples == 0 {
+	if n > 0 {
 		h.signalPlaybackLocked()
 	}
 }
@@ -404,7 +404,54 @@ func (h *coreAudioHandle) DiscardPlayback() int {
 	if h.playback == nil {
 		return 0
 	}
-	return h.playback.Discard()
+	discarded := h.playback.Discard()
+	if discarded > 0 {
+		h.signalPlaybackLocked()
+	}
+	return discarded
+}
+
+// WaitForPlaybackCapacity blocks a burst producer at the queue's high
+// watermark and resumes it only after callbacks drain to the low watermark.
+func (h *coreAudioHandle) WaitForPlaybackCapacity(ctx context.Context, samples int) error {
+	if h == nil || samples <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	low, high, err := PlaybackQueueWatermarks(h.format)
+	if err != nil {
+		return err
+	}
+	if samples > high {
+		return fmt.Errorf("%w: incoming playback chunk %d exceeds high watermark %d", ErrInvalidPlaybackQueue, samples, high)
+	}
+	throttled := false
+	for {
+		h.mu.Lock()
+		if h.closed.Load() {
+			h.mu.Unlock()
+			return &ClosedError{Operation: "wait for playback capacity", Path: string(h.id)}
+		}
+		queued := h.ensurePlaybackQueueLocked().Snapshot().QueuedSamples
+		if (!throttled && queued+samples <= high) || (throttled && queued <= low && queued+samples <= high) {
+			h.mu.Unlock()
+			return nil
+		}
+		throttled = true
+		if h.playbackWake == nil {
+			h.playbackWake = make(chan struct{})
+		}
+		wake := h.playbackWake
+		h.mu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // WaitForPlayback waits until the native render callback has consumed all

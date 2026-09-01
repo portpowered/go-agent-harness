@@ -394,9 +394,91 @@ func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
 		p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
 		if p.playback.Snapshot().QueuedSamples >= len(frame) {
 			p.playback.ReadInto(frame)
+			p.signal()
 			s.registry.mu.Unlock()
 			return nil
 		}
+		changed := p.changed
+		s.registry.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return contextError(ctx)
+		case <-changed:
+		}
+	}
+}
+
+// ReadSamples reads an exact arbitrary-sized PCM16 chunk from the paired
+// playback queue. Device callbacks and functional tests use it to preserve a
+// response-final remainder that is smaller than the legacy FrameSize.
+func (s *VirtualStream) ReadSamples(ctx context.Context, samples []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if err := contextError(ctx); err != nil {
+			return err
+		}
+		p, err := s.lock("read")
+		if err != nil {
+			return err
+		}
+		p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+		if p.playback.Snapshot().QueuedSamples >= len(samples) {
+			p.playback.ReadInto(samples)
+			p.signal()
+			s.registry.mu.Unlock()
+			return nil
+		}
+		changed := p.changed
+		s.registry.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return contextError(ctx)
+		case <-changed:
+		}
+	}
+}
+
+// WaitForPlaybackCapacity gives the virtual backend the same producer
+// backpressure contract as callback-driven native devices. A paired reader is
+// the deterministic virtual device clock that advances playback.
+func (s *VirtualStream) WaitForPlaybackCapacity(ctx context.Context, samples int) error {
+	if s == nil || samples <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	low, high, err := PlaybackQueueWatermarks(s.format)
+	if err != nil {
+		return err
+	}
+	if samples > high {
+		return fmt.Errorf("%w: incoming playback chunk %d exceeds high watermark %d", ErrInvalidPlaybackQueue, samples, high)
+	}
+	throttled := false
+	for {
+		if err := contextError(ctx); err != nil {
+			return err
+		}
+		p, err := s.lock("wait for playback capacity")
+		if err != nil {
+			return err
+		}
+		p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+		queued := p.playback.Snapshot().QueuedSamples
+		if (!throttled && queued+samples <= high) || (throttled && queued <= low && queued+samples <= high) {
+			s.registry.mu.Unlock()
+			return nil
+		}
+		throttled = true
 		changed := p.changed
 		s.registry.mu.Unlock()
 		select {
@@ -443,7 +525,11 @@ func (s *VirtualStream) DiscardPlayback() int {
 	if s.device.pair == nil || s.device.pair.playback == nil {
 		return 0
 	}
-	return s.device.pair.playback.Discard()
+	discarded := s.device.pair.playback.Discard()
+	if discarded > 0 {
+		s.device.pair.signal()
+	}
+	return discarded
 }
 func (s *VirtualStream) Close() error {
 	r := s.registry

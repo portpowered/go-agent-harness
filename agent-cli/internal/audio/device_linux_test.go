@@ -156,6 +156,44 @@ func TestLinuxPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	}
 }
 
+func TestLinuxPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
+	writer := &linuxOpenedDevice{direction: DirectionOutput, format: DefaultDeviceFormat(), playbackWake: make(chan struct{})}
+	low, high, err := PlaybackQueueWatermarks(writer.format)
+	if err != nil {
+		t.Fatalf("resolve playback watermarks: %v", err)
+	}
+	for queued := 0; queued < high; queued += FrameSize {
+		if err := writer.WriteFrame(context.Background(), make([]int16, FrameSize)); err != nil {
+			t.Fatalf("prime playback queue: %v", err)
+		}
+	}
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- writer.WaitForPlaybackCapacity(context.Background(), FrameSize) }()
+	select {
+	case err := <-waitDone:
+		t.Fatalf("capacity wait returned above low watermark: %v", err)
+	default:
+	}
+
+	callback := make([]byte, FrameSize*2)
+	for writer.PlaybackStats().QueuedSamples > low {
+		writer.onData(callback, nil, FrameSize)
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("capacity wait after callback drain: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("capacity wait did not resume at low watermark")
+	}
+	stats := writer.PlaybackStats()
+	if stats.QueuedSamples != low || stats.DroppedSamples != 0 {
+		t.Fatalf("paced Linux queue stats = %+v, want low watermark and no drops", stats)
+	}
+}
+
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
 	device, _ := NewDevice(backend, direction.String()+":"+nativeID, name, direction)
 	return linuxDeviceRecord{Device: device, defaulted: defaulted}
