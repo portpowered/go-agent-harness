@@ -61,7 +61,7 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 	resolved.LoadedConfig = loadedCfg
 	resolved.BareLive = true
 
-	provider := resolveBareSessionProvider(opts, loadedCfg)
+	provider := resolveRealtimeSessionProvider(opts, loadedCfg)
 	if provider != sessionProviderOpenAI && provider != sessionProviderGrok {
 		return SessionRunOptions{}, fmt.Errorf("%w: %q (bare sessions support %q and %q)", ErrUnsupportedBareSessionProvider, provider, sessionProviderOpenAI, sessionProviderGrok)
 	}
@@ -161,27 +161,6 @@ func loadBareSessionConfig(opts SessionRunOptions) (*config.Config, string, erro
 		return nil, "", fmt.Errorf("failed to load config: %w", err)
 	}
 	return loadedCfg, storage.Path(), nil
-}
-
-func resolveBareSessionProvider(opts SessionRunOptions, cfg *config.Config) string {
-	if provider := strings.ToLower(strings.TrimSpace(opts.Provider)); provider != "" {
-		return provider
-	}
-	if cfg != nil && cfg.Session != nil {
-		if provider := strings.ToLower(strings.TrimSpace(cfg.Session.Provider)); provider != "" {
-			return provider
-		}
-	}
-	// The ordinary config loader creates an openrouter entry for one-shot
-	// commands. It is not an explicit live-session choice and must not displace
-	// the bare OpenAI default.
-	if cfg != nil {
-		switch provider := strings.ToLower(strings.TrimSpace(cfg.Model.Provider)); provider {
-		case sessionProviderOpenAI, sessionProviderGrok:
-			return provider
-		}
-	}
-	return sessionProviderOpenAI
 }
 
 func bareProviderConfig(cfg *config.Config, provider string) *config.OpenAIConfig {

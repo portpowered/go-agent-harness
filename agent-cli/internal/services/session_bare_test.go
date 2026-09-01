@@ -11,6 +11,55 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+func TestResolveRealtimeSessionProviderPrecedenceAndNormalization(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     SessionRunOptions
+		config   *config.Config
+		provider string
+	}{
+		{
+			name:     "explicit CLI provider wins",
+			opts:     SessionRunOptions{Provider: "  GROK  "},
+			config:   &config.Config{Session: &config.SessionConfig{Provider: config.ProviderOpenAI}, Model: config.ModelConfig{Provider: config.ProviderOpenAI}},
+			provider: config.ProviderGrok,
+		},
+		{
+			name:     "session provider wins over model provider",
+			config:   &config.Config{Session: &config.SessionConfig{Provider: "  OPENAI  "}, Model: config.ModelConfig{Provider: config.ProviderGrok}},
+			provider: config.ProviderOpenAI,
+		},
+		{
+			name:     "supported model provider",
+			config:   &config.Config{Model: config.ModelConfig{Provider: "  GROK  "}},
+			provider: config.ProviderGrok,
+		},
+		{
+			name:     "generic model provider falls back to OpenAI",
+			config:   &config.Config{Model: config.ModelConfig{Provider: "  OPENROUTER  "}},
+			provider: config.ProviderOpenAI,
+		},
+		{
+			name:     "missing model provider falls back to OpenAI",
+			config:   &config.Config{},
+			provider: config.ProviderOpenAI,
+		},
+		{
+			name:     "unsupported explicit provider remains observable",
+			opts:     SessionRunOptions{Provider: "  OpenRouter  "},
+			provider: config.ProviderOpenRouter,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := resolveRealtimeSessionProvider(testCase.opts, testCase.config); got != testCase.provider {
+				t.Fatalf("resolveRealtimeSessionProvider() = %q, want %q", got, testCase.provider)
+			}
+		})
+	}
+}
+
 func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "fallback-key")
 	loaded := &config.Config{

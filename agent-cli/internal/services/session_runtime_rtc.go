@@ -127,7 +127,8 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		return sessionRuntimePlan{}, errors.Join(planErr, wrapSessionPhaseError("close WebRTC runtime", runtime.Close()))
 	}
 
-	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	provider := effectiveSessionProvider(opts)
+	opts.Provider = provider
 	model := opts.Model
 	var (
 		inner          messages.SessionInferencer

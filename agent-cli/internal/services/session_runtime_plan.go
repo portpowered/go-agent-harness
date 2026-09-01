@@ -302,6 +302,13 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	}
 	scheduledAudioDispatch := scheduledAudioDispatchPolicyForOptions(opts)
 
+	// Resolve the provider once at the session boundary so every live mode
+	// (bare, browser-enabled, recorded, injected, and RTC) consumes the same
+	// realtime-capable policy. Replay keeps its capture-owned provider identity.
+	if opts.ReplayPath == "" {
+		opts.Provider = effectiveSessionProvider(opts)
+	}
+
 	selection, err := resolveSessionRuntimeSelection(opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err

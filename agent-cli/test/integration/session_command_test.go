@@ -82,22 +82,26 @@ func TestSessionCommand_RejectsNonJSONCapturePath(t *testing.T) {
 	}
 }
 
-func TestSessionCommand_RecordRequiresLiveSessionProvider(t *testing.T) {
+func TestSessionCommand_RecordDefaultsToOpenAIAndRequiresCredentials(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
 
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("model:\n  provider: openrouter\n"), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 	rootCmd := agentCLI.Generate()
-	rootCmd.SetArgs([]string{"session", "--record", "capture.json"})
+	rootCmd.SetArgs([]string{"--config-dir", configDir, "session", "--record", filepath.Join(configDir, "capture.json")})
 
 	err = rootCmd.ExecuteContext(context.Background())
 	if err == nil {
-		t.Fatal("expected missing provider error")
+		t.Fatal("expected missing OpenAI credential error")
 	}
-	want := "--record requires --provider grok or --provider openai for live session inference"
+	want := "openai realtime api key is missing"
 	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("record error should provide full live provider guidance %q, got: %v", want, err)
+		t.Fatalf("record error should show the OpenAI default credential guidance %q, got: %v", want, err)
 	}
 }
 
