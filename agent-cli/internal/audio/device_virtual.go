@@ -322,13 +322,24 @@ func (s *VirtualStream) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := validateFrame("write", frame); err != nil {
 		return err
 	}
+	return s.WriteSamples(ctx, frame)
+}
+
+// WriteSamples queues an arbitrary non-empty PCM16 chunk for playback.
+func (s *VirtualStream) WriteSamples(ctx context.Context, samples []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
 	p, err := s.lock("write")
 	if err != nil {
 		return err
 	}
 	defer s.registry.mu.Unlock()
 	p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
-	p.playback.Enqueue(frame)
+	p.playback.Enqueue(samples)
 	p.signal()
 	return nil
 }

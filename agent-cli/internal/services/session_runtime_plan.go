@@ -369,7 +369,14 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
-	configureSessionAudioOutput(opts, &plan)
+	if err := configureSessionAudioContract(opts, &plan); err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan.audioInputs, err = convertScheduledAudioInputs(plan.audioInputs, plan.inputAudioSampleRate)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan.loop.InputAudioSampleRate = plan.inputAudioSampleRate
 	if plan.rtcDeviceRequest.outputSelected() && plan.outputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.OutputSampleRate = plan.outputAudioSampleRate
 	}

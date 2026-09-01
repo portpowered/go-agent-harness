@@ -9,6 +9,7 @@ type devicePlaybackWaiter interface {
 type DeviceSink struct {
 	adapter        *deviceAdapter
 	frameWriter    deviceFrameWriter
+	sampleWriter   deviceSampleWriter
 	byteWriter     deviceByteWriter
 	playbackWaiter devicePlaybackWaiter
 	format         DeviceFormat
@@ -41,13 +42,14 @@ func NewDeviceSinkWithFormat(registry DeviceRegistry, id DeviceID, format Device
 		return nil, err
 	}
 	frames, hasFrames := handle.(deviceFrameWriter)
+	samples, hasSamples := handle.(deviceSampleWriter)
 	bytes, hasBytes := handle.(deviceByteWriter)
-	if !hasFrames && !hasBytes {
+	if !hasFrames && !hasSamples && !hasBytes {
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
 	waiter, _ := handle.(devicePlaybackWaiter)
-	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, byteWriter: bytes, playbackWaiter: waiter, format: format}, nil
+	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, sampleWriter: samples, byteWriter: bytes, playbackWaiter: waiter, format: format}, nil
 }
 
 // DeviceID returns the stable ID acquired by the sink. When the sink was
@@ -134,6 +136,36 @@ func (s *DeviceSink) WaitForPlayback(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	return s.adapter.finish("wait for playback", s.playbackWaiter.WaitForPlayback(ctx))
+}
+
+// WriteSamples queues a non-empty PCM16 chunk without imposing the legacy
+// 480-sample processing frame. RTC playback uses this only to preserve an
+// exact response-final remainder after sample-rate conversion.
+func (s *DeviceSink) WriteSamples(ctx context.Context, samples []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+	if len(samples) == FrameSize {
+		return s.WriteFrame(ctx, samples)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := s.adapter.begin("write"); err != nil {
+		return err
+	}
+	if s.sampleWriter != nil {
+		return s.adapter.finish("write", s.sampleWriter.WriteSamples(ctx, append([]int16(nil), samples...)))
+	}
+	if s.byteWriter != nil {
+		encoded := make([]byte, len(samples)*2)
+		encodePCM16(encoded, samples)
+		return s.adapter.finish("write", s.byteWriter.Write(ctx, encoded))
+	}
+	return s.adapter.finish("write", &FrameSizeError{Operation: "device write samples", Got: len(samples), Want: FrameSize})
 }
 
 func (s *DeviceSink) Close() error {

@@ -110,15 +110,19 @@ func buildAudioRoundtripFixture(t *testing.T, wavPath string, replySamples []int
 		})
 	}
 
-	// One append per streamed frame; the final short frame is zero-padded by
-	// the source exactly as ReadFrame documents.
+	// One append per provider-rate frame; the final short source frame is
+	// zero-padded before the harness-owned 16 -> 24 kHz boundary conversion.
 	frame := make([]int16, audio.FrameSize)
 	for start := 0; start < len(samples); start += audio.FrameSize {
 		clear(frame)
 		copy(frame, samples[start:])
+		providerFrame, resampleErr := wavio.Resample(frame, rate, roundtripOutputSampleRate)
+		if resampleErr != nil {
+			t.Fatalf("resample expected provider input frame: %v", resampleErr)
+		}
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  "input_audio_buffer.append",
-			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
+			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(providerFrame)),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal append event: %v", marshalErr)

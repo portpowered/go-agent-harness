@@ -350,12 +350,24 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := validateFrame("write", frame); err != nil {
 		return err
 	}
+	return h.WriteSamples(ctx, frame)
+}
+func (h *coreAudioHandle) WriteSamples(ctx context.Context, samples []int16) error {
+	if h.direction != DirectionOutput {
+		return fmt.Errorf("audio device %q is input-only", h.id)
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed.Load() {
 		return &ClosedError{Operation: "write", Path: string(h.id)}
 	}
-	h.ensurePlaybackQueueLocked().Enqueue(frame)
+	h.ensurePlaybackQueueLocked().Enqueue(samples)
 	return nil
 }
 
