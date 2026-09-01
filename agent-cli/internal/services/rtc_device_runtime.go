@@ -155,7 +155,11 @@ func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.Se
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
-	return messages.RequestSessionResponse(ctx, s.Session)
+	outcome := messages.RequestSessionResponse(ctx, s.Session)
+	if outcome.OK() && s.binding != nil && s.binding.Sink != nil {
+		s.binding.Sink.resumePlayback()
+	}
+	return outcome
 }
 
 func (s *rtcDeviceBoundSession) SupportsResponseRequests() bool {
@@ -196,13 +200,16 @@ func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg message
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
-	if outcome.OK() && msg.Type == messages.StreamTypeResponseCancel && s.binding != nil && s.binding.Sink != nil {
-		// The provider-facing cancellation is the accepted local boundary. The
-		// queue discard shares the device callback's lock, so a callback either
-		// drains a bounded already-submitted fragment before this point or sees
-		// the queue empty; queued samples present at the boundary cannot survive
-		// into a subsequent response.
-		s.binding.Sink.DiscardPlayback()
+	if outcome.OK() && s.binding != nil && s.binding.Sink != nil {
+		switch msg.Type {
+		case messages.StreamTypeResponseCancel:
+			// The provider-facing cancellation is the accepted local boundary.
+			// The playback generation and device queue lock make a racing pump
+			// frame either get discarded here or stale before local admission.
+			s.binding.Sink.DiscardPlayback()
+		case messages.StreamTypeResponseCreate:
+			s.binding.Sink.resumePlayback()
+		}
 	}
 	return outcome
 }

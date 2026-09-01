@@ -67,6 +67,10 @@ type RTCDeviceSink struct {
 	runDone   chan struct{}
 	closeOnce sync.Once
 	closeErr  error
+
+	playbackMu         sync.Mutex
+	playbackGeneration uint64
+	playbackBlocked    bool
 }
 
 // NewRTCDeviceSink opens an output device through the shared audio registry.
@@ -127,7 +131,23 @@ func (s *RTCDeviceSink) DiscardPlayback() int {
 	if s == nil || s.sink == nil {
 		return 0
 	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	s.playbackBlocked = true
+	s.playbackGeneration++
 	return s.sink.DiscardPlayback()
+}
+
+// resumePlayback opens a new local response boundary. Frames read under a
+// prior generation remain stale even if they race with this transition.
+func (s *RTCDeviceSink) resumePlayback() {
+	if s == nil || s.sink == nil {
+		return
+	}
+	s.playbackMu.Lock()
+	s.playbackBlocked = false
+	s.playbackGeneration++
+	s.playbackMu.Unlock()
 }
 
 // Pump reads PCM frames from inbound and synchronously writes them to the
@@ -162,6 +182,7 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 	}()
 
 	for {
+		generation, blocked := s.playbackState()
 		frame, err := inbound.ReadFrame(operationCtx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -174,10 +195,35 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		// ReadFrame returns. Keep a private copy at this boundary so the device
 		// adapter can never observe storage owned by the RTC implementation.
 		samples := append([]int16(nil), frame.Samples...)
-		if err := s.sink.WriteFrame(operationCtx, samples); err != nil {
+		if err := s.writePlayback(operationCtx, samples, generation, blocked); err != nil {
 			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
 		}
 	}
+}
+
+func (s *RTCDeviceSink) playbackState() (uint64, bool) {
+	if s == nil {
+		return 0, true
+	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	return s.playbackGeneration, s.playbackBlocked
+}
+
+// writePlayback admits a frame only if the playback boundary is unchanged
+// since its inbound read. Holding playbackMu across the device enqueue makes
+// cancel and enqueue linearizable: cancellation either removes this frame or
+// marks it stale before it can reach the local queue.
+func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked bool) error {
+	if s == nil || s.sink == nil {
+		return ErrRTCDeviceSinkClosed
+	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
+		return nil
+	}
+	return s.sink.WriteFrame(ctx, samples)
 }
 
 // Run is an alias for Pump for callers that model the binding as a lifecycle

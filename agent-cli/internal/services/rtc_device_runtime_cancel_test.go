@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"sync"
 	"testing"
@@ -125,6 +126,86 @@ func TestRTCDeviceBoundSessionRejectedCancelDoesNotDiscardPlayback(t *testing.T)
 		t.Fatalf("playback after rejected cancel = %+v, want queued samples unchanged", stats)
 	}
 }
+
+func TestRTCDeviceBoundSessionDropsInFlightPlaybackAcrossCancelAndResume(t *testing.T) {
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+	binding, err := PrepareRTCDeviceBindings(RTCDeviceBindingRequest{
+		Registry:      registry,
+		OutputDevice:  "virtual:output",
+		OutputPresent: true,
+	})
+	if err != nil {
+		t.Fatalf("prepare output binding: %v", err)
+	}
+	if binding == nil || binding.Sink == nil {
+		t.Fatalf("binding = %#v, want output sink", binding)
+	}
+	defer func() { _ = binding.Close() }()
+
+	provider := &cancelPlaybackSession{receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: make(chan struct{})}
+	bound := &rtcDeviceBoundSession{Session: provider, binding: binding}
+	stale := cancelPlaybackFrame(73)
+	inbound := &cancelBoundaryInboundMedia{
+		frame: rtc.PCMFrame{Samples: stale},
+		onFirstRead: func() {
+			if outcome := bound.SendWithOutcome(context.Background(), messages.StreamMessage{
+				Type:  messages.StreamTypeResponseCancel,
+				Value: messages.NewResponseCancelValue(),
+			}); !outcome.OK() {
+				t.Fatalf("cancel outcome = %+v", outcome)
+			}
+			if outcome := bound.SendWithOutcome(context.Background(), messages.StreamMessage{
+				Type:  messages.StreamTypeResponseCreate,
+				Value: messages.NewResponseCreateValue(),
+			}); !outcome.OK() {
+				t.Fatalf("response create outcome = %+v", outcome)
+			}
+		},
+	}
+	if err := binding.Sink.Pump(context.Background(), inbound); err != nil {
+		t.Fatalf("pump stale playback: %v", err)
+	}
+	if got := binding.Sink.PlaybackStats().QueuedSamples; got != 0 {
+		t.Fatalf("stale playback queued %d samples after cancel/resume, want 0", got)
+	}
+
+	next := cancelPlaybackFrame(91)
+	if err := binding.Sink.Pump(context.Background(), &recordingRTCInboundMedia{
+		frames: []rtc.PCMFrame{{Samples: next}},
+	}); err != nil {
+		t.Fatalf("current playback write = %v", err)
+	}
+	if got := binding.Sink.PlaybackStats().QueuedSamples; got != len(next) {
+		t.Fatalf("current response queued %d samples, want %d", got, len(next))
+	}
+}
+
+type cancelBoundaryInboundMedia struct {
+	mu          sync.Mutex
+	frame       rtc.PCMFrame
+	onFirstRead func()
+	read        bool
+}
+
+func (m *cancelBoundaryInboundMedia) ReadFrame(context.Context) (rtc.PCMFrame, error) {
+	m.mu.Lock()
+	if m.read {
+		m.mu.Unlock()
+		return rtc.PCMFrame{}, io.EOF
+	}
+	m.read = true
+	frame, onFirstRead := m.frame, m.onFirstRead
+	m.mu.Unlock()
+	if onFirstRead != nil {
+		onFirstRead()
+	}
+	return frame, nil
+}
+
+func (*cancelBoundaryInboundMedia) Close() error { return nil }
 
 func cancelPlaybackFrame(seed int16) []int16 {
 	frame := make([]int16, audio.FrameSize)
