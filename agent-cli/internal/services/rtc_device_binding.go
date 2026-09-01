@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 )
 
 const (
@@ -97,6 +98,11 @@ type RTCDeviceBindingRequest struct {
 	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
 	// the legacy device rate for callers that do not carry a session contract.
 	OutputSampleRate int
+	// OutputVoice selects the fixed per-voice output loudness gain applied
+	// to this session's own audio before it reaches the device (see
+	// audio.LoudnessNormalizer / VoiceLoudnessGainDB). An empty value is the
+	// documented 0 dB no-op, matching the provider-selected default voice.
+	OutputVoice string
 	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
 	// cannot open this rate may be opened at another supported rate and
 	// converted once by RTCDeviceSource before provider transmission.
@@ -105,6 +111,12 @@ type RTCDeviceBindingRequest struct {
 	// device closes. It is called outside the native device callback and may be
 	// used to publish cumulative overflow diagnostics.
 	PlaybackObserver RTCDevicePlaybackObserver
+	// CaptureObserver receives one final capture queue snapshot after the input
+	// device has stopped, outside its native callback.
+	CaptureObserver RTCDeviceCaptureObserver
+	// Observability is populated by the application composition root so local
+	// device snapshots cannot lose their metric/logger path at a command seam.
+	Observability observability.Dependencies
 }
 
 func (r RTCDeviceBindingRequest) inputSelected() bool {
@@ -201,7 +213,32 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	binding := &RTCDeviceBinding{}
-	if request.inputSelected() {
+	// Prefer an atomic native duplex graph when both directions are selected.
+	// On macOS this is AUVoiceIO: the speaker render callback becomes the AEC
+	// reference for the processed microphone uplink. Registries without this
+	// optional capability, explicit routes it cannot host, and native setup
+	// failures retain the portable independent-device + correlation-gate path.
+	if request.inputSelected() && request.outputSelected() {
+		inputRate, outputRate := request.InputSampleRate, request.OutputSampleRate
+		if inputRate == 0 {
+			inputRate = audio.SampleRate
+		}
+		if outputRate == 0 {
+			outputRate = audio.SampleRate
+		}
+		source, sink, duplexErr := audio.NewDuplexDeviceSourceSinkWithFormat(
+			request.Registry,
+			normalizeRTCDeviceSelector(request.InputDevice), audio.PCM16DeviceFormat(inputRate),
+			normalizeRTCDeviceSelector(request.OutputDevice), audio.PCM16DeviceFormat(outputRate),
+		)
+		if duplexErr == nil {
+			binding.Source = newRTCDeviceSourceFromOpened(source, inputRate, inputRate)
+			binding.Sink = newRTCDeviceSinkFromOpened(sink, outputRate, outputRate, request.OutputVoice, request.PlaybackObserver)
+		} else if !errors.Is(duplexErr, audio.ErrDuplexDeviceUnavailable) {
+			return nil, duplexErr
+		}
+	}
+	if request.inputSelected() && binding.Source == nil {
 		source, err := NewRTCDeviceSourceAtRate(request.Registry, normalizeRTCDeviceSelector(request.InputDevice), request.InputSampleRate)
 		if err != nil {
 			return nil, &RTCDeviceBindingError{
@@ -212,10 +249,11 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 			}
 		}
 		binding.Source = source
+		binding.Source.captureObserver = request.CaptureObserver
 	}
 
-	if request.outputSelected() {
-		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.PlaybackObserver)
+	if request.outputSelected() && binding.Sink == nil {
+		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.OutputVoice, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(&RTCDeviceBindingError{

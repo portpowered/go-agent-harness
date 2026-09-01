@@ -118,6 +118,27 @@ func TestStatefulBrokerFreshnessPreservesFreshNonEmptyAndEmptyResults(t *testing
 	}
 }
 
+func TestStatefulBrokerAcceptsSynchronousOwnedTerminalAfterInvokedProvenance(t *testing.T) {
+	fixture := newFreshnessFixture(t)
+	fixture.session.SetAutoResponse("Completed", json.RawMessage(`{"documents":[{"id":"synchronous"}]}`))
+
+	result, err := fixture.broker.Invoke(context.Background(), webmcp.InvokeRequest{
+		ToolRef: fixture.ref,
+		Input:   json.RawMessage(`{}`),
+		Reason:  "synchronous deterministic target response",
+	})
+	if err != nil {
+		t.Fatalf("invoke with synchronous target response: %v", err)
+	}
+	terminal, err := fixture.broker.WaitInvocation(context.Background(), result.InvocationID)
+	if err != nil {
+		t.Fatalf("wait synchronous target result: %v", err)
+	}
+	if terminal.State != webmcp.InvocationCompleted || terminal.ErrorCode != "" || string(terminal.Output) != `{"documents":[{"id":"synchronous"}]}` {
+		t.Fatalf("synchronous terminal = %#v, want provenance-backed success", terminal)
+	}
+}
+
 func TestStatefulBrokerRejectsEarlyTerminalWithRetryableFreshnessEnvelope(t *testing.T) {
 	fixture := newFreshnessFixture(t)
 	staleID := webmcp.InvocationID("inv-000001")

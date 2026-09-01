@@ -23,10 +23,10 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents services.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents services.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, inferencer, sessionInferencer)
+	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, metricSampler, logger, inferencer, sessionInferencer)
 	executor := agent.NewExecutor(toolExecutor, toolDefs, inferencer, v...)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -44,8 +44,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	v3 := provideFleetEntryExecutors()
 	probeFleetCommand := cli.NewProbeFleetCommand(v3...)
 	sessionToolCapabilitiesFactory := provideSessionToolCapabilitiesFactory(toolExecutor)
-	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents)
-	sessionCommand := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver, sessionToolCapabilitiesFactory, deviceRegistry, sessionRTCRuntimeFactory)
+	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
+	sessionCommand := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntimeAndObservability(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver, sessionToolCapabilitiesFactory, deviceRegistry, sessionRTCRuntimeFactory, metricSampler, logger)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
@@ -64,8 +64,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 // signaling, peer/data, and media implementations behind the service's
 // provider-neutral contracts while leaving runtime side effects lazy until a
 // session actually starts.
-func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents) services.SessionRTCRuntimeFactory {
-	return services.NewSessionRTCRuntimeFactory(components)
+func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents, metricSampler MetricSampler, logger Logger) services.SessionRTCRuntimeFactory {
+	return services.NewSessionRTCRuntimeFactoryWithObservability(components, metricSampler, logger)
 }
 
 func provideModelValidation(
@@ -78,6 +78,8 @@ func provideModelValidation(
 	audioSink AudioSink,
 	clockSource Clock,
 	runtimeObserver SessionRuntimeObserver,
+	metricSampler MetricSampler,
+	logger Logger,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 ) []bool {
@@ -90,6 +92,8 @@ func provideModelValidation(
 			audioSink:         audioSink,
 			clockSource:       clockSource,
 			runtimeObserver:   runtimeObserver,
+			metricSampler:     metricSampler,
+			logger:            logger,
 			inferencer:        inferencer,
 			sessionInferencer: sessionInferencer,
 		})
@@ -123,5 +127,5 @@ var CliSet = wire.NewSet(
 	provideAcceptanceCommands,
 	provideProbeDeviceRegistries,
 	provideSessionToolCapabilitiesFactory,
-	provideSessionRTCRuntimeFactory, cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideSessionRTCRuntimeFactory, cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntimeAndObservability, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -77,13 +78,21 @@ type SessionRTCComponents struct {
 // factory construction time; every resource is acquired by Start and released
 // by Close.
 func NewSessionRTCRuntimeFactory(components SessionRTCComponents) SessionRTCRuntimeFactory {
+	return NewSessionRTCRuntimeFactoryWithObservability(components, nil, nil)
+}
+
+// NewSessionRTCRuntimeFactoryWithObservability adds application-owned
+// lifecycle telemetry without exposing concrete sinks to the RTC service.
+func NewSessionRTCRuntimeFactoryWithObservability(components SessionRTCComponents, sampler observability.MetricSampler, logger observability.Logger) SessionRTCRuntimeFactory {
 	return func(selection SessionRuntimeSelection) (SessionRTCRuntime, error) {
 		if err := components.validate(); err != nil {
 			return nil, err
 		}
 		return &sessionComposedRTCRuntime{
-			selection:  selection,
-			components: components,
+			selection:     selection,
+			components:    components,
+			metricSampler: observability.EnsureMetricSampler(sampler),
+			logger:        observability.EnsureLogger(logger),
 		}, nil
 	}
 }
@@ -250,8 +259,10 @@ func wrapSessionRTCRuntimeError(phase string, err error) error {
 }
 
 type sessionComposedRTCRuntime struct {
-	selection  SessionRuntimeSelection
-	components SessionRTCComponents
+	selection     SessionRuntimeSelection
+	components    SessionRTCComponents
+	metricSampler observability.MetricSampler
+	logger        observability.Logger
 
 	startMu sync.Mutex
 	mu      sync.Mutex
@@ -324,6 +335,7 @@ func (r *sessionComposedRTCRuntime) Start(ctx context.Context) (SessionRTCDataPl
 		r.startErr = wrapped
 		r.cancel = nil
 		r.mu.Unlock()
+		r.observe("start_failed", phase, "error")
 		return nil, wrapped
 	}
 
@@ -375,6 +387,7 @@ func (r *sessionComposedRTCRuntime) Start(ctx context.Context) (SessionRTCDataPl
 	r.started = true
 	r.cancel = cancel
 	r.mu.Unlock()
+	r.observe("started", "attach media source", "info")
 	return dataPlane, nil
 }
 
@@ -402,8 +415,30 @@ func (r *sessionComposedRTCRuntime) Close() error {
 		// close in reverse ownership order so a blocked attachment can observe
 		// its source closing before its peer and signaling owners disappear.
 		r.closeErr = closeSessionRTCResources(media, dataPlane, signaling)
+		level := "info"
+		if r.closeErr != nil {
+			level = "error"
+		}
+		r.observe("closed", "close", level)
 	})
 	return r.closeErr
+}
+
+func (r *sessionComposedRTCRuntime) observe(event, phase, level string) {
+	if r == nil {
+		return
+	}
+	fields := observability.Fields{
+		"transport": r.selection.Transport,
+		"phase":     phase,
+		"event":     event,
+	}
+	_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+		Name: "session.rtc.lifecycle", Kind: "counter", Value: 1, Unit: "events", Fields: fields,
+	})
+	_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+		Level: level, Message: "session RTC runtime " + event, Fields: fields,
+	})
 }
 
 func closeSessionRTCResources(media rtc.InboundMedia, dataPlane SessionRTCDataPlane, signaling rtc.Signaling) error {

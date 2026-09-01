@@ -346,6 +346,12 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding
+	// Local device playback of this session's own synthesized voice must
+	// carry the same fixed per-voice loudness correction as every other
+	// output path (see VoiceLoudnessGainDB), so --voice selection does not
+	// leave a live interactive session sounding louder or quieter than a
+	// recorded/room session using the same voice.
+	plan.rtcDeviceRequest.OutputVoice = opts.Voice
 	// Replay preserves the selected device pumps for lifecycle/round-trip
 	// callers, but its recorded media is not a live acoustic topology. Keep the
 	// explicit bypass at the binding boundary so replayed provider output cannot
@@ -386,9 +392,18 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// The playback-overflow observer's sink is resolved (never trusted as-is)
 	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
 	// device overflow invisible; see resolvePlaybackDiagnosticSink.
+	observabilityDependencies := opts.Observability
+	if observabilityDependencies.MetricSampler == nil && observabilityDependencies.Logger == nil {
+		observabilityDependencies = plan.rtcDeviceRequest.Observability
+	}
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
+		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
+	)
+	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
+		plan.rtcDeviceRequest.CaptureObserver,
+		sessionCaptureObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
 	)
 	plan.selection = selection
 	plan.transport = selection.Transport

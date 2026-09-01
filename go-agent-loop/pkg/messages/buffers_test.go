@@ -231,6 +231,58 @@ func TestTypedBuffer_DropCountOnlyOnBufferFullPath(t *testing.T) {
 	}
 }
 
+func TestTypedBufferWriteWaitContextBackpressuresWithoutDrop(t *testing.T) {
+	buffer := NewTypedBuffer[int](1)
+	if outcome := buffer.WriteContext(context.Background(), 1); !outcome.OK() {
+		t.Fatalf("seed write = %+v", outcome)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	written := make(chan BufferWriteOutcome, 1)
+	go func() { written <- buffer.WriteWaitContext(ctx, 2) }()
+	select {
+	case outcome := <-written:
+		t.Fatalf("backpressured write completed before capacity was released: %+v", outcome)
+	case <-time.After(20 * time.Millisecond):
+	}
+	if got, ok := buffer.Read(); !ok || got != 1 {
+		t.Fatalf("first read = (%d, %t), want (1, true)", got, ok)
+	}
+	select {
+	case outcome := <-written:
+		if !outcome.OK() {
+			t.Fatalf("released backpressure write = %+v", outcome)
+		}
+	case <-ctx.Done():
+		t.Fatalf("backpressured write did not complete: %v", ctx.Err())
+	}
+	if got := buffer.Drops(); got != 0 {
+		t.Fatalf("backpressure drops = %d, want 0", got)
+	}
+}
+
+func TestTypedBufferWriteWaitContextStopsWhenConsumerClosesWhileFull(t *testing.T) {
+	buffer := NewTypedBuffer[int](1)
+	if !buffer.Write(context.Background(), 1) {
+		t.Fatal("fill buffer")
+	}
+	done := make(chan struct{})
+	written := make(chan BufferWriteOutcome, 1)
+	go func() { written <- buffer.WriteWaitContextOrDone(context.Background(), done, 2) }()
+	close(done)
+	select {
+	case outcome := <-written:
+		if outcome.Status != BufferWriteStopped || outcome.Err != nil {
+			t.Fatalf("stopped write outcome=%+v", outcome)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("backpressured write did not stop with its consumer")
+	}
+	if buffer.Drops() != 0 {
+		t.Fatalf("lifecycle stop counted as %d drops", buffer.Drops())
+	}
+}
+
 func TestTypedBuffer_ConcurrentWritersAccurateDropCount(t *testing.T) {
 	const (
 		writers    = 8

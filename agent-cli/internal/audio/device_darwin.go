@@ -32,6 +32,7 @@ type CoreAudioDeviceRegistry struct {
 }
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
+var _ DuplexDeviceFormatOpener = (*CoreAudioDeviceRegistry)(nil)
 var (
 	_ OpenedDevice = (*coreAudioHandle)(nil)
 	_ AudioSource  = (*coreAudioHandle)(nil)
@@ -84,6 +85,52 @@ func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 // OpenWithFormat opens a CoreAudio endpoint at an explicit PCM format.
 func (r *CoreAudioDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
 	return r.openAtFormat(id, format, true)
+}
+
+// OpenDuplexWithFormat uses Apple's AUVoiceIO for a default microphone and
+// default speaker pair. AUVoiceIO owns the two directions in one native graph,
+// which enables Apple's echo cancellation, noise suppression, and AGC. An
+// explicitly routed/non-default pair falls back through the ordinary registry
+// path because one VoiceIO unit cannot safely promise two arbitrary HAL routes.
+func (r *CoreAudioDeviceRegistry) OpenDuplexWithFormat(inputID DeviceID, inputFormat DeviceFormat, outputID DeviceID, outputFormat DeviceFormat) (OpenedDevice, OpenedDevice, error) {
+	if err := inputFormat.Validate(); err != nil {
+		return nil, nil, err
+	}
+	if err := outputFormat.Validate(); err != nil {
+		return nil, nil, err
+	}
+	endpoints, err := r.enumerate()
+	if err != nil {
+		return nil, nil, err
+	}
+	var input, output *coreAudioEndpoint
+	for index := range endpoints {
+		endpoint := &endpoints[index]
+		switch endpoint.device.ID {
+		case inputID:
+			if endpoint.device.Direction == DirectionInput {
+				input = endpoint
+			}
+		case outputID:
+			if endpoint.device.Direction == DirectionOutput {
+				output = endpoint
+			}
+		}
+	}
+	if input == nil {
+		return nil, nil, NewDeviceNotFoundError(inputID)
+	}
+	if output == nil {
+		return nil, nil, NewDeviceNotFoundError(outputID)
+	}
+	if !input.defaultDevice || !output.defaultDevice {
+		return nil, nil, fmt.Errorf("%w: AUVoiceIO currently supports the default input/output route", ErrDuplexDeviceUnavailable)
+	}
+	inputHandle, outputHandle, err := newVoiceProcessingIO(inputID, outputID, inputFormat, outputFormat)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %v", ErrDuplexDeviceUnavailable, err)
+	}
+	return inputHandle, outputHandle, nil
 }
 
 func (r *CoreAudioDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {
@@ -315,7 +362,7 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 			h.nonZero.Add(1)
 		}
 	}
-	if n > 0 && h.playback != nil && h.playback.Snapshot().QueuedSamples == 0 {
+	if n > 0 {
 		h.signalPlaybackLocked()
 	}
 }
@@ -392,6 +439,13 @@ func (h *coreAudioHandle) PlaybackStats() PlaybackQueueStats {
 	return h.playback.Snapshot()
 }
 
+func (h *coreAudioHandle) CaptureStats() CaptureQueueStats {
+	if h == nil || h.capture == nil {
+		return CaptureQueueStats{}
+	}
+	return h.capture.CaptureStats()
+}
+
 // DiscardPlayback removes samples that have not yet been handed to the
 // CoreAudio callback. In-flight callback output is intentionally outside this
 // boundary.
@@ -404,7 +458,54 @@ func (h *coreAudioHandle) DiscardPlayback() int {
 	if h.playback == nil {
 		return 0
 	}
-	return h.playback.Discard()
+	discarded := h.playback.Discard()
+	if discarded > 0 {
+		h.signalPlaybackLocked()
+	}
+	return discarded
+}
+
+// WaitForPlaybackCapacity blocks a burst producer at the queue's high
+// watermark and resumes it only after callbacks drain to the low watermark.
+func (h *coreAudioHandle) WaitForPlaybackCapacity(ctx context.Context, samples int) error {
+	if h == nil || samples <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	low, high, err := PlaybackQueueWatermarks(h.format)
+	if err != nil {
+		return err
+	}
+	if samples > high {
+		return fmt.Errorf("%w: incoming playback chunk %d exceeds high watermark %d", ErrInvalidPlaybackQueue, samples, high)
+	}
+	throttled := false
+	for {
+		h.mu.Lock()
+		if h.closed.Load() {
+			h.mu.Unlock()
+			return &ClosedError{Operation: "wait for playback capacity", Path: string(h.id)}
+		}
+		queued := h.ensurePlaybackQueueLocked().Snapshot().QueuedSamples
+		if (!throttled && queued+samples <= high) || (throttled && queued <= low && queued+samples <= high) {
+			h.mu.Unlock()
+			return nil
+		}
+		throttled = true
+		if h.playbackWake == nil {
+			h.playbackWake = make(chan struct{})
+		}
+		wake := h.playbackWake
+		h.mu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // WaitForPlayback waits until the native render callback has consumed all

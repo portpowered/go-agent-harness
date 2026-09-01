@@ -6,12 +6,17 @@ type devicePlaybackWaiter interface {
 	WaitForPlayback(context.Context) error
 }
 
+type devicePlaybackCapacityWaiter interface {
+	WaitForPlaybackCapacity(context.Context, int) error
+}
+
 type DeviceSink struct {
 	adapter        *deviceAdapter
 	frameWriter    deviceFrameWriter
 	sampleWriter   deviceSampleWriter
 	byteWriter     deviceByteWriter
 	playbackWaiter devicePlaybackWaiter
+	capacityWaiter devicePlaybackCapacityWaiter
 	format         DeviceFormat
 }
 
@@ -41,6 +46,10 @@ func NewDeviceSinkWithFormat(registry DeviceRegistry, id DeviceID, format Device
 	if err != nil {
 		return nil, err
 	}
+	return newDeviceSinkFromOpened(handle, resolvedID, format)
+}
+
+func newDeviceSinkFromOpened(handle OpenedDevice, resolvedID DeviceID, format DeviceFormat) (*DeviceSink, error) {
 	frames, hasFrames := handle.(deviceFrameWriter)
 	samples, hasSamples := handle.(deviceSampleWriter)
 	bytes, hasBytes := handle.(deviceByteWriter)
@@ -49,7 +58,8 @@ func NewDeviceSinkWithFormat(registry DeviceRegistry, id DeviceID, format Device
 		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
 	waiter, _ := handle.(devicePlaybackWaiter)
-	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, sampleWriter: samples, byteWriter: bytes, playbackWaiter: waiter, format: format}, nil
+	capacityWaiter, _ := handle.(devicePlaybackCapacityWaiter)
+	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, sampleWriter: samples, byteWriter: bytes, playbackWaiter: waiter, capacityWaiter: capacityWaiter, format: format}, nil
 }
 
 // DeviceID returns the stable ID acquired by the sink. When the sink was
@@ -136,6 +146,19 @@ func (s *DeviceSink) WaitForPlayback(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	return s.adapter.finish("wait for playback", s.playbackWaiter.WaitForPlayback(ctx))
+}
+
+// WaitForPlaybackCapacity applies optional device-owned backpressure before
+// samples are enqueued. Backends without a callback queue preserve their
+// synchronous write behavior.
+func (s *DeviceSink) WaitForPlaybackCapacity(ctx context.Context, samples int) error {
+	if s == nil || s.capacityWaiter == nil || samples <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.adapter.finish("wait for playback capacity", s.capacityWaiter.WaitForPlaybackCapacity(ctx, samples))
 }
 
 // WriteSamples queues a non-empty PCM16 chunk without imposing the legacy

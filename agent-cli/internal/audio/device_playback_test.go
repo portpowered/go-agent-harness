@@ -77,6 +77,29 @@ func TestPlaybackQueueCapacityUsesResolvedFormatAndLatency(t *testing.T) {
 	}
 }
 
+func TestPlaybackQueueWatermarksLeaveCallbackReserveBelowHardCapacity(t *testing.T) {
+	for _, rate := range []int{16000, 24000, 48000} {
+		format := PCM16DeviceFormat(rate)
+		low, high, err := PlaybackQueueWatermarks(format)
+		if err != nil {
+			t.Fatalf("PlaybackQueueWatermarks(%d Hz): %v", rate, err)
+		}
+		capacity, err := PlaybackQueueCapacity(format, DefaultPlaybackLatencyTarget)
+		if err != nil {
+			t.Fatalf("PlaybackQueueCapacity(%d Hz): %v", rate, err)
+		}
+		if want := rate * int(DefaultPlaybackLowWatermark/time.Millisecond) / 1000; low != want {
+			t.Fatalf("%d Hz low watermark = %d, want %d", rate, low, want)
+		}
+		if want := rate * int(DefaultPlaybackHighWatermark/time.Millisecond) / 1000; high != want {
+			t.Fatalf("%d Hz high watermark = %d, want %d", rate, high, want)
+		}
+		if !(0 < low && low < high && high < capacity) {
+			t.Fatalf("%d Hz watermarks = low:%d high:%d capacity:%d, want strict ordering", rate, low, high, capacity)
+		}
+	}
+}
+
 func TestPlaybackQueueSustainedMatchedRatePreservesOrderWithoutDrops(t *testing.T) {
 	format := PCM16DeviceFormat(24000)
 	q, err := NewPlaybackQueueWithLatency(format, 25*time.Millisecond)
@@ -209,6 +232,40 @@ func TestPlaybackQueueHandlesInvalidInputsAndPCM16Callbacks(t *testing.T) {
 	}
 	if fallback, err := playbackQueueForFormat(DeviceFormat{}); err != nil || fallback.Snapshot().Format != DefaultDeviceFormat() {
 		t.Fatalf("invalid playbackQueueForFormat fallback = %+v/%v", fallback.Snapshot(), err)
+	}
+}
+
+func TestRenderCallbackReportsExactZeroFilledUnderrun(t *testing.T) {
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(48000), time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Enqueue([]int16{11, 22, 33})
+	rendered := []int16{9, 9, 9, 9, 9}
+	if got := q.RenderInto(rendered); got != 3 {
+		t.Fatalf("rendered source samples = %d, want 3", got)
+	}
+	if want := []int16{11, 22, 33, 0, 0}; !reflect.DeepEqual(rendered, want) {
+		t.Fatalf("rendered callback = %v, want %v", rendered, want)
+	}
+	stats := q.Snapshot()
+	if stats.CallbackCount != 1 || stats.RenderedSamples != 5 || stats.UnderflowEvents != 1 || stats.UnderflowSamples != 2 || stats.ZeroFilledSamples != 2 || stats.MinimumQueuedSamples != 3 {
+		t.Fatalf("callback stats = %+v", stats)
+	}
+}
+
+func TestPlaybackQueueRingWrapPreservesFIFO(t *testing.T) {
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(16000), time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Enqueue(int16Samples(0, 12))
+	if got := q.Dequeue(9); !reflect.DeepEqual(got, int16Samples(0, 9)) {
+		t.Fatalf("prefix = %v", got)
+	}
+	q.Enqueue(int16Samples(12, 13))
+	if got, want := q.Dequeue(16), int16Samples(9, 16); !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrapped FIFO = %v, want %v", got, want)
 	}
 }
 

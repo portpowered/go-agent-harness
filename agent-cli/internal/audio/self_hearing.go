@@ -21,14 +21,23 @@ const (
 	// PCM16SelfHearingDefaultLagMin and Max cover the expected acoustic path
 	// from a local speaker to a colocated microphone. Positive lag means the
 	// microphone signal occurs after the speaker signal.
-	PCM16SelfHearingDefaultLagMin = -100 * time.Millisecond
-	PCM16SelfHearingDefaultLagMax = 100 * time.Millisecond
+	// The negative allowance absorbs capture/render callback skew. The positive
+	// bound includes hardware buffering plus a far-field acoustic path. A live
+	// MacBook capture measured 188 ms end-to-end, which the former +/-100 ms
+	// window could never classify even though local 120 ms windows correlated
+	// above 0.95.
+	PCM16SelfHearingDefaultLagMin = -200 * time.Millisecond
+	PCM16SelfHearingDefaultLagMax = 500 * time.Millisecond
 	// PCM16SelfHearingDefaultCorrelationThreshold accounts for the gain and
 	// frequency shaping introduced by a colocated laptop speaker/microphone
 	// path while still requiring a materially correlated signal. The inclusive
 	// comparison is intentional so a measurement exactly on the configured
 	// boundary is confirmed.
-	PCM16SelfHearingDefaultCorrelationThreshold = 0.50
+	// Far-field microphones apply gain control, frequency shaping, and room
+	// reflections. A modest reduction from the former 0.50 admits transformed
+	// echo paths without making a wide lag search classify independent speech.
+	// Confirmation still requires 80 ms of active paired evidence.
+	PCM16SelfHearingDefaultCorrelationThreshold = 0.45
 	// PCM16SelfHearingDefaultSilenceFloorDBFS is shared with the room analysis
 	// contract so digital silence and low-level noise do not become evidence.
 	PCM16SelfHearingDefaultSilenceFloorDBFS = PCM16AnalysisSilenceFloorDBFS
@@ -38,7 +47,7 @@ const (
 	// PCM16SelfHearingDefaultAcousticTail is the post-playback tail reserved by
 	// the selective gate for late speaker bleed. The detector itself remains a
 	// pure classifier and does not discard audio.
-	PCM16SelfHearingDefaultAcousticTail = 200 * time.Millisecond
+	PCM16SelfHearingDefaultAcousticTail = 500 * time.Millisecond
 )
 
 var (
@@ -285,6 +294,31 @@ func (d *PCM16SelfHearingDetector) Config() PCM16SelfHearingConfig {
 	return d.config
 }
 
+// RestrictCorrelationLagWindow narrows future classifications without
+// discarding retained playback/capture evidence. A feedback gate uses this
+// after its high-evidence primary detector has learned the physical acoustic
+// lag, preventing a short post-confirmation probe from repeatedly searching
+// thousands of unrelated lag candidates.
+func (d *PCM16SelfHearingDetector) RestrictCorrelationLagWindow(window PCM16LagWindow) error {
+	if d == nil {
+		return ErrClosed
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return ErrClosed
+	}
+	if window.Min > window.Max {
+		return invalidPCM16SelfHearingConfig("correlation_lag_window", "minimum must not exceed maximum")
+	}
+	current := d.config.CorrelationLagWindow
+	if window.Min < current.Min || window.Max > current.Max {
+		return invalidPCM16SelfHearingConfig("correlation_lag_window", "restriction must remain inside the current window")
+	}
+	d.config.CorrelationLagWindow = window
+	return nil
+}
+
 // MaxBufferDuration returns the time bound used for each rolling stream.
 func (d *PCM16SelfHearingDetector) MaxBufferDuration() time.Duration {
 	if d == nil {
@@ -447,116 +481,130 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 	}
 
 	rate := d.playback.rate
-	lagMin := d.config.CorrelationLagWindow.Min
-	sourceEnd := d.playback.end
-	if candidateEnd := d.capture.end - lagMin; candidateEnd < sourceEnd {
-		sourceEnd = candidateEnd
-	}
-	if sourceEnd <= d.playback.start {
-		return observation
-	}
-	sourceStart := sourceEnd - d.config.AnalysisWindow
-	if sourceStart < d.playback.start {
-		sourceStart = d.playback.start
-	}
-	if sourceEnd <= sourceStart {
-		return observation
-	}
-
-	base := d.playback.start
-	if d.capture.start < base {
-		base = d.capture.start
-	}
-	source := PCM16TimedStream{
-		PCM16Input: PCM16Input{
-			StreamID:      "assistant-playback",
-			ParticipantID: "assistant",
-			SampleRate:    rate,
-			Samples:       d.playback.samples,
-		},
-		TimelineStart: d.playback.start - base,
-		TimelineEnd:   d.playback.end - base,
-	}
-	received := PCM16TimedStream{
-		PCM16Input: PCM16Input{
-			StreamID:      "microphone-capture",
-			ParticipantID: "local-microphone",
-			SampleRate:    d.capture.rate,
-			Samples:       d.capture.samples,
-		},
-		TimelineStart: d.capture.start - base,
-		TimelineEnd:   d.capture.end - base,
-	}
-	interval := PCM16TimeInterval{
-		ID:    "local-self-hearing-window",
-		Start: sourceStart - base,
-		End:   sourceEnd - base,
-	}
-	sourceStartIndex, sourceEndIndex, err := sampleRangeForInterval(source, interval)
-	if err != nil {
-		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
-	}
-	minLagSamples, err := signedDurationToSamples(d.config.CorrelationLagWindow.Min, rate)
-	if err != nil {
-		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
-	}
-	maxLagSamples, err := signedDurationToSamples(d.config.CorrelationLagWindow.Max, rate)
-	if err != nil {
-		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
-	}
-	if maxLagSamples < minLagSamples {
-		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
-	}
-	receivedIntervalStart, err := signedDurationToSamples(interval.Start-received.TimelineStart, rate)
-	if err != nil {
-		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
-	}
-	threshold := pcm16AmplitudeForDBFS(d.config.SilenceFloorDBFS)
 	minimumSamples, err := ceilDurationSamples(d.config.MinimumEvidence, rate)
 	if err != nil {
 		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
 	}
-	measurement := PCM16CorrelationMeasurement{
-		SourceStreamID:        source.StreamID,
-		SourceParticipantID:   source.ParticipantID,
-		ReceivedStreamID:      received.StreamID,
-		ReceivedParticipantID: received.ParticipantID,
-		IntervalID:            interval.ID,
-		Start:                 interval.Start,
-		End:                   interval.End,
+	insufficientActiveObservation := func() PCM16SelfHearingObservation {
+		result := observation
+		threshold := pcm16AmplitudeForDBFS(d.config.SilenceFloorDBFS)
+		playbackActive, captureActive := 0, 0
+		for _, sample := range d.playback.samples {
+			if float64(absoluteSample(sample)) > threshold {
+				playbackActive++
+			}
+		}
+		for _, sample := range d.capture.samples {
+			if float64(absoluteSample(sample)) > threshold {
+				captureActive++
+			}
+		}
+		if evidence := min(playbackActive, captureActive); evidence > 0 {
+			result.Classification = PCM16SelfHearingInsufficientEvidence
+			result.EvidenceSamples = evidence
+			result.EvidenceDuration = samplesToDuration(evidence, rate)
+		}
+		return result
 	}
-	sourceWindow := source.Samples[sourceStartIndex:sourceEndIndex]
-	// Lags whose geometric overlap is shorter than the minimum evidence can
-	// never confirm self-hearing. Excluding them before the Pearson scan keeps
-	// the live gate bounded in CPU as well as storage, while preserving the
-	// detector's configured lag semantics for every eligible candidate.
-	minimumEvidenceLag := minimumSamples - len(sourceWindow) - receivedIntervalStart
-	maximumEvidenceLag := len(received.Samples) - minimumSamples - receivedIntervalStart
-	if minimumEvidenceLag > maximumEvidenceLag {
-		probeLag := -receivedIntervalStart
-		if probeLag < minLagSamples {
-			probeLag = minLagSamples
-		}
-		if probeLag > maxLagSamples {
-			probeLag = maxLagSamples
-		}
-		evidenceSamples := pairedNonSilentSamples(sourceWindow, received.Samples, receivedIntervalStart+probeLag, threshold)
-		observation.Measurement = measurement
-		observation.EvidenceSamples = evidenceSamples
-		observation.EvidenceDuration = samplesToDuration(evidenceSamples, rate)
-		if evidenceSamples == 0 {
-			observation.Classification = PCM16SelfHearingNoEvidence
-		} else {
-			observation.Classification = PCM16SelfHearingInsufficientEvidence
-		}
+	// Distinguish a short but potentially alignable active window from two
+	// streams that cannot overlap anywhere inside the configured lag range.
+	// The former is insufficient evidence; the latter is genuinely no evidence
+	// and lets the gate release capture once an acoustic path has expired.
+	overlapLagMin := d.capture.start - d.playback.end
+	overlapLagMax := d.capture.end - d.playback.start
+	if d.config.CorrelationLagWindow.Max <= overlapLagMin || d.config.CorrelationLagWindow.Min >= overlapLagMax {
 		return observation
 	}
-	if minLagSamples < minimumEvidenceLag {
-		minLagSamples = minimumEvidenceLag
+	if d.playback.end-d.playback.start < d.config.MinimumEvidence || d.capture.end-d.capture.start < d.config.MinimumEvidence {
+		return insufficientActiveObservation()
 	}
-	if maxLagSamples > maximumEvidenceLag {
-		maxLagSamples = maximumEvidenceLag
+	minLagDuration := d.config.CorrelationLagWindow.Min
+	if eligible := d.capture.start + d.config.MinimumEvidence - d.playback.end; eligible > minLagDuration {
+		minLagDuration = eligible
 	}
+	maxLagDuration := d.config.CorrelationLagWindow.Max
+	if eligible := d.capture.end - d.config.MinimumEvidence - d.playback.start; eligible < maxLagDuration {
+		maxLagDuration = eligible
+	}
+	if maxLagDuration < minLagDuration {
+		return insufficientActiveObservation()
+	}
+	minLagSamples, err := signedDurationToSamples(minLagDuration, rate)
+	if err != nil {
+		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
+	}
+	maxLagSamples, err := signedDurationToSamples(maxLagDuration, rate)
+	if err != nil || maxLagSamples < minLagSamples {
+		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingInsufficientEvidence}
+	}
+	threshold := pcm16AmplitudeForDBFS(d.config.SilenceFloorDBFS)
+	base := d.playback.start
+	if d.capture.start < base {
+		base = d.capture.start
+	}
+	measurement := PCM16CorrelationMeasurement{
+		SourceStreamID:        "assistant-playback",
+		SourceParticipantID:   "assistant",
+		ReceivedStreamID:      "microphone-capture",
+		ReceivedParticipantID: "local-microphone",
+		IntervalID:            "local-self-hearing-window",
+	}
+
+	type lagResult struct {
+		coefficient float64
+		compared    int
+		evidence    int
+		start       time.Duration
+		end         time.Duration
+	}
+	results := make(map[int]lagResult, (maxLagSamples-minLagSamples)/streamingPCM16LagStride+1)
+	measure := func(lagSamples int) lagResult {
+		if result, ok := results[lagSamples]; ok {
+			return result
+		}
+		lag := samplesToSignedDuration(lagSamples, rate)
+		sourceStart := d.playback.start
+		if candidate := d.capture.start - lag; candidate > sourceStart {
+			sourceStart = candidate
+		}
+		sourceEnd := d.playback.end
+		if candidate := d.capture.end - lag; candidate < sourceEnd {
+			sourceEnd = candidate
+		}
+		if sourceEnd-sourceStart < d.config.MinimumEvidence {
+			return lagResult{}
+		}
+		if sourceEnd-sourceStart > d.config.AnalysisWindow {
+			sourceStart = sourceEnd - d.config.AnalysisWindow
+		}
+		playbackStart, startErr := signedDurationToSamples(sourceStart-d.playback.start, rate)
+		playbackEnd, endErr := signedDurationToSamples(sourceEnd-d.playback.start, rate)
+		captureStart, captureStartErr := signedDurationToSamples(sourceStart+lag-d.capture.start, rate)
+		captureEnd, captureEndErr := signedDurationToSamples(sourceEnd+lag-d.capture.start, rate)
+		if startErr != nil || endErr != nil || captureStartErr != nil || captureEndErr != nil ||
+			playbackStart < 0 || playbackEnd > len(d.playback.samples) || captureStart < 0 || captureEnd > len(d.capture.samples) ||
+			playbackEnd <= playbackStart || captureEnd <= captureStart {
+			return lagResult{}
+		}
+		playback := d.playback.samples[playbackStart:playbackEnd]
+		capture := d.capture.samples[captureStart:captureEnd]
+		if len(playback) > len(capture) {
+			playback = playback[:len(capture)]
+		} else if len(capture) > len(playback) {
+			capture = capture[:len(playback)]
+		}
+		coefficient, compared := normalizedCorrelationAtLag(playback, nil, capture, 0, threshold)
+		result := lagResult{
+			coefficient: coefficient,
+			compared:    compared,
+			evidence:    pairedNonSilentSamples(playback, capture, 0, threshold),
+			start:       sourceStart - base,
+			end:         sourceEnd - base,
+		}
+		results[lagSamples] = result
+		return result
+	}
+
 	foundSigned := false
 	foundAbsolute := false
 	bestEvidenceSamples := 0
@@ -565,40 +613,34 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 		minLagSamples,
 		maxLagSamples,
 		func(lagSamples int, coefficient float64, compared int) {
-			if compared == 0 {
-				return
+			result := measure(lagSamples)
+			if result.evidence > anyEvidenceSamples {
+				anyEvidenceSamples = result.evidence
 			}
-			evidenceSamples := pairedNonSilentSamples(
-				source.Samples[sourceStartIndex:sourceEndIndex],
-				received.Samples,
-				receivedIntervalStart+lagSamples,
-				threshold,
-			)
-			if evidenceSamples > anyEvidenceSamples {
-				anyEvidenceSamples = evidenceSamples
-			}
-			if evidenceSamples < minimumSamples {
+			if compared == 0 || result.evidence < minimumSamples {
 				return
 			}
 			if !foundSigned || coefficient > measurement.BestCorrelation {
 				measurement.BestCorrelation = coefficient
 				measurement.BestLag = samplesToSignedDuration(lagSamples, rate)
-				measurement.ComparedSamples = compared
 				foundSigned = true
 			}
 			if !foundAbsolute || math.Abs(coefficient) > measurement.BestAbsoluteCorrelation {
 				measurement.BestAbsoluteCorrelation = math.Abs(coefficient)
 				measurement.BestAbsoluteLag = samplesToSignedDuration(lagSamples, rate)
-				bestEvidenceSamples = evidenceSamples
+				measurement.ComparedSamples = compared
+				measurement.Start = result.start
+				measurement.End = result.end
+				bestEvidenceSamples = result.evidence
 				foundAbsolute = true
 			}
 		},
 		func(lagSamples int) (float64, int) {
-			return normalizedCorrelationAtLag(sourceWindow, nil, received.Samples, receivedIntervalStart+lagSamples, threshold)
+			result := measure(lagSamples)
+			return result.coefficient, result.compared
 		},
 	)
 	if anyEvidenceSamples == 0 {
-		observation.Classification = PCM16SelfHearingNoEvidence
 		return observation
 	}
 	if !foundAbsolute {
@@ -612,10 +654,6 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 		Measurement:      measurement,
 		EvidenceSamples:  bestEvidenceSamples,
 		EvidenceDuration: samplesToDuration(bestEvidenceSamples, rate),
-	}
-	if bestEvidenceSamples < minimumSamples {
-		observation.Classification = PCM16SelfHearingInsufficientEvidence
-		return observation
 	}
 	if measurement.BestAbsoluteCorrelation < d.config.CorrelationThreshold {
 		observation.Classification = PCM16SelfHearingNonFeedback

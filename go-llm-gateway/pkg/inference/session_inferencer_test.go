@@ -502,3 +502,34 @@ func TestSessionGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testin
 		t.Fatal("ConnectSession should expose the loop-owned session contract without wrapping it in a second shared session surface")
 	}
 }
+
+func TestSessionGatewayInferencer_SetSessionTurnDetectionCopiesAndClearsPolicy(t *testing.T) {
+	var nilInferencer *SessionGatewayInferencer
+	nilInferencer.SetSessionTurnDetection(&models.TurnDetectionConfig{Type: "server_vad"})
+
+	createResponse := true
+	policy := &models.TurnDetectionConfig{
+		Type:              "server_vad",
+		Threshold:         0.45,
+		PrefixPaddingMs:   300,
+		SilenceDurationMs: 500,
+		CreateResponse:    &createResponse,
+	}
+	inferencer := NewSessionGatewayInferencer(&mockSessionGateway{})
+	inferencer.SetSessionTurnDetection(policy)
+
+	policy.Type = "mutated"
+	createResponse = false
+	stored := inferencer.Request().Config.TurnDetection
+	if stored == nil || stored.Type != "server_vad" {
+		t.Fatalf("stored turn detection = %#v, want copied server_vad policy", stored)
+	}
+	if stored.CreateResponse == nil || !*stored.CreateResponse {
+		t.Fatalf("stored create_response = %#v, want independent true copy", stored.CreateResponse)
+	}
+
+	inferencer.SetSessionTurnDetection(nil)
+	if got := inferencer.Request().Config.TurnDetection; got != nil {
+		t.Fatalf("cleared turn detection = %#v, want nil", got)
+	}
+}

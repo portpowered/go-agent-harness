@@ -9,23 +9,54 @@ before:
     - go mod download
 
 builds:
-  - id: agent
+  - id: agent-portable
     main: ./agent-cli/cmd/agent
     binary: agent
     env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - linux
       - windows
     goarch:
       - amd64
       - arm64
+  - id: agent-darwin-amd64
+    main: ./agent-cli/cmd/agent
+    binary: agent
+    env:
+      - CGO_ENABLED=1
+      - CGO_CFLAGS=-arch x86_64
+      - CGO_LDFLAGS=-arch x86_64
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    hooks:
+      post:
+        - cmd: ./scripts/verify-darwin-eac-artifact.sh "{{ .Path }}" "{{ .Target }}"
+          output: true
+  - id: agent-darwin-arm64
+    main: ./agent-cli/cmd/agent
+    binary: agent
+    env:
+      - CGO_ENABLED=1
+      - CGO_CFLAGS=-arch arm64
+      - CGO_LDFLAGS=-arch arm64
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    hooks:
+      post:
+        - cmd: ./scripts/verify-darwin-eac-artifact.sh "{{ .Path }}" "{{ .Target }}"
+          output: true
 
 archives:
   - id: agent
     ids:
-      - agent
+      - agent-portable
+      - agent-darwin-amd64
+      - agent-darwin-arm64
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz

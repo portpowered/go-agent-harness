@@ -161,6 +161,26 @@ func (si *SessionGatewayInferencer) SetSessionAudioInput(format models.AudioForm
 	si.request.Config.Modalities = withSessionAudioModality(si.request.Config.Modalities)
 }
 
+// SetSessionTurnDetection configures provider-owned audio turn boundaries
+// before the next connection. Recording planners use this narrow seam after
+// determining that a live device microphone (rather than client-committed
+// file audio) owns the input stream.
+func (si *SessionGatewayInferencer) SetSessionTurnDetection(policy *models.TurnDetectionConfig) {
+	if si == nil {
+		return
+	}
+	if policy == nil {
+		si.request.Config.TurnDetection = nil
+		return
+	}
+	copyPolicy := *policy
+	if policy.CreateResponse != nil {
+		createResponse := *policy.CreateResponse
+		copyPolicy.CreateResponse = &createResponse
+	}
+	si.request.Config.TurnDetection = &copyPolicy
+}
+
 func withSessionAudioModality(modalities []models.SessionModality) []models.SessionModality {
 	for _, modality := range modalities {
 		if modality == models.SessionModalityAudio {

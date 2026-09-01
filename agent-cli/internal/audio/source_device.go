@@ -143,6 +143,10 @@ func NewDeviceSourceWithFormat(registry DeviceRegistry, id DeviceID, format Devi
 	if err != nil {
 		return nil, err
 	}
+	return newDeviceSourceFromOpened(handle, resolvedID, format)
+}
+
+func newDeviceSourceFromOpened(handle OpenedDevice, resolvedID DeviceID, format DeviceFormat) (*DeviceSource, error) {
 	frames, hasFrames := handle.(deviceFrameReader)
 	bytes, hasBytes := handle.(deviceByteReader)
 	if !hasFrames && !hasBytes {
@@ -174,6 +178,18 @@ func (s *DeviceSource) DeviceFormat() DeviceFormat {
 // the pacing contract.
 func (s *DeviceSource) SampleRate() int {
 	return s.DeviceFormat().SampleRate
+}
+
+// CaptureStats returns a synchronized capture snapshot when the selected
+// backend exposes one. Other backends retain a format-neutral zero value.
+func (s *DeviceSource) CaptureStats() CaptureQueueStats {
+	if s == nil || s.adapter == nil {
+		return CaptureQueueStats{}
+	}
+	if provider, ok := s.adapter.handle.(CaptureStatsProvider); ok {
+		return provider.CaptureStats()
+	}
+	return CaptureQueueStats{}
 }
 
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {

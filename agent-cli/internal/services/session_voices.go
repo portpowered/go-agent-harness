@@ -23,6 +23,49 @@ var (
 		"shimmer",
 		"verse",
 	}
+
+	// openAIRealtimeVoiceLoudnessGainDB corrects the customer-facing defect
+	// where --voice selection silently changes call volume. All 10 built-in
+	// voices are independently measured here (see the PR body for the full
+	// methodology, per-voice before/after table, and the calibration
+	// utterance used): one live gpt-realtime-2.1-mini session per voice
+	// speaking an identical fixed sentence, RMS measured over voiced 20ms
+	// frames only (frames at or below the package's -50 dBFS silence floor
+	// excluded, so leading/trailing silence and pauses cannot skew the
+	// figure), gain set to close each voice's measured gap to alloy.
+	//
+	// alloy is the measured reference/baseline (the audio-quality probe
+	// separately found it clean: zero clipped samples, a clean edge
+	// profile), so it is listed at 0 dB for clarity though that is also the
+	// unset default. verse's fresh figure (8.3 dB) is close to but not
+	// identical to the originally-filed probe measurement (~7.2-7.4 dB); the
+	// PR body explains why that is expected run-to-run/methodology variance
+	// rather than evidence the offset is content-dependent.
+	//
+	// Any voice without an entry here -- e.g. a future addition to the
+	// registry that has not yet been measured -- defaults to 0 dB (no
+	// adjustment): that is the deliberately conservative choice, since
+	// fabricating a correction without a measurement could just as easily
+	// make an unmeasured voice's level worse.
+	//
+	// Note: LoudnessNormalizer's peak-safety ceiling can hold a boost below
+	// its full table value for a chunk whose peak would otherwise exceed the
+	// ceiling (see loudness.go). That is intentional -- "must not clip"
+	// always wins over exact target matching -- and mainly affects the
+	// higher-crest-factor voices (sage, cedar measured with a residual gap
+	// after normalization; see the PR body).
+	openAIRealtimeVoiceLoudnessGainDB = map[string]float64{
+		"alloy":   0.0,
+		"ash":     6.2,
+		"ballad":  9.3,
+		"cedar":   3.9,
+		"coral":   10.0,
+		"echo":    5.5,
+		"marin":   5.5,
+		"sage":    15.1,
+		"shimmer": 2.4,
+		"verse":   8.3,
+	}
 )
 
 // InvalidOpenAIRealtimeVoiceError reports a value outside the documented
@@ -76,4 +119,14 @@ func ValidateOpenAIRealtimeVoice(voice string) error {
 		Voice:           voice,
 		SupportedVoices: SupportedOpenAIRealtimeVoices(),
 	}
+}
+
+// VoiceLoudnessGainDB returns the fixed output gain, in dB, that normalizes
+// voice toward the shared cross-voice loudness target. An empty, unknown, or
+// unmeasured voice returns exactly 0 (no adjustment): the map's zero value
+// is the documented, deliberately conservative default described on
+// openAIRealtimeVoiceLoudnessGainDB. All 10 currently-documented built-in
+// voices have an independently measured entry.
+func VoiceLoudnessGainDB(voice string) float64 {
+	return openAIRealtimeVoiceLoudnessGainDB[voice]
 }

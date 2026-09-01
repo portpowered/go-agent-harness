@@ -78,11 +78,12 @@ func (e *RTCDeviceSourceRateError) Unwrap() error {
 // PCM frames into an outgoing RTC media endpoint. The RTC endpoint remains
 // caller-owned; Close only stops this source and releases its device.
 type RTCDeviceSource struct {
-	source       *audio.DeviceSource
-	id           audio.DeviceID
-	filter       rtcDeviceCaptureFilter
-	sourceRate   int
-	providerRate int
+	source          *audio.DeviceSource
+	id              audio.DeviceID
+	filter          rtcDeviceCaptureFilter
+	sourceRate      int
+	providerRate    int
+	captureObserver RTCDeviceCaptureObserver
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelCauseFunc
@@ -115,15 +116,19 @@ func NewRTCDeviceSourceAtRate(registry audio.DeviceRegistry, id audio.DeviceID, 
 	if err != nil {
 		return nil, err
 	}
+	return newRTCDeviceSourceFromOpened(source, sourceRate, rate), nil
+}
+
+func newRTCDeviceSourceFromOpened(source *audio.DeviceSource, sourceRate, providerRate int) *RTCDeviceSource {
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	return &RTCDeviceSource{
 		source:       source,
 		id:           source.DeviceID(),
 		sourceRate:   sourceRate,
-		providerRate: rate,
+		providerRate: providerRate,
 		lifeCtx:      lifeCtx,
 		lifeCancel:   lifeCancel,
-	}, nil
+	}
 }
 
 // openRTCDeviceSourceAtRate first requests the provider rate natively. If a
@@ -330,6 +335,9 @@ func (s *RTCDeviceSource) Close() error {
 		s.closeErr = s.source.Close()
 		if done != nil {
 			<-done
+		}
+		if s.captureObserver != nil {
+			s.captureObserver(s.id, s.source.CaptureStats())
 		}
 	})
 	return s.closeErr

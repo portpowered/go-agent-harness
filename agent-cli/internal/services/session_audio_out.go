@@ -73,7 +73,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
+	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)})}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -148,7 +148,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
+	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)})}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -203,6 +203,14 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 type sessionAudioOutput struct {
 	sink    audio.AudioSink
 	runtime *sessionRuntimeObservationRecorder
+	// loudness applies this session's fixed, voice-specific gain (see
+	// VoiceLoudnessGainDB) before anything downstream (the sink, the
+	// runtime's clock-stamped output observation) sees the audio, so
+	// --voice selection does not change how loud a single session's
+	// captured/replayed audio is. A nil value keeps this a no-op, which
+	// existing table-driven tests that construct this struct by hand rely
+	// on.
+	loudness *audio.LoudnessNormalizer
 
 	mu        sync.Mutex
 	closed    bool
@@ -464,16 +472,25 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) err
 		return fmt.Errorf("PCM16 audio delta has odd byte length %d", len(content))
 	}
 
-	samples := make([]int16, len(content)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(content[index*2:]))
-	}
-
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
 		return audio.ErrClosed
 	}
+	if o.loudness != nil {
+		// Apply this session's fixed voice gain before anything downstream
+		// sees it, so --voice selection does not change how loud this
+		// session's captured/replayed audio is. Kept inside the same lock
+		// that serializes every other write to this output for simplicity,
+		// even though the gain itself is constant.
+		content = o.loudness.ProcessBytes(content)
+	}
+
+	samples := make([]int16, len(content)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(content[index*2:]))
+	}
+
 	// Observe the exact validated PCM at the CLI output boundary before the
 	// underlying sink is called. This lets a coupled runtime consume the
 	// command's own clock-stamped output event rather than inventing metadata

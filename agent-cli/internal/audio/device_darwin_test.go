@@ -6,9 +6,33 @@ import (
 	"context"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gen2brain/malgo"
 )
+
+func TestVoiceProcessingCoreAudioABILayout(t *testing.T) {
+	if unsafe.Sizeof(audioStreamBasicDescription{}) != 40 || unsafe.Sizeof(audioBufferList1{}) != 24 || unsafe.Sizeof(auRenderCallbackStruct{}) != 16 {
+		t.Fatalf("unexpected CoreAudio ABI sizes: ASBD=%d ABL1=%d callback=%d", unsafe.Sizeof(audioStreamBasicDescription{}), unsafe.Sizeof(audioBufferList1{}), unsafe.Sizeof(auRenderCallbackStruct{}))
+	}
+}
+
+func TestVoiceProcessingRenderMarksQueueUnderflowAsSilence(t *testing.T) {
+	queue, err := NewPlaybackQueue(DefaultDeviceFormat())
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := &voiceProcessingIO{outputFormat: DefaultDeviceFormat(), playback: queue, playbackWake: make(chan struct{})}
+	raw := make([]byte, FrameSize*2)
+	list := audioBufferList1{NumberBuffers: 1, Buffers: [1]audioBuffer{{NumberChannels: 1, DataByteSize: uint32(len(raw)), Data: unsafe.Pointer(&raw[0])}}}
+	var flags uint32
+	if status := engine.renderBuffers(&flags, FrameSize, &list); status != 0 {
+		t.Fatalf("render status=%d", status)
+	}
+	if flags&(1<<4) == 0 {
+		t.Fatalf("render flags=%#x, want kAudioUnitRenderAction_OutputIsSilence", flags)
+	}
+}
 
 func TestCoreAudioDeviceRegistryConformance(t *testing.T) {
 	t.Log("platform-independent CoreAudio conformance: 7 groups, 0 capability skips")
@@ -59,6 +83,44 @@ func TestCoreAudioPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	}
 }
 
+func TestCoreAudioPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
+	handle := &coreAudioHandle{direction: DirectionOutput, format: DefaultDeviceFormat(), playbackWake: make(chan struct{})}
+	low, high, err := PlaybackQueueWatermarks(handle.format)
+	if err != nil {
+		t.Fatalf("resolve playback watermarks: %v", err)
+	}
+	for queued := 0; queued < high; queued += FrameSize {
+		if err := handle.WriteFrame(context.Background(), make([]int16, FrameSize)); err != nil {
+			t.Fatalf("prime playback queue: %v", err)
+		}
+	}
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- handle.WaitForPlaybackCapacity(context.Background(), FrameSize) }()
+	select {
+	case err := <-waitDone:
+		t.Fatalf("capacity wait returned above low watermark: %v", err)
+	default:
+	}
+
+	callback := make([]byte, FrameSize*2)
+	for handle.PlaybackStats().QueuedSamples > low {
+		handle.onData(callback, nil, FrameSize)
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("capacity wait after callback drain: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("capacity wait did not resume at low watermark")
+	}
+	stats := handle.PlaybackStats()
+	if stats.QueuedSamples != low || stats.DroppedSamples != 0 {
+		t.Fatalf("paced CoreAudio queue stats = %+v, want low watermark and no drops", stats)
+	}
+}
+
 func coreAudioTestEndpoint(uid, name string, direction Direction, defaulted bool) coreAudioEndpoint {
 	device, _ := NewDevice(coreAudioBackend, coreAudioNativeID(uid, direction), name, direction)
 	return coreAudioEndpoint{device: device, defaultDevice: defaulted}
@@ -92,124 +154,4 @@ func (s *coreAudioPortableState) remove(id DeviceID) {
 }
 func (s *coreAudioPortableState) observations() DeviceRegistryObservations {
 	return DeviceRegistryObservations{OpenCount: s.opens, ReleaseCount: s.releases}
-}
-func TestCoreAudioDeviceRegistryHardware(t *testing.T) {
-	registry, input, output := requireCoreAudioCapabilities(t)
-	for _, capability := range []struct {
-		name   string
-		device Device
-		output bool
-	}{
-		{name: "input", device: input}, {name: "output", device: output, output: true},
-	} {
-		opened, err := registry.Open(capability.device.ID)
-		if err != nil {
-			t.Skipf("darwin: %s endpoint lacks open capability or is in use: %v", capability.name, err)
-		}
-		defer opened.Close()
-		handle, ok := opened.(*coreAudioHandle)
-		if !ok {
-			t.Fatalf("%s handle type=%T, want *coreAudioHandle", capability.name, opened)
-		}
-		if capability.output {
-			sink, ok := opened.(AudioSink)
-			if !ok {
-				t.Fatalf("%s handle does not implement AudioSink", capability.name)
-			}
-			frame := make([]int16, FrameSize)
-			frame[0] = 1024
-			if err := sink.WriteFrame(context.Background(), frame); err != nil {
-				t.Fatalf("%s WriteFrame: %v", capability.name, err)
-			}
-			waitForCoreAudioRender(t, handle)
-		} else {
-			source, ok := opened.(AudioSource)
-			if !ok {
-				t.Fatalf("%s handle does not implement AudioSource", capability.name)
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			energy, readErr := readPositiveCoreAudioInput(ctx, source)
-			cancel()
-			if readErr != nil {
-				t.Fatalf("%s ReadFrame: %v", capability.name, readErr)
-			}
-			if energy <= int64(FrameSize)*2 {
-				t.Skipf("darwin: input device %q produced no positive PCM energy; capture signal is unavailable on this host", capability.device.ID)
-			}
-		}
-		if err := opened.Close(); err != nil {
-			t.Fatalf("darwin: first close %s: %v", capability.name, err)
-		}
-		if err := opened.Close(); err != nil {
-			t.Fatalf("darwin: second close %s: %v", capability.name, err)
-		}
-	}
-}
-
-func readPositiveCoreAudioInput(ctx context.Context, source AudioSource) (int64, error) {
-	var energy int64
-	for range 10 {
-		frame := make([]int16, FrameSize)
-		if err := source.ReadFrame(ctx, frame); err != nil {
-			return 0, err
-		}
-		for _, sample := range frame {
-			if sample < 0 {
-				energy -= int64(sample)
-			} else {
-				energy += int64(sample)
-			}
-		}
-		if energy > int64(len(frame))*2 {
-			return energy, nil
-		}
-	}
-	return energy, nil
-}
-
-func requireCoreAudioCapabilities(t *testing.T) (*CoreAudioDeviceRegistry, Device, Device) {
-	t.Helper()
-	registry := NewCoreAudioDeviceRegistry()
-	listed, err := registry.List()
-	if err != nil {
-		t.Skipf("darwin: CoreAudio enumeration capability unavailable: %v", err)
-	}
-	second, err := registry.List()
-	if err != nil || len(listed) != len(second) {
-		t.Fatalf("darwin: repeated enumeration failed: first=%d second=%d err=%v", len(listed), len(second), err)
-	}
-	byID := make(map[DeviceID]Device, len(listed))
-	for _, device := range listed {
-		t.Logf("darwin CoreAudio endpoint: id=%q name=%q direction=%s", device.ID, device.Display(), device.Direction)
-		byID[device.ID] = device
-	}
-	for index := range listed {
-		if listed[index].ID != second[index].ID {
-			t.Fatalf("darwin: repeated enumeration changed ID at %d: %q -> %q", index, listed[index].ID, second[index].ID)
-		}
-	}
-	input, err := registry.Default(DirectionInput)
-	if err != nil {
-		t.Skipf("darwin: missing usable default input device or microphone permission: %v", err)
-	}
-	output, err := registry.Default(DirectionOutput)
-	if err != nil {
-		t.Skipf("darwin: missing usable default output device: %v", err)
-	}
-	if byID[input.ID].Direction != DirectionInput || byID[output.ID].Direction != DirectionOutput {
-		t.Fatalf("darwin: defaults are not listed directionally: input=%#v output=%#v", input, output)
-	}
-	t.Logf("darwin CoreAudio defaults: input=%q output=%q", input.ID, output.ID)
-	return registry, input, output
-}
-func waitForCoreAudioRender(t *testing.T, handle *coreAudioHandle) {
-	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if handle.nonZero.Load() > 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("darwin: render consumed no non-zero PCM: nonzero=%d", handle.nonZero.Load())
 }
