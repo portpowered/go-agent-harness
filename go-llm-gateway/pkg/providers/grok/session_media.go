@@ -22,7 +22,7 @@ func (s *grokSession) RTCMedia() rtc.MediaEndpoints {
 	s.mediaMu.Lock()
 	defer s.mediaMu.Unlock()
 	if s.media == nil {
-		s.media = rtc.NewSessionMedia(s.writeRTCMediaFrame)
+		s.media = rtc.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
 	}
 	return s.media.Endpoints()
 }

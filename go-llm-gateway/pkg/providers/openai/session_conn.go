@@ -45,6 +45,7 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	p.logger.Info("openai realtime: websocket connected", logging.Field{Key: "endpoint", Value: safeEndpointForError(endpoint)})
 
 	session := newRealtimeSession(conn, p.logger)
+	session.mediaSampleRate = int(config.OutputAudioSampleRate)
 	sessionUpdate, err := p.buildRealtimeSessionUpdate(config, model)
 	if err != nil {
 		_ = conn.Close()

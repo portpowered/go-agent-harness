@@ -95,6 +95,9 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 type SessionAudioInput struct {
 	Path  string
 	Stdin io.Reader
+	// SourceSampleRate declares raw or injected PCM. Zero selects the legacy
+	// 16 kHz file/test-source contract; WAV files retain their header rate.
+	SourceSampleRate int
 	// CloseStdinOnCancel allows the process-owned `--audio-in -` descriptor to
 	// interrupt a blocked read when the CLI session is cancelled. Callers that
 	// provide a shared or caller-owned stdin must leave this false.
@@ -331,6 +334,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 		return err
 	}
 	source.bindRuntime(plan.runtime)
+	source.bindProviderRate(plan.inputAudioSampleRate)
 	if input.MaxDuration > 0 {
 		plan.loop.MaxDuration = input.MaxDuration
 	}
@@ -414,8 +418,12 @@ func validateSessionAudioInputFileExists(input SessionAudioInput) error {
 }
 
 func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error) {
+	sourceRate := input.SourceSampleRate
+	if sourceRate == 0 {
+		sourceRate = audio.SampleRate
+	}
 	if input.Source != nil {
-		return &sessionAudioSource{source: input.Source, path: input.Path, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+		return &sessionAudioSource{source: input.Source, path: input.Path, sourceRate: sourceRate, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 	}
 
 	if strings.EqualFold(filepath.Ext(input.Path), ".wav") {
@@ -423,7 +431,8 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 		if err != nil {
 			return nil, err
 		}
-		return &sessionAudioSource{source: source, path: input.Path, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+		wavRate := sessionAudioSourceSampleRate(source, audio.SampleRate)
+		return &sessionAudioSource{source: source, path: input.Path, sourceRate: wavRate, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 	}
 
 	stdin := input.Stdin
@@ -454,7 +463,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 			}
 		}
 	}
-	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, sourceRate: sourceRate, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 }
 
 // prepareScheduledAudioInputs loads a finite sequence of audio files for one
@@ -468,7 +477,7 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 		if err := validateSessionAudioInput(input); err != nil {
 			return nil, err
 		}
-		pcm, err := readSessionAudioInputPCM(input)
+		pcm, sourceRate, err := readSessionAudioInputPCM(input)
 		if err != nil {
 			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
 		}
@@ -478,6 +487,7 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 		inputs = append(inputs, ScheduledAudioInput{
 			AfterCompletedTurns: index,
 			PCM:                 pcm,
+			SourceSampleRate:    sourceRate,
 			EndOfTurn:           true,
 		})
 	}
@@ -487,10 +497,10 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 // readSessionAudioInputPCM decodes one CLI audio input using the same source
 // implementation as --audio-in, but returns its normalized 16 kHz PCM bytes
 // for a scheduled persistent-session turn.
-func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, runErr error) {
+func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, sourceRate int, runErr error) {
 	source, err := openSessionAudioInput(input)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if closeErr := source.Close(); closeErr != nil {
@@ -506,7 +516,7 @@ func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, runErr error
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, &SessionAudioInputError{Kind: SessionAudioInputRead, Path: input.Path, Err: err}
+			return nil, 0, &SessionAudioInputError{Kind: SessionAudioInputRead, Path: input.Path, Err: err}
 		}
 		frameBytes := make([]byte, len(frame)*2)
 		for index, sample := range frame {
@@ -514,7 +524,7 @@ func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, runErr error
 		}
 		_, _ = encoded.Write(frameBytes)
 	}
-	return encoded.Bytes(), nil
+	return encoded.Bytes(), source.sourceRate, nil
 }
 
 func classifySessionAudioOpenError(path string, err error) error {
@@ -531,9 +541,11 @@ func classifySessionAudioOpenError(path string, err error) error {
 }
 
 type sessionAudioSource struct {
-	source audio.AudioSource
-	path   string
-	reader *sessionAudioReader
+	source       audio.AudioSource
+	path         string
+	sourceRate   int
+	providerRate int
+	reader       *sessionAudioReader
 	// paced marks file-backed finite sources whose frames must be delivered
 	// at the encoded real-time rate. Synthetic test sources injected through
 	// the SessionAudioInput.Source seam are never paced so tests control
@@ -544,6 +556,12 @@ type sessionAudioSource struct {
 	runtime   *sessionRuntimeObservationRecorder
 	once      sync.Once
 	err       error
+}
+
+func (s *sessionAudioSource) bindProviderRate(rate int) {
+	if s != nil {
+		s.providerRate = rate
+	}
 }
 
 func (s *sessionAudioSource) bindContext(ctx context.Context) {
@@ -689,10 +707,6 @@ func readAudioReaderWithCancellation(ctx context.Context, reader io.Reader, clos
 	}
 }
 
-// sessionAudioFrameDuration is the encoded playback duration of one frame:
-// FrameSize samples at the harness sample rate (480 / 16000 Hz = 30 ms).
-var sessionAudioFrameDuration = time.Duration(audio.FrameSize) * time.Second / audio.SampleRate
-
 func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
 	defer func() {
 		if closeErr := source.Close(); closeErr != nil {
@@ -707,12 +721,22 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 	// utterance and end-of-turn fires over truncated audio. Pacing keeps the
 	// outbound queue occupancy near zero for the whole file.
 	start := time.Now()
+	sourceRate := source.sourceRate
+	if sourceRate == 0 {
+		sourceRate = audio.SampleRate
+	}
+	providerRate := source.providerRate
+	if providerRate == 0 {
+		providerRate = sourceRate
+	}
+	frameDuration := time.Duration(audio.FrameSize) * time.Second / time.Duration(sourceRate)
+	framer := newSessionProviderInputFramer(sourceRate, providerRate)
 
 	frame := make([]int16, audio.FrameSize)
-	sentAudio := false
+	receivedAudio := false
 	for frameIndex := 0; ; frameIndex++ {
 		if source.paced && frameIndex > 0 {
-			target := start.Add(time.Duration(frameIndex) * sessionAudioFrameDuration)
+			target := start.Add(time.Duration(frameIndex) * frameDuration)
 			if delay := time.Until(target); delay > 0 {
 				timer := time.NewTimer(delay)
 				select {
@@ -726,17 +750,28 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		clear(frame)
 		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, audio.ErrEndOfTurn) {
-				if !sentAudio {
+				if !receivedAudio {
 					return emptySessionAudioInput(source.path)
+				}
+				if flush := framer.flush(); flush != nil {
+					if sendErr := sendSessionAudioFrames(ctx, loop, source, [][]byte{flush}); sendErr != nil {
+						return sendErr
+					}
 				}
 				if endErr := sendSessionAudioEndOfTurn(ctx, loop, source); endErr != nil {
 					return endErr
 				}
+				receivedAudio = false
 				continue
 			}
 			if errors.Is(err, io.EOF) {
-				if !sentAudio {
+				if !receivedAudio {
 					return emptySessionAudioInput(source.path)
+				}
+				if flush := framer.flush(); flush != nil {
+					if sendErr := sendSessionAudioFrames(ctx, loop, source, [][]byte{flush}); sendErr != nil {
+						return sendErr
+					}
 				}
 				return sendSessionAudioEndOfTurn(ctx, loop, source)
 			}
@@ -747,6 +782,19 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		for i, sample := range frame {
 			binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
 		}
+		providerFrames, err := framer.push(pcm)
+		if err != nil {
+			return &SessionAudioInputError{Kind: SessionAudioInputFormat, Path: source.path, Err: err}
+		}
+		receivedAudio = true
+		if err := sendSessionAudioFrames(ctx, loop, source, providerFrames); err != nil {
+			return err
+		}
+	}
+}
+
+func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, frames [][]byte) error {
+	for _, pcm := range frames {
 		send := source.send
 		if send == nil {
 			send = loop.SendAudioInput
@@ -754,9 +802,9 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		if err := send(ctx, pcm); err != nil {
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
-		sentAudio = true
 		source.runtime.audioInput(pcm)
 	}
+	return nil
 }
 
 // sendSessionAudioEndOfTurn signals end-of-turn after a finite audio source
@@ -856,17 +904,36 @@ const (
 // Header chunks are parsed once at open; data-chunk bytes are read one frame
 // at a time by ReadFrame.
 type sessionWAVSource struct {
-	path      string
-	file      io.ReadSeekCloser
-	remaining int64
-	done      bool
-	closed    bool
-	mu        sync.Mutex
-	closeOnce sync.Once
-	closeErr  error
+	path       string
+	file       io.ReadSeekCloser
+	remaining  int64
+	sampleRate int
+	done       bool
+	closed     bool
+	mu         sync.Mutex
+	closeOnce  sync.Once
+	closeErr   error
 }
 
 var _ audio.AudioSource = (*sessionWAVSource)(nil)
+
+func (s *sessionWAVSource) SampleRate() int {
+	if s == nil {
+		return 0
+	}
+	return s.sampleRate
+}
+
+type sessionAudioRateSource interface {
+	SampleRate() int
+}
+
+func sessionAudioSourceSampleRate(source audio.AudioSource, fallback int) int {
+	if rated, ok := source.(sessionAudioRateSource); ok && rated.SampleRate() > 0 {
+		return rated.SampleRate()
+	}
+	return fallback
+}
 
 func sessionWAVFormatError(path string, reason string) error {
 	return &SessionAudioInputError{
@@ -968,14 +1035,8 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (audio.AudioSource, e
 				return fail(sessionWAVFormatError(path, "data chunk appears before fmt chunk"))
 			}
 			switch {
-			case fmtRate == audio.SampleRate:
-				return &sessionWAVSource{path: path, file: r, remaining: size}, nil
-			case fmtRate == wavio.Rate24kHz:
-				source, decodeErr := newResampledSessionWAVSource(path, r, int64(size))
-				if decodeErr != nil {
-					return fail(decodeErr)
-				}
-				return source, nil
+			case fmtRate == audio.SampleRate || fmtRate == wavio.Rate24kHz:
+				return &sessionWAVSource{path: path, file: r, remaining: size, sampleRate: int(fmtRate)}, nil
 			default:
 				return fail(sessionWAVFormatError(path, fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz or %d Hz", fmtRate, audio.SampleRate, wavio.Rate24kHz)))
 			}
@@ -991,31 +1052,6 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (audio.AudioSource, e
 			}
 		}
 	}
-}
-
-// newResampledSessionWAVSource decodes a non-harness-rate (24 kHz) PCM16 data
-// chunk fully, resamples it to the harness rate, and returns an in-memory
-// source over the resampled samples so downstream streaming stays unchanged.
-func newResampledSessionWAVSource(path string, r io.ReadSeekCloser, size int64) (audio.AudioSource, error) {
-	if size%2 != 0 {
-		return nil, sessionWAVFormatError(path, "data chunk has a truncated PCM16 sample")
-	}
-	encoded := make([]byte, size)
-	if _, err := io.ReadFull(r, encoded); err != nil {
-		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
-			return nil, sessionWAVFormatError(path, "data chunk is shorter than its declared size")
-		}
-		return nil, &SessionAudioInputError{Kind: SessionAudioInputRead, Path: path, Err: err}
-	}
-	samples := make([]int16, len(encoded)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
-	}
-	resampled, err := wavio.Resample(samples, wavio.Rate24kHz, audio.SampleRate)
-	if err != nil {
-		return nil, sessionWAVFormatError(path, fmt.Sprintf("resample %d Hz payload to %d Hz: %v", wavio.Rate24kHz, audio.SampleRate, err))
-	}
-	return &sessionDecodedWAVSource{path: path, samples: resampled}, nil
 }
 
 // sessionDecodedWAVSource serves a fully decoded, harness-rate sample buffer

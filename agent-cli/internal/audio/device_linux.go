@@ -364,12 +364,24 @@ func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error
 	if err := validateFrame("write", frame); err != nil {
 		return err
 	}
+	return d.WriteSamples(ctx, frame)
+}
+func (d *linuxOpenedDevice) WriteSamples(ctx context.Context, samples []int16) error {
+	if d.direction != DirectionOutput {
+		return fmt.Errorf("audio device %q is input-only", d.id)
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
 		return &ClosedError{Operation: "write", Path: string(d.id)}
 	}
-	d.ensurePlaybackQueueLocked().Enqueue(frame)
+	d.ensurePlaybackQueueLocked().Enqueue(samples)
 	return nil
 }
 

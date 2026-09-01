@@ -469,6 +469,11 @@ func committedSessionAudioInputStreamCapturePath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(sourcePath), "testdata", "session-audio-input", "utterance-stream.session.json")
 }
 
+func committedSessionAudioInputUpdate(record gwtesting.CapturedSessionEvent) gwtesting.CapturedSessionEvent {
+	record.Payload = json.RawMessage(`{"session":{"model":"gpt-realtime","type":"realtime","audio":{"input":{"format":{"type":"audio/pcm","rate":16000}},"output":{"format":{"type":"audio/pcm","rate":16000}}}},"type":"session.update"}`)
+	return record
+}
+
 func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 	wavPath := committedSessionAudioInputWAVPath(t)
 	capturePath := committedSessionAudioInputStreamCapturePath(t)
@@ -521,7 +526,7 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 	if len(baseCapture.Records) < 2 {
 		t.Fatalf("committed replay base fixture has %d records, want session update and created", len(baseCapture.Records))
 	}
-	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	records := []gwtesting.CapturedSessionEvent{committedSessionAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
 	for frameIndex := range expectedFrames {
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  "input_audio_buffer.append",

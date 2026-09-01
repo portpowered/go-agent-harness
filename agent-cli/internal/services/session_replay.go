@@ -32,6 +32,7 @@ const (
 type replaySessionConfiguration struct {
 	payload               []byte
 	model                 string
+	inputAudioSampleRate  int
 	outputAudioSampleRate int
 }
 
@@ -107,10 +108,19 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 			model = strings.TrimSpace(model)
 		}
 
+		inputRate, outputRate := replaySessionAudioSampleRates(session)
+		if inputRate > 0 && outputRate > 0 && inputRate != outputRate {
+			return replaySessionConfiguration{}, fmt.Errorf(
+				"replay session capture %s: %w: input=%d Hz output=%d Hz",
+				path, ErrSessionAudioSampleRateConflict, inputRate, outputRate,
+			)
+		}
+
 		return replaySessionConfiguration{
 			payload:               append([]byte(nil), payload...),
 			model:                 model,
-			outputAudioSampleRate: replaySessionOutputAudioSampleRate(session),
+			inputAudioSampleRate:  inputRate,
+			outputAudioSampleRate: outputRate,
 		}, nil
 	}
 
@@ -120,29 +130,43 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 	)
 }
 
-// replaySessionOutputAudioSampleRate extracts the provider-declared rate from
-// either the current GA audio.output.format object or a provider extension
-// that carries the same object under output_audio_format. Replays without a
-// rate retain the service's compatibility default.
-func replaySessionOutputAudioSampleRate(session map[string]json.RawMessage) int {
+// replaySessionAudioSampleRates extracts both provider-declared directions
+// from the current GA audio format objects or provider extensions carrying the
+// same objects under the legacy field names. Missing rates remain unspecified.
+func replaySessionAudioSampleRates(session map[string]json.RawMessage) (int, int) {
 	var audio struct {
+		Input struct {
+			Format struct {
+				Rate int `json:"rate"`
+			} `json:"format"`
+		} `json:"input"`
 		Output struct {
 			Format struct {
 				Rate int `json:"rate"`
 			} `json:"format"`
 		} `json:"output"`
 	}
-	if raw, ok := session["audio"]; ok && json.Unmarshal(raw, &audio) == nil && audio.Output.Format.Rate > 0 {
-		return audio.Output.Format.Rate
+	if raw, ok := session["audio"]; ok {
+		_ = json.Unmarshal(raw, &audio)
 	}
 
-	var legacy struct {
+	inputRate := audio.Input.Format.Rate
+	outputRate := audio.Output.Format.Rate
+	var format struct {
 		Rate int `json:"rate"`
 	}
-	if raw, ok := session["output_audio_format"]; ok && json.Unmarshal(raw, &legacy) == nil && legacy.Rate > 0 {
-		return legacy.Rate
+	if inputRate <= 0 {
+		if raw, ok := session["input_audio_format"]; ok && json.Unmarshal(raw, &format) == nil {
+			inputRate = format.Rate
+		}
 	}
-	return 0
+	format.Rate = 0
+	if outputRate <= 0 {
+		if raw, ok := session["output_audio_format"]; ok && json.Unmarshal(raw, &format) == nil {
+			outputRate = format.Rate
+		}
+	}
+	return inputRate, outputRate
 }
 
 // replayCapturedPrompt is the one prompt shape that the ordinary OpenAI

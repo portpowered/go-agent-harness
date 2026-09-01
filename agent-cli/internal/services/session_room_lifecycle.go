@@ -49,6 +49,7 @@ type roomParticipantPlan struct {
 	secret                string
 	tracker               *roomConnectTrackingInferencer
 	participant           *roomParticipantRuntime
+	inputAudioSampleRate  int
 	capabilityCoordinator *SessionCapabilityCoordinator
 }
 

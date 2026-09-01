@@ -68,6 +68,44 @@ func TestSessionMediaFramesInboundPCMAndFlushesPartialFrame(t *testing.T) {
 	}
 }
 
+func TestSessionMediaAt24kFramesThirtyMillisecondsAndPreservesPartialResponse(t *testing.T) {
+	media := rtc.NewSessionMediaAtRate(func(context.Context, rtc.PCMFrame) error { return nil }, 24000)
+	endpoints := media.Endpoints()
+	defer func() { _ = media.Close() }()
+
+	complete := make([]int16, 720)
+	sample := int16(1)
+	for index := range complete {
+		complete[index] = sample
+		sample++
+	}
+	if err := media.PushInbound(complete); err != nil {
+		t.Fatalf("push complete 24 kHz frame: %v", err)
+	}
+	frame, err := endpoints.Inbound.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read complete 24 kHz frame: %v", err)
+	}
+	if frame.EndOfResponse || !reflect.DeepEqual(frame.Samples, complete) {
+		t.Fatalf("24 kHz frame = %d samples, boundary=%t; want exact 720-sample frame", len(frame.Samples), frame.EndOfResponse)
+	}
+
+	partial := append([]int16(nil), complete[:480]...)
+	if err := media.PushInbound(partial); err != nil {
+		t.Fatalf("push partial 24 kHz response: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("flush partial 24 kHz response: %v", err)
+	}
+	frame, err = endpoints.Inbound.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read partial 24 kHz response: %v", err)
+	}
+	if !frame.EndOfResponse || !reflect.DeepEqual(frame.Samples, partial) {
+		t.Fatalf("partial 24 kHz frame = %d samples, boundary=%t; want exact 480-sample response boundary", len(frame.Samples), frame.EndOfResponse)
+	}
+}
+
 func TestSessionMediaOutboundCopiesSamplesAndStopsOnClose(t *testing.T) {
 	var got []int16
 	media := rtc.NewSessionMedia(func(_ context.Context, frame rtc.PCMFrame) error {

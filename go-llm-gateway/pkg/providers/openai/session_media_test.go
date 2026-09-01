@@ -13,6 +13,7 @@ import (
 func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockWebSocketConn()
 	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
 	owner, ok := any(session).(rtc.MediaSession)
 	if !ok {
 		t.Fatal("OpenAI Realtime session does not expose rtc.MediaSession")
@@ -22,7 +23,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	want := make([]int16, rtc.DefaultSessionMediaFrameSamples)
+	want := make([]int16, 720)
 	for index := range want {
 		want[index] = int16((index*97)%24000 - 12000) //nolint:gosec // bounded test tone
 	}

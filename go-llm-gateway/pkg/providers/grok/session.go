@@ -43,8 +43,9 @@ type grokSession struct {
 	done      chan struct{}
 	closeOnce sync.Once
 
-	mediaMu sync.Mutex
-	media   *rtc.SessionMedia
+	mediaMu         sync.Mutex
+	media           *rtc.SessionMedia
+	mediaSampleRate int
 }
 
 func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {

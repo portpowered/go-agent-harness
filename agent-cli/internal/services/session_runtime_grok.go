@@ -60,13 +60,13 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 }
 
 func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
 	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
 	if err != nil {
 		return sessionRuntimePlan{}, err
+	}
+	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	model := configuration.model
 	if strings.TrimSpace(model) == "" {
@@ -91,6 +91,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		mode:                  sessionRuntimeModeReplayGrok,
 		provider:              sessionProviderGrok,
 		model:                 model,
+		inputAudioSampleRate:  configuration.inputAudioSampleRate,
 		outputAudioSampleRate: configuration.outputAudioSampleRate,
 		inferencer:            sessionInferencer,
 		loop: sessionLoopOptions{

@@ -51,6 +51,9 @@ type deviceFrameReader interface {
 type deviceFrameWriter interface {
 	WriteFrame(context.Context, []int16) error
 }
+type deviceSampleWriter interface {
+	WriteSamples(context.Context, []int16) error
+}
 type deviceByteReader interface {
 	Read(context.Context) ([]byte, error)
 }
