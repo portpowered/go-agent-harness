@@ -53,6 +53,9 @@ type DataConn = transport.Conn
 // session; they are intentionally not protocol-library concepts in this type.
 type PCMFrame struct {
 	Samples []int16
+	// EndOfResponse marks the provider audio-response boundary. Samples may
+	// be empty when the preceding frame ended exactly on the media cadence.
+	EndOfResponse bool
 }
 
 // VisualObservationStatus is the stable outcome of a visual look operation.

@@ -81,6 +81,75 @@ func TestDeviceSinkFrameHandleConformance(t *testing.T) {
 	}
 }
 
+func TestDeviceSinkWriteSamplesQueuesExactPartialChunk(t *testing.T) {
+	r := adapterTestRegistry(t)
+	sink, err := NewDeviceSink(r, "virtual:output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sink.Close() }()
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sink.WriteSamples(cancelled, []int16{1}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled WriteSamples = %v, want context.Canceled", err)
+	}
+	if err := sink.WriteSamples(context.Background(), nil); err != nil {
+		t.Fatalf("empty WriteSamples: %v", err)
+	}
+	samples := make([]int16, 320)
+	sample := int16(1)
+	for index := range samples {
+		samples[index] = sample
+		sample++
+	}
+	if err := sink.WriteSamples(context.Background(), samples); err != nil {
+		t.Fatalf("partial WriteSamples: %v", err)
+	}
+	samples[0] = -1
+	if got := sink.PlaybackStats().QueuedSamples; got != 320 {
+		t.Fatalf("queued partial samples = %d, want 320", got)
+	}
+	if got := sink.DiscardPlayback(); got != 320 {
+		t.Fatalf("discarded partial samples = %d, want 320", got)
+	}
+
+	frameOnly := &adapterFrameHandle{direction: DirectionOutput}
+	frameSink, err := NewDeviceSink(&adapterTestRegistryStub{handle: frameOnly}, "output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = frameSink.Close() }()
+	if err := frameSink.WriteSamples(context.Background(), make([]int16, 320)); !errors.Is(err, ErrInvalidFrameSize) {
+		t.Fatalf("partial write to frame-only device = %v, want ErrInvalidFrameSize", err)
+	}
+	if err := frameSink.WriteSamples(context.Background(), make([]int16, FrameSize)); err != nil {
+		t.Fatalf("full WriteSamples to frame-only device: %v", err)
+	}
+	if len(frameOnly.writes) != 1 {
+		t.Fatalf("full WriteSamples frame writes = %d, want 1", len(frameOnly.writes))
+	}
+
+	byteOnly := &adapterSinkByteHandle{direction: DirectionOutput}
+	byteSink, err := NewDeviceSink(&adapterTestRegistryStub{handle: byteOnly}, "output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nilContext context.Context
+	if err := byteSink.WriteSamples(nilContext, []int16{1, -2, 32767}); err != nil {
+		t.Fatalf("partial byte-device WriteSamples: %v", err)
+	}
+	if want := []byte{1, 0, 254, 255, 255, 127}; !reflect.DeepEqual(byteOnly.data, want) {
+		t.Fatalf("partial byte-device PCM = %v, want %v", byteOnly.data, want)
+	}
+	if err := byteSink.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := byteSink.WriteSamples(context.Background(), []int16{1}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("WriteSamples after Close = %v, want ErrClosed", err)
+	}
+}
+
 func TestDeviceSinkFormatCapabilitiesAndExplicitFormatFailures(t *testing.T) {
 	legacyHandle := &adapterFrameHandle{direction: DirectionOutput}
 	sink, err := NewDeviceSink(&adapterTestRegistryStub{handle: legacyHandle}, "output")
@@ -253,6 +322,18 @@ type adapterFormatHandle struct {
 	format     DeviceFormat
 	closeCount int
 }
+
+type adapterSinkByteHandle struct {
+	direction Direction
+	data      []byte
+}
+
+func (h *adapterSinkByteHandle) DeviceDirection() Direction { return h.direction }
+func (h *adapterSinkByteHandle) Write(_ context.Context, data []byte) error {
+	h.data = append([]byte(nil), data...)
+	return nil
+}
+func (h *adapterSinkByteHandle) Close() error { return nil }
 
 func (h *adapterFormatHandle) DeviceFormat() DeviceFormat { return h.format }
 func (h *adapterFormatHandle) Close() error {

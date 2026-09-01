@@ -80,6 +80,7 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 		toolFactory = defaultFactory
 	}
 
+	usesProductionSessionFactory := opts.SessionFactory == nil && opts.WebSocketDialerFactory == nil
 	factory := opts.SessionFactory
 	if factory == nil {
 		factory = defaultRoomSessionFactory
@@ -232,6 +233,19 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			plan.inferencer = inferencer
 		}
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
+		if usesProductionSessionFactory {
+			if _, injected := opts.SessionInferencers[participant.ID]; !injected {
+				rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{
+					provider:   effectiveSessionProvider(sessionOptions),
+					inferencer: plan.inferencer,
+				})
+				if rateErr != nil {
+					markStartupFailure(rateErr)
+					continue
+				}
+				plan.inputAudioSampleRate = rate
+			}
+		}
 	}
 	return plans, secrets, nil
 }
@@ -293,6 +307,10 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 		plan.options = sessionOptions
 		plan.inferencer = runtimePlan.inferencer
 		plan.replayLoop = runtimePlan.loop
+		// Captured room replay frames already own the replay transport contract.
+		// Keep the zero-rate injected seam so strict outbound bytes are not
+		// converted a second time.
+		plan.inputAudioSampleRate = 0
 		// Room replay is bounded by the admitted capture's terminal boundary,
 		// not by the ordinary live-session safety timeout.
 		plan.replayLoop.MaxDuration = 0

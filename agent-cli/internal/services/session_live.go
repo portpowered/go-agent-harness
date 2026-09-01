@@ -13,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
 var errSessionMaxDurationExpired = errors.New("session max duration expired")
@@ -244,6 +243,9 @@ type sessionLoopOptions struct {
 	// MESSAGE.END boundary is sent through AgentLoop.SendSessionEvent, preserving
 	// the normal provider ordering and barge-in behavior.
 	AudioInterruptions <-chan ScheduledAudioInput
+	// InputAudioSampleRate is the resolved provider-bound PCM16 rate used to
+	// convert event-driven inputs before they enter AgentLoop.
+	InputAudioSampleRate int
 
 	// RequireSessionUpdated makes scheduled audio wait for the current
 	// connection's initial SESSION.UPDATED acknowledgement before dispatch.
@@ -835,22 +837,8 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				audioInterruptions = nil
 				continue
 			}
-			if len(input.PCM) == 0 {
-				return terminate(errors.New("event-driven audio input is empty"))
-			}
-			if err := loop.SendAudioInput(runCtx, input.PCM); err != nil {
-				return terminate(fmt.Errorf("send event-driven audio input: %w", err))
-			}
-			if opts.observer != nil {
-				opts.observer.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
-			}
-			if input.EndOfTurn {
-				if err := loop.SendSessionEvent(runCtx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
-					return terminate(fmt.Errorf("send event-driven audio input end-of-turn: %w", err))
-				}
-				if opts.observer != nil {
-					opts.observer.armProviderProgress()
-				}
+			if err := sendEventDrivenAudioInput(runCtx, loop, opts, input); err != nil {
+				return terminate(err)
 			}
 		case <-toolLifecycleEvents:
 			// A tool lifecycle transition can make the next scheduled audio

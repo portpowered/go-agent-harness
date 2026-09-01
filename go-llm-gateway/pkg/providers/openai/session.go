@@ -36,8 +36,9 @@ type realtimeSession struct {
 	errMu       sync.Mutex
 	terminalErr error
 
-	mediaMu sync.Mutex
-	media   *rtc.SessionMedia
+	mediaMu         sync.Mutex
+	media           *rtc.SessionMedia
+	mediaSampleRate int
 }
 
 var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)

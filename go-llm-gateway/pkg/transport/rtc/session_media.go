@@ -11,7 +11,11 @@ const (
 	// DefaultSessionMediaFrameSamples is the 30 ms PCM frame size used by the
 	// realtime session media adapters at 16 kHz.
 	DefaultSessionMediaFrameSamples = 480
-	sessionMediaQueueLimit          = 256
+	// DefaultSessionMediaSampleRate retains the original low-level SessionMedia
+	// contract for callers that do not supply a negotiated provider rate.
+	DefaultSessionMediaSampleRate = 16000
+	sessionMediaFrameMillis       = 30
+	sessionMediaQueueLimit        = 256
 )
 
 var (
@@ -42,7 +46,25 @@ type SessionMedia struct {
 // assembled into DefaultSessionMediaFrameSamples-sized frames.
 func NewSessionMedia(writer SessionMediaWriter) *SessionMedia {
 	return &SessionMedia{
-		inbound:  newSessionInboundMedia(DefaultSessionMediaFrameSamples),
+		inbound:  newSessionInboundMedia(DefaultSessionMediaFrameSamples, true),
+		outbound: newSessionOutboundMedia(writer),
+	}
+}
+
+// NewSessionMediaAtRate creates a provider-owned media adapter whose inbound
+// frame cadence is 30 ms at sampleRate. A non-positive rate retains the 16 kHz
+// compatibility default. Unlike the legacy constructor, a response-final
+// partial frame remains exact rather than being padded with additional audio.
+func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMedia {
+	if sampleRate <= 0 {
+		sampleRate = DefaultSessionMediaSampleRate
+	}
+	frameSamples := sampleRate * sessionMediaFrameMillis / 1000
+	if frameSamples <= 0 {
+		frameSamples = DefaultSessionMediaFrameSamples
+	}
+	return &SessionMedia{
+		inbound:  newSessionInboundMedia(frameSamples, false),
 		outbound: newSessionOutboundMedia(writer),
 	}
 }
@@ -151,6 +173,7 @@ func (m *sessionOutboundMedia) close() {
 type sessionInboundMedia struct {
 	mu           sync.Mutex
 	frameSamples int
+	padPartial   bool
 	pending      []int16
 	frames       []PCMFrame
 	terminal     error
@@ -160,9 +183,10 @@ type sessionInboundMedia struct {
 	closeOnce    sync.Once
 }
 
-func newSessionInboundMedia(frameSamples int) *sessionInboundMedia {
+func newSessionInboundMedia(frameSamples int, padPartial bool) *sessionInboundMedia {
 	return &sessionInboundMedia{
 		frameSamples: frameSamples,
+		padPartial:   padPartial,
 		done:         make(chan struct{}),
 		wake:         make(chan struct{}, 1),
 	}
@@ -236,13 +260,7 @@ func (m *sessionInboundMedia) flush() error {
 		m.mu.Unlock()
 		return err
 	}
-	if len(m.pending) > 0 {
-		samples := make([]int16, m.frameSamples)
-		copy(samples, m.pending)
-		m.frames = append(m.frames, PCMFrame{Samples: samples})
-		m.pending = nil
-		m.trimQueueLocked()
-	}
+	m.appendResponseBoundaryLocked(true)
 	m.mu.Unlock()
 	m.notify()
 	return nil
@@ -254,10 +272,30 @@ func (m *sessionInboundMedia) fail(err error) {
 	}
 	m.mu.Lock()
 	if m.terminal == nil && !m.closed {
+		m.appendResponseBoundaryLocked(false)
 		m.terminal = err
 	}
 	m.mu.Unlock()
 	m.notify()
+}
+
+func (m *sessionInboundMedia) appendResponseBoundaryLocked(includeEmpty bool) {
+	if len(m.pending) > 0 {
+		sampleCount := len(m.pending)
+		if m.padPartial {
+			sampleCount = m.frameSamples
+		}
+		samples := make([]int16, sampleCount)
+		copy(samples, m.pending)
+		m.frames = append(m.frames, PCMFrame{Samples: samples, EndOfResponse: true})
+		m.pending = nil
+	} else if includeEmpty && !m.padPartial {
+		// A complete frame may already have been consumed before the provider's
+		// done event arrives. Publish an explicit zero-sample boundary so a sink
+		// can flush any rate-conversion remainder without inventing audio.
+		m.frames = append(m.frames, PCMFrame{EndOfResponse: true})
+	}
+	m.trimQueueLocked()
 }
 
 func (m *sessionInboundMedia) Close() error {

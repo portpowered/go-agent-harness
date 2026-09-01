@@ -1,12 +1,17 @@
 package services
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 const sessionRealtimeAudioSampleRate = int(models.SampleRate24000)
+
+var ErrSessionAudioSampleRateConflict = errors.New("session input and output sample rates conflict")
 
 // sessionAudioOutputConfigurer is deliberately smaller than the provider or
 // inference implementation. It lets the runtime planner apply the resolved
@@ -24,64 +29,52 @@ type sessionAudioRequestProvider interface {
 	Request() inference.SessionRequest
 }
 
-func sessionAudioOutputRequested(opts SessionRunOptions) bool {
-	return opts.AudioOutputRequested || opts.RTCDeviceBinding.outputSelected()
-}
-
-func sessionAudioInputDeviceRequested(opts SessionRunOptions) bool {
-	return opts.RTCDeviceBinding.inputSelected()
-}
-
-func sessionOutputAudioSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) int {
-	if plan.outputAudioSampleRate > 0 {
-		return plan.outputAudioSampleRate
-	}
+func resolveSessionAudioSampleRate(_ SessionRunOptions, plan sessionRuntimePlan) (int, error) {
+	inputRate := plan.inputAudioSampleRate
+	outputRate := plan.outputAudioSampleRate
 	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
-		if rate := int(requested.Request().Config.OutputAudioSampleRate); rate > 0 {
-			return rate
+		config := requested.Request().Config
+		if inputRate <= 0 {
+			inputRate = int(config.InputAudioSampleRate)
+		}
+		if outputRate <= 0 {
+			outputRate = int(config.OutputAudioSampleRate)
 		}
 	}
-	// A caller-supplied inferencer owns its media contract unless it exposes a
-	// concrete request rate. This keeps low-level test/integration seams
-	// compatible with their existing 16 kHz virtual devices while the normal
-	// provider constructors still receive the explicit realtime rate below.
-	if opts.SessionInferencer == nil && opts.ReplayPath == "" && sessionAudioOutputRequested(opts) && (plan.provider == sessionProviderOpenAI || plan.provider == sessionProviderGrok) {
-		return sessionRealtimeAudioSampleRate
+	if inputRate > 0 && outputRate > 0 && inputRate != outputRate {
+		return 0, fmt.Errorf("%w: input=%d Hz output=%d Hz", ErrSessionAudioSampleRateConflict, inputRate, outputRate)
 	}
-	return audio.SampleRate
+	if inputRate > 0 {
+		return inputRate, nil
+	}
+	if outputRate > 0 {
+		return outputRate, nil
+	}
+	// Realtime provider plans own one explicit 24 kHz duplex contract even when
+	// the caller supplies the inferencer. Legacy 16 kHz seams retain that rate
+	// only by declaring it explicitly in their request or captured handshake;
+	// native sources and sinks are converted at the harness boundary.
+	if plan.provider == sessionProviderOpenAI || plan.provider == sessionProviderGrok {
+		return sessionRealtimeAudioSampleRate, nil
+	}
+	return audio.SampleRate, nil
 }
 
-func sessionInputAudioSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) int {
-	if plan.inputAudioSampleRate > 0 {
-		return plan.inputAudioSampleRate
-	}
-	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
-		if rate := int(requested.Request().Config.InputAudioSampleRate); rate > 0 {
-			return rate
-		}
-	}
-	if opts.SessionInferencer == nil && opts.ReplayPath == "" && sessionAudioInputDeviceRequested(opts) && (plan.provider == sessionProviderOpenAI || plan.provider == sessionProviderGrok) {
-		return sessionRealtimeAudioSampleRate
-	}
-	return audio.SampleRate
-}
-
-func configureSessionAudioOutput(opts SessionRunOptions, plan *sessionRuntimePlan) {
+func configureSessionAudioContract(opts SessionRunOptions, plan *sessionRuntimePlan) error {
 	if plan == nil {
-		return
+		return nil
 	}
-	rate := sessionOutputAudioSampleRate(opts, *plan)
+	rate, err := resolveSessionAudioSampleRate(opts, *plan)
+	if err != nil {
+		return err
+	}
 	plan.outputAudioSampleRate = rate
-	inputRate := sessionInputAudioSampleRate(opts, *plan)
-	plan.inputAudioSampleRate = inputRate
-	if sessionAudioOutputRequested(opts) {
-		if configurer, ok := plan.inferencer.(sessionAudioOutputConfigurer); ok {
-			configurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(rate))
-		}
+	plan.inputAudioSampleRate = rate
+	if configurer, ok := plan.inferencer.(sessionAudioOutputConfigurer); ok {
+		configurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(rate))
 	}
-	if sessionAudioOutputRequested(opts) || sessionAudioInputDeviceRequested(opts) {
-		if configurer, ok := plan.inferencer.(sessionAudioInputConfigurer); ok {
-			configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(inputRate))
-		}
+	if configurer, ok := plan.inferencer.(sessionAudioInputConfigurer); ok {
+		configurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(rate))
 	}
+	return nil
 }

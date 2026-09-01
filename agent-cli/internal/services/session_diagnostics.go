@@ -143,6 +143,9 @@ type SessionStreamObserver func(messages.StreamMessage)
 type ScheduledAudioInput struct {
 	AfterCompletedTurns int
 	PCM                 []byte
+	// SourceSampleRate is the native rate of PCM. Zero explicitly means the
+	// caller/replay bytes already use the resolved provider rate.
+	SourceSampleRate int
 	// EndOfTurn sends MESSAGE.END after this input so realtime providers
 	// commit the audio and create one response before the next scheduled turn.
 	// The zero value preserves the diagnostics-only injection behavior.

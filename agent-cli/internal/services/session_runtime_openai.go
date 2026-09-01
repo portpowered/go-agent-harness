@@ -68,13 +68,13 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 }
 
 func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
-	if err != nil {
-		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
 	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
 	if err != nil {
 		return sessionRuntimePlan{}, err
+	}
+	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	model := configuration.model
 	if strings.TrimSpace(model) == "" {
@@ -134,6 +134,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		mode:                  sessionRuntimeModeReplayOpenAI,
 		provider:              sessionProviderOpenAI,
 		model:                 model,
+		inputAudioSampleRate:  configuration.inputAudioSampleRate,
 		outputAudioSampleRate: configuration.outputAudioSampleRate,
 		inferencer:            sessionInferencer,
 		loop: sessionLoopOptions{

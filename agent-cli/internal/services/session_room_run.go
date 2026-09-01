@@ -949,8 +949,13 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			return
 		}
 		frame := mixed.PCM
+		providerFrame, convertErr := roomProviderInputPCM(runtime, frame)
+		if convertErr != nil {
+			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, convertErr, secretsForPlan(runtime.plan)))
+			return
+		}
 		policy := coordinator.audioInputPolicy(mixed.Sources)
-		if err := sendAudioInput(admissionCtx, frame, policy); err != nil {
+		if err := sendAudioInput(admissionCtx, providerFrame, policy); err != nil {
 			if runtime.ingress != nil {
 				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonProviderInputRejected)
 			}
@@ -976,10 +981,10 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// received.pcm is the provider-bound artifact. Record it only after
 			// SendAudioInput succeeds so a downstream rejection cannot create a
 			// false received frame.
-			_ = participantEvidence.observeReceivedAudio(frame)
+			_ = participantEvidence.observeReceivedAudio(providerFrame)
 		}
 		if observer != nil {
-			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
+			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), providerFrame...)); err != nil {
 				coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 				return
 			}
@@ -994,6 +999,24 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			}
 		}
 	}
+}
+
+func roomProviderInputPCM(runtime *roomParticipantRuntime, pcm []byte) ([]byte, error) {
+	if runtime == nil || runtime.mixer == nil || runtime.plan == nil {
+		return pcm, nil
+	}
+	sourceRate := runtime.mixer.Format().SampleRate
+	providerRate := runtime.plan.inputAudioSampleRate
+	if providerRate == 0 {
+		// Custom room factories and injected inferencers own their low-level
+		// media seam; their mixer bytes are already at that seam's rate.
+		return pcm, nil
+	}
+	converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)
+	if err != nil {
+		return nil, fmt.Errorf("convert room participant %q input from %d Hz to provider rate %d Hz: %w", runtime.plan.manifest.ID, sourceRate, providerRate, err)
+	}
+	return converted, nil
 }
 
 func runRoomHumanCapture(

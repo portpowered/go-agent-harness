@@ -430,10 +430,9 @@ func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testin
 	}
 }
 
-// TestNewSessionWAVSourceResamples24kHz proves the 24 kHz corpus path: the
-// source decodes the payload once, resamples it to the harness rate, and
-// serves harness-rate frames with the established zero-pad/EOF semantics.
-func TestNewSessionWAVSourceResamples24kHz(t *testing.T) {
+// TestNewSessionWAVSourceRetains24kHzHeaderRate proves WAV decoding preserves
+// its native contract until the provider-bound conversion seam.
+func TestNewSessionWAVSourceRetains24kHzHeaderRate(t *testing.T) {
 	input := make([]int16, 24000) // one second of 24 kHz audio
 	for i := range input {
 		input[i] = int16(i % 327)
@@ -450,6 +449,9 @@ func TestNewSessionWAVSourceResamples24kHz(t *testing.T) {
 		t.Fatalf("open 24 kHz wav: %v", err)
 	}
 	defer func() { _ = source.Close() }()
+	if gotRate := sessionAudioSourceSampleRate(source, 0); gotRate != wavio.Rate24kHz {
+		t.Fatalf("source sample rate = %d, want %d", gotRate, wavio.Rate24kHz)
+	}
 
 	var got []int16
 	frame := make([]int16, audio.FrameSize)
@@ -464,16 +466,12 @@ func TestNewSessionWAVSourceResamples24kHz(t *testing.T) {
 		}
 		got = append(got, frame...)
 	}
-	want, err := wavio.Resample(input, wavio.Rate24kHz, audio.SampleRate)
-	if err != nil {
-		t.Fatalf("reference resample: %v", err)
+	if len(got) < len(input) || len(got)-len(input) >= audio.FrameSize {
+		t.Fatalf("native stream delivered %d samples, want ~%d (one padded frame tolerance)", len(got), len(input))
 	}
-	if len(got) < len(want) || len(got)-len(want) >= audio.FrameSize {
-		t.Fatalf("resampled stream delivered %d samples, want ~%d (one padded frame tolerance)", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("resampled sample %d = %d, want %d", i, got[i], want[i])
+	for i := range input {
+		if got[i] != input[i] {
+			t.Fatalf("native sample %d = %d, want %d", i, got[i], input[i])
 		}
 	}
 }

@@ -57,6 +57,8 @@ type RTCDeviceSink struct {
 	sink             *audio.DeviceSink
 	id               audio.DeviceID
 	observer         rtcDevicePlaybackObserver
+	providerRate     int
+	deviceRate       int
 	playbackObserver RTCDevicePlaybackObserver
 
 	lifeCtx    context.Context
@@ -91,7 +93,7 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 	if rate == 0 {
 		rate = audio.SampleRate
 	}
-	sink, err := audio.NewDeviceSinkAtRate(registry, id, rate)
+	sink, deviceRate, err := openRTCDeviceSinkAtRate(registry, id, rate)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +101,8 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 	return &RTCDeviceSink{
 		sink:             sink,
 		id:               sink.DeviceID(),
+		providerRate:     rate,
+		deviceRate:       deviceRate,
 		playbackObserver: playbackObserver,
 		lifeCtx:          lifeCtx,
 		lifeCancel:       lifeCancel,
@@ -127,6 +131,22 @@ func (s *RTCDeviceSink) SampleRate() int {
 		return 0
 	}
 	return s.sink.SampleRate()
+}
+
+// ProviderSampleRate reports the rate supplied by the provider media endpoint.
+func (s *RTCDeviceSink) ProviderSampleRate() int {
+	if s == nil {
+		return 0
+	}
+	return s.providerRate
+}
+
+// DeviceSampleRate reports the native rate selected for local playback.
+func (s *RTCDeviceSink) DeviceSampleRate() int {
+	if s == nil {
+		return 0
+	}
+	return s.deviceRate
 }
 
 // PlaybackStats returns the current synchronized local playback observation.
@@ -193,33 +213,67 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		cancel(nil)
 	}()
 
+	var pending rtcDevicePlaybackBuffer
 	for {
 		generation, blocked := s.playbackState()
 		frame, err := inbound.ReadFrame(operationCtx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				if flushErr := s.flushProviderPlayback(operationCtx, &pending); flushErr != nil {
+					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: flushErr}
+				}
 				return nil
 			}
 			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "read", Err: err}
 		}
 
-		// InboundMedia returns receiver-owned storage that may be reused after
-		// ReadFrame returns. Keep a private copy at this boundary so the device
-		// adapter can never observe storage owned by the RTC implementation.
-		samples := append([]int16(nil), frame.Samples...)
-		write := func() error {
-			return s.writePlayback(operationCtx, samples, generation, blocked)
-		}
-		var writeErr error
-		if s.observer != nil {
-			writeErr = s.observer.WritePlayback(operationCtx, samples, write)
-		} else {
-			writeErr = write()
-		}
-		if writeErr != nil {
-			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: writeErr}
+		if err := s.writeProviderFrame(operationCtx, &pending, frame, generation, blocked); err != nil {
+			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
 		}
 	}
+}
+
+func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *rtcDevicePlaybackBuffer, providerFrame rtc.PCMFrame, generation uint64, blocked bool) error {
+	// InboundMedia returns receiver-owned storage that may be reused after
+	// ReadFrame returns. Resampling to the device rate below always produces a
+	// private copy, so no additional defensive copy is needed at this
+	// boundary.
+	converted, err := s.deviceFrame(providerFrame.Samples)
+	if err != nil {
+		return err
+	}
+	frames := pending.add(converted, generation, blocked)
+	for _, frame := range frames {
+		if err := s.observedWritePlayback(ctx, frame, generation, blocked); err != nil {
+			return err
+		}
+	}
+	if providerFrame.EndOfResponse {
+		return s.flushProviderPlayback(ctx, pending)
+	}
+	return nil
+}
+
+func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *rtcDevicePlaybackBuffer) error {
+	generation, blocked := s.playbackState()
+	final := pending.flush(generation, blocked)
+	if len(final) == 0 {
+		return nil
+	}
+	return s.observedWritePlayback(ctx, final, generation, blocked)
+}
+
+// observedWritePlayback routes a device-rate playback chunk through the
+// optional self-hearing observer before it reaches the device adapter, so a
+// local feedback gate always sees exactly the PCM this sink accepted.
+func (s *RTCDeviceSink) observedWritePlayback(ctx context.Context, samples []int16, generation uint64, blocked bool) error {
+	write := func() error {
+		return s.writePlayback(ctx, samples, generation, blocked)
+	}
+	if s.observer != nil {
+		return s.observer.WritePlayback(ctx, samples, write)
+	}
+	return write()
 }
 
 func (s *RTCDeviceSink) playbackState() (uint64, bool) {
@@ -247,7 +301,12 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		s.playbackMu.Unlock()
 		return nil
 	}
-	err := s.sink.WriteFrame(ctx, samples)
+	var err error
+	if len(samples) == audio.FrameSize {
+		err = s.sink.WriteFrame(ctx, samples)
+	} else {
+		err = s.sink.WriteSamples(ctx, samples)
+	}
 	s.playbackMu.Unlock()
 	if err != nil {
 		return err

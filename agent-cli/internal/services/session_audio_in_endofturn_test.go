@@ -47,7 +47,7 @@ func TestSessionCommandAudioInputRecordsPostCommitResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load replay base fixture: %v", err)
 	}
-	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	records := []gwtesting.CapturedSessionEvent{committedSessionAudioInputUpdate(baseCapture.Records[0]), baseCapture.Records[1]}
 
 	appendChunk := func(audio []byte) {
 		t.Helper()

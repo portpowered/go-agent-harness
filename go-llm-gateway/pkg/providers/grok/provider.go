@@ -89,6 +89,7 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 	p.logger.Info("grok: websocket connected", logging.Field{Key: "url", Value: url})
 
 	gs := newGrokSession(conn, p.logger)
+	gs.mediaSampleRate = int(config.OutputAudioSampleRate)
 
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
