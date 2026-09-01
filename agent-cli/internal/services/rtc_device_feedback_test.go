@@ -17,7 +17,7 @@ import (
 
 func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning))
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 
 func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning))
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 
 func TestLocalFeedbackGateReleasesIndependentCaptureOnceInOrder(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning))
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestLocalFeedbackGateBlockedWarningWriterCannotBlockMedia(t *testing.T) {
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})
 	writer := blockingFeedbackWarningWriter{started: started, release: release}
-	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), writer)
+	gate, err := newLocalFeedbackGate(audio.DefaultSelfHearingConfig(), writer, audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -314,6 +314,89 @@ func TestPairedDeviceBindingDropsLoopedSpeakerFramesBeforeProviderMedia(t *testi
 
 	if err := binding.Close(); err != nil {
 		t.Fatalf("close paired binding: %v", err)
+	}
+}
+
+// TestPairedDeviceBindingDetectsLoopAtNegotiatedNonDefaultRate proves the gate
+// declares the true negotiated device rate (see PR #350, which stopped
+// hardcoding 16 kHz for playback) rather than the shared compatibility
+// constant. A gate that mislabeled 24 kHz PCM as 16 kHz would still classify
+// consistently between its own two streams and would not report a rate
+// mismatch, but every configured latency bound would be silently rescaled by
+// 24000/16000. Confirming the warning still fires under a realistic realtime
+// session rate is the only way to catch that class of bug.
+func TestPairedDeviceBindingDetectsLoopAtNegotiatedNonDefaultRate(t *testing.T) {
+	const negotiatedRate = 24000
+	capability := audio.VirtualCapability{SampleRate: negotiatedRate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "mic", Name: "Virtual Mic", Direction: audio.DirectionInput, LoopbackID: "speaker", Capabilities: []audio.VirtualCapability{capability}},
+			{ID: "speaker", Name: "Virtual Speaker", Direction: audio.DirectionOutput, LoopbackID: "mic", Capabilities: []audio.VirtualCapability{capability}},
+		},
+		Defaults: map[audio.Direction]string{
+			audio.DirectionInput:  "mic",
+			audio.DirectionOutput: "speaker",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new virtual feedback registry: %v", err)
+	}
+	warning := make(chan string, 1)
+	feedbackConfig := audio.DefaultSelfHearingConfig()
+	feedbackConfig.CorrelationLagWindow = audio.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
+	feedbackConfig.MinimumEvidence = 30 * time.Millisecond
+	feedbackConfig.MaximumReleaseLatency = 500 * time.Millisecond
+	binding, err := PrepareRTCDeviceBindings(RTCDeviceBindingRequest{
+		Registry:              registry,
+		InputPresent:          true,
+		OutputPresent:         true,
+		InputSampleRate:       negotiatedRate,
+		OutputSampleRate:      negotiatedRate,
+		SelfHearingConfig:     feedbackConfig,
+		FeedbackWarningWriter: feedbackWarningChannel(warning),
+	})
+	if err != nil {
+		t.Fatalf("prepare paired binding: %v", err)
+	}
+	if binding == nil || binding.Source == nil || binding.Sink == nil {
+		t.Fatalf("binding = %#v, want paired source and sink", binding)
+	}
+	defer func() { _ = binding.Close() }()
+	if got := binding.Sink.SampleRate(); got != negotiatedRate {
+		t.Fatalf("sink negotiated rate = %d, want %d", got, negotiatedRate)
+	}
+	if got := binding.Source.SourceSampleRate(); got != negotiatedRate {
+		t.Fatalf("source negotiated rate = %d, want %d", got, negotiatedRate)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inbound := newFeedbackInbound(5)
+	outbound := &feedbackOutbound{frames: make(chan rtc.PCMFrame, 5)}
+	sinkDone := make(chan error, 1)
+	go func() { sinkDone <- binding.Sink.Pump(ctx, inbound) }()
+	go func() { _ = binding.Source.Pump(ctx, outbound) }()
+
+	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+		inbound.push(feedbackSignal(frameIndex, 53))
+	}
+	inbound.closeInput()
+
+	select {
+	case err := <-sinkDone:
+		if err != nil {
+			t.Fatalf("speaker pump: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("speaker pump did not consume virtual playback")
+	}
+	select {
+	case got := <-warning:
+		if !strings.Contains(got, "Acoustic feedback detected") {
+			t.Fatalf("warning = %q, want acoustic-feedback diagnosis", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("paired device loop did not confirm self-hearing at the negotiated %d Hz rate", negotiatedRate)
 	}
 }
 

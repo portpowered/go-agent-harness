@@ -228,7 +228,11 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 		binding.Sink = sink
 	}
 	if binding.Source != nil && binding.Sink != nil && !request.BypassSelfHearing {
-		feedback, feedbackErr := newLocalFeedbackGate(request.SelfHearingConfig, request.FeedbackWarningWriter)
+		// Declare the gate's timing to the true negotiated device rates, not the
+		// caller's requested rates: a capture device that cannot honor the
+		// requested rate falls back to another supported one (see
+		// openRTCDeviceSourceAtRate) and hands the gate raw, pre-resample PCM.
+		feedback, feedbackErr := newLocalFeedbackGate(request.SelfHearingConfig, request.FeedbackWarningWriter, binding.Sink.SampleRate(), binding.Source.SourceSampleRate())
 		if feedbackErr != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(feedbackErr, closeErr)

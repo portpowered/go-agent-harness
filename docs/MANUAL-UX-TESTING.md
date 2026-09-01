@@ -19,7 +19,7 @@ The default policy is:
 
 | Setting | Default |
 | --- | --- |
-| PCM format | mono PCM16, 16 kHz, 480-sample / 30 ms device frames |
+| PCM format | mono PCM16 at the negotiated device rate (16 kHz compatibility default; 24 kHz for a live OpenAI/Grok realtime session per PR #350), fixed 480-sample device frames |
 | Active evidence | at least 80 ms |
 | Correlation | normalized absolute correlation `>= 0.50` |
 | Lag search | `-100 ms` through `+100 ms`, inclusive |
@@ -32,6 +32,15 @@ The lag search is rate-aware. Streams with different explicit sample rates are
 classified as insufficient evidence; their bytes are never compared as if they
 shared a timeline. Silence, insufficient evidence, independent speech, and
 headphone-isolated speech are non-feedback outcomes.
+
+The gate declares the true rate each device negotiated, not a hardcoded
+constant: a capture device that cannot honor the requested rate opens at
+whatever rate it does support (see `openRTCDeviceSourceAtRate`), and every
+duration above is computed from that real rate. Declaring the wrong rate would
+not surface as an error — it would silently rescale every bound in the table
+above without changing the classification outcome, which is why the automated
+suite below exercises the gate at a live realtime session's actual 24 kHz rate
+in addition to the 16 kHz compatibility default.
 
 The first confirmed loop writes exactly one warning to command stderr:
 

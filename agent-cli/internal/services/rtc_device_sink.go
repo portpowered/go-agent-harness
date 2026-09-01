@@ -118,6 +118,17 @@ func (s *RTCDeviceSink) DeviceID() audio.DeviceID {
 	return s.id
 }
 
+// SampleRate reports the negotiated PCM16 rate the output device was opened
+// at. Callers that must declare the true rate of frames accepted by this sink
+// (rather than assume the provider's requested rate) should use this instead
+// of the request's OutputSampleRate, since device negotiation can differ.
+func (s *RTCDeviceSink) SampleRate() int {
+	if s == nil || s.sink == nil {
+		return 0
+	}
+	return s.sink.SampleRate()
+}
+
 // PlaybackStats returns the current synchronized local playback observation.
 func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 	if s == nil || s.sink == nil {

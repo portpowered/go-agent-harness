@@ -61,6 +61,17 @@ type localFeedbackGate struct {
 	config  audio.PCM16SelfHearingConfig
 	warning io.Writer
 
+	// playbackRate and captureRate are the true negotiated device rates, not
+	// the provider's requested rate. A capture device that falls back to an
+	// alternate supported rate (see openRTCDeviceSourceAtRate) still hands raw,
+	// pre-resample PCM to FilterCapture, so declaring the requested rate here
+	// would silently misstate every duration and lag computed from it. If the
+	// two ever diverge, the detector's own rate-mismatch classification is the
+	// safety net: it refuses to compare bytes across an undeclared rate change
+	// rather than produce a meaningless correlation.
+	playbackRate int
+	captureRate  int
+
 	state localFeedbackGateState
 
 	playbackPosition time.Duration
@@ -73,7 +84,18 @@ type localFeedbackGate struct {
 	pending          []heldLocalCaptureFrame
 }
 
-func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer) (*localFeedbackGate, error) {
+// newLocalFeedbackGate constructs the gate for one paired local-device
+// session. playbackRate and captureRate are the true negotiated device rates
+// (see the localFeedbackGate field comments); a non-positive value falls back
+// to the shared compatibility default so a caller that has not resolved a
+// concrete rate keeps prior behavior.
+func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer, playbackRate, captureRate int) (*localFeedbackGate, error) {
+	if playbackRate <= 0 {
+		playbackRate = audio.SampleRate
+	}
+	if captureRate <= 0 {
+		captureRate = audio.SampleRate
+	}
 	detector, err := audio.NewPCM16SelfHearingDetector(config)
 	if err != nil {
 		return nil, err
@@ -85,7 +107,7 @@ func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer
 	// suppress the first headphone/user frame after playback ends. Half a frame
 	// tolerates the silence-floor samples that are excluded from otherwise
 	// contentful deterministic frames without accepting a short boundary sliver.
-	probeEvidence := pcm16DeviceDuration(audio.FrameSize) / 2
+	probeEvidence := pcm16DeviceDurationAtRate(audio.FrameSize, captureRate) / 2
 	if probeEvidence > probeConfig.AnalysisWindow {
 		probeEvidence = probeConfig.AnalysisWindow
 	}
@@ -104,11 +126,13 @@ func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer
 		return nil, err
 	}
 	return &localFeedbackGate{
-		detector: detector,
-		probe:    probe,
-		config:   detector.Config(),
-		warning:  warning,
-		state:    localFeedbackGateIdle,
+		detector:     detector,
+		probe:        probe,
+		config:       detector.Config(),
+		warning:      warning,
+		playbackRate: playbackRate,
+		captureRate:  captureRate,
+		state:        localFeedbackGateIdle,
 	}, nil
 }
 
@@ -153,20 +177,20 @@ func (g *localFeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 	}
 	if err := g.detector.ObservePlaybackContext(ctx, audio.PCM16TimedFrame{
 		Samples:    samples,
-		SampleRate: audio.SampleRate,
+		SampleRate: g.playbackRate,
 		Start:      g.playbackPosition,
 	}); err != nil {
 		return err
 	}
 	if err := g.probe.ObservePlaybackContext(ctx, audio.PCM16TimedFrame{
 		Samples:    samples,
-		SampleRate: audio.SampleRate,
+		SampleRate: g.playbackRate,
 		Start:      g.playbackPosition,
 	}); err != nil {
 		return err
 	}
 
-	g.playbackPosition += pcm16DeviceDuration(len(samples))
+	g.playbackPosition += pcm16DeviceDurationAtRate(len(samples), g.playbackRate)
 	g.lastPlaybackEnd = g.playbackPosition
 	g.playbackSeen = true
 	if g.state == localFeedbackGateSuppressing {
@@ -211,7 +235,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	}
 
 	start := g.capturePosition
-	end := start + pcm16DeviceDuration(len(samples))
+	end := start + pcm16DeviceDurationAtRate(len(samples), g.captureRate)
 	owned := append([]int16(nil), samples...)
 	g.capturePosition = end
 	if !g.playbackIsRelevantLocked(start) {
@@ -232,7 +256,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		g.probe.ResetCapture()
 		probeObservation, probeErr := g.probe.ObserveCaptureContext(ctx, audio.PCM16TimedFrame{
 			Samples:    owned,
-			SampleRate: audio.SampleRate,
+			SampleRate: g.captureRate,
 			Start:      start,
 		})
 		if probeErr != nil {
@@ -248,7 +272,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	}
 	observation, err := g.detector.ObserveCaptureContext(ctx, audio.PCM16TimedFrame{
 		Samples:    owned,
-		SampleRate: audio.SampleRate,
+		SampleRate: g.captureRate,
 		Start:      start,
 	})
 	if err != nil {
@@ -401,11 +425,17 @@ func (g *localFeedbackGate) warnOnceLocked() {
 	}()
 }
 
-func pcm16DeviceDuration(samples int) time.Duration {
-	if samples <= 0 {
+// pcm16DeviceDurationAtRate converts a sample count into wall-clock duration
+// at the caller's declared rate. The gate always uses the true negotiated
+// device rate here rather than the shared compatibility constant, since a
+// live realtime session commonly negotiates a rate other than audio.SampleRate
+// (see PR #350) and a wrong rate would silently rescale every latency bound
+// this file documents.
+func pcm16DeviceDurationAtRate(samples, rate int) time.Duration {
+	if samples <= 0 || rate <= 0 {
 		return 0
 	}
-	return time.Duration(samples) * time.Second / audio.SampleRate
+	return time.Duration(samples) * time.Second / time.Duration(rate)
 }
 
 func addFeedbackDuration(start, duration time.Duration) time.Duration {
