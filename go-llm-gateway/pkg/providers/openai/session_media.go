@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -33,9 +34,20 @@ func (s *realtimeSession) currentRTCMedia() *rtc.SessionMedia {
 
 func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame rtc.PCMFrame) error {
 	encoded := base64.StdEncoding.EncodeToString(encodePCM16(frame.Samples))
-	outcome := s.sendEvents(ctx, []models.SessionEvent{models.NewAudioBufferAppendEvent(encoded)})
+	select {
+	case <-s.done:
+		return fmt.Errorf("OpenAI Realtime RTC media write: session closed")
+	default:
+	}
+	// Hardware capture is a continuous, clocked source. Backpressure it when
+	// the WebSocket writer is briefly behind instead of treating a transient
+	// full control queue as terminal audio loss.
+	outcome := s.sendQueue.WriteWaitContextOrDone(ctx, s.done, models.NewAudioBufferAppendEvent(encoded))
 	if outcome.OK() {
 		return nil
+	}
+	if outcome.Status == messages.BufferWriteStopped {
+		return fmt.Errorf("OpenAI Realtime RTC media write: session closed")
 	}
 	if outcome.Err != nil {
 		return outcome.Err

@@ -8,12 +8,17 @@ credential, raw PCM, transcript, prompt, or provider payload.
 ## Repaired requirement
 
 When one session owns both a live local microphone and a live local speaker,
-the runtime observes the exact PCM accepted by the speaker and the raw PCM
-captured before provider delivery. It holds a finite capture window, correlates
-the two streams over their monotonic media positions, and discards only
-confirmed assistant-correlated microphone audio before server VAD can see it.
-Independent speech is released once, in capture order, within the bounded
-latency policy.
+macOS first acquires the default pair atomically through Apple's duplex
+`AUVoiceProcessingIO` audio unit. That gives the system echo canceller the
+exact speaker render reference and also enables Apple's noise suppression and
+automatic gain control. AudioToolbox is bound dynamically through PureGo; no
+Objective-C shim or file-input shortcut sits in the PCM path.
+
+The portable safety layer remains active behind native voice processing. It
+observes the exact PCM accepted by the speaker and the processed PCM captured
+before provider delivery, holds a finite capture window, and discards only
+confirmed assistant-correlated audio before server VAD can see it. Independent
+speech is released once, in capture order, within the bounded latency policy.
 
 The default policy is:
 
@@ -21,11 +26,11 @@ The default policy is:
 | --- | --- |
 | PCM format | mono PCM16 at the negotiated device rate (16 kHz compatibility default; 24 kHz for a live OpenAI/Grok realtime session per PR #350), fixed 480-sample device frames |
 | Active evidence | at least 80 ms |
-| Correlation | normalized absolute correlation `>= 0.50` |
-| Lag search | `-100 ms` through `+100 ms`, inclusive |
+| Correlation | normalized absolute correlation `>= 0.45` (`>= 0.25` for a post-confirmation probe) |
+| Lag search | `-200 ms` through `+500 ms`, inclusive |
 | Analysis window | 120 ms |
 | Maximum non-feedback release latency | 120 ms |
-| Post-playback acoustic tail | 200 ms |
+| Post-playback acoustic tail | 500 ms |
 | Silence floor | `-50 dBFS` |
 
 The lag search is rate-aware. Streams with different explicit sample rates are
@@ -60,10 +65,12 @@ it: room participants remain full duplex and may receive one another's
 contentful PCM while their own responses are open. This local speaker remedy
 must not suppress or delay room audio.
 
-Platform-specific acoustic echo cancellation (option (b)) is deferred. The
-portable implementation uses selective local gating (option (a)) plus runtime
-detection and the actionable warning floor (option (c)); a platform AEC would
-need a separately supported backend and device capability contract.
+Native voice processing currently applies to the macOS default input/output
+route. Explicit non-default macOS routes and other platforms fall back to the
+portable selective gate plus runtime detection and the actionable warning.
+This is deliberate: one VoiceIO unit cannot safely claim two arbitrary HAL
+routes, and silently pretending those routes share an echo reference would be
+worse than reporting and suppressing confirmed feedback in the portable path.
 
 ## Bounded MacBook check
 

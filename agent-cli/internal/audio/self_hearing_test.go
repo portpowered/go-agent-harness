@@ -122,6 +122,79 @@ func TestPCM16SelfHearingDetectsLaggedAndInvertedPlayback(t *testing.T) {
 	}
 }
 
+func TestPCM16SelfHearingDetectsFarFieldDelayedRoomResponse(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	playback := testSignal(800, 117)
+	capture := make([]int16, len(playback))
+	for index := range playback {
+		value := 0.52 * float64(playback[index])
+		if index >= 3 {
+			value += 0.21 * float64(playback[index-3])
+		}
+		if index >= 11 {
+			value -= 0.09 * float64(playback[index-11])
+		}
+		capture[index] = int16(math.Round(value))
+	}
+
+	observation := feedPairedSignals(t, detector, playback, capture, 1000, 240)
+	if !observation.Confirmed() {
+		t.Fatalf("far-field observation = %+v, want confirmed self-hearing", observation)
+	}
+	if observation.Measurement.BestAbsoluteLag < 220*time.Millisecond || observation.Measurement.BestAbsoluteLag > 260*time.Millisecond {
+		t.Fatalf("far-field absolute lag = %s, want near 240ms", observation.Measurement.BestAbsoluteLag)
+	}
+}
+
+func TestPCM16SelfHearingDetectsContinuousClockedFarFieldDelay(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	playback := testSignal(800, 211)
+	capture := append(make([]int16, 240), playback[:len(playback)-240]...)
+	var observation audio.PCM16SelfHearingObservation
+	for start := 0; start < len(playback); start += 20 {
+		if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: playback[start : start+20], SampleRate: 1000, Start: time.Duration(start) * time.Millisecond}); err != nil {
+			t.Fatalf("ObservePlayback(%d): %v", start, err)
+		}
+		var err error
+		observation, err = detector.ObserveCapture(audio.PCM16TimedFrame{Samples: capture[start : start+20], SampleRate: 1000, Start: time.Duration(start) * time.Millisecond})
+		if err != nil {
+			t.Fatalf("ObserveCapture(%d): %v", start, err)
+		}
+	}
+	if !observation.Confirmed() || observation.Measurement.BestAbsoluteLag < 220*time.Millisecond || observation.Measurement.BestAbsoluteLag > 260*time.Millisecond {
+		t.Fatalf("continuous far-field observation = %+v, want confirmed near +240ms", observation)
+	}
+}
+
+func TestPCM16SelfHearingDetectsFarFieldAfterSilentCaptureResets(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	const rate, frameSamples, delayedFrames = 16000, audio.FrameSize, 8
+	playback := testSignal(24*frameSamples, 313)
+	var observation audio.PCM16SelfHearingObservation
+	for frameIndex := 0; frameIndex < 24; frameIndex++ {
+		start := time.Duration(frameIndex*frameSamples) * time.Second / rate
+		frame := playback[frameIndex*frameSamples : (frameIndex+1)*frameSamples]
+		if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: frame, SampleRate: rate, Start: start}); err != nil {
+			t.Fatalf("ObservePlayback(%d): %v", frameIndex, err)
+		}
+		capture := make([]int16, frameSamples)
+		if frameIndex >= delayedFrames {
+			copy(capture, playback[(frameIndex-delayedFrames)*frameSamples:(frameIndex-delayedFrames+1)*frameSamples])
+		}
+		var err error
+		observation, err = detector.ObserveCapture(audio.PCM16TimedFrame{Samples: capture, SampleRate: rate, Start: start})
+		if err != nil {
+			t.Fatalf("ObserveCapture(%d): %v", frameIndex, err)
+		}
+		if observation.Classification == audio.PCM16SelfHearingNoEvidence {
+			detector.ResetCapture()
+		}
+	}
+	if !observation.Confirmed() {
+		t.Fatalf("reset far-field observation = %+v, want confirmed", observation)
+	}
+}
+
 func TestPCM16SelfHearingClassifiesIndependentSpeechAndSilence(t *testing.T) {
 	t.Run("independent speech is non-feedback", func(t *testing.T) {
 		detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
@@ -527,6 +600,23 @@ func TestPCM16SelfHearingZeroConfigDefaultsToDocumentedPolicy(t *testing.T) {
 	}
 }
 
+func TestPCM16SelfHearingLagRestrictionRetainsEvidenceAndRejectsWidening(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(100, 401), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatal(err)
+	}
+	window := audio.PCM16LagWindow{Min: 200 * time.Millisecond, Max: 280 * time.Millisecond}
+	if err := detector.RestrictCorrelationLagWindow(window); err != nil {
+		t.Fatalf("restrict lag: %v", err)
+	}
+	if detector.Config().CorrelationLagWindow != window || detector.BufferStats().PlaybackSamples != 100 {
+		t.Fatalf("restricted detector config/stats = %+v/%+v", detector.Config(), detector.BufferStats())
+	}
+	if err := detector.RestrictCorrelationLagWindow(audio.PCM16LagWindow{Min: 0, Max: time.Second}); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingConfig) {
+		t.Fatalf("widen lag = %v, want invalid config", err)
+	}
+}
+
 func TestPCM16SelfHearingErrorTypesFormatWithAndWithoutNilOrField(t *testing.T) {
 	var nilConfigErr *audio.InvalidPCM16SelfHearingConfigError
 	if got, want := nilConfigErr.Error(), audio.ErrInvalidPCM16SelfHearingConfig.Error(); got != want {
@@ -596,7 +686,7 @@ func TestPCM16SelfHearingClassifyLockedSkipsWhenCaptureWindowPrecedesPlayback(t 
 	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 97), SampleRate: 1000, Start: 0}); err != nil {
 		t.Fatalf("first ObserveCapture(): %v", err)
 	}
-	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 99), SampleRate: 1000, Start: 200 * time.Millisecond}); err != nil {
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 99), SampleRate: 1000, Start: 600 * time.Millisecond}); err != nil {
 		t.Fatalf("ObservePlayback(): %v", err)
 	}
 	// The capture window is entirely stale relative to the playback horizon, so

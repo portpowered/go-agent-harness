@@ -206,7 +206,32 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	binding := &RTCDeviceBinding{}
-	if request.inputSelected() {
+	// Prefer an atomic native duplex graph when both directions are selected.
+	// On macOS this is AUVoiceIO: the speaker render callback becomes the AEC
+	// reference for the processed microphone uplink. Registries without this
+	// optional capability, explicit routes it cannot host, and native setup
+	// failures retain the portable independent-device + correlation-gate path.
+	if request.inputSelected() && request.outputSelected() {
+		inputRate, outputRate := request.InputSampleRate, request.OutputSampleRate
+		if inputRate == 0 {
+			inputRate = audio.SampleRate
+		}
+		if outputRate == 0 {
+			outputRate = audio.SampleRate
+		}
+		source, sink, duplexErr := audio.NewDuplexDeviceSourceSinkWithFormat(
+			request.Registry,
+			normalizeRTCDeviceSelector(request.InputDevice), audio.PCM16DeviceFormat(inputRate),
+			normalizeRTCDeviceSelector(request.OutputDevice), audio.PCM16DeviceFormat(outputRate),
+		)
+		if duplexErr == nil {
+			binding.Source = newRTCDeviceSourceFromOpened(source, inputRate, inputRate)
+			binding.Sink = newRTCDeviceSinkFromOpened(sink, outputRate, outputRate, request.OutputVoice, request.PlaybackObserver)
+		} else if !errors.Is(duplexErr, audio.ErrDuplexDeviceUnavailable) {
+			return nil, duplexErr
+		}
+	}
+	if request.inputSelected() && binding.Source == nil {
 		source, err := NewRTCDeviceSourceAtRate(request.Registry, normalizeRTCDeviceSelector(request.InputDevice), request.InputSampleRate)
 		if err != nil {
 			return nil, &RTCDeviceBindingError{
@@ -219,7 +244,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 		binding.Source = source
 	}
 
-	if request.outputSelected() {
+	if request.outputSelected() && binding.Sink == nil {
 		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.OutputVoice, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()

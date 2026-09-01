@@ -311,6 +311,50 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 	}
 }
 
+func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
+	liveDialer := &stubRuntimeDialer{id: "record-device-vad-live"}
+	recordingDialer := &browserRecordingDialer{}
+	inferencer := &turnDetectionRecordingInferencer{scriptedSessionInferencer: &scriptedSessionInferencer{}}
+	var transcription models.InputAudioTranscriptionConfig
+	factory := sessionRuntimeFactory{
+		newDefaultLiveDialer: func() transport.Dialer { return liveDialer },
+		newRecordingDialer: func(inner transport.Dialer, provider, model string) sessionRecordingDialer {
+			recordingDialer.inner, recordingDialer.provider, recordingDialer.model = inner, provider, model
+			return recordingDialer
+		},
+		newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, _ []messages.ToolDefinition, policy models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+			transcription = policy
+			return inferencer, nil
+		},
+	}
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
+		RecordPath:       filepath.Join(t.TempDir(), "device-vad.session.json"),
+		RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true},
+	}, factory)
+	if err != nil {
+		t.Fatalf("plan recorded device session: %v", err)
+	}
+	if plan.mode != sessionRuntimeModeRecordOpenAI {
+		t.Fatalf("recorded device mode = %q", plan.mode)
+	}
+	if inferencer.turnDetection == nil || inferencer.turnDetection.Type != "server_vad" {
+		t.Fatalf("recorded device turn detection = %#v, want server_vad", inferencer.turnDetection)
+	}
+	if !transcription.Enabled || transcription.Model != models.DefaultInputAudioTranscriptionModel {
+		t.Fatalf("recorded device transcription = %#v, want enabled default", transcription)
+	}
+}
+
+type turnDetectionRecordingInferencer struct {
+	*scriptedSessionInferencer
+	turnDetection *models.TurnDetectionConfig
+}
+
+func (i *turnDetectionRecordingInferencer) SetSessionTurnDetection(policy *models.TurnDetectionConfig) {
+	i.turnDetection = cloneSessionTurnDetection(policy)
+}
+
 func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t *testing.T) {
 	for _, testCase := range []struct {
 		name     string

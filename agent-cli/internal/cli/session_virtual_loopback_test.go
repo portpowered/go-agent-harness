@@ -107,6 +107,7 @@ func newLoopbackDeviceRegistry(t *testing.T) *audio.VirtualRegistry {
 func newLoopbackDirectPairedRegistry(t *testing.T) *audio.VirtualRegistry {
 	t.Helper()
 	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		RecordPCM: true,
 		Devices: []audio.VirtualDeviceConfig{
 			{ID: "mic", Name: "Virtual Mic", Direction: audio.DirectionInput, LoopbackID: "speaker"},
 			{ID: "speaker", Name: "Virtual Speaker", Direction: audio.DirectionOutput, LoopbackID: "mic"},
@@ -118,6 +119,32 @@ func newLoopbackDirectPairedRegistry(t *testing.T) *audio.VirtualRegistry {
 	})
 	if err != nil {
 		t.Fatalf("new virtual direct-paired registry: %v", err)
+	}
+	return registry
+}
+
+func newLoopbackFarFieldRecordedRegistry(t *testing.T) *audio.VirtualRegistry {
+	t.Helper()
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		RecordPCM: true,
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "mic", Name: "Far-field Virtual Mic", Direction: audio.DirectionInput, LoopbackID: "speaker"},
+			{
+				ID: "speaker", Name: "Far-field Virtual Speaker", Direction: audio.DirectionOutput, LoopbackID: "mic",
+				// 240ms at the native 16kHz device rate exceeds the former
+				// +100ms detector range and approximates the 188ms callback /
+				// acoustic delay measured from the real failing capture.
+				LoopbackDelaySamples: 3840,
+				LoopbackImpulse:      []float64{0.52, 0.21, 0, -0.09},
+			},
+		},
+		Defaults: map[audio.Direction]string{
+			audio.DirectionInput:  "mic",
+			audio.DirectionOutput: "speaker",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new far-field recorded registry: %v", err)
 	}
 	return registry
 }
@@ -468,6 +495,8 @@ type loopbackHarness struct {
 	inferencer *loopbackInferencer
 	warning    *loopbackWarningSignal
 	runErr     chan error
+	recordPath string
+	finishOnce sync.Once
 }
 
 func startLoopbackHarness(t *testing.T) *loopbackHarness {
@@ -517,23 +546,25 @@ model:
 	h := &loopbackHarness{
 		t: t, ctx: ctx, cancel: cancel,
 		registry: registry, inbound: inbound, outbound: outbound,
-		inferencer: inferencer, warning: warning, runErr: runErr,
+		inferencer: inferencer, warning: warning, runErr: runErr, recordPath: recordPath,
 	}
 	t.Cleanup(h.finish)
 	return h
 }
 
 func (h *loopbackHarness) finish() {
-	defer h.cancel()
-	h.inferencer.endFromProvider(h.ctx)
-	select {
-	case err := <-h.runErr:
-		if err != nil {
-			h.t.Errorf("virtual loopback session command: %v", err)
+	h.finishOnce.Do(func() {
+		defer h.cancel()
+		h.inferencer.endFromProvider(h.ctx)
+		select {
+		case err := <-h.runErr:
+			if err != nil {
+				h.t.Errorf("virtual loopback session command: %v", err)
+			}
+		case <-h.ctx.Done():
+			h.t.Error("virtual loopback session did not return after the provider-driven close")
 		}
-	case <-h.ctx.Done():
-		h.t.Error("virtual loopback session did not return after the provider-driven close")
-	}
+	})
 }
 
 // TestSessionVirtualDeviceLoopbackFidelity guards PR #350/#359: assistant
@@ -633,8 +664,34 @@ func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
 	const probeFrames = 20
 	for i := 0; i < probeFrames; i++ {
 		probe := loopbackTone(audio.FrameSize, 9001+i)
+		before := h.registry.PCMObservations()
+		lastSequence := 0
+		if len(before) > 0 {
+			lastSequence = before[len(before)-1].Sequence
+		}
 		if err := userFeed.WriteFrame(h.ctx, probe); err != nil {
 			t.Fatalf("write independent probe frame %d: %v", i, err)
+		}
+		// Advance at the virtual microphone callback boundary. This preserves
+		// main's bounded hardware-queue model and guarantees the test never wins
+		// enough producer time slices to overwrite its own probe before capture.
+		wantCount := len(before) + 1
+		for {
+			observations, err := h.registry.WaitForPCMObservations(h.ctx, wantCount)
+			if err != nil {
+				t.Fatalf("wait for independent probe callback %d: %v (playback=%+v outbound=%d)", i, err, userFeed.PlaybackStats(), len(h.outbound.snapshot()))
+			}
+			consumed := false
+			for _, observation := range observations {
+				if observation.Sequence > lastSequence && observation.Operation == "read" {
+					consumed = true
+					break
+				}
+			}
+			if consumed {
+				break
+			}
+			wantCount = len(observations) + 1
 		}
 	}
 
@@ -665,6 +722,88 @@ func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
 		t.Fatalf("coupled echo correlates with what the capture path emitted to the provider after suppression was confirmed (BestAbsoluteCorrelation=%.3f at lag=%s over %d compared samples): suppression failed", measurement.BestAbsoluteCorrelation, measurement.BestAbsoluteLag, measurement.ComparedSamples)
 	}
 	t.Logf("suppression held: coupled echo vs. post-confirmation provider-received BestAbsoluteCorrelation=%.3f (want < %.2f)", measurement.BestAbsoluteCorrelation, audio.PCM16AnalysisDefaultSelfCorrelation)
+}
+
+func TestSessionVirtualDeviceLoopbackSuppressesFarFieldFeedbackAndRecordsDevices(t *testing.T) {
+	h := startLoopbackHarnessWithRegistry(t, newLoopbackFarFieldRecordedRegistry(t))
+
+	const chunks = 24
+	played := make([]int16, 0, chunks*audio.FrameSize)
+	for index := 0; index < chunks; index++ {
+		chunk := loopbackTone(loopbackProviderChunkSamples, 12001+index)
+		played = append(played, mustResample(t, chunk, loopbackProviderRate, loopbackDeviceRate)...)
+		h.inbound.push(t, h.ctx, rtc.PCMFrame{Samples: chunk, EndOfResponse: index == chunks-1})
+		// A real device callback consumes at the device clock. Pace this mock at
+		// the same boundary so a CPU-loaded test process cannot enqueue the
+		// entire far-field response into a 250ms hardware queue before capture
+		// gets its first turn; that would test producer flooding, not EAC.
+		if _, err := h.registry.WaitForPCMObservations(h.ctx, (index+1)*2); err != nil {
+			t.Fatalf("pace far-field device callback %d: %v", index, err)
+		}
+	}
+
+	select {
+	case <-h.warning.fired:
+	case <-h.ctx.Done():
+		var writes, reads []int16
+		for _, observation := range h.registry.PCMObservations() {
+			if observation.Operation == "write" {
+				writes = append(writes, observation.Samples...)
+			} else if observation.Operation == "read" {
+				reads = append(reads, observation.Samples...)
+			}
+		}
+		compareSamples := min(len(writes), len(reads)-3840)
+		var correlation audio.PCM16CorrelationMeasurement
+		if compareSamples > 0 {
+			duration := time.Duration(compareSamples) * time.Second / loopbackDeviceRate
+			correlation, _ = audio.NormalizedPCM16CrossCorrelation(
+				audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: "writes", ParticipantID: "speaker", SampleRate: loopbackDeviceRate, Samples: writes}, TimelineEnd: time.Duration(len(writes)) * time.Second / loopbackDeviceRate},
+				audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: "reads", ParticipantID: "mic", SampleRate: loopbackDeviceRate, Samples: reads}, TimelineEnd: time.Duration(len(reads)) * time.Second / loopbackDeviceRate},
+				audio.PCM16TimeInterval{ID: "debug", End: duration}, audio.PCM16LagWindow{Min: 240 * time.Millisecond, Max: 240 * time.Millisecond}, audio.PCM16AnalysisSilenceFloorDBFS,
+			)
+		}
+		t.Fatalf("far-field device loop was never confirmed as feedback; writes=%d reads=%d fixed240ms-correlation=%.3f evidence=%d", len(writes), len(reads), correlation.BestAbsoluteCorrelation, correlation.ComparedSamples)
+	}
+
+	// At least one output write and one input read per chunk must cross the
+	// device backend. The initial 240ms delay adds capture reads, so this lower
+	// bound deliberately avoids asserting internal callback batching.
+	// Every speaker write must be recorded; microphone reads are asynchronous
+	// and the finite virtual playback queue may coalesce/drop leading delay
+	// silence before the source pump consumes it. One additional observation
+	// is sufficient to prove that the capture side was active, and the exact
+	// per-direction counts below remain the authoritative assertion.
+	observations, err := h.registry.WaitForPCMObservations(h.ctx, chunks+1)
+	if err != nil {
+		t.Fatalf("wait for recorded mock-device PCM: %v", err)
+	}
+	var outputWrites, inputReads int
+	for _, observation := range observations {
+		if observation.Format.SampleRate != loopbackDeviceRate {
+			t.Fatalf("recorded device operation %d rate = %d, want native %d", observation.Sequence, observation.Format.SampleRate, loopbackDeviceRate)
+		}
+		switch {
+		case observation.DeviceID == "virtual:speaker" && observation.Operation == "write":
+			outputWrites++
+		case observation.DeviceID == "virtual:mic" && observation.Operation == "read":
+			inputReads++
+		}
+	}
+	if outputWrites < chunks || inputReads == 0 {
+		t.Fatalf("recorded device evidence = output writes %d, input reads %d; want at least %d/%d", outputWrites, inputReads, chunks, 1)
+	}
+
+	providerSignal := make([]int16, 0)
+	for _, frame := range h.outbound.snapshot() {
+		providerSignal = append(providerSignal, mustResample(t, frame.Samples, loopbackProviderRate, loopbackDeviceRate)...)
+	}
+	if len(providerSignal) > 0 {
+		measurement := measureLoopbackSelfHearing(t, "far-field-playback", played, "provider-received", providerSignal)
+		if !measurement.Passed {
+			t.Fatalf("far-field echo escaped device suppression: correlation=%.3f lag=%s", measurement.BestAbsoluteCorrelation, measurement.BestAbsoluteLag)
+		}
+	}
 }
 
 // measureLoopbackSelfHearing wraps audio.NormalizedPCM16CrossCorrelation --

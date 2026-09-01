@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
+	github.com/ebitengine/purego v0.11.0
 	github.com/gen2brain/malgo v0.11.24
 	github.com/google/wire v0.7.0
 	github.com/knadh/koanf/parsers/yaml v1.1.0

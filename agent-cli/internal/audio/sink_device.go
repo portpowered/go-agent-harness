@@ -46,6 +46,10 @@ func NewDeviceSinkWithFormat(registry DeviceRegistry, id DeviceID, format Device
 	if err != nil {
 		return nil, err
 	}
+	return newDeviceSinkFromOpened(handle, resolvedID, format)
+}
+
+func newDeviceSinkFromOpened(handle OpenedDevice, resolvedID DeviceID, format DeviceFormat) (*DeviceSink, error) {
 	frames, hasFrames := handle.(deviceFrameWriter)
 	samples, hasSamples := handle.(deviceSampleWriter)
 	bytes, hasBytes := handle.(deviceByteWriter)

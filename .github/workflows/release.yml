@@ -10,7 +10,10 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    # CoreAudio and AUVoiceIO are CGO-backed. Run the release on macOS so the
+    # darwin artifacts can be native while Go still cross-compiles the portable
+    # Linux and Windows artifacts with CGO disabled.
+    runs-on: macos-14
     timeout-minutes: 45
 
     steps:
@@ -22,7 +25,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.2"
+          go-version: "1.26.7"
           cache: true
           cache-dependency-path: |
             go.work.sum
@@ -34,7 +37,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: v2.17.0
           args: release --clean --config .goreleaser.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
