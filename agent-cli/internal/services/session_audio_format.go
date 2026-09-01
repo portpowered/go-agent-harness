@@ -29,7 +29,7 @@ type sessionAudioRequestProvider interface {
 	Request() inference.SessionRequest
 }
 
-func resolveSessionAudioSampleRate(_ SessionRunOptions, plan sessionRuntimePlan) (int, error) {
+func resolveSessionAudioSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) (int, error) {
 	inputRate := plan.inputAudioSampleRate
 	outputRate := plan.outputAudioSampleRate
 	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
@@ -53,8 +53,12 @@ func resolveSessionAudioSampleRate(_ SessionRunOptions, plan sessionRuntimePlan)
 	// Realtime provider plans own one explicit 24 kHz duplex contract even when
 	// the caller supplies the inferencer. Legacy 16 kHz seams retain that rate
 	// only by declaring it explicitly in their request or captured handshake;
-	// native sources and sinks are converted at the harness boundary.
-	if plan.provider == sessionProviderOpenAI || plan.provider == sessionProviderGrok {
+	// native sources and sinks are converted at the harness boundary. A
+	// replayed capture that never declared its own handshake rate is not
+	// talking to a live provider enforcing a minimum, so it keeps the
+	// harness compatibility default instead of silently reinterpreting an
+	// undeclared hermetic fixture at the live realtime rate.
+	if opts.ReplayPath == "" && (plan.provider == sessionProviderOpenAI || plan.provider == sessionProviderGrok) {
 		return sessionRealtimeAudioSampleRate, nil
 	}
 	return audio.SampleRate, nil

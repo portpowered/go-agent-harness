@@ -753,27 +753,23 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 				if !receivedAudio {
 					return emptySessionAudioInput(source.path)
 				}
-				if flush := framer.flush(); flush != nil {
-					if sendErr := sendSessionAudioFrames(ctx, loop, source, [][]byte{flush}); sendErr != nil {
-						return sendErr
-					}
-				}
-				if endErr := sendSessionAudioEndOfTurn(ctx, loop, source); endErr != nil {
+				if endErr := finishSessionAudioTurn(ctx, loop, source, framer, frameDuration); endErr != nil {
 					return endErr
 				}
-				receivedAudio = false
+				// receivedAudio deliberately stays true across a turn boundary:
+				// it guards the pathological "no audio ever sent" case at first
+				// read, not each individual turn. A multi-turn stream's natural
+				// close reads as one more io.EOF immediately after its last
+				// ErrEndOfTurn with no new content in between; resetting this
+				// per turn would misclassify that clean finish as an empty
+				// final turn.
 				continue
 			}
 			if errors.Is(err, io.EOF) {
 				if !receivedAudio {
 					return emptySessionAudioInput(source.path)
 				}
-				if flush := framer.flush(); flush != nil {
-					if sendErr := sendSessionAudioFrames(ctx, loop, source, [][]byte{flush}); sendErr != nil {
-						return sendErr
-					}
-				}
-				return sendSessionAudioEndOfTurn(ctx, loop, source)
+				return finishSessionAudioTurn(ctx, loop, source, framer, frameDuration)
 			}
 			return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: source.path, Err: err}
 		}
@@ -791,6 +787,45 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 			return err
 		}
 	}
+}
+
+// sessionAudioTerminationSettle is the historical, harness-rate pacing
+// quantum: the gap that always separated a 16 kHz native source's last paced
+// content read from the read that discovered its end. A session that is
+// independently closing (for example, a replay capture whose server side
+// ends the exchange as soon as it has consumed the scripted input) relies on
+// that gap for a fair chance to finish on its own before a client-initiated
+// commit reaches an already-closing session.
+const sessionAudioTerminationSettle = time.Duration(audio.FrameSize) * time.Second / time.Duration(audio.SampleRate)
+
+// finishSessionAudioTurn flushes any buffered provider-rate remainder, tops
+// up the termination settle margin for a paced source, and signals
+// end-of-turn. Both the ErrEndOfTurn and io.EOF boundaries in
+// streamSessionAudioInput share this sequence.
+//
+// A native source paced faster than the historical 16 kHz quantum (a 24 kHz
+// WAV, for example) reaches its end-discovering read sooner, narrowing that
+// gap below sessionAudioTerminationSettle. Topping the wait up to that
+// historical margin restores it without changing behavior at all for a
+// source already paced at or below the harness rate (make-up delay is zero
+// or negative there), so this leaves existing tightly-scheduled duplex
+// timing at the harness rate untouched.
+func finishSessionAudioTurn(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, framer *sessionProviderInputFramer, frameDuration time.Duration) error {
+	if flush := framer.flush(); flush != nil {
+		if sendErr := sendSessionAudioFrames(ctx, loop, source, [][]byte{flush}); sendErr != nil {
+			return sendErr
+		}
+	}
+	if settle := sessionAudioTerminationSettle - frameDuration; source.paced && settle > 0 {
+		timer := time.NewTimer(settle)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: source.path, Err: ctx.Err()}
+		case <-timer.C:
+		}
+	}
+	return sendSessionAudioEndOfTurn(ctx, loop, source)
 }
 
 func sendSessionAudioFrames(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource, frames [][]byte) error {
