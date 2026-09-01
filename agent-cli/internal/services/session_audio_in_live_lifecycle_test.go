@@ -143,21 +143,20 @@ func (c *audioInLifecycleConn) Close() error {
 // captured session.closed event. The session runner must close locally only
 // after the final scheduled response.
 type scheduledAudioLifecycleServer struct {
-	mu                      sync.Mutex
-	writes                  []string
-	sessionUpdates          []json.RawMessage
-	responses               chan int
-	events                  chan string
-	closed                  chan struct{}
-	closeOnce               sync.Once
-	sessionCreated          chan struct{}
-	sessionUpdatedRelease   chan struct{}
-	bargeIn                 bool
-	holdBargeResponseOutput bool
-	bargeResponseTurn       int
-	firstResponseCancel     chan struct{}
-	firstCancelOnce         sync.Once
-	nextTurn                int
+	mu                    sync.Mutex
+	writes                []string
+	sessionUpdates        []json.RawMessage
+	responses             chan int
+	events                chan string
+	closed                chan struct{}
+	closeOnce             sync.Once
+	sessionCreated        chan struct{}
+	sessionUpdatedRelease chan struct{}
+	bargeIn               bool
+	bargeResponseTurn     int
+	firstResponseCancel   chan struct{}
+	firstCancelOnce       sync.Once
+	nextTurn              int
 }
 
 func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
@@ -189,7 +188,6 @@ func newBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 func newPromptBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 	server := newBargeInScheduledAudioLifecycleServer()
 	server.bargeResponseTurn = 2
-	server.holdBargeResponseOutput = true
 	return server
 }
 
@@ -227,9 +225,13 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 					s.events <- `{"type":"input_audio_buffer.speech_started"}`
 					s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
 					s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
-					if !s.holdBargeResponseOutput {
-						s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
-					}
+					// The active response must deliver real audio before the
+					// scheduled dispatcher (gated on AUDIO.DELTA for the
+					// active-response policy) can release the next input, so
+					// this send is unconditional: without it, a barge
+					// scenario that withheld audio until after cancel would
+					// deadlock waiting for audio that never arrives.
+					s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
 					select {
 					case <-s.firstResponseCancel:
 						// This delta is deliberately stale. ModelRunner must suppress
@@ -608,6 +610,15 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(sessionUpdate.Audio["input"], &audioInput); err != nil {
 		t.Fatalf("decode streamed-audio audio.input: %v", err)
 	}
+	// --audio-in owns its own commit + response.create pair
+	// (ClientOwnsAudioTurnBoundaries): server_vad auto-commits the input
+	// buffer on speech-stop regardless of create_response, which collides
+	// with this source's own explicit commit (see the CLI integration test
+	// TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl,
+	// which proves that collision end to end). The wire policy must stay an
+	// explicit null for this contract; only the resolution boundary itself
+	// (never sending turn_detection at all vs. explicitly suppressing it) is
+	// this lane's concern for these paths.
 	if got := string(audioInput["turn_detection"]); got != "null" {
 		t.Fatalf("streamed-audio turn detection = %s, want explicit null", got)
 	}
@@ -737,6 +748,11 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 			t.Fatalf("scheduled tool %d = %#v, want %q", index, advertisedTools[index], wantName)
 		}
 	}
+	// See TestLiveRecordRuntimeAudioInCompletesRoundTrip: scheduled
+	// --audio-in-turn input owns its own commit + response.create pair, and
+	// server_vad's auto-commit-on-speech-stop collides with that (proven by
+	// the CLI integration negative control), so this contract keeps sending
+	// an explicit null rather than a real policy.
 	if detection := input["turn_detection"]; string(detection) != "null" {
 		t.Fatalf("scheduled session.update turn detection = %s, want explicit null", detection)
 	}
@@ -975,8 +991,20 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 	if firstResponseIndex < 0 || cancelIndex <= firstResponseIndex || cancelIndex >= secondAppendIndex {
 		t.Fatalf("scheduled barge-in wire order = %v, want response.created < response.cancel < second append", writes)
 	}
+	// Regression guard for the premature-cancel defect: releasing the barge
+	// input at response.created (before any assistant audio existed) let the
+	// cancel fire a few milliseconds after the response opened, interrupting
+	// nothing audible. The scheduled dispatcher now waits for the active
+	// response's first AUDIO.DELTA before releasing the next input, so the
+	// first assistant audio delta must always be read off the wire strictly
+	// before the cancel it triggers -- deterministically, not "may or may not
+	// cross" as before this fix.
+	firstAudioDeltaIndex := indexOfWireEvent(writes, "IN:response.output_audio.delta", 0)
+	if firstAudioDeltaIndex < 0 || firstAudioDeltaIndex >= cancelIndex {
+		t.Fatalf("scheduled barge-in cancel was not issued after first audio delivery: %v", writes)
+	}
 
-	seenSecondAudio, seenStaleAudio := false, false
+	seenFirstAudio, seenSecondAudio, seenStaleAudio := false, false, false
 	for _, msg := range observed {
 		if msg.Type != messages.StreamTypeAudioDelta {
 			continue
@@ -987,14 +1015,18 @@ func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *tes
 		}
 		switch string(value.Content) {
 		case string([]byte{1, 2, 3}):
-			// The active boundary is response.created. Depending on which
-			// already-queued provider delta the model runner drains first, the
-			// first response's output may or may not cross before cancellation.
+			// The first response's real audio, which the scheduled
+			// dispatcher must always observe before it can release the
+			// barge input that cancels this same response.
+			seenFirstAudio = true
 		case string([]byte{2, 0, 12, 0}):
 			seenSecondAudio = true
 		case "cancel-stale":
 			seenStaleAudio = true
 		}
+	}
+	if !seenFirstAudio {
+		t.Fatalf("first response's audio was not observed before cancellation; stream=%#v", observed)
 	}
 	if !seenSecondAudio {
 		t.Fatalf("replacement response audio was not observed; stream=%#v", observed)
@@ -1064,6 +1096,22 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 		!(promptItem < responseCreates[0] && responseCreates[0] < initialDone && initialDone < appends[0] &&
 			appends[0] < responseCreates[1] && responseCreates[1] < cancelIndex && cancelIndex < appends[1]) {
 		t.Fatalf("prompt/seed scheduled wire order = %v, want prompt response before first append and cancellation only during second response", writes)
+	}
+	// Same premature-cancel regression guard as
+	// TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary:
+	// the barged (second) response's own first audio delta must be observed
+	// strictly between its response.create and the cancel it triggers. The
+	// prompt-seeded first response also emits a delta earlier in the wire
+	// trace, so the delta must be selected after responseCreates[1].
+	secondResponseDeltaIndex := -1
+	for _, deltaIndex := range wireEventIndexes(writes, "IN:response.output_audio.delta") {
+		if deltaIndex > responseCreates[1] {
+			secondResponseDeltaIndex = deltaIndex
+			break
+		}
+	}
+	if secondResponseDeltaIndex < 0 || secondResponseDeltaIndex >= cancelIndex {
+		t.Fatalf("prompt/seed scheduled cancel was not issued after first audio delivery: response.create=%d delta=%d cancel=%d writes=%v", responseCreates[1], secondResponseDeltaIndex, cancelIndex, writes)
 	}
 
 	var terminalMetrics []services.SessionDiagnosticRecord

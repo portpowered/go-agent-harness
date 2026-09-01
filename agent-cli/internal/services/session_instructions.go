@@ -276,9 +276,16 @@ func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokCo
 	if err != nil {
 		return nil, fmt.Errorf("create Grok session gateway: %w", err)
 	}
+	// This duplicates the shared default in session_options.go's Grok builder
+	// because instructions callers reach the provider through their own
+	// factory-substituted build chain (see sessionRuntimeFactoryWithInstructions
+	// above) rather than the shared one. See the matching comment on
+	// defaultRealtimeTurnDetection for why every construction boundary applies
+	// this instead of leaving it to a single upstream resolver.
 	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
+		inference.WithSessionTurnDetection(defaultRealtimeTurnDetection()),
 	}
 	if len(toolDefinitions) > 0 {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
@@ -320,10 +327,15 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
+	// See the matching comment in buildGrokSessionInferencerWithInstructionsAndTools:
+	// this is the same shared default applied at every provider construction
+	// boundary, duplicated here because this is a distinct factory-substituted
+	// build chain from session_options.go's.
 	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
 		inference.WithSessionInputAudioTranscription(inputAudioTranscription),
+		inference.WithSessionTurnDetection(defaultRealtimeTurnDetection()),
 	}
 	if voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
