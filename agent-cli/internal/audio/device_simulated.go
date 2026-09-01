@@ -6,8 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 )
 
 const SimulatedDuplexBackendName = "simulated-duplex"
@@ -116,9 +120,21 @@ type SimulatedDuplexRegistry struct {
 	open                            [2]int
 	lost                            [2]bool
 	changed                         chan struct{}
+	metricSampler                   observability.MetricSampler
+	logger                          observability.Logger
+	observedPlayback                PlaybackQueueStats
+	observedCapture                 CaptureQueueStats
 }
 
 func NewSimulatedDuplexRegistry(s DuplexScenario) (*SimulatedDuplexRegistry, error) {
+	return NewSimulatedDuplexRegistryWithObservability(s, nil, nil)
+}
+
+// NewSimulatedDuplexRegistryWithObservability attaches the same application
+// ports used by live composition. Sampling occurs after Advance releases the
+// simulator lock, matching the native rule that observers never run in an
+// audio callback critical section.
+func NewSimulatedDuplexRegistryWithObservability(s DuplexScenario, sampler observability.MetricSampler, logger observability.Logger) (*SimulatedDuplexRegistry, error) {
 	if err := validateClockSpec("render", s.Render); err != nil {
 		return nil, err
 	}
@@ -161,9 +177,11 @@ func NewSimulatedDuplexRegistry(s DuplexScenario) (*SimulatedDuplexRegistry, err
 	return &SimulatedDuplexRegistry{
 		scenario: s, format: format, input: input, output: output,
 		playback: playback, captureCapacity: captureCapacity,
-		captureStats: CaptureQueueStats{DropPolicy: s.CaptureQueue.DropPolicy},
-		changed:      make(chan struct{}),
-		acoustic:     make([]int16, s.Acoustic.DelaySamples),
+		captureStats:  CaptureQueueStats{DropPolicy: s.CaptureQueue.DropPolicy},
+		changed:       make(chan struct{}),
+		acoustic:      make([]int16, s.Acoustic.DelaySamples),
+		metricSampler: observability.EnsureMetricSampler(sampler),
+		logger:        observability.EnsureLogger(logger),
 	}, nil
 }
 
@@ -307,6 +325,9 @@ func (s *SimulatedDuplexStream) Write(ctx context.Context, raw []byte) error {
 func (s *SimulatedDuplexStream) PlaybackStats() PlaybackQueueStats {
 	return s.registry.playback.Snapshot()
 }
+func (s *SimulatedDuplexStream) CaptureStats() CaptureQueueStats {
+	return s.registry.CaptureStats()
+}
 func (s *SimulatedDuplexStream) DiscardPlayback() int {
 	n := s.registry.playback.Discard()
 	s.registry.mu.Lock()
@@ -371,17 +392,95 @@ func (r *SimulatedDuplexRegistry) Advance(count int) error {
 		return errors.New("simulated callback count must not be negative")
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	traceStart := len(r.trace)
 	for i := 0; i < count; i++ {
 		if err := r.advanceRenderLocked(); err != nil {
+			r.mu.Unlock()
 			return err
 		}
 		if err := r.advanceCaptureLocked(); err != nil {
+			r.mu.Unlock()
 			return err
 		}
 	}
 	r.signalLocked()
+	events := append([]DeviceTraceEvent(nil), r.trace[traceStart:]...)
+	playback := r.playback.Snapshot()
+	capture := r.captureStats
+	previousPlayback := r.observedPlayback
+	previousCapture := r.observedCapture
+	r.observedPlayback = playback
+	r.observedCapture = capture
+	r.mu.Unlock()
+	r.observeEvents(events)
+	r.observeQueueDeltas(playback, previousPlayback, capture, previousCapture)
 	return nil
+}
+
+func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
+	for _, event := range events {
+		fields := observability.Fields{
+			"backend":     SimulatedDuplexBackendName,
+			"tap":         event.Tap,
+			"clock_epoch": strconv.FormatUint(uint64(event.ClockEpoch), 10),
+			"sample_rate": strconv.Itoa(event.SampleRate),
+		}
+		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+			Name: "audio.device.callbacks", Kind: "counter", Value: 1, Unit: "callbacks", Fields: fields,
+		})
+		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+			Name: "audio.device.queue.depth", Kind: "gauge", Value: float64(event.QueueAfter), Unit: "samples", Fields: fields,
+		})
+		if len(event.Flags) == 0 {
+			continue
+		}
+		faultFields := observability.Fields{
+			"backend":     SimulatedDuplexBackendName,
+			"tap":         event.Tap,
+			"clock_epoch": strconv.FormatUint(uint64(event.ClockEpoch), 10),
+			"flags":       strings.Join(event.Flags, ","),
+			"fault_id":    event.FaultID,
+		}
+		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+			Name: "audio.device.faults", Kind: "counter", Value: 1, Unit: "events", Fields: faultFields,
+		})
+		_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+			Level: "warn", Message: "simulated audio device callback fault", Fields: faultFields,
+		})
+	}
+}
+
+func (r *SimulatedDuplexRegistry) observeQueueDeltas(playback, previousPlayback PlaybackQueueStats, capture, previousCapture CaptureQueueStats) {
+	type deltaMetric struct {
+		name  string
+		unit  string
+		value uint64
+	}
+	metrics := []deltaMetric{
+		{name: "audio.playback.underflows", unit: "events", value: playback.UnderflowEvents - previousPlayback.UnderflowEvents},
+		{name: "audio.playback.underflow", unit: "samples", value: playback.UnderflowSamples - previousPlayback.UnderflowSamples},
+		{name: "audio.playback.overflows", unit: "events", value: playback.OverflowEvents - previousPlayback.OverflowEvents},
+		{name: "audio.playback.dropped", unit: "samples", value: playback.DroppedSamples - previousPlayback.DroppedSamples},
+		{name: "audio.capture.dropped", unit: "frames", value: capture.DroppedFrames - previousCapture.DroppedFrames},
+		{name: "audio.capture.dropped", unit: "samples", value: capture.DroppedSamples - previousCapture.DroppedSamples},
+		{name: "audio.capture.sequence_gaps", unit: "gaps", value: capture.SequenceGaps - previousCapture.SequenceGaps},
+	}
+	fields := observability.Fields{"backend": SimulatedDuplexBackendName}
+	loss := false
+	for _, metric := range metrics {
+		if metric.value == 0 {
+			continue
+		}
+		loss = true
+		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+			Name: metric.name, Kind: "counter", Value: float64(metric.value), Unit: metric.unit, Fields: fields,
+		})
+	}
+	if loss {
+		_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+			Level: "warn", Message: "simulated audio buffer loss", Fields: fields,
+		})
+	}
 }
 
 func (r *SimulatedDuplexRegistry) advanceRenderLocked() error {

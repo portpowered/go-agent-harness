@@ -22,8 +22,8 @@ import (
 // signaling, peer/data, and media implementations behind the service's
 // provider-neutral contracts while leaving runtime side effects lazy until a
 // session actually starts.
-func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents) services.SessionRTCRuntimeFactory {
-	return services.NewSessionRTCRuntimeFactory(components)
+func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents, metricSampler MetricSampler, logger Logger) services.SessionRTCRuntimeFactory {
+	return services.NewSessionRTCRuntimeFactoryWithObservability(components, metricSampler, logger)
 }
 
 func provideModelValidation(
@@ -36,6 +36,8 @@ func provideModelValidation(
 	audioSink AudioSink,
 	clockSource Clock,
 	runtimeObserver SessionRuntimeObserver,
+	metricSampler MetricSampler,
+	logger Logger,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 ) []bool {
@@ -48,6 +50,8 @@ func provideModelValidation(
 			audioSink:         audioSink,
 			clockSource:       clockSource,
 			runtimeObserver:   runtimeObserver,
+			metricSampler:     metricSampler,
+			logger:            logger,
 			inferencer:        inferencer,
 			sessionInferencer: sessionInferencer,
 		})
@@ -99,7 +103,7 @@ var CliSet = wire.NewSet(
 	provideProbeDeviceRegistries,
 	provideSessionToolCapabilitiesFactory,
 	provideSessionRTCRuntimeFactory,
-	cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime,
+	cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntimeAndObservability,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
 	cli.NewSessionDeleteCommand,
@@ -120,6 +124,8 @@ func assembleAgentCLI(
 	audioSink AudioSink,
 	clockSource Clock,
 	runtimeObserver SessionRuntimeObserver,
+	metricSampler MetricSampler,
+	logger Logger,
 	toolDefs []messages.ToolDefinition,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,

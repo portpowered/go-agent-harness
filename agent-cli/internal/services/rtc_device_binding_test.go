@@ -52,6 +52,39 @@ func TestPrepareRTCDeviceBindingsUsesRegistryDefaultsAndClosesExactlyOnce(t *tes
 	}
 }
 
+func TestRTCDeviceBindingPublishesCaptureSnapshotAfterCallbackStops(t *testing.T) {
+	registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+		Render:       audio.ClockSpec{NominalRate: 48000, Quanta: []int{480}},
+		Capture:      audio.ClockSpec{NominalRate: 48000, Quanta: []int{480}},
+		CaptureQueue: audio.QueueSpec{LatencyNanos: 1, DropPolicy: "drop_oldest"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got audio.CaptureQueueStats
+	observerCalls := 0
+	binding, err := services.PrepareRTCDeviceBindings(services.RTCDeviceBindingRequest{
+		Registry: registry, InputPresent: true, InputSampleRate: 48000,
+		CaptureObserver: func(_ audio.DeviceID, stats audio.CaptureQueueStats) { got = stats; observerCalls++ },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Advance(2); err != nil {
+		t.Fatal(err)
+	}
+	if err := binding.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if observerCalls != 1 || got.DropPolicy != "drop_oldest" || got.DroppedSamples == 0 || got.SequenceGaps == 0 {
+		t.Fatalf("capture observation = %+v", got)
+	}
+	previous := got
+	if err := binding.Close(); err != nil || got != previous || observerCalls != 1 {
+		t.Fatalf("repeated close republished or failed: calls=%d stats=%+v err=%v", observerCalls, got, err)
+	}
+}
+
 func TestPrepareRTCDeviceBindingsAcceptsDefaultKeywordAndExactIDs(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {

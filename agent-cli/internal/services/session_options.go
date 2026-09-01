@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -347,6 +348,9 @@ type SessionRunOptions struct {
 	ToolDiagnostics SessionToolDiagnosticSink
 	// MetricsRecorder optionally receives per-direction stream observations.
 	MetricsRecorder metrics.Recorder
+	// Observability carries application-wide metric and logging ports. The
+	// composition root always supplies default no-op implementations.
+	Observability observability.Dependencies
 	// StreamObserver optionally receives every session stream delta after it
 	// crosses the session loop boundary. Nil keeps runtime behavior unchanged.
 	StreamObserver SessionStreamObserver

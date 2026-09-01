@@ -7,7 +7,80 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 )
+
+func TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock(t *testing.T) {
+	scenario := simulatedScenario(48000, []int{480})
+	scenario.Faults = []FaultEvent{{Callback: 0, Direction: DirectionOutput, Type: FaultClockReset, ID: "reset-1"}}
+	scenario.PlaybackQueue.LatencyNanos = 1
+	scenario.CaptureQueue.LatencyNanos = 1
+	var (
+		registry *SimulatedDuplexRegistry
+		samples  []observability.MetricSample
+		records  []observability.LogRecord
+	)
+	sampler := observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
+		// Snapshot reacquires the registry lock. Advance would deadlock here if
+		// it invoked application observers from the callback critical section.
+		_ = registry.Trace()
+		samples = append(samples, sample)
+		return nil
+	})
+	logger := observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+		records = append(records, record)
+		return nil
+	})
+	var err error
+	registry, err = NewSimulatedDuplexRegistryWithObservability(scenario, sampler, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := registry.Open(registry.output.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = opened.Close() })
+	if err := opened.(*SimulatedDuplexStream).WriteSamples(context.Background(), make([]int16, 960)); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Advance(1); err != nil {
+		t.Fatal(err)
+	}
+	var callbacks, faults int
+	for _, sample := range samples {
+		switch sample.Name {
+		case "audio.device.callbacks":
+			callbacks++
+		case "audio.device.faults":
+			faults++
+		}
+	}
+	if callbacks != 2 || faults < 1 {
+		t.Fatalf("observed callbacks=%d faults=%d samples=%+v", callbacks, faults, samples)
+	}
+	wantLoss := map[string]bool{
+		"audio.playback.underflow/samples": false,
+		"audio.playback.dropped/samples":   false,
+		"audio.capture.dropped/samples":    false,
+		"audio.capture.sequence_gaps/gaps": false,
+	}
+	for _, sample := range samples {
+		key := sample.Name + "/" + sample.Unit
+		if _, ok := wantLoss[key]; ok && sample.Value > 0 {
+			wantLoss[key] = true
+		}
+	}
+	for key, observed := range wantLoss {
+		if !observed {
+			t.Fatalf("missing positive loss metric %s in %+v", key, samples)
+		}
+	}
+	if len(records) == 0 || records[0].Fields["fault_id"] != "reset-1" {
+		t.Fatalf("fault logs = %+v", records)
+	}
+}
 
 func TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum(t *testing.T) {
 	for _, quanta := range [][]int{{64}, {128}, {240}, {256}, {480}, {512}, {960}, {128, 512, 256, 480}} {

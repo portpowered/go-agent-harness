@@ -14,6 +14,10 @@ This checklist turns the audio-choppiness design review into merge gates. “Cov
 - [x] Add deterministic acoustic delay/gain/FIR, near-end, and background stems without collapsing the original sources.
 - [x] Add atomic, finalized failure capsules containing scenario, PCM stems/taps, JSONL device trace, sizes, and SHA-256 hashes; validate and replay them.
 - [x] Add `make test-audio-stability` and a focused race corpus in CI.
+- [x] Add application-owned `MetricSampler` and structured `Logger` function adapters with no-op defaults, defensive field copies, and panic/error containment.
+- [x] Register both observability seams as required/defaulted live Wire ports; prove replacement identity, displaced-default suppression, and propagation through the generated session graph.
+- [x] Export final playback and capture queue snapshots outside native callbacks, including underrun/zero-fill, overflow/drop-oldest, discard, watermarks, callback totals, and capture sequence gaps.
+- [x] Export simulated callback/fault/clock-epoch evidence and RTC start/failure/close lifecycle records through the same ports used by production sessions.
 
 ## Failure matrix coverage
 
@@ -25,6 +29,7 @@ The matrix is covered proportionally rather than by one test function per row; t
 - [x] T19–T20 — startup/lifecycle ordering and long integer-sample timelines: deterministic render-first ordering, duration table, long-run resampler count, and session lifecycle corpus.
 - [x] B01–B10 — exact underflow/overflow, capture policy, starvation, burst pacing, hysteresis and capacity edges: playback queue, simulated duplex, and `TestVirtualPlaybackCapacityAdversarial` tables.
 - [x] B11–B16 — malformed/fragmented input, diagnostics/recorder pressure, callback contention accounting, and defensive ownership: device, recording short-write, queue, and RTC adversarial suites.
+- [x] B01–B16 observability — `TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures`, `TestSessionCaptureObservabilitySamplesDropOldestLoss`, `TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock`, and `TestRTCDeviceBindingPublishesCaptureSnapshotAfterCallbackStops` lock the stable metric/log schema and prove observers execute after callback locks are released.
 - [x] B17–B25 — mid-frame cancel, linearizable barge-in discard, stale generations, close/loss/double-start/repeated-close/stress/race: RTC cancellation/adversarial suites plus `test-audio-stability-race`.
 - [x] R01–R09 — identity, complete supported-rate matrix, chunk invariance, duration, independent count oracle, phase continuity, long-run count and final tail: streaming resampler matrix and RTC boundary tests.
 - [x] R10–R16 — alias rejection, passband preservation, FIR/step/silence/DC/extreme saturation behavior: `TestDownsample48To16RejectsOutOfBandAlias`, streaming signal tests, and existing PCM analysis corpus.
@@ -52,5 +57,7 @@ Environment-gated M-lane tests require the named macOS route, permissions, and (
 - [x] `make coverage-changed COVERAGE_BASE=origin/main`
 - [x] Root `make test` audit: all changed packages passed; the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` timeout was reproduced unchanged in a clean `origin/main` worktree and is therefore recorded as a baseline exception, not hidden as a branch regression.
 - [x] `make validate` component gates relevant to this change (format, vet, build, changed coverage, focused race) passed. The aggregate target inherits the same independently reproduced baseline integration timeout above.
+
+The observability follow-up reruns these merge commands on its own branch before merge; checklist marks describe required gates, not inherited results.
 
 No hardware-only M-lane result is inferred from these hermetic gates.

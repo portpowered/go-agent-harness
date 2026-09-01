@@ -406,6 +406,13 @@ func (d *linuxOpenedDevice) PlaybackStats() PlaybackQueueStats {
 	return d.playback.Snapshot()
 }
 
+func (d *linuxOpenedDevice) CaptureStats() CaptureQueueStats {
+	if d == nil || d.microphone == nil {
+		return CaptureQueueStats{}
+	}
+	return d.microphone.CaptureStats()
+}
+
 // DiscardPlayback removes samples that have not yet been handed to the
 // Linux device callback. In-flight callback output is intentionally outside
 // this boundary.

@@ -2,12 +2,89 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+func TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures(t *testing.T) {
+	var samples []observability.MetricSample
+	var records []observability.LogRecord
+	observer := sessionPlaybackObservabilityObserver(
+		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
+			samples = append(samples, sample)
+			if sample.Name == "audio.playback.zero_fill" {
+				return errors.New("sink unavailable")
+			}
+			return nil
+		}),
+		observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+			records = append(records, record)
+			return errors.New("logger unavailable")
+		}),
+	)
+	observer("simulated-duplex:output", audio.PlaybackQueueStats{
+		Format: audio.PCM16DeviceFormat(48000), CallbackCount: 3, RenderedSamples: 1440,
+		UnderflowEvents: 1, UnderflowSamples: 480, ZeroFilledSamples: 480,
+		OverflowEvents: 2, DroppedSamples: 96, MinimumQueuedSamples: 0,
+	})
+	if len(samples) != len(playbackMetricSamples) {
+		t.Fatalf("metric samples = %d, want %d", len(samples), len(playbackMetricSamples))
+	}
+	byName := make(map[string]observability.MetricSample, len(samples))
+	for _, sample := range samples {
+		byName[sample.Name] = sample
+	}
+	if got := byName["audio.playback.underflow"].Value; got != 480 {
+		t.Fatalf("underflow sample = %v, want 480", got)
+	}
+	if got := byName["audio.playback.dropped"].Value; got != 96 {
+		t.Fatalf("dropped sample = %v, want 96", got)
+	}
+	if len(records) != 1 || records[0].Level != "warn" || records[0].Fields["underflow_samples"] != "480" {
+		t.Fatalf("log records = %+v", records)
+	}
+
+	// A panicking observer is also contained and cannot change device teardown.
+	panicking := sessionPlaybackObservabilityObserver(
+		observability.MetricSamplerFunc(func(context.Context, observability.MetricSample) error { panic("metric") }),
+		observability.LoggerFunc(func(context.Context, observability.LogRecord) error { panic("logger") }),
+	)
+	panicking("simulated-duplex:output", audio.PlaybackQueueStats{})
+}
+
+func TestSessionCaptureObservabilitySamplesDropOldestLoss(t *testing.T) {
+	var samples []observability.MetricSample
+	var records []observability.LogRecord
+	observer := sessionCaptureObservabilityObserver(
+		observability.MetricSamplerFunc(func(_ context.Context, sample observability.MetricSample) error {
+			samples = append(samples, sample)
+			return nil
+		}),
+		observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+			records = append(records, record)
+			return nil
+		}),
+	)
+	observer("simulated-duplex:input", audio.CaptureQueueStats{
+		DropPolicy: "drop_oldest", CapturedSamples: 960, CompletedFrames: 2,
+		DroppedFrames: 1, DroppedSamples: 480, SequenceGaps: 1,
+	})
+	seen := map[string]float64{}
+	for _, sample := range samples {
+		seen[sample.Name+"/"+sample.Unit] = sample.Value
+	}
+	if seen["audio.capture.dropped/frames"] != 1 || seen["audio.capture.dropped/samples"] != 480 || seen["audio.capture.sequence_gaps/gaps"] != 1 {
+		t.Fatalf("capture samples = %+v", samples)
+	}
+	if len(records) != 1 || records[0].Level != "warn" || records[0].Fields["drop_policy"] != "drop_oldest" {
+		t.Fatalf("capture log = %+v", records)
+	}
+}
 
 // recordingDiagnosticSink is a minimal SessionDiagnosticSink test double that
 // records every record it receives, so a test can assert exactly what a real

@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
@@ -125,6 +126,7 @@ func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, outp
 		InputPresent:          cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
 		OutputPresent:         cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
 		FeedbackWarningWriter: cmd.ErrOrStderr(),
+		Observability:         c.observability,
 	}
 	if !interactiveDevices {
 		return request
@@ -354,6 +356,7 @@ type SessionCommand struct {
 	rtcRuntimeFactory         services.SessionRTCRuntimeFactory
 	clockSource               platformclock.Source
 	runtimeObserver           services.SessionRuntimeObserver
+	observability             observability.Dependencies
 	deviceRegistry            audio.DeviceRegistry
 	imagePaths                []string
 }
@@ -485,17 +488,11 @@ func NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRunti
 	deviceRegistry audio.DeviceRegistry,
 	rtcRuntimeFactory services.SessionRTCRuntimeFactory,
 ) *SessionCommand {
-	return &SessionCommand{
-		askFlags:                  askFlags,
-		globalFlags:               globalFlags,
-		toolExecutorOverride:      toolExecutorOverride,
-		sessionInferencerOverride: sessionInferencerOverride,
-		sessionToolCapabilities:   sessionToolCapabilities,
-		rtcRuntimeFactory:         rtcRuntimeFactory,
-		clockSource:               clockSource,
-		runtimeObserver:           runtimeObserver,
-		deviceRegistry:            deviceRegistry,
-	}
+	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntimeAndObservability(
+		askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride,
+		clockSource, runtimeObserver, sessionToolCapabilities, deviceRegistry,
+		rtcRuntimeFactory, nil, nil,
+	)
 }
 
 // SetSessionStreamObserver adds an optional observer for deltas consumed by a

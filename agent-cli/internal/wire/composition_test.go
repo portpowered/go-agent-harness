@@ -19,6 +19,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -89,6 +90,20 @@ func (c *recordingClock) Now() time.Time { return c.now }
 type recordingSessionRuntimeObserver struct{}
 
 func (recordingSessionRuntimeObserver) ObserveSessionRuntime(SessionRuntimeObservation) {}
+
+type recordingMetricSampler struct{ samples []observability.MetricSample }
+
+func (s *recordingMetricSampler) Sample(_ context.Context, sample observability.MetricSample) error {
+	s.samples = append(s.samples, sample)
+	return nil
+}
+
+type recordingLogger struct{ records []observability.LogRecord }
+
+func (l *recordingLogger) Log(_ context.Context, record observability.LogRecord) error {
+	l.records = append(l.records, record)
+	return nil
+}
 
 type recordingInferencer struct {
 	calls    int
@@ -174,6 +189,8 @@ func validCompositionValues() compositionValues {
 		audioSource:     &recordingAudioSource{},
 		audioSink:       &recordingAudioSink{},
 		clockSource:     &recordingClock{now: time.Unix(123, 0)},
+		metricSampler:   &recordingMetricSampler{},
+		logger:          &recordingLogger{},
 	}
 }
 
@@ -281,7 +298,7 @@ func TestDefaultSessionRTCRuntimeCompositionConstructsLazily(t *testing.T) {
 	}
 	composition.mu.Unlock()
 
-	runtime, err := provideSessionRTCRuntimeFactory(components)(services.SessionRuntimeSelection{
+	runtime, err := provideSessionRTCRuntimeFactory(components, observability.NewNoopMetricSampler(), observability.NewNoopLogger())(services.SessionRuntimeSelection{
 		Transport:         services.SessionTransportWebRTC,
 		SignalingEndpoint: "loopback://lazy",
 		MediaSource:       "fixture://lazy",
@@ -444,6 +461,28 @@ func TestCompositionClock_DefaultsThroughEnsureAndPreservesSuppliedIdentity(t *t
 	}
 }
 
+func TestObservabilityPortSwapsReachGeneratedGraphWithExactIdentity(t *testing.T) {
+	sampler := &recordingMetricSampler{}
+	logger := &recordingLogger{}
+	var observation assemblyObservation
+	root, err := initializeAgentCLIWithPorts(true, observation.record,
+		NewPortSwap(PortMetricSampler, sampler),
+		NewPortSwap(PortLogger, logger),
+	)
+	if err != nil || root == nil {
+		t.Fatalf("initialize with observability ports: root=%v err=%v", root, err)
+	}
+	if observation.calls != 1 {
+		t.Fatalf("assembly observation calls = %d, want 1", observation.calls)
+	}
+	if observation.values.metricSampler != sampler || observation.values.logger != logger {
+		t.Fatalf("observability identity changed: sampler=%p/%p logger=%p/%p", observation.values.metricSampler, sampler, observation.values.logger, logger)
+	}
+	if observation.values.defaultCalls[PortMetricSampler] != 0 || observation.values.defaultCalls[PortLogger] != 0 {
+		t.Fatalf("displaced observability defaults were constructed: %+v", observation.values.defaultCalls)
+	}
+}
+
 func TestValidateDependencies_RejectsEveryRequiredLivePortByName(t *testing.T) {
 	requiredCount := 0
 	for _, definition := range livePortDefinitions() {
@@ -600,6 +639,8 @@ func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 				reflect.TypeOf((*AudioSink)(nil)).Elem(),
 				reflect.TypeOf((*Clock)(nil)).Elem(),
 				reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem(),
+				reflect.TypeOf((*MetricSampler)(nil)).Elem(),
+				reflect.TypeOf((*Logger)(nil)).Elem(),
 				reflect.TypeOf((*transport.Dialer)(nil)).Elem():
 				if definition.descriptor.Name == PortTransportDialer {
 					if got := replacement.(*recordingDialer).dials.Load(); got != 0 {
@@ -692,6 +733,10 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 		return &recordingClock{now: time.Unix(456, 0)}
 	case portType == reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem():
 		return recordingSessionRuntimeObserver{}
+	case portType == reflect.TypeOf((*MetricSampler)(nil)).Elem():
+		return &recordingMetricSampler{}
+	case portType == reflect.TypeOf((*Logger)(nil)).Elem():
+		return &recordingLogger{}
 	case portType == reflect.TypeOf((*transport.Dialer)(nil)).Elem():
 		return &recordingDialer{}
 	default:

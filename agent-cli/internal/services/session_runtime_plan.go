@@ -392,9 +392,18 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// The playback-overflow observer's sink is resolved (never trusted as-is)
 	// so an omitted SessionRunOptions.Diagnostics can no longer make a real
 	// device overflow invisible; see resolvePlaybackDiagnosticSink.
+	observabilityDependencies := opts.Observability
+	if observabilityDependencies.MetricSampler == nil && observabilityDependencies.Logger == nil {
+		observabilityDependencies = plan.rtcDeviceRequest.Observability
+	}
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
+		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
+	)
+	plan.rtcDeviceRequest.CaptureObserver = combineRTCDeviceCaptureObservers(
+		plan.rtcDeviceRequest.CaptureObserver,
+		sessionCaptureObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
 	)
 	plan.selection = selection
 	plan.transport = selection.Transport
