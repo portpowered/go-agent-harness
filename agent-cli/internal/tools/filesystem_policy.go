@@ -34,13 +34,6 @@ func (e *filesystemAccessDeniedError) Unwrap() error {
 	return ErrFilesystemAccessDenied
 }
 
-func newFilesystemAccessDenied(message string) error {
-	return &filesystemAccessDeniedError{
-		message: message,
-		reason:  FilesystemRefusalOutsidePermittedRoots,
-	}
-}
-
 func newFilesystemAccessDeniedWithContext(workdir string, reason FilesystemRefusalReason, message string) error {
 	if reason == "" {
 		reason = FilesystemRefusalOutsidePermittedRoots
