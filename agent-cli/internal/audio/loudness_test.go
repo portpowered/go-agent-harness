@@ -172,10 +172,27 @@ func TestLoudnessNormalizerPeakSafetyOnFullScaleTransient(t *testing.T) {
 	if clipped := countClipped(out, audio.PCM16AnalysisClipSampleThreshold); clipped != 0 {
 		t.Fatalf("full-scale transient produced %d clipped samples after +7.3 dB normalization, want 0", clipped)
 	}
-	for _, s := range out {
-		if s > 32767 || s < -32768 {
-			t.Fatalf("output sample %d outside int16 range", s)
+}
+
+// TestLoudnessNormalizerPeakSafetyAtLargestProductionGain repeats the
+// full-scale-transient safety check at +15.1 dB, the largest entry in the
+// production per-voice table (measured for "sage"; see
+// services.VoiceLoudnessGainDB). A boost this large is exactly the case
+// where the peak ceiling is most likely to engage, so it is the sharpest
+// test of the "must not clip" guarantee.
+func TestLoudnessNormalizerPeakSafetyAtLargestProductionGain(t *testing.T) {
+	norm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 15.1})
+	hot := make([]int16, 480)
+	for i := range hot {
+		if i%2 == 0 {
+			hot[i] = 32767
+		} else {
+			hot[i] = -32768
 		}
+	}
+	out := norm.Process(hot)
+	if clipped := countClipped(out, audio.PCM16AnalysisClipSampleThreshold); clipped != 0 {
+		t.Fatalf("full-scale transient produced %d clipped samples after +15.1 dB normalization, want 0", clipped)
 	}
 }
 
