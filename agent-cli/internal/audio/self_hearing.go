@@ -307,6 +307,22 @@ func (d *PCM16SelfHearingDetector) BufferStats() PCM16SelfHearingBufferStats {
 	}
 }
 
+// ResetCapture drops retained microphone samples while preserving the
+// capture timeline cursor. Runtime gates use it after a disposition so a new
+// capture window cannot be classified from stale evidence that preceded the
+// disposition.
+func (d *PCM16SelfHearingDetector) ResetCapture() {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return
+	}
+	d.capture.reset()
+}
+
 // ObservePlayback records exactly the PCM accepted by the local speaker.
 // Callers that need cancellation should use ObservePlaybackContext.
 func (d *PCM16SelfHearingDetector) ObservePlayback(frame PCM16TimedFrame) error {
@@ -506,6 +522,38 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 		Start:                 interval.Start,
 		End:                   interval.End,
 	}
+	sourceWindow := source.Samples[sourceStartIndex:sourceEndIndex]
+	// Lags whose geometric overlap is shorter than the minimum evidence can
+	// never confirm self-hearing. Excluding them before the Pearson scan keeps
+	// the live gate bounded in CPU as well as storage, while preserving the
+	// detector's configured lag semantics for every eligible candidate.
+	minimumEvidenceLag := minimumSamples - len(sourceWindow) - receivedIntervalStart
+	maximumEvidenceLag := len(received.Samples) - minimumSamples - receivedIntervalStart
+	if minimumEvidenceLag > maximumEvidenceLag {
+		probeLag := -receivedIntervalStart
+		if probeLag < minLagSamples {
+			probeLag = minLagSamples
+		}
+		if probeLag > maxLagSamples {
+			probeLag = maxLagSamples
+		}
+		evidenceSamples := pairedNonSilentSamples(sourceWindow, received.Samples, receivedIntervalStart+probeLag, threshold)
+		observation.Measurement = measurement
+		observation.EvidenceSamples = evidenceSamples
+		observation.EvidenceDuration = samplesToDuration(evidenceSamples, rate)
+		if evidenceSamples == 0 {
+			observation.Classification = PCM16SelfHearingNoEvidence
+		} else {
+			observation.Classification = PCM16SelfHearingInsufficientEvidence
+		}
+		return observation
+	}
+	if minLagSamples < minimumEvidenceLag {
+		minLagSamples = minimumEvidenceLag
+	}
+	if maxLagSamples > maximumEvidenceLag {
+		maxLagSamples = maximumEvidenceLag
+	}
 	foundSigned := false
 	foundAbsolute := false
 	bestEvidenceSamples := 0
@@ -543,7 +591,7 @@ func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation 
 			}
 		},
 		func(lagSamples int) (float64, int) {
-			return normalizedCorrelationAtLag(source.Samples[sourceStartIndex:sourceEndIndex], nil, received.Samples, receivedIntervalStart+lagSamples, threshold)
+			return normalizedCorrelationAtLag(sourceWindow, nil, received.Samples, receivedIntervalStart+lagSamples, threshold)
 		},
 	)
 	if anyEvidenceSamples == 0 {

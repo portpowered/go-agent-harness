@@ -49,8 +49,9 @@ func (e *RTCDeviceSinkError) Unwrap() error {
 // an incoming RTC media endpoint into it. The RTC endpoint remains
 // caller-owned; Close only stops this sink and releases its device.
 type RTCDeviceSink struct {
-	sink *audio.DeviceSink
-	id   audio.DeviceID
+	sink     *audio.DeviceSink
+	id       audio.DeviceID
+	observer rtcDevicePlaybackObserver
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelCauseFunc
@@ -137,8 +138,15 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		// ReadFrame returns. Keep a private copy at this boundary so the device
 		// adapter can never observe storage owned by the RTC implementation.
 		samples := append([]int16(nil), frame.Samples...)
-		if err := s.sink.WriteFrame(operationCtx, samples); err != nil {
-			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
+		write := func() error { return s.sink.WriteFrame(operationCtx, samples) }
+		var writeErr error
+		if s.observer != nil {
+			writeErr = s.observer.WritePlayback(operationCtx, samples, write)
+		} else {
+			writeErr = write()
+		}
+		if writeErr != nil {
+			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: writeErr}
 		}
 	}
 }

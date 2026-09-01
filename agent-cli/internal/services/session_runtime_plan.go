@@ -299,6 +299,11 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding
+	// Replay preserves the selected device pumps for lifecycle/round-trip
+	// callers, but its recorded media is not a live acoustic topology. Keep the
+	// explicit bypass at the binding boundary so replayed provider output cannot
+	// be mistaken for speaker-to-microphone feedback.
+	plan.rtcDeviceRequest.BypassSelfHearing = plan.rtcDeviceRequest.BypassSelfHearing || opts.ReplayPath != ""
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
 	// tool execution is enabled. The read_image binding is cloned per session
