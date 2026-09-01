@@ -514,8 +514,12 @@ func validateInjectedLiveSession(opts SessionRunOptions) error {
 		_, err := resolveGrokSessionConfig(opts)
 		return err
 	default:
-		return fmt.Errorf("--record supports session providers %q and %q; got %q", sessionProviderGrok, sessionProviderOpenAI, provider)
+		return unsupportedRealtimeSessionProviderError(provider)
 	}
+}
+
+func unsupportedRealtimeSessionProviderError(provider string) error {
+	return fmt.Errorf("unsupported realtime session provider %q; supported providers are %q and %q", provider, sessionProviderOpenAI, sessionProviderGrok)
 }
 
 func missingSessionProviderError() error {

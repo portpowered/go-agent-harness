@@ -77,7 +77,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 		grokSessionCfg, err = resolveGrokSessionConfig(opts)
 		model = grokSessionCfg.Model
 	default:
-		return sessionRuntimePlan{}, fmt.Errorf("--browser-tools live sessions require provider %q or %q; got %q", sessionProviderOpenAI, sessionProviderGrok, provider)
+		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
 	}
 	if err != nil {
 		return sessionRuntimePlan{}, err

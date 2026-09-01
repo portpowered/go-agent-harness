@@ -411,7 +411,7 @@ func TestSessionBrowserToolsClosesTransferredCapabilityOnPlanningFailure(t *test
 	command.SetArgs([]string{"--browser-tools=webmcp", "--provider=unsupported-provider"})
 
 	err := command.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "require provider") {
+	if err == nil || !strings.Contains(err.Error(), `unsupported realtime session provider "unsupported-provider"`) || !strings.Contains(err.Error(), `supported providers are "openai" and "grok"`) {
 		t.Fatalf("planning error = %v, want unsupported browser live provider error", err)
 	}
 	if closeCalls != 1 {

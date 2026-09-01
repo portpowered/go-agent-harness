@@ -586,10 +586,15 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 }
 
 func planRecordSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	if strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI) {
+	provider := effectiveSessionProvider(opts)
+	switch provider {
+	case sessionProviderOpenAI:
 		return planOpenAIRecordRuntime(opts, factory)
+	case sessionProviderGrok:
+		return planGrokRecordRuntime(opts, factory)
+	default:
+		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
 	}
-	return planGrokRecordRuntime(opts, factory)
 }
 
 func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {

@@ -109,8 +109,39 @@ func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T)
 	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return &stubRuntimeDialer{id: "unused"} },
 	})
-	if err == nil || !strings.Contains(err.Error(), "--browser-tools") || !strings.Contains(err.Error(), config.ProviderGrok) || !strings.Contains(err.Error(), config.ProviderOpenAI) {
+	want := unsupportedRealtimeSessionProviderError("unsupported-provider").Error()
+	if err == nil || err.Error() != want {
 		t.Fatalf("unsupported browser provider error = %v", err)
+	}
+}
+
+func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T) {
+	const provider = "unsupported-provider"
+	tests := []struct {
+		name string
+		opts SessionRunOptions
+	}{
+		{
+			name: "browser tools",
+			opts: SessionRunOptions{Provider: provider, BrowserToolsEnabled: true},
+		},
+		{
+			name: "recording",
+			opts: SessionRunOptions{Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+		},
+	}
+
+	want := unsupportedRealtimeSessionProviderError(provider).Error()
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := planSessionRuntimeWithFactory(testCase.opts, sessionRuntimeFactory{})
+			if err == nil {
+				t.Fatal("unsupported provider unexpectedly planned")
+			}
+			if err.Error() != want {
+				t.Fatalf("unsupported provider error = %q, want %q", err, want)
+			}
+		})
 	}
 }
 
