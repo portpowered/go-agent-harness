@@ -3,8 +3,8 @@
   "platform": "mac-arm64",
   "version": "152.0.7977.64",
   "revision": "1669021",
-  "manifestURL": "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json",
-  "manifestRetrievedAt": "2026-08-28T08:19:47Z",
+  "manifestURL": "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json",
+  "manifestRetrievedAt": "2026-09-01T22:34:10Z",
   "downloadURL": "https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/mac-arm64/chrome-mac-arm64.zip",
   "archiveSHA256": "10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f",
   "executable": "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"

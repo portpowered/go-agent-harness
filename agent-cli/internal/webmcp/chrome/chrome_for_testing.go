@@ -57,6 +57,7 @@ type ChromeForTestingLock struct {
 // needed to revalidate the repository pin before a download.
 type ChromeForTestingManifest struct {
 	Channels map[string]ChromeForTestingChannel `json:"channels"`
+	Versions []ChromeForTestingChannel          `json:"versions"`
 }
 
 // ChromeForTestingChannel describes one official Chrome for Testing channel.
@@ -133,8 +134,8 @@ func (a *ChromeForTestingAcquirer) AcquirePinnedChrome(ctx context.Context, requ
 	if err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("manifest_unavailable", err)
 	}
-	channel, ok := manifest.Channels[lock.Channel]
-	if !ok || channel.Channel != lock.Channel || channel.Version != lock.Version || channel.Revision != lock.Revision {
+	channel, ok := matchingChromeForTestingManifestEntry(manifest, lock)
+	if !ok {
 		return ChromeExecutable{}, newChromeForTestingError("manifest_mismatch", errors.New("official chrome for testing manifest does not match the lock"))
 	}
 	manifestDownloadURL := ""
@@ -158,6 +159,18 @@ func (a *ChromeForTestingAcquirer) AcquirePinnedChrome(ctx context.Context, requ
 		cacheDir = defaultChromeForTestingCacheDir()
 	}
 	return a.acquireCached(ctx, client, lock, platform, requiredMajor, cacheDir)
+}
+
+func matchingChromeForTestingManifestEntry(manifest ChromeForTestingManifest, lock ChromeForTestingLock) (ChromeForTestingChannel, bool) {
+	if channel, ok := manifest.Channels[lock.Channel]; ok && channel.Channel == lock.Channel && channel.Version == lock.Version && channel.Revision == lock.Revision {
+		return channel, true
+	}
+	for _, version := range manifest.Versions {
+		if version.Version == lock.Version && version.Revision == lock.Revision {
+			return version, true
+		}
+	}
+	return ChromeForTestingChannel{}, false
 }
 
 // LoadChromeForTestingLock reads and validates the JSON shape of the pin. It
