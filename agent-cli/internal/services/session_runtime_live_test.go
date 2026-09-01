@@ -62,15 +62,140 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 	}
 }
 
+func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *testing.T) {
+	dialer := &stubRuntimeDialer{id: "browser-openai-default"}
+	var gotConfig config.OpenAIConfig
+	factory := sessionRuntimeFactory{
+		newDefaultLiveDialer: func() transport.Dialer { return dialer },
+		newOpenAISessionWithTools: func(cfg config.OpenAIConfig, _ string, gotDialer transport.Dialer, _ []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+			if gotDialer != dialer {
+				t.Fatalf("browser default inferencer dialer = %v, want factory-owned dialer", gotDialer)
+			}
+			gotConfig = cfg
+			return &scriptedSessionInferencer{}, nil
+		},
+	}
+	loaded := &config.Config{
+		Model: config.ModelConfig{
+			Provider: config.ProviderOpenRouter,
+			OpenRouter: &config.OpenAIConfig{
+				Model: config.DefaultModelModel,
+			},
+		},
+	}
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		BrowserToolsEnabled: true,
+		LoadedConfig:        loaded,
+		APIKey:              "openai-default-key",
+		Prompt:              "use the browser",
+		ToolDefinitions:     []messages.ToolDefinition{{Name: "browser_test"}},
+	}, factory)
+	if err != nil {
+		t.Fatalf("plan browser default runtime: %v", err)
+	}
+	if plan.provider != config.ProviderOpenAI || plan.model != openAIRealtimeModel {
+		t.Fatalf("browser default plan identity = provider:%q model:%q, want openai/%q", plan.provider, plan.model, openAIRealtimeModel)
+	}
+	if gotConfig.Model != openAIRealtimeModel || gotConfig.APIKey != "openai-default-key" {
+		t.Fatalf("browser default provider config = %#v, want realtime OpenAI config", gotConfig)
+	}
+}
+
 func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T) {
 	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
-		Provider:            config.ProviderOpenRouter,
+		Provider:            "unsupported-provider",
 		BrowserToolsEnabled: true,
 	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return &stubRuntimeDialer{id: "unused"} },
 	})
-	if err == nil || !strings.Contains(err.Error(), "--browser-tools") || !strings.Contains(err.Error(), config.ProviderGrok) || !strings.Contains(err.Error(), config.ProviderOpenAI) {
+	want := unsupportedRealtimeSessionProviderError("unsupported-provider").Error()
+	if err == nil || err.Error() != want {
 		t.Fatalf("unsupported browser provider error = %v", err)
+	}
+}
+
+func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T) {
+	const provider = "unsupported-provider"
+	tests := []struct {
+		name string
+		opts SessionRunOptions
+	}{
+		{
+			name: "browser tools",
+			opts: SessionRunOptions{Provider: provider, BrowserToolsEnabled: true},
+		},
+		{
+			name: "recording",
+			opts: SessionRunOptions{Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+		},
+	}
+
+	want := unsupportedRealtimeSessionProviderError(provider).Error()
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := planSessionRuntimeWithFactory(testCase.opts, sessionRuntimeFactory{})
+			if err == nil {
+				t.Fatal("unsupported provider unexpectedly planned")
+			}
+			if err.Error() != want {
+				t.Fatalf("unsupported provider error = %q, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T) {
+	recordPath := filepath.Join(t.TempDir(), "default-openai.session.json")
+	liveDialer := &stubRuntimeDialer{id: "record-openai-default-live"}
+	recordingDialer := &browserRecordingDialer{provider: config.ProviderOpenAI, model: openAIRealtimeModel}
+	var gotConfig config.OpenAIConfig
+	var gotDialer transport.Dialer
+	factory := sessionRuntimeFactory{
+		newDefaultLiveDialer: func() transport.Dialer { return liveDialer },
+		newRecordingDialer: func(inner transport.Dialer, provider, model string) sessionRecordingDialer {
+			if provider != config.ProviderOpenAI || model != openAIRealtimeModel {
+				t.Fatalf("record default metadata = (%q, %q), want (%q, %q)", provider, model, config.ProviderOpenAI, openAIRealtimeModel)
+			}
+			recordingDialer.inner = inner
+			return recordingDialer
+		},
+		newOpenAISessionWithTools: func(cfg config.OpenAIConfig, _ string, dialer transport.Dialer, _ []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+			gotConfig = cfg
+			gotDialer = dialer
+			return &scriptedSessionInferencer{}, nil
+		},
+	}
+	loaded := &config.Config{
+		Model: config.ModelConfig{
+			Provider: config.ProviderOpenRouter,
+			OpenRouter: &config.OpenAIConfig{
+				Model: config.DefaultModelModel,
+			},
+		},
+	}
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		RecordPath:   recordPath,
+		LoadedConfig: loaded,
+		APIKey:       "openai-default-key",
+		Prompt:       "answer after the audio turn",
+		AudioInputs:  []ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}},
+	}, factory)
+	if err != nil {
+		t.Fatalf("plan record default runtime: %v", err)
+	}
+	if plan.mode != sessionRuntimeModeRecordOpenAI || plan.provider != config.ProviderOpenAI || plan.model != openAIRealtimeModel {
+		t.Fatalf("record default plan identity = mode:%q provider:%q model:%q", plan.mode, plan.provider, plan.model)
+	}
+	if !plan.loop.RequireSessionUpdated {
+		t.Fatal("record default audio plan did not retain OpenAI SESSION.UPDATED requirement")
+	}
+	if gotConfig.Model != openAIRealtimeModel || gotConfig.APIKey != "openai-default-key" {
+		t.Fatalf("record default provider config = %#v, want realtime OpenAI config", gotConfig)
+	}
+	if gotDialer != recordingDialer || recordingDialer.inner != liveDialer {
+		t.Fatalf("record default dialer chain = provider:%T inner:%T, want recording over live", gotDialer, recordingDialer.inner)
 	}
 }
 

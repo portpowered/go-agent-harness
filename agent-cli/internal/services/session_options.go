@@ -500,7 +500,8 @@ func isJSONCapturePath(path string) bool {
 }
 
 func validateInjectedLiveSession(opts SessionRunOptions) error {
-	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	provider := effectiveSessionProvider(opts)
+	opts.Provider = provider
 	if provider == "" {
 		return missingSessionProviderError()
 	}
@@ -513,8 +514,12 @@ func validateInjectedLiveSession(opts SessionRunOptions) error {
 		_, err := resolveGrokSessionConfig(opts)
 		return err
 	default:
-		return fmt.Errorf("--record supports session providers %q and %q; got %q", sessionProviderGrok, sessionProviderOpenAI, effectiveSessionProvider(opts))
+		return unsupportedRealtimeSessionProviderError(provider)
 	}
+}
+
+func unsupportedRealtimeSessionProviderError(provider string) error {
+	return fmt.Errorf("unsupported realtime session provider %q; supported providers are %q and %q", provider, sessionProviderOpenAI, sessionProviderGrok)
 }
 
 func missingSessionProviderError() error {
@@ -523,20 +528,45 @@ func missingSessionProviderError() error {
 
 func effectiveSessionProvider(opts SessionRunOptions) string {
 	if strings.TrimSpace(opts.Provider) != "" {
-		return opts.Provider
+		return resolveRealtimeSessionProvider(opts, nil)
 	}
 	if opts.LoadedConfig != nil {
-		return opts.LoadedConfig.Model.Provider
+		return resolveRealtimeSessionProvider(opts, opts.LoadedConfig)
 	}
 	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
 	if err != nil {
-		return ""
+		return resolveRealtimeSessionProvider(opts, nil)
 	}
 	loadedCfg, err := storage.Load()
 	if err != nil {
-		return ""
+		return resolveRealtimeSessionProvider(opts, nil)
 	}
-	return loadedCfg.Model.Provider
+	return resolveRealtimeSessionProvider(opts, loadedCfg)
+}
+
+// resolveRealtimeSessionProvider applies the one provider policy shared by
+// every live session path. A command-line provider and the session-specific
+// persisted provider are explicit choices; the ordinary model provider is
+// used only when it is itself realtime-capable. One-shot defaults such as
+// openrouter therefore fall through to OpenAI without changing ask or chat.
+// Provider values are normalized at this boundary so downstream config
+// overrides and runtime planners see the same canonical identity.
+func resolveRealtimeSessionProvider(opts SessionRunOptions, cfg *config.Config) string {
+	if provider := strings.ToLower(strings.TrimSpace(opts.Provider)); provider != "" {
+		return provider
+	}
+	if cfg != nil && cfg.Session != nil {
+		if provider := strings.ToLower(strings.TrimSpace(cfg.Session.Provider)); provider != "" {
+			return provider
+		}
+	}
+	if cfg != nil {
+		switch provider := strings.ToLower(strings.TrimSpace(cfg.Model.Provider)); provider {
+		case sessionProviderOpenAI, sessionProviderGrok:
+			return provider
+		}
+	}
+	return sessionProviderOpenAI
 }
 
 func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error) {
@@ -551,9 +581,8 @@ func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error)
 			return config.GrokConfig{}, fmt.Errorf("failed to load config: %w", err)
 		}
 	}
-	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderGrok) {
-		return config.GrokConfig{}, missingSessionProviderError()
-	}
+	provider := resolveRealtimeSessionProvider(opts, loadedCfg)
+	opts.Provider = provider
 
 	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
 	if strings.TrimSpace(effective.Model.Provider) == "" {
@@ -588,9 +617,8 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 			return config.OpenAIConfig{}, fmt.Errorf("failed to load config: %w", err)
 		}
 	}
-	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderOpenAI) {
-		return config.OpenAIConfig{}, missingSessionProviderError()
-	}
+	provider := resolveRealtimeSessionProvider(opts, loadedCfg)
+	opts.Provider = provider
 
 	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
 	if strings.TrimSpace(effective.Model.Provider) == "" {

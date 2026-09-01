@@ -14,7 +14,8 @@ import (
 // audio-capable WebSocket inferencer and leaves device acquisition to the
 // common session plan runner.
 func planBareLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	provider := strings.ToLower(strings.TrimSpace(opts.Provider))
+	provider := effectiveSessionProvider(opts)
+	opts.Provider = provider
 	if provider != sessionProviderOpenAI && provider != sessionProviderGrok {
 		return sessionRuntimePlan{}, fmt.Errorf("bare live sessions require provider %q or %q; got %q", sessionProviderOpenAI, sessionProviderGrok, provider)
 	}
@@ -60,7 +61,8 @@ func browserToolsInteractiveLive(opts SessionRunOptions) bool {
 // runtime that the new admission path needs.
 func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	interactive := browserToolsInteractiveLive(opts)
-	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	provider := effectiveSessionProvider(opts)
+	opts.Provider = provider
 	var (
 		openAISessionCfg config.OpenAIConfig
 		grokSessionCfg   config.GrokConfig
@@ -75,7 +77,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 		grokSessionCfg, err = resolveGrokSessionConfig(opts)
 		model = grokSessionCfg.Model
 	default:
-		return sessionRuntimePlan{}, fmt.Errorf("--browser-tools live sessions require provider %q or %q; got %q", sessionProviderOpenAI, sessionProviderGrok, provider)
+		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
 	}
 	if err != nil {
 		return sessionRuntimePlan{}, err

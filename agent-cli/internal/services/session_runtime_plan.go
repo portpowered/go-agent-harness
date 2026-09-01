@@ -302,6 +302,13 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	}
 	scheduledAudioDispatch := scheduledAudioDispatchPolicyForOptions(opts)
 
+	// Resolve the provider once at the session boundary so every live mode
+	// (bare, browser-enabled, recorded, injected, and RTC) consumes the same
+	// realtime-capable policy. Replay keeps its capture-owned provider identity.
+	if opts.ReplayPath == "" {
+		opts.Provider = effectiveSessionProvider(opts)
+	}
+
 	selection, err := resolveSessionRuntimeSelection(opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -584,10 +591,15 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 }
 
 func planRecordSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
-	if strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI) {
+	provider := effectiveSessionProvider(opts)
+	switch provider {
+	case sessionProviderOpenAI:
 		return planOpenAIRecordRuntime(opts, factory)
+	case sessionProviderGrok:
+		return planGrokRecordRuntime(opts, factory)
+	default:
+		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
 	}
-	return planGrokRecordRuntime(opts, factory)
 }
 
 func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {

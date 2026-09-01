@@ -829,8 +829,8 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
 					err = executeSessionCommand(t, root, false)
-					if err == nil || !strings.Contains(err.Error(), "requires --provider grok") {
-						t.Fatalf("session without %q did not report the unavailable capability: %v", definition.descriptor.Name, err)
+					if err == nil || !strings.Contains(err.Error(), "openai realtime api key is missing") {
+						t.Fatalf("session without %q did not report the unavailable OpenAI capability: %v", definition.descriptor.Name, err)
 					}
 				})
 				t.Run("available_with_option", func(t *testing.T) {
