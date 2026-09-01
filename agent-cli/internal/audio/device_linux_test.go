@@ -155,6 +155,13 @@ func TestLinuxPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
 	}
 }
 
+func TestLinuxPlaybackBurstPreservesFIFO(t *testing.T) {
+	writer := &linuxOpenedDevice{direction: DirectionOutput, format: PCM16DeviceFormat(24000), playbackWake: make(chan struct{})}
+	testPacedPlaybackBackend(t, writer, func(raw []byte) {
+		writer.onData(raw, nil, FrameSize)
+	})
+}
+
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
 	device, _ := NewDevice(backend, direction.String()+":"+nativeID, name, direction)
 	return linuxDeviceRecord{Device: device, defaulted: defaulted}

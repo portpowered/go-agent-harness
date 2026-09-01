@@ -392,9 +392,12 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	}
 
 	var pumps sync.WaitGroup
+	var outputPumps sync.WaitGroup
 	pumps.Add(3)
+	outputPumps.Add(2)
 	go func() {
 		defer pumps.Done()
+		defer outputPumps.Done()
 		if err := pumpDuplexOutput(runCtx, stdout, normalized.Output, stdoutCapture, progress, startedAt, true); err != nil {
 			recordFailure(err)
 		}
@@ -403,6 +406,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	}()
 	go func() {
 		defer pumps.Done()
+		defer outputPumps.Done()
 		if err := pumpDuplexOutput(runCtx, stderr, normalized.ErrorOutput, stderrCapture, progress, startedAt, false); err != nil {
 			recordFailure(err)
 		}
@@ -454,6 +458,10 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 
 	waitDone := make(chan error, 1)
 	go func() {
+		// StdoutPipe and StderrPipe require their readers to reach EOF before
+		// Wait closes the pipe descriptors. Reaping concurrently can otherwise
+		// discard the child's final audio/output chunk under scheduler load.
+		outputPumps.Wait()
 		waitCount.Add(1)
 		waitDone <- child.Wait()
 	}()

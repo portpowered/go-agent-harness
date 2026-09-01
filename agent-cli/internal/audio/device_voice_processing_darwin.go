@@ -53,10 +53,12 @@ type voiceProcessingEndpoint struct {
 }
 
 var (
-	_ OpenedDevice         = (*voiceProcessingEndpoint)(nil)
-	_ DeviceFormatProvider = (*voiceProcessingEndpoint)(nil)
-	_ AudioSource          = (*voiceProcessingEndpoint)(nil)
-	_ AudioSink            = (*voiceProcessingEndpoint)(nil)
+	_ OpenedDevice                 = (*voiceProcessingEndpoint)(nil)
+	_ DeviceFormatProvider         = (*voiceProcessingEndpoint)(nil)
+	_ AudioSource                  = (*voiceProcessingEndpoint)(nil)
+	_ AudioSink                    = (*voiceProcessingEndpoint)(nil)
+	_ devicePlaybackWaiter         = (*voiceProcessingEndpoint)(nil)
+	_ devicePlaybackCapacityWaiter = (*voiceProcessingEndpoint)(nil)
 )
 
 type audioComponentDescription struct {
@@ -306,7 +308,7 @@ func (e *voiceProcessingIO) renderBuffers(actionFlags *uint32, frames uint32, li
 	e.mu.Lock()
 	if !e.closed.Load() {
 		read = e.playback.readPCM16(raw)
-		if e.playback.Snapshot().QueuedSamples == 0 {
+		if read > 0 {
 			e.signalPlaybackLocked()
 		}
 	}
@@ -338,6 +340,9 @@ func (e *voiceProcessingIO) captureInput(_ uintptr, actionFlags, timestamp uintp
 }
 
 func (e *voiceProcessingIO) signalPlaybackLocked() {
+	if e.playbackWake == nil {
+		e.playbackWake = make(chan struct{})
+	}
 	close(e.playbackWake)
 	e.playbackWake = make(chan struct{})
 }
@@ -429,7 +434,59 @@ func (h *voiceProcessingEndpoint) DiscardPlayback() int {
 	}
 	h.engine.mu.Lock()
 	defer h.engine.mu.Unlock()
-	return h.engine.playback.Discard()
+	discarded := h.engine.playback.Discard()
+	if discarded > 0 {
+		h.engine.signalPlaybackLocked()
+	}
+	return discarded
+}
+
+// WaitForPlaybackCapacity applies the same bounded high/low-watermark pacing
+// as the standalone CoreAudio and Linux backends. OpenAI can deliver hundreds
+// of milliseconds of PCM in one burst; without this capability DeviceSink
+// treats AUVoiceIO as an unpaced backend and its drop-oldest queue overflows.
+func (h *voiceProcessingEndpoint) WaitForPlaybackCapacity(ctx context.Context, samples int) error {
+	if h == nil || samples <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	low, high, err := PlaybackQueueWatermarks(h.format)
+	if err != nil {
+		return err
+	}
+	if samples > high {
+		return fmt.Errorf("%w: incoming playback chunk %d exceeds high watermark %d", ErrInvalidPlaybackQueue, samples, high)
+	}
+	throttled := false
+	for {
+		if h.closed.Load() {
+			return &ClosedError{Operation: "wait for playback capacity", Path: string(h.id)}
+		}
+		h.engine.mu.Lock()
+		if h.engine.closed.Load() {
+			h.engine.mu.Unlock()
+			return &ClosedError{Operation: "wait for playback capacity", Path: string(h.id)}
+		}
+		queued := h.engine.playback.Snapshot().QueuedSamples
+		if (!throttled && queued+samples <= high) || (throttled && queued <= low && queued+samples <= high) {
+			h.engine.mu.Unlock()
+			return nil
+		}
+		throttled = true
+		if h.engine.playbackWake == nil {
+			h.engine.playbackWake = make(chan struct{})
+		}
+		wake := h.engine.playbackWake
+		h.engine.mu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func (h *voiceProcessingEndpoint) WaitForPlayback(ctx context.Context) error {
@@ -459,6 +516,11 @@ func (h *voiceProcessingEndpoint) WaitForPlayback(ctx context.Context) error {
 func (h *voiceProcessingEndpoint) Close() error {
 	h.closeOnce.Do(func() {
 		h.closed.Store(true)
+		if h.direction == DirectionOutput {
+			h.engine.mu.Lock()
+			h.engine.signalPlaybackLocked()
+			h.engine.mu.Unlock()
+		}
 		if h.direction == DirectionInput {
 			h.engine.closeCapture()
 		}

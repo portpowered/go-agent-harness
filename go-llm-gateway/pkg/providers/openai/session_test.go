@@ -30,7 +30,10 @@ type mockWebSocketConn struct {
 
 func newMockWebSocketConn() *mockWebSocketConn {
 	return &mockWebSocketConn{
-		readBlock:       make(chan struct{}),
+		// Retain one wake between the queue check and the blocking receive in
+		// ReadMessage. An unbuffered channel combined with the nonblocking send
+		// in addServerEvent can otherwise lose that wake in the scheduling gap.
+		readBlock:       make(chan struct{}, 1),
 		clientMessageCh: make(chan []byte, 64),
 		clientWriteCh:   make(chan struct{}, 1),
 	}

@@ -280,3 +280,26 @@ jobs:
 
       - name: Validate GoReleaser configuration
         run: go run github.com/goreleaser/goreleaser/v2@v2.17.0 check --config .goreleaser.yaml
+
+  windows-audio-portable:
+    name: CI (Windows audio portable)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run Windows audio queue regressions
+        run: go test ./agent-cli/internal/audio -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1
