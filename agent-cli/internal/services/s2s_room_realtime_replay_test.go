@@ -358,8 +358,9 @@ func roomRealtimeReplaySessionUpdate(t *testing.T, model, instructions string) [
 			"instructions":      instructions,
 			"audio": map[string]any{
 				"input": map[string]any{
-					"format":        map[string]any{"type": "audio/pcm", "rate": 24000},
-					"transcription": map[string]any{"model": "gpt-live-transcribe"},
+					"format":         map[string]any{"type": "audio/pcm", "rate": 24000},
+					"turn_detection": map[string]any{"type": "server_vad"},
+					"transcription":  map[string]any{"model": "gpt-live-transcribe"},
 				},
 				"output": map[string]any{
 					"format": map[string]any{"type": "audio/pcm", "rate": 24000},

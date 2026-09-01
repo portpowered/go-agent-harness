@@ -90,6 +90,26 @@ func WithSessionInputAudioTranscription(policy models.InputAudioTranscriptionCon
 	}
 }
 
+// WithSessionTurnDetection sets the resolved server-side voice-activity
+// detection policy for every session connection. The value is copied so
+// callers can safely reuse or mutate their input after configuring the
+// inferencer. A nil policy leaves the connection without a turn-detection
+// policy, matching a caller that deliberately never resolved one.
+func WithSessionTurnDetection(policy *models.TurnDetectionConfig) SessionOption {
+	return func(si *SessionGatewayInferencer) {
+		if policy == nil {
+			si.request.Config.TurnDetection = nil
+			return
+		}
+		turnDetection := *policy
+		if policy.CreateResponse != nil {
+			createResponse := *policy.CreateResponse
+			turnDetection.CreateResponse = &createResponse
+		}
+		si.request.Config.TurnDetection = &turnDetection
+	}
+}
+
 // NewSessionGatewayInferencer creates a bridge that delegates session
 // establishment to a gateway-owned session adapter while preserving
 // messages.SessionInferencer as the consumer-facing contract.

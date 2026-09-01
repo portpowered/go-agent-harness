@@ -611,13 +611,26 @@ func retryScheduledRateLimitedResponse(ctx context.Context, sessionDone <-chan s
 // shouldDispatchScheduledAudioForMessage identifies stream boundaries that can
 // make the next scheduled input eligible. Completion-gated scheduling keeps
 // its existing session/open, configuration, terminal, and tool-lifecycle
-// wakeups. Active-response scheduling additionally wakes at the first live
-// response boundary so the model runner can own the normal barge-in path.
+// wakeups.
+//
+// Active-response scheduling additionally wakes once the active response has
+// delivered real audio (AUDIO.DELTA), not at MESSAGE.START/AUDIO.START. A
+// provider's response.created and its first audio delta are separate ordered
+// events with real latency between them; releasing the next scheduled input
+// at response.created let the model runner's own barge-in check (gated on
+// "is a response in flight", true from MESSAGE.START) fire RESPONSE.CANCEL
+// before any assistant audio existed to interrupt -- a customer-facing
+// interruption latency of a few milliseconds that cancelled nothing audible.
+// Waiting for the first audio delta makes the model runner's cancel a genuine
+// mid-utterance interruption instead. A response that never produces audio
+// (for example a tool-only turn) still releases the next input through the
+// unconditional MESSAGE.END wakeup above, so this cannot deadlock waiting for
+// audio that will never arrive.
 func shouldDispatchScheduledAudioForMessage(msg messages.StreamMessage, policy ScheduledAudioDispatchPolicy) bool {
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen, messages.StreamTypeMessageEnd, messages.StreamTypeSessionUpdated:
 		return true
-	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+	case messages.StreamTypeAudioDelta:
 		return policy == ScheduledAudioDispatchActiveResponse
 	default:
 		return false

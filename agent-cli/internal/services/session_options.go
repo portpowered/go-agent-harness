@@ -679,7 +679,15 @@ func NewGrokSessionInferencerWithToolsAndOptions(sessionCfg config.GrokConfig, t
 	if err != nil {
 		return nil, fmt.Errorf("create Grok session gateway: %w", err)
 	}
-	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	// Every Grok realtime session needs a real server VAD policy so barge-in
+	// stays possible; this is the single construction boundary shared by the
+	// record, replay, live, WebRTC, and device-probe callers, so applying the
+	// shared default here (instead of only on the bare-session path) closes
+	// the whole class for Grok in one place.
+	inferenceOpts := []inference.SessionOption{
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionTurnDetection(defaultRealtimeTurnDetection()),
+	}
 	if len(toolDefinitions) > 0 {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
 	}
@@ -724,7 +732,24 @@ func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscripti
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
-	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	// Every OpenAI realtime session needs a real server VAD policy so barge-in
+	// stays possible; this is the single construction boundary shared by the
+	// record, replay, live, WebRTC, and device-probe callers, so applying the
+	// shared default here (instead of only on the bare-session path) closes
+	// the whole class for OpenAI in one place. A caller that owns its own
+	// audio-turn boundaries (--audio-in*, oaiprovider.WithClientOwnedAudioTurnBoundaries)
+	// still overrides this to an explicit wire null downstream in
+	// buildRealtimeAudioConfig/buildLegacyRealtimeSessionUpdate: server_vad
+	// unconditionally auto-commits the input buffer at speech-stop regardless
+	// of create_response, which collides with that contract's own explicit
+	// commit (proved by the CLI integration test
+	// TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl).
+	// This default only takes effect for the ordinary (non-client-owned) VAD
+	// paths that construction reaches through this function.
+	inferenceOpts := []inference.SessionOption{
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionTurnDetection(defaultRealtimeTurnDetection()),
+	}
 	inferenceOpts = append(inferenceOpts, inference.WithSessionInputAudioTranscription(inputAudioTranscription))
 	if voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
@@ -818,7 +843,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 			inputAudioTranscription = *opts.InputAudioTranscription
 		}
 		config.InputAudioTranscription = &inputAudioTranscription
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		config.TurnDetection = cloneSessionTurnDetection(resolveEffectiveTurnDetection(opts))
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
@@ -841,7 +866,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
-		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		config.TurnDetection = cloneSessionTurnDetection(resolveEffectiveTurnDetection(opts))
 		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
 		if opts.InputAudioTranscription != nil {
 			inputAudioTranscription = *opts.InputAudioTranscription
@@ -862,6 +887,34 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}
+}
+
+// defaultRealtimeTurnDetection is the built-in server-side VAD policy applied
+// to every live realtime session that has no more specific resolution. It is
+// the same default ResolveBareSessionOptions has always used for the bare
+// path; every other construction path now shares it instead of leaving
+// turn_detection unset.
+func defaultRealtimeTurnDetection() *models.TurnDetectionConfig {
+	return &models.TurnDetectionConfig{Type: "server_vad"}
+}
+
+// resolveEffectiveTurnDetection is the single choke point NewLiveSessionInferencer
+// uses to decide the server VAD policy for every path that reaches it (bare
+// live, self-play, room participants, and browser-interactive live).
+// ResolveBareSessionOptions is the only caller that performs config-aware
+// resolution today, including honoring an explicit VAD opt-out by leaving
+// TurnDetection nil; its result is trusted as-is via the BareLive marker it
+// always sets alongside it. Every other caller reaches this function with a
+// nil TurnDetection because no path-specific resolver ever ran for it, so it
+// receives the same built-in default bare sessions use instead of silently
+// carrying turn_detection as nil onto the wire. This is deliberately generic:
+// it closes the whole class of "resolved only on the bare path" defects for
+// this option, not just today's instance.
+func resolveEffectiveTurnDetection(opts SessionRunOptions) *models.TurnDetectionConfig {
+	if opts.TurnDetection != nil || opts.BareLive {
+		return opts.TurnDetection
+	}
+	return defaultRealtimeTurnDetection()
 }
 
 func cloneSessionTurnDetection(policy *models.TurnDetectionConfig) *models.TurnDetectionConfig {
