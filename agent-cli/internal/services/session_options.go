@@ -399,9 +399,6 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
 		return err
 	}
-	if opts.RecordPath == "" && opts.ReplayPath == "" && !opts.BrowserToolsEnabled && !opts.BareLive {
-		return fmt.Errorf("agent session requires --record <file>.json or --replay <file>.json")
-	}
 	if opts.RecordPath != "" && opts.ReplayPath != "" {
 		return fmt.Errorf("agent session does not support --record and --replay together; choose one capture mode")
 	}

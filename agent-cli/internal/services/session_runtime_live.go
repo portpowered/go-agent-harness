@@ -104,7 +104,10 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{}, err
 	}
 	if inferencer == nil {
-		return sessionRuntimePlan{}, fmt.Errorf("--browser-tools live session provider %q returned no session inferencer", provider)
+		if opts.BrowserToolsEnabled {
+			return sessionRuntimePlan{}, fmt.Errorf("--browser-tools live session provider %q returned no session inferencer", provider)
+		}
+		return sessionRuntimePlan{}, fmt.Errorf("live session provider %q returned no session inferencer", provider)
 	}
 
 	return sessionRuntimePlan{
@@ -118,6 +121,76 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 			WaitForClose:             interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 			BrowserToolsInteractive:  interactive,
+			// The provider-backed constructor receives the stable definitions in
+			// its initial Realtime session configuration. Do not send a second
+			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;
+			// page-catalog changes remain result data and never re-advertise it.
+			AdvertiseToolDefinitions: false,
+			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && provider == sessionProviderOpenAI,
+		},
+	}, nil
+}
+
+// planLiveSessionRuntime plans a live session without wrapping its provider
+// transport in a capture recorder. Capture ownership is selected by the
+// caller's explicit --record/--replay path; an empty path is the intentional
+// no-capture mode.
+func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	var (
+		openAISessionCfg config.OpenAIConfig
+		grokSessionCfg   config.GrokConfig
+		model            string
+		err              error
+	)
+	switch provider {
+	case sessionProviderOpenAI:
+		openAISessionCfg, err = resolveOpenAIRealtimeSessionConfig(opts)
+		model = openAISessionCfg.Model
+	case sessionProviderGrok:
+		grokSessionCfg, err = resolveGrokSessionConfig(opts)
+		model = grokSessionCfg.Model
+	default:
+		return sessionRuntimePlan{}, unsupportedRealtimeSessionProviderError(provider)
+	}
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+
+	liveDialer := opts.WebSocketDialer
+	if liveDialer == nil && factory.newDefaultLiveDialer != nil {
+		liveDialer = factory.newDefaultLiveDialer()
+	}
+	if liveDialer == nil {
+		return sessionRuntimePlan{}, missingOwnedSessionDialerError(provider)
+	}
+
+	var inferencer messages.SessionInferencer
+	switch provider {
+	case sessionProviderOpenAI:
+		clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, clientOwnedAudio || opts.RTCDeviceBinding.inputSelected())
+		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
+	case sessionProviderGrok:
+		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
+	}
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if inferencer == nil {
+		return sessionRuntimePlan{}, fmt.Errorf("live session provider %q returned no session inferencer", provider)
+	}
+
+	return sessionRuntimePlan{
+		mode:       sessionRuntimeModeInjectedLive,
+		provider:   provider,
+		model:      model,
+		inferencer: inferencer,
+		loop: sessionLoopOptions{
+			Prompt:                   opts.Prompt,
+			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
+			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 			// The provider-backed constructor receives the stable definitions in
 			// its initial Realtime session configuration. Do not send a second
 			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;

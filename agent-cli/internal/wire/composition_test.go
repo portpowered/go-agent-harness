@@ -889,12 +889,22 @@ func executeAskCommand(t *testing.T, root *cli.AgentCLI) error {
 	return command.ExecuteContext(context.Background())
 }
 
+// executeSessionCommand drives a scripted single-turn session to exercise
+// the SessionInferencer port. It deliberately uses --prompt rather than
+// --record: since isRecordOnlyLiveInvocation (internal/cli/session.go)
+// restores implicit microphone/speaker devices for a bare --record
+// invocation, using --record here would route this generic port-swap
+// exerciser through real device resolution against the unswapped default
+// DeviceRegistry (audio.NewPlatformDeviceRegistry), which is empty/erroring
+// on a host or hermetic build with no audio hardware. --prompt names an
+// explicit scripted turn, so it is never treated as record-only-live and
+// never requests a device.
 func executeSessionCommand(t *testing.T, root *cli.AgentCLI, provider bool) error {
 	t.Helper()
 	configDir := t.TempDir()
 	args := []string{
 		"--config-dir", configDir,
-		"session", "--record", "capture.json",
+		"session", "--prompt", "composition test turn",
 	}
 	if provider {
 		args = append(args, "--provider", "grok", "--model", "test-model", "--api-key", "test-key")

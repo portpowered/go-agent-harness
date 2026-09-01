@@ -102,6 +102,118 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 	}
 }
 
+func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		provider  string
+		model     string
+		apiKey    string
+		configure func(*sessionRuntimeFactory, *transport.Dialer)
+	}{
+		{
+			name:     "openai",
+			provider: config.ProviderOpenAI,
+			model:    "gpt-realtime",
+			apiKey:   "openai-live-test-key",
+			configure: func(factory *sessionRuntimeFactory, gotDialer *transport.Dialer) {
+				factory.newOpenAISessionWithTools = func(_ config.OpenAIConfig, _ string, dialer transport.Dialer, _ []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+					*gotDialer = dialer
+					return &scriptedSessionInferencer{events: []messages.StreamMessage{
+						{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+					}}, nil
+				}
+			},
+		},
+		{
+			name:     "grok",
+			provider: config.ProviderGrok,
+			model:    "grok-live-test",
+			apiKey:   "grok-live-test-key",
+			configure: func(factory *sessionRuntimeFactory, gotDialer *transport.Dialer) {
+				factory.newGrokSessionWithTools = func(_ config.GrokConfig, dialer transport.Dialer, _ []messages.ToolDefinition) (messages.SessionInferencer, error) {
+					*gotDialer = dialer
+					return &scriptedSessionInferencer{events: []messages.StreamMessage{
+						{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+					}}, nil
+				}
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "must-not-be-created.session.json")
+			liveDialer := &stubRuntimeDialer{id: testCase.name + "-live"}
+			var gotDialer transport.Dialer
+			defaultDialerCalls := 0
+			recordingDialerCalls := 0
+			factory := sessionRuntimeFactory{
+				newDefaultLiveDialer: func() transport.Dialer {
+					defaultDialerCalls++
+					return liveDialer
+				},
+				newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
+					recordingDialerCalls++
+					return &stubRecordingDialer{}
+				},
+			}
+			testCase.configure(&factory, &gotDialer)
+			loaded := &config.Config{Model: config.ModelConfig{Provider: testCase.provider}}
+			if testCase.provider == config.ProviderOpenAI {
+				loaded.Model.OpenAI = &config.OpenAIConfig{Model: testCase.model, APIKey: testCase.apiKey}
+			} else {
+				loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
+			}
+
+			opts := SessionRunOptions{
+				Provider:        testCase.provider,
+				LoadedConfig:    loaded,
+				ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}},
+				ConfigDir:       filepath.Dir(destination),
+			}
+			if err := validateSessionRunOptions(opts); err != nil {
+				t.Fatalf("validate no-capture options: %v", err)
+			}
+			plan, err := planSessionRuntimeWithFactory(opts, factory)
+			if err != nil {
+				t.Fatalf("plan no-capture %s runtime: %v", testCase.provider, err)
+			}
+			if plan.mode != sessionRuntimeModeInjectedLive || plan.provider != testCase.provider || plan.model != testCase.model {
+				t.Fatalf("no-capture plan identity = mode:%q provider:%q model:%q", plan.mode, plan.provider, plan.model)
+			}
+			if plan.capturePath != "" || plan.captureClaim != nil || plan.flushCapture != nil || plan.flushCaptureTo != nil || plan.finalize != nil || plan.announce != "" {
+				t.Fatalf("no-capture plan owns capture lifecycle: %+v", plan)
+			}
+			if plan.loop.Prompt != opts.Prompt || !plan.loop.CloseAfterOpen || plan.loop.AdvertiseToolDefinitions {
+				t.Fatalf("no-capture plan changed live loop semantics: %+v", plan.loop)
+			}
+			if defaultDialerCalls != 1 || gotDialer != liveDialer {
+				t.Fatalf("live provider dialer = calls:%d dialer:%v, want one factory-owned live dialer", defaultDialerCalls, gotDialer)
+			}
+			if recordingDialerCalls != 0 {
+				t.Fatalf("no-capture planning constructed %d recording dialers", recordingDialerCalls)
+			}
+
+			var out bytes.Buffer
+			if err := plan.run(context.Background(), &out); err != nil {
+				t.Fatalf("run no-capture %s plan: %v", testCase.provider, err)
+			}
+			for _, unwanted := range []string{
+				"Starting " + testCase.provider + " session recording",
+				"Wrote session capture",
+				"agent session requires --record <file>.json or --replay <file>.json",
+			} {
+				if strings.Contains(out.String(), unwanted) {
+					t.Fatalf("no-capture output contains %q:\n%s", unwanted, out.String())
+				}
+			}
+			for _, path := range []string{destination, destination + ".lock"} {
+				if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+					t.Fatalf("no-capture run touched %q: stat error = %v", path, statErr)
+				}
+			}
+		})
+	}
+}
+
 func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T) {
 	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
 		Provider:            "unsupported-provider",

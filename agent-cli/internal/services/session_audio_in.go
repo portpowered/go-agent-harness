@@ -400,13 +400,11 @@ func validateSessionAudioInput(input SessionAudioInput) error {
 
 // validateSessionAudioInputFileExists is a lightweight existence preflight
 // for a file-backed --audio-in path. It intentionally runs before the
-// generic validateSessionRunOptions check (which requires --record or
-// --replay) so a missing --audio-in file is reported as a missing file
-// instead of being masked by that unrelated requirement — a bare `session
-// --audio-in <missing file>` invocation would otherwise report "requires
-// --record or --replay" and never reach the file-open code that would name
-// the real problem. Stdin ("-") and an injected test Source are exempt: there
-// is no filesystem path to check.
+// generic validateSessionRunOptions check so a missing --audio-in file is
+// reported as a missing file instead of being masked by provider setup — a
+// `session --audio-in <missing file>` invocation must reach the file-open code
+// that names the real problem. Stdin ("-") and an injected test Source are
+// exempt: there is no filesystem path to check.
 func validateSessionAudioInputFileExists(input SessionAudioInput) error {
 	if input.Source != nil || input.Path == "" || input.Path == "-" {
 		return nil

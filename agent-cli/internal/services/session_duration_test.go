@@ -128,8 +128,8 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	// the exit-code-must-mean-the-work-happened defect (session --prompt used
 	// to silently print help and exit 0 instead of doing the work); now that
 	// --prompt is correctly treated as an explicit session mode, `--prompt=`
-	// reaches real validation and fails with "requires --record or --replay"
-	// instead of printing help, so it no longer fits what this test checks.
+	// reaches live provider validation instead of printing help, so it no longer
+	// fits what this test checks.
 	binaryPath := filepath.Join(t.TempDir(), "agent")
 	build := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent")
 	build.Dir = moduleDir

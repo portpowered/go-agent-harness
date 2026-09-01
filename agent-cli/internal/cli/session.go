@@ -86,7 +86,11 @@ func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink
 	})
 }
 
-func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID, loadedConfig *config.Config, browserInteractive bool) services.RTCDeviceBindingRequest {
+// sessionRTCDeviceBinding resolves which audio devices the session should
+// open. interactiveDevices covers both live-session shapes that get implicit
+// default microphone/speaker devices: a --browser-tools interactive session
+// and a record-only-live invocation (see isRecordOnlyLiveInvocation).
+func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID, loadedConfig *config.Config, interactiveDevices bool) services.RTCDeviceBindingRequest {
 	request := services.RTCDeviceBindingRequest{
 		Registry:              c.deviceRegistry,
 		InputDevice:           input,
@@ -95,7 +99,7 @@ func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, outp
 		OutputPresent:         cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
 		FeedbackWarningWriter: cmd.ErrOrStderr(),
 	}
-	if !browserInteractive {
+	if !interactiveDevices {
 		return request
 	}
 	if !request.InputPresent && request.InputDevice == "" && loadedConfig != nil && loadedConfig.Session != nil {
@@ -539,9 +543,8 @@ var sessionModeFlagNames = []string{
 // list fell through to cmd.Help() with a nil error — including
 // --audio-in pointing at a file that does not exist, since the file-open
 // validation that would have reported it never ran. Folding the complete
-// list in here routes those invocations to real validation instead (e.g.
-// "agent session requires --record or --replay", or the actual --audio-in
-// file-not-found error).
+// list in here routes those invocations to real validation instead (e.g. live
+// provider setup or the actual --audio-in file-not-found error).
 func sessionHasExplicitMode(cmd *cobra.Command, args []string, imagePaths []string) bool {
 	if len(args) > 0 || len(imagePaths) > 0 {
 		return true
@@ -563,6 +566,32 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 	}
 	for _, name := range sessionModeFlagNames {
 		if cmd.Flags().Changed(name) {
+			return false
+		}
+	}
+	return true
+}
+
+// isRecordOnlyLiveInvocation reports whether --record is the only explicit
+// session mode flag present, with no prompt, file-audio, scheduled-turn,
+// image, or browser flag alongside it. This is the operator's flagship
+// shape: an otherwise-bare live microphone conversation that additionally
+// captures a side recording. Unlike a fully bare invocation (which admits
+// without needing --record at all), this deliberately keeps --record's
+// explicit-mode admission and capture-recording wiring; it only restores the
+// implicit microphone/speaker devices and the keep-open-until-provider-closes
+// semantics that bare mode gets. Without this, the mere presence of --record
+// silently dropped both, and the session closed within milliseconds of
+// opening instead of running the interactive conversation it was recording.
+func isRecordOnlyLiveInvocation(cmd *cobra.Command, args []string, imagePaths []string) bool {
+	if cmd == nil || len(args) > 0 || len(imagePaths) > 0 || hasSessionBrowserFlag(cmd) {
+		return false
+	}
+	if !cmd.Flags().Changed("record") {
+		return false
+	}
+	for _, name := range sessionModeFlagNames {
+		if name != "record" && cmd.Flags().Changed(name) {
 			return false
 		}
 	}
@@ -666,6 +695,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 			browserToolsInteractive := browserToolsAdmission(cmd) && !hasSessionMode
+			recordOnlyLive := isRecordOnlyLiveInvocation(cmd, args, c.imagePaths)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
@@ -774,12 +804,17 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				BrowserToolsEnabled:     !bareSession && browserConfigEnablesTools(loadedConfig),
 				BrowserToolsInteractive: browserToolsInteractive,
 				ToolDiagnostics:         sessionToolDiagnosticSink(cmd.ErrOrStderr()),
-				WaitForClose:            waitForClose,
-				StreamObserver:          c.streamObserver,
-				Clock:                   c.clockSource,
-				RuntimeObserver:         c.runtimeObserver,
-				AudioInTurnBarge:        audioInTurnBarge,
-				RTCDeviceBinding:        c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive),
+				// A record-only-live invocation gets the same
+				// keep-open-until-provider-closes semantics as bare mode: it is
+				// an interactive microphone conversation, not a scripted
+				// prompt/audio-in exchange, so it must not self-close as soon as
+				// the session opens (see isRecordOnlyLiveInvocation).
+				WaitForClose:     waitForClose || recordOnlyLive,
+				StreamObserver:   c.streamObserver,
+				Clock:            c.clockSource,
+				RuntimeObserver:  c.runtimeObserver,
+				AudioInTurnBarge: audioInTurnBarge,
+				RTCDeviceBinding: c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || recordOnlyLive),
 			}
 			if bareSession {
 				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)

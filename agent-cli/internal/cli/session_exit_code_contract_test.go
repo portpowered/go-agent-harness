@@ -59,8 +59,8 @@ func TestSessionHasExplicitModeMatrix(t *testing.T) {
 
 // TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem pins Instance 1: the
 // exact reproduced shape ("session --prompt" with nothing else) used to exit
-// 0 and print a help dump. It must now exit non-zero and name the actual
-// problem (no --record or --replay was given) instead.
+// 0 and print a help dump. It must now exit non-zero and name the actual live
+// provider configuration problem instead of silently printing help.
 func TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
@@ -74,9 +74,9 @@ func TestSessionPromptOnlyExitsNonZeroAndNamesTheProblem(t *testing.T) {
 	if err == nil {
 		t.Fatal("session --prompt alone returned a nil error; want a named failure instead of a silent help dump")
 	}
-	for _, want := range []string{"--record", "--replay"} {
+	for _, want := range []string{"openai realtime api key is missing", "AGENT_MODEL__OPENAI__API_KEY"} {
 		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error = %q, want it to name %q as the missing requirement", err, want)
+			t.Fatalf("error = %q, want it to name %q as the live-session problem", err, want)
 		}
 	}
 }
