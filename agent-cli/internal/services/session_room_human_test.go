@@ -578,11 +578,15 @@ func waitForRoomHumanResponseCancel(t *testing.T, session *roomTestSession, cust
 	defer ticker.Stop()
 	for {
 		cancelIndex := -1
+		cancelCount := 0
 		inputIndex := -1
 		session.mu.Lock()
 		for index, msg := range session.sent {
-			if msg.Type == messages.StreamTypeResponseCancel && cancelIndex < 0 {
-				cancelIndex = index
+			if msg.Type == messages.StreamTypeResponseCancel {
+				cancelCount++
+				if cancelIndex < 0 {
+					cancelIndex = index
+				}
 			}
 			if msg.Type == messages.StreamTypeAudioDelta {
 				if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil && bytes.Equal(value.Content, wantPCM) {
@@ -591,6 +595,9 @@ func waitForRoomHumanResponseCancel(t *testing.T, session *roomTestSession, cust
 			}
 		}
 		session.mu.Unlock()
+		if cancelCount > 1 {
+			t.Fatalf("provider sent %d barge-in cancels; want exactly one", cancelCount)
+		}
 		if cancelIndex >= 0 && inputIndex > cancelIndex {
 			return
 		}

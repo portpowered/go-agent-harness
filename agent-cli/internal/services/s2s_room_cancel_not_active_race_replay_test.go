@@ -11,7 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -321,7 +320,7 @@ func TestRunRoomWithResult_RealtimeTerminalBoundaryPrecedesPeerSpeech(t *testing
 	}
 }
 
-func TestRunRoomWithResult_RealtimeInactiveCancelKeepsParticipantAlive(t *testing.T) {
+func TestRunRoomWithResult_RealtimePeerSpeechDoesNotCancelOrdinaryResponse(t *testing.T) {
 	const (
 		speakerID = "speaker"
 		targetID  = "target"
@@ -370,32 +369,16 @@ func TestRunRoomWithResult_RealtimeInactiveCancelKeepsParticipantAlive(t *testin
 		roomRealtimeReplayEvent(5, gwtesting.DirectionServerToClient, "response.output_audio.delta", roomRealtimeReplayJSON(t, map[string]any{
 			"type": "response.output_audio.delta", "response_id": "resp-inactive-target-1", "delta": targetFirstBase64,
 		})),
-		roomRealtimeReplayEvent(6, gwtesting.DirectionClientToServer, "response.cancel", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "response.cancel",
-		})),
-		roomRealtimeReplayEvent(7, gwtesting.DirectionClientToServer, "input_audio_buffer.append", roomRealtimeReplayJSON(t, map[string]any{
+		// Peer speech is admitted while the ordinary target response remains
+		// open. It must not synthesize response.cancel.
+		roomRealtimeReplayEvent(6, gwtesting.DirectionClientToServer, "input_audio_buffer.append", roomRealtimeReplayJSON(t, map[string]any{
 			"type": "input_audio_buffer.append", "audio": speakerSpeechBase64,
 		})),
-		roomRealtimeReplayEvent(8, gwtesting.DirectionServerToClient, "error", roomRealtimeReplayJSON(t, map[string]any{
-			"type":  "error",
-			"error": map[string]any{"type": "invalid_request_error", "code": "response_cancel_not_active", "message": "Cannot cancel a response that is not active.", "param": "response.cancel", "event_id": "evt-inactive-cancel-race"},
+		roomRealtimeReplayEvent(7, gwtesting.DirectionServerToClient, "response.output_audio.done", roomRealtimeReplayJSON(t, map[string]any{
+			"type": "response.output_audio.done", "response_id": "resp-inactive-target-1",
 		})),
-		// The error is non-terminal, so the next cadence frame reaches the
-		// same session without another cancel and opens a normal response.
-		roomRealtimeReplayEvent(9, gwtesting.DirectionClientToServer, "input_audio_buffer.append", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "input_audio_buffer.append", "audio": silenceBase64,
-		})),
-		roomRealtimeReplayEvent(10, gwtesting.DirectionServerToClient, "response.created", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "response.created", "response": map[string]any{"id": "resp-inactive-target-2"},
-		})),
-		roomRealtimeReplayEvent(11, gwtesting.DirectionServerToClient, "response.output_text.delta", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "response.output_text.delta", "response_id": "resp-inactive-target-2", "delta": "target follow-up survived",
-		})),
-		roomRealtimeReplayEvent(12, gwtesting.DirectionServerToClient, "response.output_text.done", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "response.output_text.done", "response_id": "resp-inactive-target-2",
-		})),
-		roomRealtimeReplayEvent(13, gwtesting.DirectionServerToClient, "response.done", roomRealtimeReplayJSON(t, map[string]any{
-			"type": "response.done", "response": map[string]any{"id": "resp-inactive-target-2", "status": "completed"},
+		roomRealtimeReplayEvent(8, gwtesting.DirectionServerToClient, "response.done", roomRealtimeReplayJSON(t, map[string]any{
+			"type": "response.done", "response": map[string]any{"id": "resp-inactive-target-1", "status": "completed"},
 		})),
 	)
 	scenario := newRoomCancelRaceScenario(t, map[string]gwtesting.SessionCapture{
@@ -414,41 +397,15 @@ func TestRunRoomWithResult_RealtimeInactiveCancelKeepsParticipantAlive(t *testin
 	awaitRoomCancelRaceFanout(t, scenario.fanouts, speakerID, targetID, speakerSpeech)
 
 	scenario.targetCadence.Advance()
-	cancelMessage := scenario.harness.participant(targetID).awaitOutbound(t, "response.cancel")
-	if !bytes.Equal(cancelMessage.Payload, roomRealtimeReplayJSON(t, map[string]any{"type": "response.cancel"})) {
-		t.Fatalf("inactive-cancel response.cancel payload = %s, want exact response.cancel", cancelMessage.Payload)
-	}
 	assertRoomRealtimeReplayAppend(t, scenario.harness.participant(targetID), speakerSpeech)
-
-	var diagnosticMessage messages.StreamMessage
-	select {
-	case diagnosticMessage = <-scenario.targetErrors:
-	case <-scenario.ctx.Done():
-		t.Fatalf("inactive-cancel diagnostic was not observed: %v", scenario.ctx.Err())
-	}
-	value, ok := diagnosticMessage.Value.(*messages.ErrorValue)
-	if !ok || value == nil {
-		t.Fatalf("inactive-cancel room diagnostic value = %T, want *messages.ErrorValue", diagnosticMessage.Value)
-	}
-	if value.IsTerminal() || value.Classification != providers.ErrorClassResponseCancelNotActive ||
-		value.ErrorType != "invalid_request_error" || value.Code != "response_cancel_not_active" ||
-		value.Param != "response.cancel" || value.EventID != "evt-inactive-cancel-race" {
-		t.Fatalf("inactive-cancel room diagnostic = %#v", value)
-	}
-
-	// This append is the next logical turn. The strict target script would
-	// diverge if the non-terminal diagnostic had killed the session or caused
-	// a duplicate cancel.
-	scenario.targetCadence.Advance()
-	assertRoomRealtimeReplayAppend(t, scenario.harness.participant(targetID), silence)
 	awaitRoomCancelRaceTargetEnd(t, scenario.targetEnds)
 
 	outcome := awaitRoomCancelRaceRun(t, scenario)
 	if outcome.err != nil {
-		t.Fatalf("inactive-cancel room replay: %v", outcome.err)
+		t.Fatalf("peer-speech room replay: %v", outcome.err)
 	}
 	if outcome.result.Reason != RoomTerminationMaxTurnsReached {
-		t.Fatalf("inactive-cancel room termination = %q, want %q", outcome.result.Reason, RoomTerminationMaxTurnsReached)
+		t.Fatalf("peer-speech room termination = %q, want %q", outcome.result.Reason, RoomTerminationMaxTurnsReached)
 	}
 	assertRoomCancelRaceParticipant(t, outcome.result.Participants, speakerID, 1)
 	assertRoomCancelRaceParticipant(t, outcome.result.Participants, targetID, 1)
@@ -456,27 +413,25 @@ func TestRunRoomWithResult_RealtimeInactiveCancelKeepsParticipantAlive(t *testin
 
 	targetWrites := scenario.harness.participant(targetID).outboundSnapshot()
 	wantTypes := []string{
-		"session.update", "input_audio_buffer.append", "response.cancel",
-		"input_audio_buffer.append", "input_audio_buffer.append",
+		"session.update", "input_audio_buffer.append", "input_audio_buffer.append",
 	}
 	if got := roomCancelRaceWireTypes(targetWrites); !sameRoomReplayStrings(got, wantTypes) {
-		t.Fatalf("inactive-cancel target outbound types = %v, want %v", got, wantTypes)
+		t.Fatalf("peer-speech target outbound types = %v, want %v", got, wantTypes)
 	}
 	assertRoomRealtimeReplayWireAppend(t, targetWrites[1], silence)
-	assertRoomRealtimeReplayWireAppend(t, targetWrites[3], speakerSpeech)
-	assertRoomRealtimeReplayWireAppend(t, targetWrites[4], silence)
-	if got := countRoomCancelRaceWireType(targetWrites, "response.cancel"); got != 1 {
-		t.Fatalf("inactive-cancel target response.cancel count = %d, want one", got)
+	assertRoomRealtimeReplayWireAppend(t, targetWrites[2], speakerSpeech)
+	if got := countRoomCancelRaceWireType(targetWrites, "response.cancel"); got != 0 {
+		t.Fatalf("peer-speech target response.cancel count = %d, want zero", got)
 	}
 	if got := scenario.harness.participant(targetID).inboundTypes(); !sameRoomReplayStrings(got, []string{
-		"session.created", "response.created", "response.output_audio.delta", "error",
-		"response.created", "response.output_text.delta", "response.output_text.done", "response.done",
+		"session.created", "response.created", "response.output_audio.delta",
+		"response.output_audio.done", "response.done",
 	}) {
-		t.Fatalf("inactive-cancel target inbound provider events = %v", got)
+		t.Fatalf("peer-speech target inbound provider events = %v", got)
 	}
 	for _, participantID := range []string{speakerID, targetID} {
 		if err := scenario.harness.participant(participantID).dialer.Err(); err != nil {
-			t.Fatalf("inactive-cancel participant %q strict wire: %v", participantID, err)
+			t.Fatalf("peer-speech participant %q strict wire: %v", participantID, err)
 		}
 	}
 }
