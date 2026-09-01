@@ -24,8 +24,12 @@ const (
 )
 
 // RunSessionWithAudioOut runs a session and writes assistant AUDIO.DELTA
-// samples to path as they arrive. An empty path preserves the normal session
-// output behavior. A path of "-" writes raw little-endian PCM16 to out.
+// samples to path as they arrive. The capture observes provider assistant
+// PCM upstream of the RTC device path; when --audio-out-device is also
+// selected, the independent device pump observes the same session through
+// its provider-owned inbound media endpoint. An empty path preserves the
+// normal session output behavior. A path of "-" writes raw little-endian
+// PCM16 to out.
 func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunOptions, path string) (runErr error) {
 	return RunSessionWithAudioOutAndTextSeed(ctx, out, opts, path, SessionTextSeed{})
 }

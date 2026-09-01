@@ -20,8 +20,10 @@ const (
 	SessionAudioOutDeviceFlag = "audio-out-device"
 )
 
-// ErrSessionAudioOutputConflict identifies the mutually exclusive file and
-// device forms of --audio-out.
+// ErrSessionAudioOutputConflict is retained for source compatibility with
+// callers that classified the old output-selection conflict. File capture
+// and RTC device playback are now independent observations and are allowed
+// together, so new validation does not return this error.
 var ErrSessionAudioOutputConflict = errors.New("--audio-out and --audio-out-device (audio device output) cannot be used together")
 
 // SessionAudioDeviceConflictError describes a file/device selection conflict
@@ -53,23 +55,18 @@ func (e *SessionAudioDeviceConflictError) Unwrap() error {
 	})
 }
 
-// ValidateSessionAudioDeviceConflicts rejects a file and registry-backed
-// device selector being supplied for the same direction. It is intentionally
-// independent of transport selection so the RTC transport can consume this
-// validation before dialing or constructing a peer.
+// ValidateSessionAudioDeviceConflicts rejects a file and registry-backed input
+// device selector being supplied for the same direction. File assistant
+// capture and RTC output-device playback intentionally remain independent so
+// both can observe one provider response in the same session. This validation
+// is intentionally independent of transport selection so the RTC transport
+// can consume it before dialing or constructing a peer.
 func ValidateSessionAudioDeviceConflicts(audioInFile, audioOutFile, audioInDevice, audioOutDevice bool) error {
 	if audioInFile && audioInDevice {
 		return &SessionAudioDeviceConflictError{
 			FileFlag:   "--audio-in",
 			DeviceFlag: "--" + SessionAudioInDeviceFlag,
 			Err:        ErrSessionAudioInputConflict,
-		}
-	}
-	if audioOutFile && audioOutDevice {
-		return &SessionAudioDeviceConflictError{
-			FileFlag:   "--audio-out",
-			DeviceFlag: "--" + SessionAudioOutDeviceFlag,
-			Err:        ErrSessionAudioOutputConflict,
 		}
 	}
 	return nil
