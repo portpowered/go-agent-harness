@@ -86,8 +86,9 @@ type RTCDeviceBindingRequest struct {
 	// OutputSampleRate is the provider-owned PCM16 playback rate. Zero keeps
 	// the legacy device rate for callers that do not carry a session contract.
 	OutputSampleRate int
-	// InputSampleRate is reserved for the corresponding capture boundary; the
-	// input conversion story owns its use after output-rate plumbing lands.
+	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
+	// cannot open this rate may be opened at another supported rate and
+	// converted once by RTCDeviceSource before provider transmission.
 	InputSampleRate int
 }
 
