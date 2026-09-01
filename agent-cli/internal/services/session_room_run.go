@@ -130,10 +130,14 @@ func runRoomParticipant(
 	if opts.Stream != nil {
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
 	}
+	// Computed once, before any result can reach the coordinator, so a human
+	// participant's teardown (see finishParticipant) can name this
+	// participant on a playback overflow the same way a provider
+	// participant's session diagnostics already do below.
+	runtime.diagnosticSink = combineRoomDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)...)
 	var observer *sessionProgressObserver
 	if !roomParticipantIsHuman(runtime.plan) {
-		diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
-		observer = newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+		observer = newSessionProgressObserver(runtime.diagnosticSink, nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 		observer.livenessObserver = func(err error) {
 			runtime.lifecycle.markLivenessFailure(err)
 			classification, _, _, _ := sessionLivenessMetadata(err)
