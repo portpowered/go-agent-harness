@@ -162,8 +162,7 @@ func cliAudioOutputFrame() []int16 {
 }
 
 type cliAudioOutputInferencer struct {
-	audioPCM  []byte
-	deviceOut bool
+	audioPCM []byte
 
 	connects          atomic.Int32
 	sessionCloseCount atomic.Int32
@@ -175,7 +174,6 @@ type cliAudioOutputInferencer struct {
 func newCLIAudioOutputInferencer(samples []int16, holdClose bool) *cliAudioOutputInferencer {
 	inferencer := &cliAudioOutputInferencer{
 		audioPCM:      cliPCM16Bytes(samples),
-		deviceOut:     holdClose,
 		closeGate:     make(chan struct{}),
 		sessionClosed: make(chan struct{}),
 	}

@@ -75,7 +75,8 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 	}
 	var rtcPumpErrors <-chan error
-	boundInferencer, rtcErrors := bindRTCDeviceSessionInferencer(admittedInferencer, opts.rtcDeviceBinding)
+	var drainRTCPumpErrors func() error
+	boundInferencer, rtcErrors, drainRTCPumpErrors := bindRTCDeviceSessionInferencer(admittedInferencer, opts.rtcDeviceBinding)
 	rtcPumpErrors = rtcErrors
 	observedInferencer := newObservedSessionInferencer(boundInferencer)
 	observedInferencer.progress = opts.observer
@@ -132,9 +133,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			cancel()
 			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
+			pumpErr := error(nil)
+			if drainRTCPumpErrors != nil {
+				pumpErr = drainRTCPumpErrors()
+			}
 			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
 			admittedInferencer.waitForClose()
-			return errors.Join(providerErr, runTerminationErr, bindingErr)
+			return errors.Join(providerErr, runTerminationErr, bindingErr, pumpErr)
 		},
 		flushBuffered: func() error {
 			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)

@@ -3,9 +3,11 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -99,6 +101,90 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 	}
 	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
 		t.Fatalf("device observations after cleanup = %+v, want exactly two opens and releases", got)
+	}
+}
+
+// TestRunSessionWithAudioOutAndRTCDeviceOutputPreservesCombinedErrors proves
+// that independent output failures retain their owning flag/device context and
+// that the combined session still releases its provider and device resources
+// exactly once. Both writes are held until the two failure paths are active so
+// the assertion does not depend on scheduler ordering.
+func TestRunSessionWithAudioOutAndRTCDeviceOutputPreservesCombinedErrors(t *testing.T) {
+	fileErr := errors.New("assistant file write failed")
+	deviceErr := errors.New("speaker device write failed")
+	fileStarted := make(chan struct{})
+	deviceStarted := make(chan struct{})
+	releaseWrites := make(chan struct{})
+
+	registry := newCombinedOutputErrorRegistry(t, deviceErr, deviceStarted, releaseWrites)
+	media := &singleFrameInboundMedia{frame: rtc.PCMFrame{Samples: sessionAudioFrame(-3600)}}
+	inferencer := &combinedAudioOutputInferencer{
+		media:             RTCMediaEndpoints{Inbound: media},
+		audioPCM:          pcm16Bytes(sessionAudioFrame(1800)),
+		allowSessionClose: make(chan struct{}),
+	}
+	close(inferencer.allowSessionClose)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	fileWriter := &coordinatedAudioErrorWriter{err: fileErr, started: fileStarted, release: releaseWrites}
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- RunSessionWithAudioOut(ctx, fileWriter, SessionRunOptions{
+			ReplayPath:        "synthetic.json",
+			Prompt:            "hello",
+			PromptProvided:    true,
+			SessionInferencer: inferencer,
+			RTCDeviceBinding: RTCDeviceBindingRequest{
+				Registry:      registry,
+				OutputDevice:  registry.device.ID,
+				OutputPresent: true,
+			},
+		}, "-")
+	}()
+
+	for name, started := range map[string]<-chan struct{}{
+		"file output":   fileStarted,
+		"device output": deviceStarted,
+	} {
+		select {
+		case <-started:
+		case <-ctx.Done():
+			t.Fatalf("%s failure path did not start: %v", name, ctx.Err())
+		}
+	}
+	close(releaseWrites)
+
+	var gotErr error
+	select {
+	case gotErr = <-runErr:
+	case <-ctx.Done():
+		t.Fatalf("combined error session timed out: %v", ctx.Err())
+	}
+	if !errors.Is(gotErr, fileErr) || !errors.Is(gotErr, deviceErr) {
+		t.Fatalf("combined error = %v, want both output failures", gotErr)
+	}
+	if !strings.Contains(gotErr.Error(), `--audio-out "-"`) {
+		t.Fatalf("combined error = %v, want --audio-out context", gotErr)
+	}
+	if !strings.Contains(gotErr.Error(), string(registry.device.ID)) {
+		t.Fatalf("combined error = %v, want --audio-out-device/device context %q", gotErr, registry.device.ID)
+	}
+	var sinkErr *RTCDeviceSinkError
+	if !errors.As(gotErr, &sinkErr) || sinkErr.DeviceID != registry.device.ID || sinkErr.Operation != "write" {
+		t.Fatalf("combined error = %v, want typed device write error for %q", gotErr, registry.device.ID)
+	}
+	if got := inferencer.connects.Load(); got != 1 {
+		t.Fatalf("provider session connects = %d, want exactly one", got)
+	}
+	if got := media.closeCount.Load(); got != 1 {
+		t.Fatalf("provider media closes = %d, want exactly one", got)
+	}
+	if got := registry.openCount.Load(); got != 1 {
+		t.Fatalf("device opens = %d, want exactly one", got)
+	}
+	if got := registry.closeCount.Load(); got != 1 {
+		t.Fatalf("device closes = %d, want exactly one", got)
 	}
 }
 
@@ -203,6 +289,84 @@ type singleFrameInboundMedia struct {
 	closeCount atomic.Int32
 }
 
+type coordinatedAudioErrorWriter struct {
+	err     error
+	started chan struct{}
+	release <-chan struct{}
+	once    sync.Once
+}
+
+func (w *coordinatedAudioErrorWriter) Write([]byte) (int, error) {
+	w.once.Do(func() { close(w.started) })
+	<-w.release
+	return 0, w.err
+}
+
+type combinedOutputErrorRegistry struct {
+	device       audio.Device
+	writeErr     error
+	writeStarted chan struct{}
+	release      <-chan struct{}
+	openCount    atomic.Int32
+	closeCount   atomic.Int32
+}
+
+func newCombinedOutputErrorRegistry(t *testing.T, writeErr error, writeStarted chan struct{}, release <-chan struct{}) *combinedOutputErrorRegistry {
+	t.Helper()
+	device, err := audio.NewDevice("test", "speaker", "Test Speaker", audio.DirectionOutput)
+	if err != nil {
+		t.Fatalf("new test output device: %v", err)
+	}
+	return &combinedOutputErrorRegistry{
+		device:       device,
+		writeErr:     writeErr,
+		writeStarted: writeStarted,
+		release:      release,
+	}
+}
+
+func (r *combinedOutputErrorRegistry) List() ([]audio.Device, error) {
+	return []audio.Device{r.device}, nil
+}
+
+func (r *combinedOutputErrorRegistry) Default(audio.Direction) (audio.Device, error) {
+	return r.device, nil
+}
+
+func (r *combinedOutputErrorRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+	if id != r.device.ID {
+		return nil, audio.NewDeviceNotFoundError(id)
+	}
+	r.openCount.Add(1)
+	return &combinedOutputErrorDevice{
+		registry: r,
+		writeErr: r.writeErr,
+		started:  r.writeStarted,
+		release:  r.release,
+	}, nil
+}
+
+type combinedOutputErrorDevice struct {
+	registry *combinedOutputErrorRegistry
+	writeErr error
+	started  chan struct{}
+	release  <-chan struct{}
+	once     sync.Once
+}
+
+func (d *combinedOutputErrorDevice) DeviceDirection() audio.Direction { return audio.DirectionOutput }
+
+func (d *combinedOutputErrorDevice) WriteFrame(context.Context, []int16) error {
+	d.once.Do(func() { close(d.started) })
+	<-d.release
+	return d.writeErr
+}
+
+func (d *combinedOutputErrorDevice) Close() error {
+	d.registry.closeCount.Add(1)
+	return nil
+}
+
 func (m *singleFrameInboundMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, error) {
 	select {
 	case <-ctx.Done():
@@ -224,3 +388,5 @@ var _ messages.SessionInferencer = (*combinedAudioOutputInferencer)(nil)
 var _ messages.Session = (*combinedAudioOutputSession)(nil)
 var _ RTCMediaSession = (*combinedAudioOutputSession)(nil)
 var _ rtc.InboundMedia = (*singleFrameInboundMedia)(nil)
+var _ audio.DeviceRegistry = (*combinedOutputErrorRegistry)(nil)
+var _ audio.OpenedDevice = (*combinedOutputErrorDevice)(nil)

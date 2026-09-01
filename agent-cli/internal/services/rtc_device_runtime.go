@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -66,18 +67,27 @@ type rtcDeviceBindingInferencer struct {
 	inner   messages.SessionInferencer
 	binding *RTCDeviceBinding
 	errors  chan error
+
+	pumpInitDone chan struct{}
+	pumpInitOnce sync.Once
+	pumpMu       sync.Mutex
+	pumpsStarted bool
+	pumpsDone    chan struct{}
 }
 
-func newRTCDeviceBindingInferencer(inner messages.SessionInferencer, binding *RTCDeviceBinding) (*rtcDeviceBindingInferencer, <-chan error) {
+func newRTCDeviceBindingInferencer(inner messages.SessionInferencer, binding *RTCDeviceBinding) (*rtcDeviceBindingInferencer, <-chan error, func() error) {
 	wrapped := &rtcDeviceBindingInferencer{
-		inner:   inner,
-		binding: binding,
-		errors:  make(chan error, 2),
+		inner:        inner,
+		binding:      binding,
+		errors:       make(chan error, 2),
+		pumpInitDone: make(chan struct{}),
+		pumpsDone:    make(chan struct{}),
 	}
-	return wrapped, wrapped.errors
+	return wrapped, wrapped.errors, wrapped.drainPumpErrors
 }
 
 func (i *rtcDeviceBindingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	defer i.pumpInitOnce.Do(func() { close(i.pumpInitDone) })
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err
@@ -115,12 +125,28 @@ func closeRTCDeviceBinding(binding *RTCDeviceBinding) error {
 }
 
 func (i *rtcDeviceBindingInferencer) startPumps(ctx context.Context, media RTCMediaEndpoints) {
+	i.pumpMu.Lock()
+	i.pumpsStarted = true
+	i.pumpMu.Unlock()
+	var pumps sync.WaitGroup
 	if i.binding.Source != nil {
-		go func() { i.report(i.binding.Source.Pump(ctx, media.Outbound)) }()
+		pumps.Add(1)
+		go func() {
+			defer pumps.Done()
+			i.report(i.binding.Source.Pump(ctx, media.Outbound))
+		}()
 	}
 	if i.binding.Sink != nil {
-		go func() { i.report(i.binding.Sink.Pump(ctx, media.Inbound)) }()
+		pumps.Add(1)
+		go func() {
+			defer pumps.Done()
+			i.report(i.binding.Sink.Pump(ctx, media.Inbound))
+		}()
 	}
+	go func() {
+		pumps.Wait()
+		close(i.pumpsDone)
+	}()
 }
 
 func (i *rtcDeviceBindingInferencer) report(err error) {
@@ -128,6 +154,36 @@ func (i *rtcDeviceBindingInferencer) report(err error) {
 		return
 	}
 	i.errors <- err
+}
+
+// drainPumpErrors waits until every started pump has reported before joining
+// errors left in the notification channel. The session loop may consume the
+// first pump failure while another output path is still unwinding; draining at
+// the shared cleanup boundary preserves that sibling failure instead of letting
+// it disappear behind the initiating error.
+func (i *rtcDeviceBindingInferencer) drainPumpErrors() error {
+	if i == nil {
+		return nil
+	}
+	<-i.pumpInitDone
+	i.pumpMu.Lock()
+	started := i.pumpsStarted
+	i.pumpMu.Unlock()
+	if !started {
+		return nil
+	}
+	<-i.pumpsDone
+	var errs []error
+	for {
+		select {
+		case err := <-i.errors:
+			if err != nil {
+				errs = append(errs, err)
+			}
+		default:
+			return errors.Join(errs...)
+		}
+	}
 }
 
 func rtcDevicePumpStopped(err error) bool {
@@ -236,9 +292,9 @@ func validateRTCDeviceMedia(binding *RTCDeviceBinding, media RTCMediaEndpoints) 
 	return nil
 }
 
-func bindRTCDeviceSessionInferencer(inner messages.SessionInferencer, binding *RTCDeviceBinding) (messages.SessionInferencer, <-chan error) {
+func bindRTCDeviceSessionInferencer(inner messages.SessionInferencer, binding *RTCDeviceBinding) (messages.SessionInferencer, <-chan error, func() error) {
 	if binding == nil {
-		return inner, nil
+		return inner, nil, nil
 	}
 	return newRTCDeviceBindingInferencer(inner, binding)
 }

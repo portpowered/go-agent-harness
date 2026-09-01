@@ -638,7 +638,8 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}()
 	}
 	var rtcPumpErrors <-chan error
-	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
+	var drainRTCPumpErrors func() error
+	sessionInferencer, rtcPumpErrors, drainRTCPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
 	observedInferencer.progress = opts.observer
 	if opts.observer != nil {
@@ -730,11 +731,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		}
 	}
 	stopOwnedResources := func() error {
-		cancelAudio()
-		cancel()
-		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
-		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
+		return closeSessionOwnedResources(cancelAudio, cancel, opts.BareLive, observedInferencer, opts.rtcDeviceBinding, drainRTCPumpErrors, waitRun, waitAudio)
 	}
 	termination := sessionTerminationBoundary{
 		quiesceUpstream: quiesceUpstream,
@@ -914,6 +911,18 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			}
 		}
 	}
+}
+
+func closeSessionOwnedResources(cancelAudio, cancel context.CancelFunc, bare bool, inferencer *observedSessionInferencer, binding *RTCDeviceBinding, drainPumpErrors func() error, waitRun, waitAudio func() error) error {
+	cancelAudio()
+	cancel()
+	providerErr := closeBareSessionIfNeeded(bare, inferencer)
+	bindingErr := closeRTCDeviceBinding(binding)
+	pumpErr := error(nil)
+	if drainPumpErrors != nil {
+		pumpErr = drainPumpErrors()
+	}
+	return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr, pumpErr)
 }
 
 // closePendingSessionIfReady is shared by response handling and the
