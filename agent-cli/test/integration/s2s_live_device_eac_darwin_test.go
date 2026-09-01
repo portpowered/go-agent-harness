@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,7 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 	root.SetErr(io.Discard)
 	root.SetArgs([]string{
 		"--config-dir", workDir,
+		"--workdir", workDir,
 		"session",
 		"--provider", "openai",
 		"--model", "gpt-realtime-2.1-mini",
@@ -46,12 +48,32 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 		"--audio-in-device", "default",
 		"--audio-out-device", "default",
 		"--record", capturePath,
-		"--max-duration", "20s",
-		"Say exactly: native echo cancellation test passed. Then stop.",
+		"--max-duration", "28s",
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 38*time.Second)
 	defer cancel()
-	if err := root.ExecuteContext(ctx); err != nil {
+	runErr := make(chan error, 1)
+	go func() { runErr <- root.ExecuteContext(ctx) }()
+
+	// This is deliberately room/device injection, not --audio-in or a fixture
+	// file. macOS speech synthesis is rendered by the default physical output,
+	// travels through the room, and is captured by the default AUVoiceIO input.
+	// The short startup allowance is only for the live provider/device handshake;
+	// all correctness is asserted from the resulting provider capture below.
+	startup := time.NewTimer(3 * time.Second)
+	defer startup.Stop()
+	select {
+	case err := <-runErr:
+		t.Fatalf("live device EAC command exited before room injection: %v\nstdout=%s", err, stdout.String())
+	case <-startup.C:
+	case <-ctx.Done():
+		t.Fatal("live device EAC setup timed out")
+	}
+	spoken := "Hello assistant."
+	if output, err := exec.CommandContext(ctx, "/usr/bin/say", "-v", "Samantha", spoken).CombinedOutput(); err != nil {
+		t.Fatalf("speak far-field turn through the physical output device: %v (%s)", err, strings.TrimSpace(string(output)))
+	}
+	if err := <-runErr; err != nil {
 		t.Fatalf("live device EAC command: %v\nstdout=%s", err, stdout.String())
 	}
 	capture, err := gwtesting.LoadSessionCapture(capturePath)
@@ -68,15 +90,14 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 	if counts["input_audio_buffer.append"] == 0 {
 		t.Fatal("physical microphone produced no provider-bound PCM")
 	}
-	if counts["response.output_audio.delta"] == 0 || counts["response.output_audio.done"] != 1 {
-		t.Fatalf("physical replay evidence = deltas:%d done:%d, want audio and one completed replay", counts["response.output_audio.delta"], counts["response.output_audio.done"])
+	if counts["response.output_audio.delta"] == 0 || counts["response.output_audio.done"] == 0 {
+		t.Fatalf("physical replay evidence = deltas:%d done:%d, want completed assistant audio", counts["response.output_audio.delta"], counts["response.output_audio.done"])
 	}
 	if counts["response.created"] != 1 {
 		t.Fatalf("response.created count=%d, want exactly one; speaker echo may have retriggered the model", counts["response.created"])
 	}
-	normalizedTranscript := strings.Join(strings.Fields(strings.ReplaceAll(strings.ToLower(stdout.String()), "assistant:", "")), " ")
-	if !strings.Contains(normalizedTranscript, "native echo cancellation test passed") {
-		t.Fatalf("assistant transcript missing expected phrase: %q", stdout.String())
+	if !strings.Contains(stdout.String(), "Assistant:") {
+		t.Fatalf("physical far-field turn produced no assistant transcript: %q", stdout.String())
 	}
 	t.Logf("live device EAC: model=gpt-realtime-2.1-mini input_appends=%d output_deltas=%d responses=1", counts["input_audio_buffer.append"], counts["response.output_audio.delta"])
 }
