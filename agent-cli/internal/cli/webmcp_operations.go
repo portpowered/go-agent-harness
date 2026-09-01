@@ -919,6 +919,18 @@ func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) conf
 }
 
 func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
+	return c.resolveDirectTargetWithPersistence(ctx, cmd, values, broker, browser, true)
+}
+
+// resolveDirectReplacementTarget resolves an explicit select from the live
+// discovery result. The select command is the recovery operation for a
+// remembered browser that was restarted, so a stale persisted identity must
+// never be loaded or validated before the replacement can be selected.
+func (c *WebMCPOperationsCommand) resolveDirectReplacementTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
+	return c.resolveDirectTargetWithPersistence(ctx, cmd, values, broker, browser, false)
+}
+
+func (c *WebMCPOperationsCommand) resolveDirectTargetWithPersistence(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig, allowPersisted bool) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
 	browserID := browser.Selection.Browser
 	targetID := browser.Selection.Tab
 	if refBrowserID, refTargetID, composite := splitCompositeTargetRef(targetID); composite {
@@ -939,7 +951,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 	// persisted record. When no target selector is supplied, an existing
 	// persisted record is used as an exact opaque ID, never as a hint for a
 	// different target.
-	if targetID == "" && !directFlagChanged(cmd, "tab", "browser-tab") && !directBrowserFlagChanged(cmd) {
+	if allowPersisted && targetID == "" && !directFlagChanged(cmd, "tab", "browser-tab") && !directBrowserFlagChanged(cmd) {
 		selection, err := c.loadDirectSelection()
 		if err != nil {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser selection could not be read", map[string]any{

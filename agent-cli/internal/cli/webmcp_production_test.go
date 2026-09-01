@@ -286,6 +286,124 @@ browser:
 	}
 }
 
+func TestProductionWebMCPDirectSelectRecoversRestartedBrowserAndActivatesPersistedTarget(t *testing.T) {
+	var server *httptest.Server
+	var mu sync.Mutex
+	versionCalls := 0
+	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/json/version" {
+			http.NotFound(writer, request)
+			return
+		}
+		mu.Lock()
+		versionCalls++
+		path := "/devtools/browser/restarted-old"
+		instance := "restarted-old-instance"
+		if versionCalls >= 2 {
+			path = "/devtools/browser/restarted-new"
+			instance = "restarted-new-instance"
+		}
+		mu.Unlock()
+		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + path
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
+	}))
+	t.Cleanup(server.Close)
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse restart fixture URL: %v", err)
+	}
+
+	oldBrowserID := discovery.HashIDMapper{}.BrowserID(discovery.BrowserIdentity{
+		Scheme: "ws",
+		Host:   "127.0.0.1",
+		Port:   serverURL.Port(),
+		Path:   "/devtools/browser/restarted-old",
+	})
+	newBrowserID := discovery.HashIDMapper{}.BrowserID(discovery.BrowserIdentity{
+		Scheme: "ws",
+		Host:   "127.0.0.1",
+		Port:   serverURL.Port(),
+		Path:   "/devtools/browser/restarted-new",
+	})
+	rawTargetID := "raw-restarted-tab"
+	oldTargetID := discovery.HashTargetIDMapper{}.TargetID(discovery.TargetIdentity{BrowserID: oldBrowserID, RawID: rawTargetID})
+	newTargetID := discovery.HashTargetIDMapper{}.TargetID(discovery.TargetIdentity{BrowserID: newBrowserID, RawID: rawTargetID})
+	runtime := &productionFakeRuntime{
+		targets: []webmcp.Target{{
+			ID:               webmcp.TargetID(rawTargetID),
+			Type:             "page",
+			Title:            "Restart recovery fixture",
+			URL:              "https://fixture.test/restart",
+			Origin:           "https://fixture.test",
+			WebSocketURL:     "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/page/" + rawTargetID,
+			ContinuityMarker: "restart-document",
+			Generation:       1,
+		}},
+		tool: webmcp.ToolDescriptor{
+			Name:        "read_state",
+			Description: "Read restart recovery state",
+			FrameID:     "frame-1",
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		},
+	}
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: %q
+  selection:
+    persist: true
+`, server.URL+"/json/version"))
+	store := NewFileWebMCPSelectionStore(configDir)
+	newFactory := func() WebMCPDoctorFactory {
+		return NewProductionWebMCPDoctorFactory(
+			WithWebMCPProductionRuntime(runtime),
+			WithWebMCPProductionHTTPClient(server.Client()),
+		)
+	}
+
+	// First CLI invocation records the browser before its restart.
+	initial := executeDirectCommand(t, configDir, store, newFactory(), "select", "--browser", oldBrowserID, "--tab", string(oldTargetID), "--json")
+	requireDirectSuccess(t, initial)
+	oldRecord, err := store.Load()
+	if err != nil {
+		t.Fatalf("load pre-restart selection: %v", err)
+	}
+	if oldRecord.BrowserID != oldBrowserID || oldRecord.TargetID != string(oldTargetID) || oldRecord.BrowserInstanceID == "" {
+		t.Fatalf("pre-restart selection = %+v", oldRecord)
+	}
+
+	// The next invocation sees the same endpoint and page URL, but a fresh
+	// browser identity. Explicit select recovery must not be blocked by the
+	// old record.
+	recovered := executeDirectCommand(t, configDir, store, newFactory(), "select", "--auto-select", "single", "--json")
+	requireDirectSuccess(t, recovered)
+	newRecord, err := store.Load()
+	if err != nil {
+		t.Fatalf("load post-restart selection: %v", err)
+	}
+	if newRecord.BrowserID != newBrowserID || newRecord.TargetID != string(newTargetID) || newRecord.BrowserInstanceID == oldRecord.BrowserInstanceID {
+		t.Fatalf("post-restart selection = %+v, old=%+v", newRecord, oldRecord)
+	}
+
+	// Activation is a separate invocation and must consume the replacement
+	// record without requiring the caller to repeat either ID.
+	activation := executeDirectCommand(t, configDir, store, newFactory(), "activate", "--json")
+	requireDirectSuccess(t, activation)
+	if runtime.count("activate") != 1 {
+		t.Fatalf("restart recovery activation operations = %v", runtime.operationSnapshot())
+	}
+	mu.Lock()
+	gotVersionCalls := versionCalls
+	mu.Unlock()
+	if gotVersionCalls != 3 {
+		t.Fatalf("restart recovery version calls = %d, want one per CLI invocation", gotVersionCalls)
+	}
+}
+
 func TestDefaultWebMCPDirectFactoryUsesProductionDiscovery(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

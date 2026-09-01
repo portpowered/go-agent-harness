@@ -11,7 +11,7 @@ import (
 )
 
 func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-	candidate, target, _, err := c.resolveDirectTarget(ctx, cmd, values, broker, browser)
+	candidate, target, _, err := c.resolveDirectReplacementTarget(ctx, cmd, values, broker, browser)
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +31,9 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 	}
 	if page.Origin == "" {
 		page.Origin = target.Origin
+	}
+	if page.Generation == 0 {
+		page.Generation = target.Generation
 	}
 	data, err := c.contextWithCatalog(ctx, broker, page, false)
 	if err != nil {

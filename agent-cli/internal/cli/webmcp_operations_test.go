@@ -178,6 +178,126 @@ func TestWebMCPDirectSelectionPersistsRedactedOpaqueIDs(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectSelectReplacesStalePersistedSelectionAndActivateRestoresIt(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	_, oldTarget, oldCandidate, _ := directFixture()
+	oldCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	oldSelection := WebMCPSelection{
+		Version:           WebMCPSelectionVersion,
+		EndpointID:        string(oldCandidate.ID),
+		BrowserID:         string(oldCandidate.ID),
+		BrowserInstanceID: oldCandidate.BrowserInstanceID,
+		TargetID:          string(oldTarget.ID),
+		Origin:            oldTarget.Origin,
+		ContinuityMarker:  "old-document",
+		Generation:        4,
+		SelectedAt:        time.Unix(4, 0).UTC(),
+	}
+	if err := store.Save(oldSelection); err != nil {
+		t.Fatalf("save stale selection: %v", err)
+	}
+
+	page, target, candidate, tool := directFixture()
+	candidate.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-new-"))
+	candidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	target.BrowserID = candidate.ID
+	target.ID = webmcp.TargetID(randomizedWebMCPTestID(t, "target-new-"))
+	target.ContinuityMarker = "new-document"
+	target.Generation = 9
+	page.Key = webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}
+	page.Generation = target.Generation
+	page.Origin = target.Origin
+	catalog := webmcp.ToolCatalogSnapshot{
+		Context:    page,
+		Generation: page.Generation,
+		Tools:      []webmcp.ToolDescriptor{tool},
+	}
+	replacement := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		catalog:    catalog,
+	}
+
+	// Supplying the endpoint and single-selection policy is the documented
+	// recovery shape after a browser restart. The stale file must not be
+	// loaded as a prerequisite for this explicit select operation.
+	selected := executeDirectCommand(t, configDir, store, directFactory(replacement),
+		"select", "--cdp-url", "http://127.0.0.1:9222", "--auto-select", "single", "--json")
+	requireDirectSuccess(t, selected)
+	updated, err := store.Load()
+	if err != nil {
+		t.Fatalf("load replacement selection: %v", err)
+	}
+	if updated.BrowserID != string(candidate.ID) || updated.BrowserInstanceID != candidate.BrowserInstanceID ||
+		updated.TargetID != string(target.ID) || updated.Generation != target.Generation || updated.ContinuityMarker != target.ContinuityMarker {
+		t.Fatalf("replacement selection = %+v, want live identity over stale=%+v", updated, oldSelection)
+	}
+	if len(replacement.selectCalls) != 1 || replacement.selectCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("replacement select calls = %+v", replacement.selectCalls)
+	}
+
+	// A subsequent command with no IDs must consume the newly persisted exact
+	// target, just as it would in a fresh process after the recovery command.
+	activation := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	activated := executeDirectCommand(t, configDir, store, directFactory(activation), "activate", "--json")
+	requireDirectSuccess(t, activated)
+	if len(activation.activateCalls) != 1 || activation.activateCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("restored activation calls = %+v", activation.activateCalls)
+	}
+}
+
+func TestWebMCPDirectFailedReplacementPreservesStalePersistedSelection(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	_, target, oldCandidate, _ := directFixture()
+	oldCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	prior := WebMCPSelection{
+		Version:           WebMCPSelectionVersion,
+		EndpointID:        string(oldCandidate.ID),
+		BrowserID:         string(oldCandidate.ID),
+		BrowserInstanceID: oldCandidate.BrowserInstanceID,
+		TargetID:          string(target.ID),
+		Origin:            target.Origin,
+		ContinuityMarker:  "old-document",
+		Generation:        4,
+		SelectedAt:        time.Unix(4, 0).UTC(),
+	}
+	if err := store.Save(prior); err != nil {
+		t.Fatalf("save stale selection: %v", err)
+	}
+
+	_, replacementTarget, replacementCandidate, _ := directFixture()
+	replacementCandidate.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-new-"))
+	replacementCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	replacementTarget.BrowserID = replacementCandidate.ID
+	replacementTarget.ID = webmcp.TargetID(randomizedWebMCPTestID(t, "target-new-"))
+	replacementTarget.Generation = 9
+	broker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{replacementCandidate},
+		targets:    []webmcp.Target{replacementTarget},
+		selectErr:  errors.New("replacement attach failed"),
+	}
+	result := executeDirectCommand(t, configDir, store, directFactory(broker),
+		"select", "--auto-select", "single", "--json")
+	if result.err == nil {
+		t.Fatal("failed replacement unexpectedly succeeded")
+	}
+	if got, err := store.Load(); err != nil {
+		t.Fatalf("load selection after failed replacement: %v", err)
+	} else if !reflect.DeepEqual(got, prior) {
+		t.Fatalf("failed replacement changed persisted selection: got=%+v want=%+v", got, prior)
+	}
+	if len(broker.selectCalls) != 0 {
+		t.Fatalf("failed replacement recorded a successful selection: %+v", broker.selectCalls)
+	}
+}
+
 func TestWebMCPDirectSeparateCommandsRejectStaleSelectionWithoutFallback(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
