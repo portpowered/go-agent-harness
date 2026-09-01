@@ -143,6 +143,10 @@ func NewDeviceSourceWithFormat(registry DeviceRegistry, id DeviceID, format Devi
 	if err != nil {
 		return nil, err
 	}
+	return newDeviceSourceFromOpened(handle, resolvedID, format)
+}
+
+func newDeviceSourceFromOpened(handle OpenedDevice, resolvedID DeviceID, format DeviceFormat) (*DeviceSource, error) {
 	frames, hasFrames := handle.(deviceFrameReader)
 	bytes, hasBytes := handle.(deviceByteReader)
 	if !hasFrames && !hasBytes {

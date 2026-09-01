@@ -19,6 +19,11 @@ var (
 	// ErrUnsupportedDeviceFormat identifies a device or backend that cannot
 	// open the requested PCM format.
 	ErrUnsupportedDeviceFormat = errors.New("unsupported audio device format")
+	// ErrDuplexDeviceUnavailable asks a caller to fall back to independent
+	// input/output handles. Native voice-processing backends use the duplex
+	// acquisition seam because acoustic echo cancellation requires both sides
+	// to be owned by one processing graph.
+	ErrDuplexDeviceUnavailable = errors.New("duplex audio device is unavailable")
 )
 
 // DeviceFormat is the concrete PCM format requested from a local device.
@@ -78,6 +83,20 @@ func defaultDeviceFormatAvailability() []DeviceFormat {
 // backend-selected format.
 type DeviceFormatOpener interface {
 	OpenWithFormat(DeviceID, DeviceFormat) (OpenedDevice, error)
+}
+
+// DuplexDeviceFormatOpener is an optional registry capability that acquires
+// capture and playback as one atomic hardware graph. It is intentionally
+// separate from DeviceRegistry.Open: ordinary devices remain independently
+// openable, while native AEC backends can guarantee a shared render reference.
+type DuplexDeviceFormatOpener interface {
+	OpenDuplexWithFormat(inputID DeviceID, inputFormat DeviceFormat, outputID DeviceID, outputFormat DeviceFormat) (OpenedDevice, OpenedDevice, error)
+}
+
+// VoiceProcessingProvider reports whether a device endpoint is backed by a
+// native duplex voice-processing graph rather than the portable fallback.
+type VoiceProcessingProvider interface {
+	VoiceProcessingActive() bool
 }
 
 // DeviceFormatProvider is implemented by opened devices that can report the

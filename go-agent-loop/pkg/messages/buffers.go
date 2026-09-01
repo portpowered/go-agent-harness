@@ -13,6 +13,7 @@ const (
 	BufferWriteCancelled  BufferWriteStatus = "cancelled"
 	BufferWriteTimedOut   BufferWriteStatus = "timed_out"
 	BufferWriteBufferFull BufferWriteStatus = "buffer_full"
+	BufferWriteStopped    BufferWriteStatus = "stopped"
 )
 
 // BufferWriteOutcome is the typed result returned by WriteContext.
@@ -91,6 +92,32 @@ func (b *TypedBuffer[T]) WriteContext(ctx context.Context, data T) BufferWriteOu
 			b.onDrop(data)
 		}
 		return BufferWriteOutcome{Status: BufferWriteBufferFull}
+	}
+}
+
+// WriteWaitContext applies bounded backpressure instead of dropping when the
+// buffer is temporarily full. Continuous realtime media producers use this
+// path because one scheduling hiccup must not terminate an otherwise healthy
+// microphone stream. Control/event producers retain WriteContext's explicit
+// non-blocking overload behavior.
+func (b *TypedBuffer[T]) WriteWaitContext(ctx context.Context, data T) BufferWriteOutcome {
+	return b.WriteWaitContextOrDone(ctx, nil, data)
+}
+
+// WriteWaitContextOrDone is the lifecycle-aware backpressure variant. The
+// extra signal prevents a producer from remaining blocked forever when its
+// consumer shuts down while the buffer is full.
+func (b *TypedBuffer[T]) WriteWaitContextOrDone(ctx context.Context, done <-chan struct{}, data T) BufferWriteOutcome {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case b.ch <- data:
+		return BufferWriteOutcome{Status: BufferWriteSucceeded}
+	case <-done:
+		return BufferWriteOutcome{Status: BufferWriteStopped}
+	case <-ctx.Done():
+		return bufferWriteContextOutcome(ctx)
 	}
 }
 

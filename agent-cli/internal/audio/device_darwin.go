@@ -32,6 +32,7 @@ type CoreAudioDeviceRegistry struct {
 }
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
+var _ DuplexDeviceFormatOpener = (*CoreAudioDeviceRegistry)(nil)
 var (
 	_ OpenedDevice = (*coreAudioHandle)(nil)
 	_ AudioSource  = (*coreAudioHandle)(nil)
@@ -84,6 +85,52 @@ func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 // OpenWithFormat opens a CoreAudio endpoint at an explicit PCM format.
 func (r *CoreAudioDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
 	return r.openAtFormat(id, format, true)
+}
+
+// OpenDuplexWithFormat uses Apple's AUVoiceIO for a default microphone and
+// default speaker pair. AUVoiceIO owns the two directions in one native graph,
+// which enables Apple's echo cancellation, noise suppression, and AGC. An
+// explicitly routed/non-default pair falls back through the ordinary registry
+// path because one VoiceIO unit cannot safely promise two arbitrary HAL routes.
+func (r *CoreAudioDeviceRegistry) OpenDuplexWithFormat(inputID DeviceID, inputFormat DeviceFormat, outputID DeviceID, outputFormat DeviceFormat) (OpenedDevice, OpenedDevice, error) {
+	if err := inputFormat.Validate(); err != nil {
+		return nil, nil, err
+	}
+	if err := outputFormat.Validate(); err != nil {
+		return nil, nil, err
+	}
+	endpoints, err := r.enumerate()
+	if err != nil {
+		return nil, nil, err
+	}
+	var input, output *coreAudioEndpoint
+	for index := range endpoints {
+		endpoint := &endpoints[index]
+		switch endpoint.device.ID {
+		case inputID:
+			if endpoint.device.Direction == DirectionInput {
+				input = endpoint
+			}
+		case outputID:
+			if endpoint.device.Direction == DirectionOutput {
+				output = endpoint
+			}
+		}
+	}
+	if input == nil {
+		return nil, nil, NewDeviceNotFoundError(inputID)
+	}
+	if output == nil {
+		return nil, nil, NewDeviceNotFoundError(outputID)
+	}
+	if !input.defaultDevice || !output.defaultDevice {
+		return nil, nil, fmt.Errorf("%w: AUVoiceIO currently supports the default input/output route", ErrDuplexDeviceUnavailable)
+	}
+	inputHandle, outputHandle, err := newVoiceProcessingIO(inputID, outputID, inputFormat, outputFormat)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %v", ErrDuplexDeviceUnavailable, err)
+	}
+	return inputHandle, outputHandle, nil
 }
 
 func (r *CoreAudioDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {

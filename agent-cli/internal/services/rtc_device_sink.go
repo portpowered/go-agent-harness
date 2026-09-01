@@ -131,11 +131,15 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 	if err != nil {
 		return nil, err
 	}
+	return newRTCDeviceSinkFromOpened(sink, deviceRate, rate, voice, playbackObserver), nil
+}
+
+func newRTCDeviceSinkFromOpened(sink *audio.DeviceSink, deviceRate, providerRate int, voice string, playbackObserver RTCDevicePlaybackObserver) *RTCDeviceSink {
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	return &RTCDeviceSink{
 		sink:             sink,
 		id:               sink.DeviceID(),
-		providerRate:     rate,
+		providerRate:     providerRate,
 		deviceRate:       deviceRate,
 		playbackObserver: playbackObserver,
 		loudness:         audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(voice)}),
@@ -143,7 +147,7 @@ func newRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, ra
 		lifeCancel:       lifeCancel,
 		holdToneConfig:   audio.DefaultHoldToneConfig(),
 		holdToneTick:     defaultRTCDeviceHoldToneTick,
-	}, nil
+	}
 }
 
 // NewDefaultRTCDeviceSink opens the directional output default from registry.

@@ -15,6 +15,8 @@ const localFeedbackWarning = "Acoustic feedback detected: speaker audio is enter
 
 var errNilLocalFeedbackPlaybackWrite = errors.New("local feedback playback write is nil")
 
+const localFeedbackIndependentCorrelation = 0.15
+
 type localFeedbackGateState string
 
 const (
@@ -106,6 +108,7 @@ type localFeedbackGate struct {
 	// feedback in the first place. Any other classification resets it to
 	// zero and discards the frames held while it accumulated.
 	probeIndependentEvidence time.Duration
+	confirmedLag             time.Duration
 }
 
 // newLocalFeedbackGate constructs the gate for one paired local-device
@@ -141,9 +144,9 @@ func newLocalFeedbackGate(config audio.PCM16SelfHearingConfig, warning io.Writer
 	// the acoustic path can reshape a frame even though the startup window was
 	// strongly correlated; independent speech still has to clear the same
 	// active-evidence and lag checks.
-	if probeConfig.CorrelationThreshold > 0.20 {
-		probeConfig.CorrelationThreshold = 0.20
-	}
+	// The primary detector's threshold remains appropriate after the probe is
+	// narrowed to its learned acoustic lag. Lowering it here would classify
+	// moderately similar synthetic/user speech as echo in a one-frame window.
 	probe, err := audio.NewPCM16SelfHearingDetector(probeConfig)
 	if err != nil {
 		_ = detector.Close()
@@ -286,6 +289,20 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	g.pending = append(g.pending, heldLocalCaptureFrame{samples: owned, start: start})
 
 	if observation.Confirmed() {
+		lag := observation.Measurement.BestAbsoluteLag
+		g.confirmedLag = lag
+		tolerance := pcm16DeviceDurationAtRate(audio.FrameSize, g.captureRate)
+		probeWindow := audio.PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
+		configuredWindow := g.probe.Config().CorrelationLagWindow
+		if probeWindow.Min < configuredWindow.Min {
+			probeWindow.Min = configuredWindow.Min
+		}
+		if probeWindow.Max > configuredWindow.Max {
+			probeWindow.Max = configuredWindow.Max
+		}
+		if err := g.probe.RestrictCorrelationLagWindow(probeWindow); err != nil {
+			return nil, err
+		}
 		g.state = localFeedbackGateSuppressing
 		g.suppressUntil = g.playbackTailEndLocked()
 		g.pending = nil
@@ -359,6 +376,17 @@ func (g *localFeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 
 	switch probeObservation.Classification {
 	case audio.PCM16SelfHearingNonFeedback:
+		// A one-frame room response can dip below the primary confirmation
+		// threshold at pauses while remaining moderately correlated. Only a
+		// clearly decorrelated frame contributes to an independent-speech streak;
+		// the sustained-duration requirement below remains the second guard.
+		if probeObservation.Measurement.BestAbsoluteCorrelation > localFeedbackIndependentCorrelation {
+			g.pending = nil
+			g.probeIndependentEvidence = 0
+			g.suppressUntil = g.playbackTailEndLocked()
+			g.state = localFeedbackGateSuppressing
+			return nil, nil
+		}
 		g.pending = append(g.pending, heldLocalCaptureFrame{samples: owned, start: start})
 		g.probeIndependentEvidence += end - start
 		if g.probeIndependentEvidence < g.config.AnalysisWindow {
@@ -368,14 +396,32 @@ func (g *localFeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 		g.probeIndependentEvidence = 0
 		return g.releaseAllLocked(), nil
 	case audio.PCM16SelfHearingNoEvidence:
-		g.pending = nil
 		g.probeIndependentEvidence = 0
+		// Silence/no-evidence inside the learned acoustic alignment is a common
+		// TTS pause, not proof of independent speech. Drop it while its source
+		// interval still overlaps accepted playback; outside that interval the
+		// acoustic path has expired and held independent frames can be released.
+		sourceStart := start - g.confirmedLag
+		sourceEnd := end - g.confirmedLag
+		if sourceEnd > 0 && sourceStart < g.lastPlaybackEnd {
+			g.pending = nil
+			g.state = localFeedbackGateSuppressing
+			return nil, nil
+		}
 		g.state = localFeedbackGateDraining
-		return [][]int16{owned}, nil
+		return append(g.releaseAllLocked(), owned), nil
+	case audio.PCM16SelfHearingInsufficientEvidence:
+		// Preserve a boundary fragment until subsequent frames disambiguate it.
+		// A following confirmed echo clears it; a sustained non-feedback streak
+		// releases it in order, avoiding loss of the first barge-in frame.
+		g.pending = append(g.pending, heldLocalCaptureFrame{samples: owned, start: start})
+		g.probeIndependentEvidence = 0
+		g.suppressUntil = g.playbackTailEndLocked()
+		g.state = localFeedbackGateSuppressing
+		return nil, nil
 	default:
-		// Confirmed, insufficient evidence, or a rate mismatch: still
-		// consistent with ongoing echo. Extend the acoustic tail and drop
-		// any independent-speech evidence that had been accumulating.
+		// Confirmed feedback or a rate mismatch remains consistent with echo.
+		// Extend the acoustic tail and drop ambiguous held frames.
 		g.pending = nil
 		g.probeIndependentEvidence = 0
 		g.suppressUntil = g.playbackTailEndLocked()

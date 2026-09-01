@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -35,10 +36,29 @@ type VirtualDeviceConfig struct {
 	Capabilities []VirtualCapability
 	Exclusive    bool
 	LoopbackID   string
+	// LoopbackDelaySamples and LoopbackImpulse model the device-owned acoustic
+	// path from an output endpoint to its paired input endpoint. An empty
+	// impulse is an identity path. The delay is inserted once per pair and the
+	// FIR history is preserved across writes, so tests exercise streaming
+	// device behavior rather than pre-transforming file or provider input.
+	LoopbackDelaySamples int
+	LoopbackImpulse      []float64
 }
 type VirtualBackendConfig struct {
 	Devices  []VirtualDeviceConfig
 	Defaults map[Direction]string
+	// RecordPCM retains owned copies of typed device writes and reads for
+	// deterministic test evidence. Raw byte traffic is intentionally excluded.
+	RecordPCM bool
+}
+
+type VirtualPCMObservation struct {
+	Sequence  int
+	DeviceID  DeviceID
+	Direction Direction
+	Operation string
+	Format    DeviceFormat
+	Samples   []int16
 }
 type virtualDevice struct {
 	Device
@@ -118,6 +138,13 @@ type virtualPair struct {
 	queue    [][]byte
 	playback *PlaybackQueue
 	changed  chan struct{}
+	coupling virtualLoopbackCoupling
+}
+
+type virtualLoopbackCoupling struct {
+	delayLine []int16
+	impulse   []float64
+	history   []int16
 }
 
 func (p *virtualPair) signal() { close(p.changed); p.changed = make(chan struct{}) }
@@ -127,13 +154,17 @@ type VirtualRegistry struct {
 	devices      map[DeviceID]*virtualDevice
 	defaults     map[Direction]DeviceID
 	observations DeviceRegistryObservations
+	recordPCM    bool
+	pcmSequence  int
+	pcm          []VirtualPCMObservation
+	pcmChanged   chan struct{}
 }
 
 func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 	if len(c.Devices) == 0 {
 		return nil, bad("", "virtual backend needs at least one device")
 	}
-	r := &VirtualRegistry{devices: map[DeviceID]*virtualDevice{}, defaults: map[Direction]DeviceID{}}
+	r := &VirtualRegistry{devices: map[DeviceID]*virtualDevice{}, defaults: map[Direction]DeviceID{}, recordPCM: c.RecordPCM, pcmChanged: make(chan struct{})}
 	for _, spec := range c.Devices {
 		v, err := makeVirtualDevice(spec)
 		if err != nil {
@@ -155,7 +186,23 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 		if a.Direction == b.Direction || !compatible(a.spec.Capabilities, b.spec.Capabilities) {
 			return nil, bad(a.ID, "loopback devices have incompatible directions or capabilities")
 		}
-		p := &virtualPair{changed: make(chan struct{})}
+		output := a
+		if output.Direction != DirectionOutput {
+			output = b
+		}
+		if output.spec.LoopbackDelaySamples < 0 {
+			return nil, bad(output.ID, "loopback delay samples must not be negative")
+		}
+		impulse := append([]float64(nil), output.spec.LoopbackImpulse...)
+		for _, coefficient := range impulse {
+			if math.IsNaN(coefficient) || math.IsInf(coefficient, 0) {
+				return nil, bad(output.ID, "loopback impulse coefficients must be finite")
+			}
+		}
+		p := &virtualPair{changed: make(chan struct{}), coupling: virtualLoopbackCoupling{
+			delayLine: make([]int16, output.spec.LoopbackDelaySamples),
+			impulse:   impulse,
+		}}
 		b.spec.LoopbackID = a.ID
 		a.pair, b.pair = p, p
 	}
@@ -246,6 +293,61 @@ func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.observations
+}
+
+// PCMObservations returns deep-copied typed PCM evidence in device operation
+// order. Recording is opt-in through VirtualBackendConfig.RecordPCM.
+func (r *VirtualRegistry) PCMObservations() []VirtualPCMObservation {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]VirtualPCMObservation, len(r.pcm))
+	for index, observation := range r.pcm {
+		out[index] = observation
+		out[index].Samples = append([]int16(nil), observation.Samples...)
+	}
+	return out
+}
+
+// WaitForPCMObservations waits until the opt-in recorder has retained at
+// least count typed operations. It is a deterministic mock-device
+// synchronization seam; production backends do not implement it.
+func (r *VirtualRegistry) WaitForPCMObservations(ctx context.Context, count int) ([]VirtualPCMObservation, error) {
+	if r == nil || count <= 0 {
+		return r.PCMObservations(), nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		r.mu.Lock()
+		if len(r.pcm) >= count {
+			r.mu.Unlock()
+			return r.PCMObservations(), nil
+		}
+		changed := r.pcmChanged
+		r.mu.Unlock()
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+func (r *VirtualRegistry) recordPCMLocked(device *virtualDevice, format DeviceFormat, operation string, samples []int16) {
+	if !r.recordPCM || device == nil || len(samples) == 0 {
+		return
+	}
+	r.pcmSequence++
+	r.pcm = append(r.pcm, VirtualPCMObservation{
+		Sequence: r.pcmSequence, DeviceID: device.ID, Direction: device.Direction,
+		Operation: operation, Format: format, Samples: append([]int16(nil), samples...),
+	})
+	close(r.pcmChanged)
+	r.pcmChanged = make(chan struct{})
 }
 func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 	r.mu.Lock()
@@ -338,8 +440,9 @@ func (s *VirtualStream) WriteSamples(ctx context.Context, samples []int16) error
 		return err
 	}
 	defer s.registry.mu.Unlock()
+	s.registry.recordPCMLocked(s.device, s.format, "write", samples)
 	p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
-	p.playback.Enqueue(samples)
+	p.playback.Enqueue(p.coupling.apply(samples))
 	p.signal()
 	return nil
 }
@@ -395,6 +498,7 @@ func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
 		if p.playback.Snapshot().QueuedSamples >= len(frame) {
 			p.playback.ReadInto(frame)
 			p.signal()
+			s.registry.recordPCMLocked(s.device, s.format, "read", frame)
 			s.registry.mu.Unlock()
 			return nil
 		}
@@ -433,6 +537,7 @@ func (s *VirtualStream) ReadSamples(ctx context.Context, samples []int16) error 
 		if p.playback.Snapshot().QueuedSamples >= len(samples) {
 			p.playback.ReadInto(samples)
 			p.signal()
+			s.registry.recordPCMLocked(s.device, s.format, "read", samples)
 			s.registry.mu.Unlock()
 			return nil
 		}
@@ -487,6 +592,57 @@ func (s *VirtualStream) WaitForPlaybackCapacity(ctx context.Context, samples int
 		case <-changed:
 		}
 	}
+}
+
+func (c *virtualLoopbackCoupling) apply(samples []int16) []int16 {
+	if len(samples) == 0 {
+		return nil
+	}
+	impulse := c.impulse
+	if len(impulse) == 0 {
+		impulse = []float64{1}
+	}
+	transformed := make([]int16, len(samples))
+	historyLen := len(impulse) - 1
+	for index := range samples {
+		value := 0.0
+		for tap, coefficient := range impulse {
+			sourceIndex := index - tap
+			var source int16
+			if sourceIndex >= 0 {
+				source = samples[sourceIndex]
+			} else if historyIndex := len(c.history) + sourceIndex; historyIndex >= 0 {
+				source = c.history[historyIndex]
+			}
+			value += float64(source) * coefficient
+		}
+		if value > math.MaxInt16 {
+			value = math.MaxInt16
+		} else if value < math.MinInt16 {
+			value = math.MinInt16
+		}
+		transformed[index] = int16(math.Round(value))
+	}
+	if historyLen > 0 {
+		joined := append(append([]int16(nil), c.history...), samples...)
+		if len(joined) > historyLen {
+			joined = joined[len(joined)-historyLen:]
+		}
+		c.history = joined
+	}
+	if len(c.delayLine) == 0 {
+		return transformed
+	}
+	// A physical delay is state carried between clocked device callbacks, not
+	// one oversized first write. Returning exactly one output sample per input
+	// sample preserves the configured latency even when it exceeds the bounded
+	// playback queue's capacity.
+	combined := make([]int16, 0, len(c.delayLine)+len(transformed))
+	combined = append(combined, c.delayLine...)
+	combined = append(combined, transformed...)
+	output := append([]int16(nil), combined[:len(transformed)]...)
+	c.delayLine = append(c.delayLine[:0], combined[len(transformed):]...)
+	return output
 }
 
 func ensureVirtualPlaybackQueue(queue *PlaybackQueue, format DeviceFormat) *PlaybackQueue {

@@ -3,6 +3,7 @@ package audio_test
 import (
 	"context"
 	"errors"
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -230,6 +231,88 @@ func TestVirtualTypedPlaybackDiscardAndUnpairedStats(t *testing.T) {
 	_ = r
 }
 
+func TestVirtualLoopbackRecordsDevicePCMAndAppliesFarFieldPath(t *testing.T) {
+	const delay = 6
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		RecordPCM: true,
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, LoopbackID: "input", LoopbackDelaySamples: delay, LoopbackImpulse: []float64{0.5, 0.25}},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+
+	sink, err := audio.NewDeviceSink(registry, "virtual:output")
+	require.NoError(t, err)
+	source, err := audio.NewDeviceSource(registry, "virtual:input")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, source.Close())
+		require.NoError(t, sink.Close())
+	})
+
+	written := make([]int16, audio.FrameSize)
+	written[0], written[1], written[2] = 1000, 2000, -1000
+	require.NoError(t, sink.WriteFrame(context.Background(), written))
+	read := make([]int16, audio.FrameSize)
+	require.NoError(t, source.ReadFrame(context.Background(), read))
+	require.Equal(t, make([]int16, delay), read[:delay])
+	require.Equal(t, []int16{500, 1250, 0}, read[delay:delay+3])
+
+	observations := registry.PCMObservations()
+	require.Len(t, observations, 2)
+	require.Equal(t, "write", observations[0].Operation)
+	require.Equal(t, audio.DeviceID("virtual:output"), observations[0].DeviceID)
+	require.Equal(t, written, observations[0].Samples)
+	require.Equal(t, "read", observations[1].Operation)
+	require.Equal(t, audio.DeviceID("virtual:input"), observations[1].DeviceID)
+	require.Equal(t, read, observations[1].Samples)
+
+	observations[0].Samples[0] = -1
+	require.Equal(t, int16(1000), registry.PCMObservations()[0].Samples[0], "PCM observations must be deep copies")
+}
+
+func TestVirtualLoopbackPreservesDelayBeyondPlaybackQueueCapacity(t *testing.T) {
+	format := audio.DefaultDeviceFormat()
+	capacity, err := audio.PlaybackQueueCapacity(format, audio.DefaultPlaybackLatencyTarget)
+	require.NoError(t, err)
+	delay := ((2*capacity + audio.FrameSize - 1) / audio.FrameSize) * audio.FrameSize
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, LoopbackID: "input", LoopbackDelaySamples: delay},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+	sink, err := audio.NewDeviceSink(registry, "virtual:output")
+	require.NoError(t, err)
+	source, err := audio.NewDeviceSource(registry, "virtual:input")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, source.Close())
+		require.NoError(t, sink.Close())
+	})
+
+	framesUntilEcho := delay / audio.FrameSize
+	for frameIndex := 0; frameIndex <= framesUntilEcho; frameIndex++ {
+		written := make([]int16, audio.FrameSize)
+		if frameIndex == 0 {
+			written[0] = 1234
+		}
+		require.NoError(t, sink.WriteFrame(context.Background(), written))
+		read := make([]int16, audio.FrameSize)
+		require.NoError(t, source.ReadFrame(context.Background(), read))
+		if frameIndex < framesUntilEcho {
+			require.Equal(t, make([]int16, audio.FrameSize), read, "early echo in frame %d", frameIndex)
+		} else {
+			require.Equal(t, int16(1234), read[0], "delayed impulse was dropped by the mock playback queue")
+		}
+	}
+	require.Zero(t, sink.PlaybackStats().DroppedSamples)
+}
+
 func TestVirtualUnsupportedExplicitRateNamesAvailableCapability(t *testing.T) {
 	registry := registry(audio.DefaultVirtualBackendConfig())
 	_, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", 24000)
@@ -271,6 +354,43 @@ func TestVirtualValidationAndDefaults(t *testing.T) {
 		require.Equal(t, missing, noDefault.Direction)
 	}
 }
+
+func TestVirtualPCMRecorderDisabledWaitAndAcousticValidation(t *testing.T) {
+	var nilRegistry *audio.VirtualRegistry
+	recorded, err := nilRegistry.WaitForPCMObservations(context.Background(), 1)
+	require.NoError(t, err)
+	require.Nil(t, recorded)
+
+	registry := registry(audio.DefaultVirtualBackendConfig())
+	recorded, err = registry.WaitForPCMObservations(context.Background(), 0)
+	require.NoError(t, err)
+	require.Empty(t, recorded)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = registry.WaitForPCMObservations(ctx, 1)
+	require.ErrorIs(t, err, context.Canceled)
+
+	for name, mutate := range map[string]func(*audio.VirtualBackendConfig){
+		"negative delay": func(config *audio.VirtualBackendConfig) {
+			config.Devices[1].LoopbackDelaySamples = -1
+		},
+		"nan impulse": func(config *audio.VirtualBackendConfig) {
+			config.Devices[1].LoopbackImpulse = []float64{math.NaN()}
+		},
+		"infinite impulse": func(config *audio.VirtualBackendConfig) {
+			config.Devices[1].LoopbackImpulse = []float64{math.Inf(1)}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := audio.DefaultVirtualBackendConfig()
+			mutate(&config)
+			_, err := audio.NewVirtualRegistry(config)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestVirtualS8Accounting(t *testing.T) {
 	r, out, in := openPair()
 	const frames, attempts = 24, 20
