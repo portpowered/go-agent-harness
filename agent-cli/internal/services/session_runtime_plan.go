@@ -354,6 +354,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if plan.rtcDeviceRequest.inputSelected() && plan.inputAudioSampleRate > 0 {
 		plan.rtcDeviceRequest.InputSampleRate = plan.inputAudioSampleRate
 	}
+	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
+		plan.rtcDeviceRequest.PlaybackObserver,
+		sessionPlaybackDiagnosticObserver(plan.diagnostics),
+	)
 	plan.selection = selection
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint

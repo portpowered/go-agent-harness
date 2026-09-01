@@ -113,10 +113,11 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 }
 
 type virtualPair struct {
-	open    [2]int
-	seen    [2]bool
-	queue   [][]byte
-	changed chan struct{}
+	open     [2]int
+	seen     [2]bool
+	queue    [][]byte
+	playback *PlaybackQueue
+	changed  chan struct{}
 }
 
 func (p *virtualPair) signal() { close(p.changed); p.changed = make(chan struct{}) }
@@ -310,6 +311,27 @@ func (s *VirtualStream) Write(ctx context.Context, frame []byte) error {
 	p.signal()
 	return nil
 }
+
+// WriteFrame is the typed PCM16 path used by DeviceSink. The raw Write
+// method remains available for transport/loopback tests that intentionally
+// exercise arbitrary byte payloads.
+func (s *VirtualStream) WriteFrame(ctx context.Context, frame []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("write", frame); err != nil {
+		return err
+	}
+	p, err := s.lock("write")
+	if err != nil {
+		return err
+	}
+	defer s.registry.mu.Unlock()
+	p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+	p.playback.Enqueue(frame)
+	p.signal()
+	return nil
+}
 func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -336,6 +358,81 @@ func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 		case <-changed:
 		}
 	}
+}
+
+// ReadFrame is the typed PCM16 path paired with WriteFrame. It waits for a
+// complete legacy frame so DeviceSource preserves its existing frame API.
+func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("read", frame); err != nil {
+		return err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if err := contextError(ctx); err != nil {
+			return err
+		}
+		p, err := s.lock("read")
+		if err != nil {
+			return err
+		}
+		p.playback = ensureVirtualPlaybackQueue(p.playback, s.format)
+		if p.playback.Snapshot().QueuedSamples >= len(frame) {
+			p.playback.ReadInto(frame)
+			s.registry.mu.Unlock()
+			return nil
+		}
+		changed := p.changed
+		s.registry.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return contextError(ctx)
+		case <-changed:
+		}
+	}
+}
+
+func ensureVirtualPlaybackQueue(queue *PlaybackQueue, format DeviceFormat) *PlaybackQueue {
+	if queue != nil {
+		return queue
+	}
+	queue, _ = playbackQueueForFormat(format)
+	return queue
+}
+
+// PlaybackStats exposes the typed playback queue used by DeviceSink. Raw
+// byte writes intentionally do not participate in this PCM observation.
+func (s *VirtualStream) PlaybackStats() PlaybackQueueStats {
+	if s == nil || s.registry == nil || s.device == nil {
+		return PlaybackQueueStats{}
+	}
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	if s.device.pair == nil {
+		return emptyPlaybackQueueStats(s.format)
+	}
+	if s.device.pair.playback == nil {
+		return emptyPlaybackQueueStats(s.format)
+	}
+	return s.device.pair.playback.Snapshot()
+}
+
+// DiscardPlayback removes typed PCM samples waiting for the virtual device's
+// paired read callback.
+func (s *VirtualStream) DiscardPlayback() int {
+	if s == nil || s.registry == nil || s.device == nil {
+		return 0
+	}
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	if s.device.pair == nil || s.device.pair.playback == nil {
+		return 0
+	}
+	return s.device.pair.playback.Discard()
 }
 func (s *VirtualStream) Close() error {
 	r := s.registry

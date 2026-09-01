@@ -53,6 +53,9 @@ Canonical record events (`Event` field values):
   delta it summarizes crosses, carrying the terminal per-direction and
   per-modality byte matrix plus provider-reported token usage when the
   provider delivered any on `MESSAGE.END`.
+- `session_playback_overflow` — at most one per selected RTC output device,
+  emitted during device teardown when the bounded local speaker queue dropped
+  samples. The record carries the cumulative drop count and queue bounds.
 
 ## Final runtime accounting observation
 
@@ -153,6 +156,20 @@ above (`input_audio_bytes`, `input_text_bytes`, `output_audio_bytes`,
 `provider_reasoning_tokens`; zero-valued provider usage stays absent. Byte
 counts and token counts measure different units and are surfaced side by side,
 never assumed equal.
+
+### `session_playback_overflow` fields
+
+| Field | Meaning |
+| --- | --- |
+| `device_id` | Stable local output-device ID. |
+| `sample_rate` | Resolved PCM16 playback sample rate in Hz. |
+| `channels` | Resolved interleaved channel count. |
+| `latency_target_ms` | Queue latency target used to derive capacity. |
+| `capacity_samples` | Maximum queued interleaved PCM samples. |
+| `queued_samples` | Samples still queued when the device closed. |
+| `peak_queued_samples` | Maximum queue depth observed during the session. |
+| `dropped_samples` | Cumulative oldest samples discarded by overflow. |
+| `overflow_events` | Number of writes that caused an overflow. |
 
 ### `session_tool_call_unexecutable` fields
 

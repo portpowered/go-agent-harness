@@ -68,6 +68,34 @@ func (s *DeviceSink) SampleRate() int {
 	return s.DeviceFormat().SampleRate
 }
 
+// PlaybackStats returns a consistent observation of samples queued for the
+// device. Backends that do not expose a queue retain a zeroed, format-aware
+// snapshot so callers can keep the optional capability source-compatible.
+func (s *DeviceSink) PlaybackStats() PlaybackQueueStats {
+	if s == nil {
+		return PlaybackQueueStats{}
+	}
+	if s.adapter != nil {
+		if provider, ok := s.adapter.handle.(PlaybackStatsProvider); ok {
+			return provider.PlaybackStats()
+		}
+	}
+	return emptyPlaybackQueueStats(s.format)
+}
+
+// DiscardPlayback removes samples queued for future device callbacks and
+// returns the exact number removed. Audio already submitted to the device is
+// outside this operation's recall boundary.
+func (s *DeviceSink) DiscardPlayback() int {
+	if s == nil || s.adapter == nil {
+		return 0
+	}
+	if discarder, ok := s.adapter.handle.(PlaybackDiscarder); ok {
+		return discarder.DiscardPlayback()
+	}
+	return 0
+}
+
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := contextError(ctx); err != nil {
 		return err

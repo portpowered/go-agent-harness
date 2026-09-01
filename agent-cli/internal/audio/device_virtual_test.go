@@ -110,6 +110,88 @@ func TestVirtualExplicitPCM16RatePreservesDeviceContract(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
+func TestVirtualTypedPlaybackQueueIsBoundedAtResolvedRate(t *testing.T) {
+	const providerRate = 24000
+	capability := audio.VirtualCapability{SampleRate: providerRate, Channels: 1, BitDepth: 16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+
+	sink, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", providerRate)
+	require.NoError(t, err)
+	source, err := audio.NewDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, source.Close())
+		require.NoError(t, sink.Close())
+	})
+
+	const frameCount = 16
+	for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+		frame := make([]int16, audio.FrameSize)
+		for sampleIndex := range frame {
+			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
+		}
+		require.NoError(t, sink.WriteFrame(context.Background(), frame))
+	}
+
+	stats := sink.PlaybackStats()
+	require.Equal(t, 6000, stats.CapacitySamples)
+	require.Equal(t, 6000, stats.QueuedSamples)
+	require.Equal(t, 6000, stats.PeakQueuedSamples)
+	require.Equal(t, uint64(1680), stats.DroppedSamples)
+	require.Equal(t, uint64(4), stats.OverflowEvents)
+
+	first := make([]int16, audio.FrameSize)
+	require.NoError(t, source.ReadFrame(context.Background(), first))
+	for sampleIndex, sample := range first {
+		require.Equal(t, int16(1680+sampleIndex), sample, "sample %d after drop-oldest overflow", sampleIndex)
+	}
+}
+
+func TestVirtualTypedPlaybackQueueMatchedRateDoesNotDrop(t *testing.T) {
+	const providerRate = 24000
+	capability := audio.VirtualCapability{SampleRate: providerRate, Channels: 1, BitDepth: 16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+
+	sink, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", providerRate)
+	require.NoError(t, err)
+	source, err := audio.NewDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, source.Close())
+		require.NoError(t, sink.Close())
+	})
+
+	for frameIndex := 0; frameIndex < 100; frameIndex++ {
+		frame := make([]int16, audio.FrameSize)
+		for sampleIndex := range frame {
+			frame[sampleIndex] = int16((frameIndex*audio.FrameSize + sampleIndex) % 30000)
+		}
+		require.NoError(t, sink.WriteFrame(context.Background(), frame))
+		got := make([]int16, audio.FrameSize)
+		require.NoError(t, source.ReadFrame(context.Background(), got))
+		require.Equal(t, frame, got)
+	}
+
+	stats := sink.PlaybackStats()
+	require.Equal(t, 0, stats.QueuedSamples)
+	require.Equal(t, uint64(0), stats.DroppedSamples)
+	require.Equal(t, uint64(0), stats.OverflowEvents)
+}
+
 func TestVirtualUnsupportedExplicitRateNamesAvailableCapability(t *testing.T) {
 	registry := registry(audio.DefaultVirtualBackendConfig())
 	_, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", 24000)

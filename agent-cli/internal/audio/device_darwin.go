@@ -208,6 +208,14 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	if err := format.Validate(); err != nil {
 		return nil, err
 	}
+	var playback *PlaybackQueue
+	if direction := endpoint.device.Direction; direction == DirectionOutput {
+		var queueErr error
+		playback, queueErr = NewPlaybackQueue(format)
+		if queueErr != nil {
+			return nil, queueErr
+		}
+	}
 	direction := endpoint.device.Direction
 	kind := malgo.Capture
 	if direction == DirectionOutput {
@@ -227,7 +235,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	} else {
 		config.Playback.DeviceID = nativeID
 	}
-	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format}
+	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format, playback: playback}
 	if direction == DirectionInput {
 		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
 	}
@@ -270,7 +278,7 @@ type coreAudioHandle struct {
 	closeOnce sync.Once
 	closeErr  error
 	closed    atomic.Bool
-	playback  []int16
+	playback  *PlaybackQueue
 	nonZero   atomic.Uint64
 	release   func()
 }
@@ -295,14 +303,12 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 		return
 	}
 	clear(output)
-	n := min(len(output)/2, len(h.playback))
-	encodePCM16(output[:n*2], h.playback[:n])
-	for _, sample := range h.playback[:n] {
-		if sample != 0 {
+	n := h.ensurePlaybackQueueLocked().readPCM16(output)
+	for _, value := range output[:n*2] {
+		if value != 0 {
 			h.nonZero.Add(1)
 		}
 	}
-	h.playback = h.playback[n:]
 }
 func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionInput {
@@ -340,11 +346,44 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	if h.closed.Load() {
 		return &ClosedError{Operation: "write", Path: string(h.id)}
 	}
-	h.playback = append(h.playback, frame...)
-	if len(h.playback) > FrameSize*64 {
-		h.playback = h.playback[len(h.playback)-FrameSize*64:]
-	}
+	h.ensurePlaybackQueueLocked().Enqueue(frame)
 	return nil
+}
+
+func (h *coreAudioHandle) ensurePlaybackQueueLocked() *PlaybackQueue {
+	if h.playback == nil {
+		h.playback, _ = playbackQueueForFormat(h.format)
+	}
+	return h.playback
+}
+
+// PlaybackStats reports the format-aware queue state without requiring a
+// hardware callback or exposing CoreAudio-specific queue details.
+func (h *coreAudioHandle) PlaybackStats() PlaybackQueueStats {
+	if h == nil {
+		return PlaybackQueueStats{}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.playback == nil {
+		return emptyPlaybackQueueStats(h.format)
+	}
+	return h.playback.Snapshot()
+}
+
+// DiscardPlayback removes samples that have not yet been handed to the
+// CoreAudio callback. In-flight callback output is intentionally outside this
+// boundary.
+func (h *coreAudioHandle) DiscardPlayback() int {
+	if h == nil {
+		return 0
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.playback == nil {
+		return 0
+	}
+	return h.playback.Discard()
 }
 func (h *coreAudioHandle) Close() error {
 	if h == nil {

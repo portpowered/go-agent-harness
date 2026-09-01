@@ -90,6 +90,10 @@ type RTCDeviceBindingRequest struct {
 	// cannot open this rate may be opened at another supported rate and
 	// converted once by RTCDeviceSource before provider transmission.
 	InputSampleRate int
+	// PlaybackObserver receives one final queue snapshot when a selected output
+	// device closes. It is called outside the native device callback and may be
+	// used to publish cumulative overflow diagnostics.
+	PlaybackObserver RTCDevicePlaybackObserver
 }
 
 func (r RTCDeviceBindingRequest) inputSelected() bool {
@@ -192,7 +196,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 	}
 
 	if request.outputSelected() {
-		sink, err := NewRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate)
+		sink, err := newRTCDeviceSinkAtRate(request.Registry, normalizeRTCDeviceSelector(request.OutputDevice), request.OutputSampleRate, request.PlaybackObserver)
 		if err != nil {
 			closeErr := binding.Close()
 			return nil, errors.Join(&RTCDeviceBindingError{
