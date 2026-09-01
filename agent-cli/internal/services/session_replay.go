@@ -30,8 +30,9 @@ const (
 // versions may carry fields (for example GA audio or output_modalities) that
 // the shared config does not model yet.
 type replaySessionConfiguration struct {
-	payload []byte
-	model   string
+	payload               []byte
+	model                 string
+	outputAudioSampleRate int
 }
 
 // loadReplaySessionConfiguration validates and extracts the authoritative
@@ -107,8 +108,9 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 		}
 
 		return replaySessionConfiguration{
-			payload: append([]byte(nil), payload...),
-			model:   model,
+			payload:               append([]byte(nil), payload...),
+			model:                 model,
+			outputAudioSampleRate: replaySessionOutputAudioSampleRate(session),
 		}, nil
 	}
 
@@ -116,6 +118,31 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 		"replay session capture %s: missing initial outbound %s configuration",
 		path, sessionUpdateEventType,
 	)
+}
+
+// replaySessionOutputAudioSampleRate extracts the provider-declared rate from
+// either the current GA audio.output.format object or a provider extension
+// that carries the same object under output_audio_format. Replays without a
+// rate retain the service's compatibility default.
+func replaySessionOutputAudioSampleRate(session map[string]json.RawMessage) int {
+	var audio struct {
+		Output struct {
+			Format struct {
+				Rate int `json:"rate"`
+			} `json:"format"`
+		} `json:"output"`
+	}
+	if raw, ok := session["audio"]; ok && json.Unmarshal(raw, &audio) == nil && audio.Output.Format.Rate > 0 {
+		return audio.Output.Format.Rate
+	}
+
+	var legacy struct {
+		Rate int `json:"rate"`
+	}
+	if raw, ok := session["output_audio_format"]; ok && json.Unmarshal(raw, &legacy) == nil && legacy.Rate > 0 {
+		return legacy.Rate
+	}
+	return 0
 }
 
 // replayCapturedPrompt is the one prompt shape that the ordinary OpenAI

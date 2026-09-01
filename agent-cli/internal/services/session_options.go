@@ -205,7 +205,12 @@ type SessionRunOptions struct {
 	// retain independent configuration.
 	Voice             string
 	SessionInferencer messages.SessionInferencer
-	WebSocketDialer   transport.Dialer
+	// AudioOutputRequested tells realtime planning that assistant PCM will be
+	// consumed by a local file/device output boundary. It is set by the audio
+	// entry points before provider construction so the provider's declared
+	// output rate is available before any sink or device is opened.
+	AudioOutputRequested bool
+	WebSocketDialer      transport.Dialer
 	// RecordSessionCapturePath, when non-empty, makes NewLiveSessionInferencer
 	// wrap the resolved websocket dialer (WebSocketDialer, or the provider's
 	// real default dialer when that is unset) with a raw-traffic recorder,

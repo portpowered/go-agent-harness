@@ -114,6 +114,42 @@ func (si *SessionGatewayInferencer) Request() SessionRequest {
 	return cloneSessionRequest(si.request)
 }
 
+// SetSessionAudioOutput configures the provider-owned output contract before
+// the next connection. Service planners use this narrow mutation seam after
+// they know whether a caller requested local audio output, which keeps text
+// sessions unchanged while still making the provider rate explicit before
+// device or artifact setup.
+func (si *SessionGatewayInferencer) SetSessionAudioOutput(format models.AudioFormat, rate models.SampleRate) {
+	if si == nil {
+		return
+	}
+	si.request.Config.OutputAudioFormat = format
+	si.request.Config.OutputAudioSampleRate = rate
+	si.request.Config.Modalities = withSessionAudioModality(si.request.Config.Modalities)
+}
+
+// SetSessionAudioInput configures the provider-owned input contract before
+// the next connection. It is used when a local capture device is opened at a
+// provider-native rate; file-source conversion remains a separate media
+// boundary concern.
+func (si *SessionGatewayInferencer) SetSessionAudioInput(format models.AudioFormat, rate models.SampleRate) {
+	if si == nil {
+		return
+	}
+	si.request.Config.InputAudioFormat = format
+	si.request.Config.InputAudioSampleRate = rate
+	si.request.Config.Modalities = withSessionAudioModality(si.request.Config.Modalities)
+}
+
+func withSessionAudioModality(modalities []models.SessionModality) []models.SessionModality {
+	for _, modality := range modalities {
+		if modality == models.SessionModalityAudio {
+			return modalities
+		}
+	}
+	return append(append([]models.SessionModality(nil), modalities...), models.SessionModalityAudio)
+}
+
 func cloneSessionRequest(req SessionRequest) SessionRequest {
 	req.Config = cloneSessionConfig(req.Config)
 	return req

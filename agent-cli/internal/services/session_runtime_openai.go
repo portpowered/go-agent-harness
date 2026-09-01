@@ -131,10 +131,11 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}
 	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
 	plan := sessionRuntimePlan{
-		mode:       sessionRuntimeModeReplayOpenAI,
-		provider:   sessionProviderOpenAI,
-		model:      model,
-		inferencer: sessionInferencer,
+		mode:                  sessionRuntimeModeReplayOpenAI,
+		provider:              sessionProviderOpenAI,
+		model:                 model,
+		outputAudioSampleRate: configuration.outputAudioSampleRate,
+		inferencer:            sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:         prompt,
 			PromptProvided: promptProvided,

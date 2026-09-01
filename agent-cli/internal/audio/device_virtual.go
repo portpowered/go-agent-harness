@@ -67,6 +67,27 @@ func virtualID(ref string) (DeviceID, error) {
 func compatible(a, b []VirtualCapability) bool {
 	return slices.ContainsFunc(a, func(c VirtualCapability) bool { return slices.Contains(b, c) })
 }
+
+func virtualDeviceFormats(capabilities []VirtualCapability) []DeviceFormat {
+	formats := make([]DeviceFormat, 0, len(capabilities))
+	for _, capability := range capabilities {
+		encoding := capability.Format
+		if encoding == "" {
+			encoding = DeviceEncodingPCM16
+		}
+		formats = append(formats, DeviceFormat{
+			SampleRate: capability.SampleRate,
+			Channels:   capability.Channels,
+			BitDepth:   capability.BitDepth,
+			Encoding:   encoding,
+		})
+	}
+	return formats
+}
+
+func containsDeviceFormat(formats []DeviceFormat, want DeviceFormat) bool {
+	return slices.ContainsFunc(formats, func(format DeviceFormat) bool { return format.equal(want) })
+}
 func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 	id, err := virtualID(s.ID)
 	if err != nil {
@@ -184,11 +205,29 @@ func (r *VirtualRegistry) Default(d Direction) (Device, error) {
 func side(d Direction) int                                 { return map[Direction]int{DirectionOutput: 1}[d] }
 func fail(mu *sync.Mutex, err error) (*virtualPair, error) { mu.Unlock(); return nil, err }
 func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openWithFormat(id, DefaultDeviceFormat())
+}
+
+// OpenWithFormat opens an exact virtual endpoint at the requested PCM
+// format. Virtual capabilities are intentionally exact so a loopback can
+// prove that no hidden sample-rate conversion occurred.
+func (r *VirtualRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openWithFormat(id, format)
+}
+
+func (r *VirtualRegistry) openWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v := r.devices[id]
 	if v == nil {
 		return nil, NewDeviceNotFoundError(id)
+	}
+	available := virtualDeviceFormats(v.spec.Capabilities)
+	if !containsDeviceFormat(available, format) {
+		return nil, &DeviceFormatError{ID: id, Direction: v.Direction, Requested: format, Available: available}
 	}
 	if v.spec.Exclusive && v.opened != 0 {
 		return nil, NewDeviceInUseError(id)
@@ -200,7 +239,7 @@ func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		p.open[i]++
 		p.seen[i] = true
 	}
-	return &VirtualStream{registry: r, device: v}, nil
+	return &VirtualStream{registry: r, device: v, format: format}, nil
 }
 func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
@@ -224,7 +263,16 @@ func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 type VirtualStream struct {
 	registry *VirtualRegistry
 	device   *virtualDevice
+	format   DeviceFormat
 	closed   bool
+}
+
+// DeviceFormat reports the exact virtual capability selected at open time.
+func (s *VirtualStream) DeviceFormat() DeviceFormat {
+	if s == nil {
+		return DeviceFormat{}
+	}
+	return s.format
 }
 
 func (s *VirtualStream) lock(op string) (*virtualPair, error) {

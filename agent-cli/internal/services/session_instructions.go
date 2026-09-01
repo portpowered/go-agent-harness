@@ -84,6 +84,9 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 		opts.Prompt = seed.Value
 		opts.PromptProvided = true
 	}
+	if audioPath != "" {
+		opts.AudioOutputRequested = true
+	}
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if seed.Present {
 		plan.loop.Prompt = nextSessionTextWirePrompt()
 	}
-	sink, err := newSessionAudioSink(audioPath, out)
+	sink, err := newSessionAudioSinkAtRate(audioPath, out, plan.outputAudioSampleRate)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}

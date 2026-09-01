@@ -67,7 +67,16 @@ type RTCDeviceSource struct {
 // An empty id selects the registry's input default; a non-empty id is passed
 // through as an exact stable device ID.
 func NewRTCDeviceSource(registry audio.DeviceRegistry, id audio.DeviceID) (*RTCDeviceSource, error) {
-	source, err := audio.NewDeviceSource(registry, id)
+	return NewRTCDeviceSourceAtRate(registry, id, audio.SampleRate)
+}
+
+// NewRTCDeviceSourceAtRate opens an input device for mono PCM16 at rate. A
+// zero rate retains the compatibility default used by NewRTCDeviceSource.
+func NewRTCDeviceSourceAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int) (*RTCDeviceSource, error) {
+	if rate == 0 {
+		rate = audio.SampleRate
+	}
+	source, err := audio.NewDeviceSourceAtRate(registry, id, rate)
 	if err != nil {
 		return nil, err
 	}

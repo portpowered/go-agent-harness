@@ -367,6 +367,9 @@ func runSessionWithRecordingDirectory(
 		// provider from auto-committing the same buffer through server VAD.
 		opts.ClientOwnsAudioTurnBoundaries = true
 	}
+	if audioOutPath != "" {
+		opts.AudioOutputRequested = true
+	}
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
@@ -413,7 +416,7 @@ func runSessionWithRecordingDirectory(
 	var audioWrapper *sessionAudioOutputInferencer
 	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
-		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
+		sink, sinkErr := newSessionAudioSinkAtRate(audioOutPath, out, plan.outputAudioSampleRate)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}

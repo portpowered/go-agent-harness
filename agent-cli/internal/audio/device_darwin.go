@@ -26,8 +26,9 @@ var coreAudioBackends = []malgo.Backend{malgo.BackendCoreaudio}
 
 // CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints.
 type CoreAudioDeviceRegistry struct {
-	enumerate func() ([]coreAudioEndpoint, error)
-	open      func(coreAudioEndpoint) (OpenedDevice, error)
+	enumerate  func() ([]coreAudioEndpoint, error)
+	open       func(coreAudioEndpoint) (OpenedDevice, error)
+	openFormat func(coreAudioEndpoint, DeviceFormat) (OpenedDevice, error)
 }
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
@@ -38,7 +39,7 @@ var (
 )
 
 func NewCoreAudioDeviceRegistry() *CoreAudioDeviceRegistry {
-	return &CoreAudioDeviceRegistry{enumerate: enumerateCoreAudioDevices, open: openCoreAudioDevice}
+	return &CoreAudioDeviceRegistry{enumerate: enumerateCoreAudioDevices, open: openCoreAudioDevice, openFormat: openCoreAudioDeviceWithFormat}
 }
 
 type coreAudioEndpoint struct {
@@ -77,6 +78,18 @@ func (r *CoreAudioDeviceRegistry) Default(direction Direction) (Device, error) {
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
 func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openAtFormat(id, DefaultDeviceFormat(), false)
+}
+
+// OpenWithFormat opens a CoreAudio endpoint at an explicit PCM format.
+func (r *CoreAudioDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openAtFormat(id, format, true)
+}
+
+func (r *CoreAudioDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	backend, _, err := ParseDeviceID(id)
 	if err != nil {
 		return nil, err
@@ -95,9 +108,20 @@ func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		if endpoint.device.ID != id {
 			continue
 		}
-		opened, err := r.open(endpoint)
+		var opened OpenedDevice
+		if r.openFormat != nil {
+			opened, err = r.openFormat(endpoint, format)
+		} else if format.equal(DefaultDeviceFormat()) {
+			opened, err = r.open(endpoint)
+		} else {
+			return nil, &DeviceFormatError{ID: id, Direction: endpoint.device.Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: errors.New("CoreAudio registry does not support explicit device formats")}
+		}
 		if err != nil {
-			return nil, mapCoreAudioOpenError(id, err)
+			mapped := mapCoreAudioOpenError(id, err)
+			if wrapFormatErrors {
+				return nil, &DeviceFormatError{ID: id, Direction: endpoint.device.Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: mapped}
+			}
+			return nil, mapped
 		}
 		return opened, nil
 	}
@@ -119,11 +143,15 @@ func enumerateCoreAudioDevices() ([]coreAudioEndpoint, error) {
 	return enumerateCoreAudioEndpoints(ctx)
 }
 func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {
+	return openCoreAudioDeviceWithFormat(endpoint, DefaultDeviceFormat())
+}
+
+func openCoreAudioDeviceWithFormat(endpoint coreAudioEndpoint, format DeviceFormat) (OpenedDevice, error) {
 	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := openCoreAudioEndpoint(ctx, endpoint)
+	handle, err := openCoreAudioEndpoint(ctx, endpoint, format)
 	if err != nil {
 		return nil, errors.Join(err, releaseCoreAudioContext(ctx))
 	}
@@ -172,18 +200,25 @@ func coreAudioUID(id malgo.DeviceID) string { return strings.TrimRight(string(id
 func coreAudioNativeID(uid string, direction Direction) string {
 	return url.PathEscape(uid) + ":" + direction.String()
 }
-func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoint) (*coreAudioHandle, error) {
+func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoint, formats ...DeviceFormat) (*coreAudioHandle, error) {
+	format := DefaultDeviceFormat()
+	if len(formats) > 0 {
+		format = formats[0]
+	}
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	direction := endpoint.device.Direction
 	kind := malgo.Capture
 	if direction == DirectionOutput {
 		kind = malgo.Playback
 	}
 	config := malgo.DefaultDeviceConfig(kind)
-	config.SampleRate, config.PerformanceProfile = uint32(SampleRate), malgo.LowLatency
+	config.SampleRate, config.PerformanceProfile = uint32(format.SampleRate), malgo.LowLatency
 	if direction == DirectionInput {
-		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(Channels)
+		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(format.Channels)
 	} else {
-		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(Channels)
+		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(format.Channels)
 	}
 	nativeID := endpoint.native.Pointer()
 	defer C.free(nativeID)
@@ -192,7 +227,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	} else {
 		config.Playback.DeviceID = nativeID
 	}
-	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction}
+	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format}
 	if direction == DirectionInput {
 		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
 	}
@@ -229,6 +264,7 @@ type coreAudioHandle struct {
 	context   *malgo.AllocatedContext
 	device    *malgo.Device
 	direction Direction
+	format    DeviceFormat
 	capture   *MicrophoneSource
 	mu        sync.Mutex
 	closeOnce sync.Once
@@ -237,6 +273,13 @@ type coreAudioHandle struct {
 	playback  []int16
 	nonZero   atomic.Uint64
 	release   func()
+}
+
+func (h *coreAudioHandle) DeviceFormat() DeviceFormat {
+	if h == nil {
+		return DeviceFormat{}
+	}
+	return h.format
 }
 
 func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {

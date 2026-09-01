@@ -67,7 +67,16 @@ type RTCDeviceSink struct {
 // An empty id selects the registry's output default; a non-empty id is passed
 // through as an exact stable device ID.
 func NewRTCDeviceSink(registry audio.DeviceRegistry, id audio.DeviceID) (*RTCDeviceSink, error) {
-	sink, err := audio.NewDeviceSink(registry, id)
+	return NewRTCDeviceSinkAtRate(registry, id, audio.SampleRate)
+}
+
+// NewRTCDeviceSinkAtRate opens an output device for mono PCM16 at rate. A
+// zero rate retains the compatibility default used by NewRTCDeviceSink.
+func NewRTCDeviceSinkAtRate(registry audio.DeviceRegistry, id audio.DeviceID, rate int) (*RTCDeviceSink, error) {
+	if rate == 0 {
+		rate = audio.SampleRate
+	}
+	sink, err := audio.NewDeviceSinkAtRate(registry, id, rate)
 	if err != nil {
 		return nil, err
 	}

@@ -260,6 +260,9 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if !sessionAudioInputSelected(input) {
 		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
 	}
+	if audioOutPath != "" {
+		opts.AudioOutputRequested = true
+	}
 	if seed.Present {
 		opts.Prompt = seed.Value
 		opts.PromptProvided = true
@@ -336,7 +339,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	var audioOutput *sessionAudioOutput
 	var audioWrapped *sessionAudioOutputInferencer
 	if audioOutPath != "" {
-		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
+		sink, sinkErr := newSessionAudioSinkAtRate(audioOutPath, out, plan.outputAudioSampleRate)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}

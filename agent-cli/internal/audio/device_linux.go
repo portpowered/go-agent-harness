@@ -80,6 +80,20 @@ func (r *LinuxDeviceRegistry) Default(direction Direction) (Device, error) {
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
 func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
+	return r.openAtFormat(id, DefaultDeviceFormat(), false)
+}
+
+// OpenWithFormat opens a Linux endpoint at an explicit PCM format. The
+// backend is configured with the requested rate rather than silently using
+// the legacy 16 kHz default.
+func (r *LinuxDeviceRegistry) OpenWithFormat(id DeviceID, format DeviceFormat) (OpenedDevice, error) {
+	return r.openAtFormat(id, format, true)
+}
+
+func (r *LinuxDeviceRegistry) openAtFormat(id DeviceID, format DeviceFormat, wrapFormatErrors bool) (OpenedDevice, error) {
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	if _, _, err := ParseDeviceID(id); err != nil {
 		return nil, err
 	}
@@ -98,10 +112,14 @@ func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	}
 	r.inUse[id] = struct{}{}
 	r.mu.Unlock()
-	opened, err := r.openNative(records[i])
+	opened, err := r.openNative(records[i], format)
 	if err != nil {
 		r.release(id)
-		return nil, mapLinuxOpenError(id, err)
+		mapped := mapLinuxOpenError(id, err)
+		if wrapFormatErrors {
+			return nil, &DeviceFormatError{ID: id, Direction: records[i].Direction, Requested: format, Available: defaultDeviceFormatAvailability(), Err: mapped}
+		}
+		return nil, mapped
 	}
 	opened.release = func() { r.release(id) }
 	return opened, nil
@@ -207,7 +225,14 @@ func newLinuxDeviceRecord(backend malgo.Backend, name string, direction Directio
 	}
 	return linuxDeviceRecord{Device: device, nativeID: info.ID, backend: backend, defaulted: info.IsDefault != 0}, nil
 }
-func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord) (*linuxOpenedDevice, error) {
+func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord, formats ...DeviceFormat) (*linuxOpenedDevice, error) {
+	format := DefaultDeviceFormat()
+	if len(formats) > 0 {
+		format = formats[0]
+	}
+	if err := format.Validate(); err != nil {
+		return nil, err
+	}
 	ctx, err := malgo.InitContext([]malgo.Backend{record.backend}, malgo.ContextConfig{Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1}}, nil)
 	if err != nil {
 		return nil, err
@@ -216,15 +241,15 @@ func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord) (*linuxOpened
 	if record.Direction == DirectionInput {
 		config = malgo.DefaultDeviceConfig(malgo.Capture)
 	}
-	config.SampleRate, config.Alsa.NoMMap = uint32(SampleRate), 1
+	config.SampleRate, config.Alsa.NoMMap = uint32(format.SampleRate), 1
 	nativeID := record.nativeID.Pointer()
 	defer C.free(nativeID)
 	if record.Direction == DirectionInput {
-		config.Capture.Format, config.Capture.Channels, config.Capture.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
+		config.Capture.Format, config.Capture.Channels, config.Capture.DeviceID = malgo.FormatS16, uint32(format.Channels), nativeID
 	} else {
-		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
+		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(format.Channels), nativeID
 	}
-	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx}
+	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, format: format}
 	callbacks := malgo.DeviceCallbacks{Data: handle.onData}
 	if record.Direction == DirectionInput {
 		handle.microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
@@ -265,6 +290,7 @@ type linuxOpenedDevice struct {
 	closeOnce  sync.Once
 	id         DeviceID
 	direction  Direction
+	format     DeviceFormat
 	context    *malgo.AllocatedContext
 	device     *malgo.Device
 	microphone *MicrophoneSource
@@ -273,6 +299,13 @@ type linuxOpenedDevice struct {
 	positive   bool
 	closeErr   error
 	release    func()
+}
+
+func (d *linuxOpenedDevice) DeviceFormat() DeviceFormat {
+	if d == nil {
+		return DeviceFormat{}
+	}
+	return d.format
 }
 
 func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {

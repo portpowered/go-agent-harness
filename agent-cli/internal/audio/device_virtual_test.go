@@ -75,6 +75,51 @@ func TestVirtualProductionConfiguration(t *testing.T) {
 	_, err = production.New("missing", c)
 	require.Error(t, err)
 }
+
+func TestVirtualExplicitPCM16RatePreservesDeviceContract(t *testing.T) {
+	const providerRate = 24000
+	capability := audio.VirtualCapability{SampleRate: providerRate, Channels: 1, BitDepth: 16, Format: audio.DeviceEncodingPCM16}
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "output"},
+			{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{capability}, LoopbackID: "input"},
+		},
+		Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"},
+	})
+	require.NoError(t, err)
+
+	sink, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", providerRate)
+	require.NoError(t, err)
+	source, err := audio.NewDeviceSourceAtRate(registry, "virtual:input", providerRate)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, source.Close())
+		require.NoError(t, sink.Close())
+	})
+
+	want := make([]int16, audio.FrameSize)
+	for index := range want {
+		want[index] = int16(index*13 - 2000)
+	}
+	require.Equal(t, audio.PCM16DeviceFormat(providerRate), sink.DeviceFormat())
+	require.Equal(t, providerRate, sink.SampleRate())
+	require.Equal(t, audio.PCM16DeviceFormat(providerRate), source.DeviceFormat())
+	require.NoError(t, sink.WriteFrame(context.Background(), want))
+	got := make([]int16, audio.FrameSize)
+	require.NoError(t, source.ReadFrame(context.Background(), got))
+	require.Equal(t, want, got)
+}
+
+func TestVirtualUnsupportedExplicitRateNamesAvailableCapability(t *testing.T) {
+	registry := registry(audio.DefaultVirtualBackendConfig())
+	_, err := audio.NewDeviceSinkAtRate(registry, "virtual:output", 24000)
+	var formatErr *audio.DeviceFormatError
+	require.ErrorAs(t, err, &formatErr)
+	require.ErrorIs(t, err, audio.ErrUnsupportedDeviceFormat)
+	require.Contains(t, err.Error(), "24000 Hz")
+	require.Contains(t, err.Error(), "16000 Hz")
+}
+
 func TestVirtualValidationAndDefaults(t *testing.T) {
 	base := audio.DefaultVirtualBackendConfig()
 	badPair := base
