@@ -57,6 +57,21 @@ func (s *RTCDeviceSink) startHoldTone(ctx context.Context) func() {
 			case <-stopCh:
 				return
 			case now := <-ticker.C:
+				if s.holdToneFeedbackConfirmed() {
+					// Local hardware has already demonstrated real
+					// speaker->mic coupling from this cue (see
+					// rtcDevicePlaybackObserver.FeedbackConfirmed). Stop
+					// generating more of it permanently for this Pump
+					// lifetime: another pulse would only hand the feedback
+					// gate another self-correlated event to reclassify
+					// against, which can otherwise keep discarding a
+					// genuinely independent, concurrent customer utterance
+					// before it accumulates enough evidence to release (see
+					// classifySuppressedCaptureLocked). The customer is
+					// better served by silence again than by a cue that
+					// risks masking their own barge-in.
+					return
+				}
 				s.tickHoldTone(ctx, now, rate, tick)
 			}
 		}
@@ -68,6 +83,20 @@ func (s *RTCDeviceSink) startHoldTone(ctx context.Context) func() {
 		<-done
 		s.setHoldToneFiller(nil)
 	}
+}
+
+// holdToneFeedbackConfirmed reports whether this sink's paired observer (the
+// local acoustic-feedback gate, when one is configured) has ever confirmed
+// that captured audio from this device pairing is this sink's own played
+// content looping back. A nil observer (no local feedback gate configured,
+// e.g. a bare playback-only sink or a room's output device) reports false:
+// there is nothing to detect a loop against, so the cue behaves exactly as
+// it did before this safeguard existed.
+func (s *RTCDeviceSink) holdToneFeedbackConfirmed() bool {
+	if s == nil || s.observer == nil {
+		return false
+	}
+	return s.observer.FeedbackConfirmed()
 }
 
 // tickHoldTone writes one hold-tone chunk if, and only if, the filler
