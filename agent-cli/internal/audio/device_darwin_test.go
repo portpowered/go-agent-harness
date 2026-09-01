@@ -59,6 +59,44 @@ func TestCoreAudioPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	}
 }
 
+func TestCoreAudioPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
+	handle := &coreAudioHandle{direction: DirectionOutput, format: DefaultDeviceFormat(), playbackWake: make(chan struct{})}
+	low, high, err := PlaybackQueueWatermarks(handle.format)
+	if err != nil {
+		t.Fatalf("resolve playback watermarks: %v", err)
+	}
+	for queued := 0; queued < high; queued += FrameSize {
+		if err := handle.WriteFrame(context.Background(), make([]int16, FrameSize)); err != nil {
+			t.Fatalf("prime playback queue: %v", err)
+		}
+	}
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- handle.WaitForPlaybackCapacity(context.Background(), FrameSize) }()
+	select {
+	case err := <-waitDone:
+		t.Fatalf("capacity wait returned above low watermark: %v", err)
+	default:
+	}
+
+	callback := make([]byte, FrameSize*2)
+	for handle.PlaybackStats().QueuedSamples > low {
+		handle.onData(callback, nil, FrameSize)
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("capacity wait after callback drain: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("capacity wait did not resume at low watermark")
+	}
+	stats := handle.PlaybackStats()
+	if stats.QueuedSamples != low || stats.DroppedSamples != 0 {
+		t.Fatalf("paced CoreAudio queue stats = %+v, want low watermark and no drops", stats)
+	}
+}
+
 func coreAudioTestEndpoint(uid, name string, direction Direction, defaulted bool) coreAudioEndpoint {
 	device, _ := NewDevice(coreAudioBackend, coreAudioNativeID(uid, direction), name, direction)
 	return coreAudioEndpoint{device: device, defaultDevice: defaulted}

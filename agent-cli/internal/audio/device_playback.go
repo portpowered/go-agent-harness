@@ -13,6 +13,13 @@ const (
 	// a latency budget, not a backend-specific frame count; capacity is derived
 	// from this target and the opened device format.
 	DefaultPlaybackLatencyTarget = 250 * time.Millisecond
+	// DefaultPlaybackLowWatermark is the amount of queued audio left when a
+	// throttled producer may resume. Keeping this reserve avoids starving the
+	// next device callback while the producer is being scheduled.
+	DefaultPlaybackLowWatermark = 120 * time.Millisecond
+	// DefaultPlaybackHighWatermark is the normal queue ceiling. Producers
+	// pause above this target instead of filling the drop-oldest capacity.
+	DefaultPlaybackHighWatermark = 180 * time.Millisecond
 )
 
 // ErrInvalidPlaybackQueue identifies an invalid playback format or latency target.
@@ -99,6 +106,29 @@ func PlaybackQueueCapacity(format DeviceFormat, latency time.Duration) (int, err
 		return 0, fmt.Errorf("%w: derived capacity %d is outside int range", ErrInvalidPlaybackQueue, capacity)
 	}
 	return int(capacity), nil
+}
+
+// PlaybackQueueWatermarks converts the default pacing latency targets into
+// interleaved sample counts for format. The high watermark remains below the
+// queue's hard drop-oldest capacity; the low watermark provides hysteresis so
+// a producer wakes in useful batches instead of once per consumed sample.
+func PlaybackQueueWatermarks(format DeviceFormat) (lowSamples, highSamples int, err error) {
+	lowSamples, err = PlaybackQueueCapacity(format, DefaultPlaybackLowWatermark)
+	if err != nil {
+		return 0, 0, err
+	}
+	highSamples, err = PlaybackQueueCapacity(format, DefaultPlaybackHighWatermark)
+	if err != nil {
+		return 0, 0, err
+	}
+	hardCapacity, err := PlaybackQueueCapacity(format, DefaultPlaybackLatencyTarget)
+	if err != nil {
+		return 0, 0, err
+	}
+	if lowSamples >= highSamples || highSamples >= hardCapacity {
+		return 0, 0, fmt.Errorf("%w: pacing watermarks low=%d high=%d capacity=%d", ErrInvalidPlaybackQueue, lowSamples, highSamples, hardCapacity)
+	}
+	return lowSamples, highSamples, nil
 }
 
 // Enqueue appends samples and returns the exact number of oldest samples

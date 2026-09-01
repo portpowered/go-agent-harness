@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,24 +22,11 @@ import (
 // alongside the audio deltas, on top of the exact frame count.
 const playbackOverflowSessionReceiveHeadroom = 8
 
-// TestSessionCommandSurfacesPlaybackOverflowDiagnostic is a regression test
-// for the CLI wiring gap found while investigating intermittent assistant
-// audio cutoff: agent-cli/internal/audio/device_playback.go accumulates
-// DroppedSamples/OverflowEvents on every local playback queue correctly, and
-// agent-cli/internal/services/session_playback_diagnostics.go can format them
-// into a SessionDiagnosticEventPlaybackOverflow record, but the `session`
-// command never populated services.SessionRunOptions.Diagnostics, so a real
-// operator running `agent session` had no way to observe these counters --
-// not on stdout, not on stderr, not in any recording artifact.
-//
-// This test delivers many device-frame-sized assistant audio chunks to a
-// virtual output device that nothing ever drains, which deterministically
-// overflows the bounded playback queue (see PlaybackQueueCapacity), and
-// asserts the overflow is reported on the command's stderr. Before the
-// Diagnostics wiring fix in session.go, this assertion fails even though the
-// queue really did drop samples, because sessionPlaybackDiagnosticObserver
-// was never handed a sink.
-func TestSessionCommandSurfacesPlaybackOverflowDiagnostic(t *testing.T) {
+// TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow delivers more
+// audio than the device queue can hold while no virtual callback drains it.
+// The RTC sink must block at its high watermark until session shutdown rather
+// than use the queue's drop-oldest overflow behavior.
+func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	capacity, err := audio.PlaybackQueueCapacity(audio.DefaultDeviceFormat(), audio.DefaultPlaybackLatencyTarget)
 	if err != nil {
 		t.Fatalf("compute playback queue capacity: %v", err)
@@ -49,7 +35,6 @@ func TestSessionCommandSurfacesPlaybackOverflowDiagnostic(t *testing.T) {
 	// Comfortably more frames than fit in the queue so the overflow is
 	// deterministic, independent of any device-callback timing.
 	frameCount := capacity/audio.FrameSize + 20
-	totalSamples := frameCount * audio.FrameSize
 	frames := make([][]int16, frameCount)
 	for frameIndex := range frames {
 		frame := make([]int16, audio.FrameSize)
@@ -64,9 +49,8 @@ func TestSessionCommandSurfacesPlaybackOverflowDiagnostic(t *testing.T) {
 		t.Fatalf("new virtual registry: %v", err)
 	}
 
-	// Deliberately no reader ever drains "virtual:output": the point is to
-	// prove the overflow diagnostic is observable purely from the sink's own
-	// accounting, not from a device-side assertion.
+	// Deliberately no reader drains "virtual:output". Session shutdown must
+	// cancel the blocked producer cleanly without dropping queued PCM.
 	inferencer := newPlaybackOverflowInferencer(frames)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
@@ -98,19 +82,8 @@ func TestSessionCommandSurfacesPlaybackOverflowDiagnostic(t *testing.T) {
 		t.Fatal("provider session did not finish closing after the command returned")
 	}
 
-	got := stderr.String()
-	if !strings.Contains(got, "playback diagnostic:") {
-		t.Fatalf("stderr missing playback overflow diagnostic; DroppedSamples/OverflowEvents from device_playback.go must be surfaced by the session command. stderr=%q", got)
-	}
-	if !strings.Contains(got, `event="session_playback_overflow"`) {
-		t.Fatalf("stderr playback diagnostic has wrong event name: %q", got)
-	}
-	wantDropped := totalSamples - capacity
-	if !strings.Contains(got, "dropped_samples="+strconv.Itoa(wantDropped)) {
-		t.Fatalf("stderr playback diagnostic dropped_samples != %d (capacity=%d total=%d): %q", wantDropped, capacity, totalSamples, got)
-	}
-	if strings.Contains(got, "overflow_events=0") {
-		t.Fatalf("stderr playback diagnostic overflow_events == 0, want at least one overflow: %q", got)
+	if got := stderr.String(); strings.Contains(got, `event="session_playback_overflow"`) || strings.Contains(got, "dropped_samples=") {
+		t.Fatalf("paced playback burst reported sample loss: %q", got)
 	}
 }
 
