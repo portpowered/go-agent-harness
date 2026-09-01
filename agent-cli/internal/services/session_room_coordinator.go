@@ -513,6 +513,37 @@ func (c *roomCoordinator) activeExcept(participantID string) []*roomParticipantR
 	return result
 }
 
+// audioInputPolicy classifies one exact mixed frame from the participant IDs
+// retained by the mixer. A frame made only from known agent inputs is
+// non-interrupting; a human/customer contributor, an unknown source, or a
+// missing source set uses the safe interrupting default.
+func (c *roomCoordinator) audioInputPolicy(sourceIDs []string) messages.SessionAudioInputPolicy {
+	if c == nil || len(sourceIDs) == 0 {
+		return messages.SessionAudioInputPolicyDefault
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, sourceID := range sourceIDs {
+		sourceID = strings.TrimSpace(sourceID)
+		if sourceID == "" {
+			return messages.SessionAudioInputPolicyDefault
+		}
+		runtime, ok := c.active[sourceID]
+		if !ok || runtime == nil || runtime.plan == nil {
+			return messages.SessionAudioInputPolicyDefault
+		}
+		kind := room.NormalizeParticipantKind(runtime.plan.manifest.Kind)
+		if kind == room.ParticipantKindHuman {
+			return messages.SessionAudioInputPolicyInterrupt
+		}
+		if kind != room.ParticipantKindAgent {
+			return messages.SessionAudioInputPolicyDefault
+		}
+	}
+	return messages.SessionAudioInputPolicyDoNotInterrupt
+}
+
 func (c *roomCoordinator) isActive(participantID string) bool {
 	if c == nil {
 		return false

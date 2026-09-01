@@ -929,9 +929,9 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, errors.New("room session loop did not become ready"), secretsForPlan(runtime.plan)))
 		return
 	}
-	sendAudioInput := loop.SendAudioInput
+	sendAudioInput := loop.SendAudioInputWithPolicy
 	if inputHook != nil {
-		sendAudioInput = func(_ context.Context, pcm []byte) error {
+		sendAudioInput = func(_ context.Context, pcm []byte, _ messages.SessionAudioInputPolicy) error {
 			return inputHook(runtime.plan.manifest.ID, append([]byte(nil), pcm...))
 		}
 	}
@@ -949,7 +949,8 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			return
 		}
 		frame := mixed.PCM
-		if err := sendAudioInput(admissionCtx, frame); err != nil {
+		policy := coordinator.audioInputPolicy(mixed.Sources)
+		if err := sendAudioInput(admissionCtx, frame, policy); err != nil {
 			if runtime.ingress != nil {
 				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonProviderInputRejected)
 			}
