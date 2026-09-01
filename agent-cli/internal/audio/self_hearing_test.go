@@ -294,6 +294,330 @@ func TestPCM16SelfHearingStorageRemainsBoundedForLargeFrames(t *testing.T) {
 	}
 }
 
+func TestPCM16SelfHearingControllerAliasesMatchDetectorConstructors(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	controller, err := audio.NewPCM16SelfHearingController(config)
+	if err != nil || controller == nil {
+		t.Fatalf("NewPCM16SelfHearingController() = (%v, %v), want a detector", controller, err)
+	}
+	t.Cleanup(func() { _ = controller.Close() })
+
+	invalid := config
+	invalid.AnalysisWindow = -time.Nanosecond
+	if _, err := audio.NewPCM16SelfHearingController(invalid); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingConfig) {
+		t.Fatalf("NewPCM16SelfHearingController(invalid) error = %v, want ErrInvalidPCM16SelfHearingConfig", err)
+	}
+
+	paired := audio.PCM16SelfHearingTopology{LiveMicrophone: true, LiveSpeaker: true}
+	if !paired.EnablesPCM16SelfHearing() {
+		t.Fatalf("paired topology EnablesPCM16SelfHearing() = false, want true")
+	}
+	pairedController, err := audio.NewPCM16SelfHearingControllerForTopology(paired, config)
+	if err != nil || pairedController == nil {
+		t.Fatalf("NewPCM16SelfHearingControllerForTopology(paired) = (%v, %v), want a detector", pairedController, err)
+	}
+	t.Cleanup(func() { _ = pairedController.Close() })
+
+	bypass := audio.PCM16SelfHearingTopology{LiveMicrophone: true, LiveSpeaker: true, RoomPeerIngress: true}
+	if bypass.EnablesPCM16SelfHearing() {
+		t.Fatalf("bypass topology EnablesPCM16SelfHearing() = true, want false")
+	}
+	bypassController, err := audio.NewPCM16SelfHearingControllerForTopology(bypass, config)
+	if err != nil || bypassController != nil {
+		t.Fatalf("NewPCM16SelfHearingControllerForTopology(bypass) = (%v, %v), want (nil, nil)", bypassController, err)
+	}
+}
+
+func TestPCM16SelfHearingNilDetectorIsInert(t *testing.T) {
+	var detector *audio.PCM16SelfHearingDetector
+	if got := detector.Config(); got != (audio.PCM16SelfHearingConfig{}) {
+		t.Fatalf("nil Config() = %+v, want zero value", got)
+	}
+	if got := detector.MaxBufferDuration(); got != 0 {
+		t.Fatalf("nil MaxBufferDuration() = %s, want 0", got)
+	}
+	if got := detector.BufferStats(); got != (audio.PCM16SelfHearingBufferStats{}) {
+		t.Fatalf("nil BufferStats() = %+v, want zero value", got)
+	}
+	detector.ResetCapture() // must not panic on a nil receiver
+	if err := detector.Close(); err != nil {
+		t.Fatalf("nil Close() = %v, want nil", err)
+	}
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 63), SampleRate: 1000}
+	if err := detector.ObservePlaybackContext(context.Background(), frame); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("nil ObservePlaybackContext() = %v, want ErrClosed", err)
+	}
+	if _, err := detector.ObserveCaptureContext(context.Background(), frame); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("nil ObserveCaptureContext() = %v, want ErrClosed", err)
+	}
+}
+
+func TestPCM16SelfHearingConfigAndMaxBufferDurationReflectNormalizedPolicy(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	config.AnalysisWindow = 150 * time.Millisecond
+	config.MinimumEvidence = 90 * time.Millisecond
+	config.CorrelationLagWindow = audio.PCM16LagWindow{Min: -40 * time.Millisecond, Max: 60 * time.Millisecond}
+	detector := newSelfHearingDetector(t, config)
+
+	got := detector.Config()
+	if got.AnalysisWindow != config.AnalysisWindow || got.MinimumEvidence != config.MinimumEvidence || got.CorrelationLagWindow != config.CorrelationLagWindow {
+		t.Fatalf("Config() = %+v, want the constructed policy %+v", got, config)
+	}
+
+	want := config.AnalysisWindow + 60*time.Millisecond // buffer bound covers the largest lag magnitude
+	if gotBound := detector.MaxBufferDuration(); gotBound != want {
+		t.Fatalf("MaxBufferDuration() = %s, want %s", gotBound, want)
+	}
+}
+
+func TestPCM16SelfHearingResetCaptureDropsCaptureOnly(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 71), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("ObservePlayback(): %v", err)
+	}
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 73), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("ObserveCapture(): %v", err)
+	}
+	before := detector.BufferStats()
+	if before.CaptureSamples == 0 || before.PlaybackSamples == 0 {
+		t.Fatalf("seed observations did not populate both buffers: %+v", before)
+	}
+
+	detector.ResetCapture()
+
+	after := detector.BufferStats()
+	if after.CaptureSamples != 0 {
+		t.Fatalf("capture samples after ResetCapture() = %d, want 0", after.CaptureSamples)
+	}
+	if after.PlaybackSamples != before.PlaybackSamples {
+		t.Fatalf("playback samples after ResetCapture() = %d, want unchanged %d", after.PlaybackSamples, before.PlaybackSamples)
+	}
+}
+
+func TestPCM16SelfHearingResetCaptureAfterCloseIsNoop(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 67), SampleRate: 1000}); err != nil {
+		t.Fatalf("seed ObserveCapture(): %v", err)
+	}
+	if err := detector.Close(); err != nil {
+		t.Fatalf("Close(): %v", err)
+	}
+
+	detector.ResetCapture() // must remain a no-op once closed
+
+	if stats := detector.BufferStats(); stats.CaptureSamples != 0 {
+		t.Fatalf("closed detector capture samples = %d, want 0", stats.CaptureSamples)
+	}
+}
+
+func TestPCM16SelfHearingDiscontinuousPlaybackResetsCapture(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 5), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("seed ObserveCapture(): %v", err)
+	}
+	if stats := detector.BufferStats(); stats.CaptureSamples == 0 {
+		t.Fatalf("capture seed did not populate the buffer")
+	}
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 7), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("first ObservePlayback(): %v", err)
+	}
+	// A large forward gap makes the playback stream discontinuous, which must
+	// drop stale capture evidence gathered before the gap.
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 9), SampleRate: 1000, Start: time.Second}); err != nil {
+		t.Fatalf("gapped ObservePlayback(): %v", err)
+	}
+	if stats := detector.BufferStats(); stats.CaptureSamples != 0 {
+		t.Fatalf("capture samples after discontinuous playback = %d, want reset to 0", stats.CaptureSamples)
+	}
+}
+
+func TestPCM16SelfHearingDiscontinuousCaptureResetsPlayback(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 11), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("seed ObservePlayback(): %v", err)
+	}
+	if stats := detector.BufferStats(); stats.PlaybackSamples == 0 {
+		t.Fatalf("playback seed did not populate the buffer")
+	}
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 13), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("first ObserveCapture(): %v", err)
+	}
+	// A large forward gap makes the capture stream discontinuous, which must
+	// drop stale playback evidence gathered before the gap.
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 15), SampleRate: 1000, Start: time.Second}); err != nil {
+		t.Fatalf("gapped ObserveCapture(): %v", err)
+	}
+	if stats := detector.BufferStats(); stats.PlaybackSamples != 0 {
+		t.Fatalf("playback samples after discontinuous capture = %d, want reset to 0", stats.PlaybackSamples)
+	}
+}
+
+func TestPCM16SelfHearingBufferGrowsThenTrimsIncrementally(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	config.AnalysisWindow = 120 * time.Millisecond
+	config.CorrelationLagWindow = audio.PCM16LagWindow{Min: -time.Millisecond, Max: time.Millisecond}
+	detector := newSelfHearingDetector(t, config)
+	for start := 0; start < 200; start += 20 {
+		if err := detector.ObservePlayback(audio.PCM16TimedFrame{
+			Samples:    testSignal(20, 61+start),
+			SampleRate: 1000,
+			Start:      time.Duration(start) * time.Millisecond,
+		}); err != nil {
+			t.Fatalf("ObservePlayback(%d): %v", start, err)
+		}
+	}
+	stats := detector.BufferStats()
+	if stats.PlaybackSamples != stats.MaxPlaybackSamples {
+		t.Fatalf("playback samples = %d, want exactly the bound %d after incremental trimming", stats.PlaybackSamples, stats.MaxPlaybackSamples)
+	}
+}
+
+func TestPCM16SelfHearingRejectsMalformedFrames(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	cases := []struct {
+		name  string
+		frame audio.PCM16TimedFrame
+	}{
+		{name: "non-positive sample rate", frame: audio.PCM16TimedFrame{Samples: testSignal(20, 81), SampleRate: 0}},
+		{name: "empty samples", frame: audio.PCM16TimedFrame{Samples: nil, SampleRate: 1000}},
+		{name: "negative media position", frame: audio.PCM16TimedFrame{Samples: testSignal(20, 83), SampleRate: 1000, Start: -time.Millisecond}},
+		{name: "frame end overflows the timeline", frame: audio.PCM16TimedFrame{Samples: testSignal(20, 85), SampleRate: 1000, Start: time.Duration(math.MaxInt64) - time.Millisecond}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if err := detector.ObservePlayback(test.frame); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingFrame) {
+				t.Fatalf("ObservePlayback(%+v) = %v, want invalid-frame", test.frame, err)
+			}
+		})
+	}
+}
+
+func TestPCM16SelfHearingRejectsSampleRateThatOverflowsBufferConversion(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	config.AnalysisWindow = 5 * time.Second
+	config.MinimumEvidence = time.Second
+	detector := newSelfHearingDetector(t, config)
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 79), SampleRate: math.MaxInt32}
+	if err := detector.ObservePlayback(frame); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingFrame) {
+		t.Fatalf("ObservePlayback() with overflowing rate = %v, want invalid-frame", err)
+	}
+}
+
+func TestPCM16SelfHearingContextNilIsTreatedAsUncancelled(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 89), SampleRate: 1000}
+	if err := detector.ObservePlaybackContext(nil, frame); err != nil {
+		t.Fatalf("ObservePlaybackContext(nil, frame) = %v, want nil", err)
+	}
+	if _, err := detector.ObserveCaptureContext(nil, frame); err != nil {
+		t.Fatalf("ObserveCaptureContext(nil, frame) = %v, want nil", err)
+	}
+}
+
+func TestPCM16SelfHearingZeroConfigDefaultsToDocumentedPolicy(t *testing.T) {
+	detector, err := audio.NewPCM16SelfHearingDetector(audio.PCM16SelfHearingConfig{})
+	if err != nil {
+		t.Fatalf("NewPCM16SelfHearingDetector(zero value) error = %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = detector.Close() })
+	if got, want := detector.Config(), audio.DefaultSelfHearingConfig(); got != want {
+		t.Fatalf("Config() = %+v, want the documented default %+v", got, want)
+	}
+}
+
+func TestPCM16SelfHearingErrorTypesFormatWithAndWithoutNilOrField(t *testing.T) {
+	var nilConfigErr *audio.InvalidPCM16SelfHearingConfigError
+	if got, want := nilConfigErr.Error(), audio.ErrInvalidPCM16SelfHearingConfig.Error(); got != want {
+		t.Fatalf("nil InvalidPCM16SelfHearingConfigError.Error() = %q, want %q", got, want)
+	}
+	fieldless := &audio.InvalidPCM16SelfHearingConfigError{Reason: "boom"}
+	if got := fieldless.Error(); got == "" || got == nilConfigErr.Error() {
+		t.Fatalf("fieldless InvalidPCM16SelfHearingConfigError.Error() = %q, want a reason-only message", got)
+	}
+
+	var nilFrameErr *audio.PCM16SelfHearingFrameError
+	if got, want := nilFrameErr.Error(), audio.ErrInvalidPCM16SelfHearingFrame.Error(); got != want {
+		t.Fatalf("nil PCM16SelfHearingFrameError.Error() = %q, want %q", got, want)
+	}
+	streamless := &audio.PCM16SelfHearingFrameError{Reason: "boom"}
+	if got := streamless.Error(); got == "" || got == nilFrameErr.Error() {
+		t.Fatalf("streamless PCM16SelfHearingFrameError.Error() = %q, want a reason-only message", got)
+	}
+}
+
+func TestPCM16TimedFrameEndAddsDurationToStart(t *testing.T) {
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 93), SampleRate: 1000, Start: 5 * time.Millisecond}
+	want := 25 * time.Millisecond // 20 samples @ 1kHz = 20ms, plus the 5ms start offset
+	if got := frame.End(); got != want {
+		t.Fatalf("End() = %s, want %s", got, want)
+	}
+}
+
+func TestPCM16SelfHearingObserveCaptureContextGuardsMirrorPlayback(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{SampleRate: 1000}); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingFrame) {
+		t.Fatalf("ObserveCapture(malformed) = %v, want invalid-frame", err)
+	}
+
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 91), SampleRate: 1000}
+	if _, err := detector.ObserveCapture(frame); err != nil {
+		t.Fatalf("first ObserveCapture(): %v", err)
+	}
+	backwards := frame
+	backwards.Start = 10 * time.Millisecond
+	if _, err := detector.ObserveCapture(backwards); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingFrame) {
+		t.Fatalf("backwards ObserveCapture() = %v, want invalid-frame", err)
+	}
+
+	if err := detector.Close(); err != nil {
+		t.Fatalf("Close(): %v", err)
+	}
+	if _, err := detector.ObserveCapture(frame); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("ObserveCapture() after Close = %v, want ErrClosed", err)
+	}
+}
+
+func TestPCM16SelfHearingObserveCaptureContextRejectsOverflowingSampleRate(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	config.AnalysisWindow = 5 * time.Second
+	config.MinimumEvidence = time.Second
+	detector := newSelfHearingDetector(t, config)
+	frame := audio.PCM16TimedFrame{Samples: testSignal(20, 95), SampleRate: math.MaxInt32}
+	if _, err := detector.ObserveCapture(frame); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingFrame) {
+		t.Fatalf("ObserveCapture() with overflowing rate = %v, want invalid-frame", err)
+	}
+}
+
+func TestPCM16SelfHearingClassifyLockedSkipsWhenCaptureWindowPrecedesPlayback(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if _, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 97), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatalf("first ObserveCapture(): %v", err)
+	}
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 99), SampleRate: 1000, Start: 200 * time.Millisecond}); err != nil {
+		t.Fatalf("ObservePlayback(): %v", err)
+	}
+	// The capture window is entirely stale relative to the playback horizon, so
+	// classification must bail out before any correlation work.
+	observation, err := detector.ObserveCapture(audio.PCM16TimedFrame{Samples: testSignal(20, 101), SampleRate: 1000, Start: 20 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("second ObserveCapture(): %v", err)
+	}
+	if observation.Classification != audio.PCM16SelfHearingNoEvidence {
+		t.Fatalf("classification = %q, want no-evidence when capture activity is entirely stale relative to playback; observation = %+v", observation.Classification, observation)
+	}
+}
+
+func TestPCM16SelfHearingRoundsBufferBoundUpForNonExactSampleRates(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(20, 103), SampleRate: 333, Start: 0}); err != nil {
+		t.Fatalf("ObservePlayback(): %v", err)
+	}
+	if stats := detector.BufferStats(); stats.MaxPlaybackSamples <= 0 {
+		t.Fatalf("MaxPlaybackSamples = %d, want a positive rounded-up bound", stats.MaxPlaybackSamples)
+	}
+}
+
 func newSelfHearingDetector(t *testing.T, config audio.PCM16SelfHearingConfig) *audio.PCM16SelfHearingDetector {
 	t.Helper()
 	detector, err := audio.NewPCM16SelfHearingDetector(config)
