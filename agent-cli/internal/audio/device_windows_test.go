@@ -3,12 +3,27 @@
 package audio
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"strings"
 	"testing"
 	"unsafe"
 )
+
+// TestWindowsPortablePlaybackBurstPreservesFIFO runs the same bounded pacing
+// contract on Windows even though the current WASAPI registry only exposes
+// endpoint discovery/probing and has no native PCM writer yet.
+func TestWindowsPortablePlaybackBurstPreservesFIFO(t *testing.T) {
+	_, output, input := adversarialVirtualPair(t, 24000)
+	testPacedPlaybackBackend(t, output, func(raw []byte) {
+		samples := make([]int16, FrameSize)
+		if err := input.ReadFrame(context.Background(), samples); err != nil {
+			t.Fatalf("read Windows portable playback frame: %v", err)
+		}
+		encodePCM16(raw, samples)
+	})
+}
 
 func TestWASAPIDeviceIDsAreStableAndNamesAreDescriptive(t *testing.T) {
 	first, err := NewDevice(wasapiBackend, "endpoint\\stable", "Microphone", DirectionInput)

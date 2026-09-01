@@ -4,6 +4,7 @@ package audio
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 	"unsafe"
@@ -31,6 +32,120 @@ func TestVoiceProcessingRenderMarksQueueUnderflowAsSilence(t *testing.T) {
 	}
 	if flags&(1<<4) == 0 {
 		t.Fatalf("render flags=%#x, want kAudioUnitRenderAction_OutputIsSilence", flags)
+	}
+}
+
+func TestVoiceProcessingPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
+	format := PCM16DeviceFormat(24000)
+	queue, err := NewPlaybackQueue(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := &voiceProcessingIO{outputFormat: format, playback: queue, playbackWake: make(chan struct{})}
+	endpoint := &voiceProcessingEndpoint{engine: engine, id: "coreaudio:voice-processing:output", direction: DirectionOutput, format: format}
+	low, high, err := PlaybackQueueWatermarks(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for queued := 0; queued < high; queued += FrameSize {
+		if err := endpoint.WriteFrame(context.Background(), make([]int16, FrameSize)); err != nil {
+			t.Fatalf("prime AUVoiceIO playback queue: %v", err)
+		}
+	}
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- endpoint.WaitForPlaybackCapacity(context.Background(), FrameSize) }()
+	select {
+	case err := <-waitDone:
+		t.Fatalf("AUVoiceIO capacity wait returned above low watermark: %v", err)
+	default:
+	}
+
+	for endpoint.PlaybackStats().QueuedSamples > low {
+		renderVoiceProcessingTestFrame(t, engine)
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("AUVoiceIO capacity wait after callback drain: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("AUVoiceIO capacity wait did not resume at low watermark")
+	}
+	stats := endpoint.PlaybackStats()
+	if stats.QueuedSamples != low || stats.DroppedSamples != 0 {
+		t.Fatalf("paced AUVoiceIO queue stats = %+v, want low watermark and no drops", stats)
+	}
+}
+
+func TestVoiceProcessingPlaybackBurstPreservesFIFO(t *testing.T) {
+	format := PCM16DeviceFormat(24000)
+	queue, err := NewPlaybackQueue(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := &voiceProcessingIO{outputFormat: format, playback: queue, playbackWake: make(chan struct{})}
+	endpoint := &voiceProcessingEndpoint{engine: engine, id: "coreaudio:voice-processing:output", direction: DirectionOutput, format: format}
+	testPacedPlaybackBackend(t, endpoint, func(raw []byte) {
+		list := audioBufferList1{NumberBuffers: 1, Buffers: [1]audioBuffer{{NumberChannels: 1, DataByteSize: uint32(len(raw)), Data: unsafe.Pointer(&raw[0])}}}
+		if status := engine.renderBuffers(nil, FrameSize, &list); status != 0 {
+			t.Fatalf("AUVoiceIO render status=%d", status)
+		}
+	})
+}
+
+func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
+	newBlockedWait := func(t *testing.T) (*voiceProcessingIO, *voiceProcessingEndpoint, <-chan error) {
+		t.Helper()
+		format := PCM16DeviceFormat(24000)
+		queue, err := NewPlaybackQueue(format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		engine := &voiceProcessingIO{outputFormat: format, playback: queue, playbackWake: make(chan struct{})}
+		engine.refs.Store(2)
+		endpoint := &voiceProcessingEndpoint{engine: engine, id: "coreaudio:voice-processing:output", direction: DirectionOutput, format: format}
+		_, high, err := PlaybackQueueWatermarks(format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for queued := 0; queued < high; queued += FrameSize {
+			if err := endpoint.WriteFrame(context.Background(), make([]int16, FrameSize)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wait := make(chan error, 1)
+		go func() { wait <- endpoint.WaitForPlaybackCapacity(context.Background(), FrameSize) }()
+		assertCapacityWaitBlocked(t, wait)
+		return engine, endpoint, wait
+	}
+
+	t.Run("discard wakes producer", func(t *testing.T) {
+		_, endpoint, wait := newBlockedWait(t)
+		if discarded := endpoint.DiscardPlayback(); discarded == 0 {
+			t.Fatal("AUVoiceIO discard removed no queued samples")
+		}
+		if err := awaitCapacityWait(t, wait); err != nil {
+			t.Fatalf("capacity wait after discard: %v", err)
+		}
+	})
+
+	t.Run("output close wakes producer while input remains open", func(t *testing.T) {
+		_, endpoint, wait := newBlockedWait(t)
+		if err := endpoint.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := awaitCapacityWait(t, wait); !errors.Is(err, ErrClosed) {
+			t.Fatalf("capacity wait after output close = %v, want ErrClosed", err)
+		}
+	})
+}
+
+func renderVoiceProcessingTestFrame(t *testing.T, engine *voiceProcessingIO) {
+	t.Helper()
+	raw := make([]byte, FrameSize*2)
+	list := audioBufferList1{NumberBuffers: 1, Buffers: [1]audioBuffer{{NumberChannels: 1, DataByteSize: uint32(len(raw)), Data: unsafe.Pointer(&raw[0])}}}
+	if status := engine.renderBuffers(nil, FrameSize, &list); status != 0 {
+		t.Fatalf("AUVoiceIO render status=%d", status)
 	}
 }
 
@@ -119,6 +234,13 @@ func TestCoreAudioPlaybackCapacityWaitResumesAtLowWatermark(t *testing.T) {
 	if stats.QueuedSamples != low || stats.DroppedSamples != 0 {
 		t.Fatalf("paced CoreAudio queue stats = %+v, want low watermark and no drops", stats)
 	}
+}
+
+func TestCoreAudioPlaybackBurstPreservesFIFO(t *testing.T) {
+	handle := &coreAudioHandle{direction: DirectionOutput, format: PCM16DeviceFormat(24000), playbackWake: make(chan struct{})}
+	testPacedPlaybackBackend(t, handle, func(raw []byte) {
+		handle.onData(raw, nil, FrameSize)
+	})
 }
 
 func coreAudioTestEndpoint(uid, name string, direction Direction, defaulted bool) coreAudioEndpoint {
