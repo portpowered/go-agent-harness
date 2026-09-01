@@ -539,9 +539,8 @@ var sessionModeFlagNames = []string{
 // list fell through to cmd.Help() with a nil error — including
 // --audio-in pointing at a file that does not exist, since the file-open
 // validation that would have reported it never ran. Folding the complete
-// list in here routes those invocations to real validation instead (e.g.
-// "agent session requires --record or --replay", or the actual --audio-in
-// file-not-found error).
+// list in here routes those invocations to real validation instead (e.g. live
+// provider setup or the actual --audio-in file-not-found error).
 func sessionHasExplicitMode(cmd *cobra.Command, args []string, imagePaths []string) bool {
 	if len(args) > 0 || len(imagePaths) > 0 {
 		return true
