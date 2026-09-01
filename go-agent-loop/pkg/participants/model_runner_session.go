@@ -72,6 +72,19 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				})
 			}
 			return nil
+		case input, ok := <-r.sessionAudioInputInbox:
+			if !ok {
+				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
+				return nil
+			}
+			// The provider may have queued its terminal boundary after the
+			// preflight but before this select chose the audio branch. Observe
+			// those messages once more before evaluating barge-in state.
+			r.forwardPendingSessionMessages(ctx, session, &state)
+			if err := r.forwardSessionAudioInputWithState(ctx, session, input, &state); err != nil {
+				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
+				return err
+			}
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
@@ -125,6 +138,14 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 			continue
 		}
 		select {
+		case input, ok := <-r.sessionAudioInputInbox:
+			if !ok {
+				return true, true, nil
+			}
+			if err := r.forwardSessionAudioInputWithState(ctx, session, input, state); err != nil {
+				return true, false, err
+			}
+			handled = true
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return true, true, nil
@@ -160,6 +181,10 @@ func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Se
 		*responseCancelSent = state.responseCancelSent
 	}
 	return err
+}
+
+func (r *ModelRunner) forwardSessionAudioInputWithState(ctx context.Context, session messages.Session, input messages.SessionAudioInput, state *sessionResponseState) error {
+	return r.forwardSessionAudioWithPolicyWithState(ctx, session, input.PCM, input.InterruptionPolicy, state)
 }
 
 func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) error {

@@ -490,7 +490,8 @@ func (al *AgentLoop) Send(ctx context.Context, msg []messages.Message) error {
 }
 
 // SendAudioInput injects raw PCM audio into the running session loop for barge-in
-// and user audio forwarding. Only meaningful in DuplexSession mode.
+// and user audio forwarding. Its unspecified origin preserves the legacy
+// interrupting-by-default behavior. Only meaningful in DuplexSession mode.
 // Returns an error if the loop is not in session mode or the channel is full.
 func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
 	mr := al.engine.GetModelRunner()
@@ -498,6 +499,19 @@ func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
 		return fmt.Errorf("SendAudioInput: not in session mode")
 	}
 	return mr.EnqueueSessionAudioInput(ctx, pcm)
+}
+
+// SendAudioInputWithPolicy injects raw PCM audio together with the admission
+// policy that was established by the caller. The policy is evaluated only for
+// contentful audio while an eligible response is active; silence is always
+// forwarded without cancellation. Unknown policies use the interrupting
+// default defined by messages.SessionAudioInputPolicy.
+func (al *AgentLoop) SendAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	mr := al.engine.GetModelRunner()
+	if mr == nil || mr.UserAudioInbox == nil {
+		return fmt.Errorf("SendAudioInputWithPolicy: not in session mode")
+	}
+	return mr.EnqueueSessionAudioInputWithPolicy(ctx, pcm, policy)
 }
 
 // SendSessionEvent delivers a pre-built outbound StreamMessage to the running
