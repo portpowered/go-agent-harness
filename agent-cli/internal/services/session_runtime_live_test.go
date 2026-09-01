@@ -39,10 +39,11 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 	}
 	definitions := []messages.ToolDefinition{{Name: "browser_test"}}
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
-		Provider:            config.ProviderGrok,
-		BrowserToolsEnabled: true,
-		LoadedConfig:        loaded,
-		ToolDefinitions:     definitions,
+		Provider:                config.ProviderGrok,
+		BrowserToolsEnabled:     true,
+		BrowserToolsInteractive: true,
+		LoadedConfig:            loaded,
+		ToolDefinitions:         definitions,
 	}, factory)
 	if err != nil {
 		t.Fatalf("plan browser live runtime: %v", err)
@@ -53,7 +54,7 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 	if plan.capturePath != "" || plan.flushCapture != nil || plan.finalize != nil {
 		t.Fatalf("browser live plan unexpectedly owns capture lifecycle: %+v", plan)
 	}
-	if plan.inferencer == nil || plan.loop.CloseAfterOpen == false || plan.loop.AdvertiseToolDefinitions {
+	if plan.inferencer == nil || plan.loop.CloseAfterOpen || !plan.loop.WaitForClose || !plan.loop.BrowserToolsInteractive || plan.loop.AdvertiseToolDefinitions {
 		t.Fatalf("browser live plan lifecycle = %+v", plan.loop)
 	}
 	if gotConfig.Model != "grok-browser-test" || gotConfig.APIKey != "test-key" || len(gotDefinitions) != 1 || gotDefinitions[0].Name != "browser_test" {

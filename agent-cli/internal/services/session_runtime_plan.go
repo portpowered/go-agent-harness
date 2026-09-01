@@ -148,6 +148,14 @@ type sessionRuntimePlan struct {
 }
 
 func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
+	return p.liveOutput(binding, "Starting bare live session: ")
+}
+
+func (p sessionRuntimePlan) browserLiveOutput(binding *RTCDeviceBinding) (string, string) {
+	return p.liveOutput(binding, "Starting WebMCP browser live session: ")
+}
+
+func (p sessionRuntimePlan) liveOutput(binding *RTCDeviceBinding, prefix string) (string, string) {
 	transport := p.transport
 	if transport == "" {
 		transport = SessionTransportWebSocket
@@ -162,7 +170,7 @@ func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, s
 		}
 	}
 	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
-	return "Starting bare live session: " + identity, "Listening: " + identity
+	return prefix + identity, "Listening: " + identity
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
@@ -201,6 +209,8 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	announcement := p.announce
 	if p.loop.BareLive {
 		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
+	} else if p.loop.BrowserToolsInteractive {
+		announcement, p.loop.ListeningBanner = p.browserLiveOutput(deviceBinding)
 	}
 	if announcement != "" {
 		if _, err := fmt.Fprintln(out, announcement); err != nil {
@@ -454,20 +464,40 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 		if err := validateInjectedLiveSession(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
+		provider := strings.ToLower(effectiveSessionProvider(opts))
+		model := strings.TrimSpace(opts.Model)
+		if model == "" {
+			switch provider {
+			case sessionProviderOpenAI:
+				resolved, err := resolveOpenAIRealtimeSessionConfig(opts)
+				if err != nil {
+					return sessionRuntimePlan{}, err
+				}
+				model = resolved.Model
+			case sessionProviderGrok:
+				resolved, err := resolveGrokSessionConfig(opts)
+				if err != nil {
+					return sessionRuntimePlan{}, err
+				}
+				model = resolved.Model
+			}
+		}
+		interactive := browserToolsInteractiveLive(opts)
 		return sessionRuntimePlan{
 			mode:       sessionRuntimeModeInjectedLive,
-			provider:   strings.ToLower(effectiveSessionProvider(opts)),
-			model:      opts.Model,
+			provider:   provider,
+			model:      model,
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
 				Prompt:                   opts.Prompt,
-				CloseAfterOpen:           !opts.BareLive && !opts.WaitForClose && len(opts.AudioInputs) == 0,
-				WaitForClose:             opts.BareLive || opts.WaitForClose || len(opts.AudioInputs) > 0,
+				CloseAfterOpen:           !opts.BareLive && !interactive && !opts.WaitForClose && len(opts.AudioInputs) == 0,
+				WaitForClose:             opts.BareLive || interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-				MaxDuration:              injectedSessionMaxDuration(opts.BareLive),
+				MaxDuration:              injectedSessionMaxDuration(opts.BareLive || interactive),
 				AdvertiseToolDefinitions: true,
 				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
 				BareLive:                 opts.BareLive,
+				BrowserToolsInteractive:  interactive,
 			},
 		}, nil
 	}
