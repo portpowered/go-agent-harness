@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -237,6 +238,129 @@ func TestRTCDeviceSinkInterruptionUsesActuallyConsumedDeviceSamples(t *testing.T
 	if stats.QueuedSamples != 0 || stats.DiscardEvents == 0 || stats.DroppedSamples != 0 {
 		t.Fatalf("device queue after interruption = %+v", stats)
 	}
+}
+
+func TestRTCDeviceSinkInterruptionExcludesPostResponseHoldToneSamples(t *testing.T) {
+	for _, pulseCount := range []int{1, 5} {
+		t.Run(fmt.Sprintf("%d hold-tone pulses", pulseCount), func(t *testing.T) {
+			registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+				Seed:    uint64(40 + pulseCount),
+				Render:  audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+				Capture: audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+			})
+			if err != nil {
+				t.Fatalf("new callback-clocked registry: %v", err)
+			}
+			sink, err := NewRTCDeviceSink(registry, "")
+			if err != nil {
+				t.Fatalf("open callback-clocked RTC sink: %v", err)
+			}
+			defer func() { _ = sink.Close() }()
+
+			response := rtc.PlaybackResponse{ResponseID: "resp-hold-tone", ItemID: "item-hold-tone"}
+			sink.StartPlayback(response)
+			generation, blocked := sink.playbackState()
+			if err := sink.observedWritePlayback(context.Background(), cancelPlaybackFrame(401), generation, blocked, true); err != nil {
+				t.Fatalf("queue model frame: %v", err)
+			}
+			if err := registry.Advance(1); err != nil {
+				t.Fatalf("consume model frame: %v", err)
+			}
+
+			for pulse := 0; pulse < pulseCount; pulse++ {
+				writeAndConsumeHoldTonePulse(t, sink, registry, int16(500+pulse))
+			}
+
+			audioEndMS, ok := sink.InterruptPlayback(response)
+			if !ok {
+				t.Fatal("device interruption did not report a playback cursor")
+			}
+			if audioEndMS != 30 {
+				t.Fatalf("device playback cursor after %d hold-tone pulses = %d ms, want only the 30 ms model frame", pulseCount, audioEndMS)
+			}
+		})
+	}
+}
+
+func TestRTCDeviceSinkCompletedResponseIgnoresLaterServerVADAfterHoldTones(t *testing.T) {
+	for _, pulseCount := range []int{1, 5} {
+		t.Run(fmt.Sprintf("%d hold-tone pulses", pulseCount), func(t *testing.T) {
+			registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+				Seed:    uint64(70 + pulseCount),
+				Render:  audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+				Capture: audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+			})
+			if err != nil {
+				t.Fatalf("new callback-clocked registry: %v", err)
+			}
+			sink, err := NewRTCDeviceSink(registry, "")
+			if err != nil {
+				t.Fatalf("open callback-clocked RTC sink: %v", err)
+			}
+			defer func() { _ = sink.Close() }()
+
+			response := rtc.PlaybackResponse{ResponseID: "resp-complete", ItemID: "item-complete"}
+			sink.StartPlayback(response)
+			pumpErr := make(chan error, 1)
+			go func() {
+				pumpErr <- sink.Pump(context.Background(), &recordingRTCInboundMedia{frames: []rtc.PCMFrame{{
+					Samples: cancelPlaybackFrame(601), PlaybackResponse: response, EndOfResponse: true,
+				}}})
+			}()
+
+			deadline := time.Now().Add(time.Second)
+			for sink.PlaybackStats().QueuedSamples == 0 && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if got := sink.PlaybackStats().QueuedSamples; got != audio.FrameSize {
+				t.Fatalf("queued final model samples = %d, want %d", got, audio.FrameSize)
+			}
+			if err := registry.Advance(1); err != nil {
+				t.Fatalf("drain completed response: %v", err)
+			}
+			select {
+			case err := <-pumpErr:
+				if err != nil {
+					t.Fatalf("pump completed response: %v", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("pump did not retire physically drained response")
+			}
+
+			for pulse := 0; pulse < pulseCount; pulse++ {
+				writeAndConsumeHoldTonePulse(t, sink, registry, int16(700+pulse))
+			}
+			if audioEndMS, ok := sink.InterruptPlayback(response); ok {
+				t.Fatalf("late server VAD returned stale completed-response cursor %d ms after %d hold-tone pulses", audioEndMS, pulseCount)
+			}
+		})
+	}
+}
+
+func writeAndConsumeHoldTonePulse(t *testing.T, sink *RTCDeviceSink, registry *audio.SimulatedDuplexRegistry, value int16) {
+	t.Helper()
+	const holdTonePulseSamples = 220 * audio.SampleRate / 1000
+	const holdToneTickSamples = 20 * audio.SampleRate / 1000
+	remaining := holdTonePulseSamples
+	for remaining > 0 {
+		samples := min(remaining, holdToneTickSamples)
+		generation, blocked := sink.playbackState()
+		if err := sink.observedWritePlayback(context.Background(), cancelPlaybackSamples(samples, value), generation, blocked, false); err != nil {
+			t.Fatalf("queue 220 ms hold-tone pulse chunk: %v", err)
+		}
+		if err := registry.Advance(1); err != nil {
+			t.Fatalf("consume 220 ms hold-tone pulse chunk: %v", err)
+		}
+		remaining -= samples
+	}
+}
+
+func cancelPlaybackSamples(samples int, value int16) []int16 {
+	frame := make([]int16, samples)
+	for index := range frame {
+		frame[index] = value
+	}
+	return frame
 }
 
 func TestRTCDeviceBoundSessionDropsInFlightPlaybackAcrossCancelAndResume(t *testing.T) {
