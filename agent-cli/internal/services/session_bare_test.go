@@ -94,11 +94,72 @@ func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 	if resolved.APIKey != "fallback-key" {
 		t.Fatalf("API key = %q, want conventional environment fallback", resolved.APIKey)
 	}
-	if resolved.TurnDetection == nil || resolved.TurnDetection.Type != "server_vad" {
-		t.Fatalf("turn detection = %#v, want server_vad", resolved.TurnDetection)
+	if resolved.TurnDetection == nil || resolved.TurnDetection.Type != "semantic_vad" {
+		t.Fatalf("turn detection = %#v, want semantic_vad", resolved.TurnDetection)
 	}
 	if resolved.InputAudioTranscription == nil || !resolved.InputAudioTranscription.Enabled || resolved.InputAudioTranscription.Model != models.DefaultInputAudioTranscriptionModel {
 		t.Fatalf("input transcription = %#v, want enabled default", resolved.InputAudioTranscription)
+	}
+}
+
+func TestResolveBareSessionOptionsKeepsGrokServerVADDefault(t *testing.T) {
+	loaded := &config.Config{
+		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+		Model: config.ModelConfig{Provider: config.ProviderGrok, Grok: &config.GrokConfig{
+			Model: "grok-voice", APIKey: "grok-key",
+		}},
+	}
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	if err != nil {
+		t.Fatalf("ResolveBareSessionOptions(): %v", err)
+	}
+	if got := resolved.TurnDetection; got == nil || got.Type != "server_vad" {
+		t.Fatalf("turn detection = %#v, want Grok server_vad default", got)
+	}
+}
+
+func TestResolveBareSessionOptionsHonorsSemanticVADPolicy(t *testing.T) {
+	interruptResponse := true
+	loaded := &config.Config{
+		ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+		Model: config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{
+			Model: "gpt-realtime", APIKey: "persisted-key",
+		}},
+		Session: &config.SessionConfig{VAD: &config.SessionVADConfig{
+			Type: "SEMANTIC_VAD", Eagerness: "LOW", InterruptResponse: &interruptResponse,
+		}},
+	}
+
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	if err != nil {
+		t.Fatalf("ResolveBareSessionOptions(): %v", err)
+	}
+	if got := resolved.TurnDetection; got == nil || got.Type != "semantic_vad" || got.Eagerness != "low" || got.InterruptResponse == nil || !*got.InterruptResponse {
+		t.Fatalf("turn detection = %#v, want normalized semantic policy", got)
+	}
+}
+
+func TestResolveBareSessionOptionsRejectsIncompatibleVADFields(t *testing.T) {
+	base := func(vad *config.SessionVADConfig) SessionRunOptions {
+		return SessionRunOptions{LoadedConfig: &config.Config{
+			ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
+			Model:      config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "key"}},
+			Session:    &config.SessionConfig{VAD: vad},
+		}}
+	}
+	for _, testCase := range []struct {
+		name string
+		vad  *config.SessionVADConfig
+	}{
+		{name: "semantic silence duration", vad: &config.SessionVADConfig{Type: "semantic_vad", SilenceDurationMs: 500}},
+		{name: "semantic invalid eagerness", vad: &config.SessionVADConfig{Type: "semantic_vad", Eagerness: "instant"}},
+		{name: "server eagerness", vad: &config.SessionVADConfig{Type: "server_vad", Eagerness: "low"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := ResolveBareSessionOptions(base(testCase.vad)); err == nil {
+				t.Fatal("ResolveBareSessionOptions() error = nil, want incompatible VAD policy error")
+			}
+		})
 	}
 }
 

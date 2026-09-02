@@ -203,11 +203,10 @@ session:
   output_device: virtual:speakers
   vad:
     enabled: true
-    type: server_vad
-    threshold: 0.7
-    prefix_padding_ms: 100
-    silence_duration_ms: 500
+    type: semantic_vad
+    eagerness: low
     create_response: false
+    interrupt_response: true
   input_transcription:
     enabled: false
     model: custom-transcriber
@@ -232,7 +231,7 @@ session:
 	if cfg.Session.Provider != ProviderOpenAI || cfg.Session.Model != "gpt-realtime-2.1-mini" || cfg.Session.InputDevice != "virtual:mic" || cfg.Session.OutputDevice != "virtual:speakers" {
 		t.Fatalf("Session identity = %#v", cfg.Session)
 	}
-	if cfg.Session.VAD == nil || cfg.Session.VAD.Enabled == nil || !*cfg.Session.VAD.Enabled || cfg.Session.VAD.Threshold != 0.7 || cfg.Session.VAD.CreateResponse == nil || *cfg.Session.VAD.CreateResponse {
+	if cfg.Session.VAD == nil || cfg.Session.VAD.Enabled == nil || !*cfg.Session.VAD.Enabled || cfg.Session.VAD.Type != "semantic_vad" || cfg.Session.VAD.Eagerness != "low" || cfg.Session.VAD.CreateResponse == nil || *cfg.Session.VAD.CreateResponse || cfg.Session.VAD.InterruptResponse == nil || !*cfg.Session.VAD.InterruptResponse {
 		t.Fatalf("Session.VAD = %#v, want decoded policy", cfg.Session.VAD)
 	}
 	if cfg.Session.InputTranscription == nil || cfg.Session.InputTranscription.Enabled == nil || *cfg.Session.InputTranscription.Enabled || cfg.Session.InputTranscription.Model != "custom-transcriber" {

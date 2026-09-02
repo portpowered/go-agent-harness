@@ -92,6 +92,22 @@ func continuationCanCompleteLocked(state *toolContinuationState) bool {
 	return state.continuationOutputObserved
 }
 
+// continuationSupersededByServerTurnLocked identifies OpenAI's normal
+// server-VAD handoff. A new user turn intentionally cancels the in-flight
+// assistant response; that cancellation retires this continuation obligation
+// instead of terminating the interactive session as a provider failure.
+func continuationSupersededByServerTurnLocked(state *toolContinuationState) bool {
+	if state == nil || (normalizeContinuationStatus(state.continuationStatus) != "cancelled" && normalizeContinuationStatus(state.continuationStatus) != "canceled") {
+		return false
+	}
+	for _, field := range strings.FieldsFunc(state.continuationStatusDetails, func(r rune) bool { return r == ',' || r == ';' }) {
+		if strings.TrimSpace(field) == "reason=turn_detected" {
+			return true
+		}
+	}
+	return false
+}
+
 func continuationTerminalFailureLocked(state *toolContinuationState) bool {
 	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen || state.continuationComplete {
 		return false

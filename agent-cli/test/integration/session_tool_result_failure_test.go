@@ -292,7 +292,10 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		sink := &unresolvedToolDiagnosticSink{}
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		// Coverage instrumentation and a loaded CI runner can take substantially
+		// longer than 50ms to compose the session and dispatch the tool call. Give
+		// setup enough headroom while still exercising a real caller deadline.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		runErr := make(chan error, 1)
 		go func() {

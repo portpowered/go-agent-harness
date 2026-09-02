@@ -298,6 +298,10 @@ func TestInboundTrackSuppressesDuplicatesLatePacketsAndOrdersWraparound(t *testi
 		source.push(testRTPPacket(11, 1960, 1))
 		source.push(testRTPPacket(10, 1000, 0))
 		initial := timers.next(t)
+		// The manual timer must model expiry after the whole jitter window has
+		// reached the playout loop. Waiting for the reader's next call proves
+		// all four queued packets were handed across the unbuffered event seam.
+		source.waitForReadCalls(t, 5)
 		initial.fire()
 		readTestFrame(t, track)
 		timers.next(t).fire()
@@ -699,9 +703,10 @@ func BenchmarkInboundTrackS10SteadyState(b *testing.B) {
 }
 
 type testPacketSource struct {
-	packets chan *rtp.Packet
-	closed  chan struct{}
-	once    sync.Once
+	packets   chan *rtp.Packet
+	closed    chan struct{}
+	readCalls chan struct{}
+	once      sync.Once
 }
 
 type errorPacketSource struct{ err error }
@@ -749,10 +754,14 @@ func (f *manualTimerFactory) next(t testing.TB) timerRequest { t.Helper(); retur
 func (r timerRequest) fire()                                 { r.channel <- time.Unix(0, 0) }
 
 func newTestPacketSource(capacity int) *testPacketSource {
-	return &testPacketSource{packets: make(chan *rtp.Packet, capacity), closed: make(chan struct{})}
+	return &testPacketSource{packets: make(chan *rtp.Packet, capacity), closed: make(chan struct{}), readCalls: make(chan struct{}, 1024)}
 }
 
 func (s *testPacketSource) ReadRTP() (*rtp.Packet, error) {
+	select {
+	case s.readCalls <- struct{}{}:
+	default:
+	}
 	select {
 	case packet := <-s.packets:
 		return packet, nil
@@ -763,6 +772,17 @@ func (s *testPacketSource) ReadRTP() (*rtp.Packet, error) {
 		return packet, nil
 	case <-s.closed:
 		return nil, io.EOF
+	}
+}
+
+func (s *testPacketSource) waitForReadCalls(t testing.TB, count int) {
+	t.Helper()
+	for range count {
+		select {
+		case <-s.readCalls:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for RTP source read")
+		}
 	}
 }
 

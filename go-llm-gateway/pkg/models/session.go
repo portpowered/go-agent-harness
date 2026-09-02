@@ -43,9 +43,9 @@ type InputAudioTranscriptionConfig struct {
 	Model string `json:"model,omitempty"`
 }
 
-// TurnDetectionConfig configures server-side voice activity detection.
+// TurnDetectionConfig configures provider-side turn detection.
 type TurnDetectionConfig struct {
-	// Type is the turn detection mode (e.g. "server_vad").
+	// Type is the turn detection mode (e.g. "server_vad" or "semantic_vad").
 	Type string `json:"type"`
 	// Threshold is the VAD activation threshold (0.0–1.0).
 	Threshold float64 `json:"threshold,omitempty"`
@@ -57,6 +57,12 @@ type TurnDetectionConfig struct {
 	// A pointer preserves the provider default when the field is unspecified and
 	// allows callers to explicitly send false for client-owned turn boundaries.
 	CreateResponse *bool `json:"create_response,omitempty"`
+	// InterruptResponse controls whether detected speech interrupts an in-flight
+	// response. A pointer preserves the provider default when unspecified.
+	InterruptResponse *bool `json:"interrupt_response,omitempty"`
+	// Eagerness controls how readily semantic VAD ends a user turn. OpenAI
+	// accepts "low", "medium", "high", and "auto".
+	Eagerness string `json:"eagerness,omitempty"`
 }
 
 // SessionConfig is a gateway-owned configuration surface for establishing a

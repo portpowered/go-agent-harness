@@ -113,7 +113,7 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 		return SessionRunOptions{}, fmt.Errorf("%w: %q (want %q or %q)", ErrInvalidSessionTransport, resolved.Transport, SessionTransportWebSocket, SessionTransportWebRTC)
 	}
 
-	resolved.TurnDetection, err = resolveBareSessionTurnDetection(loadedCfg.Session)
+	resolved.TurnDetection, err = resolveBareSessionTurnDetection(provider, loadedCfg.Session)
 	if err != nil {
 		return SessionRunOptions{}, err
 	}
@@ -197,8 +197,12 @@ func resolveBareSessionTransport(opts SessionRunOptions, cfg *config.Config) str
 	return transport
 }
 
-func resolveBareSessionTurnDetection(cfg *config.SessionConfig) (*models.TurnDetectionConfig, error) {
-	turnDetection := &models.TurnDetectionConfig{Type: "server_vad"}
+func resolveBareSessionTurnDetection(provider string, cfg *config.SessionConfig) (*models.TurnDetectionConfig, error) {
+	defaultType := "server_vad"
+	if provider == sessionProviderOpenAI {
+		defaultType = "semantic_vad"
+	}
+	turnDetection := &models.TurnDetectionConfig{Type: defaultType}
 	if cfg == nil || cfg.VAD == nil {
 		return turnDetection, nil
 	}
@@ -206,17 +210,38 @@ func resolveBareSessionTurnDetection(cfg *config.SessionConfig) (*models.TurnDet
 		return nil, nil
 	}
 	if configuredType := strings.TrimSpace(cfg.VAD.Type); configuredType != "" {
-		if !strings.EqualFold(configuredType, "server_vad") {
-			return nil, fmt.Errorf("bare live session VAD type %q is unsupported; want %q", configuredType, "server_vad")
+		configuredType = strings.ToLower(configuredType)
+		if configuredType != "server_vad" && (provider != sessionProviderOpenAI || configuredType != "semantic_vad") {
+			return nil, fmt.Errorf("bare live session VAD type %q is unsupported for %s", configuredType, provider)
 		}
 		turnDetection.Type = configuredType
 	}
-	turnDetection.Threshold = cfg.VAD.Threshold
-	turnDetection.PrefixPaddingMs = cfg.VAD.PrefixPaddingMs
-	turnDetection.SilenceDurationMs = cfg.VAD.SilenceDurationMs
+	if turnDetection.Type == "semantic_vad" {
+		if cfg.VAD.Threshold != 0 || cfg.VAD.PrefixPaddingMs != 0 || cfg.VAD.SilenceDurationMs != 0 {
+			return nil, fmt.Errorf("semantic_vad does not support threshold, prefix_padding_ms, or silence_duration_ms")
+		}
+		eagerness := strings.ToLower(strings.TrimSpace(cfg.VAD.Eagerness))
+		switch eagerness {
+		case "", "auto", "low", "medium", "high":
+			turnDetection.Eagerness = eagerness
+		default:
+			return nil, fmt.Errorf("semantic_vad eagerness %q is unsupported; want auto, low, medium, or high", cfg.VAD.Eagerness)
+		}
+	} else {
+		if strings.TrimSpace(cfg.VAD.Eagerness) != "" {
+			return nil, fmt.Errorf("server_vad does not support eagerness")
+		}
+		turnDetection.Threshold = cfg.VAD.Threshold
+		turnDetection.PrefixPaddingMs = cfg.VAD.PrefixPaddingMs
+		turnDetection.SilenceDurationMs = cfg.VAD.SilenceDurationMs
+	}
 	if cfg.VAD.CreateResponse != nil {
 		createResponse := *cfg.VAD.CreateResponse
 		turnDetection.CreateResponse = &createResponse
+	}
+	if cfg.VAD.InterruptResponse != nil {
+		interruptResponse := *cfg.VAD.InterruptResponse
+		turnDetection.InterruptResponse = &interruptResponse
 	}
 	return turnDetection, nil
 }

@@ -44,7 +44,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}); ok {
 		turnDetection := cloneSessionTurnDetection(opts.TurnDetection)
 		if turnDetection == nil && opts.RTCDeviceBinding.inputSelected() && !clientOwnedAudio {
-			turnDetection = &models.TurnDetectionConfig{Type: "server_vad"}
+			turnDetection = &models.TurnDetectionConfig{Type: "semantic_vad"}
 		}
 		configurer.SetSessionTurnDetection(turnDetection)
 	}

@@ -53,7 +53,7 @@ type SessionMedia struct {
 // assembled into DefaultSessionMediaFrameSamples-sized frames.
 func NewSessionMedia(writer SessionMediaWriter) *SessionMedia {
 	return &SessionMedia{
-		inbound:  newSessionInboundMedia(DefaultSessionMediaFrameSamples, true),
+		inbound:  newSessionInboundMedia(DefaultSessionMediaFrameSamples, DefaultSessionMediaSampleRate, true),
 		outbound: newSessionOutboundMedia(writer),
 	}
 }
@@ -71,7 +71,7 @@ func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMe
 		frameSamples = DefaultSessionMediaFrameSamples
 	}
 	return &SessionMedia{
-		inbound:  newSessionInboundMedia(frameSamples, false),
+		inbound:  newSessionInboundMedia(frameSamples, sampleRate, false),
 		outbound: newSessionOutboundMedia(writer),
 	}
 }
@@ -201,6 +201,7 @@ func (m *sessionOutboundMedia) close() {
 type sessionInboundMedia struct {
 	mu           sync.Mutex
 	frameSamples int
+	sampleRate   int
 	padPartial   bool
 	pending      []int16
 	frames       []PCMFrame
@@ -210,14 +211,19 @@ type sessionInboundMedia struct {
 	wake         chan struct{}
 	closeOnce    sync.Once
 	response     PlaybackResponse
-	interrupted  PlaybackResponse
-	discarding   bool
-	controller   PlaybackController
+	// responseSamples is provider-rate PCM received for response. A physical
+	// device clock can under-report this duration, but must never cause a
+	// provider truncation beyond audio that actually exists on the item.
+	responseSamples uint64
+	interrupted     PlaybackResponse
+	discarding      bool
+	controller      PlaybackController
 }
 
-func newSessionInboundMedia(frameSamples int, padPartial bool) *sessionInboundMedia {
+func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sessionInboundMedia {
 	return &sessionInboundMedia{
 		frameSamples: frameSamples,
+		sampleRate:   sampleRate,
 		padPartial:   padPartial,
 		done:         make(chan struct{}),
 		wake:         make(chan struct{}, 1),
@@ -282,6 +288,7 @@ func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
 	m.discarding = false
 	m.interrupted = PlaybackResponse{}
 	m.response = response
+	m.responseSamples = 0
 	controller := m.controller
 	if controller != nil {
 		controller.StartPlayback(response)
@@ -292,6 +299,7 @@ func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
 func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	m.mu.Lock()
 	response := m.response
+	responseSamples := m.responseSamples
 	controller := m.controller
 	for index := range m.frames {
 		m.frames[index] = PCMFrame{}
@@ -299,6 +307,7 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	m.frames = nil
 	m.pending = nil
 	m.response = PlaybackResponse{}
+	m.responseSamples = 0
 	m.interrupted = response
 	m.discarding = response.ItemID != ""
 	if controller == nil || response.ItemID == "" {
@@ -307,6 +316,15 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 		return PlaybackInterruption{}, false
 	}
 	audioEndMS, ok := controller.InterruptPlayback(response)
+	if audioEndMS < 0 {
+		audioEndMS = 0
+	}
+	if m.sampleRate > 0 {
+		availableMS := int(responseSamples * 1000 / uint64(m.sampleRate))
+		if audioEndMS > availableMS {
+			audioEndMS = availableMS
+		}
+	}
 	m.mu.Unlock()
 	m.notify()
 	if !ok {
@@ -345,6 +363,7 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.mu.Unlock()
 		return ErrSessionMediaInboundBacklog
 	}
+	m.responseSamples += uint64(len(samples))
 	m.pending = append(m.pending, samples...)
 	m.appendCompleteFramesLocked()
 	m.mu.Unlock()

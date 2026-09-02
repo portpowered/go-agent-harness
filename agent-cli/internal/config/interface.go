@@ -170,7 +170,7 @@ type SessionConfig struct {
 	InputTranscription *SessionInputTranscriptionConfig `koanf:"input_transcription" yaml:"input_transcription"`
 }
 
-// SessionVADConfig contains the server-side voice activity detection policy
+// SessionVADConfig contains the provider-side turn detection policy
 // for a live session. Pointer fields preserve the difference between an
 // omitted setting and an explicit false value.
 type SessionVADConfig struct {
@@ -180,6 +180,8 @@ type SessionVADConfig struct {
 	PrefixPaddingMs   int     `koanf:"prefix_padding_ms" yaml:"prefix_padding_ms"`
 	SilenceDurationMs int     `koanf:"silence_duration_ms" yaml:"silence_duration_ms"`
 	CreateResponse    *bool   `koanf:"create_response" yaml:"create_response"`
+	InterruptResponse *bool   `koanf:"interrupt_response" yaml:"interrupt_response"`
+	Eagerness         string  `koanf:"eagerness" yaml:"eagerness"`
 }
 
 // SessionInputTranscriptionConfig contains the customer-audio transcription

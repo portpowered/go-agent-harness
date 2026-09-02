@@ -338,8 +338,8 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 	if plan.mode != sessionRuntimeModeRecordOpenAI {
 		t.Fatalf("recorded device mode = %q", plan.mode)
 	}
-	if inferencer.turnDetection == nil || inferencer.turnDetection.Type != "server_vad" {
-		t.Fatalf("recorded device turn detection = %#v, want server_vad", inferencer.turnDetection)
+	if inferencer.turnDetection == nil || inferencer.turnDetection.Type != "semantic_vad" {
+		t.Fatalf("recorded device turn detection = %#v, want semantic_vad", inferencer.turnDetection)
 	}
 	if !transcription.Enabled || transcription.Model != models.DefaultInputAudioTranscriptionModel {
 		t.Fatalf("recorded device transcription = %#v, want enabled default", transcription)

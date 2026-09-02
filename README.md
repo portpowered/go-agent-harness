@@ -1,180 +1,295 @@
 # go-agent-harness
 
-`go-agent-harness` is a multi-module Go workspace for building agent runtimes,
-provider gateways, and a reference CLI on top of them. Start at the root when
-you want the package map and shared validation commands, then drop into the
-module README that matches your use case.
+`go-agent-harness` is a cross-platform voice-agent runtime and CLI with realtime audio, tools, provider integrations, and structured WebMCP browser control.
 
-## Workspace Map
+## Install
 
-This repository currently contains three consumer-facing modules:
+Install the `agent` binary from the latest release with Go 1.26 or newer:
 
-| Module | Role | Start here when you want... |
+```bash
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@latest
+agent --help
+```
+
+Prebuilt macOS, Linux, and Windows archives are available on the
+[latest release page](https://github.com/portpowered/go-agent-harness/releases/latest).
+
+This README tracks `main`. If a documented feature is newer than the latest
+published release, install the current development binary with:
+
+```bash
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@main
+```
+
+## Set your API key
+
+The default live session uses OpenAI Realtime:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+For a persistent CLI configuration, use the environment variable understood by
+the layered config loader:
+
+```bash
+export AGENT_MODEL__OPENAI__API_KEY="your-openai-api-key"
+```
+
+Do not commit API keys. You can also pass a key for one run with `--api-key` or
+store it as `model.openai.api_key` in `~/.agent-cli/config.yaml`.
+
+Other binary providers use the same nested environment-variable convention:
+
+| Provider | Environment variable |
+| --- | --- |
+| OpenAI | `AGENT_MODEL__OPENAI__API_KEY` |
+| OpenRouter | `AGENT_MODEL__OPENROUTER__API_KEY` |
+| Grok/xAI | `AGENT_MODEL__GROK__API_KEY` |
+| fal.ai | `AGENT_MODEL__FAL__API_KEY` |
+
+## Start a voice session
+
+Run the command from the directory the agent should be allowed to work in:
+
+```bash
+cd /path/to/your/project
+agent --workdir "$PWD" session
+```
+
+This starts an OpenAI Realtime session using the default microphone, speakers,
+model, voice, WebSocket transport, semantic VAD, and workspace tools. Press
+Ctrl-C to stop it.
+
+The process needs microphone access. Grant access to the terminal or host
+application that launches `agent`:
+
+- macOS: System Settings → Privacy & Security → Microphone.
+- Windows: Settings → Privacy & security → Microphone.
+- Linux: ensure the user can access the active PipeWire, PulseAudio, or ALSA
+  devices.
+
+The agent's filesystem tools are confined to `--workdir`. Add another explicit
+root only when needed:
+
+```bash
+agent --workdir "$PWD" --allow-path /path/to/shared session
+```
+
+`--allow-path` is filesystem-tool scope, not an operating-system sandbox. The
+`exec` tool runs commands as the current user. The optional `show` and `mouse`
+desktop tools also require Screen Recording permission on macOS; ordinary voice
+and WebMCP sessions do not.
+
+## Start a WebMCP browser session
+
+Add WebMCP and a startup URL to the same default voice session:
+
+```bash
+agent --workdir "$PWD" session \
+  --browser-tools webmcp \
+  --browser-open https://cubecade.openai.chatgpt.site/
+```
+
+The agent opens and manages a local Chrome instance, discovers the page's
+structured WebMCP tools, and closes only browsers it owns when configured to do
+so. No CDP port, extension, browser profile, screenshot permission, or secondary
+browser configuration is required. The page itself must expose WebMCP tools.
+
+Use `--browser-close-on-exit` if the managed browser should close with the
+session. Write-like page operations require approval by default; set
+`--browser-approval always`, `writes`, or `never` to choose the policy.
+
+## Configuration
+
+The CLI creates `~/.agent-cli/config.yaml` on first use. Configuration precedence
+is defaults, then YAML, then `AGENT_...` environment variables, then command-line
+flags.
+
+### AGENTS.md
+
+Put `AGENTS.md` in the directory selected by `--workdir`. Its contents become
+the session's workspace instructions. If it is missing, the CLI creates a
+starter file.
+
+```markdown
+# Session instructions
+
+- Keep spoken answers short.
+- Inspect files before changing them.
+- Confirm destructive operations before running them.
+- For browser tasks, use structured WebMCP tools instead of screenshots.
+```
+
+Override it for one run with a file or literal prompt:
+
+```bash
+agent --workdir "$PWD" session --system-prompt ./VOICE_AGENT.md
+```
+
+### Voice
+
+Select an OpenAI Realtime voice with `--voice`:
+
+```bash
+agent --workdir "$PWD" session --voice marin
+```
+
+Supported voices are `alloy`, `ash`, `ballad`, `cedar`, `coral`, `echo`,
+`marin`, `sage`, `shimmer`, and `verse`.
+
+### Model
+
+The default session model is `gpt-realtime-2.1-mini`. Override it per run:
+
+```bash
+agent --workdir "$PWD" session --model gpt-realtime
+```
+
+Or persist the session model:
+
+```yaml
+session:
+  provider: openai
+  model: gpt-realtime-2.1-mini
+```
+
+### Useful settings
+
+A practical `~/.agent-cli/config.yaml` can look like this:
+
+```yaml
+model:
+  provider: openai
+  openai:
+    model: gpt-4o
+
+session:
+  provider: openai
+  model: gpt-realtime-2.1-mini
+  transport: ws
+  vad:
+    enabled: true
+    type: semantic_vad
+    eagerness: low
+    create_response: true
+    interrupt_response: true
+  input_transcription:
+    enabled: true
+
+browser:
+  policy:
+    approval: writes
+    cancel_on_interrupt: read-only
+  managed:
+    close_on_exit: true
+
+tools:
+  list:
+    - id: exec
+      enabled: true
+    - id: write_file
+      enabled: true
+```
+
+Other useful command-line settings include:
+
+- `--audio-in-device` and `--audio-out-device` to select audio devices.
+- `--audio-device-server host:port` to use a mock or remote audio device.
+- `--max-duration 10m` to bound a session.
+- `--no-input-transcription` to disable user-speech transcription.
+- `--record capture.json` to record provider traffic.
+- `--record-dir ./recording` to write a complete diagnostic bundle.
+- `--replay capture.json` to replay a session without a live provider call.
+- `-C /path/to/config-dir` to use a separate config directory.
+
+Run `agent session --help` for the complete option list.
+
+## Features
+
+### Voice and audio
+
+- **EAC:** native Apple Voice Processing I/O provides acoustic echo
+  cancellation, noise suppression, and automatic gain control on supported
+  macOS duplex devices. Cross-platform feedback guards prevent assistant audio
+  from being treated as new customer speech.
+- **Barge-in:** customer speech can interrupt an active response, cancel model
+  output, discard queued playback, and truncate the provider conversation at
+  the audio the customer actually heard.
+- **VAD:** OpenAI live microphone sessions use provider-side `semantic_vad` by
+  default, which is more tolerant of hesitation and fillers such as “umm.”
+  `server_vad` remains configurable for silence/threshold-based turns.
+- **Voice configuration:** ten selectable OpenAI Realtime voices, configurable
+  per session.
+- **Audio devices:** default or named devices on macOS, Linux, and Windows,
+  plus a network audio-device server for deterministic testing.
+- **Audio conversion and pacing:** PCM16 streaming, sample-rate conversion,
+  bounded playback queues, and device-paced output.
+
+### Agent runtime
+
+- Live, multi-turn speech sessions with text, audio, image, and tool events.
+- Workspace instructions through `AGENTS.md` and reusable skills from
+  workspace/config `skills/` directories.
+- Filesystem confinement with explicit workdir and additional allowed roots.
+- Session recording, complete diagnostic bundles, offline replay, and stored
+  session inspection.
+- One-shot `agent ask`, interactive `agent chat`, direct `agent tool` debugging,
+  and acceptance/customer-simulation probes.
+- Tick-driven agent loop and provider gateway packages for custom Go agents.
+
+### WebMCP browser control
+
+- Agent-managed Chrome with one-command startup.
+- Structured page-tool discovery and invocation without screenshot parsing.
+- Multiple-page selection, origin allow/deny rules, write approvals, bounded
+  invocation sizes/timeouts, interrupt cancellation, and semantic recording.
+- External CDP/WebSocket attachment remains available for advanced setups.
+
+### Providers
+
+| Provider | Binary surface | Status |
 | --- | --- | --- |
-| [`agent-cli`](./agent-cli/README.md) | Reference executable that composes the loop and gateway libraries into a CLI agent. | A ready-to-run binary for `ask`, `chat`, tool debugging, or session workflows. |
-| [`go-agent-loop`](./go-agent-loop/README.md) | Tick-driven agent runtime library with explicit subsystem orchestration. | A Go package for building your own agent runtime or integrating custom subsystems. |
-| [`go-llm-gateway`](./go-llm-gateway/README.md) | Multi-provider inference gateway with adapters that plug into the loop. | A Go package for stateless or session-based LLM provider access. |
+| OpenAI | Stateless inference and Realtime voice sessions | Production-supported |
+| OpenRouter | Stateless inference through the OpenAI-compatible API | Production-supported |
+| Grok/xAI | Realtime voice sessions | Experimental |
+| Local OpenAI-compatible servers | Stateless inference with a custom base URL | Experimental; compatibility depends on the server |
+| fal.ai | Media-oriented stateless inference | Experimental |
 
-## Getting Started
+The reusable `go-llm-gateway` module also contains Anthropic and Gemini
+adapters. They are library integrations and are not currently selectable by the
+`agent` binary.
 
-Choose the entrypoint that matches the surface you need:
+### Tools
 
-- CLI consumer: start with [`agent-cli/README.md`](./agent-cli/README.md)
-- Agent runtime library consumer: start with [`go-agent-loop/README.md`](./go-agent-loop/README.md)
-- Provider gateway library consumer: start with [`go-llm-gateway/README.md`](./go-llm-gateway/README.md)
+All built-in tools are enabled by default and can be disabled under
+`tools.list` in `config.yaml`.
 
-## Composition Boundaries
+| Tool | Purpose |
+| --- | --- |
+| `read_file`, `read_image`, `list_dir` | Inspect files, images, and directories inside the allowed filesystem scope. |
+| `write_file`, `edit_file`, `append_file` | Create or modify files inside the allowed filesystem scope. |
+| `exec` | Run a shell command as the current user. |
+| `web_search`, `web_fetch` | Search the web or fetch readable URL content. |
+| `show`, `mouse` | Inspect and control the desktop when the platform and permissions allow it. |
+| `load_skill` | Load detailed instructions and resources from an installed skill. |
+| `sleep` | Wait for an external operation for a bounded duration. |
+| WebMCP page tools | Dynamically discovered structured tools supplied by the active browser page. |
 
-The modules are related, but they are not fully independent in the current
-workspace layout:
-
-- `agent-cli` is the top-level executable and depends on both `go-agent-loop`
-  and `go-llm-gateway` through the root workspace during development.
-- `go-agent-loop` is the runtime library. It defines the loop, tick model, and
-  subsystem-facing contracts that agent integrations build around.
-- `go-llm-gateway` provides provider adapters plus loop-facing inferencer
-  adapters. It develops against the checked-out `go-agent-loop` module through
-  the root workspace.
-
-That means the workspace should be described as a composed multi-module repo,
-not as three completely isolated packages.
-
-Each module README below focuses on its current supported consumer-facing
-surface. Internal directories may exist for implementation, but they should not
-be treated as public contracts unless the package README calls them out
-explicitly.
-
-For the current compatibility-staged cancellation, result, lifecycle, provider
-runtime, and prompt-resolution contracts, see
-[`docs/architecture/dependency-result-contracts.md`](./docs/architecture/dependency-result-contracts.md).
-
-## Releases
-
-The first public module version is `v0.0.1`. Customers can consume the modules
-with:
+The model receives the enabled tool definitions and chooses when to call them.
+Run a built-in tool directly for debugging with:
 
 ```bash
-go get github.com/portpowered/go-agent-harness/go-agent-loop@v0.0.1
-go get github.com/portpowered/go-agent-harness/go-llm-gateway@v0.0.1
-go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@v0.0.1
+agent --workdir "$PWD" tool read_file path=README.md
 ```
 
-Maintainers can run `make release-dry-run` before tagging and use
-[`docs/release.md`](./docs/release.md) for the full release flow.
+## Packages
 
-## Root Validation Commands
+- [`agent-cli`](./agent-cli/README.md): the `agent` executable.
+- [`go-agent-loop`](./go-agent-loop/README.md): the tick-driven agent runtime.
+- [`go-llm-gateway`](./go-llm-gateway/README.md): provider-neutral inference
+  and realtime session gateways.
 
-The root `Makefile` provides deterministic entrypoints for the checked-in
-workspace:
+## License
 
-```bash
-make deps
-make fmt
-make typecheck
-make vet
-make lint
-make staticcheck
-make test
-make test-rtc-race
-make test-integration
-make test-regressions
-make build
-make coverage
-make validate
-make ci
-```
-
-Use them as follows:
-
-- `make deps`: sync `go.work` and download module dependencies
-- `make fmt`: check Go formatting drift without rewriting files
-- `make typecheck`: compile the CLI and both library modules from the root
-- `make vet`: run `go vet` across all modules
-- `make lint`: run `golangci-lint` across all modules
-- `make staticcheck`: run `staticcheck` across all modules
-- `make test`: run each module's package test suite
-- `make test-rtc-race`: run the focused RTC S8 concurrency acceptance cases under the race detector; this requires supported Linux with CGO enabled
-- `make test-integration`: run the deterministic `agent-cli` and
-  `go-agent-loop` integration suites
-- `make test-regressions`: run the committed replay and fixture regression
-  suites
-- `make build`: build the root artifacts and compile library packages
-- `make coverage`: write per-module coverage profiles under `coverage/`
-- `make validate`: backward-compatible alias for the full root validation
-  pipeline
-- `make ci`: full deterministic validation pipeline used by contributors and CI
-
-### Focused RTC race acceptance
-
-The focused RTC concurrency gate is authoritative on supported Linux. It
-requires Go 1.24.2 or newer, GNU Make, Bash, and a working C compiler/linker
-for CGO. From the repository root, run the exact reproduction command:
-
-```bash
-make test-rtc-race
-```
-
-The target enables CGO and runs `go test` for
-`go-llm-gateway/pkg/transport/rtc` with `-race`, `-tags=nomicrophone`,
-`-count=1`, and a finite timeout. It uses only in-process RTC fixtures and
-event-driven synchronization: no microphone or other device, credential,
-harness-root `credentials` file, or live network service is needed. The gate
-requires one non-skipped completion for each intended concurrency case and
-returns non-zero for a race, build or test failure, timeout, missing or renamed
-case, undiscovered case, or skip. The JSON event output names each required
-case so a successful run is visibly distinguishable from an empty test match.
-
-The current Windows runtime/CGO failure (`runtime/cgo: cgo.exe: exit status 2`)
-is an environment limitation, not a reason to retry the focused tests. Run the
-gate on supported Linux; Ubuntu CI is authoritative. The CI workflow runs this
-focused step in its own `race` job, parallel to the other jobs that together
-cover the same steps as `make ci`, and all of them must succeed.
-
-If you are working inside a single module, its README also documents the
-package-local commands.
-
-## Repository Layout
-
-The documentation refresh in this phase is scoped to the active modules in this
-worktree:
-
-- `agent-cli/`: CLI application and user-facing command workflows
-- `go-agent-loop/`: agent runtime library
-- `go-llm-gateway/`: provider gateway library and loop adapters
-- `factory/`: agent-factory support code used to drive this workflow
-
-## Development Notes
-
-The root workspace now uses a checked-in `go.work` file to coordinate the three
-active modules. For consumer guidance, prefer the root `make` targets for
-cross-module validation and the package README for module-specific setup.
-
-## Shared Session Fixture Contract
-
-Committed shared `.session.json` replay fixtures are owned by
-`go-llm-gateway/pkg/testing`. The canonical repository root for those shared
-fixtures is `go-llm-gateway/pkg/testing/testdata/session-fixtures`.
-
-Use that shared root only for repository-level replay and fixture-hygiene
-behavior that multiple modules need to consume. Keep package-private fixtures
-under the owning module's local `testdata`, such as
-`agent-cli/test/integration/testdata` for CLI-only scenarios. Cross-module
-consumers should resolve shared fixtures through
-`go-llm-gateway/pkg/testing.SharedSessionFixturePath(...)` instead of
-traversing into a sibling module's private `testdata`.
-
-This ownership boundary satisfies the Phase 2 enabling step for session
-fixture ownership and boundary cleanup before broader API hardening.
-
-For the full authoring, sanitization, validation, and replay workflow, start
-with:
-
-- `go-llm-gateway/pkg/testing/session-fixture-authoring.md`
-- `go-llm-gateway/pkg/testing/README.md`
-- `agent-cli/docs/session-record-replay.md`
-
-## Workspace Checks
-
-Run `make test` from the repository root to execute the shared workspace test
-entrypoint. That delegates to the module-level `test` targets in `agent-cli`,
-`go-agent-loop`, and `go-llm-gateway`.
+Licensed under the [MIT License](./LICENSE). Copyright © 2026 Port OS.
