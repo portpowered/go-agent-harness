@@ -85,12 +85,13 @@ type RTCDeviceSink struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	playbackMu         sync.Mutex
-	playbackGeneration uint64
-	playbackBlocked    bool
-	playbackResponse   rtc.PlaybackResponse
-	playbackBaseline   uint64
-	playbackStarted    bool
+	playbackMu           sync.Mutex
+	playbackGeneration   uint64
+	playbackBlocked      bool
+	playbackResponse     rtc.PlaybackResponse
+	playbackBaseline     uint64
+	playbackModelSamples uint64
+	playbackStarted      bool
 	// pacingMu serializes producers across capacity admission and enqueue.
 	// The provider pump and hold-tone filler are independent goroutines; without
 	// this boundary they can both observe space below the high watermark and
@@ -230,6 +231,7 @@ func (s *RTCDeviceSink) StartPlayback(response rtc.PlaybackResponse) {
 	s.playbackGeneration++
 	s.playbackResponse = response
 	s.playbackBaseline = 0
+	s.playbackModelSamples = 0
 	s.playbackStarted = false
 	s.playbackMu.Unlock()
 }
@@ -256,16 +258,43 @@ func (s *RTCDeviceSink) InterruptPlayback(response rtc.PlaybackResponse) (int, b
 		if current >= s.playbackBaseline {
 			consumed = current - s.playbackBaseline
 		}
+		// The device counter also includes local non-model sources such as the
+		// hold tone. Never let those samples move a provider-relative cursor
+		// beyond the model audio admitted for this response.
+		if consumed > s.playbackModelSamples {
+			consumed = s.playbackModelSamples
+		}
 	}
 	s.playbackBlocked = true
 	s.playbackGeneration++
 	s.playbackResponse = rtc.PlaybackResponse{}
 	s.playbackStarted = false
 	s.playbackBaseline = 0
+	s.playbackModelSamples = 0
 	if s.deviceRate <= 0 {
 		return 0, false
 	}
 	return int(consumed * 1000 / uint64(s.deviceRate)), true
+}
+
+// finishPlayback retires a fully drained provider response from the device
+// clock. A later server-VAD event belongs to a new user turn and must not
+// truncate the completed response, even if local hold-tone audio has played
+// during the intervening silence.
+func (s *RTCDeviceSink) finishPlayback(response rtc.PlaybackResponse) {
+	if s == nil || response.ItemID == "" {
+		return
+	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	if s.playbackResponse != response {
+		return
+	}
+	s.playbackGeneration++
+	s.playbackResponse = rtc.PlaybackResponse{}
+	s.playbackBaseline = 0
+	s.playbackModelSamples = 0
+	s.playbackStarted = false
 }
 
 func consumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
@@ -375,7 +404,10 @@ func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *rtcDevi
 		}
 	}
 	if providerFrame.EndOfResponse {
-		return s.flushProviderPlayback(ctx, pending)
+		if err := s.flushProviderPlayback(ctx, pending); err != nil {
+			return err
+		}
+		s.finishPlayback(providerFrame.PlaybackResponse)
 	}
 	return nil
 }
@@ -468,6 +500,9 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		err = s.sink.WriteFrame(ctx, samples)
 	} else {
 		err = s.sink.WriteSamples(ctx, samples)
+	}
+	if err == nil && modelAudio && s.playbackResponse.ItemID != "" {
+		s.playbackModelSamples += uint64(len(samples))
 	}
 	s.playbackMu.Unlock()
 	return err
