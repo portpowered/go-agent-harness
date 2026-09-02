@@ -645,20 +645,12 @@ func resolveSessionAdmission(globalFlags *flags.GlobalFlags, cmd *cobra.Command,
 }
 
 func (c *SessionCommand) Generate() *cobra.Command {
-	var prompt string
-	var voice string
-	recordDirPath := ""
-	audioOutPath := ""
+	var prompt, voice, reasoningEffort string
+	recordDirPath, audioOutPath := "", ""
 	transport := SessionTransportWebSocket
-	signaling := ""
-	mediaSource := ""
+	signaling, mediaSource := "", ""
 	var maxDuration time.Duration
-	var waitForClose bool
-	var noInputTranscription bool
-	var reasoningEffort string
-	var computerUse bool
-	var experimentalTools bool
-	var noTerminalTools bool
+	var waitForClose, noInputTranscription, computerUse, experimentalTools, noTerminalTools bool
 	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
@@ -675,12 +667,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Long:         sessionCommandLongHelp,
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
-		PreRunE: func(_ *cobra.Command, _ []string) error {
-			if err := services.ValidateOpenAIRealtimeVoice(voice); err != nil {
-				return err
-			}
-			return services.ValidateOpenAIRealtimeReasoningEffort(reasoningEffort)
-		},
+		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
 				return err
@@ -1017,45 +1004,6 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(t.signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
 	registerSessionBrowserFlags(cmd, t.browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
-}
-
-var sessionTerminalToolIDs = []string{"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir"}
-var sessionExperimentalToolIDs = []string{"load_skill", "sleep", "web_fetch", "web_search"}
-
-// applySessionToolVisibility makes the CLI flags authoritative at the tool
-// composition edge. The loaded config is request-scoped, but copy the top
-// level and list so callers that reuse a config snapshot cannot observe the
-// overrides.
-func applySessionToolVisibility(cfg *config.Config, computerUse, experimentalTools, noTerminalTools bool) *config.Config {
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-	copyCfg := *cfg
-	copyCfg.Tools.List = append([]config.ToolEntry(nil), cfg.Tools.List...)
-	setEnabled := func(id string, enabled bool) {
-		for i := range copyCfg.Tools.List {
-			if copyCfg.Tools.List[i].ID == id {
-				copyCfg.Tools.List[i].Enabled = enabled
-				return
-			}
-		}
-		copyCfg.Tools.List = append(copyCfg.Tools.List, config.ToolEntry{ID: id, Enabled: enabled})
-	}
-	if !computerUse {
-		setEnabled("show", false)
-		setEnabled("mouse", false)
-	}
-	if !experimentalTools {
-		for _, id := range sessionExperimentalToolIDs {
-			setEnabled(id, false)
-		}
-	}
-	if noTerminalTools {
-		for _, id := range sessionTerminalToolIDs {
-			setEnabled(id, false)
-		}
-	}
-	return &copyCfg
 }
 
 func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValue) {
