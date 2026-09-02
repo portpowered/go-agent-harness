@@ -34,7 +34,10 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 
 	fileSamples := sessionAudioFrame(1200)
 	deviceSamples := sessionAudioFrame(-2400)
-	media := &singleFrameInboundMedia{frame: rtc.PCMFrame{Samples: deviceSamples}}
+	media := &singleFrameInboundMedia{
+		frame:  rtc.PCMFrame{Samples: deviceSamples},
+		closed: make(chan struct{}),
+	}
 	inferencer := &combinedAudioOutputInferencer{
 		media:             RTCMediaEndpoints{Inbound: media},
 		audioPCM:          pcm16Bytes(fileSamples),
@@ -89,6 +92,11 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 	}
 	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 1 {
 		t.Fatalf("device observations before observer close = %+v, want binding+observer opens and binding release", got)
+	}
+	select {
+	case <-media.closed:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for provider media cleanup")
 	}
 	if got := media.closeCount.Load(); got != 1 {
 		t.Fatalf("provider media closes = %d, want exactly one", got)
@@ -201,6 +209,8 @@ type singleFrameInboundMedia struct {
 	frame      rtc.PCMFrame
 	read       atomic.Bool
 	closeCount atomic.Int32
+	closed     chan struct{}
+	closeOnce  sync.Once
 }
 
 func (m *singleFrameInboundMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, error) {
@@ -217,6 +227,7 @@ func (m *singleFrameInboundMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, 
 
 func (m *singleFrameInboundMedia) Close() error {
 	m.closeCount.Add(1)
+	m.closeOnce.Do(func() { close(m.closed) })
 	return nil
 }
 
