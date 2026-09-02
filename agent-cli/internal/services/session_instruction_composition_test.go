@@ -194,6 +194,8 @@ func TestComposeSessionInstructionsAddsDeterministicSightRouting(t *testing.T) {
 		"Sight routing requirements:",
 		"show_page",
 		"authoritative page sight",
+		"structured state",
+		"board-state tool is authoritative",
 		"show_screen",
 		"Never use host-display sight as a fallback",
 	} {
@@ -391,6 +393,32 @@ func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testin
 	}
 }
 
+func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
+		BrowserToolsEnabled:    true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+		},
+	}, "Edit the greeting card, then update the document editor.")
+
+	for _, want := range []string{
+		"the first unfinished page is the current requested page",
+		"never ask which page comes first when the customer already supplied the order",
+		"resolve only the first unfinished page when deciding the current match",
+		"do not treat the ordered set itself as selection ambiguity",
+		"Two or more tabs matching the same current step",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("ordered multi-page calibration = %q, missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, "If multiple eligible tabs are returned, ask the customer which page to use; do not guess.") {
+		t.Fatalf("ordered multi-page calibration retained the conflicting blanket ambiguity rule: %q", got)
+	}
+}
+
 // TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth
 // covers required test 4: when two or more tabs genuinely match, the
 // calibration must direct exactly one question naming every candidate, and
@@ -407,7 +435,7 @@ func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *t
 	}, "customer instructions")
 
 	for _, want := range []string{
-		"Two or more eligible tabs: ask exactly one concise question naming every eligible candidate by its title",
+		"Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title",
 		"Do not guess and do not select by list order",
 	} {
 		if !strings.Contains(got, want) {
@@ -491,10 +519,10 @@ func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *test
 			t.Fatalf("heading %q count = %d, want 1; instructions=%q", heading, strings.Count(got, heading), got)
 		}
 	}
-	// The pre-existing connected-unselected grounding's own single-match
-	// language must remain untouched.
-	if !strings.Contains(got, "If multiple eligible tabs are returned, ask the customer which page to use; do not guess.") {
-		t.Fatalf("connected-unselected grounding lost its existing single-match language: %q", got)
+	// The connected-unselected grounding must distinguish unrelated tabs from
+	// multiple matches for the current step.
+	if !strings.Contains(got, "only ask the customer which page to use when multiple tabs still match that current step") {
+		t.Fatalf("connected-unselected grounding lost its current-step ambiguity rule: %q", got)
 	}
 
 	second := composeSessionInstructions(SessionRunOptions{
