@@ -72,3 +72,29 @@ make test-audio-device-server-integration
 
 The ordinary `make test-integration` and `make test-regressions` targets also
 select this replay, and CI exposes it as a named integration step.
+
+## Live WebMCP cube exercise
+
+The opt-in Cubecade exercise starts the shipped `agent` and
+`audio-device-server` binaries, a pinned Chrome on the real Cubecade site, and
+one OpenAI Realtime session. Its temporary workspace supplies an `AGENTS.md`
+that translates cube notation into color language and prohibits facelet
+dumps. The prompt makes the model create a known unsolved position, inspect
+and describe it, then restore and verify the solved board.
+
+Run the billed test on the qualified Darwin arm64 host with:
+
+```bash
+cd agent-cli
+WEBMCP_CUBECADE_AUDIO_DEVICE_LIVE=1 \
+OPENAI_API_KEY_FILE=/absolute/path/to/key \
+go test -tags=live ./internal/webmcp/chrome \
+  -run '^TestPinnedChromeCubecadeAgentUsesAudioDeviceServer$' -count=1 -v
+```
+
+`OPENAI_API_KEY` may be used instead. This test is deliberately outside PR CI:
+it contacts a mutable external page and incurs provider usage. It passes only
+when the model uses the page's discovered tool references for the exact move
+and inverse sequences, reads state at least three times, leaves the independent
+DOM oracle solved, describes colors and alignment without raw notation, and
+renders drained, lossless 16 kHz PCM through the server.

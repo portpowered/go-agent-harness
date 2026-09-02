@@ -382,14 +382,16 @@ const sessionToolGroundingPolicy = `Tool-grounding requirements:
 - Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.`
 
 const sessionSightGroundingPolicy = `Sight routing requirements:
-- For any question about the contents or rendered appearance of the selected browser page, use show_page. Its result is the authoritative page sight for both broad visual requests and literal follow-up questions.
+- For questions about the rendered visual appearance of the selected browser page, use show_page. Its result is the authoritative page sight for broad visual requests and literal visual follow-up questions.
+- When a discovered page tool returns structured state that directly answers the request, use that state as authoritative and do not call show_page merely to restate, verify, or translate it. For example, a board-state tool is authoritative for positions, pieces, alignment, and solved status; show_page is still required if the customer asks how the board visually looks on screen.
 - Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.
 - Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.`
 
 const sessionConnectedUnselectedBrowserGrounding = `WebMCP browser selection:
 - A browser endpoint is connected, but no page is selected.
 - Before any page work, call webmcp_list_tabs.
-- If multiple eligible tabs are returned, ask the customer which page to use; do not guess.
+- If multiple eligible tabs are returned, first match them against the current requested page by title, paraphrase, purpose, or category; only ask the customer which page to use when multiple tabs still match that current step. The mere presence of unrelated eligible tabs is not ambiguity.
+- If the customer explicitly requests work on multiple pages in an order, the first unfinished page is the current requested page. Select and finish it, then list and select the next named page; never ask which page comes first when the customer already supplied the order.
 - After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.
 - Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.`
 
@@ -412,8 +414,9 @@ const sessionWebMCPAmbiguityPolicy = `WebMCP ambiguity recovery:
 const sessionWebMCPTabSelectionCalibration = `WebMCP tab selection calibration:
 - A customer request to switch, open, or select a browser tab or page is real page work, even when a page is already selected. Call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.
 - Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for "the document editor" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.
+- For an explicit ordered request spanning multiple pages, resolve only the first unfinished page when deciding the current match. Complete that page, then list and select the next named page in the customer's order; do not treat the ordered set itself as selection ambiguity.
 - Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example "Okay, you're on <title> now."
-- Two or more eligible tabs: ask exactly one concise question naming every eligible candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.`
+- Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.`
 
 // composeSessionInstructions preserves the selected customer instructions and
 // adds the provider-neutral grounding contract exactly once for tool-enabled
