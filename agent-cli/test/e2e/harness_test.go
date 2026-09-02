@@ -44,5 +44,5 @@ func repositoryRoot(t *testing.T) string {
 	if !ok {
 		t.Fatal("locate E2E harness source")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
 }

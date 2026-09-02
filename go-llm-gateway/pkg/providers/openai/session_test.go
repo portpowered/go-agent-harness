@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,53 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRealtimeReadLoop_BackpressuresBurstWithoutDroppingAudioOrToolCall(t *testing.T) {
+	conn := newMockWebSocketConn()
+	conn.addServerEvent("session.created", map[string]any{"session": map[string]any{"id": "sess-burst", "model": "gpt-realtime-2.1"}})
+	wantAudio := make([]byte, 0, 96)
+	for i := 0; i < 96; i++ {
+		chunk := []byte{byte(i)}
+		wantAudio = append(wantAudio, chunk...)
+		conn.addServerEvent("response.output_audio.delta", map[string]any{
+			"response_id": "resp-burst",
+			"delta":       base64.StdEncoding.EncodeToString(chunk),
+		})
+	}
+	conn.addServerEvent("response.output_item.added", map[string]any{
+		"response_id": "resp-burst",
+		"item":        map[string]any{"type": "function_call", "call_id": "call-burst", "name": "list_dir"},
+	})
+	conn.addServerEvent("response.function_call_arguments.done", map[string]any{
+		"response_id": "resp-burst", "call_id": "call-burst", "name": "list_dir", "arguments": `{"path":"."}`,
+	})
+
+	provider := New(WithAPIKey("test-key"), WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"), WithWebSocketDialer(&mockWebSocketDialer{conn: conn}))
+	ctx := newRealtimeTestContext(t)
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime-2.1"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	var gotAudio []byte
+	gotToolEnd := false
+	for len(gotAudio) < len(wantAudio) || !gotToolEnd {
+		msg, ok := session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatalf("stream ended early: audio=%d/%d tool_end=%v", len(gotAudio), len(wantAudio), gotToolEnd)
+		}
+		switch msg.Type {
+		case messages.StreamTypeAudioDelta:
+			gotAudio = append(gotAudio, msg.Value.(*messages.AudioDeltaValue).Content...)
+		case messages.StreamTypeToolCallEnd:
+			gotToolEnd = true
+		}
+	}
+	if string(gotAudio) != string(wantAudio) {
+		t.Fatalf("audio mismatch after burst: got %d bytes, want %d", len(gotAudio), len(wantAudio))
+	}
+}
 
 type mockWebSocketConn struct {
 	mu sync.Mutex

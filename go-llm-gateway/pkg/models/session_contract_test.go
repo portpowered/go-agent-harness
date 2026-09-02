@@ -116,6 +116,7 @@ func populatedSessionConfig() SessionConfig {
 		Modalities:            []SessionModality{SessionModalityText, SessionModalityAudio},
 		Voice:                 "Rex",
 		Instructions:          "Answer concisely and announce tool calls.",
+		ReasoningEffort:       "high",
 		InputAudioFormat:      AudioFormatPCM16,
 		OutputAudioFormat:     AudioFormatG711Ulaw,
 		InputAudioSampleRate:  SampleRate24000,

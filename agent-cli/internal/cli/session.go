@@ -655,6 +655,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var maxDuration time.Duration
 	var waitForClose bool
 	var noInputTranscription bool
+	var reasoningEffort string
+	var computerUse bool
+	var experimentalTools bool
+	var noTerminalTools bool
 	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
@@ -672,7 +676,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
-			return services.ValidateOpenAIRealtimeVoice(voice)
+			if err := services.ValidateOpenAIRealtimeVoice(voice); err != nil {
+				return err
+			}
+			return services.ValidateOpenAIRealtimeReasoningEffort(reasoningEffort)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
@@ -718,6 +725,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return cmd.Help()
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
+			loadedConfig = applySessionToolVisibility(loadedConfig, computerUse, experimentalTools, noTerminalTools)
 			recordOnlyLive := isRecordOnlyLiveInvocation(cmd, args, c.imagePaths)
 			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || recordOnlyLive)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
@@ -808,6 +816,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Prompt:                  strings.Join(args, " "),
 				PromptProvided:          cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:                   voice,
+				ReasoningEffort:         reasoningEffort,
 				Transport:               selectedTransport,
 				TransportProvided:       cmd.Flags().Changed("transport"),
 				Signaling:               signaling,
@@ -933,6 +942,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		recordDirPath: &recordDirPath, prompt: &prompt,
 		maxDuration: &maxDuration, waitForClose: &waitForClose,
 		noInputTranscription: &noInputTranscription, audioIn: &audioIn,
+		reasoningEffort: &reasoningEffort, computerUse: &computerUse, experimentalTools: &experimentalTools, noTerminalTools: &noTerminalTools,
 		audioInTurns: &audioInTurns, audioInTurnBarge: &audioInTurnBarge,
 		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
 		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
@@ -953,6 +963,10 @@ type sessionFlagTargets struct {
 	maxDuration          *time.Duration
 	waitForClose         *bool
 	noInputTranscription *bool
+	reasoningEffort      *string
+	computerUse          *bool
+	experimentalTools    *bool
+	noTerminalTools      *bool
 	audioIn              *string
 	audioInTurns         *[]string
 	audioInTurnBarge     *bool
@@ -981,6 +995,10 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().BoolVar(t.waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().BoolVar(t.noInputTranscription, "no-input-transcription", false, "Disable customer-speech transcription for live OpenAI audio-input sessions")
+	cmd.Flags().StringVar(t.reasoningEffort, "reasoning-effort", "", "OpenAI Realtime reasoning effort: minimal, low, medium, high, or xhigh")
+	cmd.Flags().BoolVar(t.computerUse, "computer-use", false, "Expose host screen and pointer computer-control tools")
+	cmd.Flags().BoolVar(t.experimentalTools, "experimental-tools", false, "Expose experimental skill, sleep, and web tools")
+	cmd.Flags().BoolVar(t.noTerminalTools, "no-terminal-tools", false, "Hide built-in shell and filesystem tools from the model")
 	cmd.Flags().Var(t.voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(t.audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
@@ -999,6 +1017,45 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(t.signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
 	registerSessionBrowserFlags(cmd, t.browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
+}
+
+var sessionTerminalToolIDs = []string{"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir"}
+var sessionExperimentalToolIDs = []string{"load_skill", "sleep", "web_fetch", "web_search"}
+
+// applySessionToolVisibility makes the CLI flags authoritative at the tool
+// composition edge. The loaded config is request-scoped, but copy the top
+// level and list so callers that reuse a config snapshot cannot observe the
+// overrides.
+func applySessionToolVisibility(cfg *config.Config, computerUse, experimentalTools, noTerminalTools bool) *config.Config {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	copyCfg := *cfg
+	copyCfg.Tools.List = append([]config.ToolEntry(nil), cfg.Tools.List...)
+	setEnabled := func(id string, enabled bool) {
+		for i := range copyCfg.Tools.List {
+			if copyCfg.Tools.List[i].ID == id {
+				copyCfg.Tools.List[i].Enabled = enabled
+				return
+			}
+		}
+		copyCfg.Tools.List = append(copyCfg.Tools.List, config.ToolEntry{ID: id, Enabled: enabled})
+	}
+	if !computerUse {
+		setEnabled("show", false)
+		setEnabled("mouse", false)
+	}
+	if !experimentalTools {
+		for _, id := range sessionExperimentalToolIDs {
+			setEnabled(id, false)
+		}
+	}
+	if noTerminalTools {
+		for _, id := range sessionTerminalToolIDs {
+			setEnabled(id, false)
+		}
+	}
+	return &copyCfg
 }
 
 func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValue) {

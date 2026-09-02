@@ -325,6 +325,9 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 		inference.WithSessionInstructions(instructions),
 		inference.WithSessionInputAudioTranscription(inputAudioTranscription),
 	}
+	if sessionCfg.ReasoningEffort != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionReasoningEffort(sessionCfg.ReasoningEffort))
+	}
 	if voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
 	}

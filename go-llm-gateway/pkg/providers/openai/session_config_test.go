@@ -9,6 +9,29 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+func TestBuildRealtimeSessionUpdate_ReasoningEffort(t *testing.T) {
+	event, err := (&OpenAIProvider{}).buildRealtimeSessionUpdate(models.SessionConfig{
+		Model: "gpt-realtime-2.1", ReasoningEffort: "xhigh",
+	}, "gpt-realtime-2.1")
+	if err != nil {
+		t.Fatalf("buildRealtimeSessionUpdate: %v", err)
+	}
+	var payload struct {
+		Session struct {
+			Model     string `json:"model"`
+			Reasoning struct {
+				Effort string `json:"effort"`
+			} `json:"reasoning"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if payload.Session.Model != "gpt-realtime-2.1" || payload.Session.Reasoning.Effort != "xhigh" {
+		t.Fatalf("session update = %+v", payload.Session)
+	}
+}
+
 func TestBuildRealtimeSessionUpdateEncodesSemanticVAD(t *testing.T) {
 	createResponse := true
 	interruptResponse := true

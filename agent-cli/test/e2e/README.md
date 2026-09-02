@@ -26,6 +26,14 @@ WEBMCP_CUBECADE_AUDIO_DEVICE_LIVE=1 \
 go test -tags=e2e -count=1 ./agent-cli/test/e2e -run CubecadeAudioDevice -v
 ```
 
+Run the real `gpt-realtime-2.1` binary audio + tool round trip:
+
+```sh
+OPENAI_REALTIME_21_LIVE=1 \
+AGENT_MODEL__OPENAI__API_KEY="$OPENAI_API_KEY" \
+go test -tags=e2e -count=1 ./agent-cli/test/e2e -run GPTRealtime21 -v
+```
+
 Provider credentials retain their existing environment/file lookup behavior.
 The `e2e_internal` tag is an implementation detail used by this package; invoke
 manual scenarios through `agent-cli/test/e2e`.
