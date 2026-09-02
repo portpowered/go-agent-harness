@@ -45,10 +45,20 @@ func runIntegrationTests(m *testing.M) int {
 		panic("build agent binary: " + err.Error())
 	}
 	agentBinaryPath = binary
+	deviceServerBinary := filepath.Join(dir, "audio-device-server")
+	buildDeviceServer := exec.Command("go", "build", "-o", deviceServerBinary, "../../cmd/audio-device-server")
+	buildDeviceServer.Stderr = os.Stderr
+	if err := buildDeviceServer.Run(); err != nil {
+		panic("build audio-device-server binary: " + err.Error())
+	}
+	audioDeviceServerBinaryPath = deviceServerBinary
 	return m.Run()
 }
 
-var agentBinaryPath string
+var (
+	agentBinaryPath             string
+	audioDeviceServerBinaryPath string
+)
 
 type s2sV2DCLIResult struct {
 	exitCode int

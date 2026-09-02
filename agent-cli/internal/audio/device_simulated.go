@@ -686,6 +686,19 @@ func (r *SimulatedDuplexRegistry) CaptureStats() CaptureQueueStats {
 }
 func (r *SimulatedDuplexRegistry) PlaybackStats() PlaybackQueueStats { return r.playback.Snapshot() }
 
+// InjectNearEnd appends microphone PCM to the unconsumed near-end timeline.
+// Device-server harnesses use this to drive a live provider through the same
+// callback-owned capture path as a physical microphone.
+func (r *SimulatedDuplexRegistry) InjectNearEnd(samples []int16) {
+	if r == nil || len(samples) == 0 {
+		return
+	}
+	r.mu.Lock()
+	r.scenario.Acoustic.NearEnd = append(r.scenario.Acoustic.NearEnd, samples...)
+	r.signalLocked()
+	r.mu.Unlock()
+}
+
 func repeated(values []int, index uint64) int { return values[index%uint64(len(values))] }
 func jitter(c ClockSpec, index uint64) int64 {
 	if len(c.JitterSamples) == 0 {

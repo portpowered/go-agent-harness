@@ -118,9 +118,9 @@ func sessionAudioDiagnosticSink(out io.Writer) services.SessionDiagnosticSink {
 // open. interactiveDevices covers both live-session shapes that get implicit
 // default microphone/speaker devices: a --browser-tools interactive session
 // and a record-only-live invocation (see isRecordOnlyLiveInvocation).
-func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, input, output audio.DeviceID, loadedConfig *config.Config, interactiveDevices bool) services.RTCDeviceBindingRequest {
+func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, registry audio.DeviceRegistry, input, output audio.DeviceID, loadedConfig *config.Config, interactiveDevices bool) services.RTCDeviceBindingRequest {
 	request := services.RTCDeviceBindingRequest{
-		Registry:              c.deviceRegistry,
+		Registry:              registry,
 		InputDevice:           input,
 		OutputDevice:          output,
 		InputPresent:          cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
@@ -660,6 +660,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var audioInterruptTool string
 	var audioInDevice audio.DeviceID
 	var audioOutDevice audio.DeviceID
+	var audioDeviceServer string
 	browserFlags := flags.NewBrowserFlags()
 	voiceFlag := &sessionVoiceFlagValue{target: &voice}
 	cmd := &cobra.Command{
@@ -702,12 +703,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
-			filesystemPolicy, err := cliTools.ResolveFilesystemPolicy(
-				globalWorkDir(c.globalFlags),
-				globalAllowPaths(c.globalFlags)...,
-			)
+			deviceRegistry, filesystemPolicy, err := c.sessionRuntimeDependencies(audioDeviceServer)
 			if err != nil {
-				return fmt.Errorf("resolve filesystem scope: %w", err)
+				return err
 			}
 			hasSessionMode := sessionHasExplicitMode(cmd, args, c.imagePaths)
 			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
@@ -839,7 +837,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Clock:            c.clockSource,
 				RuntimeObserver:  c.runtimeObserver,
 				AudioInTurnBarge: audioInTurnBarge,
-				RTCDeviceBinding: c.sessionRTCDeviceBinding(cmd, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || recordOnlyLive),
+				RTCDeviceBinding: c.sessionRTCDeviceBinding(cmd, deviceRegistry, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || recordOnlyLive),
 			}
 			if bareSession {
 				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)
@@ -936,7 +934,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		audioInTurns: &audioInTurns, audioInTurnBarge: &audioInTurnBarge,
 		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
 		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
-		audioOutDevice: &audioOutDevice, mediaSource: &mediaSource, transport: &transport, signaling: &signaling,
+		audioOutDevice: &audioOutDevice, audioDeviceServer: &audioDeviceServer,
+		mediaSource: &mediaSource, transport: &transport, signaling: &signaling,
 	})
 	return cmd
 }
@@ -960,6 +959,7 @@ type sessionFlagTargets struct {
 	audioInDevice        *audio.DeviceID
 	audioOutPath         *string
 	audioOutDevice       *audio.DeviceID
+	audioDeviceServer    *string
 	mediaSource          *string
 	transport            *string
 	signaling            *string
@@ -989,6 +989,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(t.audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
 	cmd.Flags().StringVar(t.audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(t.audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
+	cmd.Flags().StringVar(t.audioDeviceServer, "audio-device-server", "", "Use a loopback audio-device server host:port instead of platform devices")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
 	cmd.Flags().StringVar(t.mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")

@@ -129,6 +129,10 @@ jobs:
         if: always()
         run: make test-integration
 
+      - name: Run production-binary audio-device replay integration
+        if: always()
+        run: make test-audio-device-server-integration
+
       - name: Run committed replay and fixture regression tests
         if: always()
         run: make test-regressions

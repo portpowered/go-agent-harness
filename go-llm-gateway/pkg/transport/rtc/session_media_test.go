@@ -106,6 +106,93 @@ func TestSessionMediaAt24kFramesThirtyMillisecondsAndPreservesPartialResponse(t 
 	}
 }
 
+func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T) {
+	media := rtc.NewSessionMediaAtRate(func(context.Context, rtc.PCMFrame) error { return nil }, 24000)
+	defer func() { _ = media.Close() }()
+	controlled, ok := media.Endpoints().Inbound.(rtc.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("SessionMedia inbound does not expose playback control")
+	}
+	controller := &sessionMediaPlaybackController{audioEndMS: 1234}
+	controlled.SetPlaybackController(controller)
+
+	response := rtc.PlaybackResponse{ResponseID: "resp-old", ItemID: "item-old", ContentIndex: 2}
+	media.StartInboundResponse(response)
+	if controller.started != response {
+		t.Fatalf("started response = %+v, want %+v", controller.started, response)
+	}
+	if err := media.PushInbound(make([]int16, 720*3)); err != nil {
+		t.Fatalf("push old response backlog: %v", err)
+	}
+	first, err := controlled.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read first old response frame: %v", err)
+	}
+	if first.PlaybackResponse != response {
+		t.Fatalf("first frame response = %+v, want %+v", first.PlaybackResponse, response)
+	}
+
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		t.Fatal("server-VAD interruption did not return a device cursor")
+	}
+	if interruption.PlaybackResponse != response || interruption.AudioEndMS != 1234 {
+		t.Fatalf("interruption = %+v, want response %+v at 1234 ms", interruption, response)
+	}
+	readCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := controlled.ReadFrame(readCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("read discarded old backlog = %v, want deadline", err)
+	}
+
+	// OpenAI may deliver an already-in-flight delta and audio.done after the
+	// speech_started event. They belong to the interrupted response and must
+	// not reopen playback or publish a response boundary.
+	media.StartInboundResponse(response)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatalf("push late interrupted response delta: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("flush late interrupted response: %v", err)
+	}
+	lateCtx, cancelLate := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancelLate()
+	if _, err := controlled.ReadFrame(lateCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("read late interrupted response = %v, want deadline", err)
+	}
+	if controller.started != response {
+		t.Fatalf("late interrupted response restarted playback as %+v", controller.started)
+	}
+
+	replacement := rtc.PlaybackResponse{ResponseID: "resp-new", ItemID: "item-new"}
+	media.StartInboundResponse(replacement)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatalf("push replacement response: %v", err)
+	}
+	next, err := controlled.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read replacement response: %v", err)
+	}
+	if next.PlaybackResponse != replacement {
+		t.Fatalf("replacement frame response = %+v, want %+v", next.PlaybackResponse, replacement)
+	}
+}
+
+type sessionMediaPlaybackController struct {
+	started     rtc.PlaybackResponse
+	interrupted rtc.PlaybackResponse
+	audioEndMS  int
+}
+
+func (c *sessionMediaPlaybackController) StartPlayback(response rtc.PlaybackResponse) {
+	c.started = response
+}
+
+func (c *sessionMediaPlaybackController) InterruptPlayback(response rtc.PlaybackResponse) (int, bool) {
+	c.interrupted = response
+	return c.audioEndMS, true
+}
+
 func TestSessionMediaOutboundCopiesSamplesAndStopsOnClose(t *testing.T) {
 	var got []int16
 	media := rtc.NewSessionMedia(func(_ context.Context, frame rtc.PCMFrame) error {

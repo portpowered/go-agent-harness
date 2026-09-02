@@ -110,6 +110,9 @@ const (
 	SessionEventResponseCreate SessionEventType = "response.create"
 	// SessionEventResponseCancel cancels an in-progress response.
 	SessionEventResponseCancel SessionEventType = "response.cancel"
+	// SessionEventConversationItemTruncate removes an unplayed assistant-audio
+	// suffix from conversation history after local playback interruption.
+	SessionEventConversationItemTruncate SessionEventType = "conversation.item.truncate"
 )
 
 // Server-to-client event types.
@@ -206,6 +209,17 @@ func NewResponseCreateEventWithInstructions(instructions string) SessionEvent {
 // NewResponseCancelEvent creates an event that cancels an in-progress response.
 func NewResponseCancelEvent() SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCancel}
+}
+
+// NewConversationItemTruncateEvent truncates one assistant audio content part
+// at the duration actually rendered by the client device.
+func NewConversationItemTruncateEvent(itemID string, contentIndex, audioEndMS int) SessionEvent {
+	data, _ := json.Marshal(map[string]any{
+		"item_id":       itemID,
+		"content_index": contentIndex,
+		"audio_end_ms":  audioEndMS,
+	})
+	return SessionEvent{Type: SessionEventConversationItemTruncate, Data: data}
 }
 
 // NewSessionUpdateEvent creates an event that updates the session configuration.

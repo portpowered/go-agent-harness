@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -55,7 +56,7 @@ func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame rtc.PCMF
 	return fmt.Errorf("OpenAI Realtime RTC media write: %s", outcome.Status)
 }
 
-func (s *realtimeSession) publishRTCMedia(event models.SessionEvent) error {
+func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.SessionEvent) error {
 	media := s.currentRTCMedia()
 	if media == nil {
 		return nil
@@ -63,11 +64,27 @@ func (s *realtimeSession) publishRTCMedia(event models.SessionEvent) error {
 
 	var err error
 	switch event.Type {
+	case models.SessionEventInputAudioBufferSpeechStarted:
+		if interruption, ok := media.InterruptInbound(); ok {
+			truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
+			outcome := s.sendQueue.WriteWaitContextOrDone(ctx, s.done, truncate)
+			if !outcome.OK() {
+				if outcome.Err != nil {
+					err = outcome.Err
+				} else {
+					err = fmt.Errorf("queue OpenAI Realtime conversation truncation: %s", outcome.Status)
+				}
+			}
+		}
 	case models.SessionEventResponseOutputAudioDelta:
 		format := realtimeAudioMediaType(event.Data)
 		if format != "" && format != "audio/pcm" {
 			err = fmt.Errorf("OpenAI Realtime RTC audio format %q is not PCM16", format)
 			break
+		}
+		response := realtimePlaybackResponse(event.Data)
+		if response.ItemID != "" {
+			media.StartInboundResponse(response)
 		}
 		data, decodeErr := decodeOpenAIRealtimeAudioDelta(event.Data)
 		if decodeErr != nil {
@@ -82,6 +99,20 @@ func (s *realtimeSession) publishRTCMedia(event models.SessionEvent) error {
 		media.FailInbound(err)
 	}
 	return err
+}
+
+func realtimePlaybackResponse(data json.RawMessage) rtc.PlaybackResponse {
+	var payload struct {
+		ResponseID   string `json:"response_id"`
+		ItemID       string `json:"item_id"`
+		ContentIndex int    `json:"content_index"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return rtc.PlaybackResponse{}
+	}
+	return rtc.PlaybackResponse{
+		ResponseID: payload.ResponseID, ItemID: payload.ItemID, ContentIndex: payload.ContentIndex,
+	}
 }
 
 func decodeOpenAIRealtimeAudioDelta(data []byte) ([]byte, error) {

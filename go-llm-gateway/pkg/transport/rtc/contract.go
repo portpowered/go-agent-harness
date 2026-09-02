@@ -56,6 +56,44 @@ type PCMFrame struct {
 	// EndOfResponse marks the provider audio-response boundary. Samples may
 	// be empty when the preceding frame ended exactly on the media cadence.
 	EndOfResponse bool
+	// PlaybackResponse is populated by event-oriented provider adapters. It
+	// lets a device sink reject a frame already read across a concurrent
+	// server-VAD interruption without affecting ordinary RTP media.
+	PlaybackResponse PlaybackResponse
+}
+
+// PlaybackResponse identifies one provider audio content part whose samples
+// are being rendered by a local device. ItemID and ContentIndex are the
+// coordinates required by Realtime providers when unplayed audio must be
+// truncated from conversation history after a server-VAD interruption.
+type PlaybackResponse struct {
+	ResponseID   string
+	ItemID       string
+	ContentIndex int
+}
+
+// PlaybackInterruption is the device-observed playout boundary for one
+// interrupted response. AudioEndMS is measured from samples actually consumed
+// by the local device, not samples received or queued by the transport.
+type PlaybackInterruption struct {
+	PlaybackResponse
+	AudioEndMS int
+}
+
+// PlaybackController is implemented by a clocked local playback sink. A
+// provider-owned media adapter uses it to open a response playout interval and
+// atomically stop that interval when server-side VAD reports user speech.
+type PlaybackController interface {
+	StartPlayback(PlaybackResponse)
+	InterruptPlayback(PlaybackResponse) (audioEndMS int, ok bool)
+}
+
+// PlaybackControlledInbound is the optional control seam implemented by
+// provider media adapters that support device-clocked interruption. Ordinary
+// RTP and file-backed inbound media need not implement it.
+type PlaybackControlledInbound interface {
+	InboundMedia
+	SetPlaybackController(PlaybackController)
 }
 
 // VisualObservationStatus is the stable outcome of a visual look operation.

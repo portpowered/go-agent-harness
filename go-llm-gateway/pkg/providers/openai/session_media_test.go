@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -62,4 +63,82 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	if !reflect.DeepEqual(got.Samples, want) {
 		t.Fatalf("RTC inbound PCM frame differs from provider audio: got %d samples", len(got.Samples))
 	}
+}
+
+func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	controlled, ok := endpoints.Inbound.(rtc.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+	}
+	controller := &openAIPlaybackController{audioEndMS: 1500}
+	controlled.SetPlaybackController(controller)
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	want := make([]int16, 720)
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-vad", "item_id": "item-vad", "content_index": 3,
+		"delta": base64.StdEncoding.EncodeToString(encodePCM16(want)), "format": "pcm16",
+	})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read response frame before VAD: %v", err)
+	}
+	response := rtc.PlaybackResponse{ResponseID: "resp-vad", ItemID: "item-vad", ContentIndex: 3}
+	started, _ := controller.snapshot()
+	if frame.PlaybackResponse != response || started != response {
+		t.Fatalf("playback response frame/controller = %+v/%+v, want %+v", frame.PlaybackResponse, started, response)
+	}
+
+	conn.addServerEvent("input_audio_buffer.speech_started", map[string]any{
+		"audio_start_ms": 4200, "item_id": "item-user-vad",
+	})
+	clientMessage := waitForClientMessages(t, conn, 1, "device-clocked conversation truncation")[0]
+	var event struct {
+		Type         string `json:"type"`
+		ItemID       string `json:"item_id"`
+		ContentIndex int    `json:"content_index"`
+		AudioEndMS   int    `json:"audio_end_ms"`
+	}
+	if err := json.Unmarshal(clientMessage, &event); err != nil {
+		t.Fatalf("unmarshal conversation truncation: %v", err)
+	}
+	if event.Type != "conversation.item.truncate" || event.ItemID != "item-vad" || event.ContentIndex != 3 || event.AudioEndMS != 1500 {
+		t.Fatalf("conversation truncation = %+v", event)
+	}
+	_, interrupted := controller.snapshot()
+	if interrupted != response {
+		t.Fatalf("interrupted response = %+v, want %+v", interrupted, response)
+	}
+}
+
+type openAIPlaybackController struct {
+	mu          sync.Mutex
+	started     rtc.PlaybackResponse
+	interrupted rtc.PlaybackResponse
+	audioEndMS  int
+}
+
+func (c *openAIPlaybackController) StartPlayback(response rtc.PlaybackResponse) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.started = response
+}
+
+func (c *openAIPlaybackController) InterruptPlayback(response rtc.PlaybackResponse) (int, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.interrupted = response
+	return c.audioEndMS, true
+}
+
+func (c *openAIPlaybackController) snapshot() (rtc.PlaybackResponse, rtc.PlaybackResponse) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.started, c.interrupted
 }
