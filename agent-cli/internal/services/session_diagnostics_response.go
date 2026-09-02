@@ -870,6 +870,10 @@ func recordContinuationTerminalLocked(state *toolContinuationState, terminal *me
 			state.continuationTerminalReason = terminal.TerminalReason
 		}
 		state.continuationOutputObserved = outputObserved
+		if continuationSupersededByServerTurnLocked(state) {
+			state.continuationComplete = true
+			return true
+		}
 		status := normalizeContinuationStatus(state.continuationStatus)
 		reason := state.continuationTerminalReason
 		terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed") || (reason != "" && reason != messages.TerminalReasonProviderAuthoredCompletion && reason != messages.TerminalReasonLoopSynthesizedCompletion)

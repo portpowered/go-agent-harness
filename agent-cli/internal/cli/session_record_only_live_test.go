@@ -38,7 +38,8 @@ func TestIsRecordOnlyLiveInvocationMatrix(t *testing.T) {
 		{name: "record with prompt is a scripted exchange", args: []string{"--record", "cap.json", "--prompt", "hi"}, want: false},
 		{name: "record with audio-in is a scripted exchange", args: []string{"--record", "cap.json", "--audio-in", "in.wav"}, want: false},
 		{name: "record with image is a scripted exchange", args: []string{"--record", "cap.json", "--image", "photo.png"}, want: false},
-		{name: "record with browser-tools keeps its own contract", args: []string{"--record", "cap.json", "--browser-tools", "webmcp"}, want: false},
+		{name: "record with browser-tools remains interactive", args: []string{"--record", "cap.json", "--browser-tools", "webmcp"}, want: true},
+		{name: "record with external browser remains interactive", args: []string{"--record", "cap.json", "--browser-tools", "webmcp", "--browser-cdp-url", "http://127.0.0.1:9222", "--browser-auto-select", "single"}, want: true},
 		{name: "record with positional prompt words", args: []string{"--record", "cap.json", "do", "the", "thing"}, want: false},
 	}
 
@@ -123,6 +124,74 @@ model:
 		}
 	case <-ctx.Done():
 		t.Fatal("record-only-live session did not return after the provider-driven close")
+	}
+}
+
+// TestSessionRecordedWebMCPExternalBrowserStaysInteractive reproduces the
+// eac18 command boundary. --record is a side capture, so adding it to an
+// interactive external-CDP WebMCP session must not remove the default audio
+// devices or send client_close immediately after session.open.
+func TestSessionRecordedWebMCPExternalBrowserStaysInteractive(t *testing.T) {
+	configDir := t.TempDir()
+	configYAML := `
+model:
+  provider: openai
+  openai:
+    model: gpt-realtime
+    api_key: test-key
+`
+	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual device registry: %v", err)
+	}
+
+	inferencer := newRecordOnlyLiveInferencer()
+	owner := NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry)
+	command := owner.Generate()
+	command.SetOut(io.Discard)
+	recordPath := filepath.Join(t.TempDir(), "eac18.json")
+	command.SetArgs([]string{
+		"--browser-tools", "webmcp",
+		"--browser-cdp-url", "http://127.0.0.1:9222",
+		"--browser-auto-select", "single",
+		"--record", recordPath,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- command.ExecuteContext(ctx) }()
+
+	select {
+	case <-inferencer.opened:
+	case <-ctx.Done():
+		t.Fatal("recorded WebMCP session never connected to the provider")
+	}
+
+	select {
+	case <-inferencer.session.closeRequested:
+		t.Fatal("recorded WebMCP session sent client_close immediately after opening")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	if observations := registry.Observations(); observations.OpenCount != 2 {
+		t.Fatalf("device observations = %+v, want the implicit microphone and speaker both opened", observations)
+	}
+
+	inferencer.endFromProvider(ctx)
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("recorded WebMCP session command: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("recorded WebMCP session did not return after provider close")
 	}
 }
 

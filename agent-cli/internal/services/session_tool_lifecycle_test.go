@@ -380,6 +380,7 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 		{name: "completed empty", status: "completed", wantError: true},
 		{name: "completed text", status: "completed", outputType: messages.StreamTypeTextDelta},
 		{name: "completed audio", status: "completed", outputType: messages.StreamTypeAudioDelta},
+		{name: "server VAD supersedes continuation", status: "cancelled", detail: "reason=turn_detected, type=cancelled", reason: messages.TerminalReasonCancellation},
 		{name: "provider close with partial text", reason: messages.TerminalReasonProviderClose, outputType: messages.StreamTypeTextDelta, wantError: true},
 	}
 	for _, tc := range tests {

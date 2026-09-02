@@ -9,6 +9,40 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+func TestBuildRealtimeSessionUpdateEncodesSemanticVAD(t *testing.T) {
+	createResponse := true
+	interruptResponse := true
+	event, err := (&OpenAIProvider{}).buildRealtimeSessionUpdate(models.SessionConfig{
+		InputAudioFormat: models.AudioFormatPCM16,
+		TurnDetection: &models.TurnDetectionConfig{
+			Type:              "semantic_vad",
+			Eagerness:         "low",
+			CreateResponse:    &createResponse,
+			InterruptResponse: &interruptResponse,
+		},
+	}, "gpt-realtime")
+	if err != nil {
+		t.Fatalf("buildRealtimeSessionUpdate(): %v", err)
+	}
+
+	var payload struct {
+		Session struct {
+			Audio struct {
+				Input struct {
+					TurnDetection models.TurnDetectionConfig `json:"turn_detection"`
+				} `json:"input"`
+			} `json:"audio"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		t.Fatalf("decode session.update: %v", err)
+	}
+	got := payload.Session.Audio.Input.TurnDetection
+	if got.Type != "semantic_vad" || got.Eagerness != "low" || got.CreateResponse == nil || !*got.CreateResponse || got.InterruptResponse == nil || !*got.InterruptResponse {
+		t.Fatalf("turn detection = %#v, want complete semantic_vad policy", got)
+	}
+}
+
 func TestBuildRealtimeSessionUpdateCanonicalizesToolOrder(t *testing.T) {
 	provider := &OpenAIProvider{}
 	first, err := provider.buildRealtimeSessionUpdate(models.SessionConfig{

@@ -873,6 +873,10 @@ func cloneSessionTurnDetection(policy *models.TurnDetectionConfig) *models.TurnD
 		createResponse := *policy.CreateResponse
 		copy.CreateResponse = &createResponse
 	}
+	if policy.InterruptResponse != nil {
+		interruptResponse := *policy.InterruptResponse
+		copy.InterruptResponse = &interruptResponse
+	}
 	return &copy
 }
 

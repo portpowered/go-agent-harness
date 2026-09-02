@@ -597,8 +597,10 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 }
 
 // isRecordOnlyLiveInvocation reports whether --record is the only explicit
-// session mode flag present, with no prompt, file-audio, scheduled-turn,
-// image, or browser flag alongside it. This is the operator's flagship
+// session mode flag present, with no prompt, file-audio, scheduled-turn, or
+// image alongside it. Browser flags are allowed: recording an interactive
+// WebMCP voice session must preserve the same lifetime and implicit audio
+// devices as the unrecorded browser session. This is the operator's flagship
 // shape: an otherwise-bare live microphone conversation that additionally
 // captures a side recording. Unlike a fully bare invocation (which admits
 // without needing --record at all), this deliberately keeps --record's
@@ -608,7 +610,7 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 // silently dropped both, and the session closed within milliseconds of
 // opening instead of running the interactive conversation it was recording.
 func isRecordOnlyLiveInvocation(cmd *cobra.Command, args []string, imagePaths []string) bool {
-	if cmd == nil || len(args) > 0 || len(imagePaths) > 0 || hasSessionBrowserFlag(cmd) {
+	if cmd == nil || len(args) > 0 || len(imagePaths) > 0 {
 		return false
 	}
 	if !cmd.Flags().Changed("record") {
@@ -716,8 +718,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return cmd.Help()
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
-			browserToolsInteractive := browserToolsAdmission(cmd) && !hasSessionMode
 			recordOnlyLive := isRecordOnlyLiveInvocation(cmd, args, c.imagePaths)
+			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || recordOnlyLive)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
