@@ -151,7 +151,8 @@ func (c *ToolCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "tool <tool-id> [key=value...]",
 		Short:         "Invoke a tool directly by name and key=value args (for debugging)",
-		Long:          "Invoke a tool directly. Example: agent tool read_file path=./foo.txt\n\n" + filesystemPolicyHelp,
+		Long:          "Invoke a tool directly for debugging.\n\n" + filesystemPolicyHelp,
+		Example:       "  yui tool read_file path=./foo.txt\n  yui tool exec command=\"go test ./...\"",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.ArbitraryArgs,

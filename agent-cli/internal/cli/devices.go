@@ -21,9 +21,10 @@ func NewDevicesCommand() *DevicesCommand { return &DevicesCommand{} }
 
 func (c *DevicesCommand) Generate() *cobra.Command {
 	return &cobra.Command{
-		Use:   "devices",
-		Short: "Discover available audio devices",
-		Long:  "Commands for discovering selectable audio input and output devices.",
+		Use:     "devices",
+		Short:   "Discover available audio devices",
+		Long:    "Commands for discovering selectable audio input and output devices.",
+		Example: "  yui devices list\n  yui devices list --json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},
@@ -42,10 +43,11 @@ func NewDevicesListCommand(registry audio.DeviceRegistry) *DevicesListCommand {
 
 func (c *DevicesListCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List available audio devices",
-		Long:  "List selectable audio input and output devices and their directional defaults.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List available audio devices",
+		Long:    "List selectable audio input and output devices and their directional defaults.",
+		Example: "  yui devices list\n  yui devices list --json",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.run(cmd.OutOrStdout())
 		},

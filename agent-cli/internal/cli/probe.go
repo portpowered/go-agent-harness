@@ -38,6 +38,7 @@ func (c *ProbeCommand) Generate() *cobra.Command {
 		Short: "Run deterministic offline probes",
 		Long: "Run deterministic offline probes against recorded fixtures.\n\n" +
 			"Use the run subcommand to execute probe scenarios through the JSONL probe runner without network access.",
+		Example: "  yui probe run ./scenario.json --replay ./capture.session.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},

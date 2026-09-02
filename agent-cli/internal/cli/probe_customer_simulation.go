@@ -117,7 +117,7 @@ func (c *CustomerSimulationCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "customer-simulation [scenario-path...]",
 		Short: "Run the opt-in conversational customer simulation suite",
-		Long: "Run selected A/B/C/D/E customer-simulation scenarios through the shipped agent binary. " +
+		Long: "Run selected A/B/C/D/E customer-simulation scenarios through the shipped Yui binary. " +
 			"This is a billed live-provider command: it requires --live, an audio script, and credentials. " +
 			"Family E additionally requires a natural check-in recording via --patience-reprompt-audio. " +
 			"Every run is isolated outside the checkout and leaves a hash-verified evidence bundle plus a JSON report. " +
@@ -135,7 +135,7 @@ func (c *CustomerSimulationCommand) Generate() *cobra.Command {
 	cmd.Flags().StringArrayVar(&c.AudioPaths, "audio", nil, "Ordered 16 kHz PCM16/WAV customer turn audio (repeatable)")
 	cmd.Flags().StringVar(&c.AudioDir, "audio-dir", "", "Directory containing <scenario-id>/<action-id>.wav (or .pcm/.raw) turn files")
 	cmd.Flags().StringVar(&c.PatienceRepromptAudioPath, "patience-reprompt-audio", "", "Family E 16 kHz PCM16/WAV check-in recording sent after the patience threshold")
-	cmd.Flags().StringVar(&c.BinaryPath, "binary", "", "Shipped agent binary; if omitted, locate it or build a temporary copy")
+	cmd.Flags().StringVar(&c.BinaryPath, "binary", "", "Shipped yui binary; if omitted, locate it or build a temporary copy")
 	cmd.Flags().StringVar(&c.RunRoot, "run-root", "", "Fresh evidence parent outside the checkout (default: an OS temporary directory)")
 	cmd.Flags().StringVar(&c.Provider, "provider", c.Provider, "Live realtime provider: openai or grok")
 	cmd.Flags().StringVar(&c.Model, "model", c.Model, "Live realtime model")
@@ -603,13 +603,13 @@ func locateCustomerSimulationBinary(ctx context.Context, explicit string) (strin
 		return path, func() {}, err
 	}
 	candidates := []string{}
-	if executable, err := os.Executable(); err == nil && filepath.Base(executable) == "agent" {
+	if executable, err := os.Executable(); err == nil && filepath.Base(executable) == "yui" {
 		candidates = append(candidates, executable)
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, "agent-cli", "bin", "agent"), filepath.Join(cwd, "bin", "agent"))
+		candidates = append(candidates, filepath.Join(cwd, "agent-cli", "bin", "yui"), filepath.Join(cwd, "bin", "yui"))
 		if root, rootErr := customerSimulationRepositoryRoot(cwd); rootErr == nil {
-			candidates = append(candidates, filepath.Join(root, "agent-cli", "bin", "agent"), filepath.Join(root, "bin", "agent"))
+			candidates = append(candidates, filepath.Join(root, "agent-cli", "bin", "yui"), filepath.Join(root, "bin", "yui"))
 		}
 	}
 	for _, candidate := range uniqueNonEmptyStrings(candidates...) {
@@ -619,9 +619,9 @@ func locateCustomerSimulationBinary(ctx context.Context, explicit string) (strin
 	}
 	root, err := customerSimulationRepositoryRootFromWorkingDirectory()
 	if err != nil {
-		return "", func() {}, fmt.Errorf("locate shipped agent binary: %w", err)
+		return "", func() {}, fmt.Errorf("locate shipped yui binary: %w", err)
 	}
-	temporary, err := os.CreateTemp("", "agent-customer-simulation-binary-")
+	temporary, err := os.CreateTemp("", "yui-customer-simulation-binary-")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("create temporary shipped binary: %w", err)
 	}
@@ -630,13 +630,13 @@ func locateCustomerSimulationBinary(ctx context.Context, explicit string) (strin
 		_ = os.Remove(path)
 		return "", func() {}, fmt.Errorf("prepare temporary shipped binary: %w", err)
 	}
-	build := exec.CommandContext(ctx, "go", "build", "-o", path, "./agent-cli/cmd/agent")
+	build := exec.CommandContext(ctx, "go", "build", "-o", path, "./agent-cli/cmd/yui")
 	build.Dir = root
 	build.Stdout = io.Discard
 	build.Stderr = io.Discard
 	if err := build.Run(); err != nil {
 		_ = os.Remove(path)
-		return "", func() {}, fmt.Errorf("build shipped agent binary: %w", err)
+		return "", func() {}, fmt.Errorf("build shipped yui binary: %w", err)
 	}
 	return path, func() { _ = os.Remove(path) }, nil
 }

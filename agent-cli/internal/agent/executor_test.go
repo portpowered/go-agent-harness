@@ -42,7 +42,7 @@ func TestLoadConfig_WithInferencerOverrideSkipsCredentialValidation(t *testing.T
 	}
 }
 
-func TestLoadSystemPromptWithDetails_DefaultAgentsMDReportsFilesystemSideEffects(t *testing.T) {
+func TestLoadSystemPromptWithDetails_MissingAgentsMDMeansNoPromptOrSideEffects(t *testing.T) {
 	workspaceDir := t.TempDir()
 	exec := NewExecutor(nil, nil, stubInferencer{}, true)
 
@@ -55,18 +55,17 @@ func TestLoadSystemPromptWithDetails_DefaultAgentsMDReportsFilesystemSideEffects
 	if err != nil {
 		t.Fatalf("LoadSystemPromptWithDetails() error = %v", err)
 	}
-	if !strings.Contains(prompt, "read_file") {
-		t.Fatalf("prompt missing generated AGENTS.md tool content: %s", prompt)
+	if prompt != "" {
+		t.Fatalf("prompt = %q, want empty", prompt)
 	}
 
 	agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
-	if _, err := os.Stat(agentsPath); err != nil {
-		t.Fatalf("AGENTS.md was not created: %v", err)
+	if _, err := os.Stat(agentsPath); !os.IsNotExist(err) {
+		t.Fatalf("AGENTS.md stat error = %v, want not-exist", err)
 	}
-	assertPromptSource(t, details, PromptSourceKindAgentsMD, agentsPath)
-	assertPromptSideEffect(t, details, PromptSideEffectCreateAgentsMD)
-	assertPromptSideEffect(t, details, PromptSideEffectReadAgentsMD)
-	assertPromptSideEffect(t, details, PromptSideEffectReadSkillsMetadata)
+	assertNoPromptSideEffect(t, details, PromptSideEffectCreateAgentsMD)
+	assertNoPromptSideEffect(t, details, PromptSideEffectReadAgentsMD)
+	assertNoPromptSideEffect(t, details, PromptSideEffectReadSkillsMetadata)
 	assertNoPromptSideEffect(t, details, PromptSideEffectLoadConfig)
 	assertNoPromptSideEffect(t, details, PromptSideEffectCollectSystemInfo)
 }

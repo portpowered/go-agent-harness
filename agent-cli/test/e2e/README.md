@@ -34,6 +34,13 @@ AGENT_MODEL__OPENAI__API_KEY="$OPENAI_API_KEY" \
 go test -tags=e2e -count=1 ./agent-cli/test/e2e -run GPTRealtime21 -v
 ```
 
+Audit private EAC24–33 provider-edge captures without executing their tools:
+
+```sh
+EAC_CAPTURE_DIR=/absolute/path/to/captures \
+go test -tags=e2e -count=1 ./agent-cli/test/e2e -run EAC24Through33 -v
+```
+
 Provider credentials retain their existing environment/file lookup behavior.
 The `e2e_internal` tag is an implementation detail used by this package; invoke
 manual scenarios through `agent-cli/test/e2e`.

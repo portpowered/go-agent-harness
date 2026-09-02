@@ -44,17 +44,18 @@ func (c *MediaCommand) Generate() *cobra.Command {
 	probe := &MediaProbeCommand{Probe: c.Probe, Timeout: c.Timeout, ReplayFixture: c.ReplayFixture}
 	look := &MediaLookCommand{Look: c.Look, Timeout: c.Timeout}
 	cmd := &cobra.Command{
-		Use:   "media",
-		Short: "Inspect external media sources",
-		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
-		Args:  cobra.NoArgs,
+		Use:     "media",
+		Short:   "Inspect external media sources",
+		Example: "  yui media probe https://example.com/audio.wav\n  yui media look https://example.com/audio.wav",
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Args:    cobra.NoArgs,
 	}
 	cmd.AddCommand(probe.Generate())
 	cmd.AddCommand(look.Generate())
 	return cmd
 }
 
-// MediaProbeCommand implements `agent media probe <url>`.
+// MediaProbeCommand implements `yui media probe <url>`.
 type MediaProbeCommand struct {
 	Probe   MediaProbeFunc
 	Timeout time.Duration
@@ -184,7 +185,7 @@ func RunMediaProbe(ctx context.Context, out io.Writer, rawURL string, probe Medi
 	return (&MediaProbeCommand{Probe: probe, Timeout: timeout}).Run(ctx, out, rawURL)
 }
 
-// MediaLookCommand implements `agent media look <url>`.
+// MediaLookCommand implements `yui media look <url>`.
 type MediaLookCommand struct {
 	Look    MediaLookFunc
 	Timeout time.Duration

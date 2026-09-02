@@ -142,7 +142,8 @@ func (c *AskCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "ask [prompt] [files...]",
 		Short:         "Ask the agent a question and get a response",
-		Long:          "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | agent ask",
+		Long:          "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | yui ask",
+		Example:       "  yui ask \"Summarize this repository\"\n  yui ask \"Describe this image\" screenshot.png",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,

@@ -337,7 +337,6 @@ func (c *WebMCPOperationsCommand) tabsCommand() *cobra.Command {
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
 	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.eligible, "eligible", false, "List only targets eligible for WebMCP")
-	cmd.Flags().BoolVar(&values.eligibleOnly, "eligible-only", false, "List only targets eligible for WebMCP")
 	cmd.Flags().BoolVar(&values.includeZeroToolPages, "include-zero-tool-pages", false, "Include eligible pages with no known tools")
 	cmd.Flags().StringVar(&values.originContains, "origin-contains", "", "Filter by an origin substring")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
@@ -833,32 +832,25 @@ func registerWebMCPDirectBrowserFlags(cmd *cobra.Command, values *flags.BrowserF
 			bindStrictBrowserBool(cmd.Flags(), target, name, usage)
 		}
 	}
-	stringAliases(&values.CDPURL, "Browser DevTools HTTP endpoint", "cdp-url", "browser-cdp-url")
-	stringAliases(&values.WSEndpoint, "Browser DevTools WebSocket endpoint", "ws-endpoint", "browser-ws-endpoint")
-	stringAliases(&values.UserDataDir, "Browser profile directory used for DevTools discovery", "user-data-dir", "browser-user-data-dir")
-	boolAliases(&values.AllowProcessScan, "Allow process-based browser endpoint discovery", "allow-process-scan", "browser-allow-process-scan")
-	boolAliases(&values.AllowRemoteCDP, "Allow non-loopback DevTools endpoints", "allow-remote-cdp", "browser-allow-remote-cdp")
-	stringAliases(&values.Browser, "Exact normalized browser ID", "browser", "browser-browser")
-	stringAliases(&values.Tab, "Exact browser target ID", "tab", "browser-tab")
-	stringAliases(&values.Origin, "Exact browser page origin filter", "origin", "browser-origin")
-	stringAliases(&values.AutoSelect, "Browser target auto-selection: off, single, or persisted", "auto-select", "browser-auto-select")
-	boolAliases(&values.ActivateTab, "Activate the selected browser tab", "activate-tab", "browser-activate-tab")
-	boolAliases(&values.PersistSelection, "Persist the selected browser ID and target metadata", "persist-selection", "browser-persist-selection")
-	for _, name := range []string{"allowed-origin", "browser-allowed-origin"} {
-		cmd.Flags().StringArrayVar(&values.AllowedOrigins, name, nil, "Allow an exact browser page origin (repeatable)")
-	}
-	for _, name := range []string{"denied-origin", "browser-denied-origin"} {
-		cmd.Flags().StringArrayVar(&values.DeniedOrigins, name, nil, "Deny an exact browser page origin (repeatable)")
-	}
-	stringAliases(&values.Approval, "Browser page approval policy: always, writes, or never", "approval", "browser-approval")
-	stringAliases(&values.CancelOnInterrupt, "Browser invocation cancellation policy: never, read-only, or always", "cancel-on-interrupt", "browser-cancel-on-interrupt")
+	stringAliases(&values.CDPURL, "Browser DevTools HTTP endpoint", "cdp-url")
+	stringAliases(&values.WSEndpoint, "Browser DevTools WebSocket endpoint", "ws-endpoint")
+	stringAliases(&values.UserDataDir, "Browser profile directory used for DevTools discovery", "user-data-dir")
+	boolAliases(&values.AllowProcessScan, "Allow process-based browser endpoint discovery", "allow-process-scan")
+	boolAliases(&values.AllowRemoteCDP, "Allow non-loopback DevTools endpoints", "allow-remote-cdp")
+	stringAliases(&values.Browser, "Exact normalized browser ID", "browser")
+	stringAliases(&values.Tab, "Exact browser target ID", "tab")
+	stringAliases(&values.Origin, "Exact browser page origin filter", "origin")
+	stringAliases(&values.AutoSelect, "Browser target auto-selection: off, single, or persisted", "auto-select")
+	boolAliases(&values.ActivateTab, "Activate the selected browser tab", "activate-tab")
+	boolAliases(&values.PersistSelection, "Persist the selected browser ID and target metadata", "persist-selection")
+	cmd.Flags().StringArrayVar(&values.AllowedOrigins, "allowed-origin", nil, "Allow an exact browser page origin (repeatable)")
+	cmd.Flags().StringArrayVar(&values.DeniedOrigins, "denied-origin", nil, "Deny an exact browser page origin (repeatable)")
+	stringAliases(&values.Approval, "Browser page approval policy: always, writes, or never", "approval")
+	stringAliases(&values.CancelOnInterrupt, "Browser invocation cancellation policy: never, read-only, or always", "cancel-on-interrupt")
 	cmd.Flags().DurationVar(&values.InvocationTimeout, "invocation-timeout", 0, "Maximum browser invocation duration (Go duration)")
-	cmd.Flags().DurationVar(&values.InvocationTimeout, "browser-invocation-timeout", 0, "Maximum browser invocation duration (Go duration)")
 	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxInputBytes, name: "max-input-bytes"}, "max-input-bytes", "Maximum browser input_json bytes (decimal integer)")
-	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxInputBytes, name: "browser-max-input-bytes"}, "browser-max-input-bytes", "Maximum browser input_json bytes (decimal integer)")
 	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxResultBytes, name: "max-result-bytes"}, "max-result-bytes", "Maximum browser result bytes (decimal integer)")
-	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxResultBytes, name: "browser-max-result-bytes"}, "browser-max-result-bytes", "Maximum browser result bytes (decimal integer)")
-	boolAliases(&values.SerializePerTarget, "Serialize browser page calls per target", "serialize-per-target", "browser-serialize-per-target")
+	boolAliases(&values.SerializePerTarget, "Serialize browser page calls per target", "serialize-per-target")
 }
 
 func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) config.BrowserOverrides {

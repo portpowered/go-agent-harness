@@ -889,6 +889,58 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 	}
 }
 
+func TestSessionReplayRendererKeepsActorChunksOnOneLineAcrossToolContinuation(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("I will check ")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("that now.")},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ToolCallId: "call-1", Value: messages.NewToolCallStartValue("call-1", "lookup")},
+		{Type: messages.StreamTypeToolCallDelta, Role: messages.RoleAssistant, ToolCallId: "call-1", Value: messages.NewToolCallDeltaValue("{\n  \"city\": \"Paris\"\n}")},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: "call-1", Value: messages.NewToolCallEndValue("call-1", "lookup", "{\n  \"city\": \"Paris\"\n}")},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextDeltaValue("sunny ")},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextDeltaValue("and warm")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextEndValue()},
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("It is sunny ")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("and warm.")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("It is sunny and warm.")},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write event %s: %v", event.Type, err)
+		}
+	}
+
+	want := "Assistant: I will check that now.\n" +
+		"Tool call: lookup {\"city\":\"Paris\"}\n" +
+		"Tool result: sunny and warm\n" +
+		"Assistant: It is sunny and warm.\n"
+	if got := out.String(); got != want {
+		t.Fatalf("interleaved tool output = %q, want %q", got, want)
+	}
+}
+
+func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	for _, event := range []messages.StreamMessage{
+		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("first ")},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+	} {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write event %s: %v", event.Type, err)
+		}
+	}
+	if got, want := out.String(), "Assistant: first second\n"; got != want {
+		t.Fatalf("text delta output = %q, want %q", got, want)
+	}
+}
+
 func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
@@ -1007,6 +1059,32 @@ func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.
 		if !strings.Contains(got, want) {
 			t.Fatalf("session error missing %q: %v", want, err)
 		}
+	}
+}
+
+func TestWrapSessionRuntimeErrorClassifiesQuotaMessage(t *testing.T) {
+	err := wrapSessionRuntimeError(sessionRuntimePlan{mode: sessionRuntimeModeReplayOpenAI}, errors.New("session error: You have no credits remaining."))
+	if err == nil || !strings.Contains(err.Error(), "classification=rate_limited") {
+		t.Fatalf("quota runtime error = %v, want rate_limited classification", err)
+	}
+}
+
+func TestWriteSessionToolAnnouncementEnumeratesCanonicalSurface(t *testing.T) {
+	var out bytes.Buffer
+	writeSessionToolAnnouncement(&out, []messages.ToolDefinition{
+		{Name: "write_file"},
+		{Name: "exec"},
+		{Name: "read_file"},
+		{Name: "exec"},
+	})
+	if got, want := out.String(), "Tools: exec, read_file, write_file\n"; got != want {
+		t.Fatalf("tool startup announcement = %q, want %q", got, want)
+	}
+
+	out.Reset()
+	writeSessionToolAnnouncement(&out, nil)
+	if got, want := out.String(), "Tools: none\n"; got != want {
+		t.Fatalf("empty tool startup announcement = %q, want %q", got, want)
 	}
 }
 

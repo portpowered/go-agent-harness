@@ -45,6 +45,33 @@ func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectFlagsUseOneUnprefixedSpelling(t *testing.T) {
+	operations := NewWebMCPOperationsCommand(flags.NewGlobalFlags())
+	root := &cobra.Command{Use: "webmcp"}
+	operations.AddCommands(root)
+	toolsCommand, _, err := root.Find([]string{"tools"})
+	if err != nil {
+		t.Fatalf("find tools command: %v", err)
+	}
+	for _, name := range []string{"cdp-url", "auto-select", "allowed-origin"} {
+		if toolsCommand.Flags().Lookup(name) == nil {
+			t.Fatalf("tools command missing canonical --%s flag", name)
+		}
+	}
+	for _, duplicate := range []string{"browser-cdp-url", "browser-auto-select", "browser-allowed-origin"} {
+		if toolsCommand.Flags().Lookup(duplicate) != nil {
+			t.Fatalf("tools command retained duplicate --%s flag", duplicate)
+		}
+	}
+	tabsCommand, _, err := root.Find([]string{"tabs"})
+	if err != nil {
+		t.Fatalf("find tabs command: %v", err)
+	}
+	if tabsCommand.Flags().Lookup("eligible") == nil || tabsCommand.Flags().Lookup("eligible-only") != nil {
+		t.Fatal("tabs command must expose only the canonical --eligible spelling")
+	}
+}
+
 func TestDirectInvocationResultErrorPropagatesFreshnessRetryability(t *testing.T) {
 	err := directInvocationResultError(webmcp.InvokeResult{
 		InvocationID:        "broker-invocation",

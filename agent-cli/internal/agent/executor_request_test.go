@@ -232,8 +232,8 @@ func TestExecutorRequest_SystemPromptErrorAndSideEffectBranches(t *testing.T) {
 		_, _, err := exec.LoadSystemPromptWithDetails(&Config{
 			NoSystemInformation: true,
 		}, workspaceFile, nil)
-		if err == nil || !strings.Contains(err.Error(), "initialize AGENTS.md") {
-			t.Fatalf("default workspace error = %v, want initialization context", err)
+		if err == nil || !strings.Contains(err.Error(), "read AGENTS.md") {
+			t.Fatalf("default workspace error = %v, want read context", err)
 		}
 	})
 
@@ -279,17 +279,16 @@ func TestExecutorRequest_SystemPromptErrorAndSideEffectBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("fal system information selects fal model", func(t *testing.T) {
+	t.Run("system information does not manufacture an absent prompt", func(t *testing.T) {
 		dir := t.TempDir()
 		writeExecutorConfig(t, dir, "model:\n  provider: fal\n  fal:\n    model: fal-test-model\n    api_key: test-key\n")
 		prompt, details, err := exec.LoadSystemPromptWithDetails(&Config{
 			ConfigDir: dir,
 		}, t.TempDir(), nil)
-		if err != nil || !strings.Contains(prompt, "fal-test-model") {
-			t.Fatalf("fal prompt = %q, %v", prompt, err)
+		if err != nil || prompt != "" {
+			t.Fatalf("absent prompt = %q, %v; want empty", prompt, err)
 		}
-		assertPromptSource(t, details, PromptSourceKindSystemInfo, "")
-		assertPromptSideEffect(t, details, PromptSideEffectCollectSystemInfo)
+		assertNoPromptSideEffect(t, details, PromptSideEffectCollectSystemInfo)
 	})
 
 	t.Run("config skills source is recorded", func(t *testing.T) {

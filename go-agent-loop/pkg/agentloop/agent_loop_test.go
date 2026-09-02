@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging"
 )
@@ -206,6 +207,27 @@ func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 	}
 	if outcome.Err == nil || outcome.Err.Error() != wantErr {
 		t.Fatalf("stream outcome err = %v, want %q", outcome.Err, wantErr)
+	}
+}
+
+func TestStreamErrorMessagePreservesStructuredSessionFailure(t *testing.T) {
+	value := messages.NewErrorValueWithTerminal(
+		"You have no credits remaining.",
+		"rate_limited",
+		messages.TerminalReasonTerminalFailure,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputNone,
+	)
+	value.ErrorType = "insufficient_quota"
+	value.Code = "credit_balance_exhausted"
+
+	message := streamErrorMessage(&engine.StreamDeltaError{Value: value})
+	got, ok := message.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("stream error value = %T, want *messages.ErrorValue", message.Value)
+	}
+	if got != value || got.Classification != "rate_limited" || got.Code != "credit_balance_exhausted" {
+		t.Fatalf("stream error lost structured provider fields: %+v", got)
 	}
 }
 

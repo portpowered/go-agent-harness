@@ -2,7 +2,7 @@
 
 GO ?= go
 BUILD_CGO_ENABLED ?= 0
-BUILD_OUTPUT ?= bin/agent
+BUILD_OUTPUT ?= bin/yui
 GO_TEST_TIMEOUT ?= 10s
 GO_TEST_TIMING_TOP ?= 20
 TEST_TIMEOUT_RUNNER ?= ./cmd/testtimeout
@@ -26,7 +26,7 @@ endif
 
 build: export CGO_ENABLED := $(BUILD_CGO_ENABLED)
 build:
-	$(GO) build $(WORKTREE_FLAGS) -o $(BUILD_OUTPUT) ./cmd/agent
+	$(GO) build $(WORKTREE_FLAGS) -o $(BUILD_OUTPUT) ./cmd/yui
 
 test:
 	$(GO) run $(TEST_TIMEOUT_RUNNER) --timeout $(GO_TEST_TIMEOUT) -- $(GO) test ./... -timeout $(GO_TEST_TIMEOUT) -v

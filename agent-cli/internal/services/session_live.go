@@ -422,10 +422,42 @@ func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 // loop's expected context cancellation, but must not erase the caller's
 // cancellation when the clean loop result wins that race.
 func sessionRunTerminationError(ctx context.Context, err error) error {
+	err = decorateSessionStreamTerminalError(err)
 	if ctx == nil {
 		return err
 	}
 	return errors.Join(err, ctx.Err())
+}
+
+type sessionStreamTerminalError struct {
+	cause error
+	text  string
+}
+
+func (e *sessionStreamTerminalError) Error() string { return e.text }
+func (e *sessionStreamTerminalError) Unwrap() error { return e.cause }
+
+// decorateSessionStreamTerminalError retains the human-readable message while
+// exposing the structured provider classification at the CLI boundary. The
+// agent loop returns StreamDeltaError after consuming a terminal provider
+// event; without this decoration Cobra could only print the message text.
+func decorateSessionStreamTerminalError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var deltaErr *engine.StreamDeltaError
+	if !errors.As(err, &deltaErr) || deltaErr.Value == nil {
+		return err
+	}
+	fields := sessionErrorFields(deltaErr.Value)
+	if fields == "" || strings.Contains(err.Error(), "classification=") {
+		return err
+	}
+	message := strings.TrimSpace(deltaErr.Value.Message)
+	if message == "" {
+		message = "session error"
+	}
+	return &sessionStreamTerminalError{cause: err, text: fmt.Sprintf("%s [%s]", message, fields)}
 }
 
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {

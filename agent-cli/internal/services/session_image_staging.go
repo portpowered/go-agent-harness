@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,6 +50,19 @@ func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string,
 	}
 
 	opts.ToolDefinitions = advertiseSessionImagePaths(opts.ToolDefinitions, stagedPaths)
+	// A dynamic browser/tool refresh replaces the entire advertised surface.
+	// Preserve the session-owned image paths on every refreshed snapshot, or a
+	// refresh between staging and the first model turn can erase the only valid
+	// read_image argument.
+	if refresh := opts.RefreshToolDefinitions; refresh != nil {
+		opts.RefreshToolDefinitions = func(ctx context.Context) ([]messages.ToolDefinition, error) {
+			definitions, err := refresh(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return advertiseSessionImagePaths(definitions, stagedPaths), nil
+		}
+	}
 	return opts, cleanup, nil
 }
 

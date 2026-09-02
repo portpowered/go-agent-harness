@@ -4,11 +4,11 @@
 
 ## Install
 
-Install the `agent` binary from the latest release with Go 1.26 or newer:
+Install the `yui` binary from the latest release with Go 1.26 or newer:
 
 ```bash
-go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@latest
-agent --help
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/yui@latest
+yui --help
 ```
 
 Prebuilt macOS, Linux, and Windows archives are available on the
@@ -18,7 +18,7 @@ This README tracks `main`. If a documented feature is newer than the latest
 published release, install the current development binary with:
 
 ```bash
-go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@main
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/yui@main
 ```
 
 ## Set your API key
@@ -54,7 +54,7 @@ Run the command from the directory the agent should be allowed to work in:
 
 ```bash
 cd /path/to/your/project
-agent --workdir "$PWD" session
+yui --workdir "$PWD" session
 ```
 
 This starts an OpenAI Realtime session using the default microphone, speakers,
@@ -62,7 +62,7 @@ model, voice, WebSocket transport, semantic VAD, and workspace tools. Press
 Ctrl-C to stop it.
 
 The process needs microphone access. Grant access to the terminal or host
-application that launches `agent`:
+application that launches `yui`:
 
 - macOS: System Settings → Privacy & Security → Microphone.
 - Windows: Settings → Privacy & security → Microphone.
@@ -73,7 +73,7 @@ The agent's filesystem tools are confined to `--workdir`. Add another explicit
 root only when needed:
 
 ```bash
-agent --workdir "$PWD" --allow-path /path/to/shared session
+yui --workdir "$PWD" --allow-path /path/to/shared session
 ```
 
 `--allow-path` is filesystem-tool scope, not an operating-system sandbox. The
@@ -86,7 +86,7 @@ and WebMCP sessions do not.
 Add WebMCP and a startup URL to the same default voice session:
 
 ```bash
-agent --workdir "$PWD" session \
+yui --workdir "$PWD" session \
   --browser-tools webmcp \
   --browser-open https://cubecade.openai.chatgpt.site/
 ```
@@ -102,15 +102,16 @@ session. Write-like page operations require approval by default; set
 
 ## Configuration
 
-The CLI creates `~/.agent-cli/config.yaml` on first use. Configuration precedence
-is defaults, then YAML, then `AGENT_...` environment variables, then command-line
-flags.
+Configuration precedence is defaults, then `~/.agent-cli/config.yaml` when it
+exists, then `AGENT_...` environment variables, then command-line flags. The
+CLI does not create a workspace prompt when one is absent.
 
 ### AGENTS.md
 
-Put `AGENTS.md` in the directory selected by `--workdir`. Its contents become
-the session's workspace instructions. If it is missing, the CLI creates a
-starter file.
+Put `AGENTS.md` in the directory selected by `--workdir` when you want custom
+session instructions. Its contents become the session's workspace prompt. If
+the file is missing and `--system-prompt` is not supplied, Yui sends no system
+prompt and does not create a file.
 
 ```markdown
 # Session instructions
@@ -124,15 +125,20 @@ starter file.
 Override it for one run with a file or literal prompt:
 
 ```bash
-agent --workdir "$PWD" session --system-prompt ./VOICE_AGENT.md
+yui --workdir "$PWD" session --system-prompt ./VOICE_AGENT.md
 ```
+
+Copyable command-specific examples, including audio, tool, WebMCP, and room
+guidance based on OpenAI's Realtime prompting recommendations, are indexed in
+[`docs/references`](./docs/references/README.md). The upstream source is the
+[official Realtime prompting guide](https://developers.openai.com/api/docs/guides/realtime-models-prompting).
 
 ### Voice
 
 Select an OpenAI Realtime voice with `--voice`:
 
 ```bash
-agent --workdir "$PWD" session --voice marin
+yui --workdir "$PWD" session --voice marin
 ```
 
 Supported voices are `alloy`, `ash`, `ballad`, `cedar`, `coral`, `echo`,
@@ -143,7 +149,7 @@ Supported voices are `alloy`, `ash`, `ballad`, `cedar`, `coral`, `echo`,
 The default session model is `gpt-realtime-2.1-mini`. Override it per run:
 
 ```bash
-agent --workdir "$PWD" session --model gpt-realtime
+yui --workdir "$PWD" session --model gpt-realtime-2.1
 ```
 
 Or persist the session model:
@@ -203,7 +209,7 @@ Other useful command-line settings include:
 - `--replay capture.json` to replay a session without a live provider call.
 - `-C /path/to/config-dir` to use a separate config directory.
 
-Run `agent session --help` for the complete option list.
+Run `yui session --help` for the complete option list.
 
 ## Features
 
@@ -234,7 +240,7 @@ Run `agent session --help` for the complete option list.
 - Filesystem confinement with explicit workdir and additional allowed roots.
 - Session recording, complete diagnostic bundles, offline replay, and stored
   session inspection.
-- One-shot `agent ask`, interactive `agent chat`, direct `agent tool` debugging,
+- One-shot `yui ask`, interactive `yui chat`, direct `yui tool` debugging,
   and acceptance/customer-simulation probes.
 - Tick-driven agent loop and provider gateway packages for custom Go agents.
 
@@ -258,34 +264,35 @@ Run `agent session --help` for the complete option list.
 
 The reusable `go-llm-gateway` module also contains Anthropic and Gemini
 adapters. They are library integrations and are not currently selectable by the
-`agent` binary.
+`yui` binary.
 
 ### Tools
 
-All built-in tools are enabled by default and can be disabled under
-`tools.list` in `config.yaml`.
+The default session surface contains shell and filesystem tools. Desktop
+computer-use tools and experimental network/skill utilities stay hidden until
+their explicit flags are supplied, which keeps the model's tool choice focused.
 
 | Tool | Purpose |
 | --- | --- |
 | `read_file`, `read_image`, `list_dir` | Inspect files, images, and directories inside the allowed filesystem scope. |
 | `write_file`, `edit_file`, `append_file` | Create or modify files inside the allowed filesystem scope. |
 | `exec` | Run a shell command as the current user. |
-| `web_search`, `web_fetch` | Search the web or fetch readable URL content. |
-| `show`, `mouse` | Inspect and control the desktop when the platform and permissions allow it. |
-| `load_skill` | Load detailed instructions and resources from an installed skill. |
-| `sleep` | Wait for an external operation for a bounded duration. |
+| `web_search`, `web_fetch` | Search the web or fetch readable URL content; requires `--experimental-tools`. |
+| `show`, `mouse` | Inspect and control the desktop when supported; requires `--computer-use`. |
+| `load_skill` | Load detailed instructions and resources from an installed skill; requires `--experimental-tools`. |
+| `sleep` | Wait for an external operation for a bounded duration; requires `--experimental-tools`. |
 | WebMCP page tools | Dynamically discovered structured tools supplied by the active browser page. |
 
 The model receives the enabled tool definitions and chooses when to call them.
 Run a built-in tool directly for debugging with:
 
 ```bash
-agent --workdir "$PWD" tool read_file path=README.md
+yui --workdir "$PWD" tool read_file path=README.md
 ```
 
 ## Packages
 
-- [`agent-cli`](./agent-cli/README.md): the `agent` executable.
+- [`agent-cli`](./agent-cli/README.md): the `yui` executable.
 - [`go-agent-loop`](./go-agent-loop/README.md): the tick-driven agent runtime.
 - [`go-llm-gateway`](./go-llm-gateway/README.md): provider-neutral inference
   and realtime session gateways.

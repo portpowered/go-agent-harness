@@ -58,7 +58,7 @@ func NewWebMCPDoctorCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPD
 	}
 }
 
-// Generate returns the Cobra command for `agent webmcp doctor`.
+// Generate returns the Cobra command for `yui webmcp doctor`.
 func (c *WebMCPDoctorCommand) Generate() *cobra.Command {
 	if c.browserFlags == nil {
 		c.browserFlags = flags.NewBrowserFlags()

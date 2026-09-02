@@ -119,7 +119,7 @@ func scheduledBoundaryArgs(configDir, recordDir string, audioPaths ...string) []
 // instruction composition boundary. The production CLI graph owns the default
 // registry; only the OpenAI session transport is replaced by the hermetic
 // provider-shaped connection.
-func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t *testing.T) {
+func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding(t *testing.T) {
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIGroundedScheduledBoundaryAgent(t, server)
@@ -152,7 +152,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t 
 		}
 	}
 
-	groundedReady := server.waitForSessionUpdates(2*time.Second, func(updates []json.RawMessage) bool {
+	toolsReady := server.waitForSessionUpdates(2*time.Second, func(updates []json.RawMessage) bool {
 		for _, raw := range updates {
 			var update struct {
 				Instructions string `json:"instructions"`
@@ -160,16 +160,16 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t 
 					Name string `json:"name"`
 				} `json:"tools"`
 			}
-			if json.Unmarshal(raw, &update) == nil && strings.Contains(update.Instructions, "Tool-grounding requirements:") && len(update.Tools) > 0 {
+			if json.Unmarshal(raw, &update) == nil && update.Instructions == "" && len(update.Tools) > 0 {
 				return true
 			}
 		}
 		return false
 	})
-	if !groundedReady {
+	if !toolsReady {
 		timeline, _, _, _, _ := server.snapshots()
 		updates := server.sessionUpdatesSnapshot()
-		t.Fatalf("no-prompt scheduled route did not send a combined grounding/tool update; timeline=%v updates=%v", timeline, updates)
+		t.Fatalf("no-prompt scheduled route did not advertise tools without instructions; timeline=%v updates=%v", timeline, updates)
 	}
 
 	timeline, _, _, _, _ = server.snapshots()
@@ -185,18 +185,15 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t 
 		if err := json.Unmarshal(raw, &update); err != nil {
 			t.Fatalf("decode no-prompt scheduled session.update %d: %v", index, err)
 		}
-		if !strings.Contains(update.Instructions, "Tool-grounding requirements:") {
+		if len(update.Tools) == 0 {
 			continue
 		}
 		if groundedUpdateIndex >= 0 {
 			t.Fatalf("no-prompt scheduled route sent grounding more than once: updates=%v", updates)
 		}
 		groundedUpdateIndex = index
-		if strings.Count(update.Instructions, "Tool-grounding requirements:") != 1 {
-			t.Fatalf("no-prompt grounding policy count = %d, want 1; instructions=%q", strings.Count(update.Instructions, "Tool-grounding requirements:"), update.Instructions)
-		}
-		if strings.Contains(update.Instructions, "No tools are currently registered") {
-			t.Fatalf("no-prompt grounding instructions contradict advertised tools: %q", update.Instructions)
+		if update.Instructions != "" {
+			t.Fatalf("no-prompt scheduled route synthesized instructions: %q", update.Instructions)
 		}
 		advertised := make(map[string]bool, len(update.Tools))
 		for _, tool := range update.Tools {
@@ -209,7 +206,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t 
 		}
 	}
 	if groundedUpdateIndex < 0 {
-		t.Fatalf("no-prompt scheduled route sent no instruction-bearing tool update: %v", updates)
+		t.Fatalf("no-prompt scheduled route sent no tool update: %v", updates)
 	}
 	groundedWireIndex := indexOfTimeline(timeline, "out:session.update", groundedUpdateIndex)
 	if groundedWireIndex < 0 {

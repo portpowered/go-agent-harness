@@ -353,7 +353,7 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 		}
 		if loopErr != nil {
 			resultCh <- streamEvent{
-				event: messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(loopErr.Error())},
+				event: streamErrorMessage(loopErr),
 				err:   loopErr,
 			}
 		}
@@ -364,6 +364,18 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 	result.EventStream = newChanStream(resultCh)
 
 	return result, nil
+}
+
+// streamErrorMessage preserves the structured provider/session terminal when
+// the ordering engine returns it. Replacing it with a message-only ERROR here
+// used to erase classifications such as rate_limited before the CLI rendered
+// the failure.
+func streamErrorMessage(err error) messages.StreamMessage {
+	var deltaErr *engine.StreamDeltaError
+	if errors.As(err, &deltaErr) && deltaErr.Value != nil {
+		return messages.StreamMessage{Type: messages.StreamTypeError, Value: deltaErr.Value}
+	}
+	return messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(err.Error())}
 }
 
 // Run starts the loop in continuous turn-taking mode. It blocks until the context

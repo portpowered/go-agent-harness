@@ -218,6 +218,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	// Best-effort, same as the non-duration run path: this disclosure write
 	// must not pre-empt or masquerade as the session's own run/drain failure.
 	writeFilesystemScopeAnnouncement(out, plan.filesystemPolicy)
+	writeSessionToolAnnouncement(out, plan.loop.ToolDefinitions)
 	announcement := plan.announce
 	if plan.loop.BareLive {
 		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)

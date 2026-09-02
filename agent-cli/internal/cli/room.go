@@ -40,7 +40,7 @@ type RoomRunFunc func(context.Context, io.Writer, services.RoomRunOptions) (serv
 // inject a context cancellation without installing process-global handlers.
 type RoomSignalContextFunc func(context.Context) (context.Context, func())
 
-// RoomRunCommand implements `agent room run`.
+// RoomRunCommand implements `yui room run`.
 type RoomRunCommand struct {
 	globalFlags    *flags.GlobalFlags
 	deviceRegistry audio.DeviceRegistry
@@ -99,7 +99,7 @@ func (c *RoomRunCommand) SetSignalContextFactory(factory RoomSignalContextFunc) 
 	c.signalContext = factory
 }
 
-// RoomCommand is the parent `agent room` command.
+// RoomCommand is the parent `yui room` command.
 type RoomCommand struct{}
 
 // NewRoomCommand creates the room command group.
@@ -108,9 +108,10 @@ func NewRoomCommand() *RoomCommand { return &RoomCommand{} }
 // Generate returns the room command group.
 func (c *RoomCommand) Generate() *cobra.Command {
 	return &cobra.Command{
-		Use:   "room",
-		Short: "Run participant rooms",
-		Args:  cobra.NoArgs,
+		Use:     "room",
+		Short:   "Run participant rooms",
+		Example: "  yui room run\n  yui room run --config ./room.yaml",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
@@ -141,7 +142,7 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 			"(a list; use [] for none); an all-agent room additionally needs opening_prompt set on at least one " +
 			"participant so somebody speaks first. An agent participant also requires provider, model, and " +
 			"api_key_env (naming the environment variable holding its credential); a human participant instead " +
-			"requires input_device and output_device. Run `agent room run --example` to print a complete, valid " +
+			"requires input_device and output_device. Run `yui room run --example` to print a complete, valid " +
 			"two-participant example manifest.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -164,7 +165,7 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 // manifest. A first-time user reverse-engineering the manifest shape one
 // validation error at a time (opening_prompt and the required `tools: []`
 // are easy to miss because neither is obvious from the field names alone)
-// is exactly the friction `agent room run --example` exists to remove: this
+// is exactly the friction `yui room run --example` exists to remove: this
 // is real JSON that passes room.ParseManifest unmodified, not a schema
 // description.
 const roomExampleManifest = `{
@@ -199,7 +200,7 @@ const roomExampleManifest = `{
 }
 `
 
-// writeRoomExampleManifest prints roomExampleManifest to w for `agent room
+// writeRoomExampleManifest prints roomExampleManifest to w for `yui room
 // run --example`. Every provider participant needs its own credential
 // available at run time: this example names OPENAI_API_KEY for both, so
 // `OPENAI_API_KEY=... agent room run --config example.json` runs it as-is.

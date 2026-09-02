@@ -20,6 +20,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
+func TestSessionFeedbackWarningIsMutedByDefault(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil)
+	cobraCommand := command.Generate()
+	request := command.sessionRTCDeviceBinding(cobraCommand, defaultTestDeviceRegistry{}, "", "", nil, false)
+	if request.FeedbackWarningWriter != io.Discard {
+		t.Fatalf("default feedback warning writer = %T, want io.Discard", request.FeedbackWarningWriter)
+	}
+}
+
 // This file is the hermetic virtual-device loopback harness: a virtual
 // speaker whose playback can be fed back into a virtual microphone with
 // explicit, sweepable delay/attenuation, driven through a real `agent
@@ -526,6 +535,7 @@ model:
 	globalFlags.ConfigDirPath = configDir
 
 	owner := NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry)
+	owner.SetFeedbackWarningWriter(warning)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	command.SetErr(warning)

@@ -2,7 +2,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // sessionReplayMessageWriter is implemented by the stateful terminal renderer
@@ -114,6 +117,42 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		state.deltaRendered = true
 		state.completed = false
 		r.transcriptStates[role] = state
+		return nil
+	case *messages.TextDeltaValue:
+		if value == nil || value.Content == "" || (!r.transcriptOpen && strings.TrimSpace(value.Content) == "") {
+			return nil
+		}
+		role := sessionReplayTranscriptRole(msg.Role, messages.RoleAssistant)
+		if r.transcriptOpen && r.transcriptRole != role {
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+		}
+		if !r.transcriptOpen {
+			if err := r.startTranscript(role); err != nil {
+				return err
+			}
+		}
+		return writeSessionReplayString(r.out, value.Content)
+	case *messages.ToolCallEndValue:
+		if value == nil {
+			return nil
+		}
+		if err := r.finishTranscript(); err != nil {
+			return err
+		}
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			name = "unknown"
+		}
+		arguments := compactSessionToolText(value.Arguments)
+		if arguments == "" {
+			arguments = "{}"
+		}
+		if err := writeSessionReplayString(r.out, fmt.Sprintf("Tool call: %s %s\n", name, arguments)); err != nil {
+			return err
+		}
+		r.transcriptJustClosed = false
 		return nil
 	case *messages.TranscriptEndValue:
 		role := r.transcriptRoleFor(msg.Role)
@@ -241,8 +280,8 @@ func (r *sessionReplayRenderer) finishTranscript() error {
 }
 
 func sessionReplayTranscriptRole(role, fallback messages.Role) messages.Role {
-	if role == messages.RoleUser {
-		return messages.RoleUser
+	if role == messages.RoleUser || role == messages.RoleTool {
+		return role
 	}
 	if role != "" {
 		return role
@@ -254,7 +293,22 @@ func sessionReplayTranscriptLabel(role messages.Role) string {
 	if role == messages.RoleUser {
 		return "User"
 	}
+	if role == messages.RoleTool {
+		return "Tool result"
+	}
 	return "Assistant"
+}
+
+func compactSessionToolText(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, []byte(value)) == nil {
+		return compact.String()
+	}
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func writeSessionReplayBytes(out io.Writer, data []byte) error {
@@ -302,7 +356,7 @@ func writeSessionReplayMessageUnscoped(out io.Writer, msg messages.StreamMessage
 		if v.IsNonTerminal() {
 			return nil
 		}
-		fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState)
+		fields := sessionErrorFields(v)
 		wrapCause := func(message string) error {
 			if v.Err == nil {
 				return errors.New(message)
@@ -349,6 +403,28 @@ func isTerminalErrorMessage(msg messages.StreamMessage) bool {
 	}
 	value, ok := msg.Value.(*messages.ErrorValue)
 	return !ok || value.IsTerminal()
+}
+
+func sessionErrorFields(value *messages.ErrorValue) string {
+	if value == nil {
+		return ""
+	}
+	classification := value.Classification
+	if classification == "" && (value.ErrorType != "" || value.Code != "" || value.Message != "") {
+		classification = gwproviders.SessionErrorClassification(value.ErrorType, value.Code, value.Message)
+	}
+	fields := sessionTerminalFields(classification, value.TerminalReason, value.TerminalProvenance, value.OutputState)
+	providerFields := make([]string, 0, 2)
+	if value.ErrorType != "" {
+		providerFields = append(providerFields, "error_type="+value.ErrorType)
+	}
+	if value.Code != "" {
+		providerFields = append(providerFields, "code="+value.Code)
+	}
+	if fields != "" {
+		providerFields = append([]string{fields}, providerFields...)
+	}
+	return strings.Join(providerFields, " ")
 }
 
 func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {

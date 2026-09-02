@@ -153,4 +153,4 @@ func (e *WebMCPDoctorError) Unwrap() error {
 	return e.Cause
 }
 
-// WebMCPDoctorCommand implements `agent webmcp doctor`.
+// WebMCPDoctorCommand implements `yui webmcp doctor`.

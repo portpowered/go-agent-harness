@@ -27,9 +27,10 @@ func NewConfigCommand() *ConfigCommand {
 // Generate returns the cobra command for the config group.
 func (c *ConfigCommand) Generate() *cobra.Command {
 	return &cobra.Command{
-		Use:   "config",
-		Short: "Configuration management commands",
-		Long:  "Commands to manage agent CLI configuration.",
+		Use:     "config",
+		Short:   "Configuration management commands",
+		Long:    "Commands to manage agent CLI configuration.",
+		Example: "  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1",
 	}
 }
 
@@ -48,9 +49,10 @@ func NewConfigAddLocalCommand(globalFlags *flags.GlobalFlags) *ConfigAddLocalCom
 // Generate returns the cobra command for config add-local.
 func (c *ConfigAddLocalCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add-local",
-		Short: "Add a local inference provider to config",
-		Long:  "Add a local inference provider entry to ~/.agent-cli/config.yaml.\nThe local provider connects to an OpenAI-compatible server (Ollama, llama.cpp, LM Studio, vLLM) without requiring an API key.",
+		Use:     "add-local",
+		Short:   "Add a local inference provider to config",
+		Long:    "Add a local inference provider entry to ~/.agent-cli/config.yaml.\nThe local provider connects to an OpenAI-compatible server (Ollama, llama.cpp, LM Studio, vLLM) without requiring an API key.",
+		Example: "  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.run(cmd)
 		},

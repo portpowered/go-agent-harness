@@ -371,7 +371,7 @@ func chooseDoctorTarget(targets []webmcp.Target, selection config.BrowserSelecti
 		if len(targets) == 0 {
 			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0})
 		}
-		return nil, "No target selected; run `agent webmcp tabs` and `agent webmcp select` or set browser.selection.auto_select.", nil
+		return nil, "No target selected; run `yui webmcp tabs` and `yui webmcp select` or set browser.selection.auto_select.", nil
 	default:
 		return nil, "", webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "browser target auto-selection is invalid", map[string]any{"reason": "invalid_auto_select"})
 	}

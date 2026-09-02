@@ -8,7 +8,7 @@ This guide is the package-local contributor guide for `libraries/agent-cli`. Rea
 
 ## Local Architecture
 
-- `cmd/agent/` is the binary entrypoint.
+- `cmd/yui/` is the shipped binary entrypoint. `cmd/agent/` remains a source-compatibility entrypoint only.
 - `internal/cli/` owns Cobra commands such as `ask`, `chat`, `tool`, and `session`.
 - `internal/agent/` bridges CLI config into `go-agent-loop` execution.
 - `internal/tools/` owns the shell, filesystem, web, skill, and tool registry implementations.
@@ -31,7 +31,7 @@ make deps-tidy
 make wire
 ```
 
-Use `make wire` after changing dependency injection providers or constructor wiring. `make build` emits the binary under `bin/agent`; this module forces a full rebuild in git worktrees to avoid stale build cache issues.
+Use `make wire` after changing dependency injection providers or constructor wiring. `make build` emits the binary under `bin/yui`; this module forces a full rebuild in git worktrees to avoid stale build cache issues.
 
 ### Windows-supported quality path
 
@@ -48,14 +48,14 @@ The Makefile exposes these override variables for local diagnostics and slower w
 | --- | --- | --- |
 | `GO` | `go` | Go tool command used by Agent CLI targets |
 | `BUILD_CGO_ENABLED` | `0` | `CGO_ENABLED` value exported for `make build` |
-| `BUILD_OUTPUT` | `bin/agent` | Binary path written by `make build` |
+| `BUILD_OUTPUT` | `bin/yui` | Binary path written by `make build` |
 | `GO_TEST_TIMEOUT` | `10s` | Full-suite timeout passed to `go test ./...` |
 | `TEST_TIMEOUT_RUNNER` | `./cmd/testtimeout` | Finite outer boundary that terminates blocked test descendants |
 
 Examples:
 
 ```bash
-make build BUILD_OUTPUT=bin/agent-local-check.exe
+make build BUILD_OUTPUT=bin/yui-local-check.exe
 make test GO_TEST_TIMEOUT=180s
 ```
 
@@ -92,16 +92,16 @@ Do not treat a longer timeout as the standard quality gate.
 2. Run `make test-timing` before changing slow tests or quality-gate timeouts so package and test runtime evidence is captured without committing local diagnostic artifacts.
 3. Run `make build` when command wiring, Wire providers, or binary entrypoints change.
 4. Run `make wire` before `make build` when Wire provider sets or injected dependencies change.
-5. Run the affected session record/replay tests when modifying `agent session --record`, `agent session --replay`, capture files, or replay divergence behavior.
+5. Run the affected session record/replay tests when modifying `yui session --record`, `yui session --replay`, capture files, or replay divergence behavior.
 6. If a change touches the shared `messages.Message` model through `go-agent-loop`, also test `go-agent-loop` and `go-llm-gateway` as described in the shared guide.
 
 ## Local Gotchas
 
 - CLI flags such as `--api-key`, `--model`, and `--provider` override config file values.
 - Session replay reads a capture file and must not make live provider network calls.
-- Live `agent session --record` supports Grok realtime captures and OpenAI Realtime captures. OpenAI live session mode requires provider `openai` and model `gpt-realtime`, then routes through the sessional inferencer instead of stateless OpenAI inference.
-- Live `agent session --record` for session providers must observe `messages.Session.Done()` separately from Agent Loop deltas so provider-side closes can cancel and join the command loop promptly.
-- Raw WebSocket `agent session --replay` fixtures route by capture provider metadata; keep `provider.name` accurate so OpenAI Realtime fixtures exercise the OpenAI session provider instead of the Grok replay path.
+- Live `yui session --record` supports Grok realtime captures and OpenAI Realtime captures. OpenAI live session mode routes through the sessional inferencer instead of stateless OpenAI inference.
+- Live `yui session --record` for session providers must observe `messages.Session.Done()` separately from Agent Loop deltas so provider-side closes can cancel and join the command loop promptly.
+- Raw WebSocket `yui session --replay` fixtures route by capture provider metadata; keep `provider.name` accurate so OpenAI Realtime fixtures exercise the OpenAI session provider instead of the Grok replay path.
 - End-to-end session replay smoke fixtures should include a provider close event such as `session.closed` so the public command path proves model output and graceful shutdown, not just response completion.
 - `agent-cli/test/integration/testdata` is package-private fixture space. Shared committed `.session.json` replay fixtures belong under `go-llm-gateway/pkg/testing/testdata/session-fixtures`, which is the authoritative repository contract for cross-module replay behavior.
 - API keys may live in `~/.agent-cli/config.yaml`; do not commit config files or captured secrets.

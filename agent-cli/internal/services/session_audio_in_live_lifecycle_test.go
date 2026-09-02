@@ -611,11 +611,8 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	if got := string(audioInput["turn_detection"]); got != "null" {
 		t.Fatalf("streamed-audio turn detection = %s, want explicit null", got)
 	}
-	if strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:") != 1 {
-		t.Fatalf("streamed-audio grounding policy count = %d, want 1; instructions=%q", strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:"), sessionUpdate.Instructions)
-	}
-	if strings.Contains(sessionUpdate.Instructions, "No tools are currently registered") {
-		t.Fatalf("streamed-audio instructions contradict advertised tools: %q", sessionUpdate.Instructions)
+	if sessionUpdate.Instructions != "" {
+		t.Fatalf("streamed-audio instructions = %q, want empty without an AGENTS.md", sessionUpdate.Instructions)
 	}
 	if len(sessionUpdate.Tools) != len(toolDefinitions) {
 		t.Fatalf("streamed-audio advertised tools = %#v, want %#v", sessionUpdate.Tools, toolDefinitions)
@@ -716,12 +713,14 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	if err := json.Unmarshal(audio["input"], &input); err != nil {
 		t.Fatalf("decode scheduled audio input config: %v", err)
 	}
-	var instructions string
-	if err := json.Unmarshal(sessionUpdate["instructions"], &instructions); err != nil {
-		t.Fatalf("decode scheduled instructions: %v", err)
-	}
-	if strings.Count(instructions, "Tool-grounding requirements:") != 1 {
-		t.Fatalf("scheduled grounding policy count = %d, want 1; instructions=%q", strings.Count(instructions, "Tool-grounding requirements:"), instructions)
+	if instructionsJSON, ok := sessionUpdate["instructions"]; ok {
+		var instructions string
+		if err := json.Unmarshal(instructionsJSON, &instructions); err != nil {
+			t.Fatalf("decode scheduled instructions: %v", err)
+		}
+		if instructions != "" {
+			t.Fatalf("scheduled instructions = %q, want empty without an AGENTS.md", instructions)
+		}
 	}
 	var advertisedTools []struct {
 		Name string `json:"name"`

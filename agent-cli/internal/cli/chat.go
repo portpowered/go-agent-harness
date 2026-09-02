@@ -83,9 +83,10 @@ func validateChatInvocation(cmd *cobra.Command, loopFlags *flags.LoopFlags, chat
 // Generate returns the cobra command for chat.
 func (c *ChatCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "chat",
-		Short: "Start an interactive chat session with the agent",
-		Long:  "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
+		Use:     "chat",
+		Short:   "Start an interactive chat session with the agent",
+		Long:    "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
+		Example: "  yui chat\n  yui chat --activate-audio-in",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags); err != nil {
 				// Chat preflight failures are already actionable. Leave final

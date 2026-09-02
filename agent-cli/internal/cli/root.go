@@ -31,7 +31,7 @@ func (c *AgentCLI) SetSessionStreamObserver(observer services.SessionStreamObser
 	c.router.SessionCommand.SetSessionStreamObserver(observer)
 }
 
-// RootCommand holds the root "agent" command. Subcommands and persistent flags are wired in routes.go.
+// RootCommand holds the root "yui" command. Subcommands and persistent flags are wired in routes.go.
 type RootCommand struct {
 	Flags *flags.GlobalFlags
 }
@@ -44,8 +44,16 @@ func NewRootCommand(flags *flags.GlobalFlags) *RootCommand {
 // Generate returns the root cobra command (subcommands and persistent flags added in Router.BuildRoot).
 func (c *RootCommand) Generate() *cobra.Command {
 	return &cobra.Command{
-		Use:   "agent",
-		Short: "Port OS Agent CLI - run agentic loops from the command line",
-		Long:  "A CLI that runs Port OS agentic loops with configurable LLM providers.",
+		Use:   "yui",
+		Short: "Run realtime voice agents from the command line",
+		Long: "Yui is a cross-platform voice-agent CLI for realtime conversations, local tools, recordings, replay, and structured WebMCP browser control.\n\n" +
+			"Set an OpenAI key, then start the default microphone and speaker session:\n\n" +
+			"  export OPENAI_API_KEY=\"your-openai-api-key\"\n" +
+			"  yui session\n\n" +
+			"Run `yui session --help` for audio, model, voice, recording, and browser options.",
+		Example: "  # Start a voice session in the current project\n" +
+			"  yui --workdir \"$PWD\" session\n\n" +
+			"  # Open a page and expose its WebMCP tools\n" +
+			"  yui session --browser-tools webmcp --browser-open https://example.com/",
 	}
 }

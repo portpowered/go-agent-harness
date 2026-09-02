@@ -195,6 +195,7 @@ func TestSessionCommandPromptKeepsPCMOutOfTextOutput(t *testing.T) {
 	got := string(bytes.Join(writes, nil))
 	want := "Filesystem scope: workdir=" + canonicalWorkDir + "; additional_allowed_roots=none\n" +
 		tools.FilesystemScopeStartupNotice + "\n" +
+		"Tools: none\n" +
 		"Assistant: " + transcript + "\n[session closed: provider_closed]\n" +
 		"[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\n"
 	if got != want {

@@ -220,8 +220,8 @@ func TestExecutorRun_BuildLoopUsesInjectedDependenciesAndDefaults(t *testing.T) 
 	if requests[0].FrequencyPenalty == nil || *requests[0].FrequencyPenalty != 1.4 {
 		t.Fatalf("frequency penalty = %v, want 1.4", requests[0].FrequencyPenalty)
 	}
-	if len(runData.Loop.GetConversationHistory()) < 2 || !strings.Contains(runData.Loop.GetConversationHistory()[0].TextContent(), "# Agent CLI") {
-		t.Fatalf("conversation history = %#v, want generated system prompt and initial history", runData.Loop.GetConversationHistory())
+	if len(runData.Loop.GetConversationHistory()) < 2 || runData.Loop.GetConversationHistory()[0].Role != messages.RoleUser || runData.Loop.GetConversationHistory()[0].TextContent() != "history" {
+		t.Fatalf("conversation history = %#v, want no generated system prompt before initial history", runData.Loop.GetConversationHistory())
 	}
 
 	// With an inferencer override but no injected executor, BuildLoop uses the

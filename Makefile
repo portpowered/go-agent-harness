@@ -3,7 +3,7 @@ SHELL := /bin/bash
 GO ?= go
 MODULES := agent-cli go-agent-loop go-llm-gateway
 BUILD_CGO_ENABLED ?= 0
-AGENT_CLI_OUTPUT ?= agent-cli/bin/agent
+AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
 GO_TEST_TIMEOUT ?= 300s
 AGENT_CLI_INTEGRATION_TIMEOUT ?= 385s
@@ -24,14 +24,14 @@ GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 STATICCHECK_PACKAGE ?= honnef.co/go/tools/cmd/staticcheck
 GOLANGCI_LINT_INSTALL ?= go install $(GOLANGCI_LINT_PACKAGE)@$(GOLANGCI_LINT_VERSION)
 STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
-GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@latest
+GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@v2.17.0
 PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
 FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target
-RELEASE_VERSION ?= v0.0.1
+RELEASE_VERSION ?= v0.0.2
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
@@ -51,7 +51,7 @@ help: ## Show available targets.
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
 	@printf "  %-18s %s\n" "AGENT_CLI_INTEGRATION_TIMEOUT=..." "Override the finite timeout for agent-cli/test/integration root-target invocations."
 	@printf "\nRelease env vars:\n"
-	@printf "  %-18s %s\n" "RELEASE_VERSION=v0.0.1" "Version used by release targets."
+	@printf "  %-18s %s\n" "RELEASE_VERSION=v0.0.2" "Version used by release targets."
 	@printf "  %-18s %s\n" "SKIP_RELEASE_CI=1" "Skip the CI pipeline inside make release."
 	@printf "  %-18s %s\n" "GORELEASER=..." "Override the GoReleaser binary."
 
@@ -258,7 +258,7 @@ build: ## Build the agent-cli binary and compile library packages.
 	@set -euo pipefail; \
 	echo "==> build agent-cli binary"; \
 	mkdir -p "$$(dirname "$(AGENT_CLI_OUTPUT)")"; \
-	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_CLI_OUTPUT) ./cmd/agent); \
+	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_CLI_OUTPUT) ./cmd/yui); \
 	echo "==> build deterministic audio-device server"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_AUDIO_DEVICE_SERVER_OUTPUT) ./cmd/audio-device-server); \
 	echo "==> build go-agent-loop packages"; \
@@ -341,7 +341,7 @@ release-check: ## Validate release inputs and required release tooling.
 	fi; \
 	test -f "$(GORELEASER_CONFIG)"
 
-release-tags: ## Create local v0.0.1 root and per-module tags for Go module publication.
+release-tags: ## Create local root and per-module tags for Go module publication.
 	@set -euo pipefail; \
 	if ! git diff --quiet || ! git diff --cached --quiet; then \
 		echo "release-tags requires a clean worktree so tags point at committed release content."; \
