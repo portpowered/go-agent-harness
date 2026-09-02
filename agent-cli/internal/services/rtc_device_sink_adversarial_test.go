@@ -30,7 +30,7 @@ func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *tes
 			<-start
 			frame := make([]int16, audio.FrameSize)
 			frame[0] = int16(seed + 1)
-			results <- sink.observedWritePlayback(context.Background(), frame, 0, false)
+			results <- sink.observedWritePlayback(context.Background(), frame, 0, false, true)
 		}(index)
 	}
 	close(start)

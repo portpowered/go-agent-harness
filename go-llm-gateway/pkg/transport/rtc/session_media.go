@@ -99,6 +99,25 @@ func (m *SessionMedia) PushInbound(samples []int16) error {
 	return m.inbound.push(samples)
 }
 
+// StartInboundResponse associates following inbound PCM with one provider
+// response. Repeated calls for the same response are ignored.
+func (m *SessionMedia) StartInboundResponse(response PlaybackResponse) {
+	if m == nil || m.inbound == nil || response.ItemID == "" {
+		return
+	}
+	m.inbound.startResponse(response)
+}
+
+// InterruptInbound discards PCM that has not reached the device and asks the
+// clocked playback controller to discard its native queue. The returned
+// boundary is suitable for a provider conversation-item truncation event.
+func (m *SessionMedia) InterruptInbound() (PlaybackInterruption, bool) {
+	if m == nil || m.inbound == nil {
+		return PlaybackInterruption{}, false
+	}
+	return m.inbound.interrupt()
+}
+
 // FlushInbound emits a final zero-padded frame for samples remaining at the
 // end of a provider audio response.
 func (m *SessionMedia) FlushInbound() error {
@@ -190,6 +209,10 @@ type sessionInboundMedia struct {
 	done         chan struct{}
 	wake         chan struct{}
 	closeOnce    sync.Once
+	response     PlaybackResponse
+	interrupted  PlaybackResponse
+	discarding   bool
+	controller   PlaybackController
 }
 
 func newSessionInboundMedia(frameSamples int, padPartial bool) *sessionInboundMedia {
@@ -236,6 +259,62 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	}
 }
 
+func (m *sessionInboundMedia) SetPlaybackController(controller PlaybackController) {
+	m.mu.Lock()
+	m.controller = controller
+	response := m.response
+	if controller != nil && response.ItemID != "" {
+		controller.StartPlayback(response)
+	}
+	m.mu.Unlock()
+}
+
+func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
+	m.mu.Lock()
+	if m.discarding && m.interrupted == response {
+		m.mu.Unlock()
+		return
+	}
+	if m.closed || m.response == response {
+		m.mu.Unlock()
+		return
+	}
+	m.discarding = false
+	m.interrupted = PlaybackResponse{}
+	m.response = response
+	controller := m.controller
+	if controller != nil {
+		controller.StartPlayback(response)
+	}
+	m.mu.Unlock()
+}
+
+func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
+	m.mu.Lock()
+	response := m.response
+	controller := m.controller
+	for index := range m.frames {
+		m.frames[index] = PCMFrame{}
+	}
+	m.frames = nil
+	m.pending = nil
+	m.response = PlaybackResponse{}
+	m.interrupted = response
+	m.discarding = response.ItemID != ""
+	if controller == nil || response.ItemID == "" {
+		m.mu.Unlock()
+		m.notify()
+		return PlaybackInterruption{}, false
+	}
+	audioEndMS, ok := controller.InterruptPlayback(response)
+	m.mu.Unlock()
+	m.notify()
+	if !ok {
+		return PlaybackInterruption{}, false
+	}
+	return PlaybackInterruption{PlaybackResponse: response, AudioEndMS: audioEndMS}, true
+}
+
 func (m *sessionInboundMedia) push(samples []int16) error {
 	if len(samples) == 0 {
 		return nil
@@ -250,6 +329,10 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		err := m.terminal
 		m.mu.Unlock()
 		return err
+	}
+	if m.discarding {
+		m.mu.Unlock()
+		return nil
 	}
 	maximumInt := int(^uint(0) >> 1)
 	if len(samples) > maximumInt-len(m.pending) {
@@ -279,6 +362,10 @@ func (m *sessionInboundMedia) flush() error {
 		err := m.terminal
 		m.mu.Unlock()
 		return err
+	}
+	if m.discarding {
+		m.mu.Unlock()
+		return nil
 	}
 	needsBoundary := len(m.pending) > 0 || !m.padPartial
 	if needsBoundary && len(m.frames) >= sessionMediaMaxQueuedFrames {
@@ -318,13 +405,13 @@ func (m *sessionInboundMedia) appendResponseBoundaryLocked(includeEmpty bool) {
 		}
 		samples := make([]int16, sampleCount)
 		copy(samples, m.pending)
-		m.frames = append(m.frames, PCMFrame{Samples: samples, EndOfResponse: true})
+		m.frames = append(m.frames, PCMFrame{Samples: samples, EndOfResponse: true, PlaybackResponse: m.response})
 		m.pending = nil
 	} else if includeEmpty && !m.padPartial {
 		// A complete frame may already have been consumed before the provider's
 		// done event arrives. Publish an explicit zero-sample boundary so a sink
 		// can flush any rate-conversion remainder without inventing audio.
-		m.frames = append(m.frames, PCMFrame{EndOfResponse: true})
+		m.frames = append(m.frames, PCMFrame{EndOfResponse: true, PlaybackResponse: m.response})
 	}
 }
 
@@ -347,7 +434,7 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 	for len(m.pending) >= m.frameSamples {
 		samples := make([]int16, m.frameSamples)
 		copy(samples, m.pending[:m.frameSamples])
-		m.frames = append(m.frames, PCMFrame{Samples: samples})
+		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
 		m.pending = m.pending[m.frameSamples:]
 	}
 }

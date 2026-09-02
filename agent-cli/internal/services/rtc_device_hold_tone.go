@@ -117,7 +117,7 @@ func (s *RTCDeviceSink) tickHoldTone(ctx context.Context, now time.Time, rate in
 		return
 	}
 	generation, blocked := s.playbackState()
-	_ = s.observedWritePlayback(ctx, frame, generation, blocked)
+	_ = s.observedWritePlayback(ctx, frame, generation, blocked, false)
 }
 
 // holdToneMu-guarded accessors below serialize every interaction with the
@@ -171,5 +171,5 @@ func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation
 	if len(tail) == 0 {
 		return nil
 	}
-	return s.observedWritePlayback(ctx, tail, generation, blocked)
+	return s.observedWritePlayback(ctx, tail, generation, blocked, false)
 }

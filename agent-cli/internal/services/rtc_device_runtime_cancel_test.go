@@ -175,6 +175,70 @@ func TestRTCDeviceSinkDiscardUnblocksPacedProviderBurst(t *testing.T) {
 	}
 }
 
+func TestRTCDeviceSinkInterruptionUsesActuallyConsumedDeviceSamples(t *testing.T) {
+	registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+		Seed:    19,
+		Render:  audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+		Capture: audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+	})
+	if err != nil {
+		t.Fatalf("new callback-clocked registry: %v", err)
+	}
+	sink, err := NewRTCDeviceSink(registry, "")
+	if err != nil {
+		t.Fatalf("open callback-clocked RTC sink: %v", err)
+	}
+	defer func() { _ = sink.Close() }()
+
+	// Model playback can begin behind a queued hold-tone fade. That earlier
+	// local cue must not inflate the provider-relative truncation cursor.
+	generation, blocked := sink.playbackState()
+	if err := sink.observedWritePlayback(context.Background(), cancelPlaybackFrame(101), generation, blocked, false); err != nil {
+		t.Fatalf("queue pre-response hold-tone frame: %v", err)
+	}
+
+	response := rtc.PlaybackResponse{ResponseID: "resp-device-clock", ItemID: "item-device-clock"}
+	sink.StartPlayback(response)
+	frames := make([]rtc.PCMFrame, 10)
+	for index := range frames {
+		frames[index] = rtc.PCMFrame{
+			Samples: cancelPlaybackFrame(int16(300 + index)), PlaybackResponse: response,
+		}
+	}
+	pumpErr := make(chan error, 1)
+	go func() {
+		pumpErr <- sink.Pump(context.Background(), &recordingRTCInboundMedia{frames: frames})
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for sink.PlaybackStats().QueuedSamples < 2*audio.FrameSize && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if err := registry.Advance(2); err != nil {
+		t.Fatalf("advance hold-tone and model device callbacks: %v", err)
+	}
+
+	audioEndMS, ok := sink.InterruptPlayback(response)
+	if !ok {
+		t.Fatal("device interruption did not report a playback cursor")
+	}
+	if audioEndMS != 30 {
+		t.Fatalf("device playback cursor = %d ms, want one 30 ms model frame after excluded hold tone", audioEndMS)
+	}
+	select {
+	case err := <-pumpErr:
+		if err != nil {
+			t.Fatalf("pump after server-VAD interruption: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("server-VAD interruption did not release the paced provider pump")
+	}
+	stats := sink.PlaybackStats()
+	if stats.QueuedSamples != 0 || stats.DiscardEvents == 0 || stats.DroppedSamples != 0 {
+		t.Fatalf("device queue after interruption = %+v", stats)
+	}
+}
+
 func TestRTCDeviceBoundSessionDropsInFlightPlaybackAcrossCancelAndResume(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {

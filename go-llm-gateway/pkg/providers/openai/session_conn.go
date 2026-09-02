@@ -155,7 +155,9 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			_ = s.Close()
 			return
 		}
-		_ = s.publishRTCMedia(event)
+		if err := s.publishRTCMedia(ctx, event); err != nil {
+			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
+		}
 		for _, msg := range realtimeInboundMessages(event) {
 			if !s.recvBuf.Write(ctx, msg) {
 				select {

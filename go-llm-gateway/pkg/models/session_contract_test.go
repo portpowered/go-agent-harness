@@ -429,6 +429,13 @@ func TestModels_S11SessionEventConstructors(t *testing.T) {
 			wantJSON: `{"type":"response.cancel"}`,
 		},
 		{
+			name:     "conversation-item-truncate",
+			got:      NewConversationItemTruncateEvent("item-played", 2, 1530),
+			wantType: SessionEventConversationItemTruncate,
+			wantData: []byte(`{"audio_end_ms":1530,"content_index":2,"item_id":"item-played"}`),
+			wantJSON: `{"type":"conversation.item.truncate","data":{"audio_end_ms":1530,"content_index":2,"item_id":"item-played"}}`,
+		},
+		{
 			name:     "session-update",
 			got:      NewSessionUpdateEvent(config),
 			wantType: SessionEventSessionUpdate,

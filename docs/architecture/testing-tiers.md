@@ -7,6 +7,7 @@ hardware/provider acceptance work have predictable boundaries.
 | --- | --- | --- | --- |
 | T0 unit | `make test` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T0 functional | `make test-integration` | Contributor machines and the ordinary Linux CI leg | Every PR |
+| T0 binary audio | `make test-audio-device-server-integration` | Contributor machines and the ordinary Linux CI integration leg | Every PR |
 | T0 hermetic | `make test-hermetic` | Contributor machines and the hermetic Linux CI leg; also the command for any host without a working CGO toolchain | Every PR and local validation on such hosts |
 | T1 probe-replay | `make test-regressions` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T2 probe-live | `agent probe run <scenario> --transport live` | A per-vertical acceptance environment with live services | Per-vertical acceptance; never PR CI |
@@ -17,6 +18,12 @@ T0 unit, T0 functional, T0 hermetic, and T1 probe-replay checks are
 pull-request gates with the package and target budgets documented below. T2
 live/device checks and T3 fleet/fault checks are deliberately outside those
 pull-request gates.
+
+The T0 binary-audio lane builds the shipped `agent` command and the
+loopback-only `audio-device-server` process, then runs a strict OpenAI
+WebSocket replay through the public `--audio-device-server` flag. The test
+asserts provider truncation and callback-owned device evidence without
+injecting a Go registry into the command.
 
 ## Credential-free agent-cli integration budget
 
