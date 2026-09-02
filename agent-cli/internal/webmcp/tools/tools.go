@@ -15,9 +15,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// BrokerToolSet contains the six stable tools plus the browser-enabled page
-// capture tool and a matching executor. It is intentionally not registered
-// in the process-wide static tool registry; callers opt into this set when
+// BrokerToolSet contains the six stable tools plus browser-enabled tab
+// creation and page capture tools with a matching executor. It is intentionally
+// not registered in the process-wide static tool registry; callers opt in when
 // browser tools are explicitly enabled.
 type BrokerToolSet struct {
 	broker      webmcp.Broker
@@ -330,6 +330,24 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 		}
 		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
 
+	case webmcp.OpenTabToolName:
+		opener, ok := s.broker.(webmcp.BrokerTabOpener)
+		if !ok {
+			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
+				"phase":  "open_tab",
+				"reason": "unsupported_operation",
+			}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "open_tab"})
+		}
+		selected, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{
+			BrowserID: webmcp.BrowserID(stringValue(args, "browser_id")),
+			URL:       stringValue(args, "url"),
+			Activate:  boolValueDefault(args, "activate", true),
+		})
+		if err != nil {
+			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "open_tab"})
+		}
+		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
+
 	case webmcp.ListToolsToolName:
 		options := webmcp.ListToolsOptions{
 			Refresh:        boolValue(args, "refresh"),
@@ -425,6 +443,7 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		webmcp.GetContextToolName: {"refresh"},
 		webmcp.ListTabsToolName:   {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
 		webmcp.SelectTabToolName:  {"browser_id", "target_id", "activate"},
+		webmcp.OpenTabToolName:    {"browser_id", "url", "activate"},
 		webmcp.ListToolsToolName:  {"refresh", "name_contains", "include_schemas", "frame_id"},
 		webmcp.InvokeToolName:     {"tool_ref", "input_json", "reason"},
 		webmcp.CancelToolName:     {"invocation_id", "reason"},

@@ -233,6 +233,45 @@ func (h *handle) Activate(ctx context.Context, targetID webmcp.TargetID) error {
 	return nil
 }
 
+// OpenTab creates one browser-level page target. Selection and WebMCP
+// attachment remain broker responsibilities so the normal generation,
+// catalog, activation, and cancellation rules apply to the new page.
+func (h *handle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, error) {
+	if err := contextError(ctx); err != nil {
+		return webmcp.Target{}, classifiedHandleError(h.candidate, webmcp.ErrorBrowserProtocol, "open_tab", err)
+	}
+	h.mu.Lock()
+	closed := h.closed
+	disconnected := h.disconnected
+	candidate := h.candidate
+	h.mu.Unlock()
+	if closed {
+		return webmcp.Target{}, webmcp.ErrClosed
+	}
+	if disconnected {
+		return webmcp.Target{}, h.disconnectError("", "open_tab", nil)
+	}
+	executor := h.executor()
+	if executor == nil {
+		return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserDisconnected, "open_tab", errors.New("browser connection is unavailable"))
+	}
+	commandContext, releaseContext := h.operationContext(ctx)
+	defer releaseContext()
+	targetID, err := target.CreateTarget(rawURL).Do(cdp.WithExecutor(commandContext, executor))
+	if err != nil {
+		if h.isDisconnected() {
+			return webmcp.Target{}, h.disconnectError("", "open_tab", err)
+		}
+		return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", err)
+	}
+	if targetID == "" {
+		return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", errors.New("browser returned an empty target ID"))
+	}
+	return webmcp.Target{BrowserID: candidate.ID, ID: webmcp.TargetID(targetID), Type: "page", URL: rawURL}, nil
+}
+
+var _ webmcp.BrowserTabOpener = (*handle)(nil)
+
 func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) (webmcp.TargetSession, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", err)

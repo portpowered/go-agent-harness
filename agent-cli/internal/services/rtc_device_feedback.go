@@ -293,14 +293,17 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		g.confirmedLag = lag
 		tolerance := pcm16DeviceDurationAtRate(audio.FrameSize, g.captureRate)
 		probeWindow := audio.PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
-		configuredWindow := g.probe.Config().CorrelationLagWindow
+		// Each assistant response may have a different device/callback lag. Clamp
+		// to the immutable session policy, not the probe's prior response window:
+		// disjoint successive windows would otherwise clamp into Min > Max.
+		configuredWindow := g.config.CorrelationLagWindow
 		if probeWindow.Min < configuredWindow.Min {
 			probeWindow.Min = configuredWindow.Min
 		}
 		if probeWindow.Max > configuredWindow.Max {
 			probeWindow.Max = configuredWindow.Max
 		}
-		if err := g.probe.RestrictCorrelationLagWindow(probeWindow); err != nil {
+		if err := g.probe.RetargetCorrelationLagWindow(probeWindow); err != nil {
 			return nil, err
 		}
 		g.state = localFeedbackGateSuppressing

@@ -10,6 +10,7 @@ const (
 	ListToolsToolName  = "webmcp_list_tools"
 	InvokeToolName     = "webmcp_invoke"
 	CancelToolName     = "webmcp_cancel"
+	OpenTabToolName    = "webmcp_open_tab"
 	ShowPageToolName   = "show_page"
 )
 
@@ -101,17 +102,28 @@ func StableBrokerToolSchemas() []map[string]any {
 	return brokerToolSchemas(StableBrokerToolDefinitions())
 }
 
-// BrowserToolDefinitions returns the stable broker controls plus the
-// browser-enabled page capture capability. The latter is deliberately kept
-// out of StableBrokerToolDefinitions so disabled sessions and the frozen C0
-// contract remain inert.
+// BrowserToolDefinitions returns the stable broker controls plus browser-only
+// tab creation and page capture capabilities. The latter are deliberately
+// kept out of StableBrokerToolDefinitions so disabled sessions and the frozen
+// C0 contract remain inert.
 func BrowserToolDefinitions() []BrokerToolDefinition {
 	definitions := StableBrokerToolDefinitions()
-	return append(definitions, BrokerToolDefinition{
-		Name:        ShowPageToolName,
-		Description: "Capture the currently selected browser page without changing browser state.",
-		Parameters:  objectSchema(),
-	})
+	return append(definitions,
+		BrokerToolDefinition{
+			Name:        OpenTabToolName,
+			Description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and optionally bring it to the foreground. Use this when no suitable tab is available.",
+			Parameters: objectSchema(
+				property("browser_id", "string", "Optional exact discovered browser identifier; omit when only one browser is connected.", false, ""),
+				property("url", "string", "Absolute http:// or https:// website URL to open.", true, nil),
+				property("activate", "boolean", "Bring the new tab to the foreground after opening it.", false, true),
+			),
+		},
+		BrokerToolDefinition{
+			Name:        ShowPageToolName,
+			Description: "Capture the currently selected browser page without changing browser state.",
+			Parameters:  objectSchema(),
+		},
+	)
 }
 
 // BrowserToolSchemas returns fresh provider-facing schemas for the complete

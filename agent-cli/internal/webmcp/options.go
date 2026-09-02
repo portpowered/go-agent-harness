@@ -57,6 +57,14 @@ type SelectOptions struct {
 	Activate bool
 }
 
+// OpenTabRequest creates, selects, and optionally foregrounds one absolute
+// HTTP(S) page (or about:blank for managed-browser startup recovery).
+type OpenTabRequest struct {
+	BrowserID BrowserID
+	URL       string
+	Activate  bool
+}
+
 type ListToolsOptions struct {
 	Refresh        bool
 	NameContains   string
