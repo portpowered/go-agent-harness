@@ -720,6 +720,33 @@ func TestSessionToolCapabilitiesFactoryTransfersIdempotentCloseHook(t *testing.T
 	}
 }
 
+func TestSessionBrowserBrokerPreservesModelFacingOpenTab(t *testing.T) {
+	delegate := &capabilityBroker{selected: webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
+		URL:       "https://notes.example.test/",
+		Connected: true,
+		Ready:     true,
+	}}
+	broker := &sessionBrowserBroker{
+		Broker:       delegate,
+		bootstrap:    func(context.Context) error { return nil },
+		initDone:     make(chan struct{}),
+		initState:    SessionCapabilityInitializing,
+		browserState: webmcp.BrowserCapabilityInitializing,
+	}
+
+	opened, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{
+		URL:      "https://notes.example.test/",
+		Activate: true,
+	})
+	if err != nil {
+		t.Fatalf("session broker open tab: %v", err)
+	}
+	if opened.Key.TargetID != "tab-new" || delegate.openCalls != 1 || delegate.openRequest.URL != "https://notes.example.test/" || !delegate.openRequest.Activate {
+		t.Fatalf("opened page = %+v delegate calls=%d request=%+v", opened, delegate.openCalls, delegate.openRequest)
+	}
+}
+
 func browserCapabilityConfig(enabled bool) *config.Config {
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = enabled

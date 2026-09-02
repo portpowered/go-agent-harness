@@ -49,7 +49,7 @@ func StableBrokerToolDefinitions() []BrokerToolDefinition {
 		},
 		{
 			Name:        ListTabsToolName,
-			Description: "List browser tabs available for WebMCP selection.",
+			Description: "List browser tabs available for WebMCP selection. If the user asks to open a website, call webmcp_open_tab directly instead of listing tabs first.",
 			Parameters: objectSchema(
 				property("browser_id", "string", "Filter tabs to one discovered browser.", false, ""),
 				property("origin_contains", "string", "Filter tabs by an origin substring.", false, ""),
@@ -111,7 +111,7 @@ func BrowserToolDefinitions() []BrokerToolDefinition {
 	return append(definitions,
 		BrokerToolDefinition{
 			Name:        OpenTabToolName,
-			Description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and optionally bring it to the foreground. Use this when no suitable tab is available.",
+			Description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and bring it to the foreground by default. Call this directly whenever the user asks to open a website; it works even when webmcp_list_tabs returned no tabs, and it may be called repeatedly to open additional tabs.",
 			Parameters: objectSchema(
 				property("browser_id", "string", "Optional exact discovered browser identifier; omit when only one browser is connected.", false, ""),
 				property("url", "string", "Absolute http:// or https:// website URL to open.", true, nil),

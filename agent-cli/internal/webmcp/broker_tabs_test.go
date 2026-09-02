@@ -3,6 +3,7 @@ package webmcp_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
@@ -51,6 +52,37 @@ func TestStatefulBrokerOpenTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T
 	classified, ok := err.(*webmcp.ClassifiedError)
 	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
 		t.Fatalf("unsafe URL error = %T %v, want invalid_tool_input", err, err)
+	}
+}
+
+func TestStatefulBrokerOpenTabReportsSelectedWhileCatalogIsLate(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-late-open", Product: "fixture", Loopback: true}
+	opened := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-late-open",
+		Type:      "page",
+		URL:       "https://slow.example.test/",
+		Origin:    "https://slow.example.test",
+		Eligible:  true,
+	}
+	base := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		Candidate: candidate,
+		Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(opened)},
+	})
+	runtime := openTabRuntime{BrowserRuntime: base, opened: opened}
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:     runtime,
+		Discoverer:  staticDiscoverer{candidate},
+		CatalogWait: 10 * time.Millisecond,
+	})
+	defer func() { _ = broker.Close() }()
+
+	page, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{URL: opened.URL, Activate: true})
+	if err != nil {
+		t.Fatalf("open tab with late catalog: %v", err)
+	}
+	if page.Key.TargetID != opened.ID || !page.Connected || page.Ready {
+		t.Fatalf("late-catalog opened page = %+v, want connected selected page pending readiness", page)
 	}
 }
 

@@ -239,7 +239,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 			properties:  map[string]string{"refresh": "boolean"},
 		},
 		webmcp.ListTabsToolName: {
-			description: "List browser tabs available for WebMCP selection.",
+			description: "List browser tabs available for WebMCP selection. If the user asks to open a website, call webmcp_open_tab directly instead of listing tabs first.",
 			properties: map[string]string{
 				"browser_id":              "string",
 				"origin_contains":         "string",
@@ -257,7 +257,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 			required: map[string]bool{"browser_id": true, "target_id": true},
 		},
 		webmcp.OpenTabToolName: {
-			description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and optionally bring it to the foreground. Use this when no suitable tab is available.",
+			description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and bring it to the foreground by default. Call this directly whenever the user asks to open a website; it works even when webmcp_list_tabs returned no tabs, and it may be called repeatedly to open additional tabs.",
 			properties: map[string]string{
 				"browser_id": "string",
 				"url":        "string",

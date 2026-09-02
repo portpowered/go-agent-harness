@@ -47,10 +47,9 @@ type SessionToolCapabilities struct {
 	// an empty page surface and treated as a successful provider update.
 	RefreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 	// Initialize is called synchronously after capability construction and
-	// before the session provider can issue a browser tool call. Implementations
-	// retain a classified failed state in the executor when initialization
-	// returns an error, so a stale selection is observable instead of becoming
-	// an identity-free selection_not_connected result.
+	// before the session provider can issue a browser tool call. An initialization
+	// error prevents provider startup, because advertising browser tools without
+	// a usable browser leaves the model in an unrecoverable session.
 	Initialize func(context.Context) error
 	// Status reports the explicit lifecycle state of an optional capability.
 	Status func() SessionCapabilityStatus
@@ -68,6 +67,7 @@ type SessionToolCapabilities struct {
 }
 
 type resolvedSessionToolSurface struct {
+	initializeErr     error
 	executor          messages.ToolExecutor
 	definitions       []messages.ToolDefinition
 	base              []messages.ToolDefinition
@@ -149,13 +149,14 @@ func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, registry au
 }
 
 func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
+	var initializeErr error
 	if capabilities.Initialize != nil {
 		// Initialization is deliberately completed before the provider receives
-		// the executor. A failed initializer remains represented by the broker's
-		// classified failed state and is surfaced by later tool calls.
-		_ = capabilities.Initialize(ctx)
+		// the executor. The command checks initializeErr before provider startup.
+		initializeErr = capabilities.Initialize(ctx)
 	}
 	result := resolvedSessionToolSurface{
+		initializeErr:     initializeErr,
 		executor:          capabilities.Executor,
 		definitions:       append([]messages.ToolDefinition(nil), capabilities.Definitions...),
 		base:              append([]messages.ToolDefinition(nil), capabilities.Definitions...),
@@ -163,6 +164,14 @@ func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapa
 		refresh:           capabilities.RefreshDefinitionsWithError,
 		browserWatch:      capabilities.BrowserWatch,
 		browserEventWatch: capabilities.BrowserEventWatch,
+	}
+	if capabilities.Close != nil {
+		// Ownership transfers to the command as soon as initialization has run,
+		// including its failure path.
+		result.capabilityClose = capabilities.Close
+	}
+	if initializeErr != nil {
+		return result
 	}
 	if capabilities.Status != nil {
 		status := capabilities.Status()
@@ -177,11 +186,6 @@ func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapa
 	}
 	if capabilities.RefreshDefinitions != nil {
 		result.definitions = capabilities.RefreshDefinitions(ctx)
-	}
-	if capabilities.Close != nil {
-		// Ownership transfers to the service coordinator after capability
-		// construction succeeds.
-		result.capabilityClose = capabilities.Close
 	}
 	return result
 }
@@ -780,6 +784,15 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					return fmt.Errorf("configure session tools: %w", err)
 				}
 				surface := resolveSessionToolSurface(sessionContext, capabilities)
+				if surface.initializeErr != nil {
+					initializeErr := fmt.Errorf("initialize session tools: %w", surface.initializeErr)
+					if surface.capabilityClose != nil {
+						if closeErr := surface.capabilityClose(); closeErr != nil {
+							initializeErr = errors.Join(initializeErr, fmt.Errorf("close session tools: %w", closeErr))
+						}
+					}
+					return initializeErr
+				}
 				toolExecutor = surface.executor
 				toolDefinitions = surface.definitions
 				toolDefinitionBase = surface.base

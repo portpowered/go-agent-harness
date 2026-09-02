@@ -182,11 +182,12 @@ func TestSessionCapabilityBootstrapReopensVisibleManagedTabWhenWarmBrowserIsEmpt
 			Retryable: true,
 		},
 	}
-	broker := &capabilityBroker{selected: webmcp.PageContext{
+	delegate := &capabilityBroker{selected: webmcp.PageContext{
 		Key:       webmcp.PageKey{BrowserID: "managed-browser", TargetID: "managed-tab-new"},
 		URL:       "about:blank",
 		Connected: true,
 	}}
+	broker := &creatingBootstrapBroker{capabilityBroker: delegate}
 	var state webmcp.BrowserCapabilityState
 	bootstrap := sessionCapabilityBootstrapWithState(browser, discoveryService, broker, func(got webmcp.BrowserCapabilityState) {
 		state = got
@@ -195,12 +196,27 @@ func TestSessionCapabilityBootstrapReopensVisibleManagedTabWhenWarmBrowserIsEmpt
 	if err := bootstrap(context.Background()); err != nil {
 		t.Fatalf("bootstrap empty warm managed browser: %v", err)
 	}
-	if broker.openCalls != 1 || broker.openRequest.URL != "about:blank" || !broker.openRequest.Activate {
-		t.Fatalf("managed open-tab recovery = calls:%d request:%+v", broker.openCalls, broker.openRequest)
+	if broker.createCalls != 1 || broker.createRequest.URL != "about:blank" || !broker.createRequest.Activate {
+		t.Fatalf("managed create-tab recovery = calls:%d request:%+v", broker.createCalls, broker.createRequest)
 	}
-	if state != webmcp.BrowserCapabilitySelected {
-		t.Fatalf("browser capability state = %q, want selected", state)
+	if delegate.openCalls != 0 {
+		t.Fatalf("managed about:blank recovery selected WebMCP %d times, want zero", delegate.openCalls)
 	}
+	if state != webmcp.BrowserCapabilityConnectedUnselected {
+		t.Fatalf("browser capability state = %q, want connected-unselected", state)
+	}
+}
+
+type creatingBootstrapBroker struct {
+	*capabilityBroker
+	createCalls   int
+	createRequest webmcp.OpenTabRequest
+}
+
+func (b *creatingBootstrapBroker) CreateTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.Target, error) {
+	b.createCalls++
+	b.createRequest = request
+	return webmcp.Target{BrowserID: "managed-browser", ID: "managed-tab-new", Type: "page", URL: request.URL}, nil
 }
 
 func TestSessionCapabilityErrorKeepsManagedRemediationSafe(t *testing.T) {

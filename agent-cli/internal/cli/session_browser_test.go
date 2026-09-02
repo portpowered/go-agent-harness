@@ -419,6 +419,54 @@ func TestSessionBrowserToolsClosesTransferredCapabilityOnPlanningFailure(t *test
 	}
 }
 
+// TestSessionManagedBrowserStartupFailureStopsBeforeProvider locks the exact
+// interactive command boundary: a managed browser must be visible and usable
+// before the realtime provider starts. Silently retaining a failed browser
+// capability leaves the model with tools that can never open a tab.
+func TestSessionManagedBrowserStartupFailureStopsBeforeProvider(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	inferencer := newBrowserAdmissionInferencer()
+	defer inferencer.Close()
+	startupErr := errors.New("managed Chrome did not become ready")
+	closeCalls := 0
+	owner := NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
+		flags.NewAskFlags(),
+		globalFlags,
+		nil,
+		inferencer,
+		nil,
+		nil,
+		func(*config.Config) (SessionToolCapabilities, error) {
+			return SessionToolCapabilities{
+				Initialize: func(context.Context) error { return startupErr },
+				Close: func() error {
+					closeCalls++
+					return nil
+				},
+			}, nil
+		},
+		nil,
+	)
+	command := owner.Generate()
+	command.SetArgs([]string{
+		"--browser-tools", "webmcp",
+		"--record", filepath.Join(t.TempDir(), "test17.json"),
+		"--model", "gpt-realtime-2.1-mini",
+	})
+
+	err := command.ExecuteContext(context.Background())
+	if !errors.Is(err, startupErr) || !strings.Contains(err.Error(), "initialize session tools") {
+		t.Fatalf("managed browser startup error = %v, want explicit initialization failure", err)
+	}
+	if inferencer.connects != 0 {
+		t.Fatalf("provider connections = %d, want zero before browser readiness", inferencer.connects)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("failed capability close calls = %d, want one", closeCalls)
+	}
+}
+
 type browserAdmissionInferencer struct {
 	connects int
 	session  *browserAdmissionSession
