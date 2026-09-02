@@ -647,8 +647,8 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 	if !gotBrowser.BrowserBackendEnabled() {
 		t.Fatalf("factory received disabled browser config: %+v", gotBrowser)
 	}
-	if len(capabilities.Definitions) != 8 {
-		t.Fatalf("definitions = %d, want one static plus six broker tools and show_page", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 9 {
+		t.Fatalf("definitions = %d, want one static plus six broker tools, open-tab, and show_page", len(capabilities.Definitions))
 	}
 	foundSleep := false
 	for _, definition := range capabilities.Definitions {
@@ -731,7 +731,7 @@ func browserCapabilityConfig(enabled bool) *config.Config {
 }
 
 func isBrokerToolName(name string) bool {
-	if name == webmcp.ShowPageToolName {
+	if name == webmcp.ShowPageToolName || name == webmcp.OpenTabToolName {
 		return true
 	}
 	for _, candidate := range webmcp.StableToolNames() {
@@ -747,6 +747,10 @@ type capabilityBroker struct {
 	discoverErr error
 	selectErr   error
 	selectCalls int
+	selectOpts  webmcp.SelectOptions
+	openRequest webmcp.OpenTabRequest
+	openErr     error
+	openCalls   int
 	catalog     []webmcp.ToolDescriptor
 	closeErr    error
 	closeCalls  int
@@ -765,6 +769,12 @@ func (b *capabilityBroker) Select(context.Context, webmcp.TargetSelector) (webmc
 	return b.selected, b.selectErr
 }
 
+func (b *capabilityBroker) SelectWithOptions(_ context.Context, _ webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
+	b.selectCalls++
+	b.selectOpts = options
+	return b.selected, b.selectErr
+}
+
 func (b *capabilityBroker) Selected(context.Context) (webmcp.PageContext, error) {
 	return b.selected, nil
 }
@@ -778,6 +788,12 @@ func (b *capabilityBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp
 }
 
 func (b *capabilityBroker) Cancel(context.Context, webmcp.CancelRequest) error { return nil }
+
+func (b *capabilityBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
+	b.openCalls++
+	b.openRequest = request
+	return b.selected, b.openErr
+}
 
 func (b *capabilityBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
 	return make(chan webmcp.BrokerEvent)

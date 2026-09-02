@@ -273,6 +273,117 @@ func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 	}
 }
 
+// TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses reproduces the
+// multi-response device timeline that terminated test14.json. The first assistant response
+// is heard back at essentially zero lag and narrows the post-confirmation
+// probe. After that response and its acoustic tail expire, a later assistant
+// response is heard back at a different physical lag. That second response is
+// new assistant output, not customer barge-in audio: it must be suppressed and
+// must not terminate the microphone pump. A subsequent independent customer
+// signal is the barge-in and must be released once, with a bounded amount of
+// provider-bound audio.
+func TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	config.PostPlaybackAcousticTail = 120 * time.Millisecond
+	gate, err := newLocalFeedbackGate(config, nil, audio.SampleRate, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("new local feedback gate: %v", err)
+	}
+	defer gate.Close()
+
+	const responseFrames = 12
+	firstAssistant := speechLikeStream(responseFrames)
+	writeAssistantResponse(t, gate, firstAssistant)
+	filterAssistantEcho(t, gate, firstAssistant, nil)
+	if gate.state != localFeedbackGateSuppressing {
+		t.Fatalf("first assistant response state = %q, want suppression after self-hearing confirmation", gate.state)
+	}
+	firstLag := gate.confirmedLag
+
+	// Advance capture beyond the prior response, configured acoustic tail, and
+	// maximum correlation horizon. This is the ordinary quiet gap between two
+	// assistant responses in test14, not a customer turn.
+	frameDuration := pcm16DeviceDurationAtRate(audio.FrameSize, audio.SampleRate)
+	quietFrames := int((config.PostPlaybackAcousticTail+config.CorrelationLagWindow.Max)/frameDuration) + 3
+	for frame := 0; frame < quietFrames; frame++ {
+		if _, filterErr := gate.FilterCapture(context.Background(), make([]int16, audio.FrameSize)); filterErr != nil {
+			t.Fatalf("advance quiet capture frame %d: %v", frame, filterErr)
+		}
+	}
+
+	secondAssistant := speechLikeStream(responseFrames)
+	writeAssistantResponse(t, gate, secondAssistant)
+	const secondLagFrames = 4
+	for frame := 0; frame < secondLagFrames; frame++ {
+		if _, filterErr := gate.FilterCapture(context.Background(), make([]int16, audio.FrameSize)); filterErr != nil {
+			t.Fatalf("second response pre-echo frame %d: %v", frame, filterErr)
+		}
+	}
+	filterAssistantEcho(t, gate, secondAssistant, nil)
+	if gate.confirmedLag == firstLag {
+		t.Fatalf("second assistant response retained first lag %s; want a newly learned lag", firstLag)
+	}
+
+	// Independent microphone PCM is the customer barge-in. It may be held for
+	// the analysis window, but it must eventually be forwarded in order and may
+	// never expand into more provider-bound audio than was captured.
+	const customerFrames = 20
+	customer := make([][]int16, customerFrames)
+	var submitted [][]int16
+	for frame := 0; frame < customerFrames; frame++ {
+		customer[frame] = feedbackSignal(frame, 997)
+		released, filterErr := gate.FilterCapture(context.Background(), customer[frame])
+		if filterErr != nil {
+			t.Fatalf("filter customer barge-in frame %d: %v", frame, filterErr)
+		}
+		submitted = append(submitted, released...)
+	}
+	if len(submitted) == 0 {
+		t.Fatal("customer barge-in was lost: no independent microphone audio reached the provider")
+	}
+	if len(submitted) > customerFrames {
+		t.Fatalf("customer barge-in submitted %d frames from %d captured frames", len(submitted), customerFrames)
+	}
+	if submittedSamples := len(submitted) * audio.FrameSize; submittedSamples > customerFrames*audio.FrameSize {
+		t.Fatalf("customer barge-in submitted %d samples, want at most %d", submittedSamples, customerFrames*audio.FrameSize)
+	}
+	customerIndex := 0
+	for submittedIndex := range submitted {
+		for customerIndex < len(customer) && !equalSamples(submitted[submittedIndex], customer[customerIndex]) {
+			customerIndex++
+		}
+		if customerIndex == len(customer) {
+			t.Fatalf("provider-bound frame %d is duplicated, reordered, or assistant audio", submittedIndex)
+		}
+		customerIndex++
+	}
+	t.Logf("provider-bound customer audio: frames=%d/%d samples=%d/%d; assistant echo frames=0", len(submitted), customerFrames, len(submitted)*audio.FrameSize, customerFrames*audio.FrameSize)
+}
+
+func writeAssistantResponse(t *testing.T, gate *localFeedbackGate, frames [][]int16) {
+	t.Helper()
+	for frame := range frames {
+		if err := gate.WritePlayback(context.Background(), frames[frame], func() error { return nil }); err != nil {
+			t.Fatalf("write assistant response frame %d: %v", frame, err)
+		}
+	}
+}
+
+func filterAssistantEcho(t *testing.T, gate *localFeedbackGate, frames [][]int16, submitted *[][]int16) {
+	t.Helper()
+	for frame := range frames {
+		released, err := gate.FilterCapture(context.Background(), frames[frame])
+		if err != nil {
+			t.Fatalf("filter assistant echo frame %d: %v", frame, err)
+		}
+		if submitted != nil {
+			*submitted = append(*submitted, released...)
+		} else if len(released) != 0 {
+			t.Fatalf("assistant echo frame %d submitted %d frame(s) as customer audio", frame, len(released))
+		}
+	}
+}
+
 func equalSamples(a, b []int16) bool {
 	if len(a) != len(b) {
 		return false

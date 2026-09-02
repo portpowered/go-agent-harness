@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 const managedBrowserLaunchIntegrationEnv = "WEBMCP_MANAGED_BROWSER_LAUNCH_INTEGRATION"
@@ -25,7 +27,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 
 	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/managed-start" {
+		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" {
 			http.NotFound(writer, request)
 			return
 		}
@@ -71,6 +73,47 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	}
 	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, fixture.URL+"/managed-start"); err != nil {
 		t.Fatalf("managed startup page was not reusable after detach: %v", err)
+	}
+
+	runtimeAdapter := NewRuntime()
+	handle, err := runtimeAdapter.Open(ctx, webmcp.BrowserCandidate{
+		ID:           "managed-integration-browser",
+		HTTPURL:      browser.Endpoint().CDPURL,
+		BrowserWSURL: browser.Endpoint().BrowserWSEndpoint,
+		Loopback:     true,
+	})
+	if err != nil {
+		t.Fatalf("attach managed browser runtime: %v", err)
+	}
+	t.Cleanup(func() { _ = handle.Close() })
+	opener, ok := handle.(webmcp.BrowserTabOpener)
+	if !ok {
+		t.Fatalf("managed browser handle %T does not expose tab creation", handle)
+	}
+	openedURL := fixture.URL + "/opened-by-agent"
+	opened, err := opener.OpenTab(ctx, openedURL)
+	if err != nil {
+		t.Fatalf("open managed browser tab: %v", err)
+	}
+	if opened.ID == "" || opened.URL != openedURL {
+		t.Fatalf("opened managed target = %+v", opened)
+	}
+	if err := handle.Activate(ctx, opened.ID); err != nil {
+		t.Fatalf("activate managed browser tab: %v", err)
+	}
+	targets, err := handle.ListTargets(ctx)
+	if err != nil {
+		t.Fatalf("list managed targets after open: %v", err)
+	}
+	found := false
+	for _, candidate := range targets {
+		if candidate.ID == opened.ID && candidate.URL == openedURL {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("opened target %q not found in %+v", opened.ID, targets)
 	}
 }
 

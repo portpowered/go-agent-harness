@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -614,6 +615,43 @@ func TestPCM16SelfHearingLagRestrictionRetainsEvidenceAndRejectsWidening(t *test
 	}
 	if err := detector.RestrictCorrelationLagWindow(audio.PCM16LagWindow{Min: 0, Max: time.Second}); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingConfig) {
 		t.Fatalf("widen lag = %v, want invalid config", err)
+	}
+}
+
+func TestPCM16SelfHearingLagRetargetMovesWithinOriginalBoundsAndRetainsEvidence(t *testing.T) {
+	detector := newSelfHearingDetector(t, audio.DefaultSelfHearingConfig())
+	if err := detector.ObservePlayback(audio.PCM16TimedFrame{Samples: testSignal(100, 409), SampleRate: 1000, Start: 0}); err != nil {
+		t.Fatal(err)
+	}
+	first := audio.PCM16LagWindow{Min: -30 * time.Millisecond, Max: 30 * time.Millisecond}
+	if err := detector.RestrictCorrelationLagWindow(first); err != nil {
+		t.Fatalf("restrict first lag: %v", err)
+	}
+	second := audio.PCM16LagWindow{Min: 90 * time.Millisecond, Max: 150 * time.Millisecond}
+	// This is the exact legacy clamp that terminated test14: the second
+	// response's disjoint lag was intersected with the probe's already-narrowed
+	// first-response window, turning 90ms..150ms into 90ms..30ms.
+	legacySecond := second
+	current := detector.Config().CorrelationLagWindow
+	if legacySecond.Min < current.Min {
+		legacySecond.Min = current.Min
+	}
+	if legacySecond.Max > current.Max {
+		legacySecond.Max = current.Max
+	}
+	legacyErr := detector.RestrictCorrelationLagWindow(legacySecond)
+	if !errors.Is(legacyErr, audio.ErrInvalidPCM16SelfHearingConfig) || !strings.Contains(legacyErr.Error(), "correlation_lag_window: minimum must not exceed maximum") {
+		t.Fatalf("legacy disjoint-lag clamp error = %v, want test14 terminal failure", legacyErr)
+	}
+	if err := detector.RetargetCorrelationLagWindow(second); err != nil {
+		t.Fatalf("retarget disjoint lag inside original bounds: %v", err)
+	}
+	if detector.Config().CorrelationLagWindow != second || detector.BufferStats().PlaybackSamples != 100 {
+		t.Fatalf("retargeted detector config/stats = %+v/%+v", detector.Config(), detector.BufferStats())
+	}
+	outside := audio.PCM16LagWindow{Min: -time.Second, Max: 0}
+	if err := detector.RetargetCorrelationLagWindow(outside); !errors.Is(err, audio.ErrInvalidPCM16SelfHearingConfig) {
+		t.Fatalf("retarget outside original bounds = %v, want invalid config", err)
 	}
 }
 

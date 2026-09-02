@@ -83,7 +83,14 @@ and WebMCP sessions do not.
 
 ## Start a WebMCP browser session
 
-Add WebMCP and a startup URL to the same default voice session:
+Add WebMCP to the default voice session. This starts a visible managed Chrome
+window; the agent can open and select tabs itself:
+
+```bash
+yui --workdir "$PWD" session --browser-tools webmcp
+```
+
+To begin on a specific page, supply its startup URL:
 
 ```bash
 yui --workdir "$PWD" session \
@@ -91,10 +98,11 @@ yui --workdir "$PWD" session \
   --browser-open https://cubecade.openai.chatgpt.site/
 ```
 
-The agent opens and manages a local Chrome instance, discovers the page's
-structured WebMCP tools, and closes only browsers it owns when configured to do
-so. No CDP port, extension, browser profile, screenshot permission, or secondary
-browser configuration is required. The page itself must expose WebMCP tools.
+The agent opens and manages a local Chrome instance, can create and switch tabs,
+discovers each page's structured WebMCP tools, and closes only browsers it owns
+when configured to do so. No CDP port, extension, browser profile, screenshot
+permission, or secondary browser configuration is required. A page must expose
+WebMCP tools for structured page operations.
 
 Use `--browser-close-on-exit` if the managed browser should close with the
 session. Write-like page operations require approval by default; set
@@ -281,6 +289,8 @@ their explicit flags are supplied, which keeps the model's tool choice focused.
 | `show`, `mouse` | Inspect and control the desktop when supported; requires `--computer-use`. |
 | `load_skill` | Load detailed instructions and resources from an installed skill; requires `--experimental-tools`. |
 | `sleep` | Wait for an external operation for a bounded duration; requires `--experimental-tools`. |
+| `webmcp_open_tab`, `webmcp_list_tabs`, `webmcp_select_tab` | Open, discover, and select browser tabs; requires `--browser-tools webmcp`. |
+| `webmcp_get_context`, `webmcp_list_tools`, `webmcp_invoke`, `webmcp_cancel`, `show_page` | Inspect or operate the selected WebMCP page; requires `--browser-tools webmcp`. |
 | WebMCP page tools | Dynamically discovered structured tools supplied by the active browser page. |
 
 The model receives the enabled tool definitions and chooses when to call them.

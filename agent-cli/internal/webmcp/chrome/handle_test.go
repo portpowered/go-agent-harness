@@ -19,12 +19,14 @@ type recordedCommand struct {
 	method    string
 	sessionID target.SessionID
 	targetID  target.ID
+	url       string
 }
 
 type recordingExecutor struct {
 	mu          sync.Mutex
 	calls       []recordedCommand
 	targetInfos []*target.Info
+	createdID   target.ID
 	err         error
 }
 
@@ -41,11 +43,14 @@ func (e *recordingExecutor) Execute(ctx context.Context, method string, params, 
 		call.sessionID = params.SessionID
 	case *target.CloseTargetParams:
 		call.targetID = params.TargetID
+	case *target.CreateTargetParams:
+		call.url = params.URL
 	}
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
 	err := e.err
 	infos := append([]*target.Info(nil), e.targetInfos...)
+	createdID := e.createdID
 	e.mu.Unlock()
 	if err != nil {
 		return err
@@ -53,7 +58,27 @@ func (e *recordingExecutor) Execute(ctx context.Context, method string, params, 
 	if result, ok := result.(*target.GetTargetsReturns); ok {
 		result.TargetInfos = infos
 	}
+	if result, ok := result.(*target.CreateTargetReturns); ok {
+		result.TargetID = createdID
+	}
 	return nil
+}
+
+func TestOpenTabCreatesExactBrowserTarget(t *testing.T) {
+	executor := &recordingExecutor{createdID: "target-new"}
+	handle := testHandle(executor)
+
+	opened, err := handle.OpenTab(context.Background(), "https://notes.example.test/")
+	if err != nil {
+		t.Fatalf("open tab: %v", err)
+	}
+	if opened.BrowserID != handle.candidate.ID || opened.ID != "target-new" || opened.Type != "page" || opened.URL != "https://notes.example.test/" {
+		t.Fatalf("opened target = %+v", opened)
+	}
+	calls := executor.snapshot()
+	if len(calls) != 1 || calls[0].method != target.CommandCreateTarget || calls[0].url != opened.URL {
+		t.Fatalf("open-tab CDP calls = %+v", calls)
+	}
 }
 
 func (e *recordingExecutor) snapshot() []recordedCommand {

@@ -57,6 +57,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 		}
 
 		selection := browser.Selection
+		activateSelection := selection.ActivateTab || browser.UsesManagedBrowser()
 		browserID := strings.TrimSpace(selection.Browser)
 		targetID := strings.TrimSpace(selection.Tab)
 		if refBrowserID, refTargetID, composite := splitCompositeTargetRef(targetID); composite {
@@ -88,7 +89,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 			if err != nil {
 				return sessionCapabilityError(err)
 			}
-			return adoptSelection(ctx, selected, selection.ActivateTab)
+			return adoptSelection(ctx, selected, activateSelection)
 		}
 
 		// A configured browser/origin without a target only admits automatic
@@ -103,7 +104,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 			if err != nil {
 				return sessionRecoverConnectedUnselected(ctx, browser, broker, err, mark)
 			}
-			return adoptSelection(ctx, selected, selection.ActivateTab)
+			return adoptSelection(ctx, selected, activateSelection)
 		}
 
 		if !hasExplicitSelection {
@@ -134,7 +135,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 						// exist. Non-recoverable failures still fail closed.
 						return sessionRecoverRestoredSelection(ctx, browser, broker, err, mark)
 					}
-					return adoptSelection(ctx, selected, selection.ActivateTab)
+					return adoptSelection(ctx, selected, activateSelection)
 				}
 			} else if selection.Persist && reconnector != nil {
 				// Compatibility fakes may expose Reconnect without the optional
@@ -145,7 +146,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 					Reason:     "session_bootstrap",
 				})
 				if err == nil {
-					return adoptSelection(ctx, selected, selection.ActivateTab)
+					return adoptSelection(ctx, selected, activateSelection)
 				}
 				if sessionRecoverableRestoredSelectionError(err) {
 					return sessionRecoverRestoredSelection(ctx, browser, broker, err, mark)
@@ -176,7 +177,7 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 					// never reads the browser as absent.
 					return sessionRecoverConnectedUnselected(ctx, browser, broker, err, mark)
 				}
-				return adoptSelection(ctx, selected, selection.ActivateTab)
+				return adoptSelection(ctx, selected, activateSelection)
 			}
 		}
 
@@ -228,6 +229,26 @@ func sessionRecoverableRestoredSelectionError(err error) bool {
 func sessionRecoverConnectedUnselected(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker, selectionErr error, mark func(webmcp.BrowserCapabilityState)) error {
 	if !sessionRecoverableSelectionError(selectionErr) {
 		return sessionCapabilityError(selectionErr)
+	}
+	// A warm managed Chrome can remain alive after its final window is closed.
+	// That state is reachable but unusable: discovery returns no eligible tab
+	// and the user sees no browser. Recreate the configured startup page through
+	// the same broker operation exposed to the model, select it, and foreground
+	// it. External endpoints retain their existing no-mutation recovery path.
+	if browser.UsesManagedBrowser() && sessionNoSelectionError(selectionErr) {
+		if opener, ok := broker.(webmcp.BrokerTabOpener); ok {
+			_, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{
+				URL:      browser.ManagedStartupURL(),
+				Activate: true,
+			})
+			if err != nil {
+				return sessionCapabilityError(err)
+			}
+			if mark != nil {
+				mark(webmcp.BrowserCapabilitySelected)
+			}
+			return nil
+		}
 	}
 	if err := sessionVerifyEndpoint(ctx, browser, broker); err != nil {
 		return err

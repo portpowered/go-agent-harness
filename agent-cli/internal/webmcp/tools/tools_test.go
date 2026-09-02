@@ -21,11 +21,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestBrokerToolSetPreservesFrozenSchemasAndAddsShowPage(t *testing.T) {
+func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T) {
 	set := NewToolSet(nil)
 	schemas := set.DefinitionSchemas()
-	if len(schemas) != 7 {
-		t.Fatalf("schema count = %d, want six stable tools plus show_page", len(schemas))
+	if len(schemas) != 8 {
+		t.Fatalf("schema count = %d, want six stable tools plus open-tab and show_page", len(schemas))
 	}
 	wantNames := webmcp.StableToolNames()
 	for i, schema := range schemas[:len(wantNames)] {
@@ -47,7 +47,12 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsShowPage(t *testing.T) {
 			t.Fatalf("schema %q is not a closed object: %#v", wantNames[i], parameters)
 		}
 	}
-	showPage := schemas[len(wantNames)]
+	openTab := schemas[len(wantNames)]
+	openTabFunction, ok := openTab["function"].(map[string]any)
+	if !ok || openTabFunction["name"] != webmcp.OpenTabToolName {
+		t.Fatalf("open-tab schema = %#v", openTab)
+	}
+	showPage := schemas[len(wantNames)+1]
 	showPageFunction, ok := showPage["function"].(map[string]any)
 	if !ok || showPageFunction["name"] != webmcp.ShowPageToolName {
 		t.Fatalf("show_page schema = %#v", showPage)
@@ -69,6 +74,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsShowPage(t *testing.T) {
 		{name: webmcp.GetContextToolName, defaults: map[string]any{"refresh": false}, fields: []string{"refresh"}},
 		{name: webmcp.ListTabsToolName, defaults: map[string]any{"browser_id": "", "origin_contains": "", "eligible_only": true, "include_zero_tool_pages": false}, fields: []string{"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"}},
 		{name: webmcp.SelectTabToolName, required: []string{"browser_id", "target_id"}, defaults: map[string]any{"activate": false}, fields: []string{"browser_id", "target_id", "activate"}},
+		{name: webmcp.OpenTabToolName, required: []string{"url"}, defaults: map[string]any{"browser_id": "", "activate": true}, fields: []string{"browser_id", "url", "activate"}},
 		{name: webmcp.ListToolsToolName, defaults: map[string]any{"refresh": false, "name_contains": "", "include_schemas": true, "frame_id": ""}, fields: []string{"refresh", "name_contains", "include_schemas", "frame_id"}},
 		{name: webmcp.InvokeToolName, required: []string{"tool_ref", "input_json", "reason"}, fields: []string{"tool_ref", "input_json", "reason"}},
 		{name: webmcp.CancelToolName, required: []string{"invocation_id"}, defaults: map[string]any{"reason": ""}, fields: []string{"invocation_id", "reason"}},
@@ -108,6 +114,39 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsShowPage(t *testing.T) {
 	second := NewToolSet(nil).DefinitionSchemas()[0]["function"].(map[string]any)["parameters"].(map[string]any)
 	if second["additionalProperties"] != false {
 		t.Fatal("stable definitions share mutable schema state")
+	}
+}
+
+func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
+	want := webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
+		URL:       "https://notes.example.test/",
+		Origin:    "https://notes.example.test",
+		Connected: true,
+		Ready:     true,
+	}
+	broker := &recordingBroker{selected: want}
+	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "open-tab-call",
+		Name:      webmcp.OpenTabToolName,
+		Arguments: `{"url":"https://notes.example.test/","activate":true}`,
+	})
+	if err != nil {
+		t.Fatalf("open tab: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || !envelope.OK {
+		t.Fatalf("open-tab envelope = %#v (err %v), want success", envelope, err)
+	}
+	if broker.lastOpen.URL != want.URL || !broker.lastOpen.Activate || broker.lastOpen.BrowserID != "" {
+		t.Fatalf("open-tab request = %+v", broker.lastOpen)
+	}
+	var selected selectionData
+	if err := json.Unmarshal(envelope.Data, &selected); err != nil {
+		t.Fatalf("decode open-tab selection: %v", err)
+	}
+	if selected.BrowserID != want.Key.BrowserID || selected.TargetID != want.Key.TargetID || !selected.Connected || !selected.Ready {
+		t.Fatalf("open-tab selection = %+v, want %+v", selected, want)
 	}
 }
 
@@ -628,8 +667,8 @@ func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registry: %v", err)
 	}
-	if got := registry.List(); len(got) != 7 {
-		t.Fatalf("registry names = %#v, want six stable tools plus show_page", got)
+	if got := registry.List(); len(got) != 8 {
+		t.Fatalf("registry names = %#v, want six stable tools plus open-tab and show_page", got)
 	}
 	msgs, err := registry.Execute(context.Background(), webmcp.GetContextToolName, map[string]any{"refresh": false})
 	if err != nil {
@@ -674,6 +713,7 @@ type recordingBroker struct {
 	invokeResult  webmcp.InvokeResult
 	lastInvoke    webmcp.InvokeRequest
 	lastCancel    webmcp.CancelRequest
+	lastOpen      webmcp.OpenTabRequest
 	screenshot    webmcp.PageScreenshot
 	screenshotErr error
 	calls         []string
@@ -714,6 +754,12 @@ func (b *recordingBroker) Cancel(_ context.Context, request webmcp.CancelRequest
 	b.calls = append(b.calls, "cancel")
 	b.lastCancel = request
 	return nil
+}
+
+func (b *recordingBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
+	b.calls = append(b.calls, "open_tab")
+	b.lastOpen = request
+	return b.selected, b.selectedErr
 }
 
 func (b *recordingBroker) CapturePageScreenshot(context.Context) (webmcp.PageScreenshot, error) {
@@ -829,6 +875,7 @@ func mapKeysInContractOrder(name string, properties map[string]any) []string {
 		webmcp.GetContextToolName: {"refresh"},
 		webmcp.ListTabsToolName:   {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
 		webmcp.SelectTabToolName:  {"browser_id", "target_id", "activate"},
+		webmcp.OpenTabToolName:    {"browser_id", "url", "activate"},
 		webmcp.ListToolsToolName:  {"refresh", "name_contains", "include_schemas", "frame_id"},
 		webmcp.InvokeToolName:     {"tool_ref", "input_json", "reason"},
 		webmcp.CancelToolName:     {"invocation_id", "reason"},

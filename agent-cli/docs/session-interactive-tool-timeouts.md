@@ -68,6 +68,7 @@ mutation; the class is a latency class, not a permission class.
 When browser tools are enabled, the six stable WebMCP tools
 `webmcp_get_context`, `webmcp_list_tabs`, `webmcp_select_tab`,
 `webmcp_list_tools`, `webmcp_invoke`, and `webmcp_cancel` are also eligible.
+The browser-enabled `webmcp_open_tab` and `show_page` controls are eligible too.
 They are `fast/read` by default. Page-defined WebMCP tools discovered after
 browser initialization are likewise `fast/read` unless their name is an
 explicitly admitted long-running class. Browser admission and the final

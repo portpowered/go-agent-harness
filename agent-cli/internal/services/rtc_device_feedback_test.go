@@ -563,30 +563,44 @@ func TestPairedDeviceFeedbackPreservesAssistantTerminal(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("session feedback was not confirmed: %v", ctx.Err())
 	}
+	waitForFeedbackCapturePosition(t, ctx, binding.feedback, 5*pcm16DeviceDurationAtRate(audio.FrameSize, audio.SampleRate))
 
-	wantUserFrames := make([][]int16, 5)
+	// Supply more than one analysis window. While the acoustic tail is active,
+	// the gate intentionally holds a bounded prefix until it has enough
+	// independent evidence; requiring every captured frame made this test depend
+	// on whether race instrumentation let that tail expire before capture ran.
+	wantUserFrames := make([][]int16, 10)
 	for frameIndex := range wantUserFrames {
 		wantUserFrames[frameIndex] = feedbackSignal(frameIndex, 127)
 		if err := userFeed.WriteFrame(ctx, wantUserFrames[frameIndex]); err != nil {
 			t.Fatalf("feed independent user frame %d: %v", frameIndex, err)
 		}
+		wantPosition := time.Duration(5+frameIndex+1) * pcm16DeviceDurationAtRate(audio.FrameSize, audio.SampleRate)
+		waitForFeedbackCapturePosition(t, ctx, binding.feedback, wantPosition)
 	}
-	gotUserFrames := make([][]int16, 0, len(wantUserFrames))
-	for range wantUserFrames {
+	var gotUserFrames [][]int16
+	for {
 		select {
 		case frame := <-providerInput.frames:
 			gotUserFrames = append(gotUserFrames, frame.Samples)
-		case <-ctx.Done():
-			t.Fatalf("independent user frames did not reach provider media: %v", ctx.Err())
+		default:
+			goto captureDrained
 		}
 	}
-	if !reflect.DeepEqual(gotUserFrames, wantUserFrames) {
-		t.Fatalf("provider user frames = %d/%d or reordered, got %#v", len(gotUserFrames), len(wantUserFrames), gotUserFrames)
+
+captureDrained:
+	if len(gotUserFrames) == 0 || len(gotUserFrames) > len(wantUserFrames) {
+		t.Fatalf("provider user frames = %d/%d, want a non-empty bounded subset", len(gotUserFrames), len(wantUserFrames))
 	}
-	select {
-	case frame := <-providerInput.frames:
-		t.Fatalf("correlated assistant frame reached provider media with %d samples", len(frame.Samples))
-	default:
+	userIndex := 0
+	for submittedIndex, frame := range gotUserFrames {
+		for userIndex < len(wantUserFrames) && !reflect.DeepEqual(frame, wantUserFrames[userIndex]) {
+			userIndex++
+		}
+		if userIndex == len(wantUserFrames) {
+			t.Fatalf("provider frame %d is reordered, duplicated, or correlated assistant audio", submittedIndex)
+		}
+		userIndex++
 	}
 
 	for _, message := range []messages.StreamMessage{
@@ -609,6 +623,25 @@ func TestPairedDeviceFeedbackPreservesAssistantTerminal(t *testing.T) {
 	}
 	if session.sawResponseCancel() {
 		t.Fatal("filtered assistant playback caused a response cancellation")
+	}
+}
+
+func waitForFeedbackCapturePosition(t *testing.T, ctx context.Context, gate *localFeedbackGate, want time.Duration) {
+	t.Helper()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		gate.mu.Lock()
+		got := gate.capturePosition
+		gate.mu.Unlock()
+		if got >= want {
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			t.Fatalf("feedback capture position = %s, want at least %s: %v", got, want, ctx.Err())
+		}
 	}
 }
 

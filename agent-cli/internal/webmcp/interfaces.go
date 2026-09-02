@@ -34,6 +34,13 @@ type BrowserHandle interface {
 	Close() error
 }
 
+// BrowserTabOpener is an optional browser-handle capability for creating a
+// page target. It stays outside BrowserHandle so replay and legacy runtimes
+// remain source-compatible.
+type BrowserTabOpener interface {
+	OpenTab(context.Context, string) (Target, error)
+}
+
 // BrowserHandleHealth is an optional BrowserHandle extension. A handle that
 // has observed transport loss reports Disconnected()=true so callers holding
 // a cached handle can discard it and re-dial the (possibly healthy) endpoint
@@ -84,6 +91,12 @@ type Broker interface {
 	Cancel(context.Context, CancelRequest) error
 	Watch(context.Context) <-chan BrokerEvent
 	Close() error
+}
+
+// BrokerTabOpener is the optional model-facing recovery seam used when a
+// connected browser has no selectable tabs.
+type BrokerTabOpener interface {
+	OpenTab(context.Context, OpenTabRequest) (PageContext, error)
 }
 
 // BrowserEventWatcher is an optional broker extension for callers that need

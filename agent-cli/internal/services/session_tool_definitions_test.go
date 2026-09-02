@@ -152,8 +152,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve composed session capabilities: %v", err)
 	}
-	if len(capabilities.Definitions) != 8 {
-		t.Fatalf("composed definitions = %d, want one static plus six broker definitions and show_page", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 9 {
+		t.Fatalf("composed definitions = %d, want one static plus six broker definitions, open-tab, and show_page", len(capabilities.Definitions))
 	}
 
 	conn := newRecordingRealtimeTestConn()
@@ -225,8 +225,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 		t.Fatalf("OpenAI session.update count = %d, want exactly one initial provider configuration; writes=%q", len(sessionUpdates), writes)
 	}
 	advertised := sessionUpdates[0].Session.Tools
-	if len(advertised) != 8 {
-		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools and show_page: %#v", len(advertised), advertised)
+	if len(advertised) != 9 {
+		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools, open-tab, and show_page: %#v", len(advertised), advertised)
 	}
 
 	expectedBroker := map[string]struct {
@@ -255,6 +255,15 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 				"activate":   "boolean",
 			},
 			required: map[string]bool{"browser_id": true, "target_id": true},
+		},
+		webmcp.OpenTabToolName: {
+			description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and optionally bring it to the foreground. Use this when no suitable tab is available.",
+			properties: map[string]string{
+				"browser_id": "string",
+				"url":        "string",
+				"activate":   "boolean",
+			},
+			required: map[string]bool{"url": true},
 		},
 		webmcp.ListToolsToolName: {
 			description: "List tools exposed by the selected WebMCP page. Connected page tools are also registered as directly callable session tools under their listed names - prefer calling them directly.",

@@ -166,6 +166,41 @@ func TestSessionCapabilityBootstrapUsesSingleSelectionForManagedDefault(t *testi
 	if broker.selectCalls != 1 {
 		t.Fatalf("selection calls = %d, want 1", broker.selectCalls)
 	}
+	if !broker.selectOpts.Activate {
+		t.Fatal("managed startup target was not activated for a visible browser session")
+	}
+}
+
+func TestSessionCapabilityBootstrapReopensVisibleManagedTabWhenWarmBrowserIsEmpty(t *testing.T) {
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	browser.Managed.Open = "about:blank"
+	discoveryService := ambiguousBootstrapSelectionDiscovery{
+		err: &discovery.DiscoveryError{
+			Code:      discovery.CodeNoEligibleTab,
+			Message:   "no eligible browser tab was found",
+			Retryable: true,
+		},
+	}
+	broker := &capabilityBroker{selected: webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: "managed-browser", TargetID: "managed-tab-new"},
+		URL:       "about:blank",
+		Connected: true,
+	}}
+	var state webmcp.BrowserCapabilityState
+	bootstrap := sessionCapabilityBootstrapWithState(browser, discoveryService, broker, func(got webmcp.BrowserCapabilityState) {
+		state = got
+	})
+
+	if err := bootstrap(context.Background()); err != nil {
+		t.Fatalf("bootstrap empty warm managed browser: %v", err)
+	}
+	if broker.openCalls != 1 || broker.openRequest.URL != "about:blank" || !broker.openRequest.Activate {
+		t.Fatalf("managed open-tab recovery = calls:%d request:%+v", broker.openCalls, broker.openRequest)
+	}
+	if state != webmcp.BrowserCapabilitySelected {
+		t.Fatalf("browser capability state = %q, want selected", state)
+	}
 }
 
 func TestSessionCapabilityErrorKeepsManagedRemediationSafe(t *testing.T) {

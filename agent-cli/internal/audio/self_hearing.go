@@ -233,11 +233,12 @@ type PCM16SelfHearingBufferStats struct {
 // explicit: the owner stops calling it and invokes Close, which drops both
 // copied buffers immediately.
 type PCM16SelfHearingDetector struct {
-	mu                 sync.Mutex
-	config             PCM16SelfHearingConfig
-	maxBufferDuration  time.Duration
-	maxPlaybackSamples int
-	maxCaptureSamples  int
+	mu                   sync.Mutex
+	config               PCM16SelfHearingConfig
+	correlationLagBounds PCM16LagWindow
+	maxBufferDuration    time.Duration
+	maxPlaybackSamples   int
+	maxCaptureSamples    int
 
 	playback selfHearingBuffer
 	capture  selfHearingBuffer
@@ -257,8 +258,9 @@ func NewPCM16SelfHearingDetector(config PCM16SelfHearingConfig) (*PCM16SelfHeari
 		return nil, err
 	}
 	return &PCM16SelfHearingDetector{
-		config:            normalized,
-		maxBufferDuration: maxBufferDuration,
+		config:               normalized,
+		correlationLagBounds: normalized.CorrelationLagWindow,
+		maxBufferDuration:    maxBufferDuration,
 	}, nil
 }
 
@@ -314,6 +316,31 @@ func (d *PCM16SelfHearingDetector) RestrictCorrelationLagWindow(window PCM16LagW
 	current := d.config.CorrelationLagWindow
 	if window.Min < current.Min || window.Max > current.Max {
 		return invalidPCM16SelfHearingConfig("correlation_lag_window", "restriction must remain inside the current window")
+	}
+	d.config.CorrelationLagWindow = window
+	return nil
+}
+
+// RetargetCorrelationLagWindow moves a previously narrowed search window
+// while preserving retained playback/capture evidence. The replacement must
+// remain inside the detector's original configured bounds. A multi-response
+// feedback gate uses this when a new assistant response learns a different
+// physical acoustic lag; intersecting with the prior response's narrowed
+// window can otherwise invert the interval and terminate capture.
+func (d *PCM16SelfHearingDetector) RetargetCorrelationLagWindow(window PCM16LagWindow) error {
+	if d == nil {
+		return ErrClosed
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return ErrClosed
+	}
+	if window.Min > window.Max {
+		return invalidPCM16SelfHearingConfig("correlation_lag_window", "minimum must not exceed maximum")
+	}
+	if window.Min < d.correlationLagBounds.Min || window.Max > d.correlationLagBounds.Max {
+		return invalidPCM16SelfHearingConfig("correlation_lag_window", "retarget must remain inside the original window")
 	}
 	d.config.CorrelationLagWindow = window
 	return nil
