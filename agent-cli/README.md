@@ -88,7 +88,7 @@ agent interaction replay fixtures/demo.interaction.json
 
 # Session management (sessions are stored in workspace/sessions/)
 agent session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
-agent session "hello" --record openai.session.json --provider openai --model gpt-realtime --api-key <openai-api-key>
+agent session --record openai.session.json --provider openai --model gpt-realtime-2.1 --reasoning-effort low --audio-in prompt.wav --audio-out response.wav
 agent session --replay capture.json
 agent session show <session-id>
 agent session list                                      # newest 100 (default)
@@ -120,11 +120,18 @@ endpoints.
 
 Session replay reads a JSON capture file and does not make live provider
 network calls. Session record mode supports live Grok realtime captures and
-OpenAI Realtime captures with `--provider openai --model gpt-realtime`; it
+OpenAI Realtime captures with `--provider openai --model gpt-realtime-2.1`; it
 validates the provider, model, API key, and `.json` capture path before
 attempting the live provider path. OpenAI session mode uses the sessional
 inferencer path and does not call the normal `agent ask` or `agent chat`
 stateless OpenAI inference path.
+
+Realtime reasoning can be selected with `--reasoning-effort` (`minimal`,
+`low`, `medium`, `high`, or `xhigh`). Host screen and pointer tools are hidden
+unless `--computer-use` is supplied. `load_skill`, `sleep`, `web_fetch`, and
+`web_search` require `--experimental-tools`. The default catalog contains only
+the built-in shell and filesystem tools; use `--no-terminal-tools` to hide
+those as well.
 
 See [PNIG Interaction Replay](docs/interaction-replay.md) for the normalized
 interaction fixture workflow and NDJSON output contract.

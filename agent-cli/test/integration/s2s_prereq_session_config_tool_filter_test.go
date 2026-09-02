@@ -30,12 +30,13 @@ func TestSessionConfigToolFilterThroughRealCLI(t *testing.T) {
 		name             string
 		configYAML       string
 		calls            []sessionConfigToolCall
+		commandArgs      []string
 		wantSleep        bool
 		wantReadFile     bool
 		wantSleepSuccess bool
 	}{
 		{
-			name: "empty tools list enables default sleep",
+			name: "empty tools list enables opted-in experimental sleep",
 			configYAML: `
 model:
   provider: openrouter
@@ -45,9 +46,21 @@ tools:
 			calls: []sessionConfigToolCall{
 				{ID: "prereq-default-sleep", Name: "sleep", Arguments: `{"duration":"0s"}`},
 			},
+			commandArgs:      []string{"--experimental-tools"},
 			wantSleep:        true,
 			wantReadFile:     true,
 			wantSleepSuccess: true,
+		},
+		{
+			name: "default hides experimental sleep but keeps terminal tools",
+			configYAML: `
+model:
+  provider: openrouter
+`,
+			calls: []sessionConfigToolCall{
+				{ID: "prereq-hidden-sleep", Name: "sleep", Arguments: `{"duration":"0s"}`},
+			},
+			wantReadFile: true,
 		},
 		{
 			name: "disabled sleep keeps omitted read file",
@@ -109,14 +122,18 @@ tools:
 			root := agentCLI.Generate()
 			root.SetOut(io.Discard)
 			root.SetErr(io.Discard)
-			root.SetArgs([]string{
+			args := []string{
 				"--config-dir", configDir,
 				"--workdir", filepath.Dir(toolInput),
 				"session",
+			}
+			args = append(args, tc.commandArgs...)
+			args = append(args,
 				"--replay", filepath.Join(configDir, "deterministic.session.json"),
 				"--wait-for-close",
 				"invoke", "scripted", "tool",
-			})
+			)
+			root.SetArgs(args)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if err := root.ExecuteContext(ctx); err != nil {
@@ -158,10 +175,10 @@ tools:
 				if strings.Contains(resultText.String(), "Slept for 0s (no-op).") {
 					t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText.String())
 				}
-				if len(results) != 2 || !strings.Contains(results[0].Content, `tool "sleep" failed`) {
+				if len(results) == 0 || !strings.Contains(results[0].Content, `tool "sleep" failed`) {
 					t.Fatalf("disabled sleep result = %#v, want a correlated failure", results)
 				}
-				if len(results) != 2 || results[1].Content != toolInputContents {
+				if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
 					t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
 				}
 			}

@@ -159,15 +159,17 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
 		}
 		for _, msg := range realtimeInboundMessages(event) {
-			if !s.recvBuf.Write(ctx, msg) {
-				select {
-				case <-s.done:
-					return
-				case <-ctx.Done():
+			// Provider frames are lossless protocol input. In particular, a
+			// response may contain dozens of audio/transcript deltas followed by
+			// a function call. A non-blocking write here used to silently discard
+			// whichever normalized messages arrived after the 64-entry buffer
+			// filled. Apply backpressure to the websocket reader instead, while
+			// retaining both cancellation paths so shutdown cannot deadlock.
+			if outcome := s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg); !outcome.OK() {
+				if ctx.Err() != nil {
 					_ = s.Close()
-					return
-				default:
 				}
+				return
 			}
 		}
 	}

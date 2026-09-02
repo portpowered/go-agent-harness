@@ -25,13 +25,13 @@ const (
 	v5aSessionClosedReason = "v5a-default-toolset-complete"
 )
 
-// TestSessionCommand_DefaultToolSetActive proves the default sleep tool through
+// TestSessionCommand_ExperimentalToolSetActive proves the opted-in sleep tool through
 // the production CLI composition. The replay capture blocks the continuation
 // until the CLI sends the exact correlated function_call_output for the tool
 // call, so the final response and session close also prove result reinjection.
 // The production session path must also send the explicit response.create
 // continuation boundary before the replay can deliver the continuation.
-func TestSessionCommand_DefaultToolSetActive(t *testing.T) {
+func TestSessionCommand_ExperimentalToolSetActive(t *testing.T) {
 	capturePath := writeV5ADefaultSleepCapture(t)
 	output, err := executeV5ADefaultSleepSession(t, capturePath, t.TempDir())
 	if err != nil {
@@ -50,7 +50,7 @@ func TestSessionCommand_DefaultToolSetActive(t *testing.T) {
 	}
 }
 
-func TestSessionCommand_DefaultToolSetActive_DisabledSleepRejectsSuccess(t *testing.T) {
+func TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess(t *testing.T) {
 	capturePath := writeV5ADefaultSleepCapture(t)
 	configDir := writeV5ADisabledSleepConfig(t)
 	output, err := executeV5ADefaultSleepSession(t, capturePath, configDir)
@@ -94,6 +94,7 @@ func executeV5ADefaultSleepSession(t *testing.T, capturePath, configDir string) 
 	rootCmd.SetArgs([]string{
 		"--config-dir", configDir,
 		"session",
+		"--experimental-tools",
 		"--replay", capturePath,
 		v5aDefaultSleepPrompt,
 	})

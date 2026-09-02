@@ -9,6 +9,7 @@ import (
 const (
 	openAIRealtimeLegacyModel  = "gpt-realtime"
 	openAIRealtimeDefaultModel = "gpt-realtime-2.1-mini"
+	openAIRealtime21Model      = "gpt-realtime-2.1"
 
 	// DefaultOpenAIRealtimeModel is the model selected for an OpenAI realtime
 	// session when no model is configured.
@@ -18,6 +19,17 @@ const (
 // ErrUnsupportedRealtimeModel identifies a model that is not registered for
 // the OpenAI realtime session surface.
 var ErrUnsupportedRealtimeModel = errors.New("unsupported realtime model")
+
+// ValidateOpenAIRealtimeReasoningEffort validates the documented Realtime
+// reasoning budgets. Empty preserves the provider default.
+func ValidateOpenAIRealtimeReasoningEffort(effort string) error {
+	switch strings.TrimSpace(effort) {
+	case "", "minimal", "low", "medium", "high", "xhigh":
+		return nil
+	default:
+		return fmt.Errorf("--reasoning-effort must be one of minimal, low, medium, high, or xhigh; got %q", effort)
+	}
+}
 
 // ErrUnsupportedOpenAIRealtimeModel is an explicit provider-named alias for
 // ErrUnsupportedRealtimeModel. Both names preserve the same error identity.
@@ -30,6 +42,7 @@ type OpenAIRealtimeModel struct {
 	SupportsAudio           bool
 	SupportsImageInput      bool
 	SupportsFunctionCalling bool
+	SupportsReasoning       bool
 }
 
 // UnsupportedRealtimeModelError reports an unregistered OpenAI realtime model
@@ -76,6 +89,13 @@ var openAIRealtimeModelRegistry = [...]OpenAIRealtimeModel{
 		SupportsAudio:           true,
 		SupportsImageInput:      true,
 		SupportsFunctionCalling: true,
+	},
+	{
+		ID:                      openAIRealtime21Model,
+		SupportsAudio:           true,
+		SupportsImageInput:      true,
+		SupportsFunctionCalling: true,
+		SupportsReasoning:       true,
 	},
 }
 

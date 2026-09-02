@@ -645,16 +645,12 @@ func resolveSessionAdmission(globalFlags *flags.GlobalFlags, cmd *cobra.Command,
 }
 
 func (c *SessionCommand) Generate() *cobra.Command {
-	var prompt string
-	var voice string
-	recordDirPath := ""
-	audioOutPath := ""
+	var prompt, voice, reasoningEffort string
+	recordDirPath, audioOutPath := "", ""
 	transport := SessionTransportWebSocket
-	signaling := ""
-	mediaSource := ""
+	signaling, mediaSource := "", ""
 	var maxDuration time.Duration
-	var waitForClose bool
-	var noInputTranscription bool
+	var waitForClose, noInputTranscription, computerUse, experimentalTools, noTerminalTools bool
 	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
@@ -671,9 +667,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Long:         sessionCommandLongHelp,
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
-		PreRunE: func(_ *cobra.Command, _ []string) error {
-			return services.ValidateOpenAIRealtimeVoice(voice)
-		},
+		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
 				return err
@@ -718,6 +712,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return cmd.Help()
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
+			loadedConfig = applySessionToolVisibility(loadedConfig, computerUse, experimentalTools, noTerminalTools)
 			recordOnlyLive := isRecordOnlyLiveInvocation(cmd, args, c.imagePaths)
 			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || recordOnlyLive)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
@@ -808,6 +803,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Prompt:                  strings.Join(args, " "),
 				PromptProvided:          cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:                   voice,
+				ReasoningEffort:         reasoningEffort,
 				Transport:               selectedTransport,
 				TransportProvided:       cmd.Flags().Changed("transport"),
 				Signaling:               signaling,
@@ -933,6 +929,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		recordDirPath: &recordDirPath, prompt: &prompt,
 		maxDuration: &maxDuration, waitForClose: &waitForClose,
 		noInputTranscription: &noInputTranscription, audioIn: &audioIn,
+		reasoningEffort: &reasoningEffort, computerUse: &computerUse, experimentalTools: &experimentalTools, noTerminalTools: &noTerminalTools,
 		audioInTurns: &audioInTurns, audioInTurnBarge: &audioInTurnBarge,
 		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
 		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
@@ -953,6 +950,10 @@ type sessionFlagTargets struct {
 	maxDuration          *time.Duration
 	waitForClose         *bool
 	noInputTranscription *bool
+	reasoningEffort      *string
+	computerUse          *bool
+	experimentalTools    *bool
+	noTerminalTools      *bool
 	audioIn              *string
 	audioInTurns         *[]string
 	audioInTurnBarge     *bool
@@ -981,6 +982,10 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().BoolVar(t.waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().BoolVar(t.noInputTranscription, "no-input-transcription", false, "Disable customer-speech transcription for live OpenAI audio-input sessions")
+	cmd.Flags().StringVar(t.reasoningEffort, "reasoning-effort", "", "OpenAI Realtime reasoning effort: minimal, low, medium, high, or xhigh")
+	cmd.Flags().BoolVar(t.computerUse, "computer-use", false, "Expose host screen and pointer computer-control tools")
+	cmd.Flags().BoolVar(t.experimentalTools, "experimental-tools", false, "Expose experimental skill, sleep, and web tools")
+	cmd.Flags().BoolVar(t.noTerminalTools, "no-terminal-tools", false, "Hide built-in shell and filesystem tools from the model")
 	cmd.Flags().Var(t.voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(t.audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")

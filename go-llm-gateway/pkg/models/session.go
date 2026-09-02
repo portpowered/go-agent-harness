@@ -76,6 +76,8 @@ type SessionConfig struct {
 	Voice string `json:"voice,omitempty"`
 	// Instructions are system-level instructions for the session.
 	Instructions string `json:"instructions,omitempty"`
+	// ReasoningEffort selects the model's reasoning budget when supported.
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	// InputAudioFormat is the encoding for client-to-server audio.
 	InputAudioFormat AudioFormat `json:"input_audio_format,omitempty"`
 	// OutputAudioFormat is the encoding for server-to-client audio.

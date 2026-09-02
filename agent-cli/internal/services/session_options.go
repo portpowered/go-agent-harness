@@ -204,7 +204,9 @@ type SessionRunOptions struct {
 	// invocation. The empty value preserves the provider default. It is kept
 	// on the session options rather than package state so concurrent sessions
 	// retain independent configuration.
-	Voice             string
+	Voice string
+	// ReasoningEffort selects the OpenAI Realtime reasoning budget.
+	ReasoningEffort   string
 	SessionInferencer messages.SessionInferencer
 	// AudioOutputRequested tells realtime planning that assistant PCM will be
 	// consumed by a local file/device output boundary. It is set by the audio
@@ -398,6 +400,9 @@ type SessionRunOptions struct {
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
 	if err := ValidateOpenAIRealtimeVoice(opts.Voice); err != nil {
+		return err
+	}
+	if err := ValidateOpenAIRealtimeReasoningEffort(opts.ReasoningEffort); err != nil {
 		return err
 	}
 	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
@@ -648,6 +653,19 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 	if !isOpenAIRealtimeModel(active.Model) {
 		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(active.Model)
 	}
+	active.ReasoningEffort = strings.TrimSpace(opts.ReasoningEffort)
+	if active.ReasoningEffort == "" && loadedCfg.Session != nil {
+		active.ReasoningEffort = strings.TrimSpace(loadedCfg.Session.ReasoningEffort)
+	}
+	if err := ValidateOpenAIRealtimeReasoningEffort(active.ReasoningEffort); err != nil {
+		return config.OpenAIConfig{}, err
+	}
+	if active.ReasoningEffort != "" {
+		metadata, _ := LookupOpenAIRealtimeModel(active.Model)
+		if !metadata.SupportsReasoning {
+			return config.OpenAIConfig{}, fmt.Errorf("OpenAI model %q does not support --reasoning-effort; use %q", active.Model, openAIRealtime21Model)
+		}
+	}
 	return *active, nil
 }
 
@@ -820,6 +838,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		config.InputAudioTranscription = &inputAudioTranscription
 		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
+		config.ReasoningEffort = sessionCfg.ReasoningEffort
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		dialer, recorder := resolveSessionWebSocketDialer(opts, providerName, model, func() transport.Dialer { return oaiprovider.NewDefaultWebSocketDialer() })
 		providerOpts := []oaiprovider.Option{

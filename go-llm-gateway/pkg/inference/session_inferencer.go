@@ -70,6 +70,14 @@ func WithSessionInstructions(instructions string) SessionOption {
 	}
 }
 
+// WithSessionReasoningEffort sets the model reasoning budget for every
+// session connection.
+func WithSessionReasoningEffort(effort string) SessionOption {
+	return func(si *SessionGatewayInferencer) {
+		si.request.Config.ReasoningEffort = effort
+	}
+}
+
 // WithSessionTools sets the tool definitions advertised by every session
 // connection. The definitions are copied so callers can safely reuse or
 // mutate their input after configuring the inferencer.

@@ -17,11 +17,11 @@ import (
 
 func TestOpenAIRealtimeModels_ReturnsOrderedIndependentRegistryCopy(t *testing.T) {
 	models := OpenAIRealtimeModels()
-	if len(models) != 2 {
-		t.Fatalf("OpenAIRealtimeModels returned %d models, want 2", len(models))
+	if len(models) != 3 {
+		t.Fatalf("OpenAIRealtimeModels returned %d models, want 3", len(models))
 	}
 
-	wantIDs := []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel}
+	wantIDs := []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel, openAIRealtime21Model}
 	for i, wantID := range wantIDs {
 		if models[i].ID != wantID {
 			t.Errorf("model %d ID = %q, want %q", i, models[i].ID, wantID)
@@ -91,7 +91,7 @@ func TestNewOpenAIRealtimeSessionInferencer_UnsupportedModelsRejectBeforeDial(t 
 			if unsupported.Model != tt.model {
 				t.Fatalf("rejected model = %q, want %q", unsupported.Model, tt.model)
 			}
-			for _, supported := range []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel} {
+			for _, supported := range []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel, openAIRealtime21Model} {
 				if !strings.Contains(err.Error(), supported) {
 					t.Fatalf("error %q does not list supported model %q", err, supported)
 				}
@@ -104,7 +104,7 @@ func TestNewOpenAIRealtimeSessionInferencer_UnsupportedModelsRejectBeforeDial(t 
 }
 
 func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testing.T) {
-	for _, model := range []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel} {
+	for _, model := range []string{openAIRealtimeLegacyModel, openAIRealtimeDefaultModel, openAIRealtime21Model} {
 		t.Run(model, func(t *testing.T) {
 			dialer := &recordingOpenAIRealtimeDialer{dialErr: errors.New("dial stopped by test")}
 			inferencer, err := NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -127,6 +127,34 @@ func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testin
 				t.Fatalf("dial URL = %q, want selected model %q", dialer.url, model)
 			}
 		})
+	}
+}
+
+func TestNewLiveSessionInferencer_GPTRealtime21CarriesReasoningEffort(t *testing.T) {
+	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
+		Provider: config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
+		APIKey: "sk-test", BaseURL: "ws://openai.test/realtime", ConfigDir: t.TempDir(),
+		ReasoningEffort: "high",
+	}, "test")
+	if err != nil {
+		t.Fatalf("NewLiveSessionInferencer: %v", err)
+	}
+	requested := inferencer.(interface {
+		Request() inference.SessionRequest
+	})
+	if model != openAIRealtime21Model || requested.Request().Config.ReasoningEffort != "high" {
+		t.Fatalf("model/config = %q/%+v", model, requested.Request().Config)
+	}
+}
+
+func TestValidateOpenAIRealtimeReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"", "minimal", "low", "medium", "high", "xhigh"} {
+		if err := ValidateOpenAIRealtimeReasoningEffort(effort); err != nil {
+			t.Errorf("%q: %v", effort, err)
+		}
+	}
+	if err := ValidateOpenAIRealtimeReasoningEffort("extreme"); err == nil {
+		t.Fatal("expected invalid effort error")
 	}
 }
 

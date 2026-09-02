@@ -28,6 +28,9 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	if config.Instructions != "" {
 		update["instructions"] = config.Instructions
 	}
+	if config.ReasoningEffort != "" {
+		update["reasoning"] = map[string]any{"effort": config.ReasoningEffort}
+	}
 	audio := buildRealtimeAudioConfig(config, p.clientOwnsAudioTurnBoundaries)
 	if len(audio) > 0 {
 		update["audio"] = audio
@@ -57,6 +60,9 @@ func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string,
 	}
 	if config.Instructions != "" {
 		update["instructions"] = config.Instructions
+	}
+	if config.ReasoningEffort != "" {
+		update["reasoning"] = map[string]any{"effort": config.ReasoningEffort}
 	}
 	if config.InputAudioFormat != "" {
 		update["input_audio_format"] = config.InputAudioFormat

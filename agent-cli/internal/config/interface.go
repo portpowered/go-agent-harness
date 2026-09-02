@@ -163,6 +163,7 @@ type BrowserReplayConfig struct {
 type SessionConfig struct {
 	Provider           string                           `koanf:"provider" yaml:"provider"`
 	Model              string                           `koanf:"model" yaml:"model"`
+	ReasoningEffort    string                           `koanf:"reasoning_effort" yaml:"reasoning_effort"`
 	Transport          string                           `koanf:"transport" yaml:"transport"`
 	InputDevice        string                           `koanf:"input_device" yaml:"input_device"`
 	OutputDevice       string                           `koanf:"output_device" yaml:"output_device"`
@@ -218,9 +219,10 @@ type ModelConfig struct {
 
 // OpenAIConfig holds OpenAI-compatible provider settings (OpenAI, OpenRouter, etc.).
 type OpenAIConfig struct {
-	Model   string `koanf:"model" yaml:"model"`
-	APIKey  string `koanf:"api_key" yaml:"api_key"`
-	BaseURL string `koanf:"base_url" yaml:"base_url"`
+	Model           string `koanf:"model" yaml:"model"`
+	APIKey          string `koanf:"api_key" yaml:"api_key"`
+	BaseURL         string `koanf:"base_url" yaml:"base_url"`
+	ReasoningEffort string `koanf:"-" yaml:"-"`
 }
 
 // ClaudeConfig holds Claude provider settings (placeholder for future fields).
