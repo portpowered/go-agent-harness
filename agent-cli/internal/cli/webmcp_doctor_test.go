@@ -235,8 +235,8 @@ browser:
 				"Page tools:      not_checked",
 				"Selected page:   none",
 				"Endpoint is ready, but page tools are unverified",
-				"agent webmcp tabs",
-				"agent webmcp select",
+				"yui webmcp tabs",
+				"yui webmcp select",
 			} {
 				if !strings.Contains(human, want) {
 					t.Fatalf("human output missing %q:\n%s", want, human)
@@ -284,7 +284,7 @@ func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, brows
 	if catalog := doctorCheckByName(report, "catalog"); catalog.Status != doctorCheckSkipped {
 		t.Fatalf("catalog check = %+v, want skipped", catalog)
 	}
-	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "Endpoint is ready, but page tools are unverified") || !strings.Contains(report.Warnings[0], "agent webmcp select") {
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "Endpoint is ready, but page tools are unverified") || !strings.Contains(report.Warnings[0], "yui webmcp select") {
 		t.Fatalf("unselected warnings = %v, want endpoint/page-tool guidance", report.Warnings)
 	}
 }

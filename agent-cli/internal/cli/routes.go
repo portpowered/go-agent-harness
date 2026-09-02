@@ -145,7 +145,7 @@ func (r *Router) resolveConfigDir() error {
 
 // BuildRoot defines the overall routing structure and returns the root cobra command.
 func (r *Router) BuildRoot() *cobra.Command {
-	root := NewPath("agent", r.RootCommand.Generate())
+	root := NewPath("yui", r.RootCommand.Generate())
 
 	root.AddCommand(NewPath("ask [prompt] [files...]", r.AskCommand.Generate()))
 	root.AddCommand(NewPath("chat", r.ChatCommand.Generate()))

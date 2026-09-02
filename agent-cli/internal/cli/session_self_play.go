@@ -10,7 +10,7 @@ import (
 )
 
 // SessionSelfPlayCommand exposes the bounded Phase 1 live two-agent audio
-// conversation under `agent session self-play`.
+// conversation under `yui session self-play`.
 type SessionSelfPlayCommand struct {
 	globalFlags *flags.GlobalFlags
 	run         func(context.Context, io.Writer, services.SelfPlayRunOptions) error

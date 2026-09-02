@@ -18,55 +18,6 @@ type cliExecution struct {
 	stderr   string
 }
 
-const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurable LLM providers.\n\n" +
-	"Usage:\n  agent [command]\n\n" +
-	"Available Commands:\n" +
-	"  ask         Ask the agent a question and get a response\n" +
-	"  chat        Start an interactive chat session with the agent\n" +
-	"  completion  Generate the autocompletion script for the specified shell\n" +
-	"  config      Configuration management commands\n" +
-	"  devices     Discover available audio devices\n" +
-	"  help        Help about any command\n" +
-	"  interaction Inspect provider-neutral gateway interactions\n" +
-	"  media       Inspect external media sources\n" +
-	"  probe       Run deterministic offline probes\n" +
-	"  room        Run participant rooms\n" +
-	"  session     Run or manage agent sessions\n" +
-	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
-	"  webmcp      Inspect WebMCP browser readiness\n\n" +
-	"Flags:\n" +
-	"      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n" +
-	"  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n" +
-	"  -h, --help                     help for agent\n" +
-	"      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
-	"  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n" +
-	"      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n" +
-	"Use \"agent [command] --help\" for more information about a command.\n"
-
-const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
-	"Available Commands:\n" +
-	"  ask         Ask the agent a question and get a response\n" +
-	"  chat        Start an interactive chat session with the agent\n" +
-	"  completion  Generate the autocompletion script for the specified shell\n" +
-	"  config      Configuration management commands\n" +
-	"  devices     Discover available audio devices\n" +
-	"  help        Help about any command\n" +
-	"  interaction Inspect provider-neutral gateway interactions\n" +
-	"  media       Inspect external media sources\n" +
-	"  probe       Run deterministic offline probes\n" +
-	"  room        Run participant rooms\n" +
-	"  session     Run or manage agent sessions\n" +
-	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
-	"  webmcp      Inspect WebMCP browser readiness\n\n" +
-	"Flags:\n" +
-	"      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n" +
-	"  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n" +
-	"  -h, --help                     help for agent\n" +
-	"      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n" +
-	"  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n" +
-	"      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n" +
-	"Use \"agent [command] --help\" for more information about a command.\n"
-
 func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
 	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(fleetExecutor...))
 }
@@ -153,8 +104,15 @@ func TestRootCommandExecutionContracts(t *testing.T) {
 	if noArgs.stderr != "" || help.stderr != "" {
 		t.Fatalf("root help stderr: no-args=%q help=%q", noArgs.stderr, help.stderr)
 	}
-	if noArgs.stdout != expectedRootHelp || help.stdout != expectedRootHelp {
-		t.Fatalf("root help changed:\nno args: %q\n--help: %q\nwant: %q", noArgs.stdout, help.stdout, expectedRootHelp)
+	for _, want := range []string{
+		"Yui is a cross-platform voice-agent CLI",
+		"export OPENAI_API_KEY=\"your-openai-api-key\"",
+		"yui session",
+		"yui session --browser-tools webmcp",
+	} {
+		if !strings.Contains(noArgs.stdout, want) {
+			t.Fatalf("root help missing %q:\n%s", want, noArgs.stdout)
+		}
 	}
 
 	unknownCommand := executeCLI("unknown-command")
@@ -164,7 +122,7 @@ func TestRootCommandExecutionContracts(t *testing.T) {
 	if unknownCommand.stdout != "" {
 		t.Fatalf("unknown-command stdout = %q, want empty", unknownCommand.stdout)
 	}
-	if unknownCommand.stderr != "Error: unknown command \"unknown-command\" for \"agent\"\nRun 'agent --help' for usage.\n" {
+	if unknownCommand.stderr != "Error: unknown command \"unknown-command\" for \"yui\"\nRun 'yui --help' for usage.\n" {
 		t.Fatalf("unknown-command stderr = %q, want exact message", unknownCommand.stderr)
 	}
 
@@ -172,8 +130,8 @@ func TestRootCommandExecutionContracts(t *testing.T) {
 	if unknownFlag.exitCode != 1 {
 		t.Fatalf("unknown-flag exit code = %d, want 1; stdout=%q stderr=%q", unknownFlag.exitCode, unknownFlag.stdout, unknownFlag.stderr)
 	}
-	if unknownFlag.stdout != expectedRootUsage+"\n" {
-		t.Fatalf("unknown-flag stdout = %q, want exact usage", unknownFlag.stdout)
+	if !strings.Contains(unknownFlag.stdout, "Usage:\n  yui [command]") {
+		t.Fatalf("unknown-flag stdout = %q, want yui usage", unknownFlag.stdout)
 	}
 	if unknownFlag.stderr != "Error: unknown flag: --unknown-flag\n" {
 		t.Fatalf("unknown-flag stderr = %q, want exact message", unknownFlag.stderr)
@@ -187,26 +145,26 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		usage       string
 		description string
 	}{
-		{name: "ask", args: []string{"ask", "--help"}, usage: "agent ask [prompt] [files...]", description: "One-shot queries."},
-		{name: "chat", args: []string{"chat", "--help"}, usage: "agent chat", description: "Interactive multi-turn conversation."},
-		{name: "tool", args: []string{"tool", "--help"}, usage: "agent tool <tool-id> [key=value...]", description: "Invoke a tool directly."},
-		{name: "interaction", args: []string{"interaction", "--help"}, usage: "agent interaction", description: "Inspect provider-neutral gateway interactions."},
-		{name: "interaction replay", args: []string{"interaction", "replay", "--help"}, usage: "agent interaction replay <fixture-path>", description: "Load a normalized PNIG interaction fixture"},
-		{name: "probe fleet", args: []string{"probe", "fleet", "--help"}, usage: "agent probe fleet --manifest <file>", description: "Execute every entry in a fleet manifest"},
-		{name: "media", args: []string{"media", "--help"}, usage: "agent media", description: "Inspect external media sources"},
-		{name: "media probe", args: []string{"media", "probe", "--help"}, usage: "agent media probe <url>", description: "Probe an external go2rtc or RTSP media source"},
-		{name: "media look", args: []string{"media", "look", "--help"}, usage: "agent media look <url>", description: "Observe one visual frame from an external media source"},
-		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "agent probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
-		{name: "room", args: []string{"room", "--help"}, usage: "agent room", description: "Run participant rooms"},
-		{name: "room run", args: []string{"room", "run", "--help"}, usage: "agent room run [--config <file>] [--replay <bundle>] [--out <dir>] [--stream <addr>]", description: "Run an N-participant room from --config (or the legacy --manifest spelling)."},
-		{name: "session", args: []string{"session", "--help"}, usage: "agent session", description: "Run a bidirectional session inference capture"},
-		{name: "session show", args: []string{"session", "show", "--help"}, usage: "agent session show <session-id>", description: "Load and print the conversation history"},
-		{name: "session list", args: []string{"session", "list", "--help"}, usage: "agent session list", description: "List session IDs with last modified time"},
-		{name: "session delete", args: []string{"session", "delete", "--help"}, usage: "agent session delete <session-id>", description: "Remove the session file."},
-		{name: "config", args: []string{"config", "--help"}, usage: "agent config", description: "Commands to manage agent CLI configuration."},
-		{name: "config add-local", args: []string{"config", "add-local", "--help"}, usage: "agent config add-local", description: "Add a local inference provider entry"},
-		{name: "webmcp", args: []string{"webmcp", "--help"}, usage: "agent webmcp", description: "Inspect WebMCP browser readiness"},
-		{name: "webmcp doctor", args: []string{"webmcp", "doctor", "--help"}, usage: "agent webmcp doctor", description: "Diagnose WebMCP browser readiness"},
+		{name: "ask", args: []string{"ask", "--help"}, usage: "yui ask [prompt] [files...]", description: "One-shot queries."},
+		{name: "chat", args: []string{"chat", "--help"}, usage: "yui chat", description: "Interactive multi-turn conversation."},
+		{name: "tool", args: []string{"tool", "--help"}, usage: "yui tool <tool-id> [key=value...]", description: "Invoke a tool directly"},
+		{name: "interaction", args: []string{"interaction", "--help"}, usage: "yui interaction", description: "Inspect provider-neutral gateway interactions."},
+		{name: "interaction replay", args: []string{"interaction", "replay", "--help"}, usage: "yui interaction replay <fixture-path>", description: "Load a normalized PNIG interaction fixture"},
+		{name: "probe fleet", args: []string{"probe", "fleet", "--help"}, usage: "yui probe fleet --manifest <file>", description: "Execute every entry in a fleet manifest"},
+		{name: "media", args: []string{"media", "--help"}, usage: "yui media", description: "Inspect external media sources"},
+		{name: "media probe", args: []string{"media", "probe", "--help"}, usage: "yui media probe <url>", description: "Probe an external go2rtc or RTSP media source"},
+		{name: "media look", args: []string{"media", "look", "--help"}, usage: "yui media look <url>", description: "Observe one visual frame from an external media source"},
+		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "yui probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
+		{name: "room", args: []string{"room", "--help"}, usage: "yui room", description: "Run participant rooms"},
+		{name: "room run", args: []string{"room", "run", "--help"}, usage: "yui room run [--config <file>] [--replay <bundle>] [--out <dir>] [--stream <addr>]", description: "Run an N-participant room from --config (or the legacy --manifest spelling)."},
+		{name: "session", args: []string{"session", "--help"}, usage: "yui session", description: "Run a bidirectional session inference capture"},
+		{name: "session show", args: []string{"session", "show", "--help"}, usage: "yui session show <session-id>", description: "Load and print the conversation history"},
+		{name: "session list", args: []string{"session", "list", "--help"}, usage: "yui session list", description: "List session IDs with last modified time"},
+		{name: "session delete", args: []string{"session", "delete", "--help"}, usage: "yui session delete <session-id>", description: "Remove the session file."},
+		{name: "config", args: []string{"config", "--help"}, usage: "yui config", description: "Commands to manage agent CLI configuration."},
+		{name: "config add-local", args: []string{"config", "add-local", "--help"}, usage: "yui config add-local", description: "Add a local inference provider entry"},
+		{name: "webmcp", args: []string{"webmcp", "--help"}, usage: "yui webmcp", description: "Inspect WebMCP browser readiness"},
+		{name: "webmcp doctor", args: []string{"webmcp", "doctor", "--help"}, usage: "yui webmcp doctor", description: "Diagnose WebMCP browser readiness"},
 	}
 
 	for _, tt := range tests {

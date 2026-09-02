@@ -176,6 +176,24 @@ func TestRealtimeInboundMessagesResponseDoneBoundsProviderErrorMessage(t *testin
 	}
 }
 
+func TestRealtimeInboundMessagesClassifiesCreditBalanceExhaustionAsRateLimited(t *testing.T) {
+	raw := json.RawMessage(`{"type":"error","error":{"type":"insufficient_quota","code":"credit_balance_exhausted","message":"You have no credits remaining."}}`)
+	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventError, Data: raw})
+	if len(got) != 1 {
+		t.Fatalf("error messages = %d, want one", len(got))
+	}
+	value, ok := got[0].Value.(*messages.ErrorValue)
+	if !ok || value == nil {
+		t.Fatalf("error value = %#v, want *messages.ErrorValue", got[0].Value)
+	}
+	if value.Classification != providers.ErrorClassRateLimited {
+		t.Fatalf("classification = %q, want %q", value.Classification, providers.ErrorClassRateLimited)
+	}
+	if value.Code != "credit_balance_exhausted" || value.ErrorType != "insufficient_quota" {
+		t.Fatalf("provider error metadata = type %q code %q", value.ErrorType, value.Code)
+	}
+}
+
 func TestRealtimeInboundMessagesResponseDonePreservesCompletedStatus(t *testing.T) {
 	raw := json.RawMessage(`{"type":"response.done","response":{"status":"completed"}}`)
 	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventResponseDone, Data: raw})

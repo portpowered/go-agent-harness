@@ -227,7 +227,11 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	if instructions != "" && plan.inferencer != nil && !useInitialProviderInstructions {
+	// Caller-owned/injected sessions do not have a provider factory that can
+	// receive the resolved tool surface. Configure them whenever either
+	// instructions or tools are present; an empty instruction remains empty and
+	// does not synthesize a default prompt.
+	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
 		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
 	}
 	return plan, nil
@@ -337,8 +341,9 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
-// resolveSessionInstructions delegates prompt selection, AGENTS.md creation,
-// and path-or-literal precedence to the existing ask-path Executor contract.
+// resolveSessionInstructions delegates prompt selection and path-or-literal
+// precedence to the existing ask-path Executor contract. A missing AGENTS.md
+// is intentionally an empty prompt and has no workspace side effects.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
 	toolDefinitions := messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	workDir := opts.WorkDir
@@ -363,7 +368,7 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
-	if opts.FilesystemPolicy != nil {
+	if instructions != "" && opts.FilesystemPolicy != nil {
 		instructions = appendFilesystemScopeInstructions(instructions, opts.FilesystemPolicy)
 	}
 	return instructions, nil
@@ -435,7 +440,7 @@ const sessionWebMCPTabSelectionCalibration = `WebMCP tab selection calibration:
 // and callers that already supplied any of these policies do not receive a
 // duplicate copy.
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
-	if len(opts.ToolDefinitions) == 0 {
+	if instructions == "" || len(opts.ToolDefinitions) == 0 {
 		return instructions
 	}
 	blocks := []string{instructions}

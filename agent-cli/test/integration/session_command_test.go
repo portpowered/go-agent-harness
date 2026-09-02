@@ -341,7 +341,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsComp
 	}
 
 	got := testWriter.StdoutString()
-	want := defaultFilesystemScopePrefix(t) + "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+	want := defaultFilesystemScopePrefix(t) + "Tools: none\nAssistant: recorded bare replay transcript\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare OpenAI replay output = %q, want %q", got, want)
 	}
@@ -388,7 +388,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *te
 	}
 
 	got := testWriter.StdoutString()
-	want := defaultFilesystemScopePrefix(t) + "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+	want := defaultFilesystemScopePrefix(t) + "Tools: none\nAssistant: recorded bare replay transcript\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare empty-prompt OpenAI replay output = %q, want %q", got, want)
 	}

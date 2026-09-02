@@ -50,7 +50,7 @@ func bareRoomCredentialError(err error) error {
 	if !errors.Is(err, ErrOpenAIRealtimeAPIKeyMissing) {
 		return err
 	}
-	return fmt.Errorf("%w: bare room requires an OpenAI API key; set the %s environment variable before running `agent room run`", ErrOpenAIRealtimeAPIKeyMissing, DefaultRoomCredentialEnv)
+	return fmt.Errorf("%w: bare room requires an OpenAI API key; set the %s environment variable before running `yui room run`", ErrOpenAIRealtimeAPIKeyMissing, DefaultRoomCredentialEnv)
 }
 
 // RoomLaunchMode distinguishes synthesized bare startup from an explicit

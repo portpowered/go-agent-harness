@@ -60,11 +60,12 @@ func (c *WebMCPCommand) Generate() *cobra.Command {
 		operations = NewWebMCPOperationsCommand(globalFlags, factory)
 	}
 	command := &cobra.Command{
-		Use:   "webmcp",
-		Short: "Inspect WebMCP browser readiness",
-		Long:  "Inspect WebMCP browser readiness and operate the CLI-owned browser protocol.",
-		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Use:     "webmcp",
+		Short:   "Inspect WebMCP browser readiness",
+		Long:    "Inspect WebMCP browser readiness and operate the CLI-owned browser protocol.",
+		Example: "  yui webmcp doctor\n  yui webmcp browsers\n  yui webmcp tabs --eligible",
+		Args:    cobra.NoArgs,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	command.AddCommand(NewPath("doctor", doctor.Generate()).CreateCommand())
 	operations.AddCommands(command)

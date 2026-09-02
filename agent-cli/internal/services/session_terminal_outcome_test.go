@@ -35,7 +35,7 @@ func TestSessionTerminalReporterReconcilesCompetingCandidatesOnce(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("observe pre-drain duration candidate: %v", err)
 	}
-	if got := out.String(); got != "accepted output" {
+	if got := out.String(); got != "Assistant: accepted output\n" {
 		t.Fatalf("terminal candidate was emitted before reconciliation: %q", got)
 	}
 

@@ -211,12 +211,15 @@ func IsRetryable(err error) bool {
 // session error event from its wire error type and code. Well-known
 // authentication and rate-limit identifiers map to their taxonomy classes;
 // everything else remains a generic provider rejection.
-func SessionErrorClassification(errorType, code string) string {
-	text := strings.ToLower(errorType + " " + code)
+func SessionErrorClassification(errorType, code string, details ...string) string {
+	text := strings.ToLower(strings.Join(append([]string{errorType, code}, details...), " "))
 	switch {
 	case containsAuthIdentifier(text):
 		return ErrorClassAuthentication
-	case strings.Contains(text, "rate_limit"):
+	case strings.Contains(text, "rate_limit"),
+		strings.Contains(text, "insufficient_quota"),
+		strings.Contains(text, "credit_balance_exhausted"),
+		strings.Contains(text, "no credits remaining"):
 		return ErrorClassRateLimited
 	default:
 		return ErrorClassProviderRejected

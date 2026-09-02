@@ -39,23 +39,22 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 		want              func(t *testing.T, workspaceDir, explicit string) string
 		wantConfigCount   int
 		wantError         bool
-		wantGeneratedFile bool
+		wantErrorContains string
+		skipWorkspace     bool
 	}{
 		{
-			name: "absent AGENTS.md generates default instructions",
+			name: "absent AGENTS.md sends no instructions and creates no file",
 			setup: func(*testing.T, string) string {
 				return ""
 			},
 			want: func(t *testing.T, workspaceDir, _ string) string {
 				t.Helper()
-				data, err := os.ReadFile(filepath.Join(workspaceDir, workspace.AgentsMDFileName))
-				if err != nil {
-					t.Fatalf("read generated AGENTS.md: %v", err)
+				if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {
+					t.Fatalf("absent AGENTS.md gained a side effect: %v", err)
 				}
-				return string(data)
+				return ""
 			},
-			wantConfigCount:   1,
-			wantGeneratedFile: true,
+			wantConfigCount: 0,
 		},
 		{
 			name: "AGENTS.md content",
@@ -82,7 +81,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			wantConfigCount: 0,
 		},
 		{
-			name: "unreadable AGENTS.md keeps session running without instructions",
+			name: "unreadable AGENTS.md returns an actionable error",
 			setup: func(t *testing.T, workspaceDir string) string {
 				t.Helper()
 				if err := os.Mkdir(filepath.Join(workspaceDir, workspace.AgentsMDFileName), 0755); err != nil {
@@ -90,10 +89,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				}
 				return ""
 			},
-			want: func(_ *testing.T, _, _ string) string {
-				return ""
-			},
-			wantConfigCount: 0,
+			wantError:         true,
+			wantErrorContains: "read AGENTS.md",
 		},
 		{
 			name: "inaccessible workspace fails before session configuration",
@@ -104,7 +101,9 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				}
 				return ""
 			},
-			wantError: true,
+			wantError:         true,
+			wantErrorContains: "invalid filesystem root",
+			skipWorkspace:     true,
 		},
 		{
 			name: "explicit prompt file wins over AGENTS.md",
@@ -149,7 +148,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			workspaceDir := filepath.Join(t.TempDir(), "workspace")
-			if !tt.wantError {
+			if !tt.skipWorkspace {
 				if err := os.Mkdir(workspaceDir, 0755); err != nil {
 					t.Fatalf("create workspace: %v", err)
 				}
@@ -173,8 +172,8 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				if !errors.As(err, &pathErr) {
 					t.Fatalf("prompt-resolution error = %v, want wrapped *os.PathError", err)
 				}
-				if !strings.Contains(err.Error(), "invalid filesystem root") {
-					t.Fatalf("prompt-resolution error = %v, want filesystem-scope validation context", err)
+				if !strings.Contains(err.Error(), tt.wantErrorContains) {
+					t.Fatalf("prompt-resolution error = %v, want %q", err, tt.wantErrorContains)
 				}
 				if inferencer.wasConnected() {
 					t.Fatal("inaccessible workspace connected a session before returning its prompt error")
@@ -185,18 +184,13 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				t.Fatalf("RunSessionWithInstructions: %v", err)
 			}
 
-			if tt.wantGeneratedFile {
-				if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); err != nil {
-					t.Fatalf("default resolution did not create AGENTS.md: %v", err)
-				}
-			}
 			wantInstructions := tt.want(t, workspaceDir, explicit)
 			assertSessionInstructionEvents(t, inferencer, wantInstructions, tt.wantConfigCount)
 		})
 	}
 }
 
-func TestRunSessionWithInstructions_DefaultAgentsMDUsesEffectiveToolDefinitions(t *testing.T) {
+func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t *testing.T) {
 	workspaceDir := t.TempDir()
 	inferencer := newSessionInstructionsTestInferencer()
 	toolDefinitions := []messages.ToolDefinition{
@@ -217,18 +211,12 @@ func TestRunSessionWithInstructions_DefaultAgentsMDUsesEffectiveToolDefinitions(
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(workspaceDir, workspace.AgentsMDFileName))
-	if err != nil {
-		t.Fatalf("read generated AGENTS.md: %v", err)
+	if _, err := os.Stat(filepath.Join(workspaceDir, workspace.AgentsMDFileName)); !os.IsNotExist(err) {
+		t.Fatalf("missing AGENTS.md gained a side effect: %v", err)
 	}
-	got := string(data)
-	if !strings.Contains(got, "### `read_file`") || !strings.Contains(got, "### `exec`") {
-		t.Fatalf("generated AGENTS.md does not reflect session tools: %s", got)
-	}
-	if strings.Contains(got, "No tools are currently registered.") {
-		t.Fatalf("generated AGENTS.md contradicts session tools: %s", got)
-	}
-	assertSessionInstructionEventsWithGrounding(t, inferencer, got, 1)
+	// Injected provider seams still receive their advertised tools, but the
+	// instruction field remains empty: no default or grounding prompt is made.
+	assertSessionInstructionEvents(t, inferencer, "", 1)
 }
 
 func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *testing.T) {

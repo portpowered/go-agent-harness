@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -222,23 +221,26 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 			systemPrompt = cfg.SystemPrompt
 		}
 	} else {
-		// Default: use AGENTS.md from workspace
+		// An existing AGENTS.md is an explicit workspace prompt. Its absence is
+		// also explicit: do not manufacture instructions or mutate the customer's
+		// workspace merely because a command was started there.
 		agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
-		if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
-			details.addSideEffect(PromptSideEffectCreateAgentsMD)
-		}
-		if err := workspace.EnsureAgentsMD(workspaceDir, toolDefs); err != nil {
-			return "", fmt.Errorf("initialize AGENTS.md: %w", err)
-		}
-		details.addSource(PromptSourceKindAgentsMD, agentsPath)
-		details.addSideEffect(PromptSideEffectReadAgentsMD)
-		if data, err := os.ReadFile(agentsPath); err == nil {
+		data, err := os.ReadFile(agentsPath)
+		switch {
+		case err == nil:
+			details.addSource(PromptSourceKindAgentsMD, agentsPath)
+			details.addSideEffect(PromptSideEffectReadAgentsMD)
 			systemPrompt = string(data)
+		case os.IsNotExist(err):
+			// No prompt is the intended default.
+		default:
+			return "", fmt.Errorf("read AGENTS.md %s: %w", agentsPath, err)
 		}
 	}
 
-	// Prepend dynamic system info unless explicitly disabled.
-	if !cfg.NoSystemInformation {
+	// Runtime metadata and skill summaries enrich an explicitly selected
+	// prompt; they must not create a default prompt of their own.
+	if systemPrompt != "" && !cfg.NoSystemInformation {
 		var model, provider string
 		details.addSource(PromptSourceKindConfig, cfg.ConfigDir)
 		details.addSideEffect(PromptSideEffectLoadConfig)
@@ -257,7 +259,7 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 	}
 
 	// Append skills metadata (name + description) so the model knows available skills.
-	if workspaceDir != "" {
+	if systemPrompt != "" && workspaceDir != "" {
 		configSkillsDir := cfg.ConfigDir
 		loader := skills.NewLoader(workspaceDir, configSkillsDir)
 		details.addSource(PromptSourceKindSkills, filepath.Join(workspaceDir, "skills"))

@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	gwproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -206,6 +207,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	// masquerade as (or pre-empt) the session's own run/drain failure below,
 	// which is what a broken writer is actually expected to surface as.
 	writeFilesystemScopeAnnouncement(out, p.filesystemPolicy)
+	writeSessionToolAnnouncement(out, p.loop.ToolDefinitions)
 	announcement := p.announce
 	if p.loop.BareLive {
 		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
@@ -238,6 +240,29 @@ func writeFilesystemScopeAnnouncement(out io.Writer, policy *tools.FilesystemPol
 	}
 	_, _ = fmt.Fprintln(out, "Filesystem scope: "+policy.ScopeDescription())
 	_, _ = fmt.Fprintln(out, tools.FilesystemScopeStartupNotice)
+}
+
+// writeSessionToolAnnouncement makes the exact provider-advertised surface
+// visible at startup. Canonical definitions are already stable-sorted by name,
+// but canonicalize again to keep direct service callers deterministic.
+func writeSessionToolAnnouncement(out io.Writer, definitions []messages.ToolDefinition) {
+	definitions = messages.CanonicalToolDefinitions(definitions)
+	names := make([]string, 0, len(definitions))
+	seen := make(map[string]struct{}, len(definitions))
+	for _, definition := range definitions {
+		if name := strings.TrimSpace(definition.Name); name != "" {
+			if _, duplicate := seen[name]; duplicate {
+				continue
+			}
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		_, _ = fmt.Fprintln(out, "Tools: none")
+		return
+	}
+	_, _ = fmt.Fprintln(out, "Tools: "+strings.Join(names, ", "))
 }
 
 // configureLoopObserver installs the shared stream observer for every session
@@ -634,6 +659,7 @@ func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {
 	if err == nil {
 		return nil
 	}
+	err = decorateRateLimitedSessionRuntimeError(err)
 	switch plan.mode {
 	case sessionRuntimeModeRecordGrok, sessionRuntimeModeRecordOpenAI:
 		return fmt.Errorf("record session capture %s: %w", plan.capturePath, err)
@@ -642,6 +668,17 @@ func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {
 	default:
 		return err
 	}
+}
+
+func decorateRateLimitedSessionRuntimeError(err error) error {
+	if err == nil || strings.Contains(err.Error(), "classification=") {
+		return err
+	}
+	classification := gwproviders.SessionErrorClassification("", "", err.Error())
+	if classification != gwproviders.ErrorClassRateLimited {
+		return err
+	}
+	return fmt.Errorf("[classification=%s]: %w", classification, err)
 }
 
 func missingOwnedSessionDialerError(provider string) error {

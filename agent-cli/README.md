@@ -13,14 +13,14 @@ Build from the checked-out workspace:
 
 ```bash
 make build
-./agent-cli/bin/agent --help
+./agent-cli/bin/yui --help
 ```
 
 Or install the command into your Go bin directory:
 
 ```bash
-go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@v0.0.1
-agent --help
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/yui@v0.0.2
+yui --help
 ```
 
 Release binaries can also be downloaded from the repository releases page when
@@ -34,15 +34,15 @@ The CLI reads configuration from `~/.agent-cli/config.yaml` by default. Use
 If you already have a remote provider configuration, a minimal first command is:
 
 ```bash
-agent ask "what is 2 + 2?"
+yui ask "what is 2 + 2?"
 ```
 
 If you want to point the CLI at a local OpenAI-compatible server such as
 Ollama, llama.cpp, LM Studio, or vLLM, bootstrap the config with:
 
 ```bash
-agent config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1
-agent ask "summarize the workspace"
+yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1
+yui ask "summarize the workspace"
 ```
 
 ## Supported CLI Surface
@@ -51,68 +51,69 @@ These are the supported consumer-facing command groups:
 
 | Command | Use it for |
 | --- | --- |
-| `agent ask [prompt] [files...]` | One-shot prompts, optional file inputs, stdin piping, JSON output, and iterative `--loop` runs. |
-| `agent chat` | Interactive multi-turn chat, with optional audio input and iterative loop mode. |
-| `agent tool <tool-id> key=value...` | Direct tool invocation for debugging tool behavior outside a full model run. |
-| `agent probe acceptance <binary> <goal>` | Run one blind, artifact-backed acceptance probe in a fresh empty directory. |
-| `agent probe customer-simulation --live ...` | Run the explicitly billed conversational customer-simulation suite and write sanitized reports plus finalized evidence bundles. |
-| `agent session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
-| `agent config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
+| `yui ask [prompt] [files...]` | One-shot prompts, optional file inputs, stdin piping, JSON output, and iterative `--loop` runs. |
+| `yui chat` | Interactive multi-turn chat, with optional audio input and iterative loop mode. |
+| `yui tool <tool-id> key=value...` | Direct tool invocation for debugging tool behavior outside a full model run. |
+| `yui probe acceptance <binary> <goal>` | Run one blind, artifact-backed acceptance probe in a fresh empty directory. |
+| `yui probe customer-simulation --live ...` | Run the explicitly billed conversational customer-simulation suite and write sanitized reports plus finalized evidence bundles. |
+| `yui session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
+| `yui config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
 
 Common starting flows:
 
 ```bash
 # One-shot prompt
-agent ask "describe the current directory"
+yui ask "describe the current directory"
 
 # Prompt with files
-agent ask "describe this image" ./example.png
+yui ask "describe this image" ./example.png
 
 # Continue the most recent saved session
-agent ask "continue from the previous answer" --continue-last-session
+yui ask "continue from the previous answer" --continue-last-session
 
 # Interactive chat
-agent chat
+yui chat
 
 # Tool debugging
-agent tool read_file path=./README.md
+yui tool read_file path=./README.md
 
 # Blind acceptance probe (the probe receives only the binary, goal, and empty cwd)
-agent probe acceptance ./probe-agent "Create the requested result"
+yui probe acceptance ./probe-agent "Create the requested result"
 
 # Billed conversational customer simulation; see docs/customer-simulation-live.md
-agent probe customer-simulation --live --required --audio-dir /absolute/path/to/audio
+yui probe customer-simulation --live --required --audio-dir /absolute/path/to/audio
 
 # Provider-neutral interaction fixture replay
-agent interaction replay fixtures/demo.interaction.json
+yui interaction replay fixtures/demo.interaction.json
 
 # Session management (sessions are stored in workspace/sessions/)
-agent session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
-agent session --record openai.session.json --provider openai --model gpt-realtime-2.1 --reasoning-effort low --audio-in prompt.wav --audio-out response.wav
-agent session --replay capture.json
-agent session show <session-id>
-agent session list                                      # newest 100 (default)
-agent session list --limit 20 --since 2026-08-31T00:00:00Z --filter billing
-agent session delete <session-id>
+yui session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
+yui session --record openai.session.json --provider openai --model gpt-realtime-2.1 --reasoning-effort low --audio-in prompt.wav --audio-out response.wav
+yui session --replay capture.json
+yui session show <session-id>
+yui session list                                      # newest 100 (default)
+yui session list --limit 20 --since 2026-08-31T00:00:00Z --filter billing
+yui session delete <session-id>
 ```
 
-`agent session list` accepts composable `--limit` (1–1000), `--since` (RFC3339
+`yui session list` accepts composable `--limit` (1–1000), `--since` (RFC3339
 file modification time), and case-insensitive literal `--filter` (session ID).
 
-Run `agent --help` or `agent <command> --help` for the full flag surface.
+Run `yui --help` or `yui <command> --help` for the full flag surface.
 
 ## Configuration And Workspace
 
 ```text
 ~/.agent-cli/
   config.yaml
-  AGENTS.md
   sessions/
 ```
 
 - `config.yaml` selects the provider, model, credentials, and tool settings.
-- `AGENTS.md` holds the default workspace instructions that the runtime injects.
 - `sessions/` stores conversation history and loop trace records.
+
+An existing `AGENTS.md` under `--workdir` supplies workspace instructions. If
+it is absent, Yui sends no default system prompt and does not generate the file.
 
 Interaction replay reads a normalized PNIG fixture and prints one JSON object
 per event to stdout. It is credential-free and does not call live provider
@@ -123,7 +124,7 @@ network calls. Session record mode supports live Grok realtime captures and
 OpenAI Realtime captures with `--provider openai --model gpt-realtime-2.1`; it
 validates the provider, model, API key, and `.json` capture path before
 attempting the live provider path. OpenAI session mode uses the sessional
-inferencer path and does not call the normal `agent ask` or `agent chat`
+inferencer path and does not call the normal `yui ask` or `yui chat`
 stateless OpenAI inference path.
 
 Realtime reasoning can be selected with `--reasoning-effort` (`minimal`,
@@ -190,15 +191,14 @@ with `go-agent-loop` and `go-llm-gateway` in the active workspace.
   the reusable libraries, including tool executor wiring for loop construction
   and stateless provider HTTP runtime wiring for live, record, and replay
   modes.
-- Its supported surface is the `agent` command and the user documentation under
+- Its supported surface is the `yui` command and the user documentation under
   `docs/`, not the internal package layout under `internal/`.
 - System prompt resolution is CLI-owned composition. `--system-prompt` reads an
   existing file path or treats a value that does not resolve to an existing
   entry as literal prompt text; the
-  default path creates `AGENTS.md` when missing, reads it from the workspace,
-  prepends runtime system information unless `--no-system-information` is set,
-  and appends discovered skill metadata from workspace/config `skills/`
-  directories.
+  default path reads `AGENTS.md` from the workspace only when it exists and
+  otherwise supplies no system prompt or side effect. Runtime system information
+  and discovered skill metadata are appended only when a base prompt exists.
 
 Consumers who need a library integration point should start with
 [`go-agent-loop`](../go-agent-loop/README.md) or

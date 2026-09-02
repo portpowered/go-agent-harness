@@ -162,7 +162,7 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			args:           []string{"chat", "--context-pressure-threshold", "not-a-float"},
 			wantCode:       1,
 			wantStdout:     "",
-			wantStdoutPart: "Usage:\n  agent chat [flags]",
+			wantStdoutPart: "Usage:\n  yui chat [flags]",
 			wantStderr:     "Error: invalid argument \"not-a-float\" for \"--context-pressure-threshold\" flag: strconv.ParseFloat: parsing \"not-a-float\": invalid syntax\n",
 			wantErr:        `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
 		},
@@ -535,7 +535,7 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			if !errors.As(got.err, &typed) {
 				t.Fatalf("error type = %T, want *chatFlagParseError", got.err)
 			}
-			if !strings.Contains(got.stdout, "Usage:\n  agent chat [flags]") {
+			if !strings.Contains(got.stdout, "Usage:\n  yui chat [flags]") {
 				t.Fatalf("stdout = %q, want Cobra usage on flag failure", got.stdout)
 			}
 			if got.stderr != "Error: "+got.err.Error()+"\n" {

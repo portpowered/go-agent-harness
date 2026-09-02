@@ -317,7 +317,10 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 		{
 			name: "message processing output failure",
 			setup: func(f *liveTerminalDrainFixture) func() {
-				f.writer = &liveTerminalDrainFailingWriter{target: &f.output, failAfter: 2, err: writeErr}
+				// The renderer writes the actor label and accepted chunk
+				// separately. Fail on the following write so this case still
+				// exercises a terminal-output failure after accepted content.
+				f.writer = &liveTerminalDrainFailingWriter{target: &f.output, failAfter: 3, err: writeErr}
 				return func() {
 					f.acceptedResponseThen(messages.StreamMessage{
 						Type:  messages.StreamTypeSessionClose,

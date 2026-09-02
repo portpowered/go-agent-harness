@@ -119,13 +119,19 @@ func sessionAudioDiagnosticSink(out io.Writer) services.SessionDiagnosticSink {
 // default microphone/speaker devices: a --browser-tools interactive session
 // and a record-only-live invocation (see isRecordOnlyLiveInvocation).
 func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, registry audio.DeviceRegistry, input, output audio.DeviceID, loadedConfig *config.Config, interactiveDevices bool) services.RTCDeviceBindingRequest {
+	feedbackWriter := c.feedbackWarningWriter
+	if feedbackWriter == nil {
+		feedbackWriter = io.Discard
+	}
 	request := services.RTCDeviceBindingRequest{
-		Registry:              registry,
-		InputDevice:           input,
-		OutputDevice:          output,
-		InputPresent:          cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-		OutputPresent:         cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
-		FeedbackWarningWriter: cmd.ErrOrStderr(),
+		Registry:      registry,
+		InputDevice:   input,
+		OutputDevice:  output,
+		InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+		OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+		// Feedback classification remains available to diagnostics, but the
+		// speculative warning is too noisy for the customer-facing session CLI.
+		FeedbackWarningWriter: feedbackWriter,
 		Observability:         c.observability,
 	}
 	if !interactiveDevices {
@@ -358,6 +364,7 @@ type SessionCommand struct {
 	runtimeObserver           services.SessionRuntimeObserver
 	observability             observability.Dependencies
 	deviceRegistry            audio.DeviceRegistry
+	feedbackWarningWriter     io.Writer
 	imagePaths                []string
 }
 
@@ -528,7 +535,7 @@ func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTC
 // Generate to keep the constructor within the function-length gate.
 const sessionCommandLongHelp = "Run a bidirectional session inference capture or replay a session capture file.\n" +
 	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
-	"With no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `agent session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\n" +
+	"With no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `yui session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\n" +
 	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
 	"WebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. With only --browser-tools and a provider, the command starts an interactive microphone session, prints Starting and Listening state, and waits for cancellation or provider termination. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\n" +
 	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
@@ -665,10 +672,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Use:          "session [message]",
 		Short:        "Run or manage agent sessions",
 		Long:         sessionCommandLongHelp,
+		Example:      sessionCommandExample,
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
+			defer func() { runErr = decorateSessionCommandError(runErr) }()
 			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
 				return err
 			}
@@ -758,7 +767,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
 			var browserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
 			browserCapabilityState := webmcp.BrowserCapabilityDisabled
-			if c.sessionToolCapabilities != nil && !bareSession {
+			if c.sessionToolCapabilities != nil {
 				if loadedConfig == nil {
 					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
 					if err != nil {

@@ -25,6 +25,7 @@ func (c *InteractionCommand) Generate() *cobra.Command {
 		Short: "Inspect provider-neutral gateway interactions",
 		Long: "Inspect provider-neutral gateway interactions.\n\n" +
 			"Use the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.",
+		Example: "  yui interaction replay ./fixtures/example.interaction.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},
@@ -46,7 +47,8 @@ func (c *InteractionReplayCommand) Generate() *cobra.Command {
 		Short: "Replay a normalized interaction fixture as NDJSON",
 		Long: "Load a normalized PNIG interaction fixture and print one JSON event per line to stdout.\n\n" +
 			"This command is credential-free: it validates and replays the fixture locally without reading provider API keys or making live provider network calls.",
-		Args: cobra.ExactArgs(1),
+		Example: "  yui interaction replay ./fixtures/example.interaction.json",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInteractionReplay(cmd.Context(), cmd.OutOrStdout(), args[0])
 		},

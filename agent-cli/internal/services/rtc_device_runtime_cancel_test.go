@@ -240,6 +240,62 @@ func TestRTCDeviceSinkInterruptionUsesActuallyConsumedDeviceSamples(t *testing.T
 	}
 }
 
+func TestRTCDeviceSinkInterruptionTimerSurvives24kTo16kConversion(t *testing.T) {
+	registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+		Seed:    29,
+		Render:  audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+		Capture: audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+	})
+	if err != nil {
+		t.Fatalf("new mixed-rate callback clock: %v", err)
+	}
+	sink, err := NewRTCDeviceSinkAtRate(registry, "", 24000)
+	if err != nil {
+		t.Fatalf("open 24 kHz provider -> 16 kHz device sink: %v", err)
+	}
+	defer func() { _ = sink.Close() }()
+
+	media := rtc.NewSessionMediaAtRate(nil, 24000)
+	defer func() { _ = media.Close() }()
+	response := rtc.PlaybackResponse{ResponseID: "resp-mixed-rate", ItemID: "item-mixed-rate"}
+	media.StartInboundResponse(response)
+	// Ten provider frames are 300 ms at 24 kHz. They arrive as a burst and
+	// become ten duration-equivalent 480-sample device frames at 16 kHz.
+	if err := media.PushInbound(make([]int16, 10*720)); err != nil {
+		t.Fatalf("push provider burst: %v", err)
+	}
+	pumpErr := make(chan error, 1)
+	go func() { pumpErr <- sink.Pump(context.Background(), media.Endpoints().Inbound) }()
+
+	deadline := time.Now().Add(time.Second)
+	for sink.PlaybackStats().QueuedSamples < 2*audio.FrameSize && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if err := registry.Advance(2); err != nil {
+		t.Fatalf("advance two device callbacks: %v", err)
+	}
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		t.Fatal("mixed-rate interruption did not return a device cursor")
+	}
+	if interruption.AudioEndMS != 60 {
+		t.Fatalf("mixed-rate playback cursor = %d ms, want two 30 ms device callbacks", interruption.AudioEndMS)
+	}
+	media.FailInbound(io.EOF)
+	select {
+	case err := <-pumpErr:
+		if err != nil {
+			t.Fatalf("mixed-rate pump after interruption: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("mixed-rate interruption did not release the provider pump")
+	}
+	stats := sink.PlaybackStats()
+	if stats.QueuedSamples != 0 || stats.DroppedSamples != 0 || stats.DiscardEvents == 0 {
+		t.Fatalf("mixed-rate playback stats after interruption = %+v", stats)
+	}
+}
+
 func TestRTCDeviceSinkInterruptionExcludesPostResponseHoldToneSamples(t *testing.T) {
 	for _, pulseCount := range []int{1, 5} {
 		t.Run(fmt.Sprintf("%d hold-tone pulses", pulseCount), func(t *testing.T) {
