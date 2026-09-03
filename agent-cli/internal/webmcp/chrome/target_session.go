@@ -54,7 +54,6 @@ type targetSession struct {
 	listenerReady   bool
 	wireSequence    uint64
 	castSinks       []webmcp.CastDevice
-	castSinksKnown  bool
 	castUpdate      chan struct{}
 	castIssue       string
 }

@@ -111,7 +111,9 @@ session. Write-like page operations require approval by default; set
 Add `--web-cast` alongside `--browser-tools webmcp` to let the agent discover
 Google Cast receivers visible to Chrome, cast the exact selected tab, and stop
 that Cast session. Cast discovery runs on the browser host's local network and
-may require operating-system local-network permission:
+may require operating-system local-network permission. Agent-managed Chrome
+starts receiver discovery eagerly, without requiring the customer to open
+Chrome's Cast menu first:
 
 ```bash
 yui --workdir "$PWD" session --browser-tools webmcp --web-cast

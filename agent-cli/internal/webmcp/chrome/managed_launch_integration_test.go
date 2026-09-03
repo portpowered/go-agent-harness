@@ -16,6 +16,8 @@ import (
 )
 
 const managedBrowserLaunchIntegrationEnv = "WEBMCP_MANAGED_BROWSER_LAUNCH_INTEGRATION"
+const managedBrowserExpectedCastDevicesEnv = "WEBMCP_EXPECT_CAST_DEVICE_NAMES"
+const managedBrowserCastDeviceEnv = "WEBMCP_CAST_DEVICE_NAME"
 
 // TestManagedBrowserLauncherWithStockChrome is the display-capable direct
 // browser proof for story 003. The opt-in check is intentionally first so a
@@ -163,6 +165,21 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 		t.Fatalf("enable the real Chrome Cast domain: %v", err)
 	}
 	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d", len(castDevices))
+	assertExpectedCastDevices(t, castDevices, os.Getenv(managedBrowserExpectedCastDevicesEnv))
+	castDeviceName := strings.TrimSpace(os.Getenv(managedBrowserCastDeviceEnv))
+	if castDeviceName != "" {
+		assertExpectedCastDevices(t, castDevices, castDeviceName)
+		if err := castController.CastTab(ctx, castDeviceName); err != nil {
+			t.Fatalf("cast opened managed tab to %q: %v", castDeviceName, err)
+		}
+		if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("real Chrome tab cast established on device %q", castDeviceName)
+		if err := castController.StopCasting(ctx, castDeviceName); err != nil {
+			t.Fatalf("stop real Chrome tab cast on %q: %v", castDeviceName, err)
+		}
+	}
 	added, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab tools", func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventToolsAdded && hasTool(event.Tools, "managed_open_tab_probe")
 	})
@@ -188,6 +205,48 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	}
 	if completed.Status != "Completed" || !strings.Contains(string(completed.Output), "actual-browser") {
 		t.Fatalf("managed opened-tab WebMCP response = %+v", completed)
+	}
+}
+
+func waitForActiveCastSession(ctx context.Context, controller webmcp.TargetCastController, deviceName string) (webmcp.CastDevice, error) {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		devices, err := controller.ListCastDevices(ctx)
+		if err != nil {
+			return webmcp.CastDevice{}, fmt.Errorf("observe Cast session on %q: %w", deviceName, err)
+		}
+		for _, device := range devices {
+			if device.Name == deviceName && strings.TrimSpace(device.Session) != "" {
+				return device, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return webmcp.CastDevice{}, fmt.Errorf("wait for active Cast session on %q: %w", deviceName, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func assertExpectedCastDevices(t *testing.T, devices []webmcp.CastDevice, rawExpected string) {
+	t.Helper()
+	expected := strings.Split(rawExpected, ",")
+	if strings.TrimSpace(rawExpected) == "" {
+		return
+	}
+	available := make(map[string]struct{}, len(devices))
+	for _, device := range devices {
+		available[device.Name] = struct{}{}
+	}
+	for _, rawName := range expected {
+		name := strings.TrimSpace(rawName)
+		if name == "" {
+			t.Fatalf("%s contains an empty device name", managedBrowserExpectedCastDevicesEnv)
+		}
+		if _, ok := available[name]; !ok {
+			t.Fatalf("Cast devices = %+v, want device %q from %s", devices, name, managedBrowserExpectedCastDevicesEnv)
+		}
 	}
 }
 
