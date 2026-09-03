@@ -318,6 +318,7 @@ func assertManagedLaunchArguments(t *testing.T, args []string, profileDir string
 	}
 	for _, required := range []string{
 		"--remote-debugging-address=127.0.0.1",
+		"--disable-features=DelayMediaSinkDiscovery",
 		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
 		"--enable-blink-features=DeclarativeWebmcp",
 		"--enable-experimental-web-platform-features",

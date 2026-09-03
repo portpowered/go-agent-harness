@@ -11,7 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-const castDiscoveryWait = 3 * time.Second
+const (
+	castDiscoveryWait       = 3 * time.Second
+	castDiscoverySettleWait = 500 * time.Millisecond
+)
 
 // observeCastProtocolEvent owns Cast's asynchronous sink snapshot. These
 // events are operational state for the cast tools, not WebMCP page events, so
@@ -56,7 +59,6 @@ func (s *targetSession) observeCastProtocolEvent(event any) bool {
 	})
 	s.mu.Lock()
 	s.castSinks = devices
-	s.castSinksKnown = true
 	if s.castUpdate != nil {
 		close(s.castUpdate)
 	}
@@ -66,10 +68,6 @@ func (s *targetSession) observeCastProtocolEvent(event any) bool {
 }
 
 func (s *targetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevice, error) {
-	s.mu.Lock()
-	update := s.castUpdate
-	known := s.castSinksKnown
-	s.mu.Unlock()
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		s.recordWireBeforeDispatch(webmcp.CastEnableMethod, "")
 		return cdpCast.Enable().Do(ctx)
@@ -77,26 +75,56 @@ func (s *targetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevic
 	if err != nil {
 		return nil, classifySessionError(s, webmcp.ErrorBrowserProtocol, "list_cast_devices", err)
 	}
-	if !known {
-		timer := time.NewTimer(castDiscoveryWait)
-		defer timer.Stop()
+	timer := time.NewTimer(castDiscoveryWait)
+	defer timer.Stop()
+	var settleTimer *time.Timer
+	var settle <-chan time.Time
+	stopSettleTimer := func() {
+		if settleTimer == nil {
+			return
+		}
+		if !settleTimer.Stop() {
+			select {
+			case <-settleTimer.C:
+			default:
+			}
+		}
+		settleTimer = nil
+		settle = nil
+	}
+	defer stopSettleTimer()
+	for {
+		s.mu.Lock()
+		devices := append(make([]webmcp.CastDevice, 0, len(s.castSinks)), s.castSinks...)
+		issue := strings.TrimSpace(s.castIssue)
+		update := s.castUpdate
+		s.mu.Unlock()
+		if issue != "" {
+			return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "Chrome could not discover Cast devices.", map[string]any{"phase": "list_cast_devices", "reason_code": "cast_issue", "issue": issue})
+		}
+		if len(devices) > 0 && settleTimer == nil {
+			settleTimer = time.NewTimer(castDiscoverySettleWait)
+			settle = settleTimer.C
+		}
 		select {
 		case <-update:
+			stopSettleTimer()
+		case <-settle:
+			select {
+			case <-update:
+				stopSettleTimer()
+				continue
+			default:
+			}
+			return devices, nil
 		case <-timer.C:
+			return devices, nil
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-s.done:
 			return nil, webmcp.ErrClosed
 		}
 	}
-	s.mu.Lock()
-	devices := append(make([]webmcp.CastDevice, 0, len(s.castSinks)), s.castSinks...)
-	issue := strings.TrimSpace(s.castIssue)
-	s.mu.Unlock()
-	if len(devices) == 0 && issue != "" {
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "Chrome could not discover Cast devices.", map[string]any{"phase": "list_cast_devices", "reason_code": "cast_issue", "issue": issue})
-	}
-	return devices, nil
 }
 
 func (s *targetSession) CastTab(ctx context.Context, deviceName string) error {

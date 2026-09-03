@@ -692,9 +692,13 @@ func normalizeManagedStartupURL(raw string) (string, error) {
 
 func managedBrowserArgs(profileDir string, port int, startupURL string, headless bool) []string {
 	args := []string{
-		"--disable-background-networking",
 		"--disable-component-update",
 		"--disable-extensions",
+		// Cast.enable observes Media Router results but does not count as the
+		// user interaction Chrome otherwise waits for before starting local
+		// sink discovery. Managed browsers have no reliable browser-chrome
+		// gesture boundary, so start discovery eagerly for their lifetime.
+		"--disable-features=DelayMediaSinkDiscovery",
 		"--disable-sync",
 		"--no-default-browser-check",
 		"--no-first-run",

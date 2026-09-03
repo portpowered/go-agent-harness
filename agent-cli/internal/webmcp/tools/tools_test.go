@@ -117,11 +117,19 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 	}
 }
 
-func TestWebCastToolsAreExplicitlyGatedAndExecuteThroughBroker(t *testing.T) {
+func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 8 {
 		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
 	}
-	broker := &recordingBroker{castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}}}
+	broker := &recordingBroker{
+		selected: webmcp.PageContext{
+			Key:       webmcp.PageKey{BrowserID: "browser-office", TargetID: "tab-example"},
+			URL:       "https://example.com/",
+			Origin:    "https://example.com",
+			Connected: true,
+		},
+		castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}},
+	}
 	set := NewBrokerToolSet(broker, true)
 	definitions := set.Definitions()
 	if len(definitions) != 11 || definitions[8].Name != webmcp.ListCastDevicesToolName || definitions[9].Name != webmcp.CastTabToolName || definitions[10].Name != webmcp.StopCastingToolName {
@@ -132,6 +140,7 @@ func TestWebCastToolsAreExplicitlyGatedAndExecuteThroughBroker(t *testing.T) {
 	}
 
 	calls := []messages.ToolCall{
+		{ID: "open-tab", Name: webmcp.OpenTabToolName, Arguments: `{"url":"https://example.com/","activate":true}`},
 		{ID: "list-cast", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
 		{ID: "cast-tab", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV"}`},
 		{ID: "stop-cast", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Office TV"}`},
@@ -146,8 +155,11 @@ func TestWebCastToolsAreExplicitlyGatedAndExecuteThroughBroker(t *testing.T) {
 			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
 		}
 	}
-	if !reflect.DeepEqual(broker.calls, []string{"list_cast_devices", "cast_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
+	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
 		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
+	}
+	if broker.lastOpen.URL != "https://example.com/" || !broker.lastOpen.Activate {
+		t.Fatalf("open-tab request = %+v", broker.lastOpen)
 	}
 }
 

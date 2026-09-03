@@ -102,7 +102,7 @@ func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
 		fmt.Sprintf("chrome channel=%s version=%s revision=%s platform=%s", lockedChromeChannel, lockedChromeVersion, lockedChromeRevision, lockedChromePlatform),
 		fmt.Sprintf("chrome_observed browser=%s protocol=%s", version.Browser, version.ProtocolVersion),
 		"randomized_fixture page_a=redacted page_b=redacted tool_names=redacted messages=redacted",
-		"flags --headless=new --disable-gpu --disable-background-networking --disable-component-update --disable-extensions --disable-sync --no-default-browser-check --no-first-run --remote-debugging-address=127.0.0.1 --remote-debugging-port=0 --enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport profile=<temporary>",
+		"flags --headless=new --disable-gpu --disable-component-update --disable-extensions --disable-features=DelayMediaSinkDiscovery --disable-sync --no-default-browser-check --no-first-run --remote-debugging-address=127.0.0.1 --remote-debugging-port=0 --enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport profile=<temporary>",
 		"fixture origin=loopback query_fragment=redacted",
 	)
 

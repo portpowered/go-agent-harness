@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	cdpCast "github.com/chromedp/cdproto/cast"
 	"github.com/chromedp/cdproto/cdp"
@@ -29,8 +30,9 @@ func TestTargetSessionSurfacesChromeCastDiscoveryIssue(t *testing.T) {
 }
 
 type castExecutor struct {
-	mu    sync.Mutex
-	calls []castCommand
+	mu     sync.Mutex
+	calls  []castCommand
+	notify chan string
 }
 
 func (e *castExecutor) Execute(ctx context.Context, method string, params, _ any) error {
@@ -49,6 +51,9 @@ func (e *castExecutor) Execute(ctx context.Context, method string, params, _ any
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
 	e.mu.Unlock()
+	if e.notify != nil {
+		e.notify <- method
+	}
 	return nil
 }
 
@@ -59,6 +64,52 @@ func (e *castExecutor) snapshot() []castCommand {
 }
 
 var _ cdp.Executor = (*castExecutor)(nil)
+
+func TestTargetSessionWaitsPastInitialEmptyCastSnapshot(t *testing.T) {
+	executor := &castExecutor{notify: make(chan string, 1)}
+	session := newInvocationTestSession(t, executor)
+	type listResult struct {
+		devices []webmcp.CastDevice
+		err     error
+	}
+	result := make(chan listResult, 1)
+	go func() {
+		devices, err := session.ListCastDevices(context.Background())
+		result <- listResult{devices: devices, err: err}
+	}()
+	select {
+	case method := <-executor.notify:
+		if method != cdpCast.CommandEnable {
+			t.Fatalf("first Cast command = %q, want %q", method, cdpCast.CommandEnable)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Cast.enable was not dispatched")
+	}
+	session.observeCastProtocolEvent(&cdpCast.EventSinksUpdated{Sinks: []*cdpCast.Sink{}})
+	select {
+	case early := <-result:
+		t.Fatalf("list returned after Chrome's initial empty snapshot: %+v", early)
+	case <-time.After(20 * time.Millisecond):
+	}
+	session.observeCastProtocolEvent(&cdpCast.EventSinksUpdated{Sinks: []*cdpCast.Sink{{Name: "Office TV", ID: "sink-office"}}})
+	select {
+	case early := <-result:
+		t.Fatalf("list returned before Chrome's incremental sink updates settled: %+v", early)
+	case <-time.After(20 * time.Millisecond):
+	}
+	session.observeCastProtocolEvent(&cdpCast.EventSinksUpdated{Sinks: []*cdpCast.Sink{
+		{Name: "Office TV", ID: "sink-office"},
+		{Name: "Living Room TV", ID: "sink-living"},
+	}})
+	select {
+	case got := <-result:
+		if got.err != nil || len(got.devices) != 2 || got.devices[0].Name != "Living Room TV" || got.devices[1].Name != "Office TV" {
+			t.Fatalf("list result = %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("list did not return after a non-empty sink update")
+	}
+}
 
 func TestTargetSessionListsAndControlsCastDevicesOnItsTarget(t *testing.T) {
 	executor := &castExecutor{}
