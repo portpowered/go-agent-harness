@@ -126,6 +126,23 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	}
 }
 
+// TestAgentBinaryTest46HighRateToolAudioRegression gives test46 the same
+// fresh-process acceptance as test45. Its different audio lengths preserve the
+// second captured schedule instead of treating one failing trace as a proxy
+// for both: all twenty agents must deliver every resampled device sample.
+func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
+	testCase := remoteToolAudioCase{
+		name:            "test46_high_rate",
+		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
+		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
+	}
+	for trial := 0; trial < 20; trial++ {
+		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
+			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
+		})
+	}
+}
+
 func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, deltaDelay, toolDelay, callbackInterval time.Duration, promptBytes, toolResultBytes, inputFrames int) {
 	t.Helper()
 	responses := make([][]int16, len(testCase.responseSamples))

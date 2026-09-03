@@ -182,7 +182,7 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	@set -euo pipefail; \
 	echo "==> test-audio-device-server-integration agent + audio-device-server replay"; \
 	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(GO_TEST_TIMEOUT)" -- $(GO) test ./test/integration \
-		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
+		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
