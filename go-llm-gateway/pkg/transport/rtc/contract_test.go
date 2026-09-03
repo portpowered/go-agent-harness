@@ -24,6 +24,16 @@ var (
 
 func TestRTCDataS11Conformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
 
+func TestSessionMediaConsumerContext(t *testing.T) {
+	if rtc.SessionMediaConsumerRequested(context.Background()) {
+		t.Fatal("unmarked context unexpectedly requests session media")
+	}
+	ctx := rtc.WithSessionMediaConsumer(context.Background())
+	if !rtc.SessionMediaConsumerRequested(ctx) {
+		t.Fatal("marked context did not request session media")
+	}
+}
+
 func s11Harness() transporttest.ConformanceHarness {
 	dialErr := &operationError{"dial"}
 	readErr := &operationError{"read"}

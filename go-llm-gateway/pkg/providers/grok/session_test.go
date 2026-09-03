@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -308,6 +309,20 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Samples, want) {
 		t.Fatalf("RTC inbound PCM frame differs from provider audio: got %d samples", len(got.Samples))
+	}
+}
+
+func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) {
+	conn := newMockConn()
+	provider := New(WithAPIKey("test-key"), WithWebSocketDialer(&mockDialer{conn: conn}))
+	ctx := rtc.WithSessionMediaConsumer(newGrokTestContext(t))
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "grok-realtime", OutputAudioSampleRate: models.SampleRate24000})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+	if session.(*grokSession).currentRTCMedia() == nil {
+		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
 }
 

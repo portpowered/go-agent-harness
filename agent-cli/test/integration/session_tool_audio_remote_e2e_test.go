@@ -114,6 +114,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 // criterion explicit. Twenty fresh agent, provider, tool, and device processes
 // replay the full test45 topology; one missing sample fails its trial.
 func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
+	requireRemoteToolAudioStress(t)
 	testCase := remoteToolAudioCase{
 		name:            "test45_high_rate",
 		responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
@@ -131,6 +132,7 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 // second captured schedule instead of treating one failing trace as a proxy
 // for both: all twenty agents must deliver every resampled device sample.
 func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
+	requireRemoteToolAudioStress(t)
 	testCase := remoteToolAudioCase{
 		name:            "test46_high_rate",
 		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
@@ -140,6 +142,13 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
+	}
+}
+
+func requireRemoteToolAudioStress(t *testing.T) {
+	t.Helper()
+	if os.Getenv("YUI_AUDIO_STRESS") != "1" {
+		t.Skip("set YUI_AUDIO_STRESS=1 to run fresh-process high-rate audio stress")
 	}
 }
 

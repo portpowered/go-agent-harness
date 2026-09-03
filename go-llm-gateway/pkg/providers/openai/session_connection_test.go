@@ -12,7 +12,27 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
+
+func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) {
+	conn := newMockWebSocketConn()
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(&mockWebSocketDialer{conn: conn}),
+	)
+	ctx := rtc.WithSessionMediaConsumer(newRealtimeTestContext(t))
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime", OutputAudioSampleRate: models.SampleRate24000})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+	realtime := session.(*realtimeSession)
+	if realtime.currentRTCMedia() == nil {
+		t.Fatal("RTC media was not prepared before ConnectSession returned")
+	}
+}
 
 func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	conn := newMockWebSocketConn()

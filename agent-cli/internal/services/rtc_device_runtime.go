@@ -78,6 +78,10 @@ func newRTCDeviceBindingInferencer(inner messages.SessionInferencer, binding *RT
 }
 
 func (i *rtcDeviceBindingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	// Tell the provider to create its media endpoints before its read loop can
+	// observe an immediate audio response. RTCMedia is otherwise attached only
+	// after ConnectSession returns, which leaves a small loss window at startup.
+	ctx = rtc.WithSessionMediaConsumer(ctx)
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err

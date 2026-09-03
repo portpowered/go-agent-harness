@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 const defaultBaseURL = "https://api.x.ai/v1/realtime"
@@ -90,6 +91,9 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 
 	gs := newGrokSession(conn, p.logger)
 	gs.mediaSampleRate = int(config.OutputAudioSampleRate)
+	if rtc.SessionMediaConsumerRequested(ctx) {
+		gs.RTCMedia()
+	}
 
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
