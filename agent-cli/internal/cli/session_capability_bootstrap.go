@@ -674,6 +674,39 @@ func (b *sessionBrowserBroker) Cancel(ctx context.Context, request webmcp.Cancel
 	return b.Broker.Cancel(ctx, request)
 }
 
+func (b *sessionBrowserBroker) ListCastDevices(ctx context.Context) ([]webmcp.CastDevice, error) {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+	controller, ok := b.Broker.(webmcp.BrokerCastController)
+	if !ok {
+		return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the connected browser does not support Cast controls", map[string]any{"phase": "list_cast_devices", "reason_code": "unsupported_operation"})
+	}
+	return controller.ListCastDevices(ctx)
+}
+
+func (b *sessionBrowserBroker) CastSelectedTab(ctx context.Context, deviceName string) error {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	controller, ok := b.Broker.(webmcp.BrokerCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the connected browser does not support Cast controls", map[string]any{"phase": "cast_tab", "reason_code": "unsupported_operation"})
+	}
+	return controller.CastSelectedTab(ctx, deviceName)
+}
+
+func (b *sessionBrowserBroker) StopCasting(ctx context.Context, deviceName string) error {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	controller, ok := b.Broker.(webmcp.BrokerCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the connected browser does not support Cast controls", map[string]any{"phase": "stop_casting", "reason_code": "unsupported_operation"})
+	}
+	return controller.StopCasting(ctx, deviceName)
+}
+
 func (b *sessionBrowserBroker) Watch(ctx context.Context) <-chan webmcp.BrokerEvent {
 	if err := b.ensureInitialized(ctx); err != nil {
 		closed := make(chan webmcp.BrokerEvent)
@@ -697,3 +730,4 @@ func (b *sessionBrowserBroker) WatchBrowserEvents(ctx context.Context) <-chan we
 }
 
 var _ SessionCapabilityInitializer = (*sessionBrowserBroker)(nil)
+var _ webmcp.BrokerCastController = (*sessionBrowserBroker)(nil)

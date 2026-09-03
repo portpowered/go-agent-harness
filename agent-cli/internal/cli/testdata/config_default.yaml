@@ -64,6 +64,7 @@ browser:
     tools:
         enabled: false
         backend: webmcp
+        web_cast: false
     connection:
         cdp_url: ""
         ws_endpoint: ""

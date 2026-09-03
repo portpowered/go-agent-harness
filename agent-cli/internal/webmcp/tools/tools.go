@@ -24,6 +24,7 @@ type BrokerToolSet struct {
 	definitions []webmcp.BrokerToolDefinition
 	tools       []cliTools.Tool
 	executor    *Executor
+	webCast     bool
 
 	pageOnce sync.Once
 	page     *pageToolState
@@ -35,11 +36,13 @@ type ToolSet = BrokerToolSet
 // NewBrokerToolSet creates a stable WebMCP tool set backed by broker. A nil
 // broker is allowed so definitions can be composed before browser activation;
 // execution then returns a classified webmcp_disabled envelope.
-func NewBrokerToolSet(broker webmcp.Broker) *BrokerToolSet {
-	definitions := webmcp.BrowserToolDefinitions()
+func NewBrokerToolSet(broker webmcp.Broker, webCast ...bool) *BrokerToolSet {
+	castEnabled := len(webCast) > 0 && webCast[0]
+	definitions := webmcp.BrowserToolDefinitions(castEnabled)
 	set := &BrokerToolSet{
 		broker:      broker,
 		definitions: definitions,
+		webCast:     castEnabled,
 	}
 	set.tools = make([]cliTools.Tool, 0, len(definitions))
 	for _, definition := range definitions {
@@ -50,18 +53,18 @@ func NewBrokerToolSet(broker webmcp.Broker) *BrokerToolSet {
 }
 
 // NewToolSet is an alias for NewBrokerToolSet.
-func NewToolSet(broker webmcp.Broker) *ToolSet {
-	return NewBrokerToolSet(broker)
+func NewToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
+	return NewBrokerToolSet(broker, webCast...)
 }
 
 // NewWebMCPToolSet is a descriptive constructor alias.
-func NewWebMCPToolSet(broker webmcp.Broker) *ToolSet {
-	return NewBrokerToolSet(broker)
+func NewWebMCPToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
+	return NewBrokerToolSet(broker, webCast...)
 }
 
 // NewExecutor creates the direct agent-loop executor for broker.
-func NewExecutor(broker webmcp.Broker) *Executor {
-	return NewBrokerToolSet(broker).Executor()
+func NewExecutor(broker webmcp.Broker, webCast ...bool) *Executor {
+	return NewBrokerToolSet(broker, webCast...).Executor()
 }
 
 // Tools returns the CLI-compatible broker tools in frozen order.
@@ -102,7 +105,7 @@ func (s *BrokerToolSet) DefinitionSchemas() []map[string]any {
 	if s == nil {
 		return nil
 	}
-	return webmcp.BrowserToolSchemas()
+	return webmcp.BrowserToolSchemas(s.webCast)
 }
 
 // FunctionDefinitions is a descriptive alias for DefinitionSchemas.
@@ -384,6 +387,39 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 	case webmcp.ShowPageToolName:
 		return s.capturePage(ctx)
 
+	case webmcp.ListCastDevicesToolName:
+		controller, ok := s.broker.(webmcp.BrokerCastController)
+		if !ok {
+			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "list_cast_devices", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "list_cast_devices"})
+		}
+		devices, err := controller.ListCastDevices(ctx)
+		if err != nil {
+			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "list_cast_devices"})
+		}
+		return webmcp.EncodeToolResult(castDevicesData{Devices: devices}, nil)
+
+	case webmcp.CastTabToolName:
+		controller, ok := s.broker.(webmcp.BrokerCastController)
+		if !ok {
+			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "cast_tab", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
+		}
+		deviceName := stringValue(args, "device_name")
+		if err := controller.CastSelectedTab(ctx, deviceName); err != nil {
+			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
+		}
+		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Status: "cast_started"}, nil)
+
+	case webmcp.StopCastingToolName:
+		controller, ok := s.broker.(webmcp.BrokerCastController)
+		if !ok {
+			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "stop_casting", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "stop_casting"})
+		}
+		deviceName := stringValue(args, "device_name")
+		if err := controller.StopCasting(ctx, deviceName); err != nil {
+			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "stop_casting"})
+		}
+		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Status: "cast_stopped"}, nil)
+
 	default:
 		return invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
 	}
@@ -440,14 +476,17 @@ func (s *BrokerToolSet) spec(name string) (toolSpec, bool) {
 
 func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 	orders := map[string][]string{
-		webmcp.GetContextToolName: {"refresh"},
-		webmcp.ListTabsToolName:   {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
-		webmcp.SelectTabToolName:  {"browser_id", "target_id", "activate"},
-		webmcp.OpenTabToolName:    {"browser_id", "url", "activate"},
-		webmcp.ListToolsToolName:  {"refresh", "name_contains", "include_schemas", "frame_id"},
-		webmcp.InvokeToolName:     {"tool_ref", "input_json", "reason"},
-		webmcp.CancelToolName:     {"invocation_id", "reason"},
-		webmcp.ShowPageToolName:   {},
+		webmcp.GetContextToolName:      {"refresh"},
+		webmcp.ListTabsToolName:        {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
+		webmcp.SelectTabToolName:       {"browser_id", "target_id", "activate"},
+		webmcp.OpenTabToolName:         {"browser_id", "url", "activate"},
+		webmcp.ListToolsToolName:       {"refresh", "name_contains", "include_schemas", "frame_id"},
+		webmcp.InvokeToolName:          {"tool_ref", "input_json", "reason"},
+		webmcp.CancelToolName:          {"invocation_id", "reason"},
+		webmcp.ShowPageToolName:        {},
+		webmcp.ListCastDevicesToolName: {},
+		webmcp.CastTabToolName:         {"device_name"},
+		webmcp.StopCastingToolName:     {"device_name"},
 	}
 	properties := definition.Parameters["properties"].(map[string]any)
 	var requiredSet map[string]bool
@@ -799,6 +838,15 @@ func selectionDataFrom(context webmcp.PageContext) selectionData {
 
 type tabsData struct {
 	Targets []targetData `json:"targets"`
+}
+
+type castDevicesData struct {
+	Devices []webmcp.CastDevice `json:"devices"`
+}
+
+type castActionData struct {
+	DeviceName string `json:"device_name"`
+	Status     string `json:"status"`
 }
 
 type targetData struct {

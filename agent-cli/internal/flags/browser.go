@@ -8,6 +8,7 @@ import "time"
 // flag cannot clear a YAML or environment setting.
 type BrowserFlags struct {
 	Tools              string
+	WebCast            bool
 	CDPURL             string
 	WSEndpoint         string
 	UserDataDir        string

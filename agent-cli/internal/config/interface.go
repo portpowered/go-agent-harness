@@ -93,6 +93,7 @@ type BrowserConfig struct {
 type BrowserToolsConfig struct {
 	Enabled bool   `koanf:"enabled" yaml:"enabled"`
 	Backend string `koanf:"backend" yaml:"backend"`
+	WebCast bool   `koanf:"web_cast" yaml:"web_cast"`
 }
 
 // BrowserConnectionConfig controls the ordered browser discovery sources.

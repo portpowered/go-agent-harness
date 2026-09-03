@@ -53,6 +53,10 @@ type targetSession struct {
 	sequence        uint64
 	listenerReady   bool
 	wireSequence    uint64
+	castSinks       []webmcp.CastDevice
+	castSinksKnown  bool
+	castUpdate      chan struct{}
+	castIssue       string
 }
 
 func newTargetSession(
@@ -92,6 +96,7 @@ func newTargetSession(
 		stopRouter:     make(chan struct{}),
 		routerDone:     make(chan struct{}),
 		finishDone:     make(chan struct{}),
+		castUpdate:     make(chan struct{}),
 	}
 	go session.routeProtocolEvents()
 	return session
@@ -183,6 +188,9 @@ func (s *targetSession) routeProtocolEvents() {
 			s.finishFromEventBufferOverflow()
 			return
 		case event := <-s.protocolEvents:
+			if s.observeCastProtocolEvent(event) {
+				continue
+			}
 			if converted, ok := s.convertProtocolEvent(event); ok {
 				if converted.Type == webmcp.EventTargetDetached {
 					s.finishFromProtocol(converted)

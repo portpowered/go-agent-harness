@@ -105,6 +105,7 @@ browser:
 	registerSessionBrowserFlags(command, values)
 	if err := command.Flags().Parse([]string{
 		"--browser-tools=webmcp",
+		"--web-cast",
 		"--browser-cdp-url", "http://cli.example:9222",
 		"--browser-allow-remote-cdp=false",
 		"--browser-persist-selection=false",
@@ -131,6 +132,9 @@ browser:
 	got := resolved.Browser
 	if !got.BrowserBackendEnabled() || got.Tools.Backend != config.BrowserToolsBackendWebMCP {
 		t.Fatalf("CLI tools activation = %+v, want enabled WebMCP", got.Tools)
+	}
+	if !got.Tools.WebCast {
+		t.Fatal("--web-cast did not enable Cast tools")
 	}
 	if got.Connection.CDPURL != "http://cli.example:9222" || got.Connection.AllowRemoteCDP {
 		t.Fatalf("CLI connection overrides = %+v", got.Connection)
@@ -177,6 +181,15 @@ func TestSessionBrowserFlagsRejectInvalidValues(t *testing.T) {
 				t.Fatalf("error %v does not unwrap to %v", err, testCase.want)
 			}
 		})
+	}
+}
+
+func TestWebCastRequiresWebMCPBrowserTools(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{"--web-cast"})
+	err := command.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "browser.tools.web_cast requires browser.tools.enabled") {
+		t.Fatalf("--web-cast error = %v", err)
 	}
 }
 

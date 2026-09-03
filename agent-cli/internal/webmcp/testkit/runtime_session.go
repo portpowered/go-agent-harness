@@ -205,6 +205,55 @@ func (s *ScriptedTargetSession) CapturePageScreenshot(ctx context.Context) (webm
 	return screenshot, nil
 }
 
+func (s *ScriptedTargetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevice, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, webmcp.ErrClosed
+	}
+	err := s.options.CastError
+	devices := append([]webmcp.CastDevice(nil), s.options.CastDevices...)
+	page, target := s.context, s.target
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	s.runtime.record(Operation{Kind: OperationListCastDevices, BrowserID: target.BrowserID, TargetID: target.ID, Generation: page.Generation})
+	return devices, nil
+}
+
+func (s *ScriptedTargetSession) CastTab(ctx context.Context, deviceName string) error {
+	return s.recordCastOperation(ctx, OperationCastTab, deviceName)
+}
+
+func (s *ScriptedTargetSession) StopCasting(ctx context.Context, deviceName string) error {
+	return s.recordCastOperation(ctx, OperationStopCasting, deviceName)
+}
+
+func (s *ScriptedTargetSession) recordCastOperation(ctx context.Context, kind OperationKind, deviceName string) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return webmcp.ErrClosed
+	}
+	err := s.options.CastError
+	page, target := s.context, s.target
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.runtime.record(Operation{Kind: kind, BrowserID: target.BrowserID, TargetID: target.ID, Generation: page.Generation, DeviceName: deviceName})
+	return nil
+}
+
+var _ webmcp.TargetCastController = (*ScriptedTargetSession)(nil)
+
 func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
 	if err := contextError(ctx); err != nil {
 		return "", err

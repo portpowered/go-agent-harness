@@ -157,6 +157,42 @@ func (s *productionTargetSession) CapturePageScreenshot(ctx context.Context) (we
 	return screenshot, nil
 }
 
+func (s *productionTargetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevice, error) {
+	if s == nil || s.raw == nil {
+		return nil, webmcp.ErrClosed
+	}
+	controller, ok := s.raw.(webmcp.TargetCastController)
+	if !ok {
+		return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the selected browser page does not support Cast controls", map[string]any{"phase": "list_cast_devices", "reason_code": "unsupported_operation"})
+	}
+	devices, err := controller.ListCastDevices(ctx)
+	return append(make([]webmcp.CastDevice, 0, len(devices)), devices...), err
+}
+
+func (s *productionTargetSession) CastTab(ctx context.Context, deviceName string) error {
+	if s == nil || s.raw == nil {
+		return webmcp.ErrClosed
+	}
+	controller, ok := s.raw.(webmcp.TargetCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the selected browser page does not support Cast controls", map[string]any{"phase": "cast_tab", "reason_code": "unsupported_operation"})
+	}
+	return controller.CastTab(ctx, deviceName)
+}
+
+func (s *productionTargetSession) StopCasting(ctx context.Context, deviceName string) error {
+	if s == nil || s.raw == nil {
+		return webmcp.ErrClosed
+	}
+	controller, ok := s.raw.(webmcp.TargetCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the selected browser page does not support Cast controls", map[string]any{"phase": "stop_casting", "reason_code": "unsupported_operation"})
+	}
+	return controller.StopCasting(ctx, deviceName)
+}
+
+var _ webmcp.TargetCastController = (*productionTargetSession)(nil)
+
 func (s *productionTargetSession) Events() <-chan webmcp.BrowserEvent { return s.events }
 
 func (s *productionTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {

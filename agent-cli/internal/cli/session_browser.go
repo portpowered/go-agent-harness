@@ -30,11 +30,12 @@ func (e *BrowserToolsBackendError) Error() string {
 
 func (e *BrowserToolsBackendError) Unwrap() error { return ErrInvalidBrowserToolsBackend }
 
-// sessionBrowserFlagNames is the complete C0 flag set. Keeping the list next
-// to registration makes presence-aware config loading auditable and prevents
-// a new browser flag from accidentally becoming an activation path.
+// sessionBrowserFlagNames is the complete session browser flag set. Keeping
+// the list next to registration makes presence-aware config loading auditable
+// and prevents a new browser flag from being omitted from config resolution.
 var sessionBrowserFlagNames = []string{
 	"browser-tools",
+	"web-cast",
 	"browser-cdp-url",
 	"browser-ws-endpoint",
 	"browser-user-data-dir",
@@ -96,6 +97,9 @@ func browserOverridesFromFlags(cmd *cobra.Command, values *flags.BrowserFlags) c
 	changed := func(name string) bool { return cmd.Flags().Changed(name) }
 	if changed("browser-tools") {
 		overrides.ToolsBackend = &values.Tools
+	}
+	if changed("web-cast") {
+		overrides.WebCast = &values.WebCast
 	}
 	if changed("browser-cdp-url") {
 		overrides.CDPURL = &values.CDPURL
@@ -309,6 +313,7 @@ func (*strictBrowserIntValue) Type() string { return "int" }
 
 func registerSessionBrowserFlags(cmd *cobra.Command, values *flags.BrowserFlags) {
 	cmd.Flags().StringVar(&values.Tools, "browser-tools", "", "Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome")
+	bindStrictBrowserBool(cmd.Flags(), &values.WebCast, "web-cast", "Enable selected-tab Google Cast controls; requires --browser-tools webmcp")
 	cmd.Flags().StringVar(&values.CDPURL, "browser-cdp-url", "", "Browser DevTools HTTP endpoint")
 	cmd.Flags().StringVar(&values.WSEndpoint, "browser-ws-endpoint", "", "Browser DevTools WebSocket endpoint")
 	cmd.Flags().StringVar(&values.UserDataDir, "browser-user-data-dir", "", "Browser profile directory used for DevTools discovery")
