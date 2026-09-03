@@ -118,11 +118,14 @@ func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T
 
 	response := rtc.PlaybackResponse{ResponseID: "resp-old", ItemID: "item-old", ContentIndex: 2}
 	media.StartInboundResponse(response)
-	if controller.started != response {
-		t.Fatalf("started response = %+v, want %+v", controller.started, response)
+	if controller.started != (rtc.PlaybackResponse{}) {
+		t.Fatalf("provider ingress started device playback early as %+v", controller.started)
 	}
 	if err := media.PushInbound(make([]int16, 24000*2)); err != nil {
 		t.Fatalf("push old response backlog: %v", err)
+	}
+	if controller.started != response {
+		t.Fatalf("queued FIFO head started as %+v, want %+v", controller.started, response)
 	}
 	first, err := controlled.ReadFrame(context.Background())
 	if err != nil {
@@ -130,6 +133,9 @@ func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T
 	}
 	if first.PlaybackResponse != response {
 		t.Fatalf("first frame response = %+v, want %+v", first.PlaybackResponse, response)
+	}
+	if controller.started != response {
+		t.Fatalf("dequeued response started as %+v, want %+v", controller.started, response)
 	}
 
 	interruption, ok := media.InterruptInbound()
@@ -175,6 +181,61 @@ func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T
 	}
 	if next.PlaybackResponse != replacement {
 		t.Fatalf("replacement frame response = %+v, want %+v", next.PlaybackResponse, replacement)
+	}
+}
+
+func TestSessionMediaServerVADTargetsAudibleResponseAheadOfQueuedContinuation(t *testing.T) {
+	media := rtc.NewSessionMediaAtRate(func(context.Context, rtc.PCMFrame) error { return nil }, 24000)
+	defer func() { _ = media.Close() }()
+	controlled := media.Endpoints().Inbound.(rtc.PlaybackControlledInbound)
+	controller := &sessionMediaPlaybackController{audioEndMS: 45}
+	controlled.SetPlaybackController(controller)
+
+	audible := rtc.PlaybackResponse{ResponseID: "resp-before-tool", ItemID: "item-before-tool"}
+	queued := rtc.PlaybackResponse{ResponseID: "resp-after-tool", ItemID: "item-after-tool"}
+	media.StartInboundResponse(audible)
+	if err := media.PushInbound(make([]int16, 1440)); err != nil {
+		t.Fatalf("push audible response: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("flush audible response: %v", err)
+	}
+	media.StartInboundResponse(queued)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatalf("push queued continuation: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("flush queued continuation: %v", err)
+	}
+
+	first, err := controlled.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatalf("read first audible frame: %v", err)
+	}
+	if first.PlaybackResponse != audible || controller.started != audible {
+		t.Fatalf("playback opened %+v for frame %+v, want audible response %+v", controller.started, first.PlaybackResponse, audible)
+	}
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		t.Fatal("server VAD did not interrupt the physically audible response")
+	}
+	if interruption.PlaybackResponse != audible || interruption.AudioEndMS != 45 {
+		t.Fatalf("interruption = %+v, want audible response %+v at 45 ms", interruption, audible)
+	}
+	if controller.interrupted != audible {
+		t.Fatalf("device interruption targeted %+v, want %+v", controller.interrupted, audible)
+	}
+
+	// A late packet from the already-queued continuation belongs to the
+	// cancelled chain and must not restart playback after the VAD event.
+	media.StartInboundResponse(queued)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatalf("push late queued continuation: %v", err)
+	}
+	lateCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := controlled.ReadFrame(lateCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("read late queued continuation = %v, want deadline", err)
 	}
 }
 
