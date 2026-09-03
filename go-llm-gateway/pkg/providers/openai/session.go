@@ -38,6 +38,7 @@ type realtimeSession struct {
 
 	mediaMu         sync.Mutex
 	media           *rtc.SessionMedia
+	mediaClaimed    bool
 	mediaSampleRate int
 }
 
@@ -116,6 +117,7 @@ func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome 
 }
 
 func (s *realtimeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	s.releaseUnclaimedRTCMedia()
 	return s.recvBuf
 }
 

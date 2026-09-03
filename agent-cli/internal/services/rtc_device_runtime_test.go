@@ -66,9 +66,6 @@ func TestRunSessionRTCDeviceBindingStartsRuntimePumps(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("provider session did not connect: %v", ctx.Err())
 	}
-	if !sessionInferencer.sessionMediaRequested() {
-		t.Fatal("device-bound connection did not request provider media before connect")
-	}
 
 	wantFrames := make([][]int16, rtcRoundtripFrameCount)
 	for frameIndex := range wantFrames {
@@ -186,9 +183,8 @@ type runtimeRTCSessionInferencer struct {
 	media     services.RTCMediaEndpoints
 	connected chan *runtimeRTCSession
 
-	mu             sync.Mutex
-	session        *runtimeRTCSession
-	mediaRequested bool
+	mu      sync.Mutex
+	session *runtimeRTCSession
 }
 
 func newRuntimeRTCSessionInferencer(peer *loopbackRTCTrackPeer) *runtimeRTCSessionInferencer {
@@ -213,7 +209,6 @@ func (i *runtimeRTCSessionInferencer) ConnectSession(ctx context.Context) (messa
 	}
 	i.mu.Lock()
 	i.session = session
-	i.mediaRequested = rtc.SessionMediaConsumerRequested(ctx)
 	i.mu.Unlock()
 	if !session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -227,12 +222,6 @@ func (i *runtimeRTCSessionInferencer) ConnectSession(ctx context.Context) (messa
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-func (i *runtimeRTCSessionInferencer) sessionMediaRequested() bool {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.mediaRequested
 }
 
 func (i *runtimeRTCSessionInferencer) sessionValue() *runtimeRTCSession {

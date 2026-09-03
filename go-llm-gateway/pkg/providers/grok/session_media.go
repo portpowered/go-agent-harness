@@ -21,10 +21,31 @@ var _ rtc.MediaSession = (*grokSession)(nil)
 func (s *grokSession) RTCMedia() rtc.MediaEndpoints {
 	s.mediaMu.Lock()
 	defer s.mediaMu.Unlock()
+	s.mediaClaimed = true
 	if s.media == nil {
 		s.media = rtc.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
 	}
 	return s.media.Endpoints()
+}
+
+func (s *grokSession) prepareRTCMedia() {
+	s.mediaMu.Lock()
+	if s.media == nil {
+		s.media = rtc.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+	}
+	s.mediaMu.Unlock()
+}
+
+func (s *grokSession) releaseUnclaimedRTCMedia() {
+	s.mediaMu.Lock()
+	if s.mediaClaimed || s.media == nil {
+		s.mediaMu.Unlock()
+		return
+	}
+	media := s.media
+	s.media = nil
+	s.mediaMu.Unlock()
+	_ = media.Close()
 }
 
 func (s *grokSession) currentRTCMedia() *rtc.SessionMedia {

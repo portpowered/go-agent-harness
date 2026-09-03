@@ -45,6 +45,7 @@ type grokSession struct {
 
 	mediaMu         sync.Mutex
 	media           *rtc.SessionMedia
+	mediaClaimed    bool
 	mediaSampleRate int
 }
 
@@ -154,6 +155,7 @@ func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome 
 // Receive returns the inbound typed buffer of StreamMessages translated from
 // the Grok server. Callers read from this buffer to consume session events.
 func (s *grokSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	s.releaseUnclaimedRTCMedia()
 	return s.recvBuf
 }
 

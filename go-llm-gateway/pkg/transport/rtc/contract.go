@@ -23,26 +23,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-type sessionMediaConsumerContextKey struct{}
-
-// WithSessionMediaConsumer marks a connection whose caller will attach to the
-// provider-owned RTC media endpoints as soon as ConnectSession returns. A
-// provider uses this signal to create those endpoints before starting its
-// inbound read loop, so an immediate server audio response cannot arrive in
-// the scheduling gap between connection startup and RTCMedia attachment.
-func WithSessionMediaConsumer(ctx context.Context) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, sessionMediaConsumerContextKey{}, true)
-}
-
-// SessionMediaConsumerRequested reports whether the caller marked this
-// connection as having an RTC media consumer.
-func SessionMediaConsumerRequested(ctx context.Context) bool {
-	return ctx != nil && ctx.Value(sessionMediaConsumerContextKey{}) == true
-}
-
 // Dialer is the unchanged provider-neutral data dial contract.
 //
 // It is an alias rather than a copied method set so an RTC data dialer has the

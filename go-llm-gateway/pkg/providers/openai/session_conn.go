@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 // ConnectSession establishes an OpenAI Realtime WebSocket session through the
@@ -47,11 +46,10 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 
 	session := newRealtimeSession(conn, p.logger)
 	session.mediaSampleRate = int(config.OutputAudioSampleRate)
-	if rtc.SessionMediaConsumerRequested(ctx) {
-		// Establish the provider-owned queue before the read loop starts. The
-		// server may answer session.update before ConnectSession returns.
-		session.RTCMedia()
-	}
+	// Queue any immediate server audio before the read loop starts. A caller
+	// that only consumes the normalized stream releases this speculative queue
+	// on its first Receive call; an RTC caller claims it through RTCMedia.
+	session.prepareRTCMedia()
 	sessionUpdate, err := p.buildRealtimeSessionUpdate(config, model)
 	if err != nil {
 		_ = conn.Close()

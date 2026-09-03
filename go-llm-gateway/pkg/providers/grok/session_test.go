@@ -315,7 +315,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) {
 	conn := newMockConn()
 	provider := New(WithAPIKey("test-key"), WithWebSocketDialer(&mockDialer{conn: conn}))
-	ctx := rtc.WithSessionMediaConsumer(newGrokTestContext(t))
+	ctx := newGrokTestContext(t)
 	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "grok-realtime", OutputAudioSampleRate: models.SampleRate24000})
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
