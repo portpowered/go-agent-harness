@@ -311,6 +311,16 @@ func (s *RTCDeviceSink) resumePlayback() {
 		return
 	}
 	s.playbackMu.Lock()
+	// A normal tool-result continuation can request another response while the
+	// preceding response is still draining to the physical device. Playback is
+	// already open in that case: advancing the generation would make a frame
+	// read just before response.create stale and discard its samples. Only a
+	// prior accepted cancellation sets playbackBlocked and requires a new
+	// generation boundary.
+	if !s.playbackBlocked {
+		s.playbackMu.Unlock()
+		return
+	}
 	s.playbackBlocked = false
 	s.playbackGeneration++
 	s.playbackMu.Unlock()

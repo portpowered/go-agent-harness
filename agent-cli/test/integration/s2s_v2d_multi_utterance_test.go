@@ -52,12 +52,20 @@ func runIntegrationTests(m *testing.M) int {
 		panic("build audio-device-server binary: " + err.Error())
 	}
 	audioDeviceServerBinaryPath = deviceServerBinary
+	mockToolBinary := filepath.Join(dir, "mock-tool-agent")
+	buildMockTool := exec.Command("go", "build", "-o", mockToolBinary, "./testcmd/mock-tool-agent")
+	buildMockTool.Stderr = os.Stderr
+	if err := buildMockTool.Run(); err != nil {
+		panic("build mock-tool agent binary: " + err.Error())
+	}
+	mockToolAgentBinaryPath = mockToolBinary
 	return m.Run()
 }
 
 var (
 	agentBinaryPath             string
 	audioDeviceServerBinaryPath string
+	mockToolAgentBinaryPath     string
 )
 
 type s2sV2DCLIResult struct {

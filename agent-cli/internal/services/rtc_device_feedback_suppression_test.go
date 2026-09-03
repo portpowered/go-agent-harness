@@ -160,6 +160,74 @@ func TestLocalFeedbackGateNeverForwardsRealisticSustainedFeedback(t *testing.T) 
 	}
 }
 
+// TestLocalFeedbackGateDropsTest42ShortEchoTransient reproduces the false
+// server-VAD barge-in from test42.json. After this paired device has already
+// established real speaker-to-microphone coupling, a later response leaks a
+// short, inverted onset through the acoustic path and then returns to silence.
+// The onset is shorter than MinimumEvidence, so it can never be called user
+// speech merely because the bounded startup hold expires. Forwarding it is
+// enough for provider VAD to cancel several seconds of queued assistant audio.
+func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
+	config := audio.DefaultSelfHearingConfig()
+	gate, err := newLocalFeedbackGate(config, nil, audio.SampleRate, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("new local feedback gate: %v", err)
+	}
+	defer gate.Close()
+
+	// Establish the physical loop once, as the earlier assistant turns did in
+	// test42. The next response is separated by enough quiet capture to force
+	// the normal response re-anchor path.
+	first := speechLikeStream(8)
+	writeAssistantResponse(t, gate, first)
+	filterAssistantEcho(t, gate, first, nil)
+	if !gate.FeedbackConfirmed() {
+		t.Fatal("initial response did not establish speaker-to-microphone coupling")
+	}
+	frameDuration := pcm16DeviceDurationAtRate(audio.FrameSize, audio.SampleRate)
+	quietFrames := int((config.PostPlaybackAcousticTail+config.CorrelationLagWindow.Max)/frameDuration) + 3
+	for frame := 0; frame < quietFrames; frame++ {
+		if _, filterErr := gate.FilterCapture(context.Background(), make([]int16, audio.FrameSize)); filterErr != nil {
+			t.Fatalf("advance quiet capture frame %d: %v", frame, filterErr)
+		}
+	}
+
+	second := speechLikeStream(10)
+	writeAssistantResponse(t, gate, second)
+	shortFrames := int(config.MinimumEvidence/frameDuration) - 1
+	if shortFrames < 1 {
+		t.Fatal("test requires a sub-MinimumEvidence device-frame burst")
+	}
+	var submitted [][]int16
+	for frame := 0; frame < shortFrames; frame++ {
+		inverted := make([]int16, len(second[frame]))
+		for sample, value := range second[frame] {
+			inverted[sample] = -value / 2
+		}
+		released, filterErr := gate.FilterCapture(context.Background(), inverted)
+		if filterErr != nil {
+			t.Fatalf("filter short echo frame %d: %v", frame, filterErr)
+		}
+		submitted = append(submitted, released...)
+	}
+	// Continue the microphone clock beyond the normal release bound. This is
+	// where the old gate forwarded the ambiguous onset and triggered server VAD.
+	for frame := 0; frame < 12; frame++ {
+		released, filterErr := gate.FilterCapture(context.Background(), make([]int16, audio.FrameSize))
+		if filterErr != nil {
+			t.Fatalf("filter post-transient silence %d: %v", frame, filterErr)
+		}
+		submitted = append(submitted, released...)
+	}
+	for frameIndex, frame := range submitted {
+		for _, sample := range frame {
+			if sample != 0 {
+				t.Fatalf("test42 echo transient reached provider in submitted frame %d", frameIndex)
+			}
+		}
+	}
+}
+
 // TestLocalFeedbackGateReleasesSustainedIndependentSpeechAfterPlaybackEnds
 // proves the gate does not over-suppress: once the assistant has stopped
 // talking (no further WritePlayback calls) but the acoustic tail is still

@@ -101,6 +101,16 @@ jobs:
         if: always()
         run: make build
 
+      - name: Verify standalone agent-cli dependency pins
+        if: always()
+        working-directory: agent-cli
+        env:
+          GOWORK: "off"
+        run: |
+          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-agent-loop)" = "v0.0.3"
+          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "v0.0.3"
+          go build -o "$RUNNER_TEMP/yui-standalone" ./cmd/yui
+
   # The long pole: deterministic integration tests plus committed
   # replay/fixture regression tests. Kept as its own job (not split further)
   # so both suites stay on one runner together rather than adding more
