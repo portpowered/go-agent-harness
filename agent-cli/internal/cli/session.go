@@ -47,10 +47,9 @@ type SessionToolCapabilities struct {
 	// an empty page surface and treated as a successful provider update.
 	RefreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 	// Initialize is called synchronously after capability construction and
-	// before the session provider can issue a browser tool call. Implementations
-	// retain a classified failed state in the executor when initialization
-	// returns an error, so a stale selection is observable instead of becoming
-	// an identity-free selection_not_connected result.
+	// before the session provider can issue a browser tool call. An initialization
+	// error prevents provider startup, because advertising browser tools without
+	// a usable browser leaves the model in an unrecoverable session.
 	Initialize func(context.Context) error
 	// Status reports the explicit lifecycle state of an optional capability.
 	Status func() SessionCapabilityStatus
@@ -65,17 +64,6 @@ type SessionToolCapabilities struct {
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
-}
-
-type resolvedSessionToolSurface struct {
-	executor          messages.ToolExecutor
-	definitions       []messages.ToolDefinition
-	base              []messages.ToolDefinition
-	browserState      webmcp.BrowserCapabilityState
-	refresh           func(context.Context) ([]messages.ToolDefinition, error)
-	browserWatch      func(context.Context) <-chan webmcp.BrokerEvent
-	browserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
-	capabilityClose   func() error
 }
 
 func sessionToolDiagnosticSink(out io.Writer) services.SessionToolDiagnosticSink {
@@ -146,44 +134,6 @@ func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, registry au
 	request.InputPresent = true
 	request.OutputPresent = true
 	return request
-}
-
-func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
-	if capabilities.Initialize != nil {
-		// Initialization is deliberately completed before the provider receives
-		// the executor. A failed initializer remains represented by the broker's
-		// classified failed state and is surfaced by later tool calls.
-		_ = capabilities.Initialize(ctx)
-	}
-	result := resolvedSessionToolSurface{
-		executor:          capabilities.Executor,
-		definitions:       append([]messages.ToolDefinition(nil), capabilities.Definitions...),
-		base:              append([]messages.ToolDefinition(nil), capabilities.Definitions...),
-		browserState:      capabilities.BrowserCapabilityState,
-		refresh:           capabilities.RefreshDefinitionsWithError,
-		browserWatch:      capabilities.BrowserWatch,
-		browserEventWatch: capabilities.BrowserEventWatch,
-	}
-	if capabilities.Status != nil {
-		status := capabilities.Status()
-		if status.BrowserCapabilityState != "" {
-			result.browserState = status.BrowserCapabilityState
-		}
-	}
-	if result.refresh == nil && capabilities.RefreshDefinitions != nil {
-		result.refresh = func(ctx context.Context) ([]messages.ToolDefinition, error) {
-			return capabilities.RefreshDefinitions(ctx), nil
-		}
-	}
-	if capabilities.RefreshDefinitions != nil {
-		result.definitions = capabilities.RefreshDefinitions(ctx)
-	}
-	if capabilities.Close != nil {
-		// Ownership transfers to the service coordinator after capability
-		// construction succeeds.
-		result.capabilityClose = capabilities.Close
-	}
-	return result
 }
 
 // SessionCapabilityState is the lifecycle state of a request-scoped session
@@ -652,13 +602,12 @@ func resolveSessionAdmission(globalFlags *flags.GlobalFlags, cmd *cobra.Command,
 }
 
 func (c *SessionCommand) Generate() *cobra.Command {
-	var prompt, voice, reasoningEffort string
+	var prompt, voice, reasoningEffort, audioIn string
 	recordDirPath, audioOutPath := "", ""
 	transport := SessionTransportWebSocket
 	signaling, mediaSource := "", ""
 	var maxDuration time.Duration
 	var waitForClose, noInputTranscription, computerUse, experimentalTools, noTerminalTools bool
-	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
 	var audioInterrupts []string
@@ -780,6 +729,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					return fmt.Errorf("configure session tools: %w", err)
 				}
 				surface := resolveSessionToolSurface(sessionContext, capabilities)
+				if err := sessionToolInitializationError(surface); err != nil {
+					return err
+				}
 				toolExecutor = surface.executor
 				toolDefinitions = surface.definitions
 				toolDefinitionBase = surface.base

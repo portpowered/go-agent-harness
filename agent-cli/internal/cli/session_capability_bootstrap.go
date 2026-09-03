@@ -232,10 +232,26 @@ func sessionRecoverConnectedUnselected(ctx context.Context, browser config.Brows
 	}
 	// A warm managed Chrome can remain alive after its final window is closed.
 	// That state is reachable but unusable: discovery returns no eligible tab
-	// and the user sees no browser. Recreate the configured startup page through
-	// the same broker operation exposed to the model, select it, and foreground
-	// it. External endpoints retain their existing no-mutation recovery path.
+	// and the user sees no browser. Recreate and foreground about:blank without
+	// requiring WebMCP selection; a configured website uses the model-facing
+	// open-and-select operation. External endpoints retain their no-mutation
+	// recovery path.
 	if browser.UsesManagedBrowser() && sessionNoSelectionError(selectionErr) {
+		if browser.ManagedStartupURL() == "about:blank" {
+			if creator, ok := broker.(webmcp.BrokerTabCreator); ok {
+				_, err := creator.CreateTab(ctx, webmcp.OpenTabRequest{
+					URL:      "about:blank",
+					Activate: true,
+				})
+				if err != nil {
+					return sessionCapabilityError(err)
+				}
+				if mark != nil {
+					mark(webmcp.BrowserCapabilityConnectedUnselected)
+				}
+				return nil
+			}
+		}
 		if opener, ok := broker.(webmcp.BrokerTabOpener); ok {
 			_, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{
 				URL:      browser.ManagedStartupURL(),

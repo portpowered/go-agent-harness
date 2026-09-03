@@ -12,15 +12,57 @@ import (
 // and replay-only adapters fail with a normal tool result instead of breaking
 // the frozen Broker interface.
 func (b *StatefulBroker) OpenTab(ctx context.Context, request OpenTabRequest) (PageContext, error) {
-	if err := contextError(ctx); err != nil {
+	creationRequest := request
+	creationRequest.Activate = false
+	opened, err := b.CreateTab(ctx, creationRequest)
+	if err != nil {
 		return PageContext{}, err
 	}
+	selected, err := b.selectWithOptions(ctx, TargetSelector{BrowserID: opened.BrowserID, TargetID: opened.ID}, SelectOptions{Activate: request.Activate})
+	if err == nil {
+		return selected, nil
+	}
+	// Selection deliberately remains connected when only affirmative catalog
+	// evidence missed its short diagnostic deadline. Opening the requested page
+	// succeeded; report that selected context so the model can refresh/list its
+	// tools instead of interpreting a slow page as a failed tab creation.
+	if isCatalogEvidenceError(err) {
+		b.mu.Lock()
+		pending := b.selected
+		if pending != nil && (pending.context.Key.BrowserID != opened.BrowserID || pending.context.Key.TargetID != opened.ID) {
+			pending = nil
+		}
+		b.mu.Unlock()
+		if pending != nil {
+			// A newly navigated page commonly registers its WebMCP producer just
+			// after the one-second attach diagnostic. Give that exact selected
+			// session one additional bounded catalog interval before returning a
+			// connected-but-not-ready result to the model.
+			if retryErr := b.waitForCatalog(ctx, pending, false); retryErr != nil && !isCatalogEvidenceError(retryErr) {
+				return PageContext{}, retryErr
+			}
+		}
+		selected, selectedErr := b.Selected(ctx)
+		if selectedErr == nil && selected.Key.BrowserID == opened.BrowserID && selected.Key.TargetID == opened.ID {
+			return selected, nil
+		}
+	}
+	return PageContext{}, err
+}
+
+// CreateTab creates a browser page without attaching WebMCP. This is distinct
+// from OpenTab so a managed browser can make an ordinary about:blank window
+// visible while remaining connected-unselected.
+func (b *StatefulBroker) CreateTab(ctx context.Context, request OpenTabRequest) (Target, error) {
+	if err := contextError(ctx); err != nil {
+		return Target{}, err
+	}
 	if b == nil {
-		return PageContext{}, ErrClosed
+		return Target{}, ErrClosed
 	}
 	normalizedURL, err := normalizeOpenTabURL(request.URL)
 	if err != nil {
-		return PageContext{}, classified(ErrorInvalidToolInput, "The browser tab URL is invalid.", map[string]any{
+		return Target{}, classified(ErrorInvalidToolInput, "The browser tab URL is invalid.", map[string]any{
 			"phase":  "open_tab",
 			"reason": "absolute_http_url_required",
 		}, err)
@@ -28,15 +70,15 @@ func (b *StatefulBroker) OpenTab(ctx context.Context, request OpenTabRequest) (P
 
 	candidate, err := b.candidateFor(ctx, request.BrowserID)
 	if err != nil {
-		return PageContext{}, err
+		return Target{}, err
 	}
 	handle, err := b.handleFor(ctx, candidate)
 	if err != nil {
-		return PageContext{}, err
+		return Target{}, err
 	}
 	opener, ok := handle.(BrowserTabOpener)
 	if !ok {
-		return PageContext{}, classified(ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
+		return Target{}, classified(ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
 			"browser_id": string(candidate.ID),
 			"phase":      "open_tab",
 			"reason":     "unsupported_operation",
@@ -45,22 +87,34 @@ func (b *StatefulBroker) OpenTab(ctx context.Context, request OpenTabRequest) (P
 	opened, err := opener.OpenTab(ctx, normalizedURL)
 	if err != nil {
 		if failure := b.promoteBrowserLoss(b.selectedForBrowser(candidate.ID), TargetSelector{BrowserID: candidate.ID}, "open_tab", err); failure != nil {
-			return PageContext{}, failure
+			return Target{}, failure
 		}
-		return PageContext{}, classified(ErrorBrowserProtocol, "The browser could not open the requested tab.", map[string]any{
+		return Target{}, classified(ErrorBrowserProtocol, "The browser could not open the requested tab.", map[string]any{
 			"browser_id": string(candidate.ID),
 			"phase":      "open_tab",
 			"reason":     "create_target_failed",
 		}, err)
 	}
 	if opened.ID == "" {
-		return PageContext{}, classified(ErrorBrowserProtocol, "The browser did not return a target for the new tab.", map[string]any{
+		return Target{}, classified(ErrorBrowserProtocol, "The browser did not return a target for the new tab.", map[string]any{
 			"browser_id": string(candidate.ID),
 			"phase":      "open_tab",
 			"reason":     "target_id_missing",
 		}, nil)
 	}
-	return b.selectWithOptions(ctx, TargetSelector{BrowserID: candidate.ID, TargetID: opened.ID}, SelectOptions{Activate: request.Activate})
+	if opened.BrowserID == "" {
+		opened.BrowserID = candidate.ID
+	}
+	if request.Activate {
+		if err := handle.Activate(ctx, opened.ID); err != nil {
+			return Target{}, classified(ErrorBrowserProtocol, "The browser could not activate the requested tab.", map[string]any{
+				"browser_id": string(candidate.ID),
+				"phase":      "open_tab",
+				"reason":     "activate_target_failed",
+			}, err)
+		}
+	}
+	return opened, nil
 }
 
 func normalizeOpenTabURL(raw string) (string, error) {
@@ -81,3 +135,4 @@ func normalizeOpenTabURL(raw string) (string, error) {
 }
 
 var _ BrokerTabOpener = (*StatefulBroker)(nil)
+var _ BrokerTabCreator = (*StatefulBroker)(nil)

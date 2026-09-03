@@ -585,6 +585,39 @@ func (h *productionWebMCPHandle) Activate(ctx context.Context, targetID webmcp.T
 	return h.raw.Activate(ctx, rawTarget.ID)
 }
 
+// OpenTab preserves the optional tab-creation capability exposed by the raw
+// Chrome handle while translating its transport target ID into the opaque ID
+// used by the production discovery and selection boundary.
+func (h *productionWebMCPHandle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, error) {
+	if h == nil || h.owner == nil || h.raw == nil || h.isClosed() {
+		return webmcp.Target{}, webmcp.ErrClosed
+	}
+	opener, ok := h.raw.(webmcp.BrowserTabOpener)
+	if !ok {
+		return webmcp.Target{}, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
+			"phase":  "open_tab",
+			"reason": "unsupported_operation",
+		})
+	}
+	opened, err := opener.OpenTab(ctx, rawURL)
+	if err != nil {
+		return webmcp.Target{}, err
+	}
+	if opened.ID == "" {
+		return webmcp.Target{}, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The browser did not return a target for the new tab.", map[string]any{
+			"phase":  "open_tab",
+			"reason": "target_id_missing",
+		})
+	}
+	opened.BrowserID = h.candidate.ID
+	opened.ID = h.owner.publicTargetID(string(h.candidate.ID), opened.ID)
+	opened.URL = productionSafePageURL(opened.URL)
+	opened.Origin = productionSafeOrigin(opened.Origin)
+	opened.WebSocketURL = ""
+	opened.ContinuityMarker = ""
+	return opened, nil
+}
+
 func (h *productionWebMCPHandle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) (webmcp.TargetSession, error) {
 	if h == nil || h.owner == nil || h.raw == nil || h.isClosed() {
 		return nil, webmcp.ErrClosed
@@ -658,6 +691,7 @@ var (
 	_ webmcp.BrowserDiscoverer = (*productionWebMCPComposition)(nil)
 	_ webmcp.BrowserRuntime    = (*productionWebMCPComposition)(nil)
 	_ webmcp.BrowserHandle     = (*productionWebMCPHandle)(nil)
+	_ webmcp.BrowserTabOpener  = (*productionWebMCPHandle)(nil)
 	_ webmcp.TargetSession     = (*productionTargetSession)(nil)
 	_ webmcp.DevToolsCatalog   = (*productionWebMCPCatalog)(nil)
 )

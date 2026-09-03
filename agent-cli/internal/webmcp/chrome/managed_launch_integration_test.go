@@ -27,11 +27,17 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 
 	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" {
+		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" && request.URL.Path != "/webmcp-tool" {
 			http.NotFound(writer, request)
 			return
 		}
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.Header().Set("Origin-Agent-Cluster", "?1")
+		writer.Header().Set("Permissions-Policy", "tools=(self)")
+		if request.URL.Path == "/webmcp-tool" {
+			_, _ = fmt.Fprint(writer, managedLaunchWebMCPFixture)
+			return
+		}
 		_, _ = fmt.Fprint(writer, "<!doctype html><title>Managed WebMCP launch</title><main>managed launch ready</main>")
 	}))
 	t.Cleanup(fixture.Close)
@@ -115,7 +121,92 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if !found {
 		t.Fatalf("opened target %q not found in %+v", opened.ID, targets)
 	}
+
+	secondURL := fixture.URL + "/webmcp-tool"
+	second, err := opener.OpenTab(ctx, secondURL)
+	if err != nil {
+		t.Fatalf("open second managed browser tab: %v", err)
+	}
+	if second.ID == "" || second.ID == opened.ID || second.URL != secondURL {
+		t.Fatalf("second managed target = %+v, first = %+v", second, opened)
+	}
+	if err := handle.Activate(ctx, second.ID); err != nil {
+		t.Fatalf("activate second managed browser tab: %v", err)
+	}
+	targets, err = handle.ListTargets(ctx)
+	if err != nil {
+		t.Fatalf("list managed targets after second open: %v", err)
+	}
+	foundFirst, foundSecond := false, false
+	for _, candidate := range targets {
+		foundFirst = foundFirst || candidate.ID == opened.ID && candidate.URL == openedURL
+		foundSecond = foundSecond || candidate.ID == second.ID && candidate.URL == secondURL
+	}
+	if !foundFirst || !foundSecond {
+		t.Fatalf("managed targets after repeated open = %+v, want both %q and %q", targets, opened.ID, second.ID)
+	}
+
+	session, err := handle.Attach(ctx, second.ID, webmcp.TargetOwnershipHarnessOwned)
+	if err != nil {
+		t.Fatalf("attach second managed target: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if err := session.EnableWebMCP(ctx); err != nil {
+		t.Fatalf("enable WebMCP on opened target: %v", err)
+	}
+	added, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab tools", func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolsAdded && hasTool(event.Tools, "managed_open_tab_probe")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var probe webmcp.ToolDescriptor
+	for _, candidate := range added.Tools {
+		if candidate.Name == "managed_open_tab_probe" {
+			probe = candidate
+			break
+		}
+	}
+	invocationID, err := session.InvokeWebMCP(ctx, probe.FrameID, probe.Name, json.RawMessage(`{"value":"actual-browser"}`))
+	if err != nil {
+		t.Fatalf("invoke WebMCP tool on opened target: %v", err)
+	}
+	completed, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab invocation", func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolResponded && event.InvocationID == invocationID
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != "Completed" || !strings.Contains(string(completed.Output), "actual-browser") {
+		t.Fatalf("managed opened-tab WebMCP response = %+v", completed)
+	}
 }
+
+const managedLaunchWebMCPFixture = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Managed WebMCP tool</title></head>
+<body><main id="result">ready</main><script>
+(async () => {
+  const context = document.modelContext || navigator.modelContext;
+  if (!context || typeof context.registerTool !== "function") {
+    document.querySelector("#result").textContent = "WebMCP unavailable";
+    return;
+  }
+  await context.registerTool({
+    name: "managed_open_tab_probe",
+    description: "Return the supplied probe value.",
+    inputSchema: {
+      type: "object",
+      properties: { value: { type: "string" } },
+      required: ["value"],
+      additionalProperties: false
+    },
+    execute: async (input) => {
+      document.querySelector("#result").textContent = String(input.value);
+      return { value: String(input.value), invoked: true };
+    }
+  });
+})();
+</script></body></html>`
 
 func findQualifiedStockChromeForIntegration(t *testing.T) (string, string) {
 	t.Helper()

@@ -65,8 +65,21 @@ func (e *recordingExecutor) Execute(ctx context.Context, method string, params, 
 }
 
 func TestOpenTabCreatesExactBrowserTarget(t *testing.T) {
-	executor := &recordingExecutor{createdID: "target-new"}
+	executor := &recordingExecutor{
+		createdID: "target-new",
+		targetInfos: []*target.Info{{
+			TargetID: "target-new",
+			Type:     "page",
+			Title:    "Notes",
+			URL:      "https://notes.example.test/",
+		}},
+	}
 	handle := testHandle(executor)
+	listing := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer listing.Close()
+	handle.candidate.HTTPURL = listing.URL
 
 	opened, err := handle.OpenTab(context.Background(), "https://notes.example.test/")
 	if err != nil {
@@ -76,8 +89,33 @@ func TestOpenTabCreatesExactBrowserTarget(t *testing.T) {
 		t.Fatalf("opened target = %+v", opened)
 	}
 	calls := executor.snapshot()
-	if len(calls) != 1 || calls[0].method != target.CommandCreateTarget || calls[0].url != opened.URL {
+	if len(calls) != 2 || calls[0].method != target.CommandCreateTarget || calls[0].url != opened.URL || calls[1].method != target.CommandGetTargets {
 		t.Fatalf("open-tab CDP calls = %+v", calls)
+	}
+}
+
+func TestOpenTabReturnsExactAboutBlankTargetForVisibleManagedBootstrap(t *testing.T) {
+	executor := &recordingExecutor{
+		createdID: "target-blank",
+		targetInfos: []*target.Info{{
+			TargetID: "target-blank",
+			Type:     "page",
+			URL:      "about:blank",
+		}},
+	}
+	handle := testHandle(executor)
+	listing := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer listing.Close()
+	handle.candidate.HTTPURL = listing.URL
+
+	opened, err := handle.OpenTab(context.Background(), "about:blank")
+	if err != nil {
+		t.Fatalf("open visible blank tab: %v", err)
+	}
+	if opened.ID != "target-blank" || opened.URL != "about:blank" || opened.Type != "page" || opened.Eligible {
+		t.Fatalf("opened blank target = %+v", opened)
 	}
 }
 

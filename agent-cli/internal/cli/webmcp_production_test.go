@@ -117,6 +117,42 @@ browser:
 	}
 }
 
+func TestProductionWebMCPHandlePreservesOpenTabAndNormalizesTargetIdentity(t *testing.T) {
+	runtime := &productionFakeRuntime{openedTarget: webmcp.Target{
+		ID:               "raw-opened-tab",
+		Type:             "page",
+		Title:            "Opened fixture",
+		URL:              "https://opened.example.test/page?visible=yes#section",
+		Origin:           "https://opened.example.test",
+		WebSocketURL:     "ws://127.0.0.1/devtools/page/raw-opened-tab",
+		ContinuityMarker: "raw-document-token",
+		Eligible:         true,
+	}}
+	raw := &productionFakeHandle{runtime: runtime, candidate: webmcp.BrowserCandidate{ID: "raw-browser"}}
+	owner := &productionWebMCPComposition{targetIDMapper: discovery.HashTargetIDMapper{}}
+	handle := &productionWebMCPHandle{
+		owner:     owner,
+		candidate: webmcp.BrowserCandidate{ID: "browser-public"},
+		raw:       raw,
+		closed:    make(chan struct{}),
+	}
+
+	opened, err := handle.OpenTab(context.Background(), "https://opened.example.test/page?visible=yes#section")
+	if err != nil {
+		t.Fatalf("production open tab: %v", err)
+	}
+	wantID := discovery.HashTargetIDMapper{}.TargetID(discovery.TargetIdentity{BrowserID: "browser-public", RawID: "raw-opened-tab"})
+	if opened.BrowserID != "browser-public" || string(opened.ID) != wantID || opened.URL != "https://opened.example.test/page" || opened.Origin != "https://opened.example.test" {
+		t.Fatalf("normalized opened target = %+v, want browser=%q target=%q", opened, "browser-public", wantID)
+	}
+	if opened.WebSocketURL != "" || opened.ContinuityMarker != "" {
+		t.Fatalf("opened target exposed transport identity: %+v", opened)
+	}
+	if runtime.count("open_tab") != 1 || runtime.openedURL != "https://opened.example.test/page?visible=yes#section" {
+		t.Fatalf("raw open operations = %v URL=%q", runtime.operationSnapshot(), runtime.openedURL)
+	}
+}
+
 func TestProductionWebMCPSessionRebasesRawGenerationForPersistedSelection(t *testing.T) {
 	runtime := &productionFakeRuntime{}
 	raw := &productionFakeSession{
@@ -743,10 +779,12 @@ func newProductionTestEndpoint(t *testing.T) (*httptest.Server, string, string, 
 }
 
 type productionFakeRuntime struct {
-	mu         sync.Mutex
-	targets    []webmcp.Target
-	tool       webmcp.ToolDescriptor
-	operations []string
+	mu           sync.Mutex
+	targets      []webmcp.Target
+	openedTarget webmcp.Target
+	openedURL    string
+	tool         webmcp.ToolDescriptor
+	operations   []string
 }
 
 type failingProductionSelectionStore struct {
@@ -841,6 +879,18 @@ func (h *productionFakeHandle) Activate(ctx context.Context, targetID webmcp.Tar
 	}
 	h.runtime.record("activate")
 	return nil
+}
+
+func (h *productionFakeHandle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, error) {
+	if err := ctx.Err(); err != nil {
+		return webmcp.Target{}, err
+	}
+	h.runtime.mu.Lock()
+	h.runtime.openedURL = rawURL
+	opened := h.runtime.openedTarget
+	h.runtime.mu.Unlock()
+	h.runtime.record("open_tab")
+	return opened, nil
 }
 
 func (h *productionFakeHandle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) (webmcp.TargetSession, error) {
@@ -970,7 +1020,8 @@ func (s *productionFakeSession) Close() error {
 }
 
 var (
-	_ webmcp.BrowserRuntime = (*productionFakeRuntime)(nil)
-	_ webmcp.BrowserHandle  = (*productionFakeHandle)(nil)
-	_ webmcp.TargetSession  = (*productionFakeSession)(nil)
+	_ webmcp.BrowserRuntime   = (*productionFakeRuntime)(nil)
+	_ webmcp.BrowserHandle    = (*productionFakeHandle)(nil)
+	_ webmcp.BrowserTabOpener = (*productionFakeHandle)(nil)
+	_ webmcp.TargetSession    = (*productionFakeSession)(nil)
 )

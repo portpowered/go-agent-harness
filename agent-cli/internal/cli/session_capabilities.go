@@ -481,6 +481,45 @@ func (b *sessionBrowserBroker) SelectWithOptions(ctx context.Context, selector w
 	return b.Broker.Select(ctx, selector)
 }
 
+// OpenTab preserves model-facing tab creation through the session lifecycle
+// wrapper. Embedding the base Broker interface alone hides this optional
+// capability even when the production broker and Chrome adapter support it.
+func (b *sessionBrowserBroker) OpenTab(ctx context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.PageContext{}, err
+	}
+	opener, ok := b.Broker.(webmcp.BrokerTabOpener)
+	if !ok {
+		return webmcp.PageContext{}, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
+			"phase":  "open_tab",
+			"reason": "unsupported_operation",
+		})
+	}
+	return opener.OpenTab(ctx, request)
+}
+
+// CreateTab preserves the unselected creation seam used by managed browser
+// bootstrap to make an ordinary about:blank window visible.
+func (b *sessionBrowserBroker) CreateTab(ctx context.Context, request webmcp.OpenTabRequest) (webmcp.Target, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.Target{}, errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.Target{}, err
+	}
+	creator, ok := b.Broker.(webmcp.BrokerTabCreator)
+	if !ok {
+		return webmcp.Target{}, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
+			"phase":  "open_tab",
+			"reason": "unsupported_operation",
+		})
+	}
+	return creator.CreateTab(ctx, request)
+}
+
 // CancelDirect preserves the cross-process cancellation extension for the
 // direct CLI callers that receive the session's broker value.
 func (b *sessionBrowserBroker) CancelDirect(ctx context.Context, request webmcp.DirectCancelRequest) error {
@@ -499,6 +538,8 @@ func (b *sessionBrowserBroker) CancelDirect(ctx context.Context, request webmcp.
 var (
 	_ webmcp.InvocationWaiter = (*sessionBrowserBroker)(nil)
 	_ webmcp.DirectCanceller  = (*sessionBrowserBroker)(nil)
+	_ webmcp.BrokerTabOpener  = (*sessionBrowserBroker)(nil)
+	_ webmcp.BrokerTabCreator = (*sessionBrowserBroker)(nil)
 )
 
 func closeFailedBroker(broker webmcp.Broker, primary error) (SessionToolCapabilities, error) {

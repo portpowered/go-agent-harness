@@ -99,6 +99,13 @@ type BrokerTabOpener interface {
 	OpenTab(context.Context, OpenTabRequest) (PageContext, error)
 }
 
+// BrokerTabCreator creates a visible browser tab without requiring that page
+// to expose WebMCP. Managed session bootstrap uses it for about:blank; the
+// model-facing OpenTab operation still creates and selects a WebMCP page.
+type BrokerTabCreator interface {
+	CreateTab(context.Context, OpenTabRequest) (Target, error)
+}
+
 // BrowserEventWatcher is an optional broker extension for callers that need
 // the adapter-owned semantic browser events, including invocation inputs and
 // outputs. The base Broker interface intentionally remains limited to broker

@@ -267,7 +267,38 @@ func (h *handle) OpenTab(ctx context.Context, rawURL string) (webmcp.Target, err
 	if targetID == "" {
 		return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", errors.New("browser returned an empty target ID"))
 	}
-	return webmcp.Target{BrowserID: candidate.ID, ID: webmcp.TargetID(targetID), Type: "page", URL: rawURL}, nil
+
+	// Target.createTarget acknowledges target allocation before Chrome has
+	// necessarily committed the navigation metadata exposed by /json/list.
+	// Returning at that boundary lets the broker's immediate Attach observe an
+	// empty URL, classify the exact new page as internal, and lose the tab. Wait
+	// for the allocated target itself to become eligible; never substitute a
+	// different page that happened to finish loading first.
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		targets, listErr := h.ListTargets(commandContext)
+		if listErr != nil {
+			if commandContext.Err() != nil {
+				return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", commandContext.Err())
+			}
+			return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", listErr)
+		}
+		for _, opened := range targets {
+			if opened.ID != webmcp.TargetID(targetID) {
+				continue
+			}
+			if opened.Eligible || rawURL == "about:blank" && opened.Type == "page" && opened.WebSocketURL != "" {
+				return opened, nil
+			}
+			break
+		}
+		select {
+		case <-commandContext.Done():
+			return webmcp.Target{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "open_tab", commandContext.Err())
+		case <-poll.C:
+		}
+	}
 }
 
 var _ webmcp.BrowserTabOpener = (*handle)(nil)
