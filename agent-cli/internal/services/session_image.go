@@ -299,11 +299,10 @@ func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePa
 }
 func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
 	if opts.AudioOutPath != "" {
-		sink, err := newSessionAudioSinkAtRate(opts.AudioOutPath, out, plan.outputAudioSampleRate)
+		audioOut, err := newSessionAudioOutputForPlan(&plan, opts.AudioOutPath, out, nil)
 		if err != nil {
 			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
 		}
-		audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 		defer func() {
 			if closeErr := audioOut.close(); closeErr != nil {
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))

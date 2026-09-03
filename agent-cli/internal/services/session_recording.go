@@ -416,11 +416,11 @@ func runSessionWithRecordingDirectory(
 	var audioWrapper *sessionAudioOutputInferencer
 	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
-		sink, sinkErr := newSessionAudioSinkAtRate(audioOutPath, out, plan.outputAudioSampleRate)
+		var sinkErr error
+		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
-		audioOutput = &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 		if plan.inferencer != nil {
 			wirePrompt := ""
 			if seed.Present {

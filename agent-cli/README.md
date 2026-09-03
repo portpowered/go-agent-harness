@@ -96,6 +96,15 @@ yui session list --limit 20 --since 2026-08-31T00:00:00Z --filter billing
 yui session delete <session-id>
 ```
 
+To preserve what is actually sent to the selected speaker path for debugging,
+combine `--audio-out-device` with `--audio-out`. The WAV uses the negotiated
+device rate and records PCM after gain, resampling, pacing, and cancellation
+admission:
+
+```bash
+yui session --audio-out-device default --audio-out device-output.wav --record session.json
+```
+
 `yui session list` accepts composable `--limit` (1–1000), `--since` (RFC3339
 file modification time), and case-insensitive literal `--filter` (session ID).
 

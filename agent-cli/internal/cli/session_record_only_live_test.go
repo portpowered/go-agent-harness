@@ -39,6 +39,7 @@ func TestIsRecordOnlyLiveInvocationMatrix(t *testing.T) {
 		{name: "record with audio-in is a scripted exchange", args: []string{"--record", "cap.json", "--audio-in", "in.wav"}, want: false},
 		{name: "record with image is a scripted exchange", args: []string{"--record", "cap.json", "--image", "photo.png"}, want: false},
 		{name: "record with browser-tools remains interactive", args: []string{"--record", "cap.json", "--browser-tools", "webmcp"}, want: true},
+		{name: "record with device WAV and WebMCP Cast remains interactive", args: []string{"--record", "cap.json", "--audio-out", "device.wav", "--audio-out-device", "default", "--browser-tools", "webmcp", "--web-cast"}, want: true},
 		{name: "record with external browser remains interactive", args: []string{"--record", "cap.json", "--browser-tools", "webmcp", "--browser-cdp-url", "http://127.0.0.1:9222", "--browser-auto-select", "single"}, want: true},
 		{name: "record with positional prompt words", args: []string{"--record", "cap.json", "do", "the", "thing"}, want: false},
 	}
@@ -127,11 +128,11 @@ model:
 	}
 }
 
-// TestSessionRecordedWebMCPExternalBrowserStaysInteractive reproduces the
-// eac18 command boundary. --record is a side capture, so adding it to an
-// interactive external-CDP WebMCP session must not remove the default audio
+// TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive reproduces the
+// test64 command boundary. --record and --audio-out are passive captures, so
+// adding both to an interactive WebMCP Cast session must not remove the audio
 // devices or send client_close immediately after session.open.
-func TestSessionRecordedWebMCPExternalBrowserStaysInteractive(t *testing.T) {
+func TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive(t *testing.T) {
 	configDir := t.TempDir()
 	configYAML := `
 model:
@@ -155,11 +156,15 @@ model:
 	owner := NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
-	recordPath := filepath.Join(t.TempDir(), "eac18.json")
+	recordPath := filepath.Join(t.TempDir(), "test64.json")
+	audioPath := filepath.Join(t.TempDir(), "test64-device.wav")
 	command.SetArgs([]string{
 		"--browser-tools", "webmcp",
+		"--web-cast",
 		"--browser-cdp-url", "http://127.0.0.1:9222",
 		"--browser-auto-select", "single",
+		"--audio-out-device", "default",
+		"--audio-out", audioPath,
 		"--record", recordPath,
 	})
 

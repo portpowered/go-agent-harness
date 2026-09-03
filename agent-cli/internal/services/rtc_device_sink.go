@@ -37,6 +37,11 @@ type RTCDeviceSinkError struct {
 // device callback and is therefore suitable for session diagnostics.
 type RTCDevicePlaybackObserver func(audio.DeviceID, audio.PlaybackQueueStats)
 
+// RTCDevicePlaybackSamplesObserver observes PCM accepted by the selected
+// playback device. Implementations must consume samples before returning;
+// the slice is owned by the sink and is not retained for the callback.
+type RTCDevicePlaybackSamplesObserver func(context.Context, int, []int16) error
+
 // RTCDeviceCaptureObserver receives the corresponding input queue snapshot at
 // source teardown, outside the native callback.
 type RTCDeviceCaptureObserver func(audio.DeviceID, audio.CaptureQueueStats)
@@ -59,12 +64,13 @@ func (e *RTCDeviceSinkError) Unwrap() error {
 // an incoming RTC media endpoint into it. The RTC endpoint remains
 // caller-owned; Close only stops this sink and releases its device.
 type RTCDeviceSink struct {
-	sink             *audio.DeviceSink
-	id               audio.DeviceID
-	observer         rtcDevicePlaybackObserver
-	providerRate     int
-	deviceRate       int
-	playbackObserver RTCDevicePlaybackObserver
+	sink                    *audio.DeviceSink
+	id                      audio.DeviceID
+	observer                rtcDevicePlaybackObserver
+	providerRate            int
+	deviceRate              int
+	playbackObserver        RTCDevicePlaybackObserver
+	playbackSamplesObserver RTCDevicePlaybackSamplesObserver
 	// loudness applies this session's fixed, voice-specific gain (see
 	// VoiceLoudnessGainDB) to synthesized audio before it reaches the
 	// feedback-gate observer or the device, so --voice selection does not
@@ -513,6 +519,9 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 	}
 	if err == nil && modelAudio && s.playbackResponse.ItemID != "" {
 		s.playbackModelSamples += uint64(len(samples))
+	}
+	if err == nil && s.playbackSamplesObserver != nil {
+		err = s.playbackSamplesObserver(ctx, s.deviceRate, samples)
 	}
 	s.playbackMu.Unlock()
 	return err

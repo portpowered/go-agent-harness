@@ -164,11 +164,10 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if seed.Present {
 		plan.loop.Prompt = nextSessionTextWirePrompt()
 	}
-	sink, err := newSessionAudioSinkAtRate(audioPath, out, plan.outputAudioSampleRate)
+	audioOut, err := newSessionAudioOutputForPlan(&plan, audioPath, out, nil)
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, closeErr))

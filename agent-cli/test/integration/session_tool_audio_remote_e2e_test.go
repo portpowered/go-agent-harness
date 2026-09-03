@@ -42,6 +42,21 @@ type remoteToolAudioCase struct {
 	responseSamples []int
 	toolResponses   map[int]bool
 	healthyControl  bool
+	deviceWAV       bool
+}
+
+// TestAgentBinaryAudioOutRecordsRemoteDevicePCM pins --audio-out as a
+// secondary observation of the selected playback device. The provider emits
+// 24 kHz audio on both sides of a real mock tool call, while the remote device
+// accepts 16 kHz PCM. The finished WAV must therefore carry the negotiated
+// device rate and exactly the samples observed at the remote device edge.
+func TestAgentBinaryAudioOutRecordsRemoteDevicePCM(t *testing.T) {
+	runRemoteToolAudioScenario(t, remoteToolAudioCase{
+		name:            "device_wav_tool_continuation",
+		responseSamples: []int{38400, 66000},
+		toolResponses:   map[int]bool{0: true},
+		deviceWAV:       true,
+	}, 0, 3*time.Millisecond, 30*time.Millisecond, 0, 0, 0)
 }
 
 // TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio reproduces the
@@ -170,6 +185,10 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 
 	observationPath := filepath.Join(t.TempDir(), "tool-observations.jsonl")
 	fixturePath := writeRemoteToolFixture(t, observationPath, calls, toolDelay)
+	audioOutPath := ""
+	if testCase.deviceWAV {
+		audioOutPath = filepath.Join(t.TempDir(), "device-output.wav")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, mockToolAgentBinaryPath,
@@ -184,6 +203,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		"--wait-for-close",
 		"--max-duration", "30s",
 	)
+	if audioOutPath != "" {
+		command.Args = append(command.Args, "--audio-out", audioOutPath)
+	}
 	if prompt != "" {
 		command.Args = append(command.Args, prompt)
 	}
@@ -255,6 +277,22 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 	if observed.protocolError != "" || observed.responsesSent != len(responses) || observed.responseCreates != len(calls) || observed.toolResults != len(calls) || observed.initialRequests != wantInitialRequest || observed.inputHistories != wantInputHistory {
 		t.Fatalf("provider edge observation = %+v, want responses=%d continuations=%d", observed, len(responses), len(calls))
+	}
+	if audioOutPath != "" {
+		wavBytes, err := os.ReadFile(audioOutPath)
+		if err != nil {
+			t.Fatalf("read secondary device WAV: %v", err)
+		}
+		rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+		if err != nil {
+			t.Fatalf("parse secondary device WAV: %v", err)
+		}
+		if rate != audio.SampleRate {
+			t.Fatalf("secondary device WAV sample rate = %d, want negotiated device rate %d", rate, audio.SampleRate)
+		}
+		if err := verifyRemoteToolAudio(nonzeroRemoteToolAudio(samples), want); err != nil {
+			t.Fatalf("secondary device WAV differs from remote device edge: %v", err)
+		}
 	}
 	assertRemoteToolObservations(t, observationPath, calls)
 }
