@@ -30,6 +30,8 @@ const (
 	defaultManagedBrowserLockPoll            = 10 * time.Millisecond
 	defaultManagedBrowserLockStaleAfter      = 30 * time.Second
 	managedBrowserStateResponseTimeout       = 2 * time.Second
+	managedBrowserReattachFailureLimit       = 3
+	managedBrowserSingletonLockName          = "SingletonLock"
 )
 
 var (
@@ -96,6 +98,13 @@ func (f ManagedBrowserProcessInspectorFunc) Inspect(ctx context.Context, state M
 // exact PID after its identity and command line have been validated.
 type ManagedBrowserProcessReattacher func(context.Context, ManagedBrowserState) (ManagedBrowserProcess, error)
 
+// ManagedBrowserProfileOwnerResolver returns the exact process holding the
+// agent-owned Chrome profile. Production resolution is deliberately narrow:
+// it trusts only Chrome's profile singleton PID after the process command line
+// proves the managed profile, loopback DevTools address, and WebMCP flags all
+// match. A nil process means no safely attributable owner was found.
+type ManagedBrowserProfileOwnerResolver func(context.Context, string) (ManagedBrowserProcess, error)
+
 // ManagedBrowserManagerOptions configures the persistent managed-browser
 // ownership boundary. LaunchOptions supplies the same seams as the launcher;
 // manager-specific functions are used only for state validation and reuse.
@@ -106,6 +115,7 @@ type ManagedBrowserManagerOptions struct {
 
 	ProcessInspector  ManagedBrowserProcessInspector
 	ProcessReattacher ManagedBrowserProcessReattacher
+	ProfileOwner      ManagedBrowserProfileOwnerResolver
 
 	LockTimeout    time.Duration
 	LockPoll       time.Duration
@@ -139,6 +149,9 @@ func NewManagedBrowserManager(options ManagedBrowserManagerOptions) *ManagedBrow
 	}
 	if options.ProcessReattacher == nil {
 		options.ProcessReattacher = defaultManagedBrowserProcessReattacher(options.ProcessInspector)
+	}
+	if options.ProfileOwner == nil {
+		options.ProfileOwner = defaultManagedBrowserProfileOwnerResolver(options.ProcessInspector)
 	}
 	return &ManagedBrowserManager{options: options}
 }
@@ -203,6 +216,19 @@ func (m *ManagedBrowserManager) Acquire(ctx context.Context, request ManagedBrow
 		}
 	}
 
+	browser, err := m.launchFresh(ctx, launchOptions, profileDir, statePath)
+	if err == nil || !managedBrowserLaunchNeedsProfileRecovery(err) {
+		return browser, err
+	}
+	recovered, recoveryErr := m.restartVerifiedProfileOwner(ctx, profileDir, launchOptions.ShutdownTimeout)
+	if recoveryErr != nil {
+		return nil, errors.Join(err, newManagedBrowserLifecycleError("recovery", recoveryErr))
+	}
+	if !recovered {
+		return nil, err
+	}
+	// Recovery is intentionally bounded to one relaunch. A repeated failure is
+	// returned directly instead of entering a destructive restart loop.
 	return m.launchFresh(ctx, launchOptions, profileDir, statePath)
 }
 
@@ -350,6 +376,32 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 	}
 	go m.watchManagedBrowser(browser, statePath, state)
 	return browser, nil
+}
+
+func managedBrowserLaunchNeedsProfileRecovery(err error) bool {
+	var launchErr *ManagedBrowserLaunchError
+	if !errors.As(err, &launchErr) || launchErr == nil {
+		return false
+	}
+	return launchErr.Phase == "readiness" || launchErr.Phase == "startup"
+}
+
+func (m *ManagedBrowserManager) restartVerifiedProfileOwner(ctx context.Context, profileDir string, shutdown time.Duration) (bool, error) {
+	if m == nil || m.options.ProfileOwner == nil {
+		return false, nil
+	}
+	process, err := m.options.ProfileOwner(ctx, profileDir)
+	if err != nil {
+		return false, err
+	}
+	if process == nil {
+		return false, nil
+	}
+	state := newManagedBrowserProcessState(process)
+	if err := state.stop(normalizedManagedShutdown(shutdown)); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState) error {
@@ -756,6 +808,124 @@ func defaultManagedBrowserProcessReattacher(inspector ManagedBrowserProcessInspe
 	}
 }
 
+func defaultManagedBrowserProfileOwnerResolver(inspector ManagedBrowserProcessInspector) ManagedBrowserProfileOwnerResolver {
+	if inspector == nil {
+		inspector = defaultManagedBrowserProcessInspector{}
+	}
+	return func(ctx context.Context, profileDir string) (ManagedBrowserProcess, error) {
+		pid, err := managedBrowserSingletonPID(profileDir)
+		if err != nil || pid <= 0 || pid == os.Getpid() {
+			return nil, err
+		}
+		commandLine, err := managedProcessCommandLine(ctx, pid)
+		if err != nil {
+			// Failure to prove ownership must never become permission to signal a
+			// process. Leave the existing launch error as the operator-visible
+			// result instead.
+			return nil, nil
+		}
+		state, ok := managedBrowserProfileOwnerState(pid, profileDir, commandLine)
+		if !ok {
+			return nil, nil
+		}
+		identity, err := managedProcessIdentity(ctx, pid, commandLine)
+		if err != nil || strings.TrimSpace(identity) == "" {
+			return nil, nil
+		}
+		state.ProcessIdentity = identity
+		if _, err := inspector.Inspect(ctx, state); err != nil {
+			return nil, nil
+		}
+		return &reattachedManagedBrowserProcess{state: state, inspector: inspector}, nil
+	}
+}
+
+func managedBrowserSingletonPID(profileDir string) (int, error) {
+	if strings.TrimSpace(profileDir) == "" {
+		return 0, nil
+	}
+	target, err := os.Readlink(filepath.Join(profileDir, managedBrowserSingletonLockName))
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.EINVAL) {
+		// Chrome uses a symlink singleton on Unix. A regular file or a missing
+		// lock provides no portable, safely attributable PID.
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	base := filepath.Base(strings.TrimSpace(target))
+	separator := strings.LastIndex(base, "-")
+	if separator < 0 || separator+1 >= len(base) {
+		return 0, nil
+	}
+	pid, err := strconv.Atoi(base[separator+1:])
+	if err != nil || pid <= 0 {
+		return 0, nil
+	}
+	return pid, nil
+}
+
+func managedBrowserProfileOwnerState(pid int, profileDir string, commandLine []string) (ManagedBrowserState, bool) {
+	if pid <= 0 || len(commandLine) == 0 || strings.TrimSpace(profileDir) == "" {
+		return ManagedBrowserState{}, false
+	}
+	profile := filepath.Clean(profileDir)
+	hasChrome := false
+	hasProfile := false
+	hasLoopback := false
+	hasWebMCPFeatures := false
+	hasDeclarativeWebMCP := false
+	port := 0
+	for index, argument := range commandLine {
+		if strings.Contains(strings.ToLower(argument), "chrome") {
+			hasChrome = true
+		}
+		if argument == "--user-data-dir" && index+1 < len(commandLine) {
+			hasProfile = filepath.Clean(commandLine[index+1]) == profile
+		}
+		if strings.HasPrefix(argument, "--user-data-dir=") {
+			hasProfile = filepath.Clean(strings.TrimPrefix(argument, "--user-data-dir=")) == profile
+		}
+		if argument == "--remote-debugging-address=127.0.0.1" {
+			hasLoopback = true
+		}
+		if strings.HasPrefix(argument, "--remote-debugging-port=") {
+			parsed, err := strconv.Atoi(strings.TrimPrefix(argument, "--remote-debugging-port="))
+			if err == nil && parsed > 0 && parsed <= 65535 {
+				port = parsed
+			}
+		}
+		if strings.HasPrefix(argument, "--enable-features=") {
+			features := strings.Split(strings.TrimPrefix(argument, "--enable-features="), ",")
+			hasWebMCPFeatures = stringSetContains(features, "WebMCP") &&
+				stringSetContains(features, "WebMCPTesting") &&
+				stringSetContains(features, "DevToolsWebMCPSupport")
+		}
+		if strings.HasPrefix(argument, "--enable-blink-features=") {
+			features := strings.Split(strings.TrimPrefix(argument, "--enable-blink-features="), ",")
+			hasDeclarativeWebMCP = stringSetContains(features, "DeclarativeWebmcp")
+		}
+	}
+	if !hasChrome || !hasProfile || !hasLoopback || !hasWebMCPFeatures || !hasDeclarativeWebMCP || port == 0 {
+		return ManagedBrowserState{}, false
+	}
+	return ManagedBrowserState{
+		Version:    ManagedBrowserStateVersion,
+		PID:        pid,
+		ProfileDir: profile,
+		CDPURL:     fmt.Sprintf("http://127.0.0.1:%d/json/version", port),
+	}, true
+}
+
+func stringSetContains(values []string, expected string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) == expected {
+			return true
+		}
+	}
+	return false
+}
+
 type reattachedManagedBrowserProcess struct {
 	state     ManagedBrowserState
 	inspector ManagedBrowserProcessInspector
@@ -767,9 +937,15 @@ func (p *reattachedManagedBrowserProcess) Wait() error {
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	failures := 0
 	for {
 		if _, err := p.inspector.Inspect(context.Background(), p.state); err != nil {
-			return nil
+			failures++
+			if failures >= managedBrowserReattachFailureLimit {
+				return nil
+			}
+		} else {
+			failures = 0
 		}
 		<-ticker.C
 	}

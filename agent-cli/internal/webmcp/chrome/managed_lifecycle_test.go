@@ -125,6 +125,197 @@ func TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPI
 	_ = browser.Close()
 }
 
+func TestManagedBrowserManagerRestartsVerifiedProfileOwnerAndRetriesOnce(t *testing.T) {
+	configDir := t.TempDir()
+	ownerControl := &managedLifecycleTestControl{}
+	freshControl := &managedLifecycleTestControl{}
+	var starts atomic.Int32
+	var resolutions atomic.Int32
+	manager := NewManagedBrowserManager(ManagedBrowserManagerOptions{
+		ConfigDir: configDir,
+		LaunchOptions: ManagedBrowserLaunchOptions{
+			ConfigDir:        configDir,
+			StartupURL:       "about:blank",
+			DisplayAvailable: func() bool { return true },
+			Acquirer: ManagedChromeExecutableAcquirerFunc(func(context.Context) (ChromeExecutable, error) {
+				return ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: ExecutableSourceStock}, nil
+			}),
+			HTTPClient: &http.Client{Transport: managedLifecycleRecoveryTransport{starts: &starts}},
+			ProcessStarter: func(string, []string) (ManagedBrowserProcess, error) {
+				if starts.Add(1) == 1 {
+					return managedLifecycleExitedProcess{pid: 7101}, nil
+				}
+				return freshControl.newProcess(7102), nil
+			},
+			StartupTimeout:  500 * time.Millisecond,
+			PollInterval:    time.Millisecond,
+			ShutdownTimeout: 50 * time.Millisecond,
+		},
+		ProcessInspector: ManagedBrowserProcessInspectorFunc(func(_ context.Context, state ManagedBrowserState) (ManagedBrowserProcessInfo, error) {
+			return ManagedBrowserProcessInfo{PID: state.PID, Identity: "fresh-incarnation", ProfileDir: state.ProfileDir}, nil
+		}),
+		ProfileOwner: func(context.Context, string) (ManagedBrowserProcess, error) {
+			resolutions.Add(1)
+			return ownerControl.newProcess(7001), nil
+		},
+		LockTimeout: 2 * time.Second,
+		LockPoll:    time.Millisecond,
+	})
+
+	browser, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
+	if err != nil {
+		t.Fatalf("Acquire() with orphaned profile owner: %v", err)
+	}
+	if starts.Load() != 2 {
+		t.Fatalf("launch attempts = %d, want one failed attempt and one retry", starts.Load())
+	}
+	if resolutions.Load() != 1 || ownerControl.terminate.Load() != 1 || ownerControl.kill.Load() != 0 {
+		t.Fatalf("profile-owner recovery = resolutions:%d terminate:%d kill:%d, want 1/1/0", resolutions.Load(), ownerControl.terminate.Load(), ownerControl.kill.Load())
+	}
+	if browser.PID() != 7102 {
+		t.Fatalf("replacement browser PID = %d, want 7102", browser.PID())
+	}
+	if _, err := os.Stat(ManagedBrowserStatePath(configDir)); err != nil {
+		t.Fatalf("replacement state was not published: %v", err)
+	}
+	if err := browser.Close(); err != nil {
+		t.Fatalf("Close(): %v", err)
+	}
+}
+
+func TestManagedBrowserManagerDoesNotRetryWithoutVerifiedProfileOwner(t *testing.T) {
+	configDir := t.TempDir()
+	var starts atomic.Int32
+	var resolutions atomic.Int32
+	manager := NewManagedBrowserManager(ManagedBrowserManagerOptions{
+		ConfigDir: configDir,
+		LaunchOptions: ManagedBrowserLaunchOptions{
+			ConfigDir:        configDir,
+			DisplayAvailable: func() bool { return true },
+			Acquirer: ManagedChromeExecutableAcquirerFunc(func(context.Context) (ChromeExecutable, error) {
+				return ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: ExecutableSourceStock}, nil
+			}),
+			HTTPClient: &http.Client{Transport: managedLaunchVersionTransport{alwaysError: errors.New("endpoint unavailable")}},
+			ProcessStarter: func(string, []string) (ManagedBrowserProcess, error) {
+				starts.Add(1)
+				return managedLifecycleExitedProcess{pid: 7201}, nil
+			},
+			StartupTimeout:  100 * time.Millisecond,
+			PollInterval:    time.Millisecond,
+			ShutdownTimeout: 10 * time.Millisecond,
+		},
+		ProfileOwner: func(context.Context, string) (ManagedBrowserProcess, error) {
+			resolutions.Add(1)
+			return nil, nil
+		},
+		LockTimeout: time.Second,
+		LockPoll:    time.Millisecond,
+	})
+
+	_, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
+	if err == nil || !errors.Is(err, ErrManagedBrowserLaunch) {
+		t.Fatalf("Acquire() error = %v, want managed launch failure", err)
+	}
+	if starts.Load() != 1 || resolutions.Load() != 1 {
+		t.Fatalf("unverified recovery attempts = starts:%d resolutions:%d, want 1/1", starts.Load(), resolutions.Load())
+	}
+}
+
+func TestManagedBrowserProfileOwnerStateRequiresExactManagedFlags(t *testing.T) {
+	profileDir := filepath.Join(t.TempDir(), "browser-profile")
+	managed := []string{
+		"/Applications/Google", "Chrome.app/Contents/MacOS/Google", "Chrome",
+		"--remote-debugging-address=127.0.0.1",
+		"--remote-debugging-port=52507",
+		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+		"--enable-blink-features=DeclarativeWebmcp",
+		"--user-data-dir=" + profileDir,
+	}
+	state, ok := managedBrowserProfileOwnerState(55511, profileDir, managed)
+	if !ok || state.PID != 55511 || state.CDPURL != "http://127.0.0.1:52507/json/version" {
+		t.Fatalf("managed profile owner = %#v ok=%t", state, ok)
+	}
+
+	for name, remove := range map[string]string{
+		"wrong profile":  "--user-data-dir=" + profileDir,
+		"remote address": "--remote-debugging-address=127.0.0.1",
+		"webmcp flags":   "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+		"blink flag":     "--enable-blink-features=DeclarativeWebmcp",
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := make([]string, 0, len(managed)-1)
+			for _, argument := range managed {
+				if argument != remove {
+					candidate = append(candidate, argument)
+				}
+			}
+			if _, ok := managedBrowserProfileOwnerState(55511, profileDir, candidate); ok {
+				t.Fatal("process without the exact managed ownership flags was accepted")
+			}
+		})
+	}
+}
+
+func TestManagedBrowserSingletonPIDRequiresChromeSymlinkShape(t *testing.T) {
+	profileDir := t.TempDir()
+	lockPath := filepath.Join(profileDir, managedBrowserSingletonLockName)
+	if err := os.Symlink("host-with-dashes-55511", lockPath); err != nil {
+		t.Fatalf("create singleton link: %v", err)
+	}
+	pid, err := managedBrowserSingletonPID(profileDir)
+	if err != nil || pid != 55511 {
+		t.Fatalf("singleton PID = %d, %v; want 55511", pid, err)
+	}
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatalf("remove singleton link: %v", err)
+	}
+	if err := os.WriteFile(lockPath, []byte("55511"), 0o600); err != nil {
+		t.Fatalf("create non-symlink singleton: %v", err)
+	}
+	pid, err = managedBrowserSingletonPID(profileDir)
+	if err != nil || pid != 0 {
+		t.Fatalf("regular-file singleton PID = %d, %v; want no attributable owner", pid, err)
+	}
+}
+
+func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing.T) {
+	var calls atomic.Int32
+	var persistentFailure atomic.Bool
+	process := &reattachedManagedBrowserProcess{
+		state: ManagedBrowserState{PID: 55511},
+		inspector: ManagedBrowserProcessInspectorFunc(func(context.Context, ManagedBrowserState) (ManagedBrowserProcessInfo, error) {
+			call := calls.Add(1)
+			if persistentFailure.Load() || call <= 2 {
+				return ManagedBrowserProcessInfo{}, errors.New("transient inspection failure")
+			}
+			return ManagedBrowserProcessInfo{PID: 55511, Identity: "still-running"}, nil
+		}),
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = process.Wait()
+		close(done)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() < 3 && time.Now().Before(deadline) {
+		select {
+		case <-done:
+			t.Fatal("reattached process exited after transient inspection failures")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if calls.Load() < 3 {
+		t.Fatal("reattached process did not retry inspection")
+	}
+	persistentFailure.Store(true)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("reattached process did not exit after the bounded persistent-failure threshold")
+	}
+}
+
 func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
 	configDir := t.TempDir()
 	control := &managedLifecycleTestControl{}
@@ -257,3 +448,20 @@ func (p *managedLifecycleTestProcess) Kill() error {
 }
 
 func (p *managedLifecycleTestProcess) PID() int { return p.pid }
+
+type managedLifecycleExitedProcess struct{ pid int }
+
+func (p managedLifecycleExitedProcess) Wait() error      { return errors.New("process exited") }
+func (p managedLifecycleExitedProcess) Terminate() error { return nil }
+func (p managedLifecycleExitedProcess) Kill() error      { return nil }
+func (p managedLifecycleExitedProcess) PID() int         { return p.pid }
+
+type managedLifecycleRecoveryTransport struct{ starts *atomic.Int32 }
+
+func (t managedLifecycleRecoveryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if t.starts != nil && t.starts.Load() == 1 {
+		time.Sleep(5 * time.Millisecond)
+		return nil, errors.New("first launch endpoint unavailable")
+	}
+	return managedLaunchVersionTransport{}.RoundTrip(request)
+}
