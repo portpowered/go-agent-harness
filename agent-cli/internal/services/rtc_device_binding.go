@@ -111,6 +111,13 @@ type RTCDeviceBindingRequest struct {
 	// device closes. It is called outside the native device callback and may be
 	// used to publish cumulative overflow diagnostics.
 	PlaybackObserver RTCDevicePlaybackObserver
+	// PlaybackSamplesObserver receives each PCM16 chunk only after it has
+	// passed playback-generation admission, provider-to-device resampling,
+	// loudness correction, capacity pacing, and a successful device enqueue.
+	// The sample rate is the negotiated output-device rate. The callback runs
+	// outside the native audio callback and may return an error to stop the
+	// session rather than silently publish an incomplete observation.
+	PlaybackSamplesObserver RTCDevicePlaybackSamplesObserver
 	// CaptureObserver receives one final capture queue snapshot after the input
 	// device has stopped, outside its native callback.
 	CaptureObserver RTCDeviceCaptureObserver
@@ -234,6 +241,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 		if duplexErr == nil {
 			binding.Source = newRTCDeviceSourceFromOpened(source, inputRate, inputRate)
 			binding.Sink = newRTCDeviceSinkFromOpened(sink, outputRate, outputRate, request.OutputVoice, request.PlaybackObserver)
+			binding.Sink.playbackSamplesObserver = request.PlaybackSamplesObserver
 		} else if !errors.Is(duplexErr, audio.ErrDuplexDeviceUnavailable) {
 			return nil, duplexErr
 		}
@@ -264,6 +272,7 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 			}, closeErr)
 		}
 		binding.Sink = sink
+		binding.Sink.playbackSamplesObserver = request.PlaybackSamplesObserver
 	}
 	if binding.Source != nil && binding.Sink != nil && !request.BypassSelfHearing {
 		// Declare the gate's timing to the true negotiated device rates, not the

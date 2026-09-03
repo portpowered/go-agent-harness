@@ -23,13 +23,13 @@ const (
 	sessionAudioWAVMaxDataSize = uint64(^uint32(0)) - 36
 )
 
-// RunSessionWithAudioOut runs a session and writes assistant AUDIO.DELTA
-// samples to path as they arrive. The capture observes provider assistant
-// PCM upstream of the RTC device path; when --audio-out-device is also
-// selected, the independent device pump observes the same session through
-// its provider-owned inbound media endpoint. An empty path preserves the
-// normal session output behavior. A path of "-" writes raw little-endian
-// PCM16 to out.
+// RunSessionWithAudioOut runs a session and writes assistant PCM to path. A
+// file-only invocation observes provider AUDIO.DELTA samples. When an RTC
+// output device is also selected, the file instead becomes a secondary tap of
+// PCM successfully accepted at the device boundary, after gain, resampling,
+// pacing, and stale-generation rejection. An empty path preserves the normal
+// session output behavior. A path of "-" writes raw little-endian PCM16 to
+// out.
 func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunOptions, path string) (runErr error) {
 	return RunSessionWithAudioOutAndTextSeed(ctx, out, opts, path, SessionTextSeed{})
 }
@@ -69,11 +69,10 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		return err
 	}
 
-	sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)
+	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)})}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -144,11 +143,10 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 		return err
 	}
 
-	sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)
+	audioOut, err := newSessionAudioOutputForPlan(&plan, path, out, audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)}))
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: VoiceLoudnessGainDB(opts.Voice)})}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -203,6 +201,13 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 type sessionAudioOutput struct {
 	sink    audio.AudioSink
 	runtime *sessionRuntimeObservationRecorder
+	// deviceBound makes this output a secondary tap of PCM successfully
+	// enqueued to an RTC output device. Its sink is opened lazily at the true
+	// negotiated device rate; provider deltas remain consumed by the wrapper
+	// only for stream/seed behavior and are not written a second time.
+	deviceBound  bool
+	devicePath   string
+	deviceWriter io.Writer
 	// loudness applies this session's fixed, voice-specific gain (see
 	// VoiceLoudnessGainDB) before anything downstream (the sink, the
 	// runtime's clock-stamped output observation) sees the audio, so
@@ -220,6 +225,59 @@ type sessionAudioOutput struct {
 
 type sessionAudioSamplesWriter interface {
 	WriteSamples(context.Context, []int16) error
+}
+
+func newSessionAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*sessionAudioOutput, error) {
+	if plan != nil && plan.rtcDeviceRequest.outputSelected() {
+		output := &sessionAudioOutput{
+			runtime:      plan.runtime,
+			deviceBound:  true,
+			devicePath:   path,
+			deviceWriter: out,
+		}
+		prior := plan.rtcDeviceRequest.PlaybackSamplesObserver
+		plan.rtcDeviceRequest.PlaybackSamplesObserver = func(ctx context.Context, rate int, samples []int16) error {
+			var priorErr error
+			if prior != nil {
+				priorErr = prior(ctx, rate, samples)
+			}
+			return errors.Join(priorErr, output.writeDeviceSamples(ctx, rate, samples))
+		}
+		return output, nil
+	}
+	sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)
+	if err != nil {
+		return nil, err
+	}
+	return &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: loudness}, nil
+}
+
+func (o *sessionAudioOutput) writeDeviceSamples(ctx context.Context, sampleRate int, samples []int16) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return audio.ErrClosed
+	}
+	if o.sink == nil {
+		sink, err := newSessionAudioSinkAtRate(o.devicePath, o.deviceWriter, sampleRate)
+		if err != nil {
+			return err
+		}
+		o.sink = sink
+	}
+	encoded := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
+	}
+	o.runtime.audioOutput(encoded)
+	writer, ok := o.sink.(sessionAudioSamplesWriter)
+	if !ok {
+		return fmt.Errorf("PCM16 device audio output cannot stream a %d-sample chunk", len(samples))
+	}
+	return writer.WriteSamples(ctx, samples)
 }
 
 // newSessionAudioSinkAtRate creates the streaming session artifact sink at
@@ -468,6 +526,9 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) err
 	if len(content) == 0 {
 		return nil
 	}
+	if o.deviceBound {
+		return nil
+	}
 	if len(content)%2 != 0 {
 		return fmt.Errorf("PCM16 audio delta has odd byte length %d", len(content))
 	}
@@ -507,7 +568,10 @@ func (o *sessionAudioOutput) close() error {
 	o.closeOnce.Do(func() {
 		o.mu.Lock()
 		o.closed = true
-		sinkErr := o.sink.Close()
+		var sinkErr error
+		if o.sink != nil {
+			sinkErr = o.sink.Close()
+		}
 		o.mu.Unlock()
 		o.mu.Lock()
 		o.closeErr = sinkErr

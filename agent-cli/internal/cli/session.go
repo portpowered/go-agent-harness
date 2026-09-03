@@ -553,11 +553,12 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 	return true
 }
 
-// isRecordOnlyLiveInvocation reports whether --record is the only explicit
-// session mode flag present, with no prompt, file-audio, scheduled-turn, or
-// image alongside it. Browser flags are allowed: recording an interactive
-// WebMCP voice session must preserve the same lifetime and implicit audio
-// devices as the unrecorded browser session. This is the operator's flagship
+// isRecordOnlyLiveInvocation reports whether --record is the only driving
+// session mode flag present, with no prompt, input audio, scheduled turn, or
+// image alongside it. Passive --audio-out capture and browser flags are
+// allowed: observing an interactive WebMCP voice session must preserve the
+// same lifetime and implicit audio devices as the unrecorded browser session.
+// This is the operator's flagship
 // shape: an otherwise-bare live microphone conversation that additionally
 // captures a side recording. Unlike a fully bare invocation (which admits
 // without needing --record at all), this deliberately keeps --record's
@@ -574,7 +575,7 @@ func isRecordOnlyLiveInvocation(cmd *cobra.Command, args []string, imagePaths []
 		return false
 	}
 	for _, name := range sessionModeFlagNames {
-		if name != "record" && cmd.Flags().Changed(name) {
+		if name != "record" && name != "audio-out" && cmd.Flags().Changed(name) {
 			return false
 		}
 	}
@@ -955,7 +956,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringArrayVar(t.audioInterrupts, "audio-interrupt", nil, "Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)")
 	cmd.Flags().StringVar(t.audioInterruptTool, "audio-interrupt-on-tool", "", "With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one")
 	cmd.Flags().StringVar(t.audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
-	cmd.Flags().StringVar(t.audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
+	cmd.Flags().StringVar(t.audioOutPath, "audio-out", "", "Write assistant PCM16 to a .wav/.pcm/.raw path or -; with --audio-out-device, tap device-bound PCM")
 	cmd.Flags().StringVar(t.audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(t.audioDeviceServer, "audio-device-server", "", "Use a loopback audio-device server host:port instead of platform devices")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")

@@ -343,11 +343,11 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	var audioOutput *sessionAudioOutput
 	var audioWrapped *sessionAudioOutputInferencer
 	if audioOutPath != "" {
-		sink, sinkErr := newSessionAudioSinkAtRate(audioOutPath, out, plan.outputAudioSampleRate)
+		var sinkErr error
+		audioOutput, sinkErr = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
-		audioOutput = &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 		defer func() {
 			if closeErr := audioOutput.close(); closeErr != nil {
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))

@@ -19,8 +19,8 @@ import (
 
 // TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession proves that
 // file capture and RTC playback are independent consumers of one provider
-// session. The file observes assistant AUDIO.DELTA PCM before the device path;
-// the virtual output sink observes the session-owned inbound RTC PCM.
+// session. When both are selected, the file observes the exact PCM accepted
+// by the device path rather than a separate upstream AUDIO.DELTA stream.
 func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -83,12 +83,15 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 	if err != nil {
 		t.Fatalf("read captured assistant audio: %v", err)
 	}
-	_, gotFileSamples, err := wavio.Read(bytes.NewReader(data))
+	rate, gotFileSamples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("read captured WAV: %v", err)
 	}
-	if !equalInt16(gotFileSamples, fileSamples) {
-		t.Fatalf("captured assistant samples = %d, want exact %d samples from AUDIO.DELTA", len(gotFileSamples), len(fileSamples))
+	if rate != audio.SampleRate {
+		t.Fatalf("captured device WAV rate = %d, want %d", rate, audio.SampleRate)
+	}
+	if !equalInt16(gotFileSamples, deviceSamples) {
+		t.Fatalf("captured device samples = %d, want exact %d samples accepted by playback device", len(gotFileSamples), len(deviceSamples))
 	}
 	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 1 {
 		t.Fatalf("device observations before observer close = %+v, want binding+observer opens and binding release", got)
