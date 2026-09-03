@@ -246,18 +246,8 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 			frame := m.frames[0]
 			m.frames[0] = PCMFrame{}
 			m.frames = m.frames[1:]
-			if len(frame.Samples) > 0 && frame.PlaybackResponse.ItemID != "" && frame.PlaybackResponse != m.playbackResponse {
-				previous := m.playbackResponse
-				m.playbackResponse = frame.PlaybackResponse
-				if previous.ItemID != "" {
-					delete(m.responseSamples, previous)
-				}
-				if m.controller != nil {
-					// Playback ownership follows FIFO dequeue order. Starting at
-					// provider-ingress time invalidates an older response whose PCM is
-					// still waiting behind device-clock backpressure.
-					m.controller.StartPlayback(frame.PlaybackResponse)
-				}
+			if len(frame.Samples) > 0 {
+				m.activatePlaybackLocked(frame.PlaybackResponse)
 			}
 			m.mu.Unlock()
 			return frame, nil
@@ -287,7 +277,45 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 func (m *sessionInboundMedia) SetPlaybackController(controller PlaybackController) {
 	m.mu.Lock()
 	m.controller = controller
+	if controller != nil {
+		if m.playbackResponse.ItemID != "" {
+			controller.StartPlayback(m.playbackResponse)
+		} else {
+			m.activateQueuedPlaybackLocked()
+		}
+	}
 	m.mu.Unlock()
+}
+
+// activateQueuedPlaybackLocked synchronously identifies the audible FIFO head
+// as soon as it exists. This makes a server-VAD event immediately following an
+// audio delta deterministic even when the device pump goroutine has not yet
+// been scheduled. A later ingress response cannot replace this identity; its
+// frames remain behind the current response until ReadFrame reaches them.
+func (m *sessionInboundMedia) activateQueuedPlaybackLocked() {
+	if m.playbackResponse.ItemID != "" {
+		return
+	}
+	for _, frame := range m.frames {
+		if len(frame.Samples) > 0 && frame.PlaybackResponse.ItemID != "" {
+			m.activatePlaybackLocked(frame.PlaybackResponse)
+			return
+		}
+	}
+}
+
+func (m *sessionInboundMedia) activatePlaybackLocked(response PlaybackResponse) {
+	if response.ItemID == "" || response == m.playbackResponse {
+		return
+	}
+	previous := m.playbackResponse
+	m.playbackResponse = response
+	if previous.ItemID != "" {
+		delete(m.responseSamples, previous)
+	}
+	if m.controller != nil {
+		m.controller.StartPlayback(response)
+	}
 }
 
 func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
@@ -387,6 +415,7 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 	}
 	m.pending = append(m.pending, samples...)
 	m.appendCompleteFramesLocked()
+	m.activateQueuedPlaybackLocked()
 	m.mu.Unlock()
 	m.notify()
 	return nil
@@ -413,6 +442,7 @@ func (m *sessionInboundMedia) flush() error {
 		return ErrSessionMediaInboundBacklog
 	}
 	m.appendResponseBoundaryLocked(true)
+	m.activateQueuedPlaybackLocked()
 	m.mu.Unlock()
 	m.notify()
 	return nil
@@ -425,6 +455,7 @@ func (m *sessionInboundMedia) fail(err error) {
 	m.mu.Lock()
 	if m.terminal == nil && !m.closed {
 		m.appendResponseBoundaryLocked(false)
+		m.activateQueuedPlaybackLocked()
 		m.terminal = err
 	}
 	m.mu.Unlock()

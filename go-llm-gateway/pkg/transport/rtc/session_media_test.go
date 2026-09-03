@@ -124,6 +124,9 @@ func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T
 	if err := media.PushInbound(make([]int16, 24000*2)); err != nil {
 		t.Fatalf("push old response backlog: %v", err)
 	}
+	if controller.started != response {
+		t.Fatalf("queued FIFO head started as %+v, want %+v", controller.started, response)
+	}
 	first, err := controlled.ReadFrame(context.Background())
 	if err != nil {
 		t.Fatalf("read first old response frame: %v", err)
