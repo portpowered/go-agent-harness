@@ -126,7 +126,7 @@ func newSessionToolCapabilitiesFactory(
 		// The broker definitions are stable and side-effect free. Check their
 		// namespace before asking the injected factory to allocate or dial any
 		// browser resource.
-		stableBrokerDefinitions := webmcpTools.NewBrokerToolSet(nil).Definitions()
+		stableBrokerDefinitions := webmcpTools.NewBrokerToolSet(nil, cfg.Browser.Tools.WebCast).Definitions()
 		if err := cliTools.ValidateToolDefinitionNamespaces(staticDefinitions, stableBrokerDefinitions); err != nil {
 			return SessionToolCapabilities{}, fmt.Errorf("compose session tools: %w", err)
 		}
@@ -145,7 +145,7 @@ func newSessionToolCapabilitiesFactory(
 			return SessionToolCapabilities{}, errors.New("construct WebMCP broker: broker factory returned nil")
 		}
 
-		brokerSet := webmcpTools.NewBrokerToolSet(broker)
+		brokerSet := webmcpTools.NewBrokerToolSet(broker, cfg.Browser.Tools.WebCast)
 		surface, err := cliTools.ComposeToolSurface(
 			resolvedStaticExecutor,
 			staticDefinitions,

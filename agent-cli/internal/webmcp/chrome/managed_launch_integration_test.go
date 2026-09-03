@@ -154,6 +154,15 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP on opened target: %v", err)
 	}
+	castController, ok := session.(webmcp.TargetCastController)
+	if !ok {
+		t.Fatalf("managed target session %T does not expose Cast controls", session)
+	}
+	castDevices, err := castController.ListCastDevices(ctx)
+	if err != nil {
+		t.Fatalf("enable the real Chrome Cast domain: %v", err)
+	}
+	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d", len(castDevices))
 	added, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab tools", func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventToolsAdded && hasTool(event.Tools, "managed_open_tab_probe")
 	})

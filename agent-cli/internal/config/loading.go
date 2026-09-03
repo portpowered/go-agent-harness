@@ -55,6 +55,7 @@ type interactiveConfigFieldSpec struct {
 var browserConfigFieldSpecs = []browserConfigFieldSpec{
 	{path: "browser.tools.enabled", kind: browserConfigBool},
 	{path: "browser.tools.backend", kind: browserConfigEnum, allowed: []string{BrowserToolsBackendWebMCP}},
+	{path: "browser.tools.web_cast", kind: browserConfigBool},
 	{path: "browser.connection.cdp_url", kind: browserConfigString},
 	{path: "browser.connection.ws_endpoint", kind: browserConfigString},
 	{path: "browser.connection.user_data_dir", kind: browserConfigString},

@@ -25,6 +25,7 @@ func DefaultBrowserConfig() BrowserConfig {
 		Tools: BrowserToolsConfig{
 			Enabled: false,
 			Backend: BrowserToolsBackendWebMCP,
+			WebCast: false,
 		},
 		Connection: BrowserConnectionConfig{
 			CDPURL:           "",
@@ -78,6 +79,9 @@ func DefaultBrowserConfig() BrowserConfig {
 func (c BrowserConfig) Validate() error {
 	if c.Tools.Backend != BrowserToolsBackendWebMCP {
 		return fmt.Errorf("browser.tools.backend %q is unsupported (only %q is available)", c.Tools.Backend, BrowserToolsBackendWebMCP)
+	}
+	if c.Tools.WebCast && !c.Tools.Enabled {
+		return fmt.Errorf("browser.tools.web_cast requires browser.tools.enabled")
 	}
 	if !containsString([]string{BrowserAutoSelectOff, BrowserAutoSelectSingle, BrowserAutoSelectPersisted}, c.Selection.AutoSelect) {
 		return fmt.Errorf("browser.selection.auto_select %q is invalid (want off, single, or persisted)", c.Selection.AutoSelect)

@@ -81,6 +81,15 @@ type PageScreenshotter interface {
 	CapturePageScreenshot(context.Context) (PageScreenshot, error)
 }
 
+// TargetCastController is an optional selected-target capability. Cast is a
+// page-scoped CDP domain, so tab mirroring must execute on the same attached
+// target session used by the broker selection.
+type TargetCastController interface {
+	ListCastDevices(context.Context) ([]CastDevice, error)
+	CastTab(context.Context, string) error
+	StopCasting(context.Context, string) error
+}
+
 type Broker interface {
 	Discover(context.Context, DiscoverOptions) ([]BrowserCandidate, error)
 	ListTargets(context.Context, BrowserSelector) ([]Target, error)
@@ -104,6 +113,14 @@ type BrokerTabOpener interface {
 // model-facing OpenTab operation still creates and selects a WebMCP page.
 type BrokerTabCreator interface {
 	CreateTab(context.Context, OpenTabRequest) (Target, error)
+}
+
+// BrokerCastController exposes Cast operations against the exact selected
+// target without widening the frozen Broker interface.
+type BrokerCastController interface {
+	ListCastDevices(context.Context) ([]CastDevice, error)
+	CastSelectedTab(context.Context, string) error
+	StopCasting(context.Context, string) error
 }
 
 // BrowserEventWatcher is an optional broker extension for callers that need

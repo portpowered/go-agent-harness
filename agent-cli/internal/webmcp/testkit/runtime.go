@@ -31,6 +31,9 @@ const (
 	OperationActivate              OperationKind = "activate_target"
 	OperationAttach                OperationKind = "attach_target"
 	OperationCapturePageScreenshot OperationKind = "capture_page_screenshot"
+	OperationListCastDevices       OperationKind = "list_cast_devices"
+	OperationCastTab               OperationKind = "cast_tab"
+	OperationStopCasting           OperationKind = "stop_casting"
 	OperationEnableAcknowledged    OperationKind = "enable_webmcp_acknowledged"
 	OperationInvoke                OperationKind = "invoke_tool"
 	OperationCancel                OperationKind = "cancel_invocation"
@@ -56,6 +59,7 @@ type Operation struct {
 	Input                    json.RawMessage
 	Arguments                json.RawMessage
 	Reason                   string
+	DeviceName               string
 	CancellationAcknowledged bool
 }
 
@@ -122,6 +126,8 @@ type ScriptedTargetSessionOptions struct {
 	CancelError              error
 	PageScreenshot           webmcp.PageScreenshot
 	PageScreenshotError      error
+	CastDevices              []webmcp.CastDevice
+	CastError                error
 	AutoRespond              bool
 	AutoResponseStatus       string
 	AutoResponseOutput       json.RawMessage
@@ -196,6 +202,16 @@ func WithPageScreenshotError(err error) ScriptedTargetSessionOption {
 	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.PageScreenshotError = err
 	})
+}
+
+func WithCastDevices(devices ...webmcp.CastDevice) ScriptedTargetSessionOption {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
+		options.CastDevices = append([]webmcp.CastDevice(nil), devices...)
+	})
+}
+
+func WithCastError(err error) ScriptedTargetSessionOption {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.CastError = err })
 }
 
 func WithCancellationAcknowledgement(acknowledged bool) ScriptedTargetSessionOption {

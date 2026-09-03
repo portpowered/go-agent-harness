@@ -164,7 +164,8 @@ func interactiveToolClassForName(name string) InteractiveToolClass {
 	case "exec", "sleep":
 		return InteractiveToolClassBoundedLongRunning
 	case webmcp.SelectTabToolName, webmcp.InvokeToolName, webmcp.ListToolsToolName,
-		webmcp.ListTabsToolName, webmcp.GetContextToolName, webmcp.CancelToolName:
+		webmcp.ListTabsToolName, webmcp.GetContextToolName, webmcp.CancelToolName,
+		webmcp.ListCastDevicesToolName, webmcp.CastTabToolName, webmcp.StopCastingToolName:
 		return InteractiveToolClassBoundedLongRunning
 	default:
 		return InteractiveToolClassFastRead

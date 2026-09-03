@@ -52,6 +52,7 @@ func TestDefaultBrowserConfig_IsComplete(t *testing.T) {
 		"browser:",
 		"enabled: false",
 		"backend: webmcp",
+		"web_cast: false",
 		"cdp_url: \"\"",
 		"ws_endpoint: \"\"",
 		"headless: false",
@@ -75,6 +76,7 @@ browser:
   tools:
     enabled: true
     backend: webmcp
+    web_cast: true
   connection:
     cdp_url: http://127.0.0.1:9222
     ws_endpoint: ws://127.0.0.1:9222/devtools/browser/abc
@@ -127,6 +129,9 @@ browser:
 	got := cfg.Browser
 	if !got.BrowserBackendEnabled() || got.Tools.Backend != BrowserToolsBackendWebMCP {
 		t.Fatalf("tools = %+v, want enabled WebMCP", got.Tools)
+	}
+	if !got.Tools.WebCast {
+		t.Fatal("web_cast was not loaded")
 	}
 	if got.Connection.CDPURL != "http://127.0.0.1:9222" || got.Connection.WSEndpoint == "" || !got.Connection.AllowRemoteCDP {
 		t.Errorf("connection = %+v", got.Connection)

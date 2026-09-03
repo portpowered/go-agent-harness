@@ -117,6 +117,40 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 	}
 }
 
+func TestWebCastToolsAreExplicitlyGatedAndExecuteThroughBroker(t *testing.T) {
+	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 8 {
+		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
+	}
+	broker := &recordingBroker{castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}}}
+	set := NewBrokerToolSet(broker, true)
+	definitions := set.Definitions()
+	if len(definitions) != 11 || definitions[8].Name != webmcp.ListCastDevicesToolName || definitions[9].Name != webmcp.CastTabToolName || definitions[10].Name != webmcp.StopCastingToolName {
+		t.Fatalf("cast definitions = %+v", definitions)
+	}
+	if schemas := set.DefinitionSchemas(); len(schemas) != 11 {
+		t.Fatalf("cast schemas = %d, want 11", len(schemas))
+	}
+
+	calls := []messages.ToolCall{
+		{ID: "list-cast", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
+		{ID: "cast-tab", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV"}`},
+		{ID: "stop-cast", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Office TV"}`},
+	}
+	for _, call := range calls {
+		response, err := set.Executor().Execute(context.Background(), call)
+		if err != nil {
+			t.Fatalf("execute %s: %v", call.Name, err)
+		}
+		envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+		if err != nil || !envelope.OK {
+			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
+		}
+	}
+	if !reflect.DeepEqual(broker.calls, []string{"list_cast_devices", "cast_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
+		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
+	}
+}
+
 func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
 	want := webmcp.PageContext{
 		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
@@ -706,17 +740,19 @@ func TestToolSetRegistryPreservesShowPageImageProjection(t *testing.T) {
 }
 
 type recordingBroker struct {
-	selected      webmcp.PageContext
-	selectedErr   error
-	targets       []webmcp.Target
-	catalog       webmcp.ToolCatalogSnapshot
-	invokeResult  webmcp.InvokeResult
-	lastInvoke    webmcp.InvokeRequest
-	lastCancel    webmcp.CancelRequest
-	lastOpen      webmcp.OpenTabRequest
-	screenshot    webmcp.PageScreenshot
-	screenshotErr error
-	calls         []string
+	selected       webmcp.PageContext
+	selectedErr    error
+	targets        []webmcp.Target
+	catalog        webmcp.ToolCatalogSnapshot
+	invokeResult   webmcp.InvokeResult
+	lastInvoke     webmcp.InvokeRequest
+	lastCancel     webmcp.CancelRequest
+	lastOpen       webmcp.OpenTabRequest
+	screenshot     webmcp.PageScreenshot
+	screenshotErr  error
+	calls          []string
+	castDevices    []webmcp.CastDevice
+	castDeviceName string
 }
 
 func (b *recordingBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
@@ -776,6 +812,23 @@ func (b *recordingBroker) CapturePageScreenshot(context.Context) (webmcp.PageScr
 	}
 	screenshot.Bytes = append([]byte(nil), screenshot.Bytes...)
 	return screenshot, nil
+}
+
+func (b *recordingBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
+	b.calls = append(b.calls, "list_cast_devices")
+	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
+}
+
+func (b *recordingBroker) CastSelectedTab(_ context.Context, deviceName string) error {
+	b.calls = append(b.calls, "cast_tab")
+	b.castDeviceName = deviceName
+	return nil
+}
+
+func (b *recordingBroker) StopCasting(_ context.Context, deviceName string) error {
+	b.calls = append(b.calls, "stop_casting")
+	b.castDeviceName = deviceName
+	return nil
 }
 
 func (b *recordingBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {

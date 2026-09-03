@@ -49,6 +49,9 @@ const (
 	WebMCPInvokeToolMethod        = "WebMCP.invokeTool"
 	WebMCPCancelInvocationMethod  = "WebMCP.cancelInvocation"
 	PageCaptureScreenshotMethod   = "Page.captureScreenshot"
+	CastEnableMethod              = "Cast.enable"
+	CastStartTabMirroringMethod   = "Cast.startTabMirroring"
+	CastStopCastingMethod         = "Cast.stopCasting"
 )
 
 // WireTraceSink receives safe WebMCP wire-boundary evidence. Implementations
@@ -97,6 +100,16 @@ type BrowserVersion struct {
 	// BrowserInstanceID is optional protocol metadata supplied by a browser
 	// adapter or hermetic probe. Discovery hashes it before exposing it.
 	BrowserInstanceID string
+}
+
+// CastDevice is a receiver advertised by Chrome's Media Router for the
+// selected page target. Name is the exact protocol selector required by the
+// Cast commands; ID is diagnostic identity and Session is present while a
+// route is active.
+type CastDevice struct {
+	Name    string `json:"name"`
+	ID      string `json:"id"`
+	Session string `json:"session,omitempty"`
 }
 
 // Target is a normalized browser target. Title and URL are display metadata;

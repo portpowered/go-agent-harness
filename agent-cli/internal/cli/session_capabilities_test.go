@@ -41,6 +41,7 @@ func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testin
 		testkit.NewTargetConfig(target,
 			testkit.WithInitialCatalog(pageTool),
 			testkit.WithAutoResponse(json.RawMessage(`{"mutated":true}`)),
+			testkit.WithCastDevices(webmcp.CastDevice{Name: "Session TV", ID: "sink-session"}),
 		),
 	))
 	laneCandidate := discovery.BrowserCandidate{
@@ -101,7 +102,7 @@ func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testin
 		t.Fatal("session broker dropped SelectWithOptions")
 	}
 
-	toolSet := webmcpTools.NewBrokerToolSet(broker)
+	toolSet := webmcpTools.NewBrokerToolSet(broker, true)
 	listResponse, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "list-call",
 		Name:      webmcp.ListToolsToolName,
@@ -151,6 +152,21 @@ func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testin
 	}
 	if !invokeEnvelope.OK || invokeData.Status != string(webmcp.InvocationCompleted) || string(invokeData.Output) != `{"mutated":true}` {
 		t.Fatalf("session invocation envelope = %#v data=%#v", invokeEnvelope, invokeData)
+	}
+
+	for _, call := range []messages.ToolCall{
+		{ID: "cast-list", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
+		{ID: "cast-start", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Session TV"}`},
+		{ID: "cast-stop", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Session TV"}`},
+	} {
+		response, callErr := toolSet.Executor().Execute(context.Background(), call)
+		if callErr != nil {
+			t.Fatalf("execute %s: %v", call.Name, callErr)
+		}
+		envelope, decodeErr := webmcp.UnmarshalToolResult([]byte(response.Content))
+		if decodeErr != nil || !envelope.OK {
+			t.Fatalf("%s result = %s decode=%v", call.Name, response.Content, decodeErr)
+		}
 	}
 
 	var mutations []testkit.Operation
@@ -680,6 +696,56 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 	}
 }
 
+func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *testing.T) {
+	broker := &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Den TV", ID: "sink-den"}}}
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
+
+	disabled, err := factory(browserCapabilityConfig(true))
+	if err != nil {
+		t.Fatalf("disabled cast factory: %v", err)
+	}
+	for _, definition := range disabled.Definitions {
+		if definition.Name == webmcp.ListCastDevicesToolName || definition.Name == webmcp.CastTabToolName || definition.Name == webmcp.StopCastingToolName {
+			t.Fatalf("cast control %q advertised without --web-cast", definition.Name)
+		}
+	}
+	if err := disabled.Close(); err != nil {
+		t.Fatalf("close disabled cast capabilities: %v", err)
+	}
+
+	broker = &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Den TV", ID: "sink-den"}}}
+	enabledConfig := browserCapabilityConfig(true)
+	enabledConfig.Browser.Tools.WebCast = true
+	enabled, err := factory(enabledConfig)
+	if err != nil {
+		t.Fatalf("enabled cast factory: %v", err)
+	}
+	defer func() { _ = enabled.Close() }()
+	want := map[string]bool{
+		webmcp.ListCastDevicesToolName: false,
+		webmcp.CastTabToolName:         false,
+		webmcp.StopCastingToolName:     false,
+	}
+	for _, definition := range enabled.Definitions {
+		if _, ok := want[definition.Name]; ok {
+			want[definition.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Fatalf("enabled definitions omit %q", name)
+		}
+	}
+	response, err := enabled.Executor.Execute(context.Background(), messages.ToolCall{ID: "cast-list", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`})
+	if err != nil {
+		t.Fatalf("execute session cast list: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || !envelope.OK || broker.castListCalls != 1 {
+		t.Fatalf("session cast list = %s err=%v calls=%d", response.Content, err, broker.castListCalls)
+	}
+}
+
 func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testing.T) {
 	closeErr := errors.New("broker close failed")
 	broker := &capabilityBroker{closeErr: closeErr}
@@ -770,17 +836,19 @@ func isBrokerToolName(name string) bool {
 }
 
 type capabilityBroker struct {
-	selected    webmcp.PageContext
-	discoverErr error
-	selectErr   error
-	selectCalls int
-	selectOpts  webmcp.SelectOptions
-	openRequest webmcp.OpenTabRequest
-	openErr     error
-	openCalls   int
-	catalog     []webmcp.ToolDescriptor
-	closeErr    error
-	closeCalls  int
+	selected      webmcp.PageContext
+	discoverErr   error
+	selectErr     error
+	selectCalls   int
+	selectOpts    webmcp.SelectOptions
+	openRequest   webmcp.OpenTabRequest
+	openErr       error
+	openCalls     int
+	catalog       []webmcp.ToolDescriptor
+	closeErr      error
+	closeCalls    int
+	castDevices   []webmcp.CastDevice
+	castListCalls int
 }
 
 func (b *capabilityBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
@@ -821,6 +889,15 @@ func (b *capabilityBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequ
 	b.openRequest = request
 	return b.selected, b.openErr
 }
+
+func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
+	b.castListCalls++
+	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
+}
+
+func (b *capabilityBroker) CastSelectedTab(context.Context, string) error { return nil }
+
+func (b *capabilityBroker) StopCasting(context.Context, string) error { return nil }
 
 func (b *capabilityBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
 	return make(chan webmcp.BrokerEvent)

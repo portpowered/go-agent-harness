@@ -108,6 +108,15 @@ Use `--browser-close-on-exit` if the managed browser should close with the
 session. Write-like page operations require approval by default; set
 `--browser-approval always`, `writes`, or `never` to choose the policy.
 
+Add `--web-cast` alongside `--browser-tools webmcp` to let the agent discover
+Google Cast receivers visible to Chrome, cast the exact selected tab, and stop
+that Cast session. Cast discovery runs on the browser host's local network and
+may require operating-system local-network permission:
+
+```bash
+yui --workdir "$PWD" session --browser-tools webmcp --web-cast
+```
+
 ## Configuration
 
 Configuration precedence is defaults, then `~/.agent-cli/config.yaml` when it
@@ -291,6 +300,7 @@ their explicit flags are supplied, which keeps the model's tool choice focused.
 | `sleep` | Wait for an external operation for a bounded duration; requires `--experimental-tools`. |
 | `webmcp_open_tab`, `webmcp_list_tabs`, `webmcp_select_tab` | Open, discover, and select browser tabs; requires `--browser-tools webmcp`. |
 | `webmcp_get_context`, `webmcp_list_tools`, `webmcp_invoke`, `webmcp_cancel`, `show_page` | Inspect or operate the selected WebMCP page; requires `--browser-tools webmcp`. |
+| `webmcp_list_cast_devices`, `webmcp_cast_tab`, `webmcp_stop_casting` | Discover Cast receivers, cast the exact selected tab, or stop casting; additionally requires `--web-cast`. |
 | WebMCP page tools | Dynamically discovered structured tools supplied by the active browser page. |
 
 The model receives the enabled tool definitions and chooses when to call them.

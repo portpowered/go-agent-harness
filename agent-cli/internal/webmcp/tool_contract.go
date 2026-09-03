@@ -4,14 +4,17 @@ package webmcp
 // dynamic. Keep this list ordered: it is the order presented to providers and
 // the order used by contract/golden tests.
 const (
-	GetContextToolName = "webmcp_get_context"
-	ListTabsToolName   = "webmcp_list_tabs"
-	SelectTabToolName  = "webmcp_select_tab"
-	ListToolsToolName  = "webmcp_list_tools"
-	InvokeToolName     = "webmcp_invoke"
-	CancelToolName     = "webmcp_cancel"
-	OpenTabToolName    = "webmcp_open_tab"
-	ShowPageToolName   = "show_page"
+	GetContextToolName      = "webmcp_get_context"
+	ListTabsToolName        = "webmcp_list_tabs"
+	SelectTabToolName       = "webmcp_select_tab"
+	ListToolsToolName       = "webmcp_list_tools"
+	InvokeToolName          = "webmcp_invoke"
+	CancelToolName          = "webmcp_cancel"
+	OpenTabToolName         = "webmcp_open_tab"
+	ShowPageToolName        = "show_page"
+	ListCastDevicesToolName = "webmcp_list_cast_devices"
+	CastTabToolName         = "webmcp_cast_tab"
+	StopCastingToolName     = "webmcp_stop_casting"
 )
 
 // StableToolNames is a copy of the ordered C0 tool-name list.
@@ -102,13 +105,13 @@ func StableBrokerToolSchemas() []map[string]any {
 	return brokerToolSchemas(StableBrokerToolDefinitions())
 }
 
-// BrowserToolDefinitions returns the stable broker controls plus browser-only
-// tab creation and page capture capabilities. The latter are deliberately
-// kept out of StableBrokerToolDefinitions so disabled sessions and the frozen
-// C0 contract remain inert.
-func BrowserToolDefinitions() []BrokerToolDefinition {
+// BrowserToolDefinitions returns the stable broker controls plus opt-in
+// browser capabilities. They are deliberately kept out of
+// StableBrokerToolDefinitions so disabled sessions and the frozen C0 contract
+// remain inert.
+func BrowserToolDefinitions(webCast ...bool) []BrokerToolDefinition {
 	definitions := StableBrokerToolDefinitions()
-	return append(definitions,
+	definitions = append(definitions,
 		BrokerToolDefinition{
 			Name:        OpenTabToolName,
 			Description: "Open an absolute website URL in a new browser tab, select it for WebMCP operations, and bring it to the foreground by default. Call this directly whenever the user asks to open a website; it works even when webmcp_list_tabs returned no tabs, and it may be called repeatedly to open additional tabs.",
@@ -124,12 +127,36 @@ func BrowserToolDefinitions() []BrokerToolDefinition {
 			Parameters:  objectSchema(),
 		},
 	)
+	if len(webCast) == 0 || !webCast[0] {
+		return definitions
+	}
+	return append(definitions,
+		BrokerToolDefinition{
+			Name:        ListCastDevicesToolName,
+			Description: "List Google Cast devices visible to the browser hosting the selected WebMCP tab.",
+			Parameters:  objectSchema(),
+		},
+		BrokerToolDefinition{
+			Name:        CastTabToolName,
+			Description: "Start casting the exact selected WebMCP tab to a device returned by webmcp_list_cast_devices. Only call this after the customer explicitly asks to cast.",
+			Parameters: objectSchema(
+				property("device_name", "string", "Exact Cast device name returned by webmcp_list_cast_devices.", true, nil),
+			),
+		},
+		BrokerToolDefinition{
+			Name:        StopCastingToolName,
+			Description: "Stop the active Cast session on a device returned by webmcp_list_cast_devices.",
+			Parameters: objectSchema(
+				property("device_name", "string", "Exact Cast device name returned by webmcp_list_cast_devices.", true, nil),
+			),
+		},
+	)
 }
 
 // BrowserToolSchemas returns fresh provider-facing schemas for the complete
 // browser-enabled broker surface.
-func BrowserToolSchemas() []map[string]any {
-	return brokerToolSchemas(BrowserToolDefinitions())
+func BrowserToolSchemas(webCast ...bool) []map[string]any {
+	return brokerToolSchemas(BrowserToolDefinitions(webCast...))
 }
 
 func brokerToolSchemas(definitions []BrokerToolDefinition) []map[string]any {

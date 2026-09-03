@@ -7,6 +7,7 @@ import "time"
 // and an explicit zero, false, empty string, or empty list.
 type BrowserOverrides struct {
 	ToolsBackend       *string
+	WebCast            *bool
 	CDPURL             *string
 	WSEndpoint         *string
 	UserDataDir        *string
@@ -49,6 +50,9 @@ func (c BrowserConfig) ApplyBrowserOverrides(overrides BrowserOverrides) (Browse
 	if overrides.ToolsBackend != nil {
 		out.Tools.Enabled = true
 		out.Tools.Backend = *overrides.ToolsBackend
+	}
+	if overrides.WebCast != nil {
+		out.Tools.WebCast = *overrides.WebCast
 	}
 	if overrides.CDPURL != nil {
 		out.Connection.CDPURL = *overrides.CDPURL
