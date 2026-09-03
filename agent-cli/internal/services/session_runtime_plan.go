@@ -556,7 +556,11 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 				WaitForClose:             opts.BareLive || interactive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 				MaxDuration:              injectedSessionMaxDuration(opts.BareLive || interactive),
-				AdvertiseToolDefinitions: true,
+				// composeSessionInstructions wraps injected inferencers and sends the
+				// complete instructions/tool surface when SESSION.CREATED arrives.
+				// Advertising it again from ModelRunner races a duplicate
+				// SESSION.UPDATE onto the provider wire.
+				AdvertiseToolDefinitions: false,
 				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
 				BareLive:                 opts.BareLive,
 				BrowserToolsInteractive:  interactive,
