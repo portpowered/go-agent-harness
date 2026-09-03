@@ -211,22 +211,28 @@ type sessionInboundMedia struct {
 	wake         chan struct{}
 	closeOnce    sync.Once
 	response     PlaybackResponse
-	// responseSamples is provider-rate PCM received for response. A physical
-	// device clock can under-report this duration, but must never cause a
-	// provider truncation beyond audio that actually exists on the item.
-	responseSamples uint64
-	interrupted     PlaybackResponse
-	discarding      bool
-	controller      PlaybackController
+	// responseSamples retains provider-rate PCM by response. Network delivery
+	// can open later responses while an earlier response is still reaching the
+	// physical device, so one mutable counter cannot cap the audible response's
+	// truncation cursor correctly.
+	responseSamples map[PlaybackResponse]uint64
+	// playbackResponse is the response whose first FIFO frame was most recently
+	// dequeued for the device. It deliberately trails response when the provider
+	// sends a tool continuation faster than real-time playback.
+	playbackResponse PlaybackResponse
+	interrupted      PlaybackResponse
+	discarding       bool
+	controller       PlaybackController
 }
 
 func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sessionInboundMedia {
 	return &sessionInboundMedia{
-		frameSamples: frameSamples,
-		sampleRate:   sampleRate,
-		padPartial:   padPartial,
-		done:         make(chan struct{}),
-		wake:         make(chan struct{}, 1),
+		frameSamples:    frameSamples,
+		sampleRate:      sampleRate,
+		padPartial:      padPartial,
+		done:            make(chan struct{}),
+		wake:            make(chan struct{}, 1),
+		responseSamples: make(map[PlaybackResponse]uint64),
 	}
 }
 
@@ -240,6 +246,19 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 			frame := m.frames[0]
 			m.frames[0] = PCMFrame{}
 			m.frames = m.frames[1:]
+			if len(frame.Samples) > 0 && frame.PlaybackResponse.ItemID != "" && frame.PlaybackResponse != m.playbackResponse {
+				previous := m.playbackResponse
+				m.playbackResponse = frame.PlaybackResponse
+				if previous.ItemID != "" {
+					delete(m.responseSamples, previous)
+				}
+				if m.controller != nil {
+					// Playback ownership follows FIFO dequeue order. Starting at
+					// provider-ingress time invalidates an older response whose PCM is
+					// still waiting behind device-clock backpressure.
+					m.controller.StartPlayback(frame.PlaybackResponse)
+				}
+			}
 			m.mu.Unlock()
 			return frame, nil
 		}
@@ -268,10 +287,6 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 func (m *sessionInboundMedia) SetPlaybackController(controller PlaybackController) {
 	m.mu.Lock()
 	m.controller = controller
-	response := m.response
-	if controller != nil && response.ItemID != "" {
-		controller.StartPlayback(response)
-	}
 	m.mu.Unlock()
 }
 
@@ -288,18 +303,18 @@ func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
 	m.discarding = false
 	m.interrupted = PlaybackResponse{}
 	m.response = response
-	m.responseSamples = 0
-	controller := m.controller
-	if controller != nil {
-		controller.StartPlayback(response)
+	if m.responseSamples == nil {
+		m.responseSamples = make(map[PlaybackResponse]uint64)
 	}
+	m.responseSamples[response] = 0
 	m.mu.Unlock()
 }
 
 func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	m.mu.Lock()
-	response := m.response
-	responseSamples := m.responseSamples
+	response := m.playbackResponse
+	responseSamples := m.responseSamples[response]
+	ingressResponse := m.response
 	controller := m.controller
 	for index := range m.frames {
 		m.frames[index] = PCMFrame{}
@@ -307,9 +322,13 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	m.frames = nil
 	m.pending = nil
 	m.response = PlaybackResponse{}
-	m.responseSamples = 0
-	m.interrupted = response
-	m.discarding = response.ItemID != ""
+	m.playbackResponse = PlaybackResponse{}
+	m.responseSamples = make(map[PlaybackResponse]uint64)
+	// Discard late deltas from the newest ingress response in this cancelled
+	// chain. The audible response can be older when tool continuations have
+	// already arrived and queued behind it.
+	m.interrupted = ingressResponse
+	m.discarding = ingressResponse.ItemID != ""
 	if controller == nil || response.ItemID == "" {
 		m.mu.Unlock()
 		m.notify()
@@ -363,7 +382,9 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.mu.Unlock()
 		return ErrSessionMediaInboundBacklog
 	}
-	m.responseSamples += uint64(len(samples))
+	if m.response.ItemID != "" {
+		m.responseSamples[m.response] += uint64(len(samples))
+	}
 	m.pending = append(m.pending, samples...)
 	m.appendCompleteFramesLocked()
 	m.mu.Unlock()
