@@ -233,6 +233,10 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	// does not synthesize a default prompt.
 	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
 		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
+		// The wrapper above owns the complete injected-session configuration.
+		// Suppress ModelRunner's separate tool-only update, which otherwise races
+		// an identical second SESSION.UPDATE onto the provider wire.
+		plan.loop.AdvertiseToolDefinitions = false
 	}
 	return plan, nil
 }
