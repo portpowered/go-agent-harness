@@ -215,11 +215,16 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		state.completed = true
 		r.transcriptStates[role] = state
 		return nil
+	case *messages.TextEndValue, *messages.MessageEndValue:
+		// These are explicit visible-utterance boundaries. In contrast, audio
+		// and other non-rendered stream events may be interleaved between text
+		// or transcript deltas and must not fragment the terminal line.
+		return r.finishTranscript()
 	default:
-		if err := r.finishTranscript(); err != nil {
-			return err
-		}
 		if value, ok := msg.Value.(*messages.SessionCloseValue); ok {
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
 			leadingNewline := !r.transcriptJustClosed
 			r.transcriptJustClosed = false
 			if r.terminalReporter != nil {
@@ -228,16 +233,24 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 			}
 			return writeSessionReplayClose(r.out, value, leadingNewline)
 		}
-		if r.terminalReporter != nil {
-			r.terminalReporter.observeStreamMessage(msg, !r.transcriptJustClosed)
-		}
-		err := writeSessionReplayMessageUnscoped(r.out, msg)
-		if err == nil {
-			if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil && value.Content != "" {
-				r.transcriptJustClosed = false
+		if value, ok := msg.Value.(*messages.ErrorValue); ok {
+			// A non-terminal provider notice is invisible and therefore cannot
+			// create a visible actor boundary. A terminal error does end the
+			// current line before it is returned to the session loop.
+			if !value.IsNonTerminal() {
+				if err := r.finishTranscript(); err != nil {
+					return err
+				}
 			}
+			if r.terminalReporter != nil {
+				r.terminalReporter.observeStreamMessage(msg, !r.transcriptJustClosed)
+			}
+			return writeSessionReplayMessageUnscoped(r.out, msg)
 		}
-		return err
+		// All remaining messages are invisible to this renderer. Their
+		// arrival—including AUDIO.*, VAD.*, usage, and session lifecycle
+		// traffic—does not mean the visible speaker changed.
+		return nil
 	}
 }
 

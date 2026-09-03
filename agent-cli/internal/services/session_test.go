@@ -941,6 +941,62 @@ func TestSessionReplayRendererKeepsTextDeltasOnOneActorLine(t *testing.T) {
 	}
 }
 
+func TestSessionReplayRendererKeepsTranscriptContiguousAcrossAudioPackets(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptDeltaValue("Incorrect. ")},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewAudioDeltaValue([]byte{0x01, 0x02})},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptDeltaValue("Me llam")},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewAudioDeltaValue([]byte{0x03, 0x04})},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptDeltaValue("o means my name is.")},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: "response-1", Value: messages.NewTranscriptEndValue("Incorrect. Me llamo means my name is.")},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write event %s: %v", event.Type, err)
+		}
+	}
+
+	if got, want := out.String(), "Assistant: Incorrect. Me llamo means my name is.\n"; got != want {
+		t.Fatalf("interleaved audio transcript output = %q, want %q", got, want)
+	}
+}
+
+func TestSessionReplayRendererBreaksOnlyWhenVisibleActorChanges(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("assistant ")},
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x01})},
+		{Type: messages.StreamTypeUsageInfo, Role: messages.RoleAssistant, Value: messages.NewUsageInfoValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("continued")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("user ")},
+		{Type: messages.StreamTypeVADSpeechStopped, Role: messages.RoleUser, Value: messages.NewVADSpeechStoppedValue()},
+		{Type: messages.StreamTypeInputItemAdded, Role: messages.RoleUser, Value: messages.NewInputItemAddedValue("item-1")},
+		{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("session-1")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("continued")},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, Value: messages.NewTextDeltaValue("tool ")},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, Value: messages.NewTextDeltaValue("continued")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue()},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write event %s: %v", event.Type, err)
+		}
+	}
+
+	want := "Assistant: assistant continued\n" +
+		"User: user continued\n" +
+		"Tool result: tool continued\n"
+	if got := out.String(); got != want {
+		t.Fatalf("actor-aware stream output = %q, want %q", got, want)
+	}
+}
+
 func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
