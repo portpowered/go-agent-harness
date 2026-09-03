@@ -5,8 +5,3 @@ use (
 	./go-agent-loop
 	./go-llm-gateway
 )
-
-replace (
-	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1 => ./go-agent-loop
-	github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.1 => ./go-llm-gateway
-)

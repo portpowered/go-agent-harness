@@ -6,7 +6,7 @@ BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
 GO_TEST_TIMEOUT ?= 300s
-AGENT_CLI_INTEGRATION_TIMEOUT ?= 385s
+AGENT_CLI_INTEGRATION_TIMEOUT ?= 480s
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
@@ -182,7 +182,7 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	@set -euo pipefail; \
 	echo "==> test-audio-device-server-integration agent + audio-device-server replay"; \
 	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(GO_TEST_TIMEOUT)" -- $(GO) test ./test/integration \
-		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
+		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \

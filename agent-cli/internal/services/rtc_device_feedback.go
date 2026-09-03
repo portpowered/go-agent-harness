@@ -109,6 +109,14 @@ type localFeedbackGate struct {
 	// zero and discards the frames held while it accumulated.
 	probeIndependentEvidence time.Duration
 	confirmedLag             time.Duration
+	// startupAmbiguousEvidence marks a sub-MinimumEvidence active burst seen
+	// while local playback is relevant. Such a burst cannot yet be classified
+	// as feedback or independent speech. Releasing it merely because the normal
+	// latency hold expired caused the short AUVoiceIO startup echo in test42 to
+	// reach server VAD and cancel the assistant. It remains held until sustained
+	// non-feedback proves real speech, confirmed correlation proves echo, or a
+	// return to no evidence lets the gate discard the meaningless short burst.
+	startupAmbiguousEvidence bool
 }
 
 // newLocalFeedbackGate constructs the gate for one paired local-device
@@ -199,6 +207,7 @@ func (g *localFeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 		g.playbackPosition = g.capturePosition
 		g.lastPlaybackEnd = g.playbackPosition
 		g.pending = nil
+		g.startupAmbiguousEvidence = false
 		g.resetCaptureEvidenceLocked()
 		g.state = localFeedbackGateIdle
 	}
@@ -272,7 +281,13 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		// playback began (or after the acoustic tail ended).
 		g.resetCaptureEvidenceLocked()
 		g.state = localFeedbackGateIdle
-		released := g.releaseAllLocked()
+		var released [][]int16
+		if g.startupAmbiguousEvidence {
+			g.pending = nil
+		} else {
+			released = g.releaseAllLocked()
+		}
+		g.startupAmbiguousEvidence = false
 		return append(released, owned), nil
 	}
 	if g.state == localFeedbackGateSuppressing || g.state == localFeedbackGateDraining {
@@ -309,6 +324,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		g.state = localFeedbackGateSuppressing
 		g.suppressUntil = g.playbackTailEndLocked()
 		g.pending = nil
+		g.startupAmbiguousEvidence = false
 		g.resetCaptureEvidenceLocked()
 		g.warnOnceLocked()
 		return nil, nil
@@ -321,6 +337,13 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	// is also the documented maximum release latency, so this does not extend
 	// the user-visible bound.
 	stableNonFeedback := observation.Classification == audio.PCM16SelfHearingNonFeedback && end >= g.config.AnalysisWindow
+	if observation.Classification == audio.PCM16SelfHearingNoEvidence && g.startupAmbiguousEvidence && g.playbackIsRelevantLocked(start) {
+		g.pending = nil
+		g.startupAmbiguousEvidence = false
+		g.resetCaptureEvidenceLocked()
+		g.state = localFeedbackGateIdle
+		return nil, nil
+	}
 	if !g.playbackIsRelevantLocked(start) || observation.Classification == audio.PCM16SelfHearingNoEvidence || observation.Classification == audio.PCM16SelfHearingRateMismatch || stableNonFeedback {
 		if g.state == localFeedbackGateSuppressing && g.playbackIsRelevantLocked(start) {
 			g.state = localFeedbackGateDraining
@@ -328,6 +351,7 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 			g.state = localFeedbackGateIdle
 		}
 		released := g.releaseAllLocked()
+		g.startupAmbiguousEvidence = false
 		if observation.Classification != audio.PCM16SelfHearingNonFeedback {
 			g.resetCaptureEvidenceLocked()
 		}
@@ -336,6 +360,12 @@ func (g *localFeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 
 	if g.state == localFeedbackGateIdle {
 		g.state = localFeedbackGateAnalyzing
+	}
+	if observation.Classification == audio.PCM16SelfHearingInsufficientEvidence && observation.EvidenceSamples > 0 {
+		g.startupAmbiguousEvidence = true
+	}
+	if g.startupAmbiguousEvidence {
+		return nil, nil
 	}
 	return g.releaseExpiredLocked(end), nil
 }
@@ -443,6 +473,7 @@ func (g *localFeedbackGate) DiscardHeld() {
 	g.mu.Lock()
 	g.pending = nil
 	g.probeIndependentEvidence = 0
+	g.startupAmbiguousEvidence = false
 	g.mu.Unlock()
 }
 
@@ -460,6 +491,7 @@ func (g *localFeedbackGate) Close() error {
 	}
 	g.closed = true
 	g.pending = nil
+	g.startupAmbiguousEvidence = false
 	return errors.Join(g.detector.Close(), g.probe.Close())
 }
 
