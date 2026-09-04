@@ -19,6 +19,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
@@ -45,6 +47,7 @@ type remoteToolAudioCase struct {
 	deviceWAV       bool
 	naturalClose    bool
 	providerClose   bool
+	timingEvidence  bool
 }
 
 // TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM reproduces the live
@@ -90,6 +93,22 @@ func TestAgentBinaryAudioOutRecordsRemoteDevicePCM(t *testing.T) {
 		toolResponses:   map[int]bool{0: true},
 		deviceWAV:       true,
 	}, 0, 3*time.Millisecond, 30*time.Millisecond, 0, 0, 0)
+}
+
+// TestAgentBinarySerialToolTimingAtProcessEdges distills the six-call browser
+// chain observed in test7.json. The compiled CLI crosses a real WebSocket, a
+// fixture-controlled executor process, and the remote device HTTP boundary.
+// It proves that harness scheduling does not manufacture the multi-second
+// pauses seen in the live recording and that burst audio remains queued while
+// the serial tool chain completes.
+func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
+	runRemoteToolAudioScenario(t, remoteToolAudioCase{
+		name:            "test7_serial_tool_timing",
+		responseSamples: []int{48000, 0, 0, 0, 0, 0, 24000},
+		toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true, 5: true},
+		deviceWAV:       true,
+		timingEvidence:  true,
+	}, 0, 3*time.Millisecond, 30*time.Millisecond, 32, 0, 0)
 }
 
 // TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio reproduces the
@@ -231,6 +250,10 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	if testCase.deviceWAV {
 		audioOutPath = filepath.Join(t.TempDir(), "device-output.wav")
 	}
+	capturePath := ""
+	if testCase.timingEvidence {
+		capturePath = filepath.Join(t.TempDir(), "session.json")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	arguments := []string{
@@ -254,6 +277,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	command := exec.CommandContext(ctx, binaryPath, arguments...)
 	if audioOutPath != "" {
 		command.Args = append(command.Args, "--audio-out", audioOutPath)
+	}
+	if capturePath != "" {
+		command.Args = append(command.Args, "--record", capturePath)
 	}
 	if prompt != "" {
 		command.Args = append(command.Args, prompt)
@@ -378,6 +404,44 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 	if len(calls) > 0 {
 		assertRemoteToolObservations(t, observationPath, calls)
+	}
+	if capturePath != "" {
+		assertRemoteToolTimingEvidence(t, capturePath, len(calls))
+	}
+}
+
+func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls int) {
+	t.Helper()
+	capture, err := gwtesting.LoadSessionCapture(capturePath)
+	if err != nil {
+		t.Fatalf("load process-edge timing capture: %v", err)
+	}
+	report, err := sessiontiming.AnalyzeCapture(capture)
+	if err != nil {
+		t.Fatalf("analyze process-edge timing capture: %v", err)
+	}
+	if report.Summary.ToolCallCount != wantCalls || report.Summary.UnfinishedToolCallCount != 0 {
+		t.Fatalf("process-edge tool topology = %+v, want %d completed calls", report.Summary, wantCalls)
+	}
+	for _, check := range []struct {
+		name string
+		got  int64
+		max  int64
+	}{
+		{name: "executor", got: report.Summary.ToolExecutionMS.MaxMS, max: 500},
+		{name: "result scheduling", got: report.Summary.ToolResultToRequestMS.MaxMS, max: 100},
+		{name: "provider admission", got: report.Summary.ToolRequestToCreatedMS.MaxMS, max: 500},
+		{name: "fixture response", got: report.Summary.ToolCreatedToFirstOutputMS.MaxMS, max: 500},
+	} {
+		if check.got > check.max {
+			t.Errorf("process-edge %s latency = %dms, want <= %dms; summary=%+v", check.name, check.got, check.max, report.Summary)
+		}
+	}
+	if report.Summary.EstimatedAudibleGapMS.Count != 0 {
+		t.Errorf("serial tool fixture introduced an estimated audible gap: %+v", report.Summary.EstimatedAudibleGapMS)
+	}
+	if report.Summary.MaxEstimatedQueueDelayMS < 1000 {
+		t.Errorf("fixture did not exercise burst audio queued across tools: max queue delay=%dms", report.Summary.MaxEstimatedQueueDelayMS)
 	}
 }
 

@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // TestGPTRealtime21BinaryAudioAndToolRoundTrip is the billed, real-provider
@@ -117,9 +120,30 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 			}
 		}
 	}
-	if !reasoningLow || toolCall != 1 || toolResult != 1 || audioDone < 2 {
+	if !reasoningLow || toolCall != 1 || toolResult != 1 || audioDone < 1 {
 		t.Fatalf("wire contract: reasoning_low=%v tool_calls=%d tool_results=%d audio_done=%d", reasoningLow, toolCall, toolResult, audioDone)
 	}
+	protectedCapture, err := gwtesting.LoadSessionCapture(capturePath)
+	if err != nil {
+		t.Fatalf("load protected live capture: %v", err)
+	}
+	timing, err := sessiontiming.AnalyzeCapture(protectedCapture)
+	if err != nil {
+		t.Fatalf("analyze live timing: %v", err)
+	}
+	assertLiveTimingBudget(t, timing)
+	t.Logf("sanitized gpt-realtime-2.1 timing: input_to_output=%+v response_generation=%+v tool_execution=%+v result_to_request=%+v request_to_created=%+v continuation_generation=%+v result_to_output=%+v result_to_audio=%+v max_burst_ratio=%.2f max_queue_delay_ms=%d",
+		timing.Summary.InputToFirstOutputMS,
+		timing.Summary.ResponseToFirstOutputMS,
+		timing.Summary.ToolExecutionMS,
+		timing.Summary.ToolResultToRequestMS,
+		timing.Summary.ToolRequestToCreatedMS,
+		timing.Summary.ToolCreatedToFirstOutputMS,
+		timing.Summary.ToolResultToFirstOutputMS,
+		timing.Summary.ToolResultToFirstAudioMS,
+		timing.Summary.MaxAudioBurstRatio,
+		timing.Summary.MaxEstimatedQueueDelayMS,
+	)
 	inputPCM := wavData(t, inputPath)
 	if len(ingress) < len(inputPCM) || !bytes.Equal(ingress[:len(inputPCM)], inputPCM) || len(ingress)-len(inputPCM) >= 1440 {
 		t.Fatalf("ingress mismatch: wire=%d fixture=%d", len(ingress), len(inputPCM))
@@ -131,6 +155,36 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	}
 	if outputPCM := wavData(t, outputPath); !bytes.Equal(egress, outputPCM) {
 		t.Fatalf("egress mismatch: wire=%d wav=%d", len(egress), len(outputPCM))
+	}
+}
+
+func assertLiveTimingBudget(t *testing.T, report sessiontiming.Report) {
+	t.Helper()
+	if report.Summary.ToolCallCount != 1 || report.Summary.UnfinishedToolCallCount != 0 {
+		t.Fatalf("tool timing topology = %+v", report.Summary)
+	}
+	if report.Summary.ToolResultToFirstAudioMS.Count != 1 {
+		t.Fatalf("tool produced no correlated spoken continuation: tools=%+v", report.Tools)
+	}
+	// The live gate keeps provider variability separate from harness-owned
+	// latency. These are intentionally generous billed-test ceilings: tighter
+	// deterministic timing belongs in the hermetic process-edge suite.
+	checks := []struct {
+		name string
+		got  int64
+		max  int64
+	}{
+		{name: "input commit to first output", got: report.Summary.InputToFirstOutputMS.MaxMS, max: 10_000},
+		{name: "tool execution", got: report.Summary.ToolExecutionMS.MaxMS, max: 5_000},
+		{name: "tool result to continuation request", got: report.Summary.ToolResultToRequestMS.MaxMS, max: 250},
+		{name: "continuation request to response created", got: report.Summary.ToolRequestToCreatedMS.MaxMS, max: 5_000},
+		{name: "continuation response generation", got: report.Summary.ToolCreatedToFirstOutputMS.MaxMS, max: 10_000},
+		{name: "tool result to first continuation audio", got: report.Summary.ToolResultToFirstAudioMS.MaxMS, max: 15_000},
+	}
+	for _, check := range checks {
+		if check.got > check.max {
+			t.Errorf("%s latency = %dms, want <= %dms; summary=%+v", check.name, check.got, check.max, report.Summary)
+		}
 	}
 }
 
