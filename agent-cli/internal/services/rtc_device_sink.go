@@ -412,7 +412,7 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 		generation, blocked := s.playbackState()
 		frame, err := inbound.ReadFrame(operationCtx)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) || errors.Is(err, rtc.ErrSessionMediaClosed) {
 				if flushErr := s.flushProviderPlayback(operationCtx, &pending); flushErr != nil {
 					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: flushErr}
 				}
@@ -617,6 +617,31 @@ func (s *RTCDeviceSink) Close() error {
 		}
 	})
 	return s.closeErr
+}
+
+// waitForPump waits for the provider-media pump to finish without cancelling
+// it. A graceful session close first seals the provider-owned inbound media;
+// the pump can then consume its already-accepted FIFO and wait for the native
+// playback queue to reach the physical device before the binding is released.
+func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	done := s.runDone
+	s.mu.Unlock()
+	if done == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *RTCDeviceSink) beginPump() (context.Context, func(), error) {

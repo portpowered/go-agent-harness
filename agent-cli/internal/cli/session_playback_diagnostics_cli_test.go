@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -23,9 +24,9 @@ import (
 const playbackOverflowSessionReceiveHeadroom = 8
 
 // TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow delivers more
-// audio than the device queue can hold while no virtual callback drains it.
-// The RTC sink must block at its high watermark until session shutdown rather
-// than use the queue's drop-oldest overflow behavior.
+// audio faster than a delayed virtual callback can drain it. The RTC sink must
+// block at its high watermark, resume as callbacks consume audio, and complete
+// a clean playback drain without using the queue's drop-oldest behavior.
 func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	capacity, err := audio.PlaybackQueueCapacity(audio.DefaultDeviceFormat(), audio.DefaultPlaybackLatencyTarget)
 	if err != nil {
@@ -48,9 +49,43 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new virtual registry: %v", err)
 	}
+	deviceObserver, err := audio.NewDeviceSource(registry, "virtual:input")
+	if err != nil {
+		t.Fatalf("open virtual device observer: %v", err)
+	}
+	defer deviceObserver.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// Deliberately no reader drains "virtual:output". Session shutdown must
-	// cancel the blocked producer cleanly without dropping queued PCM.
+	// Let the producer reach its high watermark before callbacks start. This
+	// preserves the backpressure assertion while also modeling the physical
+	// callback progress that a clean playback drain necessarily waits for.
+	drainErr := make(chan error, 1)
+	go func() {
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			drainErr <- ctx.Err()
+			return
+		case <-timer.C:
+		}
+		frame := make([]int16, audio.FrameSize)
+		for {
+			err := deviceObserver.ReadFrame(ctx, frame)
+			if errors.Is(err, audio.ErrClosed) {
+				drainErr <- nil
+				return
+			}
+			if err != nil {
+				drainErr <- err
+				return
+			}
+		}
+	}()
+
+	// The delayed reader must force the burst through the paced device path
+	// without dropping queued PCM.
 	inferencer := newPlaybackOverflowInferencer(frames)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
@@ -70,10 +105,11 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 		"--audio-out-device", "virtual:output",
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	if err := command.ExecuteContext(ctx); err != nil {
 		t.Fatalf("session command: %v", err)
+	}
+	if err := <-drainErr; err != nil {
+		t.Fatalf("drain virtual playback callbacks: %v", err)
 	}
 
 	select {

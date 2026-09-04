@@ -807,15 +807,24 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			return nil
 		}
 	}
+	drainDevicePlayback := false
 	stopOwnedResources := func() error {
 		cancelAudio()
+		var drainErr error
+		if drainDevicePlayback {
+			drainErr = observedInferencer.DrainSessionPlayback(ctx)
+		}
 		cancel()
 		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
-		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
+		return errors.Join(drainErr, providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
 	termination := newSessionLiveTerminationBoundary(ctx, quiesceUpstream, stopOwnedResources, out, loop, opts, observedInferencer)
 	terminate := termination.terminate
+	terminateWithPlaybackDrain := func(err error) error {
+		drainDevicePlayback = err == nil && ctx.Err() == nil
+		return terminate(err)
+	}
 
 	var sessionUpdatedTimer *time.Timer
 	var sessionUpdatedTimeout <-chan time.Time
@@ -920,12 +929,15 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				}
 				return sessionRunTerminationError(ctx, terminate(nil))
 			}
-			return terminate(nil)
+			return terminateWithPlaybackDrain(nil)
 		case err := <-runErrCh:
 			runErr = err
 			runDone = true
 			if ctxErr := ctx.Err(); ctxErr != nil && awaitingResponse {
 				return terminate(fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctxErr))
+			}
+			if runErr == nil && ctx.Err() == nil {
+				return sessionRunTerminationError(ctx, terminateWithPlaybackDrain(nil))
 			}
 			return sessionRunTerminationError(ctx, terminate(nil))
 		case msg := <-loop.Deltas().Chan():
@@ -952,9 +964,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 					// A provider terminal delta can make the consumer stop before
 					// AgentLoop.Run has observed cancellation. Use the same owner
 					// shutdown path so the model runner cannot outlive this command.
-					return terminate(nil)
+					return terminateWithPlaybackDrain(nil)
 				}
-				return terminate(nil)
+				return terminateWithPlaybackDrain(nil)
 			}
 		}
 	}
