@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -475,6 +476,23 @@ func replayCaptureRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
 		return record.Payload
 	}
 	return record.Data
+}
+
+func replayLoopMaxDuration(path, timing string) time.Duration {
+	const completionGrace = 3 * time.Second
+	if normalizedSessionReplayTiming(timing) != sessionReplayTimingRecorded {
+		return completionGrace
+	}
+	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
+	if err != nil || len(loaded.Capture.Records) < 2 {
+		return completionGrace
+	}
+	first := loaded.Capture.Records[0].TimestampMs
+	last := loaded.Capture.Records[len(loaded.Capture.Records)-1].TimestampMs
+	if last <= first {
+		return completionGrace
+	}
+	return time.Duration(last-first)*time.Millisecond + completionGrace
 }
 
 // replayInitialSessionUpdateDialer lets the provider keep its normal session

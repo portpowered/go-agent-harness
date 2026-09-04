@@ -59,6 +59,7 @@ type AskFlags struct {
 	BaseURL               string // Base URL (overrides config, required for --provider local)
 	RecordCapturePath     string // Path to record LLM request/response captures (for testing)
 	ReplayCapturePath     string // Path to replay captures from file (for testing)
+	ReplayTiming          string // Replay cadence: immediate or recorded
 	OutputReasoningTokens bool   // Emit reasoning/thinking tokens to stdout when streaming
 	NoSystemInformation   bool   // Disable injection of runtime system info into the system prompt
 	OutputJSON            bool   // Output response as JSON; when combined with --stream, emits NDJSON delta events

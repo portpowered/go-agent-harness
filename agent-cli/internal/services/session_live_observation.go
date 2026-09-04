@@ -132,6 +132,23 @@ func (i *observedSessionInferencer) CloseSession() error {
 	return i.closeErr
 }
 
+func (i *observedSessionInferencer) DrainSessionPlayback(ctx context.Context) error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	observed := i.observed
+	i.mu.Unlock()
+	if observed == nil {
+		return nil
+	}
+	drainer, ok := observed.Session.(playbackDrainingSession)
+	if !ok {
+		return nil
+	}
+	return drainer.DrainPlayback(ctx)
+}
+
 func closeBareSessionIfNeeded(bare bool, inferencer *observedSessionInferencer) error {
 	if !bare || inferencer == nil {
 		return nil

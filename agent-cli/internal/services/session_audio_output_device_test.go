@@ -229,8 +229,10 @@ func (m *singleFrameInboundMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, 
 }
 
 func (m *singleFrameInboundMedia) Close() error {
-	m.closeCount.Add(1)
-	m.closeOnce.Do(func() { close(m.closed) })
+	m.closeOnce.Do(func() {
+		m.closeCount.Add(1)
+		close(m.closed)
+	})
 	return nil
 }
 

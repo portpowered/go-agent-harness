@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -64,7 +63,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
+	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -97,7 +96,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
 			WaitForClose: opts.WaitForClose || grokReplayCaptureHasSessionClose(opts.ReplayPath),
-			MaxDuration:  3 * time.Second,
+			MaxDuration:  replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
 			Done:         replayDialer.Done(),
 			DoneErr:      replayDialer.Err,
 		},

@@ -177,6 +177,37 @@ func TestReplayWebSocketDialer_ReplaysInboundEventsBeforeNextExpectedOutbound(t 
 	}
 }
 
+func TestReplayWebSocketDialer_PreservesRecordedCadenceWhenRequested(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "timed.session.json")
+	first := websocketCapture(DirectionServerToClient, 1, `{"type":"response.output_audio.delta","delta":"YQ=="}`)
+	second := websocketCapture(DirectionServerToClient, 2, `{"type":"response.output_audio.delta","delta":"Yg=="}`)
+	first.TimestampMs = 500
+	second.TimestampMs = 580
+	writeWebSocketCapture(t, path, []CapturedSessionEvent{first, second})
+
+	dialer, err := NewReplayWebSocketDialer(path, WithRecordedSessionTiming())
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	started := time.Now()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage first timed event: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > 40*time.Millisecond {
+		t.Fatalf("first recorded event was not released immediately: %s", elapsed)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage second timed event: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed < 65*time.Millisecond {
+		t.Fatalf("second event arrived after %s, want recorded ~80ms cadence", elapsed)
+	}
+}
+
 func TestReplayWebSocketDialer_WaitForNextOutboundFollowsCaptureCursor(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "paced.session.json")
 	writeWebSocketCapture(t, path, []CapturedSessionEvent{

@@ -309,7 +309,7 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
 	if runCalls != 2 {
-		t.Fatalf("target action runs = %d, want attach and enable", runCalls)
+		t.Fatalf("target action runs = %d, want attach/bootstrap and enable", runCalls)
 	}
 	if len(phases) < 3 || phases[0] != "listen" || phases[len(phases)-1] != "enable-command" {
 		t.Fatalf("listener/enable phases = %v, want listener before enable command", phases)

@@ -123,6 +123,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	}
 
 	var terminationPlanned bool
+	var drainDevicePlayback bool
 	termination := sessionTerminationBoundary{
 		ctx:             ctx,
 		quiesceUpstream: opts.quiesceUpstream,
@@ -130,12 +131,16 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			return waitForDurationSessionLoopStragglers(out, loop, policy, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
 		},
 		stopOwnedResources: func() error {
+			var drainErr error
+			if drainDevicePlayback {
+				drainErr = observedInferencer.DrainSessionPlayback(ctx)
+			}
 			cancel()
 			providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 			bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 			runTerminationErr := joinSessionTerminationErrors(waitRun(), nil)
 			admittedInferencer.waitForClose()
-			return errors.Join(providerErr, runTerminationErr, bindingErr)
+			return errors.Join(drainErr, providerErr, runTerminationErr, bindingErr)
 		},
 		flushBuffered: func() error {
 			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
@@ -148,6 +153,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	finish := func(planned bool, preferredErr error) error {
 		terminationPlanned = planned
+		drainDevicePlayback = !planned && preferredErr == nil && ctx.Err() == nil
 		terminationErr := termination.terminate(preferredErr)
 		durationTerminalWritten = terminalState.terminalWritten
 		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())

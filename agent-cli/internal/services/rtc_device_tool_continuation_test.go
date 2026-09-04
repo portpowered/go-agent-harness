@@ -76,13 +76,9 @@ func assertToolContinuationScenario(t *testing.T, providerRate int, duplicateOpe
 			t.Fatalf("reference response %d conversion: %v", index, err)
 		}
 		want = append(want, converted...)
-		// A response boundary drains its short native tail before the next
-		// response begins. The callback fills the unused portion with silence;
-		// that is device timing, not dropped or invented model speech.
-		if index+1 < len(responseSizes) && len(converted) > 0 {
-			padding := (audio.FrameSize - len(converted)%audio.FrameSize) % audio.FrameSize
-			want = append(want, make([]int16, padding)...)
-		}
+		// Adjacent provider responses are one continuous speaker timeline. A
+		// response/tool boundary must not force the native queue to empty or
+		// invent a silent callback between the two PCM spans.
 	}
 	if len(responses) < 2 {
 		t.Fatal("tool-continuation scenario requires at least two responses")
@@ -117,7 +113,7 @@ func assertToolContinuationScenario(t *testing.T, providerRate int, duplicateOpe
 	media.FailInbound(io.EOF)
 
 	drainToolContinuationPlayback(t, registry, sink, pumpErr)
-	if got := trimToolContinuationUnderflow(registry.RenderedSamples()); !reflect.DeepEqual(got, want) {
+	if got := trimToolContinuationEdgeUnderflow(registry.RenderedSamples()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tool continuation rendered %d/%d samples; response handoff lost %d samples", len(got), len(want), len(want)-len(got))
 	}
 }
@@ -177,7 +173,10 @@ func drainToolContinuationPlayback(t *testing.T, registry *audio.SimulatedDuplex
 	t.Fatalf("tool-continuation playback did not drain: %+v", sink.PlaybackStats())
 }
 
-func trimToolContinuationUnderflow(samples []int16) []int16 {
+func trimToolContinuationEdgeUnderflow(samples []int16) []int16 {
+	for len(samples) > 0 && samples[0] == 0 {
+		samples = samples[1:]
+	}
 	for len(samples) > 0 && samples[len(samples)-1] == 0 {
 		samples = samples[:len(samples)-1]
 	}

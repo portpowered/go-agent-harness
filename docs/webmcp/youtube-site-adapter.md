@@ -22,11 +22,14 @@ YouTube link.
 
 ## Architecture and safety boundaries
 
-The Chrome target session chooses the adapter only for HTTPS `youtube.com`,
-`www.youtube.com`, `m.youtube.com`, and redirecting `youtu.be` targets. It uses
+The Chrome target session installs the bundled site-adapter dispatcher with
 CDP `Page.addScriptToEvaluateOnNewDocument` for reload/redirect continuity and
-evaluates the same script immediately in the current main world. The script
-also checks protocol and hostname before doing any work.
+evaluates it immediately in the current main world. The YouTube IIFE returns
+without registering anything unless the document is HTTPS on `youtube.com`,
+`www.youtube.com`, or `m.youtube.com`. The Go registry also recognizes
+redirecting `youtu.be` targets. Installing the dispatcher before a newly opened
+tab's URL is final avoids an `about:blank` attachment race while preserving the
+exact in-page origin boundary.
 
 Search results are bounded to ten visible ordinary video links. Ads are
 excluded, video IDs are validated, and play accepts only an ID from the current
