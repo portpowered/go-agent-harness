@@ -397,6 +397,13 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 		}
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", attachErr)
 	}
+	if err := session.installDefaultSiteAdapter(ctx, selected.URL); err != nil {
+		cleanupErr := session.abortOpen()
+		if cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+		return nil, classifiedTargetError(h.candidate, targetID, "site_adapter", err)
+	}
 	session.publishAttached()
 
 	h.mu.Lock()
