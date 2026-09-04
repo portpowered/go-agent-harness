@@ -152,8 +152,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve composed session capabilities: %v", err)
 	}
-	if len(capabilities.Definitions) != 9 {
-		t.Fatalf("composed definitions = %d, want one static plus six broker definitions, open-tab, and show_page", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 10 {
+		t.Fatalf("composed definitions = %d, want one static plus six broker definitions, open-tab, navigate-tab, and show_page", len(capabilities.Definitions))
 	}
 
 	conn := newRecordingRealtimeTestConn()
@@ -225,8 +225,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 		t.Fatalf("OpenAI session.update count = %d, want exactly one initial provider configuration; writes=%q", len(sessionUpdates), writes)
 	}
 	advertised := sessionUpdates[0].Session.Tools
-	if len(advertised) != 9 {
-		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools, open-tab, and show_page: %#v", len(advertised), advertised)
+	if len(advertised) != 10 {
+		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools, open-tab, navigate-tab, and show_page: %#v", len(advertised), advertised)
 	}
 
 	expectedBroker := map[string]struct {
@@ -262,6 +262,13 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 				"browser_id": "string",
 				"url":        "string",
 				"activate":   "boolean",
+			},
+			required: map[string]bool{"url": true},
+		},
+		webmcp.NavigateTabToolName: {
+			description: "Navigate the currently selected browser tab to an absolute website URL without opening a new tab. Use this when the user asks to switch, change, or redirect the current tab. The target identity is preserved, so an active cast of that tab continues with the new page.",
+			properties: map[string]string{
+				"url": "string",
 			},
 			required: map[string]bool{"url": true},
 		},

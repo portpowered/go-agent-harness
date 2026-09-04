@@ -60,6 +60,7 @@ type Operation struct {
 	Arguments                json.RawMessage
 	Reason                   string
 	DeviceName               string
+	URL                      string
 	CancellationAcknowledged bool
 }
 

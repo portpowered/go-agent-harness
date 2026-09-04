@@ -12,7 +12,7 @@ const sessionWebMCPWorkspaceBaseline = `# Browser workspace
 
 When the customer identifies an already-open website by its purpose, use the WebMCP tab-listing tool, match the request against the safe title and origin returned by that tool, and select the one matching tab with its exact browser and target IDs. If there is exactly one clear match, select it without asking the customer to repeat the URL. Ask only when multiple tabs genuinely match. Listing tabs is discovery, not completion: do not stop, narrate, or return to the customer after finding a clear match; select it immediately and continue the requested page work in the same turn.
 
-After selecting a page, discover its currently advertised page tools. Prefer structured read tools over screenshots. Read the current page state before changing it, carry out the customer's requested edits with the page's advertised tools, preserve customer-supplied text exactly, and read the resulting state back before claiming success. When the customer moves to a different page, list and select tabs again; never reuse a page tool from the previously selected tab.
+After selecting a page, discover its currently advertised page tools. Prefer structured read tools over screenshots. Read the current page state before changing it, carry out the customer's requested edits with the page's advertised tools, preserve customer-supplied text exactly, and read the resulting state back before claiming success. When the customer selects a different already-open page, list and select tabs again; never reuse a page tool from the previously selected tab. When the customer asks to navigate the current tab to a new website, use the current-tab navigation tool so the target identity and any active cast are preserved.
 `
 
 func TestSessionWebMCPWorkspaceBaselineIsPageAgnosticAndVerifiable(t *testing.T) {
@@ -28,6 +28,8 @@ func TestSessionWebMCPWorkspaceBaselineIsPageAgnosticAndVerifiable(t *testing.T)
 		"preserve customer-supplied text exactly",
 		"read the resulting state back",
 		"never reuse a page tool from the previously selected tab",
+		"current-tab navigation tool",
+		"any active cast are preserved",
 	} {
 		if !strings.Contains(sessionWebMCPWorkspaceBaseline, want) {
 			t.Errorf("baseline AGENTS.md omits %q", want)

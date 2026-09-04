@@ -29,7 +29,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 
 	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" && request.URL.Path != "/webmcp-tool" {
+		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" && request.URL.Path != "/webmcp-tool" && request.URL.Path != "/cast-navigation" {
 			http.NotFound(writer, request)
 			return
 		}
@@ -164,7 +164,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enable the real Chrome Cast domain: %v", err)
 	}
-	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d", len(castDevices))
+	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d names=%v", len(castDevices), castDeviceNames(castDevices))
 	assertExpectedCastDevices(t, castDevices, os.Getenv(managedBrowserExpectedCastDevicesEnv))
 	castDeviceName := strings.TrimSpace(os.Getenv(managedBrowserCastDeviceEnv))
 	if castDeviceName != "" {
@@ -176,8 +176,29 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("real Chrome tab cast established on device %q", castDeviceName)
+		navigator, ok := session.(webmcp.TargetTabNavigator)
+		if !ok {
+			t.Fatalf("managed target session %T does not expose in-place tab navigation", session)
+		}
+		navigationURL := fixture.URL + "/cast-navigation"
+		if err := navigator.NavigateTab(ctx, navigationURL); err != nil {
+			t.Fatalf("navigate actively cast tab: %v", err)
+		}
+		if err := waitForManagedTargetURL(ctx, handle, second.ID, navigationURL); err != nil {
+			t.Fatalf("wait for cast target navigation: %v", err)
+		}
+		if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
+			t.Fatalf("cast session did not survive in-place navigation: %v", err)
+		}
+		t.Logf("real Chrome cast navigation preserved target=%s device=%q", second.ID, castDeviceName)
 		if err := castController.StopCasting(ctx, castDeviceName); err != nil {
 			t.Fatalf("stop real Chrome tab cast on %q: %v", castDeviceName, err)
+		}
+		if err := navigator.NavigateTab(ctx, secondURL); err != nil {
+			t.Fatalf("restore WebMCP fixture after cast navigation: %v", err)
+		}
+		if err := waitForManagedTargetURL(ctx, handle, second.ID, secondURL); err != nil {
+			t.Fatalf("wait for restored WebMCP fixture: %v", err)
 		}
 	}
 	added, err := waitForIntegrationEvent(ctx, session.Events(), "managed opened-tab tools", func(event webmcp.BrowserEvent) bool {
@@ -297,6 +318,35 @@ func TestManagedBrowserManagerRecoversLiveStaleProfileOwner(t *testing.T) {
 		t.Fatalf("replacement managed state = %+v present=%t err=%v", secondState, present, err)
 	}
 	t.Logf("WEBMCP_MANAGED_STALE_RECOVERY_PASS stale_pid=%d replacement_pid=%d loopback=true", first.PID(), second.PID())
+}
+
+func castDeviceNames(devices []webmcp.CastDevice) []string {
+	names := make([]string, 0, len(devices))
+	for _, device := range devices {
+		names = append(names, device.Name)
+	}
+	return names
+}
+
+func waitForManagedTargetURL(ctx context.Context, handle webmcp.BrowserHandle, targetID webmcp.TargetID, expectedURL string) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		targets, err := handle.ListTargets(ctx)
+		if err != nil {
+			return err
+		}
+		for _, target := range targets {
+			if target.ID == targetID && target.URL == expectedURL {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func waitForActiveCastSession(ctx context.Context, controller webmcp.TargetCastController, deviceName string) (webmcp.CastDevice, error) {
