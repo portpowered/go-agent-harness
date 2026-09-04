@@ -108,7 +108,7 @@ jobs:
           GOWORK: "off"
         run: |
           test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-agent-loop)" = "v0.0.3"
-          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "v0.0.3"
+          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "v0.0.5-0.20260904005433-1a695c9c6934"
           go build -o "$RUNNER_TEMP/yui-standalone" ./cmd/yui
 
   # The long pole: deterministic integration tests plus committed

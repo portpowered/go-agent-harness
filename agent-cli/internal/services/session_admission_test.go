@@ -102,3 +102,12 @@ func TestValidateSessionRunOptionsAdmitsRecordAndReplay(t *testing.T) {
 		t.Fatalf("validateSessionRunOptions(--replay) = %v, want admission", err)
 	}
 }
+
+func TestValidateSessionRunOptionsReplayTiming(t *testing.T) {
+	if err := validateSessionRunOptions(SessionRunOptions{ReplayTiming: "recorded"}); err == nil || !strings.Contains(err.Error(), "requires --replay") {
+		t.Fatalf("recorded timing without replay error = %v, want --replay requirement", err)
+	}
+	if err := validateSessionRunOptions(SessionRunOptions{ReplayTiming: "elastic"}); err == nil || !strings.Contains(err.Error(), "immediate or recorded") {
+		t.Fatalf("invalid replay timing error = %v, want accepted-value guidance", err)
+	}
+}

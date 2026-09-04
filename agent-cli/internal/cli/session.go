@@ -501,6 +501,7 @@ var sessionModeFlagNames = []string{
 	"record",
 	"record-dir",
 	"replay",
+	"replay-timing",
 	"prompt",
 	"system-prompt",
 	"audio-in",
@@ -749,8 +750,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return err
 			}
 			sessionOptions := services.SessionRunOptions{
-				RecordPath:              c.askFlags.RecordCapturePath,
-				ReplayPath:              c.askFlags.ReplayCapturePath,
+				RecordPath: c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath,
+				ReplayTiming:            c.askFlags.ReplayTiming,
 				Provider:                c.askFlags.Provider,
 				ProviderProvided:        cmd.Flags().Changed("provider"),
 				Model:                   c.askFlags.Model,
@@ -937,6 +938,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(t.recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
+	cmd.Flags().StringVar(&c.askFlags.ReplayTiming, "replay-timing", "immediate", "Replay cadence: immediate for fast order validation, or recorded to preserve timestamp_ms timing")
 	cmd.Flags().StringVar(t.prompt, "prompt", "", "Seed the realtime session with text")
 	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")

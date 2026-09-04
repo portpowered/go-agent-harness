@@ -119,6 +119,11 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				continue
 			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
+				// Every scenario owns its provider, tool fixture, device process,
+				// ports, and temporary files. Run the real-time device clocks in
+				// parallel so wall-clock duration does not grow with the size of
+				// the adversarial matrix.
+				t.Parallel()
 				runRemoteToolAudioScenario(t, testCase, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
 			})
 		}
@@ -250,6 +255,13 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 	snapshot := waitForRemoteToolAudio(t, ctx, endpoint, want, callbackInterval)
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
+	if testCase.deviceWAV {
+		// This fixture deliberately makes the continuation available while the
+		// first response still has ample queued audio, so any interior silence is
+		// a scheduler-created cut. Longer multi-tool stress fixtures may contain
+		// legitimate provider/tool latency after their queue naturally empties.
+		got = trimRemoteToolAudioEdgeSilence(snapshot.RenderedSamples)
+	}
 	if err := verifyRemoteToolAudio(got, want); err != nil {
 		t.Fatalf("%s process-boundary audio verification: %v (playback=%+v provider=%+v)", testCase.name, err, snapshot.Playback, provider.Snapshot())
 	}
@@ -407,6 +419,19 @@ func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 
 func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
 	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
+}
+
+// trimRemoteToolAudioEdgeSilence removes only callbacks before playback began
+// and after it completed. Silence inside the model PCM remains observable: it
+// is the audible discontinuity that sample-count-only checks used to erase.
+func trimRemoteToolAudioEdgeSilence(samples []int16) []int16 {
+	for len(samples) > 0 && samples[0] == 0 {
+		samples = samples[1:]
+	}
+	for len(samples) > 0 && samples[len(samples)-1] == 0 {
+		samples = samples[:len(samples)-1]
+	}
+	return samples
 }
 
 type remoteToolCallFixture struct {

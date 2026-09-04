@@ -51,6 +51,7 @@ type sessionRuntimeFactory struct {
 	newDefaultLiveDialer               func() transport.Dialer
 	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
 	newReplayDialer                    func(string) (sessionReplayDialer, error)
+	newRecordedTimingReplayDialer      func(string) (sessionReplayDialer, error)
 	newReplayInferencer                func(string) messages.SessionInferencer
 	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
 	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
@@ -70,6 +71,9 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	},
 	newReplayDialer: func(path string) (sessionReplayDialer, error) {
 		return gwtesting.NewReplayWebSocketDialer(path)
+	},
+	newRecordedTimingReplayDialer: func(path string) (sessionReplayDialer, error) {
+		return gwtesting.NewReplayWebSocketDialer(path, gwtesting.WithRecordedSessionTiming())
 	},
 	newReplayInferencer: func(path string) messages.SessionInferencer {
 		return gwtesting.NewReplaySessionInferencer(path)
@@ -92,6 +96,13 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	newOpenAIScheduledSessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, inputAudioTranscription)
 	},
+}
+
+func (f sessionRuntimeFactory) replayDialer(path, timing string) (sessionReplayDialer, error) {
+	if normalizedSessionReplayTiming(timing) == sessionReplayTimingRecorded && f.newRecordedTimingReplayDialer != nil {
+		return f.newRecordedTimingReplayDialer(path)
+	}
+	return f.newReplayDialer(path)
 }
 
 func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {

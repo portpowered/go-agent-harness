@@ -88,6 +88,16 @@ type PlaybackController interface {
 	InterruptPlayback(PlaybackResponse) (audioEndMS int, ok bool)
 }
 
+// ActivePlaybackController is the lossless device-clock extension used when
+// more than one provider response can be queued ahead of the speaker. The
+// media reader's latest dequeued response may be newer than the response the
+// device callback is actually rendering; implementations return the audible
+// response identity together with its exact consumed duration.
+type ActivePlaybackController interface {
+	PlaybackController
+	InterruptActivePlayback() (PlaybackInterruption, bool)
+}
+
 // PlaybackControlledInbound is the optional control seam implemented by
 // provider media adapters that support device-clocked interruption. Ordinary
 // RTP and file-backed inbound media need not implement it.
