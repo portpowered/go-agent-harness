@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,5 +153,32 @@ func TestSessionDirectoryRecordingPersistsBrowserArtifact(t *testing.T) {
 	}
 	if !strings.Contains(string(manifest), `"browser"`) || !strings.Contains(string(manifest), `"browser.events.jsonl"`) {
 		t.Fatalf("recording manifest = %s, want browser artifact metadata", manifest)
+	}
+}
+
+func TestSessionBrowserRecordingDefaultsEmptyNavigationReason(t *testing.T) {
+	inputs, err := sessionBrowserEventInputs(webmcp.BrowserEvent{
+		Type:               webmcp.EventPageNavigated,
+		BrowserID:          "browser-1",
+		TargetID:           "tab-1",
+		PreviousGeneration: 1,
+		Generation:         2,
+	}, false, false)
+	if err != nil {
+		t.Fatalf("sessionBrowserEventInputs(): %v", err)
+	}
+	if len(inputs) != 1 {
+		t.Fatalf("inputs = %#v", inputs)
+	}
+	recorder, err := testkit.NewRecorder(io.Discard)
+	if err != nil {
+		t.Fatalf("NewRecorder(): %v", err)
+	}
+	recorded, err := recorder.Record(inputs[0])
+	if err != nil {
+		t.Fatalf("Record(): %v", err)
+	}
+	if !strings.Contains(string(recorded.Payload), `"reason":"navigation"`) {
+		t.Fatalf("payload = %s", recorded.Payload)
 	}
 }

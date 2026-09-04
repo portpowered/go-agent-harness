@@ -137,7 +137,18 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 		t.Fatalf("play response = %s, decode=%v; this is the media user-activation gate (error=%s)", play.Output, err, playResult.Error.Code)
 	}
 
-	first := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
+	playerState := invokeYouTubeAdapterTool(t, ctx, session, tools["youtube_get_player_state"], `{}`)
+	var playerStateResult struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			VerifiedAdvanceSeconds float64 `json:"verified_advance_seconds"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(playerState.Output, &playerStateResult); err != nil || !playerStateResult.OK || playerStateResult.Data.VerifiedAdvanceSeconds <= 0 {
+		t.Fatalf("player-state response = %s, decode=%v", playerState.Output, err)
+	}
+
+	first := waitForYouTubeAdapterPlayer(t, ctx, targetSession, "tone1234567")
 	time.Sleep(1200 * time.Millisecond)
 	second := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
 	if first.Path != "/watch" || first.VideoID != "tone1234567" || first.Paused || first.ReadyState < 2 || second.CurrentTime <= first.CurrentTime || second.Muted || second.Volume <= 0 {
@@ -187,6 +198,21 @@ func inspectYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *tar
 	return oracle
 }
 
+func waitForYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *targetSession, videoID string) youtubeAdapterPlayerOracle {
+	t.Helper()
+	for {
+		oracle := inspectYouTubeAdapterPlayer(t, ctx, session)
+		if oracle.Path == "/watch" && oracle.VideoID == videoID && !oracle.Paused && oracle.ReadyState >= 2 {
+			return oracle
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("wait for playing video %s: %v (last=%+v)", videoID, ctx.Err(), oracle)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
 func youtubeAdapterToneWAV(duration time.Duration, sampleRate int, frequency float64) []byte {
 	samples := int(duration.Seconds() * float64(sampleRate))
 	dataSize := samples * 2
@@ -213,22 +239,23 @@ func youtubeAdapterToneWAV(duration time.Duration, sampleRate int, frequency flo
 
 const youtubeAdapterFixtureHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>YouTube adapter fixture</title>
-<style>input,button,a,video{display:block;width:320px;height:40px;margin:10px}video{height:180px}</style></head>
-<body><input id="search" name="search_query"><button id="search-icon-legacy">Search</button><main id="content"></main>
+<style>textarea,button,a,video{display:block;width:320px;height:40px;margin:10px}video{height:180px}</style></head>
+<body><textarea id="search" name="search_query"></textarea><button aria-label="Search">Search</button><ytd-search id="content"></ytd-search>
 <script>
 document.addEventListener("click", (event) => {
-  const button = event.target.closest("button#search-icon-legacy");
+  const button = event.target.closest("button[aria-label='Search']");
   if (button) {
     event.preventDefault();
     history.pushState({}, "", "/results?search_query=" + encodeURIComponent(document.querySelector("#search").value));
-    document.querySelector("#content").innerHTML = '<ytd-video-renderer><a id="video-title" title="Fixture tone" href="/watch?v=tone1234567">Fixture tone</a><div id="channel-name"><a>Fixture channel</a></div><ytd-thumbnail-overlay-time-status-renderer><span id="text">0:04</span></ytd-thumbnail-overlay-time-status-renderer></ytd-video-renderer>';
+    document.querySelector("#content").innerHTML = '<ad-button-view-model><a aria-label="Sponsored video" href="/watch?v=advert123456">Sponsored video</a></ad-button-view-model><yt-lockup-view-model><a aria-label="Fixture tone 4 seconds" href="/watch?v=tone1234567">Fixture tone</a></yt-lockup-view-model>';
     return;
   }
   const anchor = event.target.closest("a[href*='/watch?v=']");
   if (anchor) {
     event.preventDefault();
     history.pushState({}, "", anchor.getAttribute("href"));
-    document.body.innerHTML = '<h1 class="title">Fixture tone</h1><video src="/tone.wav"></video><button class="ytp-subtitles-button" aria-pressed="false" aria-disabled="false">CC</button>';
+	document.body.innerHTML = '<h1 class="title">Fixture tone</h1><video src="/tone.wav"></video><button class="ytp-subtitles-button" aria-pressed="false" aria-disabled="false">CC</button>';
+	document.querySelector("video").play();
   }
 });
 </script></body></html>`
