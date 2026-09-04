@@ -11,6 +11,7 @@ const (
 	InvokeToolName          = "webmcp_invoke"
 	CancelToolName          = "webmcp_cancel"
 	OpenTabToolName         = "webmcp_open_tab"
+	NavigateTabToolName     = "webmcp_navigate_tab"
 	ShowPageToolName        = "show_page"
 	ListCastDevicesToolName = "webmcp_list_cast_devices"
 	CastTabToolName         = "webmcp_cast_tab"
@@ -119,6 +120,13 @@ func BrowserToolDefinitions(webCast ...bool) []BrokerToolDefinition {
 				property("browser_id", "string", "Optional exact discovered browser identifier; omit when only one browser is connected.", false, ""),
 				property("url", "string", "Absolute http:// or https:// website URL to open.", true, nil),
 				property("activate", "boolean", "Bring the new tab to the foreground after opening it.", false, true),
+			),
+		},
+		BrokerToolDefinition{
+			Name:        NavigateTabToolName,
+			Description: "Navigate the currently selected browser tab to an absolute website URL without opening a new tab. Use this when the user asks to switch, change, or redirect the current tab. The target identity is preserved, so an active cast of that tab continues with the new page.",
+			Parameters: objectSchema(
+				property("url", "string", "Absolute http:// or https:// website URL to load in the selected tab.", true, nil),
 			),
 		},
 		BrokerToolDefinition{

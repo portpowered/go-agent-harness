@@ -351,6 +351,23 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 		}
 		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
 
+	case webmcp.NavigateTabToolName:
+		navigator, ok := s.broker.(webmcp.BrokerTabNavigator)
+		if !ok {
+			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot navigate the selected tab.", map[string]any{
+				"phase":  "navigate_tab",
+				"reason": "unsupported_operation",
+			}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "navigate_tab"})
+		}
+		selected, err := navigator.NavigateSelectedTab(ctx, stringValue(args, "url"))
+		if err != nil {
+			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "navigate_tab"})
+		}
+		return webmcp.EncodeToolResult(navigationData{
+			contextData: contextDataFrom(selected),
+			Status:      "navigated",
+		}, nil)
+
 	case webmcp.ListToolsToolName:
 		options := webmcp.ListToolsOptions{
 			Refresh:        boolValue(args, "refresh"),
@@ -480,6 +497,7 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		webmcp.ListTabsToolName:        {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
 		webmcp.SelectTabToolName:       {"browser_id", "target_id", "activate"},
 		webmcp.OpenTabToolName:         {"browser_id", "url", "activate"},
+		webmcp.NavigateTabToolName:     {"url"},
 		webmcp.ListToolsToolName:       {"refresh", "name_contains", "include_schemas", "frame_id"},
 		webmcp.InvokeToolName:          {"tool_ref", "input_json", "reason"},
 		webmcp.CancelToolName:          {"invocation_id", "reason"},
@@ -847,6 +865,11 @@ type castDevicesData struct {
 type castActionData struct {
 	DeviceName string `json:"device_name"`
 	Status     string `json:"status"`
+}
+
+type navigationData struct {
+	contextData
+	Status string `json:"status"`
 }
 
 type targetData struct {

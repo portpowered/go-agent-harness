@@ -24,8 +24,8 @@ import (
 func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T) {
 	set := NewToolSet(nil)
 	schemas := set.DefinitionSchemas()
-	if len(schemas) != 8 {
-		t.Fatalf("schema count = %d, want six stable tools plus open-tab and show_page", len(schemas))
+	if len(schemas) != 9 {
+		t.Fatalf("schema count = %d, want six stable tools plus open-tab, navigate-tab, and show_page", len(schemas))
 	}
 	wantNames := webmcp.StableToolNames()
 	for i, schema := range schemas[:len(wantNames)] {
@@ -52,7 +52,12 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 	if !ok || openTabFunction["name"] != webmcp.OpenTabToolName {
 		t.Fatalf("open-tab schema = %#v", openTab)
 	}
-	showPage := schemas[len(wantNames)+1]
+	navigateTab := schemas[len(wantNames)+1]
+	navigateTabFunction, ok := navigateTab["function"].(map[string]any)
+	if !ok || navigateTabFunction["name"] != webmcp.NavigateTabToolName {
+		t.Fatalf("navigate-tab schema = %#v", navigateTab)
+	}
+	showPage := schemas[len(wantNames)+2]
 	showPageFunction, ok := showPage["function"].(map[string]any)
 	if !ok || showPageFunction["name"] != webmcp.ShowPageToolName {
 		t.Fatalf("show_page schema = %#v", showPage)
@@ -75,6 +80,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		{name: webmcp.ListTabsToolName, defaults: map[string]any{"browser_id": "", "origin_contains": "", "eligible_only": true, "include_zero_tool_pages": false}, fields: []string{"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"}},
 		{name: webmcp.SelectTabToolName, required: []string{"browser_id", "target_id"}, defaults: map[string]any{"activate": false}, fields: []string{"browser_id", "target_id", "activate"}},
 		{name: webmcp.OpenTabToolName, required: []string{"url"}, defaults: map[string]any{"browser_id": "", "activate": true}, fields: []string{"browser_id", "url", "activate"}},
+		{name: webmcp.NavigateTabToolName, required: []string{"url"}, fields: []string{"url"}},
 		{name: webmcp.ListToolsToolName, defaults: map[string]any{"refresh": false, "name_contains": "", "include_schemas": true, "frame_id": ""}, fields: []string{"refresh", "name_contains", "include_schemas", "frame_id"}},
 		{name: webmcp.InvokeToolName, required: []string{"tool_ref", "input_json", "reason"}, fields: []string{"tool_ref", "input_json", "reason"}},
 		{name: webmcp.CancelToolName, required: []string{"invocation_id"}, defaults: map[string]any{"reason": ""}, fields: []string{"invocation_id", "reason"}},
@@ -118,7 +124,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 }
 
 func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
-	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 8 {
+	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 9 {
 		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
 	}
 	broker := &recordingBroker{
@@ -132,17 +138,18 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 	}
 	set := NewBrokerToolSet(broker, true)
 	definitions := set.Definitions()
-	if len(definitions) != 11 || definitions[8].Name != webmcp.ListCastDevicesToolName || definitions[9].Name != webmcp.CastTabToolName || definitions[10].Name != webmcp.StopCastingToolName {
+	if len(definitions) != 12 || definitions[9].Name != webmcp.ListCastDevicesToolName || definitions[10].Name != webmcp.CastTabToolName || definitions[11].Name != webmcp.StopCastingToolName {
 		t.Fatalf("cast definitions = %+v", definitions)
 	}
-	if schemas := set.DefinitionSchemas(); len(schemas) != 11 {
-		t.Fatalf("cast schemas = %d, want 11", len(schemas))
+	if schemas := set.DefinitionSchemas(); len(schemas) != 12 {
+		t.Fatalf("cast schemas = %d, want 12", len(schemas))
 	}
 
 	calls := []messages.ToolCall{
 		{ID: "open-tab", Name: webmcp.OpenTabToolName, Arguments: `{"url":"https://example.com/","activate":true}`},
 		{ID: "list-cast", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
 		{ID: "cast-tab", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV"}`},
+		{ID: "navigate-tab", Name: webmcp.NavigateTabToolName, Arguments: `{"url":"https://www.google.com/"}`},
 		{ID: "stop-cast", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Office TV"}`},
 	}
 	for _, call := range calls {
@@ -155,11 +162,14 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
 		}
 	}
-	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
+	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
 		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
 	}
 	if broker.lastOpen.URL != "https://example.com/" || !broker.lastOpen.Activate {
 		t.Fatalf("open-tab request = %+v", broker.lastOpen)
+	}
+	if broker.lastNavigate != "https://www.google.com/" {
+		t.Fatalf("navigate-tab URL = %q", broker.lastNavigate)
 	}
 }
 
@@ -713,8 +723,8 @@ func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registry: %v", err)
 	}
-	if got := registry.List(); len(got) != 8 {
-		t.Fatalf("registry names = %#v, want six stable tools plus open-tab and show_page", got)
+	if got := registry.List(); len(got) != 9 {
+		t.Fatalf("registry names = %#v, want six stable tools plus open-tab, navigate-tab, and show_page", got)
 	}
 	msgs, err := registry.Execute(context.Background(), webmcp.GetContextToolName, map[string]any{"refresh": false})
 	if err != nil {
@@ -760,6 +770,7 @@ type recordingBroker struct {
 	lastInvoke     webmcp.InvokeRequest
 	lastCancel     webmcp.CancelRequest
 	lastOpen       webmcp.OpenTabRequest
+	lastNavigate   string
 	screenshot     webmcp.PageScreenshot
 	screenshotErr  error
 	calls          []string
@@ -807,6 +818,13 @@ func (b *recordingBroker) Cancel(_ context.Context, request webmcp.CancelRequest
 func (b *recordingBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
 	b.calls = append(b.calls, "open_tab")
 	b.lastOpen = request
+	return b.selected, b.selectedErr
+}
+
+func (b *recordingBroker) NavigateSelectedTab(_ context.Context, targetURL string) (webmcp.PageContext, error) {
+	b.calls = append(b.calls, "navigate_tab")
+	b.lastNavigate = targetURL
+	b.selected.URL = targetURL
 	return b.selected, b.selectedErr
 }
 
@@ -937,13 +955,14 @@ func (d staticToolTestDiscoverer) Discover(context.Context, webmcp.DiscoverOptio
 
 func mapKeysInContractOrder(name string, properties map[string]any) []string {
 	orders := map[string][]string{
-		webmcp.GetContextToolName: {"refresh"},
-		webmcp.ListTabsToolName:   {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
-		webmcp.SelectTabToolName:  {"browser_id", "target_id", "activate"},
-		webmcp.OpenTabToolName:    {"browser_id", "url", "activate"},
-		webmcp.ListToolsToolName:  {"refresh", "name_contains", "include_schemas", "frame_id"},
-		webmcp.InvokeToolName:     {"tool_ref", "input_json", "reason"},
-		webmcp.CancelToolName:     {"invocation_id", "reason"},
+		webmcp.GetContextToolName:  {"refresh"},
+		webmcp.ListTabsToolName:    {"browser_id", "origin_contains", "eligible_only", "include_zero_tool_pages"},
+		webmcp.SelectTabToolName:   {"browser_id", "target_id", "activate"},
+		webmcp.OpenTabToolName:     {"browser_id", "url", "activate"},
+		webmcp.NavigateTabToolName: {"url"},
+		webmcp.ListToolsToolName:   {"refresh", "name_contains", "include_schemas", "frame_id"},
+		webmcp.InvokeToolName:      {"tool_ref", "input_json", "reason"},
+		webmcp.CancelToolName:      {"invocation_id", "reason"},
 	}
 	result := make([]string, 0, len(properties))
 	for _, property := range orders[name] {

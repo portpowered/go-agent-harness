@@ -50,6 +50,90 @@ func (b *StatefulBroker) OpenTab(ctx context.Context, request OpenTabRequest) (P
 	return PageContext{}, err
 }
 
+// NavigateSelectedTab changes the document loaded by the exact selected page
+// while retaining its browser target identity. Chrome tab-mirroring routes are
+// target-scoped, so this is the operation callers need when a cast tab should
+// switch websites without opening and casting a different tab.
+func (b *StatefulBroker) NavigateSelectedTab(ctx context.Context, rawURL string) (PageContext, error) {
+	if err := contextError(ctx); err != nil {
+		return PageContext{}, err
+	}
+	normalizedURL, err := normalizeOpenTabURL(rawURL)
+	if err != nil || normalizedURL == "about:blank" {
+		return PageContext{}, classified(ErrorInvalidToolInput, "The selected tab requires an absolute HTTP URL.", map[string]any{
+			"phase":  "navigate_tab",
+			"reason": "invalid_url",
+		}, err)
+	}
+	if b == nil {
+		return PageContext{}, ErrClosed
+	}
+	b.flushSelected()
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return PageContext{}, ErrClosed
+	}
+	selected := b.selected
+	b.mu.Unlock()
+	if selected == nil {
+		return PageContext{}, staleSelectionError("", "", 0, "selection_not_connected")
+	}
+
+	selected.dispatchMu.Lock()
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		selected.dispatchMu.Unlock()
+		return PageContext{}, ErrClosed
+	}
+	if b.selected != selected {
+		err := staleSelectionForSession(selected, "selection_changed")
+		b.mu.Unlock()
+		selected.dispatchMu.Unlock()
+		return PageContext{}, err
+	}
+	if err := b.captureSelectionStateErrorLocked(selected, "navigate_tab", "selection_not_connected"); err != nil {
+		b.mu.Unlock()
+		selected.dispatchMu.Unlock()
+		return PageContext{}, err
+	}
+	navigator, ok := selected.session.(TargetTabNavigator)
+	if !ok {
+		b.mu.Unlock()
+		selected.dispatchMu.Unlock()
+		return PageContext{}, classified(ErrorBrowserProtocol, "the selected browser page does not support in-place navigation", map[string]any{
+			"phase":       "navigate_tab",
+			"reason_code": "unsupported_operation",
+		}, nil)
+	}
+	b.mu.Unlock()
+
+	if err := navigator.NavigateTab(ctx, normalizedURL); err != nil {
+		selected.dispatchMu.Unlock()
+		return PageContext{}, err
+	}
+	selected.dispatchMu.Unlock()
+	// Navigation events are applied under dispatchMu. Flush only after the
+	// command releases it, then reacquire it to prevent a concurrent selected-
+	// page operation from invalidating the context while it is returned.
+	b.flushSession(selected)
+	selected.dispatchMu.Lock()
+	defer selected.dispatchMu.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return PageContext{}, ErrClosed
+	}
+	if b.selected != selected {
+		return PageContext{}, staleSelectionForSession(selected, "selection_changed")
+	}
+	if err := b.captureSelectionStateErrorLocked(selected, "navigate_tab", "selection_changed"); err != nil {
+		return PageContext{}, err
+	}
+	return selected.context, nil
+}
+
 // CreateTab creates a browser page without attaching WebMCP. This is distinct
 // from OpenTab so a managed browser can make an ordinary about:blank window
 // visible while remaining connected-unselected.
@@ -136,3 +220,4 @@ func normalizeOpenTabURL(raw string) (string, error) {
 
 var _ BrokerTabOpener = (*StatefulBroker)(nil)
 var _ BrokerTabCreator = (*StatefulBroker)(nil)
+var _ BrokerTabNavigator = (*StatefulBroker)(nil)

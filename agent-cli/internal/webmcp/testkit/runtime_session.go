@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"net/url"
 	"sync"
 	"sync/atomic"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 type ScriptedTargetSession struct {
@@ -233,6 +235,22 @@ func (s *ScriptedTargetSession) StopCasting(ctx context.Context, deviceName stri
 	return s.recordCastOperation(ctx, OperationStopCasting, deviceName)
 }
 
+func (s *ScriptedTargetSession) NavigateTab(ctx context.Context, targetURL string) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	parsed, err := url.Parse(targetURL)
+	if err != nil || parsed == nil || parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("invalid navigation URL")
+	}
+	if err := s.Navigate(targetURL, parsed.Scheme+"://"+parsed.Host); err != nil {
+		return err
+	}
+	page := s.Context()
+	s.runtime.record(Operation{Kind: OperationNavigate, BrowserID: page.Key.BrowserID, TargetID: page.Key.TargetID, Generation: page.Generation, URL: targetURL})
+	return nil
+}
+
 func (s *ScriptedTargetSession) recordCastOperation(ctx context.Context, kind OperationKind, deviceName string) error {
 	if err := contextError(ctx); err != nil {
 		return err
@@ -253,6 +271,7 @@ func (s *ScriptedTargetSession) recordCastOperation(ctx context.Context, kind Op
 }
 
 var _ webmcp.TargetCastController = (*ScriptedTargetSession)(nil)
+var _ webmcp.TargetTabNavigator = (*ScriptedTargetSession)(nil)
 
 func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
 	if err := contextError(ctx); err != nil {

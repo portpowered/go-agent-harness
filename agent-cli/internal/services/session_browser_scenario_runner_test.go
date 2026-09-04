@@ -110,7 +110,7 @@ func TestRunBrowserConversationJoinsHermeticFixtureSessionAndOracleEvidence(t *t
 	if err != nil {
 		t.Fatalf("RunBrowserConversation: %v", err)
 	}
-	if !bytes.Equal(sawAudio, []byte{1, 2, 3, 4}) || sawDefinitions != 8 {
+	if !bytes.Equal(sawAudio, []byte{1, 2, 3, 4}) || sawDefinitions != 9 {
 		t.Fatalf("session composition audio=%v definitions=%d", sawAudio, sawDefinitions)
 	}
 	if !result.Finalized || !result.Mechanical.Passed {

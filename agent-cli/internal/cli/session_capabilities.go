@@ -501,6 +501,26 @@ func (b *sessionBrowserBroker) OpenTab(ctx context.Context, request webmcp.OpenT
 	return opener.OpenTab(ctx, request)
 }
 
+// NavigateSelectedTab preserves target-scoped navigation through the session
+// lifecycle wrapper. This keeps model requests on the same target, including
+// when Chrome is actively mirroring that target to a Cast receiver.
+func (b *sessionBrowserBroker) NavigateSelectedTab(ctx context.Context, targetURL string) (webmcp.PageContext, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.PageContext{}, err
+	}
+	navigator, ok := b.Broker.(webmcp.BrokerTabNavigator)
+	if !ok {
+		return webmcp.PageContext{}, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot navigate the selected tab.", map[string]any{
+			"phase":  "navigate_tab",
+			"reason": "unsupported_operation",
+		})
+	}
+	return navigator.NavigateSelectedTab(ctx, targetURL)
+}
+
 // CreateTab preserves the unselected creation seam used by managed browser
 // bootstrap to make an ordinary about:blank window visible.
 func (b *sessionBrowserBroker) CreateTab(ctx context.Context, request webmcp.OpenTabRequest) (webmcp.Target, error) {

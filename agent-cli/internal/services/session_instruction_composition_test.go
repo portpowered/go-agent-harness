@@ -393,6 +393,32 @@ func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testin
 	}
 }
 
+func TestComposeSessionInstructionsDistinguishesCurrentTabNavigation(t *testing.T) {
+	got := composeSessionInstructions(SessionRunOptions{
+		BrowserCapabilityState: webmcp.BrowserCapabilitySelected,
+		BrowserToolsEnabled:    true,
+		ToolDefinitions: []messages.ToolDefinition{
+			{Name: webmcp.ListTabsToolName},
+			{Name: webmcp.SelectTabToolName},
+			{Name: webmcp.OpenTabToolName},
+			{Name: webmcp.NavigateTabToolName},
+		},
+	}, "customer instructions")
+
+	for _, want := range []string{
+		"Distinguish tab selection from navigation",
+		"asks to open a new tab, call webmcp_open_tab",
+		"asks to change, redirect, or navigate the currently selected tab",
+		"call webmcp_navigate_tab directly",
+		"do not open or select another tab first",
+		"preserves the selected target and any active cast",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("current-tab navigation calibration = %q, missing %q", got, want)
+		}
+	}
+}
+
 func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
 	got := composeSessionInstructions(SessionRunOptions{
 		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
