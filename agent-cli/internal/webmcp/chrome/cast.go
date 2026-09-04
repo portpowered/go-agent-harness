@@ -132,7 +132,25 @@ func (s *targetSession) CastTab(ctx context.Context, deviceName string) error {
 	if deviceName == "" {
 		return webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the Cast device name is required", map[string]any{"phase": "cast_tab", "reason_code": "device_name_required"})
 	}
-	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+	// Models may call cast_tab directly when the customer already named a
+	// receiver. Chrome requires Cast.enable before StartTabMirroring, so make
+	// the mutation independently usable instead of relying on list_devices as
+	// an undocumented ordering prerequisite.
+	devices, err := s.ListCastDevices(ctx)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, device := range devices {
+		if device.Name == deviceName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the requested Cast device is not available", map[string]any{"phase": "cast_tab", "reason_code": "device_not_found", "device_name": deviceName})
+	}
+	err = s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		s.recordWireBeforeDispatch(webmcp.CastStartTabMirroringMethod, "")
 		return cdpCast.StartTabMirroring(deviceName).Do(ctx)
 	}))

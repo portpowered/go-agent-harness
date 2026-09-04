@@ -97,25 +97,28 @@ func newProductionWebMCPSession(raw webmcp.TargetSession, target webmcp.Target) 
 func (s *productionTargetSession) Context() webmcp.PageContext {
 	page := s.raw.Context()
 	page.Key = webmcp.PageKey{BrowserID: s.target.BrowserID, TargetID: s.target.ID}
-	if s.target.Title != "" {
-		page.Title = s.target.Title
+	if page.Generation <= s.rawGeneration {
+		// Discovery metadata is authoritative only for the document that was
+		// attached. After navigation the raw session owns the new URL/title and
+		// document state; reapplying this snapshot would resurrect stale values.
+		if s.target.Title != "" {
+			page.Title = s.target.Title
+		}
+		if s.target.URL != "" {
+			page.URL = s.target.URL
+		}
+		if s.target.Origin != "" {
+			page.Origin = s.target.Origin
+		}
+		if page.DocumentReadyState == "" {
+			page.DocumentReadyState = s.target.DocumentReadyState
+		}
+		if !page.DocumentLoadingKnown && s.target.DocumentLoadingKnown {
+			page.DocumentLoading = s.target.DocumentLoading
+			page.DocumentLoadingKnown = true
+		}
 	}
-	if s.target.URL != "" {
-		page.URL = s.target.URL
-	}
-	if s.target.Origin != "" {
-		page.Origin = s.target.Origin
-	}
-	if s.target.Generation > 0 {
-		page.Generation = s.target.Generation
-	}
-	if page.DocumentReadyState == "" {
-		page.DocumentReadyState = s.target.DocumentReadyState
-	}
-	if !page.DocumentLoadingKnown && s.target.DocumentLoadingKnown {
-		page.DocumentLoading = s.target.DocumentLoading
-		page.DocumentLoadingKnown = true
-	}
+	page.Generation = s.publicGenerationForRawGeneration(page.Generation)
 	return page
 }
 
@@ -192,6 +195,28 @@ func (s *productionTargetSession) StopCasting(ctx context.Context, deviceName st
 }
 
 var _ webmcp.TargetCastController = (*productionTargetSession)(nil)
+
+// NavigateTab preserves the raw target's optional in-place navigation
+// capability through the production identity/event bridge.
+func (s *productionTargetSession) NavigateTab(ctx context.Context, targetURL string) error {
+	if s == nil || s.raw == nil {
+		return webmcp.ErrClosed
+	}
+	navigator, ok := s.raw.(webmcp.TargetTabNavigator)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the selected browser page does not support in-place navigation", map[string]any{"phase": "navigate_tab", "reason_code": "unsupported_operation"})
+	}
+	if err := navigator.NavigateTab(ctx, targetURL); err != nil {
+		return err
+	}
+	// Navigation events cross this production identity bridge before the
+	// broker consumes them. Synchronize that forwarding hop so the successful
+	// tool result reports the new URL/generation rather than stale target
+	// metadata from before the navigation.
+	return s.flushEvents(ctx)
+}
+
+var _ webmcp.TargetTabNavigator = (*productionTargetSession)(nil)
 
 func (s *productionTargetSession) Events() <-chan webmcp.BrowserEvent { return s.events }
 

@@ -178,6 +178,13 @@ func newSessionToolCapabilitiesFactory(
 				if sessionPageCatalogIsUnselected(broker, refreshErr) {
 					return append([]messages.ToolDefinition(nil), surface.Definitions...), nil
 				}
+				// Browser-level controls remain valid on ordinary websites that
+				// expose no WebMCP producer. A selected YouTube or Google tab must
+				// not terminate the session merely because there are no dynamic
+				// page tools to publish.
+				if sessionRetryableCatalogDeadline(refreshErr) {
+					return append([]messages.ToolDefinition(nil), surface.Definitions...), nil
+				}
 				return nil, fmt.Errorf("refresh WebMCP page tools: %w", refreshErr)
 			}
 			refreshed := append([]messages.ToolDefinition(nil), surface.Definitions...)

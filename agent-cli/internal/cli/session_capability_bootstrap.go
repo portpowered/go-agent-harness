@@ -122,6 +122,17 @@ func sessionCapabilityBootstrapWithState(browser config.BrowserConfig, service W
 						Reason:     "session_bootstrap",
 					})
 					if err != nil {
+						// A managed browser may have been deliberately closed after
+						// persisting its last selected target. On the next session the
+						// new Chrome instance has a different target identity, but its
+						// configured startup page is still the intended current tab.
+						// Recreate and select that page so first-call operations such as
+						// Cast do not inherit a connected-but-unselected dead end.
+						if browser.UsesManagedBrowser() && sessionStaleSelectionError(err) {
+							if recovered, recoveryErr := sessionRecoverManagedStartup(ctx, browser, broker, mark); recovered {
+								return recoveryErr
+							}
+						}
 						// A persisted record that no longer resolves is the
 						// ordinary drift case: the remembered tab was closed,
 						// reloaded, or is now one of several equally eligible
@@ -237,33 +248,8 @@ func sessionRecoverConnectedUnselected(ctx context.Context, browser config.Brows
 	// open-and-select operation. External endpoints retain their no-mutation
 	// recovery path.
 	if browser.UsesManagedBrowser() && sessionNoSelectionError(selectionErr) {
-		if browser.ManagedStartupURL() == "about:blank" {
-			if creator, ok := broker.(webmcp.BrokerTabCreator); ok {
-				_, err := creator.CreateTab(ctx, webmcp.OpenTabRequest{
-					URL:      "about:blank",
-					Activate: true,
-				})
-				if err != nil {
-					return sessionCapabilityError(err)
-				}
-				if mark != nil {
-					mark(webmcp.BrowserCapabilityConnectedUnselected)
-				}
-				return nil
-			}
-		}
-		if opener, ok := broker.(webmcp.BrokerTabOpener); ok {
-			_, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{
-				URL:      browser.ManagedStartupURL(),
-				Activate: true,
-			})
-			if err != nil {
-				return sessionCapabilityError(err)
-			}
-			if mark != nil {
-				mark(webmcp.BrowserCapabilitySelected)
-			}
-			return nil
+		if recovered, recoveryErr := sessionRecoverManagedStartup(ctx, browser, broker, mark); recovered {
+			return recoveryErr
 		}
 	}
 	if err := sessionVerifyEndpoint(ctx, browser, broker); err != nil {
@@ -273,6 +259,36 @@ func sessionRecoverConnectedUnselected(ctx context.Context, browser config.Brows
 		mark(webmcp.BrowserCapabilityConnectedUnselected)
 	}
 	return nil
+}
+
+func sessionRecoverManagedStartup(ctx context.Context, browser config.BrowserConfig, broker webmcp.Broker, mark func(webmcp.BrowserCapabilityState)) (bool, error) {
+	startupURL := browser.ManagedStartupURL()
+	if startupURL == "about:blank" {
+		creator, ok := broker.(webmcp.BrokerTabCreator)
+		if !ok {
+			return false, nil
+		}
+		_, err := creator.CreateTab(ctx, webmcp.OpenTabRequest{URL: startupURL, Activate: true})
+		if err != nil {
+			return true, sessionCapabilityError(err)
+		}
+		if mark != nil {
+			mark(webmcp.BrowserCapabilityConnectedUnselected)
+		}
+		return true, nil
+	}
+	opener, ok := broker.(webmcp.BrokerTabOpener)
+	if !ok {
+		return false, nil
+	}
+	_, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{URL: startupURL, Activate: true})
+	if err != nil {
+		return true, sessionCapabilityError(err)
+	}
+	if mark != nil {
+		mark(webmcp.BrowserCapabilitySelected)
+	}
+	return true, nil
 }
 
 func sessionRecoverableSelectionError(err error) bool {
@@ -394,6 +410,15 @@ func sessionNoSelectionError(err error) bool {
 	}
 	var classified *webmcp.ClassifiedError
 	return errors.As(err, &classified) && classified != nil && classified.Code == webmcp.ErrorNoEligibleTab
+}
+
+func sessionStaleSelectionError(err error) bool {
+	var discoveryErr *discovery.DiscoveryError
+	if errors.As(err, &discoveryErr) && discoveryErr != nil && discoveryErr.Code == discovery.CodeStaleSelection {
+		return true
+	}
+	var classified *webmcp.ClassifiedError
+	return errors.As(err, &classified) && classified != nil && classified.Code == webmcp.ErrorStaleSelection
 }
 
 func sessionCapabilityError(err error) error {

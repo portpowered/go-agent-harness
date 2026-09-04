@@ -236,6 +236,37 @@ func TestProductionWebMCPSessionMapsRawScreenshotIdentity(t *testing.T) {
 	}
 }
 
+func TestProductionWebMCPSessionPreservesRawTabNavigation(t *testing.T) {
+	raw := &productionNavigationSession{productionFakeSession: &productionFakeSession{
+		runtime: &productionFakeRuntime{},
+		page: webmcp.PageContext{
+			Key:        webmcp.PageKey{BrowserID: "browser-raw", TargetID: "target-raw"},
+			Generation: 1,
+			Connected:  true,
+		},
+	}}
+	session, err := newProductionWebMCPSession(raw, webmcp.Target{BrowserID: "browser-public", ID: "target-public", Generation: 3})
+	if err != nil {
+		t.Fatalf("construct production session: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	navigator, ok := session.(webmcp.TargetTabNavigator)
+	if !ok {
+		t.Fatalf("production session %T does not preserve in-place navigation", session)
+	}
+	if err := navigator.NavigateTab(context.Background(), "https://www.google.com/"); err != nil {
+		t.Fatalf("navigate through production session: %v", err)
+	}
+	if raw.navigatedURL != "https://www.google.com/" {
+		t.Fatalf("raw navigation URL = %q", raw.navigatedURL)
+	}
+	got := session.Context()
+	if got.URL != "https://www.google.com/" || got.Origin != "https://www.google.com" || got.Generation != 4 {
+		t.Fatalf("post-navigation context = %+v, want Google at public generation 4", got)
+	}
+}
+
 func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testing.T) {
 	var server *httptest.Server
 	var mu sync.Mutex
@@ -940,6 +971,28 @@ type productionFakeSession struct {
 type productionScreenshotSession struct {
 	*productionFakeSession
 	screenshot webmcp.PageScreenshot
+}
+
+type productionNavigationSession struct {
+	*productionFakeSession
+	navigatedURL string
+}
+
+func (s *productionNavigationSession) NavigateTab(ctx context.Context, targetURL string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.navigatedURL = targetURL
+	s.init()
+	s.mu.Lock()
+	previous := s.page.Generation
+	s.page.Generation++
+	s.page.URL = targetURL
+	s.page.Origin = "https://www.google.com"
+	current := s.page.Generation
+	s.mu.Unlock()
+	s.events <- webmcp.BrowserEvent{Type: webmcp.EventPageNavigated, PreviousGeneration: previous, Generation: current, Reason: "navigation"}
+	return nil
 }
 
 func (s *productionScreenshotSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {

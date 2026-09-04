@@ -746,6 +746,34 @@ func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *
 	}
 }
 
+func TestSessionToolCapabilitiesRefreshKeepsBrowserControlsForOrdinaryPage(t *testing.T) {
+	catalogPending := webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "page-tool catalog evidence is not ready", map[string]any{
+		"reason_code": "page_tools_unverified",
+		"reason":      "deadline_exceeded",
+	})
+	catalogPending.Retryable = true
+	broker := &capabilityBroker{
+		selected: webmcp.PageContext{
+			Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-youtube"},
+			URL:       "https://www.youtube.com/",
+			Connected: true,
+		},
+		catalogErr: catalogPending,
+	}
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
+	capabilities, err := factory(browserCapabilityConfig(true))
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	definitions, err := capabilities.RefreshDefinitionsWithError(context.Background())
+	if err != nil {
+		t.Fatalf("refresh ordinary selected page: %v", err)
+	}
+	if len(definitions) != len(capabilities.Definitions) {
+		t.Fatalf("ordinary-page definitions = %d, want stable browser surface %d", len(definitions), len(capabilities.Definitions))
+	}
+}
+
 func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testing.T) {
 	closeErr := errors.New("broker close failed")
 	broker := &capabilityBroker{closeErr: closeErr}
@@ -836,6 +864,47 @@ func TestSessionBrowserBrokerPreservesModelFacingNavigateTab(t *testing.T) {
 	}
 }
 
+func TestSessionBrowserBrokerInitializesBeforeFirstCastCall(t *testing.T) {
+	delegate := &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}}}
+	bootstrapCalls := 0
+	broker := &sessionBrowserBroker{
+		Broker: delegate,
+		bootstrap: func(context.Context) error {
+			bootstrapCalls++
+			delegate.selected = webmcp.PageContext{
+				Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-youtube"},
+				URL:       "https://www.youtube.com/",
+				Connected: true,
+			}
+			return nil
+		},
+		initDone:     make(chan struct{}),
+		initState:    SessionCapabilityInitializing,
+		browserState: webmcp.BrowserCapabilityInitializing,
+	}
+
+	controller, ok := any(broker).(webmcp.BrokerCastController)
+	if !ok {
+		t.Fatalf("session broker %T does not preserve Cast controls", broker)
+	}
+	if err := controller.CastSelectedTab(context.Background(), "Office TV"); err != nil {
+		t.Fatalf("first browser call cast selected tab: %v", err)
+	}
+	devices, err := controller.ListCastDevices(context.Background())
+	if err != nil {
+		t.Fatalf("list Cast devices after first-call initialization: %v", err)
+	}
+	if err := controller.StopCasting(context.Background(), "Office TV"); err != nil {
+		t.Fatalf("stop Cast after first-call initialization: %v", err)
+	}
+	if bootstrapCalls != 1 || delegate.castCalls != 1 || delegate.castDeviceName != "Office TV" || delegate.castListCalls != 1 || delegate.stopCastCalls != 1 {
+		t.Fatalf("bootstrap/cast/list/stop = %d/%d/%d/%d device=%q, want 1/1/1/1 Office TV", bootstrapCalls, delegate.castCalls, delegate.castListCalls, delegate.stopCastCalls, delegate.castDeviceName)
+	}
+	if len(devices) != 1 || devices[0].Name != "Office TV" || delegate.selected.Key.TargetID != "tab-youtube" {
+		t.Fatalf("devices/selection = %+v/%+v", devices, delegate.selected)
+	}
+}
+
 func browserCapabilityConfig(enabled bool) *config.Config {
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = enabled
@@ -859,21 +928,25 @@ func isBrokerToolName(name string) bool {
 }
 
 type capabilityBroker struct {
-	selected      webmcp.PageContext
-	discoverErr   error
-	selectErr     error
-	selectCalls   int
-	selectOpts    webmcp.SelectOptions
-	openRequest   webmcp.OpenTabRequest
-	openErr       error
-	openCalls     int
-	navigateURL   string
-	navigateCalls int
-	catalog       []webmcp.ToolDescriptor
-	closeErr      error
-	closeCalls    int
-	castDevices   []webmcp.CastDevice
-	castListCalls int
+	selected       webmcp.PageContext
+	discoverErr    error
+	selectErr      error
+	selectCalls    int
+	selectOpts     webmcp.SelectOptions
+	openRequest    webmcp.OpenTabRequest
+	openErr        error
+	openCalls      int
+	navigateURL    string
+	navigateCalls  int
+	catalog        []webmcp.ToolDescriptor
+	catalogErr     error
+	closeErr       error
+	closeCalls     int
+	castDevices    []webmcp.CastDevice
+	castListCalls  int
+	castCalls      int
+	stopCastCalls  int
+	castDeviceName string
 }
 
 func (b *capabilityBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
@@ -900,7 +973,7 @@ func (b *capabilityBroker) Selected(context.Context) (webmcp.PageContext, error)
 }
 
 func (b *capabilityBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	return webmcp.ToolCatalogSnapshot{Context: b.selected, Generation: b.selected.Generation, Tools: append([]webmcp.ToolDescriptor(nil), b.catalog...)}, nil
+	return webmcp.ToolCatalogSnapshot{Context: b.selected, Generation: b.selected.Generation, Tools: append([]webmcp.ToolDescriptor(nil), b.catalog...)}, b.catalogErr
 }
 
 func (b *capabilityBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
@@ -927,9 +1000,16 @@ func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice
 	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
 }
 
-func (b *capabilityBroker) CastSelectedTab(context.Context, string) error { return nil }
+func (b *capabilityBroker) CastSelectedTab(_ context.Context, deviceName string) error {
+	b.castCalls++
+	b.castDeviceName = deviceName
+	return nil
+}
 
-func (b *capabilityBroker) StopCasting(context.Context, string) error { return nil }
+func (b *capabilityBroker) StopCasting(context.Context, string) error {
+	b.stopCastCalls++
+	return nil
+}
 
 func (b *capabilityBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
 	return make(chan webmcp.BrokerEvent)
