@@ -34,6 +34,13 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 	if err := broker.CastSelectedTab(context.Background(), devices[0].Name); err != nil {
 		t.Fatalf("cast selected tab: %v", err)
 	}
+	navigated, err := broker.NavigateSelectedTab(context.Background(), "https://www.google.com/")
+	if err != nil {
+		t.Fatalf("navigate cast tab: %v", err)
+	}
+	if navigated.Key.TargetID != "tab-second" || navigated.URL != "https://www.google.com/" {
+		t.Fatalf("navigated cast page = %+v, want the same selected target on Google", navigated)
+	}
 	if err := broker.StopCasting(context.Background(), devices[0].Name); err != nil {
 		t.Fatalf("stop casting: %v", err)
 	}
@@ -41,11 +48,11 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 	var castOperations []testkit.Operation
 	for _, operation := range runtime.Operations() {
 		switch operation.Kind {
-		case testkit.OperationListCastDevices, testkit.OperationCastTab, testkit.OperationStopCasting:
+		case testkit.OperationListCastDevices, testkit.OperationCastTab, testkit.OperationNavigate, testkit.OperationStopCasting:
 			castOperations = append(castOperations, operation)
 		}
 	}
-	if len(castOperations) != 3 {
+	if len(castOperations) != 4 {
 		t.Fatalf("cast operations = %+v", castOperations)
 	}
 	for _, operation := range castOperations {
@@ -53,7 +60,7 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 			t.Fatalf("cast operation targeted %q, want tab-second", operation.TargetID)
 		}
 	}
-	if castOperations[1].DeviceName != "Living Room TV" || castOperations[2].DeviceName != "Living Room TV" {
+	if castOperations[1].DeviceName != "Living Room TV" || castOperations[2].URL != "https://www.google.com/" || castOperations[3].DeviceName != "Living Room TV" {
 		t.Fatalf("device routing = %+v", castOperations)
 	}
 }

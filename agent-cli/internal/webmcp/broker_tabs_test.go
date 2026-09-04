@@ -55,6 +55,16 @@ func TestStatefulBrokerOpenTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T
 	}
 }
 
+func TestStatefulBrokerNavigateSelectedTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T) {
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
+	defer func() { _ = broker.Close() }()
+	_, err := broker.NavigateSelectedTab(context.Background(), "file:///private/notes")
+	classified, ok := err.(*webmcp.ClassifiedError)
+	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
+		t.Fatalf("unsafe URL error = %T %v, want invalid_tool_input", err, err)
+	}
+}
+
 func TestStatefulBrokerOpenTabReportsSelectedWhileCatalogIsLate(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-late-open", Product: "fixture", Loopback: true}
 	opened := webmcp.Target{

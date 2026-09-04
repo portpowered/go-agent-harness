@@ -466,6 +466,16 @@ func (s *targetSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageS
 	}, nil
 }
 
+// NavigateTab loads a new document in this exact attached target. It does not
+// create or activate another tab, so a Cast.startTabMirroring route associated
+// with the target continues to mirror the navigated page.
+func (s *targetSession) NavigateTab(ctx context.Context, targetURL string) error {
+	if err := s.run(ctx, chromedp.Navigate(targetURL)); err != nil {
+		return classifySessionError(s, webmcp.ErrorBrowserProtocol, "navigate_tab", err)
+	}
+	return nil
+}
+
 func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 	switch event.Type {
 	case webmcp.EventToolsAdded:
@@ -498,6 +508,8 @@ func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 	}
 	s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported && s.page.CatalogReady
 }
+
+var _ webmcp.TargetTabNavigator = (*targetSession)(nil)
 
 func (s *targetSession) Events() <-chan webmcp.BrowserEvent {
 	return s.events

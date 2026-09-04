@@ -90,6 +90,13 @@ type TargetCastController interface {
 	StopCasting(context.Context, string) error
 }
 
+// TargetTabNavigator changes the document loaded by an already attached page
+// target. Keeping the same target identity is what allows Chrome tab mirroring
+// to continue across navigation.
+type TargetTabNavigator interface {
+	NavigateTab(context.Context, string) error
+}
+
 type Broker interface {
 	Discover(context.Context, DiscoverOptions) ([]BrowserCandidate, error)
 	ListTargets(context.Context, BrowserSelector) ([]Target, error)
@@ -113,6 +120,12 @@ type BrokerTabOpener interface {
 // model-facing OpenTab operation still creates and selects a WebMCP page.
 type BrokerTabCreator interface {
 	CreateTab(context.Context, OpenTabRequest) (Target, error)
+}
+
+// BrokerTabNavigator exposes in-place navigation of the exact selected page.
+// It remains optional so replay and legacy browser runtimes stay compatible.
+type BrokerTabNavigator interface {
+	NavigateSelectedTab(context.Context, string) (PageContext, error)
 }
 
 // BrokerCastController exposes Cast operations against the exact selected

@@ -159,6 +159,7 @@ func TestRoomBrowserCapabilitiesProveSharedTopologyIsolationAndReceipts(t *testi
 			webmcp.InvokeToolName,
 			webmcp.CancelToolName,
 			webmcp.OpenTabToolName,
+			webmcp.NavigateTabToolName,
 			webmcp.ShowPageToolName,
 			queueTool.Name,
 			stateTool.Name,

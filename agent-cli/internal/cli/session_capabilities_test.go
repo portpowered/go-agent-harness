@@ -663,8 +663,8 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 	if !gotBrowser.BrowserBackendEnabled() {
 		t.Fatalf("factory received disabled browser config: %+v", gotBrowser)
 	}
-	if len(capabilities.Definitions) != 9 {
-		t.Fatalf("definitions = %d, want one static plus six broker tools, open-tab, and show_page", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 10 {
+		t.Fatalf("definitions = %d, want one static plus six broker tools, open-tab, navigate-tab, and show_page", len(capabilities.Definitions))
 	}
 	foundSleep := false
 	for _, definition := range capabilities.Definitions {
@@ -813,6 +813,29 @@ func TestSessionBrowserBrokerPreservesModelFacingOpenTab(t *testing.T) {
 	}
 }
 
+func TestSessionBrowserBrokerPreservesModelFacingNavigateTab(t *testing.T) {
+	delegate := &capabilityBroker{selected: webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-cast"},
+		URL:       "https://www.youtube.com/",
+		Connected: true,
+	}}
+	broker := &sessionBrowserBroker{
+		Broker:       delegate,
+		bootstrap:    func(context.Context) error { return nil },
+		initDone:     make(chan struct{}),
+		initState:    SessionCapabilityInitializing,
+		browserState: webmcp.BrowserCapabilityInitializing,
+	}
+
+	navigated, err := broker.NavigateSelectedTab(context.Background(), "https://www.google.com/")
+	if err != nil {
+		t.Fatalf("session broker navigate tab: %v", err)
+	}
+	if navigated.Key.TargetID != "tab-cast" || delegate.navigateCalls != 1 || delegate.navigateURL != "https://www.google.com/" {
+		t.Fatalf("navigated page = %+v delegate calls=%d URL=%q", navigated, delegate.navigateCalls, delegate.navigateURL)
+	}
+}
+
 func browserCapabilityConfig(enabled bool) *config.Config {
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = enabled
@@ -824,7 +847,7 @@ func browserCapabilityConfig(enabled bool) *config.Config {
 }
 
 func isBrokerToolName(name string) bool {
-	if name == webmcp.ShowPageToolName || name == webmcp.OpenTabToolName {
+	if name == webmcp.ShowPageToolName || name == webmcp.OpenTabToolName || name == webmcp.NavigateTabToolName {
 		return true
 	}
 	for _, candidate := range webmcp.StableToolNames() {
@@ -844,6 +867,8 @@ type capabilityBroker struct {
 	openRequest   webmcp.OpenTabRequest
 	openErr       error
 	openCalls     int
+	navigateURL   string
+	navigateCalls int
 	catalog       []webmcp.ToolDescriptor
 	closeErr      error
 	closeCalls    int
@@ -888,6 +913,13 @@ func (b *capabilityBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequ
 	b.openCalls++
 	b.openRequest = request
 	return b.selected, b.openErr
+}
+
+func (b *capabilityBroker) NavigateSelectedTab(_ context.Context, targetURL string) (webmcp.PageContext, error) {
+	b.navigateCalls++
+	b.navigateURL = targetURL
+	b.selected.URL = targetURL
+	return b.selected, nil
 }
 
 func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
