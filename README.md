@@ -104,12 +104,14 @@ when configured to do so. No CDP port, extension, browser profile, screenshot
 permission, or secondary browser configuration is required. A page must expose
 WebMCP tools for structured page operations.
 
-YouTube is the first built-in site adapter. When the selected target is an
-HTTPS `youtube.com` page (or a `youtu.be` link that redirects there), the
-runtime automatically installs structured tools for search, result listing,
-playback, player state, pause/resume, seek, volume, and captions. There is no
-adapter flag or extension to install. The adapter is exact-host gated and is
-not installed on unrelated targets.
+The runtime includes default-on site adapters for YouTube, Spotify Web Player,
+Wikipedia, Reddit, and Google Maps. They provide small task-oriented tool sets
+for media playback, structured search/result selection, article/post reading,
+place lookup, and directions. There is no adapter flag or browser extension to
+install. Every adapter is independently HTTPS host/path gated, and unsupported
+pages expose none of these tools. See
+[`docs/webmcp/site-adapters.md`](./docs/webmcp/site-adapters.md) for the support
+matrix, architecture, testing contract, and adapter-authoring workflow.
 
 Use `--browser-close-on-exit` if the managed browser should close with the
 session. Write-like page operations require approval by default; set

@@ -430,22 +430,15 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 	return nil
 }
 
-// installDefaultSiteAdapter installs the bundled main-world adapter for a
-// narrowly supported target URL. It runs immediately for the current document
-// and at document start after reloads or redirects in this target session.
-func (s *targetSession) installDefaultSiteAdapter(ctx context.Context, rawURL string) error {
-	script, ok := siteadapter.ForURL(rawURL)
-	if !ok {
-		return nil
-	}
-	return s.installPageScript(ctx, script.Source)
-}
-
 func (s *targetSession) installPageScript(ctx context.Context, source string) error {
 	if source == "" {
 		return errors.New("site adapter source is empty")
 	}
-	return s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+	return s.run(ctx, pageScriptAction(source))
+}
+
+func pageScriptAction(source string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
 		if _, err := cdpPage.AddScriptToEvaluateOnNewDocument(source).Do(ctx); err != nil {
 			return err
 		}
@@ -457,7 +450,7 @@ func (s *targetSession) installPageScript(ctx context.Context, source string) er
 			return exception
 		}
 		return nil
-	}))
+	})
 }
 
 // CapturePageScreenshot uses the target-bound CDP context created at attach
@@ -547,7 +540,7 @@ func (s *targetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID
 
 	var invocationID string
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		if s.youtubeMediaInvocation(toolName) {
+		if s.trustedActivationInvocation(toolName) {
 			_, exception, err := cdpRuntime.Evaluate("void 0").WithUserGesture(true).Do(ctx)
 			if err != nil {
 				return err
@@ -570,7 +563,7 @@ func (s *targetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID
 	return webmcp.InvocationID(invocationID), nil
 }
 
-func (s *targetSession) youtubeMediaInvocation(toolName string) bool {
+func (s *targetSession) trustedActivationInvocation(toolName string) bool {
 	s.mu.Lock()
 	rawURL := s.page.URL
 	s.mu.Unlock()

@@ -14,6 +14,7 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 )
 
 type handle struct {
@@ -372,7 +373,10 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	// attach and make every later target command time out. The target context
 	// and handle lifecycle cancel the bound context after attach.
 	attachContext, _ := h.bindDisconnect(targetContext)
-	err = ops.run(attachContext, chromedp.ActionFunc(func(context.Context) error { return nil }))
+	err = ops.run(attachContext,
+		chromedp.ActionFunc(func(context.Context) error { return nil }),
+		pageScriptAction(siteadapter.BootstrapSource()),
+	)
 	protocolTarget := ops.target(targetContext)
 	session.setProtocolTarget(protocolTarget)
 	if err != nil {
@@ -396,13 +400,6 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 			return nil, h.disconnectError(targetID, "attach", attachErr)
 		}
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", attachErr)
-	}
-	if err := session.installDefaultSiteAdapter(ctx, selected.URL); err != nil {
-		cleanupErr := session.abortOpen()
-		if cleanupErr != nil {
-			err = errors.Join(err, cleanupErr)
-		}
-		return nil, classifiedTargetError(h.candidate, targetID, "site_adapter", err)
 	}
 	session.publishAttached()
 

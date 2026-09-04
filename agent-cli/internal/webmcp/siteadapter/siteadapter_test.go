@@ -31,6 +31,97 @@ func TestForURLSelectsOnlyHTTPSYouTubeLinks(t *testing.T) {
 	}
 }
 
+func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
+	for _, candidate := range []struct {
+		rawURL string
+		name   string
+	}{
+		{"https://open.spotify.com/search/test", SpotifyName},
+		{"https://en.wikipedia.org/wiki/Web_browser", WikipediaName},
+		{"https://www.wikipedia.org/", WikipediaName},
+		{"https://www.reddit.com/search/?q=test", RedditName},
+		{"https://old.reddit.com/r/golang/", RedditName},
+		{"https://www.google.com/maps/dir/", GoogleMapsName},
+		{"https://maps.google.com/", GoogleMapsName},
+	} {
+		script, ok := ForURL(candidate.rawURL)
+		if !ok || script.Name != candidate.name || script.Source == "" {
+			t.Errorf("ForURL(%q) = %+v, %v; want %s", candidate.rawURL, script, ok, candidate.name)
+		}
+	}
+
+	for _, rawURL := range []string{
+		"http://open.spotify.com/",
+		"https://open.spotify.com.example.test/",
+		"https://spotify.com/",
+		"https://wikipedia.org.example.test/",
+		"https://notwikipedia.org/",
+		"https://reddit.com.example.test/",
+		"https://new.reddit.com/",
+		"https://www.google.com/",
+		"https://www.google.com/search?q=maps",
+		"https://maps.google.com.example.test/",
+		"https://www.google.com@evil.test/maps/",
+	} {
+		if script, ok := ForURL(rawURL); ok {
+			t.Errorf("ForURL(%q) selected unexpected adapter %+v", rawURL, script)
+		}
+	}
+}
+
+func TestSupportedRegistryIsCompleteAndDefensive(t *testing.T) {
+	infos := Supported()
+	if len(infos) != 5 {
+		t.Fatalf("Supported() has %d adapters, want 5", len(infos))
+	}
+	want := map[string]string{
+		YouTubeName: "youtube_", SpotifyName: "spotify_", WikipediaName: "wikipedia_", RedditName: "reddit_", GoogleMapsName: "google_maps_",
+	}
+	for _, info := range infos {
+		if want[info.Name] != info.ToolPrefix || len(info.URLPatterns) == 0 {
+			t.Errorf("adapter metadata = %+v", info)
+		}
+		delete(want, info.Name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing registry entries: %v", want)
+	}
+	infos[0].URLPatterns[0] = "mutated"
+	again := Supported()
+	if again[0].URLPatterns[0] == "mutated" {
+		t.Fatal("Supported returned mutable registry storage")
+	}
+}
+
+func TestBootstrapSourceContainsEachAdapterExactlyOnce(t *testing.T) {
+	bootstrap := BootstrapSource()
+	if bootstrap == "" {
+		t.Fatal("BootstrapSource is empty")
+	}
+	for _, info := range Supported() {
+		if count := strings.Count(bootstrap, `const INSTALL_KEY = "__yui`+adapterInstallStem(info.Name)); count != 1 {
+			t.Errorf("bootstrap install marker count for %s = %d, want 1", info.Name, count)
+		}
+	}
+}
+
+func adapterInstallStem(name string) string {
+	switch name {
+	case YouTubeName:
+		return "YouTube"
+	case SpotifyName:
+		return "Spotify"
+	case WikipediaName:
+		return "Wikipedia"
+	case RedditName:
+		return "Reddit"
+	case GoogleMapsName:
+		return "GoogleMaps"
+	default:
+		return "missing"
+	}
+}
+
 func TestYouTubeScriptIsOriginGatedAndRegistersStableTools(t *testing.T) {
 	script := YouTubeSource()
 	for _, host := range []string{"youtube.com", "www.youtube.com", "m.youtube.com"} {
@@ -45,6 +136,21 @@ func TestYouTubeScriptIsOriginGatedAndRegistersStableTools(t *testing.T) {
 	}
 }
 
+func TestEveryAdapterScriptHasAnOriginGateAndStableToolPrefix(t *testing.T) {
+	for _, info := range Supported() {
+		source, ok := Source(info.Name)
+		if !ok || source == "" {
+			t.Fatalf("Source(%q) missing", info.Name)
+		}
+		if !strings.Contains(source, `location.protocol !== "https:"`) && !strings.Contains(source, `location.protocol !== ALLOWED_PROTOCOL`) {
+			t.Errorf("adapter %s has no in-script HTTPS gate", info.Name)
+		}
+		if count := strings.Count(source, `name: "`+info.ToolPrefix); count < 4 {
+			t.Errorf("adapter %s registers only %d prefixed tools", info.Name, count)
+		}
+	}
+}
+
 func TestNeedsTrustedActivationIsNarrowlyScoped(t *testing.T) {
 	if !NeedsTrustedActivation("https://www.youtube.com/watch?v=abc123", "youtube_play_video") {
 		t.Fatal("YouTube play does not request trusted activation")
@@ -52,11 +158,20 @@ func TestNeedsTrustedActivationIsNarrowlyScoped(t *testing.T) {
 	if !NeedsTrustedActivation("https://youtube.com/watch?v=abc123", "youtube_resume") {
 		t.Fatal("YouTube resume does not request trusted activation")
 	}
+	if !NeedsTrustedActivation("https://open.spotify.com/track/abc1234567", "spotify_play_track") {
+		t.Fatal("Spotify play does not request trusted activation")
+	}
+	if !NeedsTrustedActivation("https://open.spotify.com/track/abc1234567", "spotify_resume") {
+		t.Fatal("Spotify resume does not request trusted activation")
+	}
 	for _, candidate := range []struct{ rawURL, tool string }{
 		{"https://example.com/", "youtube_play_video"},
 		{"http://www.youtube.com/", "youtube_play_video"},
 		{"https://www.youtube.com/", "youtube_search"},
 		{"https://www.youtube.com/", "youtube_pause"},
+		{"https://open.spotify.com/", "spotify_pause"},
+		{"https://example.com/", "spotify_resume"},
+		{"https://www.reddit.com/", "spotify_resume"},
 	} {
 		if NeedsTrustedActivation(candidate.rawURL, candidate.tool) {
 			t.Fatalf("NeedsTrustedActivation(%q, %q) = true", candidate.rawURL, candidate.tool)
