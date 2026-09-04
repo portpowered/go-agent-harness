@@ -182,6 +182,8 @@ github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3 h1:aRNfnQCvToctS8ta
 github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3/go.mod h1:zl6sBK/PhvOMpRPeuZkUU01BMEcHLZbju8/8hgGKWi8=
 github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.3 h1:ic9OmICb/LedywZeqb8vFjeqXyLShtSl0PQZtb6sja4=
 github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.3/go.mod h1:ByP8odtfDBTyJCNwLssv4XTZoVFZ2I+St4nCoNQpoTU=
+github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.5-0.20260904005433-1a695c9c6934 h1:wku8/Equc9itUnPxZMao5/pSdUPPHtYlM0sC3iHUgeI=
+github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.5-0.20260904005433-1a695c9c6934/go.mod h1:C1FgQYfHkCZma6R2UHhY3xrGqc5w/A1lOV1OE8c1JEw=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
