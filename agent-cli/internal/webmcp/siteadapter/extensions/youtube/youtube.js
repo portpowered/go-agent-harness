@@ -7,9 +7,10 @@
 
   const VERSION = "1.0.0";
   const INSTALL_KEY = "__yuiYouTubeWebMCPAdapterV1";
-  const MAX_QUERY = 200;
-  const MAX_RESULTS = 10;
-  const WAIT_MS = 12000;
+	const MAX_QUERY = 200;
+	const MAX_RESULTS = 10;
+	const WAIT_MS = 12000;
+	const SEARCH_WAIT_MS = 25000;
 
   if (globalThis[INSTALL_KEY]) return;
 
@@ -67,24 +68,27 @@
     const rect = element.getBoundingClientRect();
     return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
   };
-  const collectResults = () => {
-    const selectors = [
-      "ytd-video-renderer a#video-title[href*='/watch?v=']",
-      "ytd-rich-item-renderer a#video-title-link[href*='/watch?v=']",
-      "a#video-title[href*='/watch?v=']"
-    ];
+	  const searchResultsRoot = () => document.querySelector("ytd-search, yt-search-page");
+	  const collectResults = (root = document) => {
+	  const selectors = [
+		"ytd-video-renderer a#video-title[href*='/watch?v=']",
+		"ytd-rich-item-renderer a#video-title-link[href*='/watch?v=']",
+		"a#video-title[href*='/watch?v=']",
+		"a[href*='/watch?v=']"
+	  ];
     const found = new Map();
     for (const selector of selectors) {
-      for (const anchor of document.querySelectorAll(selector)) {
-        if (!isVisible(anchor) || anchor.closest("ytd-ad-slot-renderer, ytd-promoted-video-renderer")) continue;
-        const id = videoIDFromURL(anchor.href);
-        if (!id || found.has(id)) continue;
-        const container = anchor.closest("ytd-video-renderer, ytd-rich-item-renderer") || anchor.parentElement;
-        const channel = container && container.querySelector("#channel-name a, ytd-channel-name a");
-        const duration = container && container.querySelector("ytd-thumbnail-overlay-time-status-renderer #text, .ytd-thumbnail-overlay-time-status-renderer");
-        found.set(id, {
-          video_id: id,
-          title: clean(anchor.getAttribute("title") || anchor.textContent, 300),
+		for (const anchor of root.querySelectorAll(selector)) {
+		if (!isVisible(anchor) || anchor.closest("ytd-ad-slot-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer, ad-slot-renderer, ad-button-view-model, lockup-attachments-view-model")) continue;
+		const id = videoIDFromURL(anchor.href);
+		if (!id || found.has(id)) continue;
+		const container = anchor.closest("ytd-video-renderer, ytd-rich-item-renderer") || anchor.parentElement;
+		const titleAnchor = container && container.querySelector("a#video-title[href*='/watch?v='], a#video-title-link[href*='/watch?v='], a[aria-label][href*='/watch?v=']");
+		const channel = container && container.querySelector("#channel-name a, ytd-channel-name a");
+		const duration = container && container.querySelector("ytd-thumbnail-overlay-time-status-renderer #text, .ytd-thumbnail-overlay-time-status-renderer");
+		found.set(id, {
+		  video_id: id,
+		  title: clean((titleAnchor || anchor).getAttribute("title") || (titleAnchor || anchor).getAttribute("aria-label") || (titleAnchor || anchor).textContent, 300),
           channel: clean(channel && channel.textContent, 200),
           duration: clean(duration && duration.textContent, 40),
           watch_url: `${location.origin}/watch?v=${encodeURIComponent(id)}`
@@ -189,18 +193,23 @@
         execute: async (input) => {
           const query = clean(input && input.query, MAX_QUERY);
           if (!query) return failure("invalid_input", "A non-empty search query is required.");
-          const search = document.querySelector("input#search, input[name='search_query'], ytd-searchbox input");
-          const button = document.querySelector("button#search-icon-legacy, ytd-searchbox button#search-icon-legacy, ytd-searchbox button");
-          if (!(search instanceof HTMLInputElement) || !(button instanceof HTMLElement)) {
-            return failure(classifyPage(), "The visible YouTube search controls are unavailable.");
-          }
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+          const search = document.querySelector("input#search, input[name='search_query'], textarea[name='search_query'], ytd-searchbox input, .ytSearchboxComponentInput");
+          const button = document.querySelector("button#search-icon-legacy, ytd-searchbox button#search-icon-legacy, button[aria-label='Search']");
+          if (!(search instanceof HTMLInputElement || search instanceof HTMLTextAreaElement) || !(button instanceof HTMLElement)) {
+			return failure(classifyPage(), "The visible YouTube search controls are unavailable.");
+		  }
+		  const valuePrototype = search instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+		  const setter = Object.getOwnPropertyDescriptor(valuePrototype, "value")?.set;
           if (!setter) return failure("site_changed", "The YouTube search input could not be updated.");
           setter.call(search, query);
           search.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
           search.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
           button.click();
-          const results = await waitFor(() => route() === "results" && collectResults());
+		  const results = await waitFor(() => {
+			if (route() !== "results") return null;
+			const root = searchResultsRoot();
+			return root && collectResults(root);
+		  }, SEARCH_WAIT_MS);
           if (!results || results.size === 0) return failure("results_not_ready", "No ordinary video results became available.");
           state.searchGeneration += 1;
           state.query = query;
@@ -222,7 +231,8 @@
           const requested = input && input.limit === undefined ? MAX_RESULTS : Number(input && input.limit);
           if (!Number.isInteger(requested) || requested < 1 || requested > MAX_RESULTS) return failure("invalid_input", "limit must be an integer from 1 through 10.");
           if (route() !== "results") return failure("unsupported_route", "Search results are available only on the YouTube results page.");
-          const observed = collectResults();
+		  const root = searchResultsRoot();
+		  const observed = root ? collectResults(root) : new Map();
           if (observed.size) state.results = observed;
           return success({ query: state.query, search_generation: state.searchGeneration, results: Array.from(state.results.values()).slice(0, requested) });
         }
@@ -230,7 +240,7 @@
       {
         name: "youtube_play_video",
         title: "Play a YouTube search result",
-        description: "Open and play a video returned by the current structured YouTube search results.",
+		description: "Open a video returned by the current structured YouTube search results. After navigation, refresh the catalog and call youtube_get_player_state; call youtube_resume if it is paused.",
         inputSchema: {
           type: "object",
           properties: {
@@ -249,10 +259,14 @@
           }
           const anchor = Array.from(document.querySelectorAll("a[href*='/watch?v=']")).find((candidate) => videoIDFromURL(candidate.href) === id && isVisible(candidate));
           if (!(anchor instanceof HTMLElement)) return failure("stale_result", "The selected result is no longer visible.");
-          anchor.click();
-          const reached = await waitFor(() => currentVideoID() === id && activeVideo());
-          if (!reached) return failure(classifyPage(), "The selected YouTube watch page did not become ready.");
-          return playAndVerify(id);
+		  const watchURL = anchor.href;
+		  setTimeout(() => anchor.click(), 0);
+		  return success({
+			video_id: id,
+			watch_url: watchURL,
+			navigation_started: true,
+			verification_required: "Refresh the page-tool catalog and call youtube_get_player_state after navigation. Call youtube_resume if paused."
+		  });
         }
       },
       {
@@ -261,10 +275,17 @@
         description: "Read and verify the selected YouTube watch page's visible media state.",
         inputSchema: emptySchema,
         annotations: { readOnly: true, untrustedContent: true },
-        execute: async () => {
-          const snapshot = playerSnapshot();
-          return snapshot ? success({ player: snapshot }) : failure("player_not_ready", "No YouTube media player is ready.");
-        }
+		execute: async () => {
+		  const first = playerSnapshot();
+		  if (!first) return failure("player_not_ready", "No YouTube media player is ready.");
+		  if (first.paused || first.ended) return success({ player: first, verified_advance_seconds: 0 });
+		  await delay(1200);
+		  const second = playerSnapshot();
+		  if (!second || second.paused || second.ended || second.current_time <= first.current_time) {
+			return failure("player_not_ready", "Playback did not advance during verification.", { first, second });
+		  }
+		  return success({ player: second, verified_advance_seconds: second.current_time - first.current_time });
+		}
       },
       {
         name: "youtube_pause",

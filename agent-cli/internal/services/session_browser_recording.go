@@ -306,10 +306,14 @@ func sessionBrowserEventInputs(event webmcp.BrowserEvent, includeArguments, incl
 			}
 		}
 	case webmcp.EventPageNavigated, webmcp.EventFrameNavigated:
+		reason := strings.TrimSpace(event.Reason)
+		if reason == "" {
+			reason = "navigation"
+		}
 		if err := add(testkit.EventBrowserPageGenerationChanged, 0, map[string]any{
 			"previous_generation": event.PreviousGeneration,
 			"current_generation":  event.Generation,
-			"reason":              event.Reason,
+			"reason":              reason,
 		}); err != nil {
 			return nil, err
 		}

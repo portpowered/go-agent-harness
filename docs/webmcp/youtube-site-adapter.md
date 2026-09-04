@@ -63,7 +63,7 @@ go build -o /tmp/yui-youtube ./agent-cli/cmd/yui
 AGENT_MODEL__OPENAI__API_KEY="$OPENAI_API_KEY" \
 /tmp/yui-youtube session \
   --provider openai \
-  --model gpt-realtime-2.1-mini \
+  --model gpt-realtime-2.1 \
   --browser-tools webmcp \
   --browser-open https://www.youtube.com/ \
   --browser-allowed-origin https://www.youtube.com \
