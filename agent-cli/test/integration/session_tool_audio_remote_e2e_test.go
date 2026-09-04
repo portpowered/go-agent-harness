@@ -119,6 +119,11 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				continue
 			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
+				// Every scenario owns its provider, tool fixture, device process,
+				// ports, and temporary files. Run the real-time device clocks in
+				// parallel so wall-clock duration does not grow with the size of
+				// the adversarial matrix.
+				t.Parallel()
 				runRemoteToolAudioScenario(t, testCase, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
 			})
 		}
