@@ -132,6 +132,7 @@ func TestTargetSessionListsAndControlsCastDevicesOnItsTarget(t *testing.T) {
 
 	want := []castCommand{
 		{method: cdpCast.CommandEnable},
+		{method: cdpCast.CommandEnable},
 		{method: cdpCast.CommandStartTabMirroring, sinkName: "Living Room TV"},
 		{method: cdpCast.CommandStopCasting, sinkName: "Living Room TV"},
 	}
@@ -143,5 +144,22 @@ func TestTargetSessionListsAndControlsCastDevicesOnItsTarget(t *testing.T) {
 		if got[index] != want[index] {
 			t.Fatalf("Cast CDP call %d = %+v, want %+v", index, got[index], want[index])
 		}
+	}
+}
+
+func TestTargetSessionCastEnablesDeviceDiscoveryWhenCalledFirst(t *testing.T) {
+	executor := &castExecutor{}
+	session := newInvocationTestSession(t, executor)
+	session.observeCastProtocolEvent(&cdpCast.EventSinksUpdated{Sinks: []*cdpCast.Sink{{Name: "Office TV", ID: "sink-office"}}})
+
+	if err := session.CastTab(context.Background(), "Office TV"); err != nil {
+		t.Fatalf("first Cast operation: %v", err)
+	}
+	want := []castCommand{
+		{method: cdpCast.CommandEnable},
+		{method: cdpCast.CommandStartTabMirroring, sinkName: "Office TV"},
+	}
+	if got := executor.snapshot(); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("first-operation Cast CDP calls = %+v, want %+v", got, want)
 	}
 }

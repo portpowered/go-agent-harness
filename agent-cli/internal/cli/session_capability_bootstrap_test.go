@@ -110,6 +110,18 @@ type ambiguousBootstrapSelectionDiscovery struct {
 	err error
 }
 
+type stalePersistedBootstrapDiscovery struct {
+	bootstrapSelectionDiscovery
+}
+
+func (d stalePersistedBootstrapDiscovery) LoadPersistedSelection(context.Context) (discovery.PersistedSelection, bool, error) {
+	return discovery.PersistedSelection{BrowserID: "managed-old", TargetID: "youtube-old"}, true, nil
+}
+
+func (d stalePersistedBootstrapDiscovery) Reconnect(context.Context, discovery.ConnectionInputs, ...discovery.ReconnectOptions) (discovery.Selection, error) {
+	return discovery.Selection{}, &discovery.DiscoveryError{Code: discovery.CodeStaleSelection, Message: "persisted target is gone", Retryable: true}
+}
+
 func (d ambiguousBootstrapSelectionDiscovery) LoadPersistedSelection(context.Context) (discovery.PersistedSelection, bool, error) {
 	return discovery.PersistedSelection{}, false, nil
 }
@@ -204,6 +216,31 @@ func TestSessionCapabilityBootstrapReopensVisibleManagedTabWhenWarmBrowserIsEmpt
 	}
 	if state != webmcp.BrowserCapabilityConnectedUnselected {
 		t.Fatalf("browser capability state = %q, want connected-unselected", state)
+	}
+}
+
+func TestSessionCapabilityBootstrapReopensManagedStartupAfterStalePersistedTarget(t *testing.T) {
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	browser.Managed.Open = "https://www.youtube.com/"
+	delegate := &capabilityBroker{selected: webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: "managed-new", TargetID: "youtube-new"},
+		URL:       browser.Managed.Open,
+		Connected: true,
+	}}
+	var state webmcp.BrowserCapabilityState
+	bootstrap := sessionCapabilityBootstrapWithState(browser, stalePersistedBootstrapDiscovery{}, delegate, func(got webmcp.BrowserCapabilityState) {
+		state = got
+	})
+
+	if err := bootstrap(context.Background()); err != nil {
+		t.Fatalf("recover stale managed startup selection: %v", err)
+	}
+	if delegate.openCalls != 1 || delegate.openRequest.URL != browser.Managed.Open || !delegate.openRequest.Activate {
+		t.Fatalf("managed stale recovery = calls:%d request:%+v", delegate.openCalls, delegate.openRequest)
+	}
+	if state != webmcp.BrowserCapabilitySelected {
+		t.Fatalf("browser capability state = %q, want selected", state)
 	}
 }
 
