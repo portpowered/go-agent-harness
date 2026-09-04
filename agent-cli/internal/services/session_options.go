@@ -167,6 +167,10 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 type SessionRunOptions struct {
 	RecordPath string
 	ReplayPath string
+	// ReplayTiming selects whether websocket replay runs as fast as causal
+	// ordering permits (immediate) or preserves capture timestamp_ms cadence
+	// (recorded). Empty retains the immediate compatibility default.
+	ReplayTiming string
 	// roomReplay marks a session that is part of a room-owned replay. Room
 	// orchestration supplies audio frames from the shared timeline, so the
 	// single-session replay planner must not auto-reconstruct client audio
@@ -417,6 +421,11 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	if opts.ReplayPath != "" && !isJSONCapturePath(opts.ReplayPath) {
 		return fmt.Errorf("--replay path %q must end with .json", opts.ReplayPath)
 	}
+	if timing := normalizedSessionReplayTiming(opts.ReplayTiming); timing == "" {
+		return fmt.Errorf("--replay-timing %q is invalid; use immediate or recorded", opts.ReplayTiming)
+	} else if timing == sessionReplayTimingRecorded && opts.ReplayPath == "" {
+		return fmt.Errorf("--replay-timing recorded requires --replay")
+	}
 	// Validate the complete capture before any caller-owned audio source,
 	// derived artifact sink, provider plan, or replay session can be created.
 	// Injected sessions are an explicit low-level test seam and do not use the
@@ -427,6 +436,22 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 		}
 	}
 	return nil
+}
+
+const (
+	sessionReplayTimingImmediate = "immediate"
+	sessionReplayTimingRecorded  = "recorded"
+)
+
+func normalizedSessionReplayTiming(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", sessionReplayTimingImmediate:
+		return sessionReplayTimingImmediate
+	case sessionReplayTimingRecorded:
+		return sessionReplayTimingRecorded
+	default:
+		return ""
+	}
 }
 
 func resolveSessionRuntimeSelection(opts SessionRunOptions) (SessionRuntimeSelection, error) {

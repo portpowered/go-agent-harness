@@ -296,6 +296,75 @@ func TestRTCDeviceSinkInterruptionTimerSurvives24kTo16kConversion(t *testing.T) 
 	}
 }
 
+func TestRTCDeviceSinkInterruptionUsesAudibleResponseAcrossQueuedContinuation(t *testing.T) {
+	registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
+		Seed:    31,
+		Render:  audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+		Capture: audio.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+	})
+	if err != nil {
+		t.Fatalf("new callback-clocked registry: %v", err)
+	}
+	sink, err := NewRTCDeviceSink(registry, "")
+	if err != nil {
+		t.Fatalf("open callback-clocked RTC sink: %v", err)
+	}
+	defer func() { _ = sink.Close() }()
+	sink.holdToneConfig.GapThreshold = time.Hour
+
+	media := rtc.NewSessionMediaAtRate(nil, audio.SampleRate)
+	defer func() { _ = media.Close() }()
+	first := rtc.PlaybackResponse{ResponseID: "resp-before-tool", ItemID: "item-before-tool"}
+	second := rtc.PlaybackResponse{ResponseID: "resp-after-tool", ItemID: "item-after-tool"}
+	media.StartInboundResponse(first)
+	if err := media.PushInbound(cancelPlaybackSamples(4*audio.FrameSize, 801)); err != nil {
+		t.Fatalf("queue first response: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("finish first response: %v", err)
+	}
+	media.StartInboundResponse(second)
+	if err := media.PushInbound(cancelPlaybackSamples(4*audio.FrameSize, 901)); err != nil {
+		t.Fatalf("queue continuation response: %v", err)
+	}
+	if err := media.FlushInbound(); err != nil {
+		t.Fatalf("finish continuation response: %v", err)
+	}
+
+	pumpErr := make(chan error, 1)
+	go func() { pumpErr <- sink.Pump(context.Background(), media.Endpoints().Inbound) }()
+	deadline := time.Now().Add(time.Second)
+	for sink.PlaybackStats().QueuedSamples < 6*audio.FrameSize && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := sink.PlaybackStats().QueuedSamples; got < 6*audio.FrameSize {
+		t.Fatalf("provider continuation was not queued behind first response: %+v", sink.PlaybackStats())
+	}
+	if err := registry.Advance(2); err != nil {
+		t.Fatalf("advance audible first response: %v", err)
+	}
+
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		t.Fatal("queued-continuation interruption did not return a device cursor")
+	}
+	if interruption.PlaybackResponse != first {
+		t.Fatalf("interrupted response = %+v, want still-audible first response %+v", interruption.PlaybackResponse, first)
+	}
+	if interruption.AudioEndMS != 60 {
+		t.Fatalf("first-response playback cursor = %d ms, want two 30 ms callbacks", interruption.AudioEndMS)
+	}
+	media.FailInbound(io.EOF)
+	select {
+	case err := <-pumpErr:
+		if err != nil {
+			t.Fatalf("pump after queued-continuation interruption: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("queued-continuation interruption did not release provider pump")
+	}
+}
+
 func TestRTCDeviceSinkInterruptionExcludesPostResponseHoldToneSamples(t *testing.T) {
 	for _, pulseCount := range []int{1, 5} {
 		t.Run(fmt.Sprintf("%d hold-tone pulses", pulseCount), func(t *testing.T) {

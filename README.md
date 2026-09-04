@@ -226,6 +226,9 @@ Other useful command-line settings include:
 - `--record capture.json` to record provider traffic.
 - `--record-dir ./recording` to write a complete diagnostic bundle.
 - `--replay capture.json` to replay a session without a live provider call.
+- `--replay capture.json --replay-timing recorded` to reproduce the capture's
+  real `timestamp_ms` cadence; the default `immediate` mode is faster and
+  validates ordering/content without reproducing lag.
 - `-C /path/to/config-dir` to use a separate config directory.
 
 Run `yui session --help` for the complete option list.

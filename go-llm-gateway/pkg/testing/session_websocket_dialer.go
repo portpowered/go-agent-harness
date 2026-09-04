@@ -166,10 +166,11 @@ func (c *recordingWebSocketConn) Close() error {
 
 // ReplayWebSocketDialer replays raw WebSocket messages from a capture.
 type ReplayWebSocketDialer struct {
-	capture SessionCapture
-	mu      sync.Mutex
-	conn    *replayWebSocketConn
-	done    chan struct{}
+	capture        SessionCapture
+	preserveTiming bool
+	mu             sync.Mutex
+	conn           *replayWebSocketConn
+	done           chan struct{}
 }
 
 var _ transport.Dialer = (*ReplayWebSocketDialer)(nil)
@@ -184,22 +185,34 @@ type ReplayOutboundPacer interface {
 
 var _ ReplayOutboundPacer = (*ReplayWebSocketDialer)(nil)
 
+// ReplayWebSocketDialerOption configures replay behavior without changing the
+// strict payload and direction validation contract.
+type ReplayWebSocketDialerOption func(*ReplayWebSocketDialer)
+
+// WithRecordedSessionTiming preserves the relative timestamp_ms cadence from
+// the capture. The first record is released immediately; every later record is
+// gated by its offset from that first timestamp. The default remains the fast,
+// order-only replay used by deterministic unit tests.
+func WithRecordedSessionTiming() ReplayWebSocketDialerOption {
+	return func(d *ReplayWebSocketDialer) { d.preserveTiming = true }
+}
+
 // NewReplayWebSocketDialer loads a raw WebSocket session capture from path.
 // Current captures are fully verified; retained version-1 captures are
 // structurally validated and replayed with a reduced-integrity guarantee.
-func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
+func NewReplayWebSocketDialer(path string, opts ...ReplayWebSocketDialerOption) (*ReplayWebSocketDialer, error) {
 	loaded, err := LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, err
 	}
-	return NewReplayWebSocketDialerFromCapture(loaded.Capture)
+	return NewReplayWebSocketDialerFromCapture(loaded.Capture, opts...)
 }
 
 // NewReplayWebSocketDialerFromCapture builds a replay dialer from an already
 // decoded capture. Version-2 captures must be integrity-verified; version-1
 // captures are accepted only as an explicit replay compatibility seam and are
 // structurally validated without claiming integrity.
-func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSocketDialer, error) {
+func NewReplayWebSocketDialerFromCapture(capture SessionCapture, opts ...ReplayWebSocketDialerOption) (*ReplayWebSocketDialer, error) {
 	if err := validateSessionCaptureReplayEnvelope("<in-memory>", capture); err != nil {
 		return nil, err
 	}
@@ -208,7 +221,13 @@ func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSock
 			return nil, fmt.Errorf("session capture contains %q payload; expected %q", evt.PayloadType, SessionPayloadTypeWebSocketMessage)
 		}
 	}
-	return &ReplayWebSocketDialer{capture: capture, done: make(chan struct{})}, nil
+	dialer := &ReplayWebSocketDialer{capture: capture, done: make(chan struct{})}
+	for _, option := range opts {
+		if option != nil {
+			option(dialer)
+		}
+	}
+	return dialer, nil
 }
 
 // Model returns the model metadata from the replay capture, if present.
@@ -233,7 +252,7 @@ func (d *ReplayWebSocketDialer) WaitForNextOutbound() error {
 func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	events := make([]CapturedSessionEvent, len(d.capture.Records))
 	copy(events, d.capture.Records)
-	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect)
+	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect, d.preserveTiming)
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -266,12 +285,26 @@ type replayWebSocketConn struct {
 	err                error
 	done               chan struct{}
 	once               sync.Once
+	preserveTiming     bool
+	timingStartedAt    time.Time
+	firstTimestampMs   int64
 }
 
 var _ transport.Conn = (*replayWebSocketConn)(nil)
 
-func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect bool) *replayWebSocketConn {
-	conn := &replayWebSocketConn{events: events, done: done, endsWithDisconnect: endsWithDisconnect}
+func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect, preserveTiming bool) *replayWebSocketConn {
+	firstTimestampMs := int64(0)
+	if len(events) > 0 {
+		firstTimestampMs = events[0].TimestampMs
+	}
+	conn := &replayWebSocketConn{
+		events:             events,
+		done:               done,
+		endsWithDisconnect: endsWithDisconnect,
+		preserveTiming:     preserveTiming,
+		timingStartedAt:    time.Now(),
+		firstTimestampMs:   firstTimestampMs,
+	}
 	conn.cond = sync.NewCond(&conn.mu)
 	return conn
 }
@@ -297,6 +330,16 @@ func (c *replayWebSocketConn) ReadMessage() (int, []byte, error) {
 		}
 		evt := c.events[c.index]
 		if evt.Direction == DirectionServerToClient {
+			index := c.index
+			c.mu.Unlock()
+			err := c.waitForRecordedTimestamp(evt.TimestampMs)
+			c.mu.Lock()
+			if err != nil {
+				return 0, nil, err
+			}
+			if c.index != index {
+				continue
+			}
 			c.index++
 			c.cond.Broadcast()
 			return 1, eventPayload(evt), nil
@@ -327,6 +370,17 @@ func (c *replayWebSocketConn) waitForNextOutbound() error {
 			)
 		}
 		if c.events[c.index].Direction == DirectionClientToServer {
+			timestampMs := c.events[c.index].TimestampMs
+			index := c.index
+			c.mu.Unlock()
+			err := c.waitForRecordedTimestamp(timestampMs)
+			c.mu.Lock()
+			if err != nil {
+				return err
+			}
+			if c.index != index {
+				continue
+			}
 			return nil
 		}
 		c.cond.Wait()
@@ -358,9 +412,46 @@ func (c *replayWebSocketConn) WriteMessage(_ int, payload []byte) error {
 			err,
 		))
 	}
+	index := c.index
+	c.mu.Unlock()
+	waitErr := c.waitForRecordedTimestamp(evt.TimestampMs)
+	c.mu.Lock()
+	if waitErr != nil {
+		return waitErr
+	}
+	if c.index != index {
+		return c.setErrLocked(newReplayMismatchError(
+			"unchanged replay cursor while awaiting recorded timing",
+			websocketPayloadType(payload),
+			fmt.Errorf("replay cursor advanced concurrently"),
+		))
+	}
 	c.index++
 	c.cond.Broadcast()
 	return nil
+}
+
+func (c *replayWebSocketConn) waitForRecordedTimestamp(timestampMs int64) error {
+	if c == nil || !c.preserveTiming {
+		return nil
+	}
+	offsetMs := timestampMs - c.firstTimestampMs
+	if offsetMs <= 0 {
+		return nil
+	}
+	due := c.timingStartedAt.Add(time.Duration(offsetMs) * time.Millisecond)
+	delay := time.Until(due)
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-c.done:
+		return io.EOF
+	}
 }
 
 func (c *replayWebSocketConn) Close() error {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -81,7 +80,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	replayDialer, err := factory.newReplayDialer(opts.ReplayPath)
+	replayDialer, err := factory.replayDialer(opts.ReplayPath, opts.ReplayTiming)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -150,7 +149,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			Prompt:         prompt,
 			PromptProvided: promptProvided,
 			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:    3 * time.Second,
+			MaxDuration:    replayLoopMaxDuration(opts.ReplayPath, opts.ReplayTiming),
 			// Caller-supplied scheduled audio owns its close request. A bare
 			// replay must follow the capture's provider terminal instead of
 			// synthesizing a loop-authored client_close after the final turn.

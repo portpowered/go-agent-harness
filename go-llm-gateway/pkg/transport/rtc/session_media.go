@@ -308,11 +308,7 @@ func (m *sessionInboundMedia) activatePlaybackLocked(response PlaybackResponse) 
 	if response.ItemID == "" || response == m.playbackResponse {
 		return
 	}
-	previous := m.playbackResponse
 	m.playbackResponse = response
-	if previous.ItemID != "" {
-		delete(m.responseSamples, previous)
-	}
 	if m.controller != nil {
 		m.controller.StartPlayback(response)
 	}
@@ -342,6 +338,7 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	m.mu.Lock()
 	response := m.playbackResponse
 	responseSamples := m.responseSamples[response]
+	responseSamplesByResponse := m.responseSamples
 	ingressResponse := m.response
 	controller := m.controller
 	for index := range m.frames {
@@ -362,12 +359,23 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 		m.notify()
 		return PlaybackInterruption{}, false
 	}
-	audioEndMS, ok := controller.InterruptPlayback(response)
+	interruption := PlaybackInterruption{PlaybackResponse: response}
+	var ok bool
+	if active, precise := controller.(ActivePlaybackController); precise {
+		interruption, ok = active.InterruptActivePlayback()
+	} else {
+		interruption.AudioEndMS, ok = controller.InterruptPlayback(response)
+	}
+	audioEndMS := interruption.AudioEndMS
 	if audioEndMS < 0 {
 		audioEndMS = 0
 	}
 	if m.sampleRate > 0 {
-		availableMS := int(responseSamples * 1000 / uint64(m.sampleRate))
+		availableSamples := responseSamples
+		if preciseSamples, exists := responseSamplesByResponse[interruption.PlaybackResponse]; exists {
+			availableSamples = preciseSamples
+		}
+		availableMS := int(availableSamples * 1000 / uint64(m.sampleRate))
 		if audioEndMS > availableMS {
 			audioEndMS = availableMS
 		}
@@ -377,7 +385,8 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	if !ok {
 		return PlaybackInterruption{}, false
 	}
-	return PlaybackInterruption{PlaybackResponse: response, AudioEndMS: audioEndMS}, true
+	interruption.AudioEndMS = audioEndMS
+	return interruption, true
 }
 
 func (m *sessionInboundMedia) push(samples []int16) error {

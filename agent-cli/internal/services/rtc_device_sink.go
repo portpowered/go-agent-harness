@@ -91,13 +91,11 @@ type RTCDeviceSink struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	playbackMu           sync.Mutex
-	playbackGeneration   uint64
-	playbackBlocked      bool
-	playbackResponse     rtc.PlaybackResponse
-	playbackBaseline     uint64
-	playbackModelSamples uint64
-	playbackStarted      bool
+	playbackMu         sync.Mutex
+	playbackGeneration uint64
+	playbackBlocked    bool
+	playbackResponse   rtc.PlaybackResponse
+	playbackSpans      []rtcDevicePlaybackSpan
 	// pacingMu serializes producers across capacity admission and enqueue.
 	// The provider pump and hold-tone filler are independent goroutines; without
 	// this boundary they can both observe space below the high watermark and
@@ -115,6 +113,18 @@ type RTCDeviceSink struct {
 
 	holdToneMu     sync.Mutex
 	holdToneFiller *audio.HoldToneFiller
+}
+
+// rtcDevicePlaybackSpan maps one provider response onto the monotonic count
+// of non-underflow samples consumed by the physical device. Multiple response
+// spans may be queued at once; that is what allows a tool continuation to stay
+// gapless without confusing the latest provider response with the one that is
+// currently audible.
+type rtcDevicePlaybackSpan struct {
+	response rtc.PlaybackResponse
+	start    uint64
+	end      uint64
+	complete bool
 }
 
 // NewRTCDeviceSink opens an output device through the shared audio registry.
@@ -233,54 +243,78 @@ func (s *RTCDeviceSink) StartPlayback(response rtc.PlaybackResponse) {
 		s.playbackMu.Unlock()
 		return
 	}
-	s.playbackBlocked = false
-	s.playbackGeneration++
+	if s.playbackBlocked {
+		s.playbackBlocked = false
+		s.playbackGeneration++
+	}
 	s.playbackResponse = response
-	s.playbackBaseline = 0
-	s.playbackModelSamples = 0
-	s.playbackStarted = false
 	s.playbackMu.Unlock()
 }
 
 // InterruptPlayback returns the exact duration of model audio consumed by the
 // device callback, then invalidates racing frames and discards queued audio.
 func (s *RTCDeviceSink) InterruptPlayback(response rtc.PlaybackResponse) (int, bool) {
-	if s == nil || s.sink == nil || response.ItemID == "" {
-		return 0, false
+	interruption, ok := s.interruptPlayback(response, true)
+	return interruption.AudioEndMS, ok
+}
+
+// InterruptActivePlayback resolves interruption against the callback-consumed
+// response span instead of the media reader's latest dequeued response. This
+// remains correct when a fast provider has already queued a tool continuation
+// behind speech that is still physically audible.
+func (s *RTCDeviceSink) InterruptActivePlayback() (rtc.PlaybackInterruption, bool) {
+	return s.interruptPlayback(rtc.PlaybackResponse{}, false)
+}
+
+func (s *RTCDeviceSink) interruptPlayback(requested rtc.PlaybackResponse, requireRequested bool) (rtc.PlaybackInterruption, bool) {
+	if s == nil || s.sink == nil || requireRequested && requested.ItemID == "" {
+		return rtc.PlaybackInterruption{}, false
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	if s.playbackResponse != response {
-		return 0, false
-	}
 	// Clear the native queue before sampling its callback clock. A callback
 	// that wins the queue lock is counted as heard; one that runs after the
 	// discard observes underflow, which leaves rendered-minus-underflow
 	// unchanged. This makes the truncation cursor linearizable with discard.
 	s.sink.DiscardPlayback()
-	consumed := uint64(0)
-	if s.playbackStarted {
-		current := consumedPlaybackSamples(s.sink.PlaybackStats())
-		if current >= s.playbackBaseline {
-			consumed = current - s.playbackBaseline
+	current := consumedPlaybackSamples(s.sink.PlaybackStats())
+	var active rtcDevicePlaybackSpan
+	found := false
+	for _, span := range s.playbackSpans {
+		if requireRequested {
+			if span.response == requested && current > span.start && !(span.complete && current >= span.end) {
+				active = span
+				found = true
+				break
+			}
+		} else if current < span.end {
+			active = span
+			found = true
+			break
 		}
-		// The device counter also includes local non-model sources such as the
-		// hold tone. Never let those samples move a provider-relative cursor
-		// beyond the model audio admitted for this response.
-		if consumed > s.playbackModelSamples {
-			consumed = s.playbackModelSamples
-		}
+	}
+	if !found && !requireRequested && s.playbackResponse.ItemID != "" {
+		active = rtcDevicePlaybackSpan{response: s.playbackResponse}
+		found = true
 	}
 	s.playbackBlocked = true
 	s.playbackGeneration++
 	s.playbackResponse = rtc.PlaybackResponse{}
-	s.playbackStarted = false
-	s.playbackBaseline = 0
-	s.playbackModelSamples = 0
-	if s.deviceRate <= 0 {
-		return 0, false
+	s.playbackSpans = nil
+	if !found || s.deviceRate <= 0 || requireRequested && active.response != requested {
+		return rtc.PlaybackInterruption{}, false
 	}
-	return int(consumed * 1000 / uint64(s.deviceRate)), true
+	heard := uint64(0)
+	if current > active.start {
+		heard = current - active.start
+	}
+	if maximum := active.end - active.start; heard > maximum {
+		heard = maximum
+	}
+	return rtc.PlaybackInterruption{
+		PlaybackResponse: active.response,
+		AudioEndMS:       int(heard * 1000 / uint64(s.deviceRate)),
+	}, true
 }
 
 // finishPlayback retires a fully drained provider response from the device
@@ -296,11 +330,14 @@ func (s *RTCDeviceSink) finishPlayback(response rtc.PlaybackResponse) {
 	if s.playbackResponse != response {
 		return
 	}
+	for index := len(s.playbackSpans) - 1; index >= 0; index-- {
+		if s.playbackSpans[index].response == response {
+			s.playbackSpans[index].complete = true
+			break
+		}
+	}
 	s.playbackGeneration++
 	s.playbackResponse = rtc.PlaybackResponse{}
-	s.playbackBaseline = 0
-	s.playbackModelSamples = 0
-	s.playbackStarted = false
 }
 
 func consumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
@@ -379,6 +416,9 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound rtc.InboundMedia) erro
 				if flushErr := s.flushProviderPlayback(operationCtx, &pending); flushErr != nil {
 					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: flushErr}
 				}
+				if drainErr := s.sink.WaitForPlayback(operationCtx); drainErr != nil {
+					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "drain", Err: drainErr}
+				}
 				return nil
 			}
 			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "read", Err: err}
@@ -436,10 +476,10 @@ func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *rtcD
 			return err
 		}
 	}
-	// A response boundary drains the final queued tail. Normal frames are
-	// paced by queue-capacity backpressure, so this is the only place that
-	// intentionally waits for an empty native queue.
-	return s.sink.WaitForPlayback(ctx)
+	// Response boundaries are metadata, not physical drain points. Capacity
+	// pacing keeps the queue bounded while the response-span ledger preserves
+	// exact callback-clock interruption identity across a queued continuation.
+	return nil
 }
 
 // observedWritePlayback routes a device-rate playback chunk through the
@@ -503,28 +543,49 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		s.playbackMu.Unlock()
 		return nil
 	}
-	if modelAudio && s.playbackResponse.ItemID != "" && !s.playbackStarted {
-		stats := s.sink.PlaybackStats()
-		// Samples already queued belong to an earlier source such as the
-		// hold-tone fade. Starting after their future consumption keeps the
-		// provider cursor relative to the first model sample actually heard.
-		s.playbackBaseline = consumedPlaybackSamples(stats) + uint64(stats.QueuedSamples)
-		s.playbackStarted = true
-	}
+	statsBefore := s.sink.PlaybackStats()
+	response := s.playbackResponse
 	var err error
 	if len(samples) == audio.FrameSize {
 		err = s.sink.WriteFrame(ctx, samples)
 	} else {
 		err = s.sink.WriteSamples(ctx, samples)
 	}
-	if err == nil && modelAudio && s.playbackResponse.ItemID != "" {
-		s.playbackModelSamples += uint64(len(samples))
+	if err == nil && modelAudio && response.ItemID != "" {
+		s.recordPlaybackSpanLocked(response, consumedPlaybackSamples(statsBefore)+uint64(statsBefore.QueuedSamples), len(samples))
 	}
 	if err == nil && s.playbackSamplesObserver != nil {
 		err = s.playbackSamplesObserver(ctx, s.deviceRate, samples)
 	}
 	s.playbackMu.Unlock()
 	return err
+}
+
+func (s *RTCDeviceSink) recordPlaybackSpanLocked(response rtc.PlaybackResponse, start uint64, samples int) {
+	if response.ItemID == "" || samples <= 0 {
+		return
+	}
+	s.prunePlaybackSpansLocked(consumedPlaybackSamples(s.sink.PlaybackStats()))
+	end := start + uint64(samples)
+	if count := len(s.playbackSpans); count > 0 {
+		last := &s.playbackSpans[count-1]
+		if last.response == response && last.end == start {
+			last.end = end
+			return
+		}
+	}
+	s.playbackSpans = append(s.playbackSpans, rtcDevicePlaybackSpan{response: response, start: start, end: end})
+}
+
+func (s *RTCDeviceSink) prunePlaybackSpansLocked(consumed uint64) {
+	first := 0
+	for first < len(s.playbackSpans) && s.playbackSpans[first].end <= consumed {
+		first++
+	}
+	if first > 0 {
+		copy(s.playbackSpans, s.playbackSpans[first:])
+		s.playbackSpans = s.playbackSpans[:len(s.playbackSpans)-first]
+	}
 }
 
 // Run is an alias for Pump for callers that model the binding as a lifecycle
