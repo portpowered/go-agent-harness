@@ -43,6 +43,39 @@ type remoteToolAudioCase struct {
 	toolResponses   map[int]bool
 	healthyControl  bool
 	deviceWAV       bool
+	naturalClose    bool
+	providerClose   bool
+}
+
+// TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM reproduces the live
+// provider timing contract: response.done makes a finite session return while
+// the provider's faster-than-realtime PCM is still queued for a 16 kHz output
+// device. Both the plain response and the speech/tool/speech continuation must
+// remain alive until every accepted sample reaches the external device edge.
+func TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM(t *testing.T) {
+	for _, testCase := range []remoteToolAudioCase{
+		{
+			name:            "natural_close_baseline",
+			responseSamples: []int{38400},
+			naturalClose:    true,
+			deviceWAV:       true,
+		},
+		{
+			name:            "provider_close_tool_continuation",
+			responseSamples: []int{38400, 66000},
+			toolResponses:   map[int]bool{0: true},
+			providerClose:   true,
+			deviceWAV:       true,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			promptBytes := 0
+			if testCase.naturalClose {
+				promptBytes = 32
+			}
+			runRemoteToolAudioScenario(t, testCase, 0, 3*time.Millisecond, 30*time.Millisecond, promptBytes, 0, 0)
+		})
+	}
 }
 
 // TestAgentBinaryAudioOutRecordsRemoteDevicePCM pins --audio-out as a
@@ -188,15 +221,19 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	endpoint, stopDevice := startAudioDeviceServerBinary(t, true)
 	defer stopDevice()
 
-	observationPath := filepath.Join(t.TempDir(), "tool-observations.jsonl")
-	fixturePath := writeRemoteToolFixture(t, observationPath, calls, toolDelay)
+	observationPath := ""
+	fixturePath := ""
+	if len(calls) > 0 {
+		observationPath = filepath.Join(t.TempDir(), "tool-observations.jsonl")
+		fixturePath = writeRemoteToolFixture(t, observationPath, calls, toolDelay)
+	}
 	audioOutPath := ""
 	if testCase.deviceWAV {
 		audioOutPath = filepath.Join(t.TempDir(), "device-output.wav")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, mockToolAgentBinaryPath,
+	arguments := []string{
 		"--config-dir", t.TempDir(),
 		"session",
 		"--provider", "openai",
@@ -205,9 +242,16 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		"--base-url", provider.WebSocketURL(),
 		"--audio-device-server", endpoint,
 		"--audio-out-device=",
-		"--wait-for-close",
 		"--max-duration", "30s",
-	)
+	}
+	if !testCase.naturalClose {
+		arguments = append(arguments, "--wait-for-close")
+	}
+	binaryPath := agentBinaryPath
+	if len(calls) > 0 {
+		binaryPath = mockToolAgentBinaryPath
+	}
+	command := exec.CommandContext(ctx, binaryPath, arguments...)
 	if audioOutPath != "" {
 		command.Args = append(command.Args, "--audio-out", audioOutPath)
 	}
@@ -215,11 +259,13 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		command.Args = append(command.Args, prompt)
 	}
 	command.Env = append(os.Environ(),
-		"YUI_E2E_TOOL_MOCK_FIXTURE="+fixturePath,
 		"HTTP_PROXY=http://127.0.0.1:1",
 		"HTTPS_PROXY=http://127.0.0.1:1",
 		"ALL_PROXY=http://127.0.0.1:1",
 	)
+	if fixturePath != "" {
+		command.Env = append(command.Env, "YUI_E2E_TOOL_MOCK_FIXTURE="+fixturePath)
+	}
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
@@ -243,7 +289,20 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	case <-ctx.Done():
 		t.Fatalf("timed out receiving the complete %s topology: %v; provider=%+v stderr=%q", testCase.name, ctx.Err(), provider.Snapshot(), stderr.String())
 	}
+	if testCase.providerClose {
+		provider.ReleaseClose()
+	}
 
+	if testCase.naturalClose || testCase.providerClose {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("naturally closing mock-tool agent failed: %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+			}
+		case <-ctx.Done():
+			t.Fatalf("mock-tool agent did not close after its final response: %v; stderr=%q", ctx.Err(), stderr.String())
+		}
+	}
 	stopClock()
 	select {
 	case err := <-clockDone:
@@ -253,7 +312,16 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	case <-ctx.Done():
 		t.Fatalf("timed out stopping remote playback clock: %v", ctx.Err())
 	}
-	snapshot := waitForRemoteToolAudio(t, ctx, endpoint, want, callbackInterval)
+	var snapshot audio.DeviceServerSnapshot
+	if testCase.naturalClose || testCase.providerClose {
+		var snapshotErr error
+		snapshot, snapshotErr = audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+		if snapshotErr != nil {
+			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
+		}
+	} else {
+		snapshot = waitForRemoteToolAudio(t, ctx, endpoint, want, callbackInterval)
+	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
 		// This fixture deliberately makes the continuation available while the
@@ -269,14 +337,16 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		t.Fatalf("%s remote playback reported loss: %+v", testCase.name, snapshot.Playback)
 	}
 
-	provider.ReleaseClose()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("mock-tool agent exited: %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+	if !testCase.naturalClose && !testCase.providerClose {
+		provider.ReleaseClose()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("mock-tool agent exited: %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+			}
+		case <-ctx.Done():
+			t.Fatalf("agent did not close after verified device playback: %v; stderr=%q", ctx.Err(), stderr.String())
 		}
-	case <-ctx.Done():
-		t.Fatalf("agent did not close after verified device playback: %v; stderr=%q", ctx.Err(), stderr.String())
 	}
 	observed := provider.Snapshot()
 	wantInitialRequest := 0
@@ -306,7 +376,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("secondary device WAV differs from remote device edge: %v", err)
 		}
 	}
-	assertRemoteToolObservations(t, observationPath, calls)
+	if len(calls) > 0 {
+		assertRemoteToolObservations(t, observationPath, calls)
+	}
 }
 
 func primeRemoteToolAudioInput(t *testing.T, ctx context.Context, endpoint string, provider *remoteToolAudioProvider, frames int) {

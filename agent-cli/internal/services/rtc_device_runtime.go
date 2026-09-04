@@ -144,6 +144,10 @@ type rtcDeviceBoundSession struct {
 	binding *RTCDeviceBinding
 }
 
+type playbackDrainingSession interface {
+	DrainPlayback(context.Context) error
+}
+
 // Send keeps the legacy bool-only session path on the same cancellation
 // boundary as SendWithOutcome. Without this explicit method, the promoted
 // messages.Session.Send method would bypass the local playback flush.
@@ -244,6 +248,23 @@ func (s *rtcDeviceBoundSession) Close() error {
 		return nil
 	}
 	return errors.Join(s.Session.Close(), s.binding.Close())
+}
+
+// DrainPlayback seals only the provider-owned inbound media, leaving the
+// provider session lifecycle unchanged. The sink pump can then consume every
+// frame already accepted before the clean response boundary and wait for the
+// native callback queue without manufacturing a provider-close terminal.
+func (s *rtcDeviceBoundSession) DrainPlayback(ctx context.Context) error {
+	if s == nil || s.binding == nil || s.binding.Sink == nil {
+		return nil
+	}
+	media, ok := rtcMediaFromSession(s.Session)
+	if ok && !nilRTCInboundMedia(media.Inbound) {
+		if err := media.Inbound.Close(); err != nil {
+			return err
+		}
+	}
+	return s.binding.Sink.waitForPump(ctx)
 }
 
 func validateRTCDeviceMedia(binding *RTCDeviceBinding, media RTCMediaEndpoints) error {
