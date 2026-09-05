@@ -313,7 +313,7 @@ func (*strictBrowserIntValue) Type() string { return "int" }
 
 func registerSessionBrowserFlags(cmd *cobra.Command, values *flags.BrowserFlags) {
 	cmd.Flags().StringVar(&values.Tools, "browser-tools", "", "Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome")
-	bindStrictBrowserBool(cmd.Flags(), &values.WebCast, "web-cast", "Enable selected-tab Google Cast controls; requires --browser-tools webmcp")
+	bindStrictBrowserBool(cmd.Flags(), &values.WebCast, "web-cast", "Enable native-media and selected-tab Google Cast controls; requires --browser-tools webmcp")
 	cmd.Flags().StringVar(&values.CDPURL, "browser-cdp-url", "", "Browser DevTools HTTP endpoint")
 	cmd.Flags().StringVar(&values.WSEndpoint, "browser-ws-endpoint", "", "Browser DevTools WebSocket endpoint")
 	cmd.Flags().StringVar(&values.UserDataDir, "browser-user-data-dir", "", "Browser profile directory used for DevTools discovery")

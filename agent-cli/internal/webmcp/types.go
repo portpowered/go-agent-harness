@@ -50,6 +50,7 @@ const (
 	WebMCPCancelInvocationMethod  = "WebMCP.cancelInvocation"
 	PageCaptureScreenshotMethod   = "Page.captureScreenshot"
 	CastEnableMethod              = "Cast.enable"
+	CastSetSinkToUseMethod        = "Cast.setSinkToUse"
 	CastStartTabMirroringMethod   = "Cast.startTabMirroring"
 	CastStopCastingMethod         = "Cast.stopCasting"
 )
@@ -111,6 +112,15 @@ type CastDevice struct {
 	ID      string `json:"id"`
 	Session string `json:"session,omitempty"`
 }
+
+// CastMode selects whether Chrome mirrors the selected tab or asks the page's
+// active media element to hand playback off to the receiver.
+type CastMode string
+
+const (
+	CastModeTab   CastMode = "tab"
+	CastModeMedia CastMode = "media"
+)
 
 // Target is a normalized browser target. Title and URL are display metadata;
 // ID is the authoritative selector.

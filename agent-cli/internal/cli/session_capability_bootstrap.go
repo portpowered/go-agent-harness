@@ -721,6 +721,17 @@ func (b *sessionBrowserBroker) CastSelectedTab(ctx context.Context, deviceName s
 	return controller.CastSelectedTab(ctx, deviceName)
 }
 
+func (b *sessionBrowserBroker) CastSelectedMedia(ctx context.Context, deviceName string) error {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	controller, ok := b.Broker.(webmcp.BrokerMediaCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the connected browser does not support native media casting", map[string]any{"phase": "cast_media", "reason_code": "unsupported_operation"})
+	}
+	return controller.CastSelectedMedia(ctx, deviceName)
+}
+
 func (b *sessionBrowserBroker) StopCasting(ctx context.Context, deviceName string) error {
 	if err := b.ensureInitialized(ctx); err != nil {
 		return err
@@ -756,3 +767,4 @@ func (b *sessionBrowserBroker) WatchBrowserEvents(ctx context.Context) <-chan we
 
 var _ SessionCapabilityInitializer = (*sessionBrowserBroker)(nil)
 var _ webmcp.BrokerCastController = (*sessionBrowserBroker)(nil)
+var _ webmcp.BrokerMediaCastController = (*sessionBrowserBroker)(nil)

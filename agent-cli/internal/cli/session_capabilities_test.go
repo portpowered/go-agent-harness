@@ -890,6 +890,13 @@ func TestSessionBrowserBrokerInitializesBeforeFirstCastCall(t *testing.T) {
 	if err := controller.CastSelectedTab(context.Background(), "Office TV"); err != nil {
 		t.Fatalf("first browser call cast selected tab: %v", err)
 	}
+	mediaController, ok := any(broker).(webmcp.BrokerMediaCastController)
+	if !ok {
+		t.Fatalf("session broker %T does not preserve native media Cast controls", broker)
+	}
+	if err := mediaController.CastSelectedMedia(context.Background(), "Office TV"); err != nil {
+		t.Fatalf("cast selected media: %v", err)
+	}
 	devices, err := controller.ListCastDevices(context.Background())
 	if err != nil {
 		t.Fatalf("list Cast devices after first-call initialization: %v", err)
@@ -897,8 +904,8 @@ func TestSessionBrowserBrokerInitializesBeforeFirstCastCall(t *testing.T) {
 	if err := controller.StopCasting(context.Background(), "Office TV"); err != nil {
 		t.Fatalf("stop Cast after first-call initialization: %v", err)
 	}
-	if bootstrapCalls != 1 || delegate.castCalls != 1 || delegate.castDeviceName != "Office TV" || delegate.castListCalls != 1 || delegate.stopCastCalls != 1 {
-		t.Fatalf("bootstrap/cast/list/stop = %d/%d/%d/%d device=%q, want 1/1/1/1 Office TV", bootstrapCalls, delegate.castCalls, delegate.castListCalls, delegate.stopCastCalls, delegate.castDeviceName)
+	if bootstrapCalls != 1 || delegate.castCalls != 1 || delegate.castMediaCalls != 1 || delegate.castDeviceName != "Office TV" || delegate.castListCalls != 1 || delegate.stopCastCalls != 1 {
+		t.Fatalf("bootstrap/tab/media/list/stop = %d/%d/%d/%d/%d device=%q, want 1/1/1/1/1 Office TV", bootstrapCalls, delegate.castCalls, delegate.castMediaCalls, delegate.castListCalls, delegate.stopCastCalls, delegate.castDeviceName)
 	}
 	if len(devices) != 1 || devices[0].Name != "Office TV" || delegate.selected.Key.TargetID != "tab-youtube" {
 		t.Fatalf("devices/selection = %+v/%+v", devices, delegate.selected)
@@ -945,6 +952,7 @@ type capabilityBroker struct {
 	castDevices    []webmcp.CastDevice
 	castListCalls  int
 	castCalls      int
+	castMediaCalls int
 	stopCastCalls  int
 	castDeviceName string
 }
@@ -1002,6 +1010,12 @@ func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice
 
 func (b *capabilityBroker) CastSelectedTab(_ context.Context, deviceName string) error {
 	b.castCalls++
+	b.castDeviceName = deviceName
+	return nil
+}
+
+func (b *capabilityBroker) CastSelectedMedia(_ context.Context, deviceName string) error {
+	b.castMediaCalls++
 	b.castDeviceName = deviceName
 	return nil
 }

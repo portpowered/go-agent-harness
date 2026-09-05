@@ -141,14 +141,21 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 	if len(definitions) != 12 || definitions[9].Name != webmcp.ListCastDevicesToolName || definitions[10].Name != webmcp.CastTabToolName || definitions[11].Name != webmcp.StopCastingToolName {
 		t.Fatalf("cast definitions = %+v", definitions)
 	}
-	if schemas := set.DefinitionSchemas(); len(schemas) != 12 {
+	schemas := set.DefinitionSchemas()
+	if len(schemas) != 12 {
 		t.Fatalf("cast schemas = %d, want 12", len(schemas))
+	}
+	castParameters := schemas[10]["function"].(map[string]any)["parameters"].(map[string]any)
+	modeSchema := castParameters["properties"].(map[string]any)["mode"].(map[string]any)
+	if modeSchema["default"] != string(webmcp.CastModeTab) || !reflect.DeepEqual(modeSchema["enum"], []string{string(webmcp.CastModeMedia), string(webmcp.CastModeTab)}) {
+		t.Fatalf("cast mode schema = %+v", modeSchema)
 	}
 
 	calls := []messages.ToolCall{
 		{ID: "open-tab", Name: webmcp.OpenTabToolName, Arguments: `{"url":"https://example.com/","activate":true}`},
 		{ID: "list-cast", Name: webmcp.ListCastDevicesToolName, Arguments: `{}`},
 		{ID: "cast-tab", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV"}`},
+		{ID: "cast-media", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV","mode":"media"}`},
 		{ID: "navigate-tab", Name: webmcp.NavigateTabToolName, Arguments: `{"url":"https://www.google.com/"}`},
 		{ID: "stop-cast", Name: webmcp.StopCastingToolName, Arguments: `{"device_name":"Office TV"}`},
 	}
@@ -162,7 +169,7 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
 		}
 	}
-	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
+	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "cast_media", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
 		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
 	}
 	if broker.lastOpen.URL != "https://example.com/" || !broker.lastOpen.Activate {
@@ -170,6 +177,23 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 	}
 	if broker.lastNavigate != "https://www.google.com/" {
 		t.Fatalf("navigate-tab URL = %q", broker.lastNavigate)
+	}
+}
+
+func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
+	broker := &recordingBroker{}
+	response, err := NewBrokerToolSet(broker, true).Executor().Execute(context.Background(), messages.ToolCall{
+		ID: "cast-invalid", Name: webmcp.CastTabToolName, Arguments: `{"device_name":"Office TV","mode":"window"}`,
+	})
+	if err != nil {
+		t.Fatalf("execute invalid cast mode: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || envelope.OK {
+		t.Fatalf("invalid cast mode result = %s, err=%v", response.Content, err)
+	}
+	if len(broker.calls) != 0 {
+		t.Fatalf("invalid cast mode reached broker: %v", broker.calls)
 	}
 }
 
@@ -851,6 +875,12 @@ func (b *recordingBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice,
 
 func (b *recordingBroker) CastSelectedTab(_ context.Context, deviceName string) error {
 	b.calls = append(b.calls, "cast_tab")
+	b.castDeviceName = deviceName
+	return nil
+}
+
+func (b *recordingBroker) CastSelectedMedia(_ context.Context, deviceName string) error {
+	b.calls = append(b.calls, "cast_media")
 	b.castDeviceName = deviceName
 	return nil
 }

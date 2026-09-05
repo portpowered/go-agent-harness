@@ -231,6 +231,10 @@ func (s *ScriptedTargetSession) CastTab(ctx context.Context, deviceName string) 
 	return s.recordCastOperation(ctx, OperationCastTab, deviceName)
 }
 
+func (s *ScriptedTargetSession) CastMedia(ctx context.Context, deviceName string) error {
+	return s.recordCastOperation(ctx, OperationCastMedia, deviceName)
+}
+
 func (s *ScriptedTargetSession) StopCasting(ctx context.Context, deviceName string) error {
 	return s.recordCastOperation(ctx, OperationStopCasting, deviceName)
 }
@@ -271,6 +275,7 @@ func (s *ScriptedTargetSession) recordCastOperation(ctx context.Context, kind Op
 }
 
 var _ webmcp.TargetCastController = (*ScriptedTargetSession)(nil)
+var _ webmcp.TargetMediaCastController = (*ScriptedTargetSession)(nil)
 var _ webmcp.TargetTabNavigator = (*ScriptedTargetSession)(nil)
 
 func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {

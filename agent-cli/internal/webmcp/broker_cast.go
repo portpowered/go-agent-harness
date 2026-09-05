@@ -31,6 +31,18 @@ func (b *StatefulBroker) CastSelectedTab(ctx context.Context, deviceName string)
 	})
 }
 
+// CastSelectedMedia asks the exact selected page to hand its active media to
+// the named receiver. Unlike CastSelectedTab, this is page-initiated native
+// playback rather than pixel mirroring.
+func (b *StatefulBroker) CastSelectedMedia(ctx context.Context, deviceName string) error {
+	if strings.TrimSpace(deviceName) == "" {
+		return classified(ErrorInvalidToolInput, "the Cast device name is required", map[string]any{"phase": "cast_media", "reason_code": "device_name_required"}, nil)
+	}
+	return b.withSelectedMediaCastController(ctx, "cast_media", func(controller TargetMediaCastController) error {
+		return controller.CastMedia(ctx, deviceName)
+	})
+}
+
 // StopCasting terminates the route on the named receiver.
 func (b *StatefulBroker) StopCasting(ctx context.Context, deviceName string) error {
 	if strings.TrimSpace(deviceName) == "" {
@@ -42,6 +54,16 @@ func (b *StatefulBroker) StopCasting(ctx context.Context, deviceName string) err
 }
 
 func (b *StatefulBroker) withSelectedCastController(ctx context.Context, phase string, call func(TargetCastController) error) error {
+	return b.withSelectedSession(ctx, phase, func(session TargetSession) error {
+		controller, ok := session.(TargetCastController)
+		if !ok {
+			return classified(ErrorBrowserProtocol, "the selected browser page does not support Cast controls", map[string]any{"phase": phase, "reason_code": "unsupported_operation"}, nil)
+		}
+		return call(controller)
+	})
+}
+
+func (b *StatefulBroker) withSelectedSession(ctx context.Context, phase string, call func(TargetSession) error) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -76,14 +98,10 @@ func (b *StatefulBroker) withSelectedCastController(ctx context.Context, phase s
 		b.mu.Unlock()
 		return err
 	}
-	controller, ok := selected.session.(TargetCastController)
-	if !ok {
-		b.mu.Unlock()
-		return classified(ErrorBrowserProtocol, "the selected browser page does not support Cast controls", map[string]any{"phase": phase, "reason_code": "unsupported_operation"}, nil)
-	}
+	session := selected.session
 	b.mu.Unlock()
 
-	if err := call(controller); err != nil {
+	if err := call(session); err != nil {
 		return err
 	}
 	b.mu.Lock()
@@ -95,6 +113,16 @@ func (b *StatefulBroker) withSelectedCastController(ctx context.Context, phase s
 		return staleSelectionForSession(selected, "selection_changed")
 	}
 	return b.captureSelectionStateErrorLocked(selected, phase, "selection_changed")
+}
+
+func (b *StatefulBroker) withSelectedMediaCastController(ctx context.Context, phase string, call func(TargetMediaCastController) error) error {
+	return b.withSelectedSession(ctx, phase, func(session TargetSession) error {
+		controller, ok := session.(TargetMediaCastController)
+		if !ok {
+			return classified(ErrorBrowserProtocol, "the selected browser page does not support native media casting", map[string]any{"phase": phase, "reason_code": "unsupported_operation"}, nil)
+		}
+		return call(controller)
+	})
 }
 
 var _ BrokerCastController = (*StatefulBroker)(nil)

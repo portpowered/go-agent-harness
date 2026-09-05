@@ -3,18 +3,23 @@ package chrome
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	cdpCast "github.com/chromedp/cdproto/cast"
 	"github.com/chromedp/cdproto/cdp"
+	cdpRuntime "github.com/chromedp/cdproto/runtime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 type castCommand struct {
-	method   string
-	sinkName string
+	method      string
+	sinkName    string
+	expression  string
+	await       bool
+	userGesture bool
 }
 
 func TestTargetSessionSurfacesChromeCastDiscoveryIssue(t *testing.T) {
@@ -43,10 +48,16 @@ func (e *castExecutor) Execute(ctx context.Context, method string, params, _ any
 	}
 	call := castCommand{method: method}
 	switch value := params.(type) {
+	case *cdpCast.SetSinkToUseParams:
+		call.sinkName = value.SinkName
 	case *cdpCast.StartTabMirroringParams:
 		call.sinkName = value.SinkName
 	case *cdpCast.StopCastingParams:
 		call.sinkName = value.SinkName
+	case *cdpRuntime.EvaluateParams:
+		call.expression = value.Expression
+		call.await = value.AwaitPromise
+		call.userGesture = value.UserGesture
 	}
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
@@ -161,5 +172,33 @@ func TestTargetSessionCastEnablesDeviceDiscoveryWhenCalledFirst(t *testing.T) {
 	}
 	if got := executor.snapshot(); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("first-operation Cast CDP calls = %+v, want %+v", got, want)
+	}
+}
+
+func TestTargetSessionCastsActiveMediaThroughPageRemotePlayback(t *testing.T) {
+	executor := &castExecutor{}
+	session := newInvocationTestSession(t, executor)
+	session.observeCastProtocolEvent(&cdpCast.EventSinksUpdated{Sinks: []*cdpCast.Sink{{Name: "Office TV", ID: "sink-office"}}})
+
+	if err := session.CastMedia(context.Background(), "Office TV"); err != nil {
+		t.Fatalf("cast media: %v", err)
+	}
+	got := executor.snapshot()
+	if len(got) != 3 {
+		t.Fatalf("media Cast CDP calls = %+v, want enable, sink selection, and page request", got)
+	}
+	if got[0].method != cdpCast.CommandEnable {
+		t.Fatalf("first media Cast command = %+v", got[0])
+	}
+	if got[1].method != cdpCast.CommandSetSinkToUse || got[1].sinkName != "Office TV" {
+		t.Fatalf("media sink selection = %+v", got[1])
+	}
+	if got[2].method != cdpRuntime.CommandEvaluate || !got[2].await || !got[2].userGesture {
+		t.Fatalf("media page request = %+v", got[2])
+	}
+	for _, required := range []string{"media.remote.prompt", ".ytp-remote-button"} {
+		if !strings.Contains(got[2].expression, required) {
+			t.Fatalf("media page request omits %q", required)
+		}
 	}
 }
