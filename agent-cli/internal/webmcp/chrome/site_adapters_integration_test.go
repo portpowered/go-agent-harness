@@ -16,6 +16,7 @@ import (
 )
 
 const siteAdaptersIntegrationEnv = "WEBMCP_SITE_ADAPTER_INTEGRATION"
+const capitalOneShoppingAdapterIntegrationEnv = "WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_INTEGRATION"
 
 func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	if os.Getenv(siteAdaptersIntegrationEnv) != "1" {
@@ -25,6 +26,14 @@ func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	t.Run("wikipedia", testWikipediaAdapterJourney)
 	t.Run("reddit", testRedditAdapterJourney)
 	t.Run("google_maps", testGoogleMapsAdapterJourney)
+	t.Run("capital_one_shopping", testCapitalOneShoppingAdapterJourney)
+}
+
+func TestCapitalOneShoppingAdapterStockChromeJourney(t *testing.T) {
+	if os.Getenv(capitalOneShoppingAdapterIntegrationEnv) != "1" {
+		t.Skipf("set %s=1 to run the stock-Chrome Capital One Shopping adapter journey", capitalOneShoppingAdapterIntegrationEnv)
+	}
+	testCapitalOneShoppingAdapterJourney(t)
 }
 
 type adapterFixture struct {
@@ -85,7 +94,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
-	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5}[name]
+	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4}[name]
 	tools := waitForAdapterCatalog(t, ctx, session, "adapter catalog", expected)
 	return adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
 }
@@ -298,3 +307,107 @@ func testGoogleMapsAdapterJourney(t *testing.T) {
 	}
 	t.Logf("WEBMCP_GOOGLE_MAPS_ADAPTER_PASS chrome=%s current_location=true", fixture.version)
 }
+
+func testCapitalOneShoppingAdapterJourney(t *testing.T) {
+	source, _ := siteadapter.Source(siteadapter.CapitalOneShoppingName)
+	// Keep the hermetic end-of-feed branch fast while production retains the
+	// four-second allowance required by live lazy-loaded pages.
+	source = strings.Replace(source, "Date.now() + 4000", "Date.now() + 250", 1)
+	handler := func(writer http.ResponseWriter, _ *http.Request) {
+		adapterFixtureHeaders(writer)
+		_, _ = fmt.Fprint(writer, capitalOneShoppingAdapterFixtureHTML)
+	}
+	fixture := newAdapterFixture(t, "capital-one-shopping", "https://capitaloneshopping.com/", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
+
+	requireAdapterFailure(t, fixture, "capital_one_shopping_scan_offers", `{"max_pages":21}`, "invalid_input")
+	output := invokeAdapterTool(t, fixture, "capital_one_shopping_scan_offers", `{"max_pages":6,"max_cost_usd":500,"min_cashback_percent":70,"min_bonus_usd":300,"reward_match":"any","unknown_cost_policy":"separate"}`)
+	var scan struct {
+		Data struct {
+			PagesScanned          int    `json:"pages_scanned"`
+			OffersObserved        int    `json:"offers_observed"`
+			MatchCount            int    `json:"match_count"`
+			UnknownCostMatchCount int    `json:"unknown_cost_match_count"`
+			StopReason            string `json:"stop_reason"`
+			Generation            int    `json:"scan_generation"`
+			Matches               []struct {
+				Merchant           string   `json:"merchant"`
+				CashbackPercent    *float64 `json:"cashback_percent"`
+				BonusUSD           *float64 `json:"bonus_usd"`
+				RewardCapUSD       *float64 `json:"reward_cap_usd"`
+				QualifyingSpendUSD *float64 `json:"qualifying_spend_usd"`
+				CostUSD            *float64 `json:"cost_usd"`
+			} `json:"matches"`
+			Unknown []struct {
+				Merchant string `json:"merchant"`
+			} `json:"unknown_cost_matches"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(output, &scan); err != nil {
+		t.Fatalf("decode Capital One Shopping scan: %v: %s", err, output)
+	}
+	if scan.Data.PagesScanned < 3 || scan.Data.StopReason != "no_growth" || scan.Data.OffersObserved < 6 {
+		t.Fatalf("Capital One Shopping scan lifecycle = %+v; output=%s", scan.Data, output)
+	}
+	if scan.Data.MatchCount != 3 || scan.Data.UnknownCostMatchCount != 1 || len(scan.Data.Matches) != 3 || len(scan.Data.Unknown) != 1 {
+		t.Fatalf("Capital One Shopping match counts = %+v; output=%s", scan.Data, output)
+	}
+	if !strings.Contains(string(output), `"merchant":"Exact Seventy"`) ||
+		!strings.Contains(string(output), `"merchant":"Exact Three Hundred"`) ||
+		!strings.Contains(string(output), `"merchant":"Late Bonus"`) ||
+		!strings.Contains(string(output), `"merchant":"Unknown Price"`) {
+		t.Fatalf("Capital One Shopping expected merchants missing: %s", output)
+	}
+	if strings.Contains(string(output), `"merchant":"Reward Cap Trap"`) || strings.Contains(string(output), `"merchant":"Over Budget"`) {
+		t.Fatalf("Capital One Shopping cap/cost filters admitted an invalid match: %s", output)
+	}
+
+	listed := invokeAdapterTool(t, fixture, "capital_one_shopping_list_matches", fmt.Sprintf(`{"scan_generation":%d,"offset":1,"limit":1}`, scan.Data.Generation))
+	if !strings.Contains(string(listed), `"total":3`) || !strings.Contains(string(listed), `"limit":1`) {
+		t.Fatalf("Capital One Shopping bounded list = %s", listed)
+	}
+	requireAdapterFailure(t, fixture, "capital_one_shopping_list_matches", `{"scan_generation":999}`, "stale_result")
+	invokeAdapterTool(t, fixture, "capital_one_shopping_reset_scan", `{}`)
+	requireAdapterFailure(t, fixture, "capital_one_shopping_list_matches", fmt.Sprintf(`{"scan_generation":%d}`, scan.Data.Generation), "stale_result")
+	t.Logf("WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_PASS chrome=%s pages=%d offers=%d", fixture.version, scan.Data.PagesScanned, scan.Data.OffersObserved)
+}
+
+const capitalOneShoppingAdapterFixtureHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Capital One Shopping adapter fixture</title>
+<style>body{margin:0}#offers{min-height:1400px}.offer{display:block;margin:24px;height:180px;width:640px}.spacer{height:900px}</style></head>
+<body><main><div id="offers"></div><div class="spacer"></div></main>
+<script>
+const batches = [
+  [
+    {merchant:"Exact Seventy", promo:"25% off Exact Seventy plans.", reward:"Now 70% back ($1,000 max)", price:"$450", detail:"Eligible product"},
+    {merchant:"Exact Three Hundred", reward:"Get $300 back when you spend $1,000", price:"$499", detail:"Activation bonus"},
+    {merchant:"Reward Cap Trap", reward:"Now 5% back ($1,000 max)", price:"$20", detail:"Low reward"}
+  ],
+  [
+    {merchant:"Exact Seventy", promo:"25% off Exact Seventy plans.", reward:"Now 70% back ($1,000 max)", price:"$450", detail:"Eligible product"},
+    {merchant:"Unknown Price", reward:"Now 80% back ($1,000 max)", price:"", detail:"Merchant offer"},
+    {merchant:"Over Budget", reward:"Now 90% back ($1,000 max)", price:"$800", detail:"Expensive product"}
+  ],
+  [
+    {merchant:"Late Bonus", reward:"Now up to $350 back", price:"$200", detail:"Late-loaded bonus"}
+  ]
+];
+let batch = 0;
+const offers = document.querySelector("#offers");
+const render = (rows) => {
+  for (const row of rows) {
+    const button = document.createElement("button");
+    button.className = "offer";
+    button.setAttribute("aria-label", "View " + row.merchant + " offer - " + row.reward);
+    button.innerHTML = '<img alt="Merchant image for ' + row.merchant + '"><p>' + row.merchant + '</p>' + (row.promo ? '<p>' + row.promo + '</p>' : '') + '<p>' + row.reward + '</p>' + (row.price ? '<span class="product-price">' + row.price + '</span>' : '') + '<p>' + row.detail + '</p><span>Get this Offer</span>';
+    offers.appendChild(button);
+  }
+};
+render(batches[0]);
+addEventListener("scroll", () => {
+  if (scrollY + innerHeight < document.documentElement.scrollHeight - 5 || batch >= batches.length - 1) return;
+  batch += 1;
+  if (batch === 2) offers.querySelectorAll("button")[0]?.remove();
+  render(batches[batch]);
+  document.querySelector(".spacer").style.height = (900 + batch * 700) + "px";
+});
+</script></body></html>`

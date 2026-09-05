@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	YouTubeName    = "youtube"
-	SpotifyName    = "spotify"
-	WikipediaName  = "wikipedia"
-	RedditName     = "reddit"
-	GoogleMapsName = "google_maps"
+	YouTubeName            = "youtube"
+	SpotifyName            = "spotify"
+	WikipediaName          = "wikipedia"
+	RedditName             = "reddit"
+	GoogleMapsName         = "google_maps"
+	CapitalOneShoppingName = "capital_one_shopping"
 )
 
 //go:embed extensions/youtube/youtube.js
@@ -31,6 +32,9 @@ var redditSource string
 
 //go:embed extensions/google_maps/google_maps.js
 var googleMapsSource string
+
+//go:embed extensions/capital_one_shopping/capital_one_shopping.js
+var capitalOneShoppingSource string
 
 // Script is a main-world page adapter selected for one target URL.
 type Script struct {
@@ -98,6 +102,18 @@ var registry = []definition{
 		match: func(parsed *url.URL) bool {
 			host := strings.ToLower(parsed.Hostname())
 			return host == "maps.google.com" || host == "www.google.com" && (parsed.Path == "/maps" || strings.HasPrefix(parsed.Path, "/maps/"))
+		},
+	},
+	{
+		info:   Info{Name: CapitalOneShoppingName, URLPatterns: []string{"https://capitaloneshopping.com/*", "https://www.capitaloneshopping.com/*"}, ToolPrefix: "capital_one_shopping_"},
+		source: capitalOneShoppingSource,
+		match: func(parsed *url.URL) bool {
+			switch strings.ToLower(parsed.Hostname()) {
+			case "capitaloneshopping.com", "www.capitaloneshopping.com":
+				return true
+			default:
+				return false
+			}
 		},
 	},
 }

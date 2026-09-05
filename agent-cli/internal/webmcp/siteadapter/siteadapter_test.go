@@ -43,6 +43,8 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 		{"https://old.reddit.com/r/golang/", RedditName},
 		{"https://www.google.com/maps/dir/", GoogleMapsName},
 		{"https://maps.google.com/", GoogleMapsName},
+		{"https://capitaloneshopping.com/", CapitalOneShoppingName},
+		{"https://www.capitaloneshopping.com/deals", CapitalOneShoppingName},
 	} {
 		script, ok := ForURL(candidate.rawURL)
 		if !ok || script.Name != candidate.name || script.Source == "" {
@@ -62,6 +64,9 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 		"https://www.google.com/search?q=maps",
 		"https://maps.google.com.example.test/",
 		"https://www.google.com@evil.test/maps/",
+		"http://capitaloneshopping.com/",
+		"https://capitaloneshopping.com.example.test/",
+		"https://www.capitaloneshopping.com@evil.test/",
 	} {
 		if script, ok := ForURL(rawURL); ok {
 			t.Errorf("ForURL(%q) selected unexpected adapter %+v", rawURL, script)
@@ -71,11 +76,11 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 
 func TestSupportedRegistryIsCompleteAndDefensive(t *testing.T) {
 	infos := Supported()
-	if len(infos) != 5 {
-		t.Fatalf("Supported() has %d adapters, want 5", len(infos))
+	if len(infos) != 6 {
+		t.Fatalf("Supported() has %d adapters, want 6", len(infos))
 	}
 	want := map[string]string{
-		YouTubeName: "youtube_", SpotifyName: "spotify_", WikipediaName: "wikipedia_", RedditName: "reddit_", GoogleMapsName: "google_maps_",
+		YouTubeName: "youtube_", SpotifyName: "spotify_", WikipediaName: "wikipedia_", RedditName: "reddit_", GoogleMapsName: "google_maps_", CapitalOneShoppingName: "capital_one_shopping_",
 	}
 	for _, info := range infos {
 		if want[info.Name] != info.ToolPrefix || len(info.URLPatterns) == 0 {
@@ -117,6 +122,8 @@ func adapterInstallStem(name string) string {
 		return "Reddit"
 	case GoogleMapsName:
 		return "GoogleMaps"
+	case CapitalOneShoppingName:
+		return "CapitalOneShopping"
 	default:
 		return "missing"
 	}
@@ -147,6 +154,39 @@ func TestEveryAdapterScriptHasAnOriginGateAndStableToolPrefix(t *testing.T) {
 		}
 		if count := strings.Count(source, `name: "`+info.ToolPrefix); count < 4 {
 			t.Errorf("adapter %s registers only %d prefixed tools", info.Name, count)
+		}
+	}
+}
+
+func TestCapitalOneShoppingScriptHasBoundedReadOnlyScanContract(t *testing.T) {
+	script, ok := Source(CapitalOneShoppingName)
+	if !ok || script == "" {
+		t.Fatal("Capital One Shopping adapter source is missing")
+	}
+	for _, host := range []string{"capitaloneshopping.com", "www.capitaloneshopping.com"} {
+		if !strings.Contains(script, `"`+host+`"`) {
+			t.Errorf("Capital One Shopping script omits origin gate for %s", host)
+		}
+	}
+	for _, tool := range []string{
+		"capital_one_shopping_get_context",
+		"capital_one_shopping_scan_offers",
+		"capital_one_shopping_list_matches",
+		"capital_one_shopping_reset_scan",
+	} {
+		if strings.Count(script, `name: "`+tool+`"`) != 1 {
+			t.Errorf("tool %s is not registered exactly once", tool)
+		}
+	}
+	for _, required := range []string{
+		"const MAX_PAGES = 20",
+		"reward_cap_usd",
+		"qualifying_spend_usd",
+		"unknown_cost_policy",
+		"This only reads and scrolls; it never activates an offer or makes a purchase.",
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("Capital One Shopping scan contract omits %q", required)
 		}
 	}
 }

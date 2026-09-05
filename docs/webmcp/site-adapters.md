@@ -2,7 +2,7 @@
 
 ## Overview
 
-`yui session --browser-tools webmcp` includes five default-on site adapters.
+`yui session --browser-tools webmcp` includes six default-on site adapters.
 They are bundled into the executable and need no Chrome extension,
 Tampermonkey script, or per-site feature flag.
 
@@ -13,9 +13,15 @@ Tampermonkey script, or per-site feature flag.
 | Wikipedia | `wikipedia.org` and language subdomains ending in `.wikipedia.org` | Full-text search; list/open a returned article; read bounded intro/headings | Only ordinary `/wiki/` articles are selectable; namespace links are excluded. |
 | Reddit | `reddit.com`, `www.reddit.com`, `old.reddit.com` | Search/list non-promoted posts; open a returned post; read bounded title/body | Reddit may show a humanity or login challenge depending on network reputation. |
 | Google Maps | `www.google.com/maps/*`, `maps.google.com/*` | Search/read a place; request/read directions | Current-location routes use Maps' browser location. Browser/OS permission or an unavailable position is reported explicitly. |
+| [Capital One Shopping](sites/capitaloneshopping.md) | `capitaloneshopping.com`, `www.capitaloneshopping.com` | Scan and filter lazy-loaded offers | See the site-specific tool, data, operation, and test reference. |
 
 Tool names are prefixed with `youtube_`, `spotify_`, `wikipedia_`, `reddit_`,
-or `google_maps_`. This keeps a mixed-tab model session unambiguous.
+`google_maps_`, or `capital_one_shopping_`. This keeps a mixed-tab model
+session unambiguous.
+
+Site-specific contracts and operator instructions live under `docs/webmcp/sites/`.
+See [Capital One Shopping](sites/capitaloneshopping.md) for its bespoke tools,
+offer data model, matching rules, manual CLI trigger, and test gates.
 
 ## How installation works
 
@@ -122,6 +128,9 @@ WEBMCP_YOUTUBE_ADAPTER_INTEGRATION=1 \
   go test ./agent-cli/internal/webmcp/chrome \
   -run '^TestYouTubeAdapterStockChromeJourney$' -count=1 -v
 ```
+
+Additional site-specific integration and live gates are documented under
+`docs/webmcp/sites/`.
 
 Before merging, run the repository-wide suite and one Realtime journey per
 adapter. Live acceptance is successful only when the recording contains the
