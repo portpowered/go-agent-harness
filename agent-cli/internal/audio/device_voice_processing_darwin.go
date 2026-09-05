@@ -428,6 +428,15 @@ func (h *voiceProcessingEndpoint) PlaybackStats() PlaybackQueueStats {
 	return h.engine.playback.Snapshot()
 }
 
+func (h *voiceProcessingEndpoint) SetPlaybackRenderObserver(observer PlaybackRenderObserver) {
+	if h == nil || h.direction != DirectionOutput {
+		return
+	}
+	h.engine.mu.Lock()
+	h.engine.playback.SetRenderObserver(observer)
+	h.engine.mu.Unlock()
+}
+
 func (h *voiceProcessingEndpoint) DiscardPlayback() int {
 	if h.closed.Load() {
 		return 0

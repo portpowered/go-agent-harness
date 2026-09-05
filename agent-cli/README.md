@@ -105,6 +105,20 @@ admission:
 yui session --audio-out-device default --audio-out device-output.wav --record session.json
 ```
 
+For a simultaneous microphone/playback timing diagnosis, add `--trace-audio`.
+It writes `./audio-trace/timeline.jsonl` plus four edge-specific WAV files:
+`microphone-pre-gate.wav`, `microphone-uploaded.wav`,
+`speaker-enqueued.wav`, and `speaker-rendered.wav`. The rendered file contains
+only PCM consumed by the device callback; queued audio discarded by a barge-in
+therefore appears in `speaker-enqueued.wav` but not `speaker-rendered.wav`.
+On macOS, “pre-gate” is after Apple's AUVoiceIO processing and before Yui's
+local self-hearing gate.
+
+```bash
+yui session --model gpt-realtime-2.1 --audio-in-device default \
+  --audio-out-device default --record session.json --trace-audio
+```
+
 `yui session list` accepts composable `--limit` (1–1000), `--since` (RFC3339
 file modification time), and case-insensitive literal `--filter` (session ID).
 

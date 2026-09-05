@@ -42,6 +42,14 @@ type RTCDevicePlaybackObserver func(audio.DeviceID, audio.PlaybackQueueStats)
 // the slice is owned by the sink and is not retained for the callback.
 type RTCDevicePlaybackSamplesObserver func(context.Context, int, []int16) error
 
+// RTCDeviceCaptureSamplesObserver observes one owned PCM block at a capture
+// edge. Implementations must copy samples they retain and return promptly.
+type RTCDeviceCaptureSamplesObserver func(sampleRate int, samples []int16)
+
+// RTCDeviceRenderedSamplesObserver observes non-underflow PCM consumed by the
+// selected device callback, after enqueue pacing and cancellation.
+type RTCDeviceRenderedSamplesObserver func(sampleRate int, samples []int16)
+
 // RTCDeviceCaptureObserver receives the corresponding input queue snapshot at
 // source teardown, outside the native callback.
 type RTCDeviceCaptureObserver func(audio.DeviceID, audio.CaptureQueueStats)
@@ -216,6 +224,13 @@ func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 		return audio.PlaybackQueueStats{}
 	}
 	return s.sink.PlaybackStats()
+}
+
+func (s *RTCDeviceSink) setRenderedSamplesObserver(observer RTCDeviceRenderedSamplesObserver) bool {
+	if s == nil || s.sink == nil || observer == nil {
+		return false
+	}
+	return s.sink.SetPlaybackRenderObserver(audio.PlaybackRenderObserver(observer))
 }
 
 // DiscardPlayback removes only queued local speaker samples that have not

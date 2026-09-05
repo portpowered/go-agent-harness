@@ -78,12 +78,14 @@ func (e *RTCDeviceSourceRateError) Unwrap() error {
 // PCM frames into an outgoing RTC media endpoint. The RTC endpoint remains
 // caller-owned; Close only stops this source and releases its device.
 type RTCDeviceSource struct {
-	source          *audio.DeviceSource
-	id              audio.DeviceID
-	filter          rtcDeviceCaptureFilter
-	sourceRate      int
-	providerRate    int
-	captureObserver RTCDeviceCaptureObserver
+	source                  *audio.DeviceSource
+	id                      audio.DeviceID
+	filter                  rtcDeviceCaptureFilter
+	sourceRate              int
+	providerRate            int
+	captureObserver         RTCDeviceCaptureObserver
+	preGateSamplesObserver  RTCDeviceCaptureSamplesObserver
+	uploadedSamplesObserver RTCDeviceCaptureSamplesObserver
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelCauseFunc
@@ -261,6 +263,9 @@ func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) 
 			}
 			return &RTCDeviceSourceError{DeviceID: s.id, Operation: "read", Err: err}
 		}
+		if s.preGateSamplesObserver != nil {
+			s.preGateSamplesObserver(s.sourceRate, frame)
+		}
 
 		samplesToSend := [][]int16{append([]int16(nil), frame...)}
 		if s.filter != nil {
@@ -283,6 +288,9 @@ func (s *RTCDeviceSource) Pump(ctx context.Context, outbound rtc.OutboundMedia) 
 			// storage, and the unfiltered path copied the source buffer above.
 			if err := outbound.WriteFrame(operationCtx, rtc.PCMFrame{Samples: providerSamples}); err != nil {
 				return &RTCDeviceSourceError{DeviceID: s.id, Operation: "write", Err: err}
+			}
+			if s.uploadedSamplesObserver != nil {
+				s.uploadedSamplesObserver(s.providerRate, providerSamples)
 			}
 		}
 	}

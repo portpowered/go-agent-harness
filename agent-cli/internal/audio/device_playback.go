@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -68,6 +69,23 @@ type PlaybackQueue struct {
 	underflows       uint64
 	underflowSamples uint64
 	minimumQueued    int
+	renderObserver   PlaybackRenderObserver
+	renderPool       sync.Pool
+}
+
+// PlaybackRenderObserver receives the exact non-underflow PCM16 samples
+// consumed by a device callback. Implementations must return immediately and
+// copy samples they retain; the callback-owned slice is invalid after return.
+type PlaybackRenderObserver func(sampleRate int, samples []int16)
+
+// SetRenderObserver installs the optional device-consumption tap.
+func (q *PlaybackQueue) SetRenderObserver(observer PlaybackRenderObserver) {
+	if q == nil {
+		return
+	}
+	q.mu.Lock()
+	q.renderObserver = observer
+	q.mu.Unlock()
 }
 
 // NewPlaybackQueue creates a queue using DefaultPlaybackLatencyTarget.
@@ -84,13 +102,15 @@ func NewPlaybackQueueWithLatency(format DeviceFormat, latency time.Duration) (*P
 	if err != nil {
 		return nil, err
 	}
-	return &PlaybackQueue{
+	queue := &PlaybackQueue{
 		format:        format,
 		latencyTarget: latency,
 		capacity:      capacity,
 		samples:       make([]int16, capacity),
 		minimumQueued: capacity,
-	}, nil
+	}
+	queue.renderPool.New = func() any { return make([]int16, FrameSize) }
+	return queue, nil
 }
 
 // PlaybackQueueCapacity derives the bounded queue size from an explicit
@@ -198,9 +218,13 @@ func (q *PlaybackQueue) ReadInto(destination []int16) int {
 		return 0
 	}
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	n := min(len(destination), q.size)
 	q.readIntoLocked(destination[:n])
+	observer, rate := q.renderObserver, q.format.SampleRate
+	q.mu.Unlock()
+	if n > 0 && observer != nil {
+		observer(rate, destination[:n])
+	}
 	return n
 }
 
@@ -212,7 +236,6 @@ func (q *PlaybackQueue) RenderInto(destination []int16) int {
 		return 0
 	}
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	queuedBefore := q.size
 	n := min(len(destination), q.size)
 	q.readIntoLocked(destination[:n])
@@ -226,6 +249,11 @@ func (q *PlaybackQueue) RenderInto(destination []int16) int {
 	}
 	if queuedBefore < q.minimumQueued {
 		q.minimumQueued = queuedBefore
+	}
+	observer, rate := q.renderObserver, q.format.SampleRate
+	q.mu.Unlock()
+	if n > 0 && observer != nil {
+		observer(rate, destination[:n])
 	}
 	return n
 }
@@ -286,7 +314,6 @@ func (q *PlaybackQueue) readPCM16(destination []byte) int {
 		return 0
 	}
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	requested := len(destination) / 2
 	queuedBefore := q.size
 	n := min(requested, q.size)
@@ -305,6 +332,26 @@ func (q *PlaybackQueue) readPCM16(destination []byte) int {
 	}
 	if queuedBefore < q.minimumQueued {
 		q.minimumQueued = queuedBefore
+	}
+	observer, rate := q.renderObserver, q.format.SampleRate
+	var rendered []int16
+	if n > 0 && observer != nil {
+		rendered = q.renderPool.Get().([]int16)
+		if cap(rendered) < n {
+			rendered = make([]int16, n)
+		} else {
+			rendered = rendered[:n]
+		}
+		for index := range rendered {
+			rendered[index] = int16(binary.LittleEndian.Uint16(destination[index*2:]))
+		}
+	}
+	q.mu.Unlock()
+	if len(rendered) > 0 {
+		observer(rate, rendered)
+		if cap(rendered) == FrameSize {
+			q.renderPool.Put(rendered[:FrameSize])
+		}
 	}
 	return n
 }
