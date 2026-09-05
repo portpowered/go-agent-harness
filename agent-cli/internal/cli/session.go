@@ -631,35 +631,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
 		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
 			defer func() { runErr = decorateSessionCommandError(runErr) }()
-			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
-				return err
-			}
-			if err := validateBrowserToolsBackend(browserFlags.Tools, browserToolsAdmission(cmd)); err != nil {
-				return err
-			}
-			selectedTransport, err := validateSessionTransport(transport)
+			selectedTransport, err := validateSessionCommandPreflight(sessionCommandPreflight{
+				cmd: cmd, browserTools: browserFlags.Tools, transport: transport,
+				signaling: signaling, mediaSource: mediaSource, audioInTurnBarge: audioInTurnBarge,
+				audioInTurns: len(audioInTurns), maxDuration: maxDuration,
+			})
 			if err != nil {
 				return err
-			}
-			if err := validateSessionSignaling(selectedTransport, signaling, cmd.Flags().Changed("signaling")); err != nil {
-				return err
-			}
-			if err := validateSessionMediaSource(selectedTransport, mediaSource, cmd.Flags().Changed("media-source"), cmd.Flags().Changed("audio-in")); err != nil {
-				return err
-			}
-			if err := services.ValidateSessionAudioDeviceConflicts(
-				cmd.Flags().Changed("audio-in"),
-				cmd.Flags().Changed("audio-out"),
-				cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-				cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
-			); err != nil {
-				return err
-			}
-			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
-				return err
-			}
-			if selectedTransport == SessionTransportWebRTC {
-				return &SessionWebRTCUnavailableError{}
 			}
 			deviceRegistry, filesystemPolicy, err := c.sessionRuntimeDependencies(audioDeviceServer)
 			if err != nil {
@@ -751,28 +729,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var audioTrace *services.SessionAudioTrace
-			if traceAudio {
-				const traceAudioPath = "audio-trace"
-				audioTrace, err = services.NewSessionAudioTrace(traceAudioPath)
-				if err != nil {
-					return fmt.Errorf("--trace-audio %q: %w", traceAudioPath, err)
-				}
-				defer func() {
-					if closeErr := audioTrace.Close(); closeErr != nil {
-						runErr = errors.Join(runErr, fmt.Errorf("--trace-audio %q: %w", traceAudioPath, closeErr))
-					}
-				}()
-			}
 			rtcDeviceRequest := c.sessionRTCDeviceBinding(cmd, deviceRegistry, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || passiveLive)
-			runtimeObserver := c.runtimeObserver
-			if audioTrace != nil {
-				rtcDeviceRequest.PreGateSamplesObserver = audioTrace.CaptureMicrophonePreGate
-				rtcDeviceRequest.UploadedSamplesObserver = audioTrace.CaptureMicrophoneUploaded
-				rtcDeviceRequest.PlaybackSamplesObserver = audioTrace.CaptureSpeakerEnqueued
-				rtcDeviceRequest.RenderedSamplesObserver = audioTrace.CaptureSpeakerRendered
-				runtimeObserver = services.CombineSessionRuntimeObservers(runtimeObserver, audioTrace)
+			audioTrace, runtimeObserver, err := prepareSessionAudioTrace(traceAudio, &rtcDeviceRequest, c.runtimeObserver)
+			if err != nil {
+				return err
 			}
+			defer closeSessionAudioTrace(audioTrace, &runErr)
 			sessionOptions := services.SessionRunOptions{
 				RecordPath: c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath,
 				ReplayTiming:            c.askFlags.ReplayTiming,

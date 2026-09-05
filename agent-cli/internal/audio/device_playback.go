@@ -109,7 +109,10 @@ func NewPlaybackQueueWithLatency(format DeviceFormat, latency time.Duration) (*P
 		samples:       make([]int16, capacity),
 		minimumQueued: capacity,
 	}
-	queue.renderPool.New = func() any { return make([]int16, FrameSize) }
+	queue.renderPool.New = func() any {
+		samples := make([]int16, FrameSize)
+		return &samples
+	}
 	return queue, nil
 }
 
@@ -335,9 +338,13 @@ func (q *PlaybackQueue) readPCM16(destination []byte) int {
 	}
 	observer, rate := q.renderObserver, q.format.SampleRate
 	var rendered []int16
+	var pooled *[]int16
 	if n > 0 && observer != nil {
-		rendered = q.renderPool.Get().([]int16)
+		pooled = q.renderPool.Get().(*[]int16)
+		rendered = *pooled
 		if cap(rendered) < n {
+			q.renderPool.Put(pooled)
+			pooled = nil
 			rendered = make([]int16, n)
 		} else {
 			rendered = rendered[:n]
@@ -349,8 +356,9 @@ func (q *PlaybackQueue) readPCM16(destination []byte) int {
 	q.mu.Unlock()
 	if len(rendered) > 0 {
 		observer(rate, rendered)
-		if cap(rendered) == FrameSize {
-			q.renderPool.Put(rendered[:FrameSize])
+		if pooled != nil {
+			*pooled = rendered[:FrameSize]
+			q.renderPool.Put(pooled)
 		}
 	}
 	return n

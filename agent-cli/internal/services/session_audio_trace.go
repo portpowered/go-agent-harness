@@ -97,7 +97,10 @@ func NewSessionAudioTrace(directory string) (*SessionAudioTrace, error) {
 		events:    make(chan sessionAudioTraceBlock, sessionAudioTraceQueueSize),
 		done:      make(chan struct{}),
 	}
-	t.samplePool.New = func() any { return make([]int16, 4096) }
+	t.samplePool.New = func() any {
+		samples := make([]int16, 4096)
+		return &samples
+	}
 	go t.writeLoop()
 	return t, nil
 }
@@ -107,7 +110,8 @@ func (t *SessionAudioTrace) capture(tap int, sampleRate int, samples []int16) {
 		return
 	}
 	start := t.position[tap].Add(uint64(len(samples))) - uint64(len(samples))
-	buffer := t.samplePool.Get().([]int16)
+	pooled := t.samplePool.Get().(*[]int16)
+	buffer := *pooled
 	if cap(buffer) < len(samples) {
 		buffer = make([]int16, len(samples))
 	} else {
@@ -245,7 +249,8 @@ func (t *SessionAudioTrace) writeLoop() {
 
 func (t *SessionAudioTrace) releaseSamples(samples []int16) {
 	if cap(samples) == 4096 {
-		t.samplePool.Put(samples[:4096])
+		samples = samples[:4096]
+		t.samplePool.Put(&samples)
 	}
 }
 
