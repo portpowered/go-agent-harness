@@ -670,6 +670,18 @@ func (s *VirtualStream) PlaybackStats() PlaybackQueueStats {
 	return s.device.pair.playback.Snapshot()
 }
 
+func (s *VirtualStream) SetPlaybackRenderObserver(observer PlaybackRenderObserver) {
+	if s == nil || s.registry == nil || s.device == nil || s.device.Direction != DirectionOutput {
+		return
+	}
+	s.registry.mu.Lock()
+	if s.device.pair != nil {
+		s.device.pair.playback = ensureVirtualPlaybackQueue(s.device.pair.playback, s.format)
+		s.device.pair.playback.SetRenderObserver(observer)
+	}
+	s.registry.mu.Unlock()
+}
+
 // DiscardPlayback removes typed PCM samples waiting for the virtual device's
 // paired read callback.
 func (s *VirtualStream) DiscardPlayback() int {

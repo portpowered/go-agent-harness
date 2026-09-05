@@ -10,6 +10,10 @@ type devicePlaybackCapacityWaiter interface {
 	WaitForPlaybackCapacity(context.Context, int) error
 }
 
+type devicePlaybackRenderObserverSetter interface {
+	SetPlaybackRenderObserver(PlaybackRenderObserver)
+}
+
 type DeviceSink struct {
 	adapter        *deviceAdapter
 	frameWriter    deviceFrameWriter
@@ -112,6 +116,21 @@ func (s *DeviceSink) DiscardPlayback() int {
 		return discarder.DiscardPlayback()
 	}
 	return 0
+}
+
+// SetPlaybackRenderObserver installs a tap at the backend's physical consume
+// boundary. It returns false when a third-party or remote backend cannot
+// expose that optional boundary.
+func (s *DeviceSink) SetPlaybackRenderObserver(observer PlaybackRenderObserver) bool {
+	if s == nil || s.adapter == nil {
+		return false
+	}
+	setter, ok := s.adapter.handle.(devicePlaybackRenderObserverSetter)
+	if !ok {
+		return false
+	}
+	setter.SetPlaybackRenderObserver(observer)
+	return true
 }
 
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {

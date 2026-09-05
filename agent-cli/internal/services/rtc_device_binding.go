@@ -118,6 +118,15 @@ type RTCDeviceBindingRequest struct {
 	// outside the native audio callback and may return an error to stop the
 	// session rather than silently publish an incomplete observation.
 	PlaybackSamplesObserver RTCDevicePlaybackSamplesObserver
+	// PreGateSamplesObserver receives microphone PCM immediately after the
+	// device read and before the local self-hearing filter.
+	PreGateSamplesObserver RTCDeviceCaptureSamplesObserver
+	// UploadedSamplesObserver receives provider-rate PCM only after the
+	// outbound media boundary accepts it.
+	UploadedSamplesObserver RTCDeviceCaptureSamplesObserver
+	// RenderedSamplesObserver receives exact non-underflow PCM consumed at the
+	// physical playback callback where the selected backend exposes that seam.
+	RenderedSamplesObserver RTCDeviceRenderedSamplesObserver
 	// CaptureObserver receives one final capture queue snapshot after the input
 	// device has stopped, outside its native callback.
 	CaptureObserver RTCDeviceCaptureObserver
@@ -287,6 +296,13 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 		binding.feedback = feedback
 		binding.Source.filter = feedback
 		binding.Sink.observer = feedback
+	}
+	if binding.Source != nil {
+		binding.Source.preGateSamplesObserver = request.PreGateSamplesObserver
+		binding.Source.uploadedSamplesObserver = request.UploadedSamplesObserver
+	}
+	if binding.Sink != nil {
+		binding.Sink.setRenderedSamplesObserver(request.RenderedSamplesObserver)
 	}
 
 	return binding, nil
