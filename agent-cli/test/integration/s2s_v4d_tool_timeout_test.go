@@ -1,11 +1,13 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 // s2s v4d-tool-timeout vertical: hermetic integration proof that a
 // never-returning tool call is bounded by an explicit ToolExecutionTimeout,
 // that the deadline expiry surfaces as an observable correlated outcome on the
 // session stream, and that the session degrades gracefully and keeps serving.
 //
-// Proven here through the real production session runtime — services.RunSession
+// Proven here through the real production session runtime — servicetest.RunSession
 // driving the actual duplex loop construction seam
 // (services duplexSessionLoopOptions → newSessionToolExecutorWithTimeout →
 // go-agent-loop) — with:
@@ -46,7 +48,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -328,19 +329,19 @@ func (i *v4DScriptedInferencer) ConnectSession(ctx context.Context) (messages.Se
 // records emitted by the services observer seam.
 type v4DDiagnosticSink struct {
 	mu      sync.Mutex
-	records []services.SessionDiagnosticRecord
+	records []servicetest.SessionDiagnosticRecord
 }
 
-func (s *v4DDiagnosticSink) RecordSessionDiagnostic(record services.SessionDiagnosticRecord) {
+func (s *v4DDiagnosticSink) RecordSessionDiagnostic(record servicetest.SessionDiagnosticRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.records = append(s.records, record)
 }
 
-func (s *v4DDiagnosticSink) recordsWith(event string) []services.SessionDiagnosticRecord {
+func (s *v4DDiagnosticSink) recordsWith(event string) []servicetest.SessionDiagnosticRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var matched []services.SessionDiagnosticRecord
+	var matched []servicetest.SessionDiagnosticRecord
 	for _, record := range s.records {
 		if record.Event == event {
 			matched = append(matched, record)
@@ -361,7 +362,7 @@ func filepathV4DScratch(t *testing.T) string {
 	return path
 }
 
-// runV4DSession drives services.RunSession — the real production session
+// runV4DSession drives servicetest.RunSession — the real production session
 // runtime — with an injected tool executor, an explicit adapter deadline
 // override, and the scripted session inferencer.
 func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBound time.Duration) (*v4DObservableWriter, []messages.ToolCall, *v4DDiagnosticSink, error) {
@@ -372,7 +373,7 @@ func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBou
 	inferencer := newV4DScriptedInferencer(out)
 	ctx, cancel := context.WithTimeout(context.Background(), runBound)
 	defer cancel()
-	err := services.RunSession(ctx, out, services.SessionRunOptions{
+	err := servicetest.RunSession(ctx, out, servicetest.SessionRunOptions{
 		ReplayPath:           filepathV4DScratch(t),
 		SessionInferencer:    inferencer,
 		WaitForClose:         true,
@@ -448,7 +449,7 @@ func validateV4DBoundedTimeoutOutcome(obs v4DObservation) error {
 	// Canonical structured diagnostics: the terminal metrics matrix must
 	// account for the scripted assistant text plus both tool results, proving
 	// everything crossed before termination.
-	metrics := obs.diagnostics.recordsWith(services.SessionDiagnosticEventMetrics)
+	metrics := obs.diagnostics.recordsWith(servicetest.SessionDiagnosticEventMetrics)
 	expect(len(metrics) >= 1, "missing expected session_metrics diagnostic record")
 	minCrossedBytes := len(v4dRecoveryTranscript) + len(v4dContinuationText) + len(v4dQuickResultPayload)
 	textBytesAccounted := false

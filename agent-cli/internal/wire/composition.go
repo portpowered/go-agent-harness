@@ -3,14 +3,15 @@ package wire
 import (
 	"errors"
 	"fmt"
+	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	"reflect"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -120,15 +121,6 @@ func (inertTransportDialer) Dial(string, map[string]string) (transport.Conn, err
 
 func defaultTransportDialer() transport.Dialer { return inertTransportDialer{} }
 
-// provideSessionToolCapabilitiesFactory creates the request-scoped session
-// capability resolver used by the generated CLI graph. The production
-// registry executor is replaced with a config-filtered registry at command
-// execution time; explicitly injected executors remain caller-owned and keep
-// their legacy no-advertisement behavior.
-func provideSessionToolCapabilitiesFactory(toolExecutor messages.ToolExecutor) cli.SessionToolCapabilitiesFactory {
-	return cli.NewSessionToolCapabilitiesFactory(toolExecutor, nil)
-}
-
 // PortDescriptor is the public, read-only description of a live composition
 // port. LivePorts returns a fresh slice so callers cannot mutate composition
 // state.
@@ -164,7 +156,7 @@ type compositionOptions struct {
 	runtimeObserver      SessionRuntimeObserver
 	metricSampler        MetricSampler
 	logger               Logger
-	rtcComponents        services.SessionRTCComponents
+	rtcComponents        rtcontract.SessionRTCComponents
 	rtcComponentsSet     bool
 	relaxModelValidation bool
 }
@@ -217,7 +209,7 @@ func WithLogger(logger Logger) CompositionOption {
 // while retaining the production service-owned runtime factory and CLI graph.
 // It is intended for hermetic command tests; omitted callers receive the
 // concrete production composition.
-func WithSessionRTCComponents(components services.SessionRTCComponents) CompositionOption {
+func WithSessionRTCComponents(components rtcontract.SessionRTCComponents) CompositionOption {
 	return func(options *compositionOptions) error {
 		options.rtcComponents = components
 		options.rtcComponentsSet = true
@@ -450,11 +442,11 @@ type compositionValues struct {
 	logger            Logger
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
-	rtcComponents     services.SessionRTCComponents
+	rtcComponents     rtcontract.SessionRTCComponents
 	defaultCalls      map[string]int
 }
 
-func effectiveSessionRTCComponents(options compositionOptions) services.SessionRTCComponents {
+func effectiveSessionRTCComponents(options compositionOptions) rtcontract.SessionRTCComponents {
 	if options.rtcComponentsSet {
 		return options.rtcComponents
 	}

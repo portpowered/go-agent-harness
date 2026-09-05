@@ -5,6 +5,8 @@
 // this test only corroborates its event shape against the real provider.
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"bufio"
 	"context"
@@ -21,7 +23,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -49,7 +50,7 @@ type liveBargeInRuntimeObserver struct {
 }
 
 type liveBargeInRuntimeFact struct {
-	Kind           services.SessionRuntimeObservationKind
+	Kind           runtimecontract.SessionRuntimeObservationKind
 	PayloadBytes   int
 	TurnsCompleted int
 	InputCommit    int
@@ -58,7 +59,7 @@ type liveBargeInRuntimeFact struct {
 	HasAccounting  bool
 }
 
-func (o *liveBargeInRuntimeObserver) ObserveSessionRuntime(observation services.SessionRuntimeObservation) {
+func (o *liveBargeInRuntimeObserver) ObserveSessionRuntime(observation runtimecontract.SessionRuntimeObservation) {
 	if o == nil {
 		return
 	}
@@ -959,16 +960,16 @@ func validateLiveBargeInRuntime(t *testing.T, observations []liveBargeInRuntimeF
 	terminals := 0
 	for _, observation := range observations {
 		switch observation.Kind {
-		case services.SessionRuntimeObservationInputCommit:
+		case runtimecontract.SessionRuntimeObservationInputCommit:
 			inputCommits++
 			if observation.PayloadBytes == 0 {
 				t.Fatalf("live runtime input commit %d carried no PCM", observation.InputCommit)
 			}
-		case services.SessionRuntimeObservationTurnCompleted:
+		case runtimecontract.SessionRuntimeObservationTurnCompleted:
 			turns++
-		case services.SessionRuntimeObservationAudioOutput:
+		case runtimecontract.SessionRuntimeObservationAudioOutput:
 			outputBytes += observation.PayloadBytes
-		case services.SessionRuntimeObservationTerminal:
+		case runtimecontract.SessionRuntimeObservationTerminal:
 			terminals++
 			if !observation.Clean || observation.HasError || !observation.HasAccounting {
 				t.Fatalf("live runtime terminal was not clean and accounted: %s", liveBargeInRuntimeEvidence(observations))

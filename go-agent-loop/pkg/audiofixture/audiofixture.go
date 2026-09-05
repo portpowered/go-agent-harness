@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"io/fs"
 	"os"

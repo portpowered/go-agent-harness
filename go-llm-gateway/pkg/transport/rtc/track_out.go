@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"errors"
@@ -8,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const (
@@ -107,7 +109,7 @@ type OutboundTrackConfig struct {
 }
 
 // OutboundTrack sends PCM16 frames as timestamped, paced RTP Opus packets.
-var _ OutboundMedia = (*OutboundTrack)(nil)
+var _ sharedaudio.OutboundMedia = (*OutboundTrack)(nil)
 
 type OutboundTrack struct {
 	encoder    OpusEncoder
@@ -181,7 +183,7 @@ func NewOutboundTrack(config OutboundTrackConfig) (*OutboundTrack, error) {
 
 // WriteFrame resamples, encodes, paces, and writes one caller-owned PCM16
 // frame. No state is committed until the complete RTP write succeeds.
-func (t *OutboundTrack) WriteFrame(ctx context.Context, frame PCMFrame) error {
+func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	operationCtx, finish, err := t.beginWrite(ctx)
 	if err != nil {
 		return err

@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -369,14 +369,14 @@ func inspectCubecadeAudioDeviceCapture(capture gatewaytesting.SessionCapture) (c
 	return observation, nil
 }
 
-func waitForCubecadeAudioDeviceDrain(ctx context.Context, endpoint string) (audio.DeviceServerSnapshot, error) {
+func waitForCubecadeAudioDeviceDrain(ctx context.Context, endpoint string) (devicegw.DeviceServerSnapshot, error) {
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
-	var latest audio.DeviceServerSnapshot
+	var latest devicegw.DeviceServerSnapshot
 	for {
-		snapshot, err := audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+		snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 		if err != nil {
 			return latest, err
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,7 @@ func TestRunPrintsReportDerivedFromFinalizedBundle(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{"-out", destination}, &stdout, &stderr); err != nil {
+	if err := run([]string{"-out", destination}, &stdout, &stderr, servicewire.NewRoomReportingService()); err != nil {
 		t.Fatalf("run returned error: %v (stderr: %s)", err, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"eligible_count": 0`) {
@@ -33,7 +34,7 @@ func TestRunPrintsReportDerivedFromFinalizedBundle(t *testing.T) {
 
 func TestRunRequiresDestination(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := run(nil, &stdout, &stderr); err == nil || err.Error() != "room latency report requires -out" {
+	if err := run(nil, &stdout, &stderr, servicewire.NewRoomReportingService()); err == nil || err.Error() != "room latency report requires -out" {
 		t.Fatalf("run error = %v, want missing destination error", err)
 	}
 }

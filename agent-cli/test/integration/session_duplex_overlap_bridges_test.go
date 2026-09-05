@@ -1,11 +1,12 @@
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"io"
 	"sync"
 )
@@ -17,7 +18,7 @@ type v8MultiTurnBridgePacket struct {
 }
 
 type v8RuntimeInputEvent struct {
-	observation services.SessionRuntimeObservation
+	observation runtimecontract.SessionRuntimeObservation
 	// release is closed only after the bridge has recorded the accepted input
 	// and completed its scheduled crossing, keeping a subsequent replay event
 	// from observing the shared clock too early.
@@ -30,7 +31,7 @@ type v8MultiTurnBridge struct {
 	sender      *v8RecordingView
 	receiver    *v8RecordingView
 	eofReady    <-chan struct{}
-	runtimeOut  chan services.SessionRuntimeObservation
+	runtimeOut  chan runtimecontract.SessionRuntimeObservation
 	runtimeIn   chan v8RuntimeInputEvent
 
 	packets chan v8MultiTurnBridgePacket
@@ -48,30 +49,30 @@ func newV8MultiTurnBridge(coordinator *v8MultiTurnCoordinator, direction string,
 		sender:      sender,
 		receiver:    receiver,
 		eofReady:    eofReady,
-		runtimeOut:  make(chan services.SessionRuntimeObservation, 1),
+		runtimeOut:  make(chan runtimecontract.SessionRuntimeObservation, 1),
 		runtimeIn:   make(chan v8RuntimeInputEvent),
 		packets:     make(chan v8MultiTurnBridgePacket, 2),
 		eofSeen:     make(chan struct{}),
 	}
 }
 
-func (b *v8MultiTurnBridge) acceptRuntimeOutput(observation services.SessionRuntimeObservation) {
+func (b *v8MultiTurnBridge) acceptRuntimeOutput(observation runtimecontract.SessionRuntimeObservation) {
 	select {
 	case b.runtimeOut <- observation:
 	case <-b.coordinator.abort:
 	}
 }
 
-func (b *v8MultiTurnBridge) nextRuntimeOutput() (services.SessionRuntimeObservation, error) {
+func (b *v8MultiTurnBridge) nextRuntimeOutput() (runtimecontract.SessionRuntimeObservation, error) {
 	select {
 	case observation := <-b.runtimeOut:
 		return observation, nil
 	case <-b.coordinator.abort:
-		return services.SessionRuntimeObservation{}, context.Canceled
+		return runtimecontract.SessionRuntimeObservation{}, context.Canceled
 	}
 }
 
-func (b *v8MultiTurnBridge) acceptRuntimeInput(observation services.SessionRuntimeObservation) {
+func (b *v8MultiTurnBridge) acceptRuntimeInput(observation runtimecontract.SessionRuntimeObservation) {
 	event := v8RuntimeInputEvent{
 		observation: observation,
 		release:     make(chan struct{}),
@@ -111,8 +112,8 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if outputObservation.Kind != services.SessionRuntimeObservationAudioOutput {
-		return 0, fmt.Errorf("%s runtime observation kind = %q, want %q", b.direction, outputObservation.Kind, services.SessionRuntimeObservationAudioOutput)
+	if outputObservation.Kind != runtimecontract.SessionRuntimeObservationAudioOutput {
+		return 0, fmt.Errorf("%s runtime observation kind = %q, want %q", b.direction, outputObservation.Kind, runtimecontract.SessionRuntimeObservationAudioOutput)
 	}
 	emitted := append([]byte(nil), data...)
 	if !bytes.Equal(outputObservation.Payload, emitted) {
@@ -312,7 +313,7 @@ type v8PCMBridge struct {
 	receiver    *v8RecordingView
 	silence     []byte
 	mutateFirst bool
-	runtimeOut  chan services.SessionRuntimeObservation
+	runtimeOut  chan runtimecontract.SessionRuntimeObservation
 
 	packets chan v8BridgePacket
 	mu      sync.Mutex
@@ -329,23 +330,23 @@ func newV8PCMBridge(coordinator *v8CrossingCoordinator, direction string, sender
 		silence:     append([]byte(nil), silence...),
 		mutateFirst: mutateFirst,
 		packets:     make(chan v8BridgePacket, 2),
-		runtimeOut:  make(chan services.SessionRuntimeObservation, 1),
+		runtimeOut:  make(chan runtimecontract.SessionRuntimeObservation, 1),
 	}
 }
 
-func (b *v8PCMBridge) acceptRuntimeOutput(observation services.SessionRuntimeObservation) {
+func (b *v8PCMBridge) acceptRuntimeOutput(observation runtimecontract.SessionRuntimeObservation) {
 	select {
 	case b.runtimeOut <- observation:
 	case <-b.coordinator.abort:
 	}
 }
 
-func (b *v8PCMBridge) nextRuntimeOutput() (services.SessionRuntimeObservation, error) {
+func (b *v8PCMBridge) nextRuntimeOutput() (runtimecontract.SessionRuntimeObservation, error) {
 	select {
 	case observation := <-b.runtimeOut:
 		return observation, nil
 	case <-b.coordinator.abort:
-		return services.SessionRuntimeObservation{}, context.Canceled
+		return runtimecontract.SessionRuntimeObservation{}, context.Canceled
 	}
 }
 
@@ -374,8 +375,8 @@ func (b *v8PCMBridge) write(data []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if outputObservation.Kind != services.SessionRuntimeObservationAudioOutput {
-		return 0, fmt.Errorf("%s runtime observation kind = %q, want %q", b.direction, outputObservation.Kind, services.SessionRuntimeObservationAudioOutput)
+	if outputObservation.Kind != runtimecontract.SessionRuntimeObservationAudioOutput {
+		return 0, fmt.Errorf("%s runtime observation kind = %q, want %q", b.direction, outputObservation.Kind, runtimecontract.SessionRuntimeObservationAudioOutput)
 	}
 	if !bytes.Equal(outputObservation.Payload, emitted) {
 		return 0, fmt.Errorf("%s runtime audio output payload differs from the CLI writer payload: runtime hash=%s writer hash=%s", b.direction, v8PCMHash(outputObservation.Payload), v8PCMHash(emitted))

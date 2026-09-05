@@ -5,7 +5,7 @@ go 1.26.7
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/pion/opus v0.1.1-0.20260814200708-161621adf560
+	github.com/pion/opus v0.1.1-0.20260814200708-161621adf560 // indirect
 	github.com/pion/rtp v1.10.5
 	github.com/pion/webrtc/v4 v4.2.18
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3
@@ -51,3 +51,9 @@ require (
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
+
+require github.com/portpowered/go-agent-harness/go-audio v0.0.0
+
+replace github.com/portpowered/go-agent-harness/go-audio => ../go-audio
+
+replace github.com/portpowered/go-agent-harness/go-agent-loop => ../go-agent-loop

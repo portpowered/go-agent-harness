@@ -1,9 +1,12 @@
 package wire
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"errors"
 	"fmt"
+	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	"io"
 	"net/url"
 	"strings"
@@ -13,7 +16,7 @@ import (
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -33,7 +36,7 @@ type productionRTCComposition struct {
 	answerers map[*rtc.LoopbackEndpoint]*rtc.LoopbackEndpoint
 }
 
-func defaultSessionRTCComponents() services.SessionRTCComponents {
+func defaultSessionRTCComponents() rtcontract.SessionRTCComponents {
 	return newProductionRTCComposition().components()
 }
 
@@ -43,8 +46,8 @@ func newProductionRTCComposition() *productionRTCComposition {
 	}
 }
 
-func (c *productionRTCComposition) components() services.SessionRTCComponents {
-	return services.SessionRTCComponents{
+func (c *productionRTCComposition) components() rtcontract.SessionRTCComponents {
+	return rtcontract.SessionRTCComponents{
 		ResolveSignaling: c.resolveSignaling,
 		NewDataPlane:     c.newDataPlane,
 		OpenMediaSource:  openProductionRTCMediaSource,
@@ -85,7 +88,7 @@ func isLoopbackRTCSignalingEndpoint(raw string) bool {
 	return err == nil && strings.EqualFold(parsed.Scheme, "loopback")
 }
 
-func (c *productionRTCComposition) newDataPlane(ctx context.Context, signaling rtc.Signaling) (services.SessionRTCDataPlane, error) {
+func (c *productionRTCComposition) newDataPlane(ctx context.Context, signaling rtc.Signaling) (rtcontract.SessionRTCDataPlane, error) {
 	offerer, ok := signaling.(*rtc.LoopbackEndpoint)
 	if !ok {
 		return nil, fmt.Errorf("%w: production RTC data plane requires loopback signaling", rtc.ErrSignalingUnreachable)
@@ -105,7 +108,7 @@ func (c *productionRTCComposition) newDataPlane(ctx context.Context, signaling r
 	return dataPlane, nil
 }
 
-func openProductionRTCMediaSource(ctx context.Context, raw string) (rtc.InboundMedia, error) {
+func openProductionRTCMediaSource(ctx context.Context, raw string) (sharedaudio.InboundMedia, error) {
 	stream, err := rtc.OpenMediaSource(ctx, raw)
 	if err != nil {
 		return nil, err
@@ -152,7 +155,7 @@ type productionRTCDataPlane struct {
 	closeErr  error
 }
 
-var _ services.SessionRTCDataPlane = (*productionRTCDataPlane)(nil)
+var _ rtcontract.SessionRTCDataPlane = (*productionRTCDataPlane)(nil)
 
 func newProductionRTCDataPlane(ctx context.Context, offerer, answerer *rtc.LoopbackEndpoint) (*productionRTCDataPlane, error) {
 	if ctx != nil {
@@ -288,7 +291,7 @@ func newProductionRTCDataPlane(ctx context.Context, offerer, answerer *rtc.Loopb
 
 func (p *productionRTCDataPlane) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
 	if p == nil || p.data == nil {
-		return nil, services.ErrSessionRTCDataPlaneUnavailable
+		return nil, rtcontract.ErrSessionRTCDataPlaneUnavailable
 	}
 	if p.closed.Load() {
 		return nil, io.ErrClosedPipe
@@ -296,9 +299,9 @@ func (p *productionRTCDataPlane) Dial(endpoint string, headers map[string]string
 	return p.data, nil
 }
 
-func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source rtc.InboundMedia) error {
+func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source sharedaudio.InboundMedia) error {
 	if p == nil {
-		return services.ErrSessionRTCDataPlaneUnavailable
+		return rtcontract.ErrSessionRTCDataPlaneUnavailable
 	}
 	if source == nil {
 		return errors.New("RTC inbound media source is nil")
@@ -317,13 +320,13 @@ func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source 
 	if p.closed.Load() {
 		return io.ErrClosedPipe
 	}
-	codec := webrtc.RTPCodecCapability{
+	capability := webrtc.RTPCodecCapability{
 		MimeType:    webrtc.MimeTypeOpus,
 		ClockRate:   rtc.OutboundRTPClockRate,
 		Channels:    1,
 		SDPFmtpLine: "minptime=10;useinbandfec=1",
 	}
-	localTrack, err := webrtc.NewTrackLocalStaticRTP(codec, productionRTCMediaTrackID, "agent-cli")
+	localTrack, err := webrtc.NewTrackLocalStaticRTP(capability, productionRTCMediaTrackID, "agent-cli")
 	if err != nil {
 		return fmt.Errorf("create RTC inbound media track: %w", err)
 	}
@@ -335,12 +338,12 @@ func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source 
 	if err := p.negotiate(connectCtx); err != nil {
 		return err
 	}
-	encoder, err := rtc.NewRTCOpusEncoder()
+	encoder, err := codec.NewOpusEncoder()
 	if err != nil {
 		return fmt.Errorf("create RTC inbound Opus encoder: %w", err)
 	}
 	outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{
-		SourceRate: rtc.OpusSampleRate,
+		SourceRate: codec.OpusSampleRate,
 		Encoder:    encoder,
 		Writer: rtc.RTPWriterFunc(func(writeCtx context.Context, packet *rtp.Packet) error {
 			select {
@@ -490,16 +493,16 @@ func (p *productionRTCDataPlane) failureValue() error {
 	return errors.New("RTC data plane failed")
 }
 
-func (p *productionRTCDataPlane) pumpInboundMedia(ctx context.Context, source rtc.InboundMedia, outbound *rtc.OutboundTrack) {
+func (p *productionRTCDataPlane) pumpInboundMedia(ctx context.Context, source sharedaudio.InboundMedia, outbound *rtc.OutboundTrack) {
 	defer close(p.mediaDone)
-	pending := make([]int16, 0, rtc.OpusFrameSamples)
+	pending := make([]int16, 0, codec.OpusFrameSamples)
 	write := func(samples []int16) error {
 		if len(samples) == 0 {
 			return nil
 		}
-		frame := make([]int16, rtc.OpusFrameSamples)
+		frame := make([]int16, codec.OpusFrameSamples)
 		copy(frame, samples)
-		if err := outbound.WriteFrame(ctx, rtc.PCMFrame{Samples: frame}); err != nil {
+		if err := outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: frame}); err != nil {
 			return err
 		}
 		p.mediaFrames.Add(1)
@@ -509,12 +512,12 @@ func (p *productionRTCDataPlane) pumpInboundMedia(ctx context.Context, source rt
 		frame, err := source.ReadFrame(ctx)
 		if len(frame.Samples) > 0 {
 			pending = append(pending, frame.Samples...)
-			for len(pending) >= rtc.OpusFrameSamples {
-				if writeErr := write(pending[:rtc.OpusFrameSamples]); writeErr != nil {
+			for len(pending) >= codec.OpusFrameSamples {
+				if writeErr := write(pending[:codec.OpusFrameSamples]); writeErr != nil {
 					p.recordMediaError(writeErr)
 					return
 				}
-				pending = pending[rtc.OpusFrameSamples:]
+				pending = pending[codec.OpusFrameSamples:]
 			}
 		}
 		if err != nil {

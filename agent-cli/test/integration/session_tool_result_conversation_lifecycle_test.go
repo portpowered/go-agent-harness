@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 // Story 004 controls for the depth-5 tool-call conversation. These controls
 // keep the production session composition and its real executor/result
 // boundary intact while proving that unresolved work, missing continuation,
@@ -20,11 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 func shortConversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
@@ -345,7 +346,7 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 		if result.err == nil {
 			t.Fatalf("provider close returned clean success while %q was unresolved; stdout=%q", toolConversationCallID, result.stdout)
 		}
-		if !errors.Is(result.err, services.ErrSessionUnresolvedToolResults) {
+		if !errors.Is(result.err, servicetest.ErrSessionUnresolvedToolResults) {
 			t.Fatalf("provider-close error = %v, want ErrSessionUnresolvedToolResults", result.err)
 		}
 		if !strings.Contains(result.err.Error(), toolConversationCallID) {
@@ -444,7 +445,7 @@ func TestSessionToolResultConversationMissingContinuationIsBounded(t *testing.T)
 	if runErr == nil {
 		t.Fatalf("missing-continuation control completed cleanly after accepting a result; stdout=%q", stdout)
 	}
-	if !errors.Is(runErr, services.ErrSessionAudioResponseIncomplete) {
+	if !errors.Is(runErr, servicetest.ErrSessionAudioResponseIncomplete) {
 		t.Fatalf("missing-continuation error = %v, want ErrSessionAudioResponseIncomplete", runErr)
 	}
 	if elapsed > 1500*time.Millisecond {
@@ -513,7 +514,7 @@ func TestSessionToolResultConversationCorruptAudioDeltaIsRejected(t *testing.T) 
 	if !strings.Contains(runErr.Error(), "PCM16 audio delta has odd byte length") {
 		t.Fatalf("corrupt-audio error = %v, want the audio PCM boundary diagnostic", runErr)
 	}
-	if errors.Is(runErr, services.ErrSessionUnresolvedToolResults) || strings.Contains(runErr.Error(), "replay mismatch") {
+	if errors.Is(runErr, servicetest.ErrSessionUnresolvedToolResults) || strings.Contains(runErr.Error(), "replay mismatch") {
 		t.Fatalf("corrupt-audio control was reported as a tool/result transport failure: %v", runErr)
 	}
 	assertConversationOneCall(t, executor)

@@ -288,10 +288,10 @@ func TestLoadManifestDirReportsMalformedFragmentPath(t *testing.T) {
 	}
 }
 
-func TestRepositoryFragmentCatalogMatchesPreMigrationBaseline(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "pre-migration-coverage-manifest.json"))
+func TestRepositoryFragmentCatalogMatchesCheckedInBaseline(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "repository-coverage-manifest.json"))
 	if err != nil {
-		t.Fatalf("read pre-migration baseline: %v", err)
+		t.Fatalf("read repository coverage baseline: %v", err)
 	}
 	want, err := ParseManifest(data)
 	if err != nil {

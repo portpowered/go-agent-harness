@@ -1,15 +1,18 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"io"
 	"sync"
 
 	"github.com/pion/webrtc/v4"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type pionInbound struct {
-	frames          chan PCMFrame
+	frames          chan sharedaudio.PCMFrame
 	visuals         chan pionVisualFrame
 	done            chan struct{}
 	once            sync.Once
@@ -35,7 +38,7 @@ func newPionInbound(closeFn func() error, source ...string) *pionInbound {
 		identity = source[0]
 	}
 	return &pionInbound{
-		frames:     make(chan PCMFrame, 8),
+		frames:     make(chan sharedaudio.PCMFrame, 8),
 		visuals:    make(chan pionVisualFrame, 8),
 		done:       make(chan struct{}),
 		close:      closeFn,
@@ -71,12 +74,12 @@ func (m *pionInbound) attachAudio(track *webrtc.TrackRemote) {
 			if err != nil {
 				return
 			}
-			samples := decodeAudio(track.Codec().MimeType, packet.Payload)
+			samples := codec.DecodeRTPAudioPayload(track.Codec().MimeType, packet.Payload)
 			if len(samples) == 0 {
 				continue
 			}
 			select {
-			case m.frames <- PCMFrame{Samples: samples}:
+			case m.frames <- sharedaudio.PCMFrame{Samples: samples}:
 			case <-m.done:
 				return
 			}
@@ -176,7 +179,7 @@ func (m *pionInbound) Look(ctx context.Context) (VisualObservation, error) {
 	}
 }
 
-func (m *pionInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
+func (m *pionInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -184,9 +187,9 @@ func (m *pionInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	case frame := <-m.frames:
 		return frame, nil
 	case <-m.done:
-		return PCMFrame{}, io.EOF
+		return sharedaudio.PCMFrame{}, io.EOF
 	case <-ctx.Done():
-		return PCMFrame{}, ctx.Err()
+		return sharedaudio.PCMFrame{}, ctx.Err()
 	}
 }
 func (m *pionInbound) Close() error {

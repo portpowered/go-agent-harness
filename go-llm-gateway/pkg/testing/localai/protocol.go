@@ -2,8 +2,6 @@ package localai
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -101,7 +100,7 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 		}
 		if err := writeRealtimeEvent(ctx, conn, map[string]any{
 			"type":  "input_audio_buffer.append",
-			"audio": base64.StdEncoding.EncodeToString(audio[start:end]),
+			"audio": codec.EncodeBase64(audio[start:end]),
 		}); err != nil {
 			return proof, fmt.Errorf("append PCM16 audio at byte %d: %w", start, err)
 		}
@@ -132,7 +131,7 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 			if event.Delta == "" {
 				return proof, errors.New("server sent an empty audio delta")
 			}
-			chunk, err := base64.StdEncoding.DecodeString(event.Delta)
+			chunk, err := codec.DecodeBase64(event.Delta)
 			if err != nil {
 				return proof, fmt.Errorf("decode audio delta: %w", err)
 			}
@@ -292,10 +291,14 @@ func pcm16RMS(audio []byte) (float64, error) {
 		return 0, fmt.Errorf("PCM16 audio has odd byte count %d", len(audio))
 	}
 
+	samples := make([]int16, len(audio)/2)
+	if err := codec.DecodePCM16Into(samples, audio); err != nil {
+		return 0, err
+	}
 	var sumSquares float64
-	for offset := 0; offset < len(audio); offset += 2 {
-		sample := float64(int16(binary.LittleEndian.Uint16(audio[offset:]))) / math.MaxInt16
+	for _, sampleValue := range samples {
+		sample := float64(sampleValue) / math.MaxInt16
 		sumSquares += sample * sample
 	}
-	return math.Sqrt(sumSquares / float64(len(audio)/2)), nil
+	return math.Sqrt(sumSquares / float64(len(samples))), nil
 }

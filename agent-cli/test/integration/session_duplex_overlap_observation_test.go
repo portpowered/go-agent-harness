@@ -1,8 +1,9 @@
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"context"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"sync"
 	"time"
@@ -14,11 +15,11 @@ type v8RuntimeObserver struct {
 	turnTwoReady chan struct{}
 
 	mu           sync.Mutex
-	observations []services.SessionRuntimeObservation
+	observations []runtimecontract.SessionRuntimeObservation
 	turnTwoOnce  sync.Once
 }
 
-func (o *v8RuntimeObserver) ObserveSessionRuntime(observation services.SessionRuntimeObservation) {
+func (o *v8RuntimeObserver) ObserveSessionRuntime(observation runtimecontract.SessionRuntimeObservation) {
 	if o == nil {
 		return
 	}
@@ -26,24 +27,24 @@ func (o *v8RuntimeObserver) ObserveSessionRuntime(observation services.SessionRu
 	o.mu.Lock()
 	o.observations = append(o.observations, observation)
 	o.mu.Unlock()
-	if observation.Kind == services.SessionRuntimeObservationTurnCompleted && observation.TurnsCompleted == 2 && o.turnTwoReady != nil {
+	if observation.Kind == runtimecontract.SessionRuntimeObservationTurnCompleted && observation.TurnsCompleted == 2 && o.turnTwoReady != nil {
 		o.turnTwoOnce.Do(func() { close(o.turnTwoReady) })
 	}
-	if observation.Kind == services.SessionRuntimeObservationAudioInput && o.inputBridge != nil {
+	if observation.Kind == runtimecontract.SessionRuntimeObservationAudioInput && o.inputBridge != nil {
 		o.inputBridge.acceptRuntimeInput(observation)
 	}
-	if observation.Kind == services.SessionRuntimeObservationAudioOutput && o.outputBridge != nil {
+	if observation.Kind == runtimecontract.SessionRuntimeObservationAudioOutput && o.outputBridge != nil {
 		o.outputBridge.acceptRuntimeOutput(observation)
 	}
 }
 
-func (o *v8RuntimeObserver) snapshot() []services.SessionRuntimeObservation {
+func (o *v8RuntimeObserver) snapshot() []runtimecontract.SessionRuntimeObservation {
 	if o == nil {
 		return nil
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	observations := make([]services.SessionRuntimeObservation, len(o.observations))
+	observations := make([]runtimecontract.SessionRuntimeObservation, len(o.observations))
 	for i, observation := range o.observations {
 		observations[i] = observation
 		observations[i].Payload = append([]byte(nil), observation.Payload...)
@@ -164,7 +165,7 @@ type v8HarnessResult struct {
 	ReplayPath  string
 	Err         error
 	Elapsed     time.Duration
-	Runtime     []services.SessionRuntimeObservation
+	Runtime     []runtimecontract.SessionRuntimeObservation
 	Stream      []v8StreamRecord
 }
 

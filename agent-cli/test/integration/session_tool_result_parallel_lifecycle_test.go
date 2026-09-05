@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"context"
 	"errors"
@@ -10,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -583,7 +584,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
 			RecordPath:        "parallel-tool-result-terminal-failure.session.json",
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -592,7 +593,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 			ToolExecutor:      executor,
 			Diagnostics:       sink,
 			StreamObserver:    observation.observe,
-			AudioInputs: []services.ScheduledAudioInput{{
+			AudioInputs: []servicetest.ScheduledAudioInput{{
 				AfterCompletedTurns: 0,
 				PCM:                 []byte{1, 2, 3, 4},
 				EndOfTurn:           true,
@@ -616,11 +617,11 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	if err == nil {
 		t.Fatal("terminal-path session returned nil with one unresolved tool result")
 	}
-	var unresolved *services.SessionUnresolvedToolResultsError
+	var unresolved *servicetest.SessionUnresolvedToolResultsError
 	if !errors.As(err, &unresolved) {
 		t.Fatalf("terminal-path error = %v, want SessionUnresolvedToolResultsError", err)
 	}
-	if !errors.Is(err, services.ErrSessionUnresolvedToolResults) {
+	if !errors.Is(err, servicetest.ErrSessionUnresolvedToolResults) {
 		t.Fatalf("terminal-path error = %v, want stable unresolved-result sentinel", err)
 	}
 	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != parallelLifecycleBravoID {
@@ -629,7 +630,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	if got := unresolved.SendStatuses[parallelLifecycleBravoID]; got != messages.SessionSendBufferFull {
 		t.Fatalf("terminal-path send status = %q, want %q", got, messages.SessionSendBufferFull)
 	}
-	var continuation *services.SessionToolContinuationError
+	var continuation *servicetest.SessionToolContinuationError
 	if !errors.As(err, &continuation) {
 		t.Fatalf("terminal-path error = %v, want SessionToolContinuationError for accepted result without continuation", err)
 	}
@@ -645,17 +646,17 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 		t.Fatalf("terminal-path failure diagnostic count = %d, want exactly one", len(failures))
 	}
 	fields := failures[0].Fields
-	if fields[services.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
-		t.Fatalf("terminal-path unresolved count = %q, want 1", fields[services.SessionDiagnosticFieldUnresolvedToolResultCount])
+	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
+		t.Fatalf("terminal-path unresolved count = %q, want 1", fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount])
 	}
-	if fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs] != parallelLifecycleBravoID {
-		t.Fatalf("terminal-path unresolved IDs diagnostic = %q, want only %s", fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs], parallelLifecycleBravoID)
+	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs] != parallelLifecycleBravoID {
+		t.Fatalf("terminal-path unresolved IDs diagnostic = %q, want only %s", fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs], parallelLifecycleBravoID)
 	}
-	if fields[services.SessionDiagnosticFieldPendingToolContinuationCount] != "1" {
-		t.Fatalf("terminal-path pending continuation count = %q, want 1", fields[services.SessionDiagnosticFieldPendingToolContinuationCount])
+	if fields[servicetest.SessionDiagnosticFieldPendingToolContinuationCount] != "1" {
+		t.Fatalf("terminal-path pending continuation count = %q, want 1", fields[servicetest.SessionDiagnosticFieldPendingToolContinuationCount])
 	}
-	if fields[services.SessionDiagnosticFieldPendingToolContinuationIDs] != parallelLifecycleAlphaID {
-		t.Fatalf("terminal-path pending continuation IDs diagnostic = %q, want only %s", fields[services.SessionDiagnosticFieldPendingToolContinuationIDs], parallelLifecycleAlphaID)
+	if fields[servicetest.SessionDiagnosticFieldPendingToolContinuationIDs] != parallelLifecycleAlphaID {
+		t.Fatalf("terminal-path pending continuation IDs diagnostic = %q, want only %s", fields[servicetest.SessionDiagnosticFieldPendingToolContinuationIDs], parallelLifecycleAlphaID)
 	}
 	assertParallelLifecycleResults(t, session.sentSnapshot(), parallelLifecycleAlphaID, parallelLifecycleBravoID)
 	if got := observation.closeCount(); got != 0 {

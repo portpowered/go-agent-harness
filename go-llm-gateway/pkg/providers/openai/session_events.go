@@ -2,7 +2,6 @@ package openai
 
 // This file owns OpenAI Realtime event parsing and inbound/outbound translation, including audio decoding and nested event-field helpers.
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -19,6 +19,8 @@ const conversationItemCreateEvent = models.SessionEventType("conversation.item.c
 const (
 	realtimeInvalidRequestErrorType     = "invalid_request_error"
 	realtimeResponseCancelNotActiveCode = "response_cancel_not_active"
+	realtimeResponseCreateActiveCode    = "conversation_already_has_active_response"
+	realtimeResponseCreateActiveClass   = "response_create_active"
 	realtimeMaxStatusDetailBytes        = 256
 )
 
@@ -166,6 +168,12 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCancelNotActiveCode {
 			value = messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
 			value.Classification = providers.ErrorClassResponseCancelNotActive
+		} else if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCreateActiveCode {
+			// This exact provider rejection is recoverable at the response
+			// admission boundary. It must not terminate the session or make the
+			// caller lose the already accepted continuation intent.
+			value = messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
+			value.Classification = realtimeResponseCreateActiveClass
 		} else {
 			value = messages.NewErrorValueWithTerminal(
 				msg,
@@ -291,7 +299,7 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
-		return []models.SessionEvent{models.NewAudioBufferAppendEvent(base64.StdEncoding.EncodeToString(v.Content))}, true
+		return []models.SessionEvent{models.NewAudioBufferAppendEvent(codec.EncodeBase64(v.Content))}, true
 	case messages.StreamTypeResponseCancel:
 		// RESPONSE.CANCEL is the provider-facing boundary for barge-in. Keep it
 		// as a single wire event so cancellation is ordered before the
@@ -387,7 +395,7 @@ func realtimeAudioBytes(data json.RawMessage) []byte {
 	if encoded == "" {
 		return nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	decoded, err := codec.DecodeBase64(encoded)
 	if err != nil {
 		return nil
 	}

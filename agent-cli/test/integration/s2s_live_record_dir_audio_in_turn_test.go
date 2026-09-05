@@ -1,12 +1,14 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
@@ -50,7 +52,7 @@ type cliLiveRecordingEntry struct {
 
 func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
 	server := newCLILiveRecordDirServer(false)
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 	)
@@ -219,7 +221,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
 	server := newCLILiveRecordDirCloseAfterTurnServer(2)
 	t.Cleanup(server.shutdown)
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 	)
@@ -259,10 +261,10 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 	if err == nil {
 		t.Fatal("clean provider close after turn 2 reported success with an undispatched third turn")
 	}
-	if !errors.Is(err, services.ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, servicetest.ErrSessionScheduledAudioIncomplete) {
 		t.Fatalf("incomplete scheduled session error = %v, want ErrSessionScheduledAudioIncomplete", err)
 	}
-	var incomplete *services.SessionScheduledAudioIncompleteError
+	var incomplete *servicetest.SessionScheduledAudioIncompleteError
 	if !errors.As(err, &incomplete) {
 		t.Fatalf("incomplete scheduled session error = %v, want typed counts", err)
 	}
@@ -288,7 +290,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 
 func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingValidation(t *testing.T) {
 	server := newCLILiveRecordDirServer(true)
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 	)
@@ -333,7 +335,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 
 func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverIncompleteSchedule(t *testing.T) {
 	server := newCLILiveRecordDirReadErrorServer(errors.New("websocket: close 1008 (policy violation): Incorrect API key provided: invalid-test-key"))
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 	)
@@ -372,10 +374,10 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 	if !strings.Contains(err.Error(), "Incorrect API key") {
 		t.Fatalf("unexpected provider close error: %v", err)
 	}
-	if !errors.Is(err, services.ErrSessionScheduledAudioIncomplete) {
+	if !errors.Is(err, servicetest.ErrSessionScheduledAudioIncomplete) {
 		t.Fatalf("provider close did not retain the incomplete schedule signal: %v", err)
 	}
-	var incomplete *services.SessionScheduledAudioIncompleteError
+	var incomplete *servicetest.SessionScheduledAudioIncompleteError
 	if !errors.As(err, &incomplete) || incomplete.Completed != 0 || incomplete.Dispatched != 0 || incomplete.Scheduled != 1 {
 		t.Fatalf("provider close incomplete schedule counts = %+v, want completed=0 dispatched=0 scheduled=1; error=%v", incomplete, err)
 	}

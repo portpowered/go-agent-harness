@@ -1,22 +1,23 @@
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"os"
 	"runtime"
 	"testing"
 	"time"
 )
 
-func v8RuntimeObservation(observations []services.SessionRuntimeObservation, kind services.SessionRuntimeObservationKind) (services.SessionRuntimeObservation, error) {
-	var found services.SessionRuntimeObservation
+func v8RuntimeObservation(observations []runtimecontract.SessionRuntimeObservation, kind runtimecontract.SessionRuntimeObservationKind) (runtimecontract.SessionRuntimeObservation, error) {
+	var found runtimecontract.SessionRuntimeObservation
 	count := 0
 	for _, observation := range observations {
 		if observation.Kind != kind {
@@ -26,7 +27,7 @@ func v8RuntimeObservation(observations []services.SessionRuntimeObservation, kin
 		count++
 	}
 	if count != 1 {
-		return services.SessionRuntimeObservation{}, fmt.Errorf("runtime observation %q count = %d, want exactly one", kind, count)
+		return runtimecontract.SessionRuntimeObservation{}, fmt.Errorf("runtime observation %q count = %d, want exactly one", kind, count)
 	}
 	return found, nil
 }
@@ -119,7 +120,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if crossing.Direction == "B-to-A" {
 			sender, receiver = "B", "A"
 		}
-		outputObservation, err := v8RuntimeObservation(run.harnesses[sender].Runtime, services.SessionRuntimeObservationAudioOutput)
+		outputObservation, err := v8RuntimeObservation(run.harnesses[sender].Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)
 		if err != nil {
 			return fmt.Errorf("harness %s output runtime observation: %w", sender, err)
 		}
@@ -129,7 +130,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if !bytes.Equal(outputObservation.Payload, crossing.Emitted) {
 			return v8PCMFailure(crossing, crossing.Emitted, outputObservation.Payload, "runtime output")
 		}
-		inputObservation, err := v8RuntimeObservation(run.harnesses[receiver].Runtime, services.SessionRuntimeObservationAudioInput)
+		inputObservation, err := v8RuntimeObservation(run.harnesses[receiver].Runtime, runtimecontract.SessionRuntimeObservationAudioInput)
 		if err != nil {
 			return fmt.Errorf("harness %s input runtime observation: %w", receiver, err)
 		}
@@ -163,7 +164,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if terminal.Turns > run.turnsBound || terminal.FinalTick > v8OverlapTickLimit {
 			return fmt.Errorf("harness %s exceeded turn/tick bounds: %+v", name, terminal)
 		}
-		turnObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, services.SessionRuntimeObservationTurnCompleted)
+		turnObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, runtimecontract.SessionRuntimeObservationTurnCompleted)
 		if err != nil {
 			return fmt.Errorf("harness %s turn runtime observation: %w", name, err)
 		}
@@ -173,7 +174,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if terminal.Turns == 0 {
 			return fmt.Errorf("harness %s terminal observation reported no completed turns", name)
 		}
-		terminalObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, services.SessionRuntimeObservationTerminal)
+		terminalObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
 			return fmt.Errorf("harness %s terminal runtime observation: %w", name, err)
 		}
@@ -207,8 +208,8 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 	return verifyV8Artifacts(run)
 }
 
-func v8RuntimeObservations(observations []services.SessionRuntimeObservation, kind services.SessionRuntimeObservationKind) []services.SessionRuntimeObservation {
-	matched := make([]services.SessionRuntimeObservation, 0)
+func v8RuntimeObservations(observations []runtimecontract.SessionRuntimeObservation, kind runtimecontract.SessionRuntimeObservationKind) []runtimecontract.SessionRuntimeObservation {
+	matched := make([]runtimecontract.SessionRuntimeObservation, 0)
 	for _, observation := range observations {
 		if observation.Kind != kind {
 			continue
@@ -271,9 +272,9 @@ func v8InputCommitFailure(harness string, crossing v8Crossing, expected, observe
 	return fmt.Errorf("multi-turn harness %s %s %s turn %d input commit PCM mismatch: expected hash=%s RMS=%.1f (> %.1f); observed hash=%s RMS=%.1f", harness, crossing.Direction, crossing.TurnKey, crossing.Turn, wantHash, wantRMS, v8VADThreshold, gotHash, gotRMS)
 }
 
-func verifyV8InputCommitLedger(harness string, result v8HarnessResult, crossings []v8Crossing, completions []services.SessionRuntimeObservation, expected [][]byte, base time.Time) error {
+func verifyV8InputCommitLedger(harness string, result v8HarnessResult, crossings []v8Crossing, completions []runtimecontract.SessionRuntimeObservation, expected [][]byte, base time.Time) error {
 	direction := v8InputDirection(harness)
-	commits := v8RuntimeObservations(result.Runtime, services.SessionRuntimeObservationInputCommit)
+	commits := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationInputCommit)
 	markers := v8StreamTextMarkers(result.Stream)
 	observedOrdinals := make([]int, 0, len(commits))
 	for turnIndex, observation := range commits {
@@ -432,9 +433,9 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 		if result.Elapsed > v8CommandMaxDuration+500*time.Millisecond {
 			return fmt.Errorf("multi-turn harness %s exceeded command bound: %s", name, result.Elapsed)
 		}
-		outputObservations := v8RuntimeObservations(result.Runtime, services.SessionRuntimeObservationAudioOutput)
-		inputObservations := v8RuntimeObservations(result.Runtime, services.SessionRuntimeObservationAudioInput)
-		turnObservations := v8RuntimeObservations(result.Runtime, services.SessionRuntimeObservationTurnCompleted)
+		outputObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)
+		inputObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationAudioInput)
+		turnObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationTurnCompleted)
 		if len(outputObservations) != v8MultiTurnCount || len(inputObservations) != v8MultiTurnCount || len(turnObservations) != v8MultiTurnCount {
 			return fmt.Errorf("multi-turn harness %s runtime counts output=%d input=%d completed=%d, want %d each", name, len(outputObservations), len(inputObservations), len(turnObservations), v8MultiTurnCount)
 		}
@@ -678,7 +679,7 @@ func mutateV8InputCommitPayload(run *v8DuplexRun, harness string, turn int, payl
 	}
 	commitOrdinal := 0
 	for index := range result.Runtime {
-		if result.Runtime[index].Kind != services.SessionRuntimeObservationInputCommit {
+		if result.Runtime[index].Kind != runtimecontract.SessionRuntimeObservationInputCommit {
 			continue
 		}
 		commitOrdinal++
@@ -702,11 +703,11 @@ func dropV8InputCommit(run *v8DuplexRun, harness string, turn int) error {
 	if !ok {
 		return fmt.Errorf("multi-turn harness %s is missing", harness)
 	}
-	filtered := make([]services.SessionRuntimeObservation, 0, len(result.Runtime))
+	filtered := make([]runtimecontract.SessionRuntimeObservation, 0, len(result.Runtime))
 	commitOrdinal := 0
 	dropped := false
 	for _, observation := range result.Runtime {
-		if observation.Kind == services.SessionRuntimeObservationInputCommit {
+		if observation.Kind == runtimecontract.SessionRuntimeObservationInputCommit {
 			commitOrdinal++
 			if commitOrdinal == turn {
 				dropped = true

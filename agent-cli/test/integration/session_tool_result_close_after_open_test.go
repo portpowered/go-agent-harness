@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bytes"
 	"context"
@@ -10,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -186,7 +187,7 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		var out bytes.Buffer
-		runErr <- services.RunSession(ctx, &out, services.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
 			RecordPath:        filepath.Join(t.TempDir(), "close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",
@@ -244,19 +245,30 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 type closeAfterOpenDurationClock struct {
 	mu    sync.Mutex
 	timer *closeAfterOpenDurationTimer
+	calls int
 }
 
-func (c *closeAfterOpenDurationClock) NewTimer(time.Duration) services.SessionDurationTimer {
+func (c *closeAfterOpenDurationClock) NewTimer(_ time.Duration) servicetest.SessionDurationTimer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.timer = &closeAfterOpenDurationTimer{ch: make(chan time.Time)}
+	c.calls++
+	timer := &closeAfterOpenDurationTimer{ch: make(chan time.Time, 1)}
+	if c.calls > 1 {
+		// The production controller uses this clock for its terminal quiet
+		// period as well as the overall bound. This fixture intentionally never
+		// fires the hour bound, so drive the bounded drain timer explicitly once
+		// the close boundary is entered.
+		timer.signal()
+	}
+	c.timer = timer
 	return c.timer
 }
 
 type closeAfterOpenDurationTimer struct {
-	ch      chan time.Time
-	mu      sync.Mutex
-	stopped bool
+	ch         chan time.Time
+	mu         sync.Mutex
+	stopped    bool
+	signalOnce sync.Once
 }
 
 func (t *closeAfterOpenDurationTimer) C() <-chan time.Time { return t.ch }
@@ -266,6 +278,10 @@ func (t *closeAfterOpenDurationTimer) Stop() bool {
 	t.stopped = true
 	t.mu.Unlock()
 	return true
+}
+
+func (t *closeAfterOpenDurationTimer) signal() {
+	t.signalOnce.Do(func() { t.ch <- time.Time{} })
 }
 
 func (c *closeAfterOpenDurationClock) stopped() bool {
@@ -297,7 +313,7 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- services.RunSessionWithMaxDurationClock(ctx, io.Discard, services.SessionRunOptions{
+		runErr <- servicetest.RunSessionWithMaxDurationClock(ctx, io.Discard, servicetest.SessionRunOptions{
 			RecordPath:        filepath.Join(t.TempDir(), "duration-close-after-open-rich.json"),
 			Provider:          "grok",
 			Model:             "grok-realtime",

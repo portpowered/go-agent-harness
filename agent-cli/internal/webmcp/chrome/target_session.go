@@ -430,13 +430,6 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 	return nil
 }
 
-func (s *targetSession) installPageScript(ctx context.Context, source string) error {
-	if source == "" {
-		return errors.New("site adapter source is empty")
-	}
-	return s.run(ctx, pageScriptAction(source))
-}
-
 func pageScriptAction(source string) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		if _, err := cdpPage.AddScriptToEvaluateOnNewDocument(source).Do(ctx); err != nil {

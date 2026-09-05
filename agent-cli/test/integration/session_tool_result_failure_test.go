@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bytes"
 	"context"
@@ -9,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -17,31 +18,31 @@ const unresolvedToolCallID = "call_unresolved_failure"
 
 type unresolvedToolDiagnosticSink struct {
 	mu      sync.Mutex
-	records []services.SessionDiagnosticRecord
+	records []servicetest.SessionDiagnosticRecord
 }
 
-func (s *unresolvedToolDiagnosticSink) RecordSessionDiagnostic(record services.SessionDiagnosticRecord) {
+func (s *unresolvedToolDiagnosticSink) RecordSessionDiagnostic(record servicetest.SessionDiagnosticRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.records = append(s.records, record)
 }
 
-func (s *unresolvedToolDiagnosticSink) failureRecords() []services.SessionDiagnosticRecord {
+func (s *unresolvedToolDiagnosticSink) failureRecords() []servicetest.SessionDiagnosticRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var records []services.SessionDiagnosticRecord
+	var records []servicetest.SessionDiagnosticRecord
 	for _, record := range s.records {
-		if record.Event == services.SessionDiagnosticEventFailure {
+		if record.Event == servicetest.SessionDiagnosticEventFailure {
 			records = append(records, record)
 		}
 	}
 	return records
 }
 
-func (s *unresolvedToolDiagnosticSink) recordsFor(event string) []services.SessionDiagnosticRecord {
+func (s *unresolvedToolDiagnosticSink) recordsFor(event string) []servicetest.SessionDiagnosticRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var records []services.SessionDiagnosticRecord
+	var records []servicetest.SessionDiagnosticRecord
 	for _, record := range s.records {
 		if record.Event == event {
 			records = append(records, record)
@@ -169,7 +170,7 @@ type sessionRunInputs struct {
 
 func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
 	var out bytes.Buffer
-	return services.RunSession(ctx, &out, services.SessionRunOptions{
+	return servicetest.RunSession(ctx, &out, servicetest.SessionRunOptions{
 		RecordPath:        "unresolved-tool-result.session.json",
 		Provider:          "grok",
 		Model:             "grok-realtime",
@@ -177,7 +178,7 @@ func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *session
 		SessionInferencer: &fixedUnresolvedFailureInferencer{session: inputs.session},
 		ToolExecutor:      inputs.executor,
 		Diagnostics:       inputs.sink,
-		AudioInputs: []services.ScheduledAudioInput{{
+		AudioInputs: []servicetest.ScheduledAudioInput{{
 			AfterCompletedTurns: 0,
 			PCM:                 []byte{1, 2, 3, 4},
 			EndOfTurn:           true,
@@ -202,11 +203,11 @@ func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagno
 	if err == nil {
 		t.Fatal("RunSession returned nil for a terminal path with an unresolved tool result")
 	}
-	var unresolved *services.SessionUnresolvedToolResultsError
+	var unresolved *servicetest.SessionUnresolvedToolResultsError
 	if !errors.As(err, &unresolved) {
 		t.Fatalf("RunSession error = %v, want SessionUnresolvedToolResultsError", err)
 	}
-	if !errors.Is(err, services.ErrSessionUnresolvedToolResults) {
+	if !errors.Is(err, servicetest.ErrSessionUnresolvedToolResults) {
 		t.Fatalf("RunSession error = %v, want ErrSessionUnresolvedToolResults identity", err)
 	}
 	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != unresolvedToolCallID {
@@ -224,15 +225,15 @@ func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagno
 	if len(failures) != 1 {
 		t.Fatalf("failure diagnostic count = %d, want exactly one", len(failures))
 	}
-	if turns := sink.recordsFor(services.SessionDiagnosticEventTurn); len(turns) != 0 {
+	if turns := sink.recordsFor(servicetest.SessionDiagnosticEventTurn); len(turns) != 0 {
 		t.Fatalf("unresolved terminal path emitted %d completed-turn records: %#v", len(turns), turns)
 	}
 	fields := failures[0].Fields
-	if fields[services.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
-		t.Fatalf("unresolved count field = %q, want 1", fields[services.SessionDiagnosticFieldUnresolvedToolResultCount])
+	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
+		t.Fatalf("unresolved count field = %q, want 1", fields[servicetest.SessionDiagnosticFieldUnresolvedToolResultCount])
 	}
-	if fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs] != unresolvedToolCallID {
-		t.Fatalf("unresolved IDs field = %q, want %s", fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs], unresolvedToolCallID)
+	if fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs] != unresolvedToolCallID {
+		t.Fatalf("unresolved IDs field = %q, want %s", fields[servicetest.SessionDiagnosticFieldUnresolvedToolCallIDs], unresolvedToolCallID)
 	}
 }
 

@@ -2,7 +2,16 @@ package state
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+// AudioState is a tick observation of independently running media buffers.
+// It contains no devices or mutable DSP state.
+type AudioState struct {
+	Capture       audio.BufferStats
+	Playback      audio.BufferStats
+	LastCommandID uint64
+}
 
 // ExecutionMode is the canonical execution mode type. Engine and agentloop packages
 // use this directly to avoid duplication.
@@ -17,6 +26,7 @@ const (
 
 // This defines the current loop state of the agent loop.
 type LoopState struct {
+	Audio   *AudioState
 	Inputs  Buffers
 	Outputs OutputBuffers
 	History History

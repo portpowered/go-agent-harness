@@ -1,5 +1,7 @@
 package integration
 
+import
+
 // s2s-v4f-tool-during-audio vertical: CLI-verified hermetic (T1) proof driving
 // the real 'agent session' command over the record/replay transport with a
 // spoken (file-backed audio-in) request whose replayed provider exchange
@@ -22,6 +24,9 @@ package integration
 // Like the sibling v4a single-call lane, the fixture reuses an existing
 // committed corpus WAV (go-agent-loop/testdata/audio); no new binary assets
 // are added.
+sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 
 import (
 	"bytes"
@@ -37,11 +42,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const (
@@ -264,7 +269,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 func runToolDuringAudio(t *testing.T, wavPath, wirePath string) (string, string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(io.Discard)

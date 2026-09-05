@@ -1,5 +1,9 @@
 package integration
 
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
 import (
 	"bytes"
 	"context"
@@ -14,11 +18,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // The depth-4 multiturn fixtures encode a four-turn spoken conversation in
@@ -259,7 +263,7 @@ func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error)
 	t.Helper()
 
 	stdout := &syncBuffer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})

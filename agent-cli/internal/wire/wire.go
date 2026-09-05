@@ -8,11 +8,15 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -22,8 +26,8 @@ import (
 // signaling, peer/data, and media implementations behind the service's
 // provider-neutral contracts while leaving runtime side effects lazy until a
 // session actually starts.
-func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents, metricSampler MetricSampler, logger Logger) services.SessionRTCRuntimeFactory {
-	return services.NewSessionRTCRuntimeFactoryWithObservability(components, metricSampler, logger)
+func provideSessionRTCRuntimeFactory(components rtcontract.SessionRTCComponents, metricSampler MetricSampler, logger Logger) rtcontract.SessionRTCRuntimeFactory {
+	return servicewire.NewSessionRTCRuntimeFactory(components, metricSampler, logger)
 }
 
 func provideModelValidation(
@@ -76,12 +80,25 @@ func provideFleetEntryExecutors() []fleet.EntryExecutor { return nil }
 // acceptance runner while leaving the command injectable for route tests.
 func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
 
-// provideProbeDeviceRegistries adapts the shared application registry to the
-// variadic probe constructor. Keeping the adapter in the source graph makes
-// the generated call retain the same device implementation as the session
-// command and device routes.
-func provideProbeDeviceRegistries(registry DeviceRegistry) []audio.DeviceRegistry {
-	return []audio.DeviceRegistry{registry}
+func provideSessionBrowserCapabilityFactory() serviceTools.BrowserFactory {
+	return func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
+		broker, err := cli.NewSessionBrowserBrokerWithConfigDir(browser, configDir)
+		if err != nil {
+			return serviceTools.BrowserCapability{}, err
+		}
+		return cli.NewSessionBrowserCapability(broker), nil
+	}
+}
+
+// provideSessionDisplaySurface installs the platform display boundary in the
+// application graph. The capability service receives it explicitly; private
+// service construction never creates a host display surface implicitly.
+func provideSessionDisplaySurface() cliTools.DisplaySurface {
+	return cliTools.NewHostDisplaySurface()
+}
+
+func provideSessionDependencies(clockSource Clock, resolver serviceTools.Service, runtimeFactory rtcontract.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, observer SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, runtime serviceRuntime.Runtime) servicewire.SessionDependencies {
+	return servicewire.SessionDependencies{Clock: clockSource, ToolService: resolver, RuntimeFactory: runtimeFactory, SessionInferencer: inferencer, ToolExecutor: toolExecutor, DeviceRegistry: deviceRegistry, RuntimeObserver: observer, MetricSampler: metricSampler, Logger: logger, Runtime: runtime}
 }
 
 // CliSet provides CLI commands, router, and root.
@@ -94,16 +111,27 @@ var CliSet = wire.NewSet(
 	cli.NewInteractionCommand,
 	cli.NewInteractionReplayCommand,
 	cli.NewProbeCommand,
-	cli.NewProbeRunCommand,
+	servicewire.DeviceSet,
+	servicewire.RoomSet,
+	servicewire.SessionSet,
+	servicewire.NewReplayClockFactory,
+	servicewire.NewReplayService,
+	servicewire.NewMetricsCollector,
+	provideSessionBrowserCapabilityFactory,
+	provideSessionDisplaySurface,
+	provideSessionDependencies,
+	servicewire.NewToolCapabilitiesServiceForWire,
+	cli.NewProbeRunCommandWithDeviceService,
 	cli.NewProbeGateCommand,
 	cli.NewProbeReportCommand,
 	cli.NewProbeFleetCommand,
 	provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	provideProbeDeviceRegistries,
-	provideSessionToolCapabilitiesFactory,
 	provideSessionRTCRuntimeFactory,
-	cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntimeAndObservability,
+	cli.NewSessionCommand,
+	servicewire.SelfPlaySet,
+	cli.NewSessionReplayCommand,
+	cli.NewRoomRunCommand,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
 	cli.NewSessionDeleteCommand,
@@ -129,7 +157,7 @@ func assembleAgentCLI(
 	toolDefs []messages.ToolDefinition,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
-	rtcComponents services.SessionRTCComponents,
+	rtcComponents rtcontract.SessionRTCComponents,
 	relaxModelValidation bool,
 	observer assemblyObserver,
 ) (*cli.AgentCLI, error) {

@@ -139,6 +139,9 @@ func New(opts ...Option) (*AgentLoop, error) {
 	// reacts to the current tick's inputs.
 	interruptHandler := subsystems.NewInterruptHandler(modelRunner, toolRunner, cfg.Logger)
 	hlps = append(hlps, interruptHandler)
+	if cfg.Audio != nil {
+		hlps = append(hlps, cfg.Audio)
+	}
 
 	// Both Coordinator and CoordinatorDelta write to the same DeltaInbox so that
 	// full messages (SYSTEM.FULL_MESSAGE) and streaming deltas share a single
@@ -395,9 +398,27 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	// Forward kernel delta events to the consumer-facing Deltas() buffer.
 	// Must be set up before RunHotLoopContinuous starts (KernelRunner reads it on startup).
 	kernelDeltaCh := al.engine.GetKernelRunner().NewDeltaEventReader(256)
+	forwardCtx, forwardCancel := context.WithCancel(context.Background())
+	// If the caller cancels after the engine has reported an error, Run may
+	// already be waiting for the forwarding worker in finish. Tie cancellation
+	// directly to that worker as well as handling it in the select below so a
+	// full public buffer cannot strand shutdown.
+	stopForwardOnCancel := context.AfterFunc(ctx, forwardCancel)
+	defer stopForwardOnCancel()
+	forwardDone := make(chan struct{})
 	go func() {
+		defer close(forwardDone)
 		for msg := range kernelDeltaCh {
-			al.deltas.Write(loopCtx, msg)
+			// Keep forwarding independent of the run context. Run cancels the
+			// engine as part of shutdown, but the kernel reader can still contain
+			// deltas published before that cancellation. Waiting for this worker
+			// is the publication barrier that makes those deltas visible before
+			// Run returns. Use bounded backpressure so a full consumer buffer is
+			// observable as pressure rather than silently dropping the terminal
+			// response.
+			if outcome := al.deltas.WriteWaitContext(forwardCtx, msg); !outcome.OK() {
+				return
+			}
 		}
 	}()
 
@@ -407,11 +428,30 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	go func() {
 		errCh <- al.engine.RunHotLoopContinuous(loopCtx)
 	}()
+	finish := func(err error, received bool) error {
+		// The engine has either completed naturally or is being cancelled by
+		// the caller. Wait for its participant shutdown to close the kernel
+		// delta reader, then join the forwarding worker before exposing the
+		// result to the caller.
+		if !received {
+			err = <-errCh
+		}
+		<-forwardDone
+		forwardCancel()
+		return err
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			al.logInfo("agentloop: context cancelled, stopping turn-taking loop")
+			cancel()
+			// A consumer may have stopped reading while the forwarding worker is
+			// blocked on the bounded public delta buffer. External cancellation is
+			// the lifecycle signal that releases that worker; natural engine errors
+			// still drain it to preserve the publication barrier.
+			forwardCancel()
+			_ = finish(nil, false)
 			return ctx.Err()
 
 		case err := <-errCh:
@@ -420,7 +460,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			} else {
 				al.logInfo("agentloop: hot loop exited cleanly (turn-taking)")
 			}
-			return err
+			return finish(err, true)
 
 		case req := <-userOut:
 			// The model has produced a text response for this turn. Forward it to

@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"errors"
@@ -9,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func TestOutboundTrackResamplesAndPreservesRTPTimeline(t *testing.T) {
@@ -21,10 +23,10 @@ func TestOutboundTrackResamplesAndPreservesRTPTimeline(t *testing.T) {
 	first := pcmTone(320, 3)
 	second := pcmTone(320, 97)
 	firstBefore, secondBefore := append([]int16(nil), first...), append([]int16(nil), second...)
-	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: first}); err != nil {
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: first}); err != nil {
 		t.Fatalf("first WriteFrame: %v", err)
 	}
-	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: second}); err != nil {
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: second}); err != nil {
 		t.Fatalf("second WriteFrame: %v", err)
 	}
 	if !reflect.DeepEqual(first, firstBefore) || !reflect.DeepEqual(second, secondBefore) {
@@ -89,10 +91,10 @@ func TestOutboundTrackSuccessfulWriteCommitsAfterCancellation(t *testing.T) {
 	writer.cancelAfterWrite = cancel
 	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, writer, &captureOutboundPacer{})
 
-	if err := track.WriteFrame(ctx, PCMFrame{Samples: pcmTone(320, 1)}); err != nil {
+	if err := track.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}); err != nil {
 		t.Fatalf("successful canceled WriteFrame: %v", err)
 	}
-	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)}); err != nil {
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 2)}); err != nil {
 		t.Fatalf("follow-up WriteFrame: %v", err)
 	}
 	if err := track.Close(); err != nil {
@@ -127,7 +129,7 @@ func TestOutboundTrackPacingUsesMediaTimelineAcrossIrregularArrival(t *testing.T
 			// interval instead of bursting alongside it.
 			clock.Advance(5 * sampleOffsetDuration(960))
 		}
-		if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, index+1)}); err != nil {
+		if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, index+1)}); err != nil {
 			t.Fatalf("WriteFrame %d: %v", index, err)
 		}
 	}
@@ -185,7 +187,7 @@ func TestOutboundTrackErrorsPreserveIdentity(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			track := test.track()
-			err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)})
+			err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 1)})
 			if !errors.Is(err, test.want) {
 				t.Fatalf("WriteFrame error = %v, want errors.Is(..., %v)", err, test.want)
 			}
@@ -203,20 +205,20 @@ func TestOutboundTrackErrorsPreserveIdentity(t *testing.T) {
 			t.Fatalf("unsupported source rate error = %v, want wavio identity", err)
 		}
 		track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, &captureOutboundPacer{})
-		if err := track.WriteFrame(context.Background(), PCMFrame{}); !errors.Is(err, ErrOutboundEmptyFrame) {
+		if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{}); !errors.Is(err, ErrOutboundEmptyFrame) {
 			t.Fatalf("empty frame error = %v, want %v", err, ErrOutboundEmptyFrame)
 		}
 		if err := track.Close(); err != nil {
 			t.Fatalf("Close: %v", err)
 		}
-		if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)}); !errors.Is(err, ErrOutboundClosed) {
+		if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}); !errors.Is(err, ErrOutboundClosed) {
 			t.Fatalf("write after close = %v, want %v", err, ErrOutboundClosed)
 		}
 	})
 
 	t.Run("empty encoder payload", func(t *testing.T) {
 		track := newTestOutboundTrack(t, &captureOutboundEncoder{emptyPayload: true}, &captureOutboundWriter{}, &captureOutboundPacer{})
-		err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)})
+		err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 1)})
 		if !errors.Is(err, ErrOutboundEmptyPayload) {
 			t.Fatalf("empty payload error = %v, want %v", err, ErrOutboundEmptyPayload)
 		}
@@ -268,7 +270,7 @@ func TestOutboundTrackConfigurationDefaultsAndAdapters(t *testing.T) {
 	}
 	samples := pcmTone(3, 5)
 	wantSamples := append([]int16(nil), samples...)
-	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: samples}); err != nil {
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: samples}); err != nil {
 		t.Fatalf("identity-rate WriteFrame: %v", err)
 	}
 	if !reflect.DeepEqual(encodedSamples, wantSamples) {
@@ -297,7 +299,7 @@ func TestOutboundTrackCancellationInterruptsPacingAndWriting(t *testing.T) {
 		track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, pacer)
 		ctx, cancel := context.WithCancel(context.Background())
 		result := make(chan error, 1)
-		go func() { result <- track.WriteFrame(ctx, PCMFrame{Samples: pcmTone(320, 1)}) }()
+		go func() { result <- track.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}) }()
 		waitForSignal(t, pacer.entered)
 		cancel()
 		if err := <-result; !errors.Is(err, context.Canceled) {
@@ -313,7 +315,7 @@ func TestOutboundTrackCancellationInterruptsPacingAndWriting(t *testing.T) {
 		track := newTestOutboundTrack(t, &captureOutboundEncoder{}, writer, &captureOutboundPacer{})
 		ctx, cancel := context.WithCancel(context.Background())
 		result := make(chan error, 1)
-		go func() { result <- track.WriteFrame(ctx, PCMFrame{Samples: pcmTone(320, 1)}) }()
+		go func() { result <- track.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}) }()
 		waitForSignal(t, writer.entered)
 		cancel()
 		if err := <-result; !errors.Is(err, context.Canceled) {
@@ -329,7 +331,9 @@ func TestOutboundTrackCancellationInterruptsPacingAndWriting(t *testing.T) {
 		encoder := &captureOutboundEncoder{}
 		track := newTestOutboundTrack(t, encoder, writer, &captureOutboundPacer{})
 		result := make(chan error, 1)
-		go func() { result <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)}) }()
+		go func() {
+			result <- track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 1)})
+		}()
 		waitForSignal(t, writer.entered)
 		closeResult := make(chan error, 1)
 		go func() { closeResult <- track.Close() }()
@@ -354,7 +358,7 @@ func TestOutboundTrackSerializesConcurrentWrites(t *testing.T) {
 		group.Add(1)
 		go func(value int) {
 			defer group.Done()
-			results <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, value)})
+			results <- track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, value)})
 		}(index)
 	}
 	group.Wait()
@@ -378,11 +382,11 @@ func TestOutboundTrackConcurrentWriteCancelClose(t *testing.T) {
 	closeResult := make(chan error, 1)
 
 	go func() {
-		firstResult <- track.WriteFrame(writeContext, PCMFrame{Samples: pcmTone(320, 1)})
+		firstResult <- track.WriteFrame(writeContext, sharedaudio.PCMFrame{Samples: pcmTone(320, 1)})
 	}()
 	waitForSignal(t, writer.entered)
 	go func() {
-		secondResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)})
+		secondResult <- track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 2)})
 	}()
 
 	shutdown := make(chan struct{})
@@ -409,7 +413,7 @@ func TestOutboundTrackConcurrentWriteCancelClose(t *testing.T) {
 func TestOutboundTrackRejectsUnrepresentableMediaTimeline(t *testing.T) {
 	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, &captureOutboundPacer{})
 	track.mediaSamples = ^uint64(0)
-	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)}); !errors.Is(err, ErrOutboundFrameTooLarge) {
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}); !errors.Is(err, ErrOutboundFrameTooLarge) {
 		t.Fatalf("oversized media timeline error = %v, want %v", err, ErrOutboundFrameTooLarge)
 	}
 	if err := track.Close(); err != nil {
@@ -458,7 +462,7 @@ func TestOutboundTrackAllocationGateNegativeControl(t *testing.T) {
 
 func TestOutboundTrackSteadyStateAllocations(t *testing.T) {
 	track := newTestOutboundTrack(t, noAllocOutboundEncoder{}, noAllocOutboundWriter{}, PacerFunc(func(context.Context, uint64) error { return nil }))
-	frame := PCMFrame{Samples: pcmTone(320, 1)}
+	frame := sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}
 	for warmup := 0; warmup < 10; warmup++ {
 		if err := track.WriteFrame(context.Background(), frame); err != nil {
 			t.Fatalf("warm-up WriteFrame: %v", err)
@@ -486,7 +490,7 @@ func outboundAllocationsWithinBudget(got, ceiling float64) bool { return got <= 
 
 func BenchmarkOutboundTrackFrame(b *testing.B) {
 	track := newTestOutboundTrack(b, noAllocOutboundEncoder{}, noAllocOutboundWriter{}, PacerFunc(func(context.Context, uint64) error { return nil }))
-	frame := PCMFrame{Samples: pcmTone(320, 1)}
+	frame := sharedaudio.PCMFrame{Samples: pcmTone(320, 1)}
 	for warmup := 0; warmup < 10; warmup++ {
 		if err := track.WriteFrame(context.Background(), frame); err != nil {
 			b.Fatalf("warm-up WriteFrame: %v", err)

@@ -11,10 +11,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/parity"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/sessions"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/timeharness"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const (

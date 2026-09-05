@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 GO ?= go
-MODULES := agent-cli go-agent-loop go-llm-gateway
+MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
@@ -37,7 +37,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -168,13 +168,14 @@ test-tools: ## Run tests for standalone repository helper modules.
 
 test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, and RTC audio regressions.
 	@set -euo pipefail; \
-	(cd go-llm-gateway && $(GO) test ./pkg/wavio -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
-	(cd agent-cli && $(GO) test ./internal/audio ./internal/services -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
+	(cd go-audio && $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
+	(cd go-device-gateway && $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
+	(cd agent-cli && $(GO) test ./internal/services/... -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
 	(cd agent-cli && $(GO) test ./test/integration -run '^TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
 test-audio-stability-race: ## Run callback, cancellation, queue, and replay audio paths under the race detector.
 	@set -euo pipefail; \
-	(cd agent-cli && CGO_ENABLED=1 $(GO) test -race -tags=nomicrophone ./internal/audio ./internal/services \
+	(cd agent-cli && CGO_ENABLED=1 $(GO) test -race -tags=nomicrophone ../go-audio/... ../go-device-gateway/... ./internal/services/... \
 		-run 'Test(SimulatedDuplex|RemoteDeviceServer|SessionAudioFailureCapsule|FailureCapsule|VirtualPlaybackCapacityAdversarial|RTCDeviceSinkSerializes|RTCDeviceSinkDiscard|RTCDeviceBoundSessionDrops)' \
 		-count=1 -timeout "$(RTC_RACE_TIMEOUT)")
 
@@ -265,6 +266,10 @@ build: ## Build the agent-cli binary and compile library packages.
 	(cd go-agent-loop && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
 	echo "==> build go-llm-gateway packages"; \
 	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	echo "==> build go-audio packages"; \
+	(cd go-audio && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	echo "==> build go-device-gateway packages"; \
+	(cd go-device-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
 	echo "==> build tools/analyzergate"; \
 	analyzer_build_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$analyzer_build_dir"' EXIT; \
@@ -290,7 +295,7 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 	done; \
 	echo "==> coverage gate"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out ../../coverage/go-audio.out ../../coverage/go-device-gateway.out)
 
 coverage-registration: ## Validate every workspace Go package is registered without running coverage.
 	@set -euo pipefail; \
@@ -300,7 +305,9 @@ coverage-registration: ## Validate every workspace Go package is registered with
 		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
 		--module-dir ../../agent-cli \
 		--module-dir ../../go-agent-loop \
-		--module-dir ../../go-llm-gateway)
+		--module-dir ../../go-llm-gateway \
+		--module-dir ../../go-audio \
+		--module-dir ../../go-device-gateway)
 
 coverage-changed: ## Measure coverage floors only for packages owning changed Go files.
 	@set -euo pipefail; \
@@ -313,14 +320,24 @@ coverage-changed: ## Measure coverage floors only for packages owning changed Go
 		--test-timeout "$(GO_TEST_TIMEOUT)" \
 		--module-dir ../../agent-cli \
 		--module-dir ../../go-agent-loop \
-		--module-dir ../../go-llm-gateway)
+		--module-dir ../../go-llm-gateway \
+		--module-dir ../../go-audio \
+		--module-dir ../../go-device-gateway)
+
+wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
+	@set -euo pipefail; \
+	wire_before="$$(mktemp)"; \
+	trap 'rm -f "$$wire_before"' EXIT; \
+	cp agent-cli/internal/wire/wire_gen.go "$$wire_before"; \
+	(cd agent-cli && GOWORK=off $(GO) generate ./internal/wire); \
+	diff -u "$$wire_before" agent-cli/internal/wire/wire_gen.go
 
 prepush: ## Run the fail-fast, timed local pre-push gate.
 	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt vet lint staticcheck test-tools test-factory-scripts test-integration test-regressions build coverage"; \
+	steps="fmt wire-check vet lint staticcheck test-tools test-factory-scripts test-integration test-regressions build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
@@ -421,6 +438,8 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	run_budget_unit agent-cli; \
 	run_budget_unit go-agent-loop; \
 	run_budget_unit go-llm-gateway; \
+	run_budget_unit go-audio; \
+	run_budget_unit go-device-gateway; \
 	run_budget_test agent-cli ./test/integration; \
 	run_budget_test go-agent-loop ./test/functional; \
 	run_budget_test agent-cli ./test/integration -run '$(AGENT_CLI_REGRESSION_TESTS)'; \

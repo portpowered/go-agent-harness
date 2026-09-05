@@ -1,5 +1,7 @@
 package chrome
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bufio"
 	"context"
@@ -22,7 +24,7 @@ import (
 
 	cdpTarget "github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	looptranscript "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
@@ -328,15 +330,15 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 			{StepID: "correction", Event: homeNavigation},
 		},
 		[]conversationalCustomerOracleObservation{
-			{StepID: "initial_action", Phase: services.BrowserConversationOracleBefore, Oracle: initialOracle},
-			{StepID: "initial_action", Phase: services.BrowserConversationOracleAfter, Oracle: labelAfter},
-			{StepID: "second_action", Phase: services.BrowserConversationOracleBefore, Oracle: labelAfter},
-			{StepID: "second_action", Phase: services.BrowserConversationOracleAfter, Oracle: themeAfter},
-			{StepID: "stale_recovery", Phase: services.BrowserConversationOracleBefore, Oracle: settingsBefore},
-			{StepID: "stale_recovery", Phase: services.BrowserConversationOracleAfter, Oracle: settingsAfter},
-			{StepID: "correction", Phase: services.BrowserConversationOracleBefore, Oracle: correctionBefore},
-			{StepID: "correction", Phase: services.BrowserConversationOracleAfter, Oracle: correctionAfter},
-			{StepID: "", Phase: services.BrowserConversationOraclePostSession, Oracle: postOracle},
+			{StepID: "initial_action", Phase: servicetest.BrowserConversationOracleBefore, Oracle: initialOracle},
+			{StepID: "initial_action", Phase: servicetest.BrowserConversationOracleAfter, Oracle: labelAfter},
+			{StepID: "second_action", Phase: servicetest.BrowserConversationOracleBefore, Oracle: labelAfter},
+			{StepID: "second_action", Phase: servicetest.BrowserConversationOracleAfter, Oracle: themeAfter},
+			{StepID: "stale_recovery", Phase: servicetest.BrowserConversationOracleBefore, Oracle: settingsBefore},
+			{StepID: "stale_recovery", Phase: servicetest.BrowserConversationOracleAfter, Oracle: settingsAfter},
+			{StepID: "correction", Phase: servicetest.BrowserConversationOracleBefore, Oracle: correctionBefore},
+			{StepID: "correction", Phase: servicetest.BrowserConversationOracleAfter, Oracle: correctionAfter},
+			{StepID: "", Phase: servicetest.BrowserConversationOraclePostSession, Oracle: postOracle},
 		},
 		browserID,
 		targetID,
@@ -347,27 +349,27 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build joined live evidence: %v", err)
 	}
-	mechanical, err := services.EvaluateBrowserConversation(scenario, result, nil)
+	mechanical, err := servicetest.EvaluateBrowserConversation(scenario, result, nil)
 	if err != nil {
 		t.Fatalf("evaluate joined live evidence: %v", err)
 	}
 	result.Mechanical = mechanical
-	validator, err := services.NewBrowserConversationCommandValidator(validatorCommand, 90*time.Second)
+	validator, err := servicetest.NewBrowserConversationCommandValidator(validatorCommand, 90*time.Second)
 	if err != nil {
 		t.Fatalf("construct validator command: %v", err)
 	}
 	validator.Env = sanitizedValidatorEnvironment()
 	verdict, validatorErr := validator.ValidateBrowserConversation(result)
 	if validatorErr != nil {
-		result.Validator = services.BrowserConversationValidatorVerdict{
-			Version: services.BrowserConversationValidatorVersion,
-			Status:  services.BrowserConversationValidatorNotRun,
+		result.Validator = servicetest.BrowserConversationValidatorVerdict{
+			Version: servicetest.BrowserConversationValidatorVersion,
+			Status:  servicetest.BrowserConversationValidatorNotRun,
 			Summary: "validator command failed before a structured verdict was returned",
 		}
 	} else {
 		result.Validator = verdict
 	}
-	metadata := services.BrowserConversationReportMetadata{
+	metadata := servicetest.BrowserConversationReportMetadata{
 		Command:       fmt.Sprintf("agent session --browser-tools=webmcp --provider openai --model %s --record-dir <recording> --audio-in-turn <six finite files> --audio-interrupt <finite file> --audio-interrupt-on-tool webmcp_customer_pending", conversationalCustomerModel()),
 		Configuration: fmt.Sprintf("browser backend=webmcp cdp=loopback allowed_origin=%s browser=%s target=%s", fixture.Origin(), browserID, targetID),
 		DependencyBaseline: []string{
@@ -385,7 +387,7 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 		LaneIBranch:      lane.HeadRefName,
 		LaneIPullRequest: "https://github.com/portpowered/go-agent-harness/pull/" + conversationalCustomerLaneNumber,
 	}
-	report, reportErr := services.RenderBrowserConversationReport(result, metadata)
+	report, reportErr := servicetest.RenderBrowserConversationReport(result, metadata)
 	if reportErr != nil {
 		t.Fatalf("render sanitized live report: %v", reportErr)
 	}
@@ -394,7 +396,7 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 		if openErr != nil {
 			t.Fatalf("open requested report path: %v", openErr)
 		}
-		writeErr := services.WriteBrowserConversationReport(file, result, metadata)
+		writeErr := servicetest.WriteBrowserConversationReport(file, result, metadata)
 		closeErr := file.Close()
 		if writeErr != nil || closeErr != nil {
 			t.Fatalf("write requested report path: %v", errors.Join(writeErr, closeErr))
@@ -515,7 +517,7 @@ func (f *conversationalCustomerFixtureServer) handleOracle(writer http.ResponseW
 	}
 }
 
-func newConversationalCustomerScenario(homeURL, settingsURL string) services.BrowserConversationScenario {
+func newConversationalCustomerScenario(homeURL, settingsURL string) servicetest.BrowserConversationScenario {
 	homeBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, "unset", "default", "normal", false, "unset/default")
 	labelAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, "default", "normal", false, conversationalCustomerLabel+"/default")
 	themeAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, "normal", false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
@@ -523,25 +525,25 @@ func newConversationalCustomerScenario(homeURL, settingsURL string) services.Bro
 	settingsAfter := conversationalCustomerState(settingsURL, conversationalCustomerSettingsPage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerPriority)
 	correctionBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
 	correctionAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerCorrected, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerCorrected+"/"+conversationalCustomerTheme)
-	return services.BrowserConversationScenario{
-		Version: services.BrowserConversationScenarioVersion,
+	return servicetest.BrowserConversationScenario{
+		Version: servicetest.BrowserConversationScenarioVersion,
 		ID:      "canonical-webmcp-conversational-customer",
 		Name:    "canonical WebMCP conversational customer",
-		Fixture: services.BrowserConversationFixture{
+		Fixture: servicetest.BrowserConversationFixture{
 			ID:          "declarative-conversational-customer",
-			Pages:       []services.BrowserConversationPage{{ID: conversationalCustomerHomePage, URL: homeURL}, {ID: conversationalCustomerSettingsPage, URL: settingsURL}},
+			Pages:       []servicetest.BrowserConversationPage{{ID: conversationalCustomerHomePage, URL: homeURL}, {ID: conversationalCustomerSettingsPage, URL: settingsURL}},
 			InitialPage: conversationalCustomerHomePage,
 		},
 		RunTimeout: 10 * time.Minute,
-		Steps: []services.BrowserConversationStep{
-			{ID: "initial_action", Utterance: "Set the customer label to live alpha.", PageID: conversationalCustomerHomePage, ExpectedState: &services.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: homeBefore, After: labelAfter}, Deadline: 90 * time.Second},
-			{ID: "second_action", Utterance: "Now set the customer theme to live dark.", PageID: conversationalCustomerHomePage, ExpectedState: &services.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: labelAfter, After: themeAfter}, Deadline: 90 * time.Second},
-			{ID: "stale_recovery", Utterance: "Set the customer priority to high.", PageID: conversationalCustomerSettingsPage, ExpectedState: &services.BrowserStateTransition{PageID: conversationalCustomerSettingsPage, Before: settingsBefore, After: settingsAfter}, Navigation: &services.BrowserCustomerNavigation{FromPageID: conversationalCustomerHomePage, ToPageID: conversationalCustomerSettingsPage, URL: settingsURL}, Deadline: 120 * time.Second},
-			{ID: "correction", Utterance: "Actually change the customer label to live corrected.", PageID: conversationalCustomerHomePage, Navigation: &services.BrowserCustomerNavigation{FromPageID: conversationalCustomerSettingsPage, ToPageID: conversationalCustomerHomePage, URL: homeURL}, Correction: &services.BrowserConversationCorrection{TargetStepID: "initial_action", ExpectedState: services.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: correctionBefore, After: correctionAfter}}, Deadline: 90 * time.Second},
-			{ID: "interrupt", Utterance: "Hold this customer request while I decide.", PageID: conversationalCustomerHomePage, Interrupt: &services.BrowserConversationInterrupt{Trigger: services.BrowserInterruptOnInFlightInvocation, ToolName: "webmcp_customer_pending"}, Deadline: 90 * time.Second},
-			{ID: "cancel", Utterance: "Stop and cancel that request.", PageID: conversationalCustomerHomePage, Cancel: &services.BrowserConversationCancelRequest{Reason: "customer explicitly stopped the pending request"}, Deadline: 90 * time.Second},
+		Steps: []servicetest.BrowserConversationStep{
+			{ID: "initial_action", Utterance: "Set the customer label to live alpha.", PageID: conversationalCustomerHomePage, ExpectedState: &servicetest.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: homeBefore, After: labelAfter}, Deadline: 90 * time.Second},
+			{ID: "second_action", Utterance: "Now set the customer theme to live dark.", PageID: conversationalCustomerHomePage, ExpectedState: &servicetest.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: labelAfter, After: themeAfter}, Deadline: 90 * time.Second},
+			{ID: "stale_recovery", Utterance: "Set the customer priority to high.", PageID: conversationalCustomerSettingsPage, ExpectedState: &servicetest.BrowserStateTransition{PageID: conversationalCustomerSettingsPage, Before: settingsBefore, After: settingsAfter}, Navigation: &servicetest.BrowserCustomerNavigation{FromPageID: conversationalCustomerHomePage, ToPageID: conversationalCustomerSettingsPage, URL: settingsURL}, Deadline: 120 * time.Second},
+			{ID: "correction", Utterance: "Actually change the customer label to live corrected.", PageID: conversationalCustomerHomePage, Navigation: &servicetest.BrowserCustomerNavigation{FromPageID: conversationalCustomerSettingsPage, ToPageID: conversationalCustomerHomePage, URL: homeURL}, Correction: &servicetest.BrowserConversationCorrection{TargetStepID: "initial_action", ExpectedState: servicetest.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: correctionBefore, After: correctionAfter}}, Deadline: 90 * time.Second},
+			{ID: "interrupt", Utterance: "Hold this customer request while I decide.", PageID: conversationalCustomerHomePage, Interrupt: &servicetest.BrowserConversationInterrupt{Trigger: servicetest.BrowserInterruptOnInFlightInvocation, ToolName: "webmcp_customer_pending"}, Deadline: 90 * time.Second},
+			{ID: "cancel", Utterance: "Stop and cancel that request.", PageID: conversationalCustomerHomePage, Cancel: &servicetest.BrowserConversationCancelRequest{Reason: "customer explicitly stopped the pending request"}, Deadline: 90 * time.Second},
 		},
-		PostSession: services.BrowserConversationTabStateRequired{PageID: conversationalCustomerHomePage, MustRemainAlive: true, MustBeResponsive: true, MustAllowMutation: true},
+		PostSession: servicetest.BrowserConversationTabStateRequired{PageID: conversationalCustomerHomePage, MustRemainAlive: true, MustBeResponsive: true, MustAllowMutation: true},
 	}
 }
 
@@ -836,7 +838,7 @@ type conversationalCustomerNavigationObservation struct {
 
 type conversationalCustomerOracleObservation struct {
 	StepID string
-	Phase  services.BrowserConversationOraclePhase
+	Phase  servicetest.BrowserConversationOraclePhase
 	Oracle conversationalCustomerOracle
 }
 
@@ -1085,7 +1087,7 @@ func conversationalCustomerInvokeArguments(arguments string) (webmcp.ToolRef, st
 }
 
 func buildConversationalCustomerResult(
-	scenario services.BrowserConversationScenario,
+	scenario servicetest.BrowserConversationScenario,
 	events []webmcp.BrowserEvent,
 	logPath string,
 	navigations []conversationalCustomerNavigationObservation,
@@ -1095,24 +1097,24 @@ func buildConversationalCustomerResult(
 	probe conversationalCustomerProbe,
 	pending webmcp.BrowserEvent,
 	cancel conversationalCustomerCancelResult,
-) (services.BrowserConversationResult, error) {
+) (servicetest.BrowserConversationResult, error) {
 	providerCalls, err := readConversationalCustomerProviderCalls(filepath.Join(filepath.Dir(logPath), "agent.transcript.jsonl"))
 	if err != nil {
-		return services.BrowserConversationResult{}, fmt.Errorf("read agent transcript: %w", err)
+		return servicetest.BrowserConversationResult{}, fmt.Errorf("read agent transcript: %w", err)
 	}
 	logs, err := readConversationalCustomerSessionLog(logPath)
 	if err != nil {
-		return services.BrowserConversationResult{}, fmt.Errorf("read session log: %w", err)
+		return servicetest.BrowserConversationResult{}, fmt.Errorf("read session log: %w", err)
 	}
-	turns := make([]services.BrowserConversationTurn, 0, len(logs)*2)
+	turns := make([]servicetest.BrowserConversationTurn, 0, len(logs)*2)
 	logStepIDs := conversationalCustomerLogStepIDs(scenario, logs)
 	for index, entry := range logs {
 		stepID := logStepIDs[index]
 		if strings.TrimSpace(entry.Input.Text) != "" {
-			turns = append(turns, services.BrowserConversationTurn{StepID: stepID, Direction: services.BrowserConversationCustomerTurn, ExpectedText: expectedStepTextForStep(scenario, stepID), ObservedText: entry.Input.Text, Complete: entry.Response.Complete})
+			turns = append(turns, servicetest.BrowserConversationTurn{StepID: stepID, Direction: servicetest.BrowserConversationCustomerTurn, ExpectedText: expectedStepTextForStep(scenario, stepID), ObservedText: entry.Input.Text, Complete: entry.Response.Complete})
 		}
 		if strings.TrimSpace(entry.Response.Text) != "" {
-			turns = append(turns, services.BrowserConversationTurn{StepID: stepID, Direction: services.BrowserConversationAssistantTurn, ObservedText: entry.Response.Text, Complete: entry.Response.Complete})
+			turns = append(turns, servicetest.BrowserConversationTurn{StepID: stepID, Direction: servicetest.BrowserConversationAssistantTurn, ObservedText: entry.Response.Text, Complete: entry.Response.Complete})
 		}
 	}
 
@@ -1144,8 +1146,8 @@ func buildConversationalCustomerResult(
 		}
 	}
 	matchedInvocation := make(map[webmcp.InvocationID]bool)
-	var calls []services.BrowserConversationBrokerCall
-	appendCall := func(call services.BrowserConversationBrokerCall) {
+	var calls []servicetest.BrowserConversationBrokerCall
+	appendCall := func(call servicetest.BrowserConversationBrokerCall) {
 		call.Sequence = uint64(len(calls) + 1)
 		calls = append(calls, call)
 	}
@@ -1172,8 +1174,8 @@ func buildConversationalCustomerResult(
 				break
 			}
 		}
-		appendCall(services.BrowserConversationBrokerCall{
-			StepID: stepID, Operation: services.BrowserConversationCustomerNavigate,
+		appendCall(servicetest.BrowserConversationBrokerCall{
+			StepID: stepID, Operation: servicetest.BrowserConversationCustomerNavigate,
 			InputJSON: string(input), Generation: event.Generation,
 			PreviousGeneration: event.PreviousGeneration,
 		})
@@ -1197,12 +1199,12 @@ func buildConversationalCustomerResult(
 			}
 			appendNavigation(stepID)
 			refs, generation := conversationalCustomerCurrentToolRefs(toolNames, toolRefsByGeneration, stepID, navigationByStep, firstGeneration)
-			appendCall(services.BrowserConversationBrokerCall{StepID: stepID, Operation: services.BrowserConversationListTools, InputJSON: providerCall.Arguments, Generation: generation, ToolRefs: refs})
+			appendCall(servicetest.BrowserConversationBrokerCall{StepID: stepID, Operation: servicetest.BrowserConversationListTools, InputJSON: providerCall.Arguments, Generation: generation, ToolRefs: refs})
 			lastStep = stepID
 			continue
 		}
 		if providerCall.Name == webmcp.CancelToolName {
-			appendCall(services.BrowserConversationBrokerCall{StepID: "cancel", Operation: services.BrowserConversationCancel, InputJSON: providerCall.Arguments, State: webmcp.InvocationCanceled, Terminal: true})
+			appendCall(servicetest.BrowserConversationBrokerCall{StepID: "cancel", Operation: servicetest.BrowserConversationCancel, InputJSON: providerCall.Arguments, State: webmcp.InvocationCanceled, Terminal: true})
 			continue
 		}
 		if providerCall.Name != webmcp.InvokeToolName {
@@ -1235,7 +1237,7 @@ func buildConversationalCustomerResult(
 		}
 		appendNavigation(stepID)
 		lastStep = stepID
-		appendCall(services.BrowserConversationBrokerCall{StepID: stepID, Operation: services.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationDispatched, Terminal: false, Generation: toolGenerations[providerCall.ToolRef]})
+		appendCall(servicetest.BrowserConversationBrokerCall{StepID: stepID, Operation: servicetest.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationDispatched, Terminal: false, Generation: toolGenerations[providerCall.ToolRef]})
 		matched := false
 		for _, event := range events {
 			providerGeneration := toolGenerations[providerCall.ToolRef]
@@ -1247,13 +1249,13 @@ func buildConversationalCustomerResult(
 			if !ok {
 				continue
 			}
-			appendCall(services.BrowserConversationBrokerCall{StepID: stepID, Operation: services.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InvocationID: event.InvocationID, InputJSON: providerCall.InputJSON, State: conversationalCustomerInvocationState(terminal), Terminal: true, Output: conversationalCustomerJSON(terminal.Output), ErrorCode: terminal.ErrorCode, Generation: terminal.Generation, PreviousGeneration: terminal.PreviousGeneration})
+			appendCall(servicetest.BrowserConversationBrokerCall{StepID: stepID, Operation: servicetest.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InvocationID: event.InvocationID, InputJSON: providerCall.InputJSON, State: conversationalCustomerInvocationState(terminal), Terminal: true, Output: conversationalCustomerJSON(terminal.Output), ErrorCode: terminal.ErrorCode, Generation: terminal.Generation, PreviousGeneration: terminal.PreviousGeneration})
 			matched = true
 			break
 		}
 		if !matched && toolName == "webmcp_customer_set_priority" && toolGenerations[providerCall.ToolRef] != 0 {
 			if navigationEvent, ok := navigationByStep["stale_recovery"]; ok && toolGenerations[providerCall.ToolRef] <= navigationEvent.PreviousGeneration {
-				appendCall(services.BrowserConversationBrokerCall{StepID: stepID, Operation: services.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationError, Terminal: true, ErrorCode: string(webmcp.ErrorStaleToolRef), Generation: toolGenerations[providerCall.ToolRef]})
+				appendCall(servicetest.BrowserConversationBrokerCall{StepID: stepID, Operation: servicetest.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationError, Terminal: true, ErrorCode: string(webmcp.ErrorStaleToolRef), Generation: toolGenerations[providerCall.ToolRef]})
 			}
 		}
 	}
@@ -1267,7 +1269,7 @@ func buildConversationalCustomerResult(
 		}
 		if !found {
 			if terminal, ok := terminalByInvocation[pending.InvocationID]; ok {
-				appendCall(services.BrowserConversationBrokerCall{StepID: "interrupt", Operation: services.BrowserConversationInvoke, ToolName: pending.ToolName, InvocationID: pending.InvocationID, InputJSON: string(pending.Input), State: conversationalCustomerInvocationState(terminal), Terminal: true, ErrorCode: terminal.ErrorCode, Generation: terminal.Generation})
+				appendCall(servicetest.BrowserConversationBrokerCall{StepID: "interrupt", Operation: servicetest.BrowserConversationInvoke, ToolName: pending.ToolName, InvocationID: pending.InvocationID, InputJSON: string(pending.Input), State: conversationalCustomerInvocationState(terminal), Terminal: true, ErrorCode: terminal.ErrorCode, Generation: terminal.Generation})
 			}
 		}
 	}
@@ -1275,7 +1277,7 @@ func buildConversationalCustomerResult(
 		cancelInput, _ := json.Marshal(struct {
 			InvocationID string `json:"invocation_id"`
 		}{InvocationID: cancel.InvocationID})
-		appendCall(services.BrowserConversationBrokerCall{StepID: "cancel", Operation: services.BrowserConversationCancel, InvocationID: webmcp.InvocationID(cancel.InvocationID), InputJSON: string(cancelInput), State: webmcp.InvocationCanceled, Terminal: true})
+		appendCall(servicetest.BrowserConversationBrokerCall{StepID: "cancel", Operation: servicetest.BrowserConversationCancel, InvocationID: webmcp.InvocationID(cancel.InvocationID), InputJSON: string(cancelInput), State: webmcp.InvocationCanceled, Terminal: true})
 	}
 	for _, step := range scenario.Steps {
 		if step.Navigation != nil {
@@ -1284,19 +1286,19 @@ func buildConversationalCustomerResult(
 	}
 	assignConversationalCustomerTurnSequences(turns, calls)
 
-	var oracleSnapshots []services.BrowserConversationOracleSnapshot
+	var oracleSnapshots []servicetest.BrowserConversationOracleSnapshot
 	for index, observation := range oracles {
-		oracleSnapshots = append(oracleSnapshots, services.BrowserConversationOracleSnapshot{Sequence: uint64(index + 1), StepID: observation.StepID, PageID: observation.Oracle.Page, Generation: 0, Phase: observation.Phase, State: conversationalCustomerOracleState(observation.Oracle)})
+		oracleSnapshots = append(oracleSnapshots, servicetest.BrowserConversationOracleSnapshot{Sequence: uint64(index + 1), StepID: observation.StepID, PageID: observation.Oracle.Page, Generation: 0, Phase: observation.Phase, State: conversationalCustomerOracleState(observation.Oracle)})
 	}
-	lifecycle := services.BrowserConversationLifecycleEvidence{Outcome: services.BrowserConversationLifecycleCanceled, SessionStarted: true, SessionTerminated: true, Detached: true, DetachCount: 1, DetachRequired: true, ExternalBrowserID: webmcp.BrowserID(browserID), ExternalTargetID: targetID, ExternalTabAlive: probe.Alive, ExternalTabResponsive: probe.Responsive, ExternalTabAllowsMutation: probe.AllowsMutation, ExternalTabRead: probe.ReadSucceeded, ExternalTabMutation: probe.MutationSucceeded}
-	result := services.BrowserConversationResult{ScenarioID: scenario.ID, ScenarioName: scenario.Name, Finalized: true, Turns: turns, BrokerCalls: calls, Oracles: oracleSnapshots, Cancellation: services.BrowserConversationCancellationEvidence{Interrupted: true, Requested: true, InvocationID: pending.InvocationID, FinalState: webmcp.InvocationCanceled, Reason: "customer stop", InterruptedStepID: "interrupt", CancelStepID: "cancel", OverlappingAudioSent: true, ExplicitCancelAudioSent: true}, Lifecycle: lifecycle}
-	result.Corrections = services.DeriveBrowserConversationCorrections(scenario, result)
-	result.Recovery = services.DeriveBrowserConversationRecovery(scenario, result)
-	result.InputJSONValidity = services.ComputeBrowserConversationInputJSONValidity(result.BrokerCalls)
+	lifecycle := servicetest.BrowserConversationLifecycleEvidence{Outcome: servicetest.BrowserConversationLifecycleCanceled, SessionStarted: true, SessionTerminated: true, Detached: true, DetachCount: 1, DetachRequired: true, ExternalBrowserID: webmcp.BrowserID(browserID), ExternalTargetID: targetID, ExternalTabAlive: probe.Alive, ExternalTabResponsive: probe.Responsive, ExternalTabAllowsMutation: probe.AllowsMutation, ExternalTabRead: probe.ReadSucceeded, ExternalTabMutation: probe.MutationSucceeded}
+	result := servicetest.BrowserConversationResult{ScenarioID: scenario.ID, ScenarioName: scenario.Name, Finalized: true, Turns: turns, BrokerCalls: calls, Oracles: oracleSnapshots, Cancellation: servicetest.BrowserConversationCancellationEvidence{Interrupted: true, Requested: true, InvocationID: pending.InvocationID, FinalState: webmcp.InvocationCanceled, Reason: "customer stop", InterruptedStepID: "interrupt", CancelStepID: "cancel", OverlappingAudioSent: true, ExplicitCancelAudioSent: true}, Lifecycle: lifecycle}
+	result.Corrections = servicetest.DeriveBrowserConversationCorrections(scenario, result)
+	result.Recovery = servicetest.DeriveBrowserConversationRecovery(scenario, result)
+	result.InputJSONValidity = servicetest.ComputeBrowserConversationInputJSONValidity(result.BrokerCalls)
 	return result, result.Validate()
 }
 
-func expectedStepTextForStep(scenario services.BrowserConversationScenario, stepID string) string {
+func expectedStepTextForStep(scenario servicetest.BrowserConversationScenario, stepID string) string {
 	for _, step := range scenario.Steps {
 		if step.ID == stepID {
 			return step.Utterance
@@ -1305,7 +1307,7 @@ func expectedStepTextForStep(scenario services.BrowserConversationScenario, step
 	return ""
 }
 
-func conversationalCustomerLogStepIDs(scenario services.BrowserConversationScenario, logs []conversationalCustomerSessionLogEntry) []string {
+func conversationalCustomerLogStepIDs(scenario servicetest.BrowserConversationScenario, logs []conversationalCustomerSessionLogEntry) []string {
 	stepIDs := make([]string, len(logs))
 	nextStep := 0
 	lastStep := ""
@@ -1352,7 +1354,7 @@ func conversationalCustomerLogStepIDs(scenario services.BrowserConversationScena
 	return stepIDs
 }
 
-func assignConversationalCustomerTurnSequences(turns []services.BrowserConversationTurn, calls []services.BrowserConversationBrokerCall) {
+func assignConversationalCustomerTurnSequences(turns []servicetest.BrowserConversationTurn, calls []servicetest.BrowserConversationBrokerCall) {
 	type bounds struct{ first, last uint64 }
 	byStep := make(map[string]bounds)
 	for _, call := range calls {
@@ -1376,7 +1378,7 @@ func assignConversationalCustomerTurnSequences(turns []services.BrowserConversat
 			next++
 			continue
 		}
-		if turns[index].Direction == services.BrowserConversationCustomerTurn {
+		if turns[index].Direction == servicetest.BrowserConversationCustomerTurn {
 			turns[index].Sequence = current.first
 		} else {
 			turns[index].Sequence = current.last + 1

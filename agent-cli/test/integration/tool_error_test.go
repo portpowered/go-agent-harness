@@ -1,5 +1,9 @@
 package integration
 
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
 import (
 	"context"
 	"encoding/json"
@@ -11,11 +15,12 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -198,6 +203,20 @@ func (panickingToolExecutor) Execute(ctx context.Context, call messages.ToolCall
 	panic("s2s-v4c negative control: unhandled panic inside tool execution")
 }
 
+type toolErrorDeviceService struct{}
+
+func (toolErrorDeviceService) Enumerate(context.Context) (serviceDevices.DeviceList, error) {
+	return serviceDevices.DeviceList{}, nil
+}
+
+func (toolErrorDeviceService) Select(context.Context, serviceDevices.DeviceSelectionRequest) (serviceDevices.DeviceSelection, error) {
+	return serviceDevices.DeviceSelection{}, nil
+}
+
+func (toolErrorDeviceService) ProbeAvailability(context.Context) (serviceDevices.DeviceProbeAvailability, error) {
+	return serviceDevices.DeviceProbeAvailability{Status: serviceDevices.DeviceProbeStatusSkip}, nil
+}
+
 func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, string, error) {
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
@@ -215,16 +234,20 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewInteractionCommand(),
 		cli.NewInteractionReplayCommand(),
 		cli.NewProbeCommand(),
-		cli.NewProbeRunCommand(),
+		cli.NewProbeRunCommandWithDeviceService(toolErrorDeviceService{}, nil, nil),
 		cli.NewProbeGateCommand(),
 		cli.NewProbeReportCommand(),
-		cli.NewProbeFleetCommand(),
-		cli.NewSessionCommand(askFlags, globalFlags, nil, nil),
+		cli.NewProbeFleetCommand(nil, nil),
+		cli.NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil),
 		cli.NewSessionShowCommand(globalFlags),
 		cli.NewSessionListCommand(globalFlags),
 		cli.NewSessionDeleteCommand(globalFlags),
+		cli.NewSessionReplayCommand(nil),
+		cli.NewRoomRunCommand(globalFlags, nil),
 		cli.NewConfigCommand(),
 		cli.NewConfigAddLocalCommand(globalFlags),
+		nil,
+		toolErrorDeviceService{},
 	)
 	tw := NewTestWriter()
 	rootCmd := router.BuildRoot()

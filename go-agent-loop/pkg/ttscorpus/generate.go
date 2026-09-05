@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // Corpus budget from the program rules.

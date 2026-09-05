@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
@@ -165,7 +166,7 @@ func contentPartToRequestPart(p models.ContentPart) (contentPart, bool) {
 		}
 		format := audioFormatFromMediaType(v.MediaType)
 		return contentPart{Type: "input_audio", InputAudio: &inputAudio{
-			Data:   base64.StdEncoding.EncodeToString(v.Bytes),
+			Data:   codec.EncodeBase64(v.Bytes),
 			Format: format,
 		}}, true
 
@@ -304,7 +305,7 @@ func responseToContentParts(msg responseMsg) []models.ContentPart {
 		parts = append(parts, models.TextPart{Text: msg.Content})
 	}
 	if msg.Audio != nil && msg.Audio.Data != "" {
-		decoded, err := base64.StdEncoding.DecodeString(msg.Audio.Data)
+		decoded, err := codec.DecodeBase64(msg.Audio.Data)
 		if err == nil {
 			parts = append(parts, models.AudioPart{Bytes: decoded, MediaType: "audio/wav"})
 		}

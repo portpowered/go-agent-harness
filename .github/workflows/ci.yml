@@ -35,6 +35,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Cache pinned analyzer binaries
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
@@ -55,6 +57,10 @@ jobs:
       - name: Run gofmt check
         if: always()
         run: make fmt
+
+      - name: Verify generated service composition
+        if: always()
+        run: make wire-check
 
       - name: Run go vet
         if: always()
@@ -88,6 +94,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run repository helper module tests
         if: always()
@@ -101,14 +109,16 @@ jobs:
         if: always()
         run: make build
 
-      - name: Verify standalone agent-cli dependency pins
+      - name: Verify standalone checkout dependency graph
         if: always()
         working-directory: agent-cli
         env:
           GOWORK: "off"
         run: |
-          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-agent-loop)" = "v0.0.3"
-          test "$(go list -m -f '{{.Version}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "v0.0.5-0.20260904005433-1a695c9c6934"
+          # This coordinated multi-module change uses adjacent checkout modules
+          # even without go.work; published module releases are versioned separately.
+          test "$(go list -m -f '{{.Replace.Dir}}' github.com/portpowered/go-agent-harness/go-agent-loop)" = "$(cd ../go-agent-loop && pwd)"
+          test "$(go list -m -f '{{.Replace.Dir}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "$(cd ../go-llm-gateway && pwd)"
           go build -o "$RUNNER_TEMP/yui-standalone" ./cmd/yui
 
   # The long pole: deterministic integration tests plus committed
@@ -134,6 +144,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run deterministic integration tests
         if: always()
@@ -168,6 +180,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run coverage profiles and coverage gate
         run: make coverage
@@ -194,6 +208,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run focused RTC race acceptance
         if: always()
@@ -226,6 +242,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run hermetic test pipeline
         run: make test-hermetic
@@ -254,6 +272,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run production-binary cross-process cancellation acceptance
         working-directory: agent-cli
@@ -278,9 +298,11 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run package-adjacent macOS audio units
-        run: go test ./agent-cli/internal/audio -count=1
+        run: go test ./go-audio/... ./go-device-gateway/... -count=1
 
       - name: Compile functional physical-device suite
         run: go test ./agent-cli/test/functional -count=1
@@ -314,6 +336,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run Windows audio queue regressions
-        run: go test ./agent-cli/internal/audio -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1
+        run: go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1

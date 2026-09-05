@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
