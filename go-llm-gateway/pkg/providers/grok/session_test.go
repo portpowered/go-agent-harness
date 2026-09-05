@@ -1,5 +1,7 @@
 package grok
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"encoding/base64"
@@ -10,13 +12,20 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 const grokTestSafetyTimeout = 10 * time.Second
+
+func TestDecodeGrokAudioDeltaRejectsOddPCM16(t *testing.T) {
+	data := []byte(`{"delta":"` + base64.StdEncoding.EncodeToString([]byte{1}) + `"}`)
+	if _, err := decodeGrokAudioDelta(data); err == nil {
+		t.Fatal("decodeGrokAudioDelta accepted an odd PCM16 payload")
+	}
+}
 
 func newGrokTestContext(t *testing.T) context.Context {
 	t.Helper()
@@ -263,7 +272,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockConn()
 	session := newGrokSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
-	owner, ok := any(session).(rtc.MediaSession)
+	owner, ok := any(session).(sharedaudio.MediaSession)
 	if !ok {
 		t.Fatal("grok session does not expose rtc.MediaSession")
 	}
@@ -276,7 +285,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	for index := range want {
 		want[index] = int16((index*73)%24000 - 12000) //nolint:gosec // bounded test tone
 	}
-	if err := endpoints.Outbound.WriteFrame(ctx, rtc.PCMFrame{Samples: want}); err != nil {
+	if err := endpoints.Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: want}); err != nil {
 		t.Fatalf("write RTC outbound frame: %v", err)
 	}
 
@@ -295,12 +304,12 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	if eventType != "input_audio_buffer.append" {
 		t.Fatalf("RTC outbound event type = %q, want input_audio_buffer.append", eventType)
 	}
-	if got, wantBytes := encoded, base64.StdEncoding.EncodeToString(encodePCM16(want)); got != wantBytes {
+	if got, wantBytes := encoded, codec.EncodeBase64(codec.EncodePCM16(want)); got != wantBytes {
 		t.Fatalf("RTC outbound PCM payload = %q, want %q", got, wantBytes)
 	}
 
 	conn.addServerEvent("response.audio.delta", map[string]any{
-		"delta": base64.StdEncoding.EncodeToString(encodePCM16(want)),
+		"delta": codec.EncodeBase64(codec.EncodePCM16(want)),
 	})
 	conn.addServerEvent("response.audio.done", nil)
 	got, err := endpoints.Inbound.ReadFrame(ctx)

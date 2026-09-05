@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"context"
 	"errors"
@@ -8,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -206,14 +207,14 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- services.RunSession(ctx, io.Discard, services.SessionRunOptions{
+		runErr <- servicetest.RunSession(ctx, io.Discard, servicetest.SessionRunOptions{
 			RecordPath:        "scheduled-tool-lifecycle.session.json",
 			Provider:          "grok",
 			Model:             "grok-realtime",
 			APIKey:            "test-key",
 			SessionInferencer: inferencer,
 			ToolExecutor:      executor,
-			AudioInputs: []services.ScheduledAudioInput{{
+			AudioInputs: []servicetest.ScheduledAudioInput{{
 				AfterCompletedTurns: 0,
 				PCM:                 []byte{1, 2, 3, 4},
 				EndOfTurn:           true,

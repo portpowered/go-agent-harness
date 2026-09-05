@@ -1,5 +1,9 @@
 package wire
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"bytes"
 	"context"
@@ -17,13 +21,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -46,17 +50,17 @@ func (r *recordingDeviceRegistry) ListDevices() []string {
 	return []string{"recording-device"}
 }
 
-func (r *recordingDeviceRegistry) List() ([]audio.Device, error) {
+func (r *recordingDeviceRegistry) List() ([]devicegw.Device, error) {
 	r.lookups++
 	return nil, nil
 }
 
-func (r *recordingDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
-	return audio.Device{}, audio.NewNoDefaultDeviceError(direction)
+func (r *recordingDeviceRegistry) Default(direction devicegw.Direction) (devicegw.Device, error) {
+	return devicegw.Device{}, devicegw.NewNoDefaultDeviceError(direction)
 }
 
-func (r *recordingDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
-	return nil, audio.NewDeviceNotFoundError(id)
+func (r *recordingDeviceRegistry) Open(id devicegw.DeviceID) (devicegw.OpenedDevice, error) {
+	return nil, devicegw.NewDeviceNotFoundError(id)
 }
 
 type recordingAudioSource struct {
@@ -86,6 +90,12 @@ type recordingClock struct {
 }
 
 func (c *recordingClock) Now() time.Time { return c.now }
+
+// These composition tests pin observation timestamps while session lifecycle
+// deadlines retain live scheduling. Virtual-time behavior is tested separately.
+func (*recordingClock) NewTimer(duration time.Duration) clock.Timer {
+	return clock.Real{}.NewTimer(duration)
+}
 
 type recordingSessionRuntimeObserver struct{}
 
@@ -243,14 +253,14 @@ func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
 
 func TestComposeAgentCLI_RejectsWebRTCBeforeRuntimeFactoryInGeneratedGraph(t *testing.T) {
 	resolverErr := errors.New("resolver edge reached")
-	components := services.SessionRTCComponents{
+	components := servicetest.SessionRTCComponents{
 		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
 			return nil, resolverErr
 		},
-		NewDataPlane: func(context.Context, rtc.Signaling) (services.SessionRTCDataPlane, error) {
+		NewDataPlane: func(context.Context, rtc.Signaling) (servicetest.SessionRTCDataPlane, error) {
 			return nil, errors.New("data-plane edge should not run")
 		},
-		OpenMediaSource: func(context.Context, string) (rtc.InboundMedia, error) {
+		OpenMediaSource: func(context.Context, string) (sharedaudio.InboundMedia, error) {
 			return nil, errors.New("media edge should not run")
 		},
 	}
@@ -298,8 +308,8 @@ func TestDefaultSessionRTCRuntimeCompositionConstructsLazily(t *testing.T) {
 	}
 	composition.mu.Unlock()
 
-	runtime, err := provideSessionRTCRuntimeFactory(components, observability.NewNoopMetricSampler(), observability.NewNoopLogger())(services.SessionRuntimeSelection{
-		Transport:         services.SessionTransportWebRTC,
+	runtime, err := provideSessionRTCRuntimeFactory(components, observability.NewNoopMetricSampler(), observability.NewNoopLogger())(servicetest.SessionRuntimeSelection{
+		Transport:         servicetest.SessionTransportWebRTC,
 		SignalingEndpoint: "loopback://lazy",
 		MediaSource:       "fixture://lazy",
 	})
@@ -320,7 +330,7 @@ func TestDefaultSessionRTCRuntimeCompositionConstructsLazily(t *testing.T) {
 }
 
 func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
-	inner, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {
 		t.Fatalf("new virtual registry: %v", err)
 	}
@@ -350,21 +360,21 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	}
 	var response struct {
 		Devices []struct {
-			ID        audio.DeviceID  `json:"id"`
-			Direction audio.Direction `json:"direction"`
-			Default   bool            `json:"default"`
+			ID        devicegw.DeviceID  `json:"id"`
+			Direction devicegw.Direction `json:"direction"`
+			Default   bool               `json:"default"`
 		} `json:"devices"`
 	}
 	if err := json.Unmarshal(listOut.Bytes(), &response); err != nil {
 		t.Fatalf("decode composed devices list: %v", err)
 	}
-	wantDevices := map[audio.DeviceID]struct {
-		direction audio.Direction
+	wantDevices := map[devicegw.DeviceID]struct {
+		direction devicegw.Direction
 		defaulted bool
 	}{
-		"virtual:input":     {direction: audio.DirectionInput, defaulted: true},
-		"virtual:output":    {direction: audio.DirectionOutput, defaulted: true},
-		"virtual:exclusive": {direction: audio.DirectionOutput},
+		"virtual:input":     {direction: devicegw.DirectionInput, defaulted: true},
+		"virtual:output":    {direction: devicegw.DirectionOutput, defaulted: true},
+		"virtual:exclusive": {direction: devicegw.DirectionOutput},
 	}
 	if len(response.Devices) != len(wantDevices) {
 		t.Fatalf("composed device list = %#v, want exact shared-registry snapshot", response.Devices)
@@ -399,7 +409,7 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 		"--audio-in-device", "virtual:input",
 		"--audio-out-device", "default",
 	})
-	if err := sessionRoot.Execute(); err == nil || !errors.Is(err, services.ErrRTCSessionMediaUnavailable) {
+	if err := sessionRoot.Execute(); err == nil || !errors.Is(err, servicetest.ErrRTCSessionMediaUnavailable) {
 		t.Fatalf("composed session error = %v, want RTC media capability error after preflight", err)
 	}
 	if len(registry.opened) != 2 || registry.opened[0] != "virtual:input" || registry.opened[1] != "virtual:output" {
@@ -411,17 +421,17 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 }
 
 type trackingDeviceRegistry struct {
-	inner  *audio.VirtualRegistry
-	opened []audio.DeviceID
+	inner  *devicegw.VirtualRegistry
+	opened []devicegw.DeviceID
 }
 
-func (r *trackingDeviceRegistry) List() ([]audio.Device, error) { return r.inner.List() }
+func (r *trackingDeviceRegistry) List() ([]devicegw.Device, error) { return r.inner.List() }
 
-func (r *trackingDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
+func (r *trackingDeviceRegistry) Default(direction devicegw.Direction) (devicegw.Device, error) {
 	return r.inner.Default(direction)
 }
 
-func (r *trackingDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+func (r *trackingDeviceRegistry) Open(id devicegw.DeviceID) (devicegw.OpenedDevice, error) {
 	r.opened = append(r.opened, id)
 	return r.inner.Open(id)
 }
@@ -936,7 +946,7 @@ func executeAskCommand(t *testing.T, root *cli.AgentCLI) error {
 
 // executeSessionCommand drives a scripted single-turn session to exercise
 // the SessionInferencer port. It deliberately uses --prompt rather than
-// --record: since isRecordOnlyLiveInvocation (internal/cli/session.go)
+// --record: since isRecordOnlyLiveInvocation (internal/transport/cli/session.go)
 // restores implicit microphone/speaker devices for a bare --record
 // invocation, using --record here would route this generic port-swap
 // exerciser through real device resolution against the unswapped default

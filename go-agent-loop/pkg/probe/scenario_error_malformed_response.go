@@ -7,7 +7,7 @@ package probe
 // the healthy well-formed control fixture into that same malformed expectation
 // must FAIL: the healthy session terminates with a plain disconnect and no
 // error classification, so the expectation cannot be satisfied. This negative
-// control is exercised as a CI test case in agent-cli/internal/cli/probe_test.go.
+// control is exercised as a CI test case in agent-cli/internal/transport/cli/probe_test.go.
 
 const (
 	// ScenarioIDS2SV6DErrorMalformedResponse selects the whole

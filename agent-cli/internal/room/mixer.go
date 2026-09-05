@@ -2,7 +2,6 @@ package room
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 var (
@@ -723,6 +724,7 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	}
 	sort.Strings(ids)
 	accumulated := make([]int32, m.frameBytes/2)
+	sampleScratch := make([]int16, m.frameBytes/2)
 	sources := make([]string, 0, len(ids))
 	for _, id := range ids {
 		input := m.inputs[id]
@@ -730,9 +732,12 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 		if take > m.frameBytes {
 			take = m.frameBytes
 		}
-		for offset := 0; offset < take; offset += 2 {
-			sample := int16(binary.LittleEndian.Uint16(input.data[offset : offset+2]))
-			accumulated[offset/2] += int32(sample)
+		inputSamples := sampleScratch[:take/2]
+		if err := codec.DecodePCM16Into(inputSamples, input.data[:take]); err != nil {
+			return nil, nil, fmt.Errorf("decode mixer PCM16 input %q: %w", id, err)
+		}
+		for offset, sample := range inputSamples {
+			accumulated[offset] += int32(sample)
 		}
 		if take > 0 {
 			sources = append(sources, id)
@@ -743,13 +748,17 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	if len(ids) > 0 {
 		m.signalWritersLocked()
 	}
+	outputSamples := make([]int16, len(accumulated))
 	for index, sample := range accumulated {
 		if sample > 32767 {
 			sample = 32767
 		} else if sample < -32768 {
 			sample = -32768
 		}
-		binary.LittleEndian.PutUint16(frame[index*2:index*2+2], uint16(int16(sample)))
+		outputSamples[index] = int16(sample)
+	}
+	if err := codec.EncodePCM16Into(frame, outputSamples); err != nil {
+		return nil, nil, fmt.Errorf("encode mixer PCM16 output: %w", err)
 	}
 	return frame, sources, nil
 }

@@ -1,5 +1,7 @@
 package rtc_test
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"bytes"
 	"context"
@@ -14,12 +16,12 @@ import (
 )
 
 var (
-	_ transport.Dialer  = (*dataDialer)(nil)
-	_ transport.Conn    = (*dataConn)(nil)
-	_ rtc.Dialer        = (*dataDialer)(nil)
-	_ rtc.Conn          = (*dataConn)(nil)
-	_ rtc.InboundMedia  = (*inboundStub)(nil)
-	_ rtc.OutboundMedia = (*outboundStub)(nil)
+	_ transport.Dialer          = (*dataDialer)(nil)
+	_ transport.Conn            = (*dataConn)(nil)
+	_ rtc.Dialer                = (*dataDialer)(nil)
+	_ rtc.Conn                  = (*dataConn)(nil)
+	_ sharedaudio.InboundMedia  = (*inboundStub)(nil)
+	_ sharedaudio.OutboundMedia = (*outboundStub)(nil)
 )
 
 func TestRTCDataS11Conformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
@@ -209,13 +211,15 @@ func (*noOpConn) Close() error                      { return nil }
 
 type inboundStub struct{}
 
-func (*inboundStub) ReadFrame(context.Context) (rtc.PCMFrame, error) { return rtc.PCMFrame{}, nil }
-func (*inboundStub) Close() error                                    { return nil }
+func (*inboundStub) ReadFrame(context.Context) (sharedaudio.PCMFrame, error) {
+	return sharedaudio.PCMFrame{}, nil
+}
+func (*inboundStub) Close() error { return nil }
 
 type outboundStub struct{}
 
-func (*outboundStub) WriteFrame(context.Context, rtc.PCMFrame) error { return nil }
-func (*outboundStub) Close() error                                   { return nil }
+func (*outboundStub) WriteFrame(context.Context, sharedaudio.PCMFrame) error { return nil }
+func (*outboundStub) Close() error                                           { return nil }
 
 func cloneMessages(messages []transporttest.Message) []transporttest.Message {
 	cloned := make([]transporttest.Message, len(messages))

@@ -1,19 +1,21 @@
 package wire
 
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 import (
 	"context"
+	runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	"io"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/observability"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
 
 // DeviceRegistry is the shared registry boundary used by both device listing
 // and session RTC device bindings. Keeping the alias here prevents the wire
 // graph from inventing a second, discovery-only device contract.
-type DeviceRegistry = audio.DeviceRegistry
+type DeviceRegistry = devicegw.DeviceRegistry
 
 // AudioSource is the shared PCM input contract used by the audio package.
 type AudioSource = audio.AudioSource
@@ -36,31 +38,31 @@ type LoggerFunc = observability.LoggerFunc
 // SessionRuntimeObserver is the optional runtime evidence sink used by
 // hermetic command-level tests. It observes events emitted from inside the
 // shipped session command, alongside the composed Clock.
-type SessionRuntimeObserver = services.SessionRuntimeObserver
+type SessionRuntimeObserver = runtimecontract.SessionRuntimeObserver
 
 // SessionRuntimeObservation is the value delivered by SessionRuntimeObserver.
-type SessionRuntimeObservation = services.SessionRuntimeObservation
+type SessionRuntimeObservation = runtimecontract.SessionRuntimeObservation
 
 const (
-	SessionRuntimeObservationAudioOutput    = services.SessionRuntimeObservationAudioOutput
-	SessionRuntimeObservationAudioInput     = services.SessionRuntimeObservationAudioInput
-	SessionRuntimeObservationInputCommit    = services.SessionRuntimeObservationInputCommit
-	SessionRuntimeObservationResponseCreate = services.SessionRuntimeObservationResponseCreate
-	SessionRuntimeObservationTurnCompleted  = services.SessionRuntimeObservationTurnCompleted
-	SessionRuntimeObservationTerminal       = services.SessionRuntimeObservationTerminal
+	SessionRuntimeObservationAudioOutput    = runtimecontract.SessionRuntimeObservationAudioOutput
+	SessionRuntimeObservationAudioInput     = runtimecontract.SessionRuntimeObservationAudioInput
+	SessionRuntimeObservationInputCommit    = runtimecontract.SessionRuntimeObservationInputCommit
+	SessionRuntimeObservationResponseCreate = runtimecontract.SessionRuntimeObservationResponseCreate
+	SessionRuntimeObservationTurnCompleted  = runtimecontract.SessionRuntimeObservationTurnCompleted
+	SessionRuntimeObservationTerminal       = runtimecontract.SessionRuntimeObservationTerminal
 )
 
 // SessionFinalAccounting is the production-owned terminal token and metrics
 // value carried by SessionRuntimeObservation.FinalAccounting.
-type SessionFinalAccounting = services.SessionFinalAccounting
+type SessionFinalAccounting = runtimecontract.SessionFinalAccounting
 
 // SessionTokenUsageSemantics describes how provider MESSAGE.END usage values
 // contribute to SessionFinalAccounting's session totals.
-type SessionTokenUsageSemantics = services.SessionTokenUsageSemantics
+type SessionTokenUsageSemantics = runtimecontract.SessionTokenUsageSemantics
 
 // SessionTokenUsageIncremental is the supported session usage contract: each
 // MESSAGE.END usage value contributes once for its completed turn.
-const SessionTokenUsageIncremental = services.SessionTokenUsageIncremental
+const SessionTokenUsageIncremental = runtimecontract.SessionTokenUsageIncremental
 
 type inertAudioSource struct{}
 
@@ -72,7 +74,7 @@ type inertAudioSink struct{}
 func (inertAudioSink) WriteFrame(context.Context, []int16) error { return nil }
 func (inertAudioSink) Close() error                              { return nil }
 
-func defaultDeviceRegistry() DeviceRegistry { return audio.NewPlatformDeviceRegistry() }
+func defaultDeviceRegistry() DeviceRegistry { return devicegw.NewPlatformDeviceRegistry() }
 func defaultAudioSource() AudioSource       { return inertAudioSource{} }
 func defaultAudioSink() AudioSink           { return inertAudioSink{} }
 

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -54,7 +54,7 @@ func TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice(t *testing.T) {
 		t.Fatalf("run agent binary with remote audio-device server: %v; stderr=%q", err, stderr.String())
 	}
 
-	snapshot, err := audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 	if err != nil {
 		t.Fatalf("read cross-process device evidence: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestAudioDeviceServerBinaryDefaultClockRunsWithoutController(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	for {
-		snapshot, err := audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+		snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 		if err != nil {
 			t.Fatalf("read realtime device snapshot: %v", err)
 		}

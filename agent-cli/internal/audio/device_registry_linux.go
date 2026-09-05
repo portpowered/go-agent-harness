@@ -1,6 +1,0 @@
-//go:build linux && cgo && !nomicrophone
-
-package audio
-
-// NewHostDeviceRegistry returns the registry for the current Linux host.
-func NewHostDeviceRegistry() DeviceRegistry { return NewDeviceRegistry() }

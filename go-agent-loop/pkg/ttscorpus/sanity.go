@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // Clip sanity bounds from the pin contract (docs/architecture/s2s-tts-pinning.md).

@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"bufio"
 	"context"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type rtspTrack struct {
@@ -236,17 +239,17 @@ type rtspInbound struct {
 	videoMediaType string
 	source         string
 	mu             sync.Mutex
-	pendingAudio   []PCMFrame
+	pendingAudio   []sharedaudio.PCMFrame
 	pendingVisuals []VisualObservation
 	once           sync.Once
 }
 
-func (r *rtspInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
+func (r *rtspInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := callerContextError(ctx); err != nil {
-		return PCMFrame{}, err
+		return sharedaudio.PCMFrame{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -259,9 +262,9 @@ func (r *rtspInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 		channel, payload, err := r.readPacketContext(ctx)
 		if err != nil {
 			if contextErr := callerContextError(ctx); contextErr != nil {
-				return PCMFrame{}, contextErr
+				return sharedaudio.PCMFrame{}, contextErr
 			}
-			return PCMFrame{}, err
+			return sharedaudio.PCMFrame{}, err
 		}
 		if channel != r.audioChannel {
 			if channel == r.videoChannel && len(payload) > 0 {
@@ -269,9 +272,9 @@ func (r *rtspInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 			}
 			continue
 		}
-		samples := decodeAudio(r.codec, payload)
+		samples := codec.DecodeRTPAudioPayload(r.codec, payload)
 		if len(samples) > 0 {
-			return PCMFrame{Samples: samples}, nil
+			return sharedaudio.PCMFrame{Samples: samples}, nil
 		}
 	}
 }
@@ -304,9 +307,9 @@ func (r *rtspInbound) Look(ctx context.Context) (VisualObservation, error) {
 			return unavailableVisual(r.source), nil
 		}
 		if channel == r.audioChannel {
-			samples := decodeAudio(r.codec, payload)
+			samples := codec.DecodeRTPAudioPayload(r.codec, payload)
 			if len(samples) > 0 {
-				r.pendingAudio = append(r.pendingAudio, PCMFrame{Samples: samples})
+				r.pendingAudio = append(r.pendingAudio, sharedaudio.PCMFrame{Samples: samples})
 			}
 			continue
 		}
@@ -371,52 +374,4 @@ func (r *rtspInbound) Close() error {
 		}
 	})
 	return nil
-}
-
-func decodeAudio(codec string, payload []byte) []int16 {
-	if len(payload) == 0 {
-		return nil
-	}
-	codec = strings.TrimPrefix(strings.ToUpper(codec), "AUDIO/")
-	if codec == "L16" || codec == "PCM16" || codec == "RAW" {
-		out := make([]int16, len(payload)/2)
-		for i := range out {
-			out[i] = int16(binary.BigEndian.Uint16(payload[i*2:]))
-		}
-		return out
-	}
-	out := make([]int16, len(payload))
-	for i, value := range payload {
-		if codec == "PCMA" || codec == "G711A" {
-			out[i] = alaw(value)
-		} else if codec == "PCMU" || codec == "G711U" {
-			out[i] = ulaw(value)
-		} else if i*2+1 < len(payload) {
-			out[i] = int16(binary.BigEndian.Uint16(payload[i*2:]))
-		} else {
-			out[i] = int16(value) << 8
-		}
-	}
-	return out
-}
-func ulaw(value byte) int16 {
-	value = ^value
-	sample := int16((value&0x0f)<<3 + 132)
-	sample <<= (value & 0x70) >> 4
-	if value&0x80 != 0 {
-		return 132 - sample
-	}
-	return sample - 132
-}
-func alaw(value byte) int16 {
-	value ^= 0x55
-	sample := int16(value&0x0f) << 4
-	if value&0x70 != 0 {
-		sample += 0x100
-		sample <<= (value&0x70)>>4 - 1
-	}
-	if value&0x80 != 0 {
-		return sample
-	}
-	return -sample
 }

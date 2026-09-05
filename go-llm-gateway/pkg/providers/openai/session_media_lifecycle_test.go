@@ -1,5 +1,7 @@
 package openai
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"strings"
@@ -8,7 +10,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 func TestRTCMediaBackpressureUnblocksWhenSessionCloses(t *testing.T) {
@@ -21,7 +22,7 @@ func TestRTCMediaBackpressureUnblocksWhenSessionCloses(t *testing.T) {
 	}
 	result := make(chan error, 1)
 	go func() {
-		result <- session.writeRTCMediaFrame(context.Background(), rtc.PCMFrame{Samples: []int16{1, 2, 3}})
+		result <- session.writeRTCMediaFrame(context.Background(), sharedaudio.PCMFrame{Samples: []int16{1, 2, 3}})
 	}()
 	select {
 	case err := <-result:

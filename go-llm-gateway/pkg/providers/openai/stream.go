@@ -2,12 +2,12 @@ package openai
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -169,7 +169,7 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 
 		// Audio output (delta.audio.data is base64-encoded PCM)
 		if delta.Audio != nil && delta.Audio.Data != "" {
-			decoded, err := base64.StdEncoding.DecodeString(delta.Audio.Data)
+			decoded, err := codec.DecodeBase64(delta.Audio.Data)
 			if err == nil && len(decoded) > 0 {
 				transitionTo(contentStateAudio, messages.StreamTypeAudioStart, messages.NewAudioStartValue())
 				ch <- messages.StreamMessage{

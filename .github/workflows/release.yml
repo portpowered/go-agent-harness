@@ -32,6 +32,8 @@ jobs:
             agent-cli/go.sum
             go-agent-loop/go.sum
             go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

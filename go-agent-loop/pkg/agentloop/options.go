@@ -7,10 +7,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
+	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 )
 
 // AgentLoopConfig holds configuration for creating an AgentLoop.
 type AgentLoopConfig struct {
+	Audio             *audiosubsystem.Subsystem
 	Mode              state.ExecutionMode
 	Inferencer        messages.Inferencer
 	SessionInferencer messages.SessionInferencer
@@ -60,6 +62,12 @@ type ToolAcknowledgementPolicy struct {
 
 // Option is a functional option for configuring an AgentLoop.
 type Option func(*AgentLoopConfig)
+
+// WithAudioSubsystem attaches buffer observation/control to ticks. Its media
+// workers are started and stopped by the owning runtime outside the loop.
+func WithAudioSubsystem(subsystem *audiosubsystem.Subsystem) Option {
+	return func(c *AgentLoopConfig) { c.Audio = subsystem }
+}
 
 // ToolExecutionMode makes the constructor-side tool capability decision explicit.
 type ToolExecutionMode int

@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"context"
 	"encoding/json"
@@ -10,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -34,7 +35,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "recorded.session.json")
 	recordDialer := newHandshakeReplayDialer()
 
-	err := services.RunSessionWithInstructions(context.Background(), io.Discard, services.SessionRunOptions{
+	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, servicetest.SessionRunOptions{
 		RecordPath: recordPath,
 		Provider:   "openai",
 		Model:      "gpt-realtime",

@@ -148,13 +148,15 @@ func TestDuplexRunnerKillsChildAtDeadline(t *testing.T) {
 }
 
 func TestDuplexRunnerRejectsPrematureChildExit(t *testing.T) {
+	// Test incomplete input after a normal child exit, independently of the
+	// deadline test above. Allow process startup under concurrent coverage load.
 	binary := buildDuplexTestChild(t)
 	result, err := RunDuplexSession(context.Background(), DuplexSessionConfig{
 		BinaryPath:     binary,
 		RecordDir:      filepath.Join(t.TempDir(), "record"),
 		Provider:       "openai",
 		Model:          "duplex-test-model",
-		MaxDuration:    time.Second,
+		MaxDuration:    5 * time.Second,
 		FrameDuration:  time.Millisecond,
 		AdditionalArgs: []string{"--duplex-exit-immediately"},
 		Segments:       []DuplexAudioSegment{{PCM16: make([]byte, 1<<20)}},

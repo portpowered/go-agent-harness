@@ -11,9 +11,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/timeharness"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // This file provides the shared machinery for the multi-session concurrency

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
+	audiocodec "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
@@ -397,9 +398,9 @@ func TestRTSPLookHonorsCancellationAndSkipsNonVideoPackets(t *testing.T) {
 }
 
 func TestDecodeAudioProducesNonEmptySamples(t *testing.T) {
-	for _, codec := range []string{"PCMU", "PCMA", "L16", "opus"} {
-		if got := decodeAudio(codec, []byte{0, 1, 2, 3}); len(got) == 0 {
-			t.Errorf("decodeAudio(%q) returned no samples", codec)
+	for _, codecName := range []string{"PCMU", "PCMA", "L16", "opus"} {
+		if got := audiocodec.DecodeRTPAudioPayload(codecName, []byte{0, 1, 2, 3}); len(got) == 0 {
+			t.Errorf("DecodeRTPAudioPayload(%q) returned no samples", codecName)
 		}
 	}
 }
@@ -600,10 +601,10 @@ func TestMediaSourceAPIAndProtocolEdgeContracts(t *testing.T) {
 	if _, _, err := (&rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader([]byte{'$', 0, 0, 2, 0}))}}).readPacket(); err == nil {
 		t.Fatal("short RTP body returned nil error")
 	}
-	if got := decodeAudio("PCMU", nil); got != nil {
+	if got := audiocodec.DecodeRTPAudioPayload("PCMU", nil); got != nil {
 		t.Fatalf("empty audio decode = %v", got)
 	}
-	if got := decodeAudio("PCMA", []byte{0xd4}); len(got) != 1 || got[0] <= 0 {
+	if got := audiocodec.DecodeRTPAudioPayload("PCMA", []byte{0xd4}); len(got) != 1 || got[0] <= 0 {
 		t.Fatalf("positive A-law decode = %v", got)
 	}
 }

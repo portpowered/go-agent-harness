@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 // Story 004 proves the complete credential-free voice-to-vision composition.
 // The public session command receives a file-backed spoken request, the
 // production tool executor reads one deterministic image, and strict replay
@@ -18,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -354,10 +355,10 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	if run.err == nil {
 		t.Fatalf("failed empty continuation completed cleanly\nstdout:\n%s\nstderr:\n%s", run.stdout, run.stderr)
 	}
-	if !errors.Is(run.err, services.ErrSessionImageContinuationIncomplete) {
+	if !errors.Is(run.err, servicetest.ErrSessionImageContinuationIncomplete) {
 		t.Fatalf("failed empty continuation error = %v, want image continuation sentinel", run.err)
 	}
-	var continuationErr *services.SessionImageContinuationError
+	var continuationErr *servicetest.SessionImageContinuationError
 	if !errors.As(run.err, &continuationErr) {
 		t.Fatalf("failed empty continuation error = %v, want typed image continuation error", run.err)
 	}

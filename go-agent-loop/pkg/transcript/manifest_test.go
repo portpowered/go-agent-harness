@@ -791,6 +791,126 @@ func TestRecordingWriter(t *testing.T) {
 	}
 }
 
+func TestWriteRecordingBundleStreamsSpoolPathsAndRedactsAcrossReads(t *testing.T) {
+	root := t.TempDir()
+	clientPath := filepath.Join(root, "client.spool")
+	agentPath := filepath.Join(root, "agent.spool")
+	inputPath := filepath.Join(root, "input.pcm")
+	outputPath := filepath.Join(root, "output.pcm")
+	secret := "stream-secret-20260904"
+	if err := os.WriteFile(clientPath, []byte("client-"+secret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agentPath, []byte("agent-"+secret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input := []byte{0x01, 0x00, 0xff, 0x7f}
+	output := []byte{0x10, 0x00}
+	if err := os.WriteFile(inputPath, input, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outputPath, output, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := WriteRecordingBundle(RecordingConfig{
+		Destination:          filepath.Join(root, "bundle"),
+		ClientTranscriptPath: clientPath,
+		AgentTranscriptPath:  agentPath,
+		InputSegmentPaths:    []string{inputPath},
+		OutputSegmentPaths:   []string{outputPath},
+		Credentials:          []string{secret},
+		WriteStream: func(path string, source io.Reader, mode os.FileMode) (int64, error) {
+			file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			if err != nil {
+				return 0, err
+			}
+			// Small reads exercise redaction when a credential spans source reads.
+			chunked := &limitedReader{source: source, limit: 3}
+			written, copyErr := io.Copy(file, chunked)
+			closeErr := file.Close()
+			return written, errors.Join(copyErr, closeErr)
+		},
+	})
+	if err != nil {
+		t.Fatalf("WriteRecordingBundle: %v", err)
+	}
+	if got := readBundleFile(t, filepath.Join(root, "bundle"), "client.transcript.jsonl"); !bytes.Equal(got, []byte("client-"+RecordingRedactionMarker+"\n")) {
+		t.Fatalf("client transcript = %q", got)
+	}
+	if got := readBundleFile(t, filepath.Join(root, "bundle"), "agent.transcript.jsonl"); !bytes.Equal(got, []byte("agent-"+RecordingRedactionMarker+"\n")) {
+		t.Fatalf("agent transcript = %q", got)
+	}
+	if got := readBundleFile(t, filepath.Join(root, "bundle"), "audio/in-000.pcm"); !bytes.Equal(got, input) {
+		t.Fatalf("input audio = %x, want %x", got, input)
+	}
+	if got := readBundleFile(t, filepath.Join(root, "bundle"), "audio/out-000.pcm"); !bytes.Equal(got, output) {
+		t.Fatalf("output audio = %x, want %x", got, output)
+	}
+}
+
+func TestWriteRecordingBundleRejectsStreamingShortWrite(t *testing.T) {
+	root := t.TempDir()
+	clientPath := filepath.Join(root, "client.spool")
+	agentPath := filepath.Join(root, "agent.spool")
+	if err := os.WriteFile(clientPath, []byte("client"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agentPath, []byte("agent"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(root, "bundle")
+	err := WriteRecordingBundle(RecordingConfig{
+		Destination:          destination,
+		ClientTranscriptPath: clientPath,
+		AgentTranscriptPath:  agentPath,
+		WriteStream: func(path string, source io.Reader, mode os.FileMode) (int64, error) {
+			data, err := io.ReadAll(source)
+			if err != nil {
+				return 0, err
+			}
+			if err := os.WriteFile(path, data, mode); err != nil {
+				return 0, err
+			}
+			return int64(len(data) - 1), nil
+		},
+	})
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("WriteRecordingBundle error = %v, want io.ErrShortWrite", err)
+	}
+	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
+		t.Fatalf("destination exists after streaming short write: %v", statErr)
+	}
+}
+
+func TestRecordingFileContainsCredentialAcrossChunkBoundary(t *testing.T) {
+	secret := "boundary-secret"
+	data := append(bytes.Repeat([]byte{'x'}, 64*1024-len(secret)/2), []byte(secret)...)
+	path := filepath.Join(t.TempDir(), "artifact")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	found, err := recordingFileContainsCredential(path, [][]byte{[]byte(secret)})
+	if err != nil {
+		t.Fatalf("recordingFileContainsCredential: %v", err)
+	}
+	if !found {
+		t.Fatal("credential crossing read boundary was not found")
+	}
+}
+
+type limitedReader struct {
+	source io.Reader
+	limit  int
+}
+
+func (r *limitedReader) Read(p []byte) (int, error) {
+	if len(p) > r.limit {
+		p = p[:r.limit]
+	}
+	return r.source.Read(p)
+}
+
 func testRecordingConfig(destination string) RecordingConfig {
 	return RecordingConfig{
 		Destination:      destination,

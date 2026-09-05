@@ -299,6 +299,13 @@ type RecordingMetadata struct {
 // unrelated filesystem behavior.
 type RecordingWriteFile func(path string, data []byte, mode os.FileMode) (int, error)
 
+// RecordingWriteStream is the streaming counterpart to RecordingWriteFile.
+// The source is already redacted and must be consumed before the callback
+// returns. The returned byte count must equal the redacted bytes consumed. It
+// is used for recordings that were spooled while they were being captured, so
+// finalization does not materialize the whole session in memory.
+type RecordingWriteStream func(path string, source io.Reader, mode os.FileMode) (int64, error)
+
 // RecordingConfig supplies all inputs needed to produce one recording bundle.
 type RecordingConfig struct {
 	Destination string
@@ -306,9 +313,15 @@ type RecordingConfig struct {
 	ClientTranscript []byte
 	AgentTranscript  []byte
 	// Path fields are alternatives for callers that already persisted the
-	// transcript bytes. The files are read before staging begins.
+	// transcript bytes. The files are streamed during staging.
 	ClientTranscriptPath string
 	AgentTranscriptPath  string
+
+	// InputSegmentPaths and OutputSegmentPaths are streaming alternatives to
+	// the in-memory segment slices. Each path must contain one non-empty PCM
+	// segment and is emitted using the same deterministic audio names.
+	InputSegmentPaths  []string
+	OutputSegmentPaths []string
 
 	// InputSegments is optional for prompt-only sessions. When present, every
 	// segment must contain bytes and is emitted as audio/in-NNN.pcm.
@@ -344,9 +357,13 @@ type RecordingConfig struct {
 	// manifest paths.
 	AdditionalArtifacts []RecordingArtifact
 
-	// WriteFile is optional. It is called with the private staging path, so a
-	// failed write cannot expose a partial bundle at Destination.
+	// WriteFile is optional and handles in-memory artifacts. It is called with
+	// the private staging path, so a failed write cannot expose a partial bundle
+	// at Destination. Streaming artifacts use WriteStream.
 	WriteFile RecordingWriteFile
+	// WriteStream is optional. When omitted, the default streams to a private
+	// staging file. It is ignored for in-memory artifacts.
+	WriteStream RecordingWriteStream
 	// BeforeCommit is optional. It runs after the private bundle has been
 	// staged and verified, immediately before publication at Destination. A
 	// failed guard leaves the destination untouched.
@@ -451,14 +468,51 @@ func WriteRecordingBundle(config RecordingConfig) error {
 		}
 		return nil
 	}
+	writePath := func(relative, sourcePath string) error {
+		if strings.TrimSpace(sourcePath) == "" {
+			return recordingError(ErrInvalidRecording, "validate artifact source", filepath.Join(destination, filepath.FromSlash(relative)), errors.New("source path is required"), redactor)
+		}
+		source, err := os.Open(sourcePath)
+		if err != nil {
+			return recordingError(ErrRecordingWrite, "open artifact source", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
+		}
+		defer source.Close()
+		path := filepath.Join(staging, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return recordingError(ErrRecordingDestination, "prepare artifact directory", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
+		}
+		stream := normalized.writeStream
+		if stream == nil {
+			stream = defaultRecordingWriteStream
+		}
+		reader := &countingReader{source: newRedactingReader(source, redactor)}
+		written, writeErr := stream(path, reader, 0o644)
+		if writeErr == nil && written != reader.bytesRead {
+			writeErr = io.ErrShortWrite
+		}
+		if writeErr != nil {
+			return recordingError(ErrRecordingWrite, "write artifact", filepath.Join(destination, filepath.FromSlash(relative)), writeErr, redactor)
+		}
+		return nil
+	}
 
 	if len(normalized.clientTranscript) > 0 {
 		if err := write("client.transcript.jsonl", redactor.apply(normalized.clientTranscript)); err != nil {
 			return err
 		}
 	}
+	if normalized.clientTranscriptPath != "" {
+		if err := writePath("client.transcript.jsonl", normalized.clientTranscriptPath); err != nil {
+			return err
+		}
+	}
 	if len(normalized.agentTranscript) > 0 {
 		if err := write("agent.transcript.jsonl", redactor.apply(normalized.agentTranscript)); err != nil {
+			return err
+		}
+	}
+	if normalized.agentTranscriptPath != "" {
+		if err := writePath("agent.transcript.jsonl", normalized.agentTranscriptPath); err != nil {
 			return err
 		}
 	}
@@ -473,9 +527,21 @@ func WriteRecordingBundle(config RecordingConfig) error {
 			return err
 		}
 	}
+	for index, segmentPath := range normalized.inputSegmentPaths {
+		path := fmt.Sprintf("audio/in-%03d.pcm", index)
+		if err := writePath(path, segmentPath); err != nil {
+			return err
+		}
+	}
 	for index, segment := range normalized.outputSegments {
 		path := fmt.Sprintf("audio/out-%03d.pcm", index)
 		if err := write(path, segment); err != nil {
+			return err
+		}
+	}
+	for index, segmentPath := range normalized.outputSegmentPaths {
+		path := fmt.Sprintf("audio/out-%03d.pcm", index)
+		if err := writePath(path, segmentPath); err != nil {
 			return err
 		}
 	}
@@ -527,23 +593,28 @@ func WriteRecordingBundle(config RecordingConfig) error {
 }
 
 type normalizedRecording struct {
-	destination      string
-	clientTranscript []byte
-	agentTranscript  []byte
-	recordingStatus  *RecordingStatus
-	inputSegments    [][]byte
-	outputSegments   [][]byte
-	sessionLog       []byte
-	metadata         RecordingMetadata
-	terminal         *RecordingTerminalSummary
-	corpus           []CorpusHash
-	artifactPaths    []string
-	expectedPaths    []string
-	writeFile        RecordingWriteFile
-	beforeCommit     func() error
-	manifestVersion  int
-	browser          *normalizedBrowserArtifact
-	additional       []normalizedRecordingArtifact
+	destination          string
+	clientTranscript     []byte
+	agentTranscript      []byte
+	clientTranscriptPath string
+	agentTranscriptPath  string
+	recordingStatus      *RecordingStatus
+	inputSegments        [][]byte
+	outputSegments       [][]byte
+	inputSegmentPaths    []string
+	outputSegmentPaths   []string
+	sessionLog           []byte
+	metadata             RecordingMetadata
+	terminal             *RecordingTerminalSummary
+	corpus               []CorpusHash
+	artifactPaths        []string
+	expectedPaths        []string
+	writeFile            RecordingWriteFile
+	writeStream          RecordingWriteStream
+	beforeCommit         func() error
+	manifestVersion      int
+	browser              *normalizedBrowserArtifact
+	additional           []normalizedRecordingArtifact
 }
 
 type normalizedRecordingArtifact struct {
@@ -565,18 +636,32 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	if strings.TrimSpace(destination) == "" {
 		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate destination", "", errors.New("destination is required"), redactor)
 	}
-	clientTranscript, err := readTranscriptInput(config.ClientTranscript, config.ClientTranscriptPath, "client", destination, redactor)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
+	clientTranscript := config.ClientTranscript
+	clientTranscriptPath := ""
+	if len(clientTranscript) == 0 && config.ClientTranscriptPath != "" {
+		if err := validateRecordingInputPath(config.ClientTranscriptPath, "client", destination, redactor); err != nil {
+			return normalizedRecording{}, redactor, err
+		}
+		if recordingInputPathPresent(config.ClientTranscriptPath) {
+			clientTranscriptPath = config.ClientTranscriptPath
+		}
 	}
-	agentTranscript, err := readTranscriptInput(config.AgentTranscript, config.AgentTranscriptPath, "agent", destination, redactor)
-	if err != nil {
-		return normalizedRecording{}, redactor, err
+	agentTranscript := config.AgentTranscript
+	agentTranscriptPath := ""
+	if len(agentTranscript) == 0 && config.AgentTranscriptPath != "" {
+		if err := validateRecordingInputPath(config.AgentTranscriptPath, "agent", destination, redactor); err != nil {
+			return normalizedRecording{}, redactor, err
+		}
+		if recordingInputPathPresent(config.AgentTranscriptPath) {
+			agentTranscriptPath = config.AgentTranscriptPath
+		}
 	}
+	clientPresent := len(clientTranscript) > 0 || clientTranscriptPath != ""
+	agentPresent := len(agentTranscript) > 0 || agentTranscriptPath != ""
 	recordingStatus, err := normalizeRecordingStatus(
 		config.RecordingStatus,
-		len(clientTranscript) > 0,
-		len(agentTranscript) > 0,
+		clientPresent,
+		agentPresent,
 		destination,
 		redactor,
 	)
@@ -585,6 +670,20 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	}
 	inputSegments := config.InputSegments
 	outputSegments := config.OutputSegments
+	if len(inputSegments) > 0 && len(config.InputSegmentPaths) > 0 {
+		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate input audio", destination, errors.New("input segments and input segment paths are alternatives"), redactor)
+	}
+	if len(outputSegments) > 0 && len(config.OutputSegmentPaths) > 0 {
+		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate output audio", destination, errors.New("output segments and output segment paths are alternatives"), redactor)
+	}
+	inputSegmentPaths, err := normalizeRecordingInputPaths(config.InputSegmentPaths, "input", destination, redactor)
+	if err != nil {
+		return normalizedRecording{}, redactor, err
+	}
+	outputSegmentPaths, err := normalizeRecordingInputPaths(config.OutputSegmentPaths, "output", destination, redactor)
+	if err != nil {
+		return normalizedRecording{}, redactor, err
+	}
 	if err := validateSegments(inputSegments, "input", destination, redactor); err != nil {
 		return normalizedRecording{}, redactor, err
 	}
@@ -611,11 +710,11 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	}
 	artifactPaths := make([]string, 0, 2)
 	expectedPaths := make([]string, 0, 2)
-	if len(clientTranscript) > 0 {
+	if clientPresent {
 		artifactPaths = append(artifactPaths, "client.transcript.jsonl")
 		expectedPaths = append(expectedPaths, "client.transcript.jsonl")
 	}
-	if len(agentTranscript) > 0 {
+	if agentPresent {
 		artifactPaths = append(artifactPaths, "agent.transcript.jsonl")
 		expectedPaths = append(expectedPaths, "agent.transcript.jsonl")
 	}
@@ -629,7 +728,17 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		artifactPaths = append(artifactPaths, path)
 		expectedPaths = append(expectedPaths, path)
 	}
+	for index := range inputSegmentPaths {
+		path := fmt.Sprintf("audio/in-%03d.pcm", index)
+		artifactPaths = append(artifactPaths, path)
+		expectedPaths = append(expectedPaths, path)
+	}
 	for index := range outputSegments {
+		path := fmt.Sprintf("audio/out-%03d.pcm", index)
+		artifactPaths = append(artifactPaths, path)
+		expectedPaths = append(expectedPaths, path)
+	}
+	for index := range outputSegmentPaths {
 		path := fmt.Sprintf("audio/out-%03d.pcm", index)
 		artifactPaths = append(artifactPaths, path)
 		expectedPaths = append(expectedPaths, path)
@@ -650,23 +759,28 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	}
 	expectedPaths = append(expectedPaths, "manifest.json")
 	return normalizedRecording{
-		destination:      destination,
-		clientTranscript: append([]byte(nil), clientTranscript...),
-		agentTranscript:  append([]byte(nil), agentTranscript...),
-		recordingStatus:  recordingStatus,
-		inputSegments:    copySegments(inputSegments),
-		outputSegments:   copySegments(outputSegments),
-		sessionLog:       append([]byte(nil), config.SessionLog...),
-		metadata:         metadata,
-		terminal:         terminal,
-		corpus:           append([]CorpusHash(nil), corpus...),
-		artifactPaths:    artifactPaths,
-		expectedPaths:    expectedPaths,
-		writeFile:        writeFile,
-		beforeCommit:     config.BeforeCommit,
-		manifestVersion:  manifestVersion,
-		browser:          browser,
-		additional:       additional,
+		destination:          destination,
+		clientTranscript:     append([]byte(nil), clientTranscript...),
+		agentTranscript:      append([]byte(nil), agentTranscript...),
+		clientTranscriptPath: clientTranscriptPath,
+		agentTranscriptPath:  agentTranscriptPath,
+		recordingStatus:      recordingStatus,
+		inputSegments:        copySegments(inputSegments),
+		outputSegments:       copySegments(outputSegments),
+		inputSegmentPaths:    append([]string(nil), inputSegmentPaths...),
+		outputSegmentPaths:   append([]string(nil), outputSegmentPaths...),
+		sessionLog:           append([]byte(nil), config.SessionLog...),
+		metadata:             metadata,
+		terminal:             terminal,
+		corpus:               append([]CorpusHash(nil), corpus...),
+		artifactPaths:        artifactPaths,
+		expectedPaths:        expectedPaths,
+		writeFile:            writeFile,
+		writeStream:          config.WriteStream,
+		beforeCommit:         config.BeforeCommit,
+		manifestVersion:      manifestVersion,
+		browser:              browser,
+		additional:           additional,
 	}, redactor, nil
 }
 
@@ -784,15 +898,37 @@ func appendRecordingArtifactParents(expectedPaths *[]string, artifactPath string
 	}
 }
 
-func readTranscriptInput(data []byte, path, side, destination string, redactor credentialRedactor) ([]byte, error) {
-	if len(data) != 0 || path == "" {
-		return data, nil
-	}
-	transcript, err := os.ReadFile(path)
+func validateRecordingInputPath(sourcePath, side, destination string, redactor credentialRedactor) error {
+	info, err := os.Stat(sourcePath)
 	if err != nil {
-		return nil, recordingError(ErrInvalidRecording, "read "+side+" transcript", destination, err, redactor)
+		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, err, redactor)
 	}
-	return transcript, nil
+	if !info.Mode().IsRegular() {
+		return recordingError(ErrInvalidRecording, "inspect "+side+" transcript", destination, errors.New("source path is not a regular file"), redactor)
+	}
+	return nil
+}
+
+func recordingInputPathPresent(sourcePath string) bool {
+	info, err := os.Stat(sourcePath)
+	return err == nil && info.Size() > 0
+}
+
+func normalizeRecordingInputPaths(paths []string, side, destination string, redactor credentialRedactor) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(paths))
+	for index, sourcePath := range paths {
+		if err := validateRecordingInputPath(sourcePath, fmt.Sprintf("%s audio segment %d", side, index), destination, redactor); err != nil {
+			return nil, err
+		}
+		if !recordingInputPathPresent(sourcePath) {
+			return nil, recordingError(ErrInvalidRecording, "validate "+side+" audio", destination, fmt.Errorf("segment %d is empty", index), redactor)
+		}
+		normalized = append(normalized, sourcePath)
+	}
+	return normalized, nil
 }
 
 func validateSegments(segments [][]byte, name, destination string, redactor credentialRedactor) error {
@@ -1022,11 +1158,10 @@ func commitRecording(staging, destination string, existingEmpty bool) error {
 func hashArtifacts(root string, paths []string) ([]ArtifactHash, error) {
 	artifacts := make([]ArtifactHash, 0, len(paths))
 	for _, relative := range paths {
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		digest, err := digestRecordingFile(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", relative, err)
 		}
-		digest := sha256.Sum256(data)
 		artifacts = append(artifacts, ArtifactHash{Path: relative, SHA256: hex.EncodeToString(digest[:])})
 	}
 	return artifacts, nil
@@ -1034,11 +1169,10 @@ func hashArtifacts(root string, paths []string) ([]ArtifactHash, error) {
 
 func verifyArtifactHashes(root string, artifacts []ArtifactHash) error {
 	for _, artifact := range artifacts {
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artifact.Path)))
+		digest, err := digestRecordingFile(filepath.Join(root, filepath.FromSlash(artifact.Path)))
 		if err != nil {
 			return fmt.Errorf("read %s: %w", artifact.Path, err)
 		}
-		digest := sha256.Sum256(data)
 		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
 			return fmt.Errorf("hash mismatch for %s", artifact.Path)
 		}
@@ -1048,11 +1182,10 @@ func verifyArtifactHashes(root string, artifacts []ArtifactHash) error {
 
 func verifyAdditionalArtifactHashes(root string, artifacts []normalizedRecordingArtifact) error {
 	for _, artifact := range artifacts {
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artifact.path)))
+		digest, err := digestRecordingFile(filepath.Join(root, filepath.FromSlash(artifact.path)))
 		if err != nil {
 			return fmt.Errorf("read %s: %w", artifact.path, err)
 		}
-		digest := sha256.Sum256(data)
 		if got := hex.EncodeToString(digest[:]); got != artifact.sha256 {
 			return fmt.Errorf("hash mismatch for additional artifact %s", artifact.path)
 		}
@@ -1119,11 +1252,11 @@ func scanForCredentials(root string, secrets [][]byte) error {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		contains, err := recordingFileContainsCredential(path, secrets)
 		if err != nil {
 			return err
 		}
-		if containsCredential(data, secrets) {
+		if contains {
 			relative, relErr := filepath.Rel(root, path)
 			if relErr != nil {
 				return relErr

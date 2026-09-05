@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"context"
 	"encoding/base64"
@@ -12,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -544,7 +546,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	executor := newToolBargeInExecutor()
 	t.Cleanup(server.shutdown)
 	recorder := gwtesting.NewRecordingWebSocketDialer(server, "openai", "gpt-realtime")
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(recorder),
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),

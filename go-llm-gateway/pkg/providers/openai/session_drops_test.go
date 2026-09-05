@@ -113,7 +113,12 @@ func TestRealtimeSessionDropLoggersSilentOnNormalTraffic(t *testing.T) {
 	session := newRealtimeSession(newMockWebSocketConn(), logger)
 	ctx := context.Background()
 
-	msg := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hello")}
+	// Audio append events do not open a response, so this normal-traffic probe
+	// remains independent of provider lifecycle acknowledgements.
+	msg := messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{0x01}),
+	}
 	for i := range 8 {
 		if outcome := session.SendWithOutcome(ctx, msg); !outcome.OK() {
 			t.Fatalf("send %d returned %+v, want success", i, outcome)

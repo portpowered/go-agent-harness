@@ -1,12 +1,15 @@
 package openai
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -300,6 +303,691 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 	}
 	if end.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
 		t.Fatalf("final MESSAGE.END terminal reason = %q, want provider completion", end.TerminalReason)
+	}
+}
+
+func TestRealtimeSession_QueuesLateToolContinuationUntilResponseDone(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response request: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+
+	// The provider's response.created is the authoritative indication that a
+	// response is active. A timeout result can arrive while that response is
+	// still streaming, so its result and continuation are admitted locally and
+	// dispatched only after response.done.
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-active"}})
+	if got := readRealtimeMessage(t, session, ctx, "response.created"); got.Type != messages.StreamTypeMessageStart {
+		t.Fatalf("response.created normalized as %s, want MESSAGE.START", got.Type)
+	}
+
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-late-timeout", "slow_tool", "timeout output"),
+	}); !outcome.OK() {
+		t.Fatalf("late timeout result admission: %#v", outcome)
+	}
+	if got := len(conn.getClientMessages()); got != 1 {
+		t.Fatalf("wire frames while response active = %d, want 1 (initial response only)", got)
+	}
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("queued continuation admission: %#v", outcome)
+	}
+
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-active", "status": "failed"}})
+	if got := readRealtimeMessage(t, session, ctx, "response.done"); got.Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("response.done normalized as %s, want MESSAGE.END", got.Type)
+	}
+	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if frames[0].Type != "response.create" || frames[1].Type != "conversation.item.create" || frames[2].Type != "response.create" {
+		t.Fatalf("wire order = %#v, want response.create, function_call_output item, response.create", frames)
+	}
+}
+
+func TestRealtimeSession_DropsStaleResponseCreateBeforeReplacementToolResult(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response admission: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-original"}})
+	if got := readRealtimeMessage(t, session, ctx, "original response.created"); got.Type != messages.StreamTypeMessageStart {
+		t.Fatalf("response.created normalized as %s, want MESSAGE.START", got.Type)
+	}
+
+	// The replacement response starts as a function call. The standalone
+	// request below may be admitted after response.created but before the
+	// function-call output item is observed, so it must still be retired.
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-replacement"}}`),
+	})
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("queued correction response admission: %#v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-replacement", "write_file", "result"),
+	}); !outcome.OK() {
+		t.Fatalf("queued replacement tool result admission: %#v", outcome)
+	}
+
+	// The provider's function-call item proves that the standalone request was
+	// stale. Retire only it, preserving the function_call_output intent.
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	session.responseMu.Lock()
+	if len(session.pendingResponseIntents) != 1 || len(session.pendingResponseIntents[0].events) != 1 || session.pendingResponseIntents[0].events[0].Type != conversationItemCreateEvent {
+		t.Fatalf("pending intents after replacement = %#v, want only function_call_output", session.pendingResponseIntents)
+	}
+	session.responseMu.Unlock()
+
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-replacement","status":"completed"}}`),
+	})
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("stale response admission after function-call completion: %#v", outcome)
+	}
+	waitForFrameCount(t, conn, 2, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if len(frames) != 2 || frames[0].Type != "response.create" || frames[1].Type != string(conversationItemCreateEvent) {
+		t.Fatalf("wire order after replacement = %#v, want response.create then function_call_output", frames)
+	}
+}
+
+func TestRealtimeSession_CancelClearsFunctionCallResponseSuppression(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tool"}}`),
+	})
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCancel,
+		Value: messages.NewResponseCancelValue(),
+	}); !outcome.OK() {
+		t.Fatalf("response.cancel admission: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "response.cancel")
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-tool","status":"cancelled"}}`),
+	})
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("fresh response admission after cancellation: %#v", outcome)
+	}
+	waitForFrameCount(t, conn, 2, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if frames[0].Type != "response.cancel" || frames[1].Type != "response.create" {
+		t.Fatalf("wire order after cancelled function response = %#v, want cancel then fresh response.create", frames)
+	}
+}
+
+func TestRealtimeSession_PreservesFreshUserTurnWhileFunctionCallPending(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tool"}}`),
+	})
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	if !session.SendMessage(ctx, messages.NewTextMessage(messages.RoleUser, "fresh turn")) {
+		t.Fatal("fresh user turn was rejected while function call was pending")
+	}
+
+	session.responseMu.Lock()
+	defer session.responseMu.Unlock()
+	if len(session.pendingResponseIntents) != 1 {
+		t.Fatalf("pending intents = %#v, want one fresh user turn", session.pendingResponseIntents)
+	}
+	intent := session.pendingResponseIntents[0]
+	if len(intent.events) != 2 || intent.events[0].Type != conversationItemCreateEvent || intent.events[1].Type != models.SessionEventResponseCreate {
+		t.Fatalf("fresh user turn events = %#v, want item followed by response.create", intent.events)
+	}
+	if !strings.Contains(string(intent.events[0].Data), "fresh turn") {
+		t.Fatalf("fresh user turn payload = %s", intent.events[0].Data)
+	}
+}
+
+func TestRealtimeSession_PreservesAudioCommitWhenSuppressingStaleResponse(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tool"}}`),
+	})
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}); !outcome.OK() {
+		t.Fatalf("audio end admission: %#v", outcome)
+	}
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	session.responseMu.Lock()
+	if len(session.pendingResponseIntents) != 1 || len(session.pendingResponseIntents[0].events) != 2 || session.pendingResponseIntents[0].events[0].Type != models.SessionEventInputAudioBufferCommit || session.pendingResponseIntents[0].events[1].Type != models.SessionEventResponseCreate {
+		t.Fatalf("pending audio intent = %#v, want preserved commit and response.create", session.pendingResponseIntents)
+	}
+	session.responseMu.Unlock()
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-tool","status":"completed"}}`),
+	})
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-tool", "tool", "result"),
+	}); !outcome.OK() {
+		t.Fatalf("tool result admission: %#v", outcome)
+	}
+	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != "input_audio_buffer.commit" || frames[2].Type != "response.create" {
+		t.Fatalf("wire frames = %#v, want tool result then commit then response.create", frames)
+	}
+}
+
+func TestRealtimeSession_PreservesFreshAudioResponseAfterFunctionCall(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tool"}}`),
+	})
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-tool","status":"completed"}}`),
+	})
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}); !outcome.OK() {
+		t.Fatalf("fresh audio end admission: %#v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-tool", "tool", "result"),
+	}); !outcome.OK() {
+		t.Fatalf("tool result admission after fresh audio: %#v", outcome)
+	}
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("fresh audio continuation admission: %#v", outcome)
+	}
+	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if len(frames) != 3 || frames[0].Type != "input_audio_buffer.commit" || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != "response.create" {
+		t.Fatalf("fresh audio wire frames = %#v, want commit then tool result then response.create", frames)
+	}
+}
+
+func TestRealtimeSession_ResponseDoneRequiresMatchingIdentity(t *testing.T) {
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-current"}}`),
+	})
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"status":"completed"}}`),
+	})
+	session.responseMu.Lock()
+	active := session.responseActive
+	session.responseMu.Unlock()
+	if !active {
+		t.Fatal("response.done without an id released the active response")
+	}
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-current","conversation":"none"}}`),
+	})
+	session.responseMu.Lock()
+	active = session.responseActive
+	session.responseMu.Unlock()
+	if !active {
+		t.Fatal("out-of-band response.done released the active response")
+	}
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-current","status":"completed"}}`),
+	})
+	session.responseMu.Lock()
+	active = session.responseActive
+	session.responseMu.Unlock()
+	if active {
+		t.Fatal("matching response.done did not release the active response")
+	}
+
+	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated})
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"unexpected"}}`),
+	})
+	session.responseMu.Lock()
+	active = session.responseActive
+	session.responseMu.Unlock()
+	if !active {
+		t.Fatal("response.done id released response with unknown local identity")
+	}
+}
+
+func TestRealtimeSession_ToolResultBufferFullDoesNotAdmitResult(t *testing.T) {
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tool"}}`),
+	})
+	session.responseMu.Lock()
+	session.pendingResponseIntents = make([]responseIntent, maxPendingResponseIntents)
+	session.responseMu.Unlock()
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-full", "tool", "result"),
+	}); outcome.Status != messages.SessionSendBufferFull {
+		t.Fatalf("tool result admission = %#v, want buffer full", outcome)
+	}
+	session.responseMu.Lock()
+	admitted := session.toolResultAdmitted
+	session.responseMu.Unlock()
+	if admitted {
+		t.Fatal("buffer-full tool result was marked admitted")
+	}
+}
+
+func TestRealtimeSession_AllowsMultipleToolResultsBeforeContinuation(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-tools"}}`),
+	})
+	session.observeResponseLifecycle(models.SessionEvent{
+		Type: models.SessionEventResponseOutputItemAdded,
+		Data: []byte(`{"item":{"type":"function_call"}}`),
+	})
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-tools","status":"completed"}}`),
+	})
+	for _, callID := range []string{"call-1", "call-2"} {
+		if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeToolCallEnd,
+			Value: messages.NewToolCallEndValue(callID, "tool", "result"),
+		}); !outcome.OK() {
+			t.Fatalf("tool result %s admission: %#v", callID, outcome)
+		}
+	}
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("tool continuation response admission: %#v", outcome)
+	}
+	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if len(frames) != 3 || frames[0].Type != string(conversationItemCreateEvent) || frames[1].Type != string(conversationItemCreateEvent) || frames[2].Type != "response.create" {
+		t.Fatalf("wire order after multiple tool results = %#v, want two items then response.create", frames)
+	}
+}
+
+func TestRealtimeSession_CancellingQueuedContinuationInvalidatesIt(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response request: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+	conn.addServerEvent("response.created", nil)
+	if got := readRealtimeMessage(t, session, ctx, "response.created"); got.Type != messages.StreamTypeMessageStart {
+		t.Fatalf("response.created normalized as %s, want MESSAGE.START", got.Type)
+	}
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("queued continuation admission = %#v, want accepted local queueing", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		t.Fatalf("response.cancel admission = %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "response.cancel")
+	if got := len(conn.getClientMessages()); got != 2 {
+		t.Fatalf("wire frames after cancelled queued continuation = %d, want 2 including cancel", got)
+	}
+}
+
+func TestRealtimeSession_CancelWaitsForPoppedContinuationAdmission(t *testing.T) {
+	conn := newMockWebSocketConn()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	session := newRealtimeSession(conn, nil)
+	session.responseDispatchBarrier = func() {
+		close(entered)
+		<-release
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response admission: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-active"}})
+	if got := readRealtimeMessage(t, session, ctx, "response.created"); got.Type != messages.StreamTypeMessageStart {
+		t.Fatalf("response.created normalized as %s, want MESSAGE.START", got.Type)
+	}
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("continuation admission: %#v", outcome)
+	}
+
+	// Completing the active response wakes the independent dispatcher. The
+	// barrier freezes it after the pending intent is popped, exactly where the
+	// old implementation allowed response.cancel to invalidate the generation
+	// before the popped intent reached sendQueue.
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-active","status":"failed"}}`),
+	})
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("pending continuation was not popped before cancellation")
+	}
+
+	cancelDone := make(chan messages.SessionSendOutcome, 1)
+	go func() {
+		cancelDone <- session.SendWithOutcome(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeResponseCancel,
+			Value: messages.NewResponseCancelValue(),
+		})
+	}()
+	select {
+	case outcome := <-cancelDone:
+		t.Fatalf("response.cancel completed while popped continuation held admission: %#v", outcome)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+
+	select {
+	case outcome := <-cancelDone:
+		if !outcome.OK() {
+			t.Fatalf("response.cancel admission: %#v", outcome)
+		}
+	case <-ctx.Done():
+		t.Fatal("response.cancel remained blocked after continuation admission")
+	}
+	waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if frames[0].Type != "response.create" || frames[1].Type != "response.create" || frames[2].Type != "response.cancel" {
+		t.Fatalf("wire order = %#v, want initial response.create, popped continuation, response.cancel", frames)
+	}
+}
+
+func TestRealtimeSession_DispatchFailureInvalidatesBeforeFreshAdmission(t *testing.T) {
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	session.responseDispatchFailureBarrier = func() {
+		close(entered)
+		<-release
+	}
+	for index := 0; index < 64; index++ {
+		if !session.sendQueue.Write(context.Background(), models.SessionEvent{Type: models.SessionEventSessionUpdate}) {
+			t.Fatalf("fill send queue at %d", index)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-active"}}`),
+	})
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("queue continuation: %#v", outcome)
+	}
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-active","status":"failed"}}`),
+	})
+	dispatchDone := make(chan struct{})
+	go func() {
+		session.dispatchPendingResponseIntents()
+		close(dispatchDone)
+	}()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("failed dispatch did not reach cleanup barrier")
+	}
+
+	freshDone := make(chan messages.SessionSendOutcome, 1)
+	go func() { freshDone <- session.RequestResponse(ctx) }()
+	select {
+	case outcome := <-freshDone:
+		t.Fatalf("fresh response admitted before failed generation invalidation: %#v", outcome)
+	case <-time.After(20 * time.Millisecond):
+	}
+	if _, ok := session.sendQueue.Read(); !ok {
+		t.Fatal("failed to free one send queue slot")
+	}
+	close(release)
+	select {
+	case <-dispatchDone:
+	case <-ctx.Done():
+		t.Fatal("failed dispatch did not finish")
+	}
+	select {
+	case outcome := <-freshDone:
+		if !outcome.OK() {
+			t.Fatalf("fresh response after failed generation: %#v", outcome)
+		}
+	case <-ctx.Done():
+		t.Fatal("fresh response remained blocked after failed generation cleanup")
+	}
+}
+
+func TestRealtimeSession_CancelRejectionInvalidatesQueuedContinuation(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response request: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+	conn.addServerEvent("response.created", nil)
+	if got := readRealtimeMessage(t, session, ctx, "response.created"); got.Type != messages.StreamTypeMessageStart {
+		t.Fatalf("response.created normalized as %s, want MESSAGE.START", got.Type)
+	}
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("continuation admission: %#v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCancel,
+		Value: messages.NewResponseCancelValue(),
+	}); !outcome.OK() {
+		t.Fatalf("response.cancel: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "response.cancel")
+	conn.addServerEvent("error", map[string]any{"error": map[string]any{
+		"type": "invalid_request_error", "code": "response_cancel_not_active",
+		"param": "response.cancel", "message": "Can only cancel an active response.",
+	}})
+	if got := readRealtimeMessage(t, session, ctx, "response.cancel rejection"); got.Type != messages.StreamTypeError {
+		t.Fatalf("cancel rejection normalized as %s, want ERROR", got.Type)
+	}
+	if got := len(conn.getClientMessages()); got != 2 {
+		t.Fatalf("wire frames after cancel rejection = %d, want initial response and cancel", got)
+	}
+}
+
+func TestRealtimeSession_IgnoresStaleResponseDoneForCurrentResponse(t *testing.T) {
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated, Data: []byte(`{"response":{"id":"resp-old"}}`)})
+	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-old"}}`)})
+	if outcome := session.sendEvents(ctx, []models.SessionEvent{models.NewResponseCreateEvent()}); !outcome.OK() {
+		t.Fatalf("current response admission: %#v", outcome)
+	}
+	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated, Data: []byte(`{"response":{"id":"resp-current"}}`)})
+	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-old"}}`)})
+	session.responseMu.Lock()
+	active := session.responseActive
+	session.responseMu.Unlock()
+	if !active {
+		t.Fatal("stale response.done released the current response admission")
+	}
+	session.observeResponseDone(models.SessionEvent{Type: models.SessionEventResponseDone, Data: []byte(`{"response":{"id":"resp-current"}}`)})
+	session.responseMu.Lock()
+	active = session.responseActive
+	session.responseMu.Unlock()
+	if active {
+		t.Fatal("current response.done did not release response admission")
+	}
+}
+
+func TestRealtimeSession_ResponseAdmissionExcludesOutOfBandCreate(t *testing.T) {
+	oob := models.SessionEvent{
+		Type: models.SessionEventResponseCreate,
+		Data: []byte(`{"response":{"conversation":"none"}}`),
+	}
+	if realtimeEventNeedsResponseAdmission(oob) {
+		t.Fatal("out-of-band response.create was incorrectly serialized with default conversation")
+	}
+	defaultConversation := models.SessionEvent{Type: models.SessionEventResponseCreate}
+	if !realtimeEventNeedsResponseAdmission(defaultConversation) {
+		t.Fatal("default response.create was not admitted")
+	}
+}
+
+func TestRealtimeSession_CloneSessionEventsCopiesRawData(t *testing.T) {
+	original := []models.SessionEvent{{Type: models.SessionEventResponseCreate, Data: []byte(`{"response":{"conversation":"none"}}`)}}
+	cloned := cloneSessionEvents(original)
+	if len(cloned) != 1 || &cloned[0].Data[0] == &original[0].Data[0] {
+		t.Fatal("clone retained raw event backing storage")
+	}
+	original[0].Data[0] = 'x'
+	if cloned[0].Data[0] == 'x' {
+		t.Fatal("mutating source event changed queued intent")
+	}
+}
+
+func TestRealtimeSession_ResponseIntentOverflowIsExplicit(t *testing.T) {
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated})
+	for i := 0; i < maxPendingResponseIntents; i++ {
+		if outcome := session.RequestResponse(ctx); !outcome.OK() {
+			t.Fatalf("pending response intent %d: %#v", i, outcome)
+		}
+	}
+	if outcome := session.RequestResponse(ctx); outcome.Status != messages.SessionSendBufferFull {
+		t.Fatalf("overflow response intent = %#v, want buffer_full", outcome)
+	}
+}
+
+func TestRealtimeSession_RetriesOwnedCreateAfterActiveResponseRejection(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("initial response request: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "initial response.create")
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-initial"}})
+	readRealtimeMessage(t, session, ctx, "initial response.created")
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-initial"}})
+	readRealtimeMessage(t, session, ctx, "initial response.done")
+
+	if outcome := session.RequestResponse(ctx); !outcome.OK() {
+		t.Fatalf("owned continuation request: %#v", outcome)
+	}
+	waitForClientMessage(t, ctx, conn, "owned continuation response.create")
+	// Simulate an automatic default-conversation response winning the tiny
+	// server race after the client write. The exact active-response rejection
+	// must retain and replay the owned continuation after that response ends.
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-auto"}})
+	readRealtimeMessage(t, session, ctx, "automatic response.created")
+	conn.addServerEvent("error", map[string]any{"error": map[string]any{
+		"type": "invalid_request_error", "code": realtimeResponseCreateActiveCode,
+		"message": "Conversation already has an active response.",
+	}})
+	if got := readRealtimeMessage(t, session, ctx, "active-response rejection"); got.Type != messages.StreamTypeError {
+		t.Fatalf("active-response rejection normalized as %s, want ERROR", got.Type)
+	}
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-auto", "status": "completed"}})
+	readRealtimeMessage(t, session, ctx, "automatic response.done")
+	frames := waitForFrameCount(t, conn, 3, time.Now().Add(time.Second))
+	if frames[0].Type != "response.create" || frames[1].Type != "response.create" || frames[2].Type != "response.create" {
+		t.Fatalf("response create retry wire sequence = %#v, want initial, rejected, retry", frames)
 	}
 }
 

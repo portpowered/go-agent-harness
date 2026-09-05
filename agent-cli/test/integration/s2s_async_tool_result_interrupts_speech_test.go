@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 // s2s async-tool-result serialization vertical: CLI-verified hermetic proof
 // that a scheduled spoken turn waits for an outstanding provider tool call's
 // accepted result and grounded continuation before its own audio reaches the
@@ -30,14 +32,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const (
@@ -306,7 +308,7 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	if err != nil {
 		t.Fatalf("build gated async collision replay dialer: %v", err)
 	}
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "replay", Model: "gpt-realtime"},
 		oaiprovider.WithWebSocketDialer(replayDialer),
 	)

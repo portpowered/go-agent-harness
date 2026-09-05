@@ -44,8 +44,12 @@ func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T
 			if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{1, 2, 3, 4}, test.policy); err != nil {
 				t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 			}
-			if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
-				t.Fatalf("drainSessionAudioWithState: %v", err)
+			input := <-runner.sessionInputInbox
+			if input.kind != sessionInputAudio {
+				t.Fatalf("queued session input kind = %d, want audio", input.kind)
+			}
+			if err := runner.forwardSessionAudioInputWithState(ctx, session, input.audio, state); err != nil {
+				t.Fatalf("forwardSessionAudioInputWithState: %v", err)
 			}
 
 			sent := session.sentMessages()
@@ -84,8 +88,12 @@ func TestModelRunner_ExplicitInterruptPolicyDoesNotCancelToolContinuation(t *tes
 	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{7, 7, 7}, messages.SessionAudioInputPolicyInterrupt); err != nil {
 		t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 	}
-	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
-		t.Fatalf("drainSessionAudioWithState: %v", err)
+	input := <-runner.sessionInputInbox
+	if input.kind != sessionInputAudio {
+		t.Fatalf("queued session input kind = %d, want audio", input.kind)
+	}
+	if err := runner.forwardSessionAudioInputWithState(ctx, session, input.audio, state); err != nil {
+		t.Fatalf("forwardSessionAudioInputWithState: %v", err)
 	}
 
 	sent := session.sentMessages()

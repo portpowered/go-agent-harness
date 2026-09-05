@@ -590,8 +590,8 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 	if err != nil {
 		t.Fatalf("read SIGINT recording directory: %v", err)
 	}
-	if len(entries) != 5 {
-		t.Fatalf("SIGINT recording top-level entries = %d, want five final entries: %v", len(entries), entries)
+	if len(entries) != 6 {
+		t.Fatalf("SIGINT recording top-level entries = %d, want six final entries (including audio-trace): %v", len(entries), entries)
 	}
 	for _, entry := range entries {
 		if strings.Contains(entry.Name(), ".staging-") {

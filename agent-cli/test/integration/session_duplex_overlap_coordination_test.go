@@ -1,15 +1,15 @@
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"context"
 	"fmt"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
 const (
@@ -47,11 +47,11 @@ type v8Crossing struct {
 }
 
 type v8RuntimeOutputSink interface {
-	acceptRuntimeOutput(services.SessionRuntimeObservation)
+	acceptRuntimeOutput(runtimecontract.SessionRuntimeObservation)
 }
 
 type v8RuntimeInputSink interface {
-	acceptRuntimeInput(services.SessionRuntimeObservation)
+	acceptRuntimeInput(runtimecontract.SessionRuntimeObservation)
 }
 
 type v8CrossingCoordinator struct {

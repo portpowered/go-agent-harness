@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"io"
 	"maps"
 	"net/http"
@@ -161,7 +162,7 @@ func extractAudioAndTextFromMessages(msgs []models.Message) (audioURL, text stri
 					if mediaType == "" {
 						mediaType = "audio/mpeg"
 					}
-					audioURL = "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(v.Bytes)
+					audioURL = "data:" + mediaType + ";base64," + codec.EncodeBase64(v.Bytes)
 				}
 			}
 		}

@@ -93,16 +93,25 @@ type SessionReplayer struct {
 	closeOnce        sync.Once
 
 	// sentLog records messages passed to Send (for test inspection).
-	sentLog   []messages.StreamMessage
-	index     int
-	err       error
-	outcome   SessionReplayOutcome
-	closed    bool
-	cond      *sync.Cond
-	mu        sync.Mutex
-	replayCtx context.Context
-	cancel    context.CancelFunc
+	sentLog []messages.StreamMessage
+	index   int
+	err     error
+	outcome SessionReplayOutcome
+	closed  bool
+	cond    *sync.Cond
+	// outboundValidationIndex is independent from the chronological replay
+	// cursor. Send validates the next client record synchronously, while the
+	// replay pump later consumes that admission at its chronological position.
+	// This lets the pump publish a long server run without making the caller
+	// wait for the bounded receive buffer to drain.
+	outboundValidationIndex int
+	validatedOutbound       int
+	mu                      sync.Mutex
+	replayCtx               context.Context
+	cancel                  context.CancelFunc
 }
+
+const maxPendingReplayOutbound = 64
 
 var _ messages.Session = (*SessionReplayer)(nil)
 var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
@@ -181,34 +190,32 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.closed {
+		r.mu.Unlock()
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
 	if r.err != nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: r.err}
+		err := r.err
+		r.mu.Unlock()
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 	if !r.validateOutbound {
 		r.sentLog = append(r.sentLog, msg)
+		r.mu.Unlock()
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	}
-	if r.index >= len(r.events) {
+	if r.validatedOutbound >= maxPendingReplayOutbound {
+		r.mu.Unlock()
+		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+	}
+	expectedIndex, ok := r.nextValidationOutboundLocked()
+	if !ok {
 		err := newReplayMismatchError("replay completed", string(msg.Type), fmt.Errorf("unexpected outbound event after replay completed"))
 		r.failLocked(SessionReplayDiverged, err)
+		r.mu.Unlock()
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
-
-	expected := r.events[r.index]
-	if expected.Direction != DirectionClientToServer {
-		err := newReplayMismatchError(
-			fmt.Sprintf("%s event %s at sequence %d", expected.Direction, expected.Type, expected.Sequence),
-			string(msg.Type),
-			fmt.Errorf("got outbound before expected capture event"),
-		)
-		r.failLocked(SessionReplayDiverged, err)
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-	}
+	expected := r.events[expectedIndex]
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
 		mismatchErr := newReplayMismatchError(
 			replayEventDescription(expected.Sequence, expected.Type),
@@ -216,12 +223,15 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 			err,
 		)
 		r.failLocked(SessionReplayDiverged, mismatchErr)
+		r.mu.Unlock()
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: mismatchErr}
 	}
 
 	r.sentLog = append(r.sentLog, msg)
-	r.index++
+	r.outboundValidationIndex = expectedIndex + 1
+	r.validatedOutbound++
 	r.cond.Broadcast()
+	r.mu.Unlock()
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
 
@@ -307,7 +317,7 @@ func (r *SessionReplayer) replayLoop() {
 	var lastTimestamp int64
 	for {
 		r.mu.Lock()
-		for r.validateOutbound && !r.closed && r.err == nil && r.replayCtx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer {
+		for r.validateOutbound && !r.closed && r.err == nil && r.replayCtx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer && r.validatedOutbound == 0 {
 			r.cond.Wait()
 		}
 		if !r.closed && r.err == nil && r.replayCtx.Err() != nil {
@@ -316,14 +326,26 @@ func (r *SessionReplayer) replayLoop() {
 			return
 		}
 		if r.closed || r.err != nil || r.index >= len(r.events) {
-			if r.err == nil && r.index >= len(r.events) {
+			if r.err == nil && r.index >= len(r.events) && r.validatedOutbound == 0 {
 				r.setOutcomeLocked(SessionReplayCompleted, nil)
 			}
 			r.mu.Unlock()
 			return
 		}
 		evt := r.events[r.index]
-		r.index++
+		eventIndex := r.index
+		if evt.Direction != DirectionServerToClient {
+			// With validation enabled, Send has already checked this record and
+			// reserved one admission. Consume it in capture order. Validation is
+			// disabled for transcript rendering, so client records are skipped.
+			if r.validateOutbound {
+				r.validatedOutbound--
+			}
+			r.index++
+			r.cond.Broadcast()
+			r.mu.Unlock()
+			continue
+		}
 		r.mu.Unlock()
 
 		if r.useTiming && evt.TimestampMs > lastTimestamp {
@@ -348,22 +370,51 @@ func (r *SessionReplayer) replayLoop() {
 		msg, err := deserializeStreamMessage(evt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "session replayer: skipping event (type=%s): %v\n", evt.Type, err)
+			r.mu.Lock()
+			if !r.closed && r.err == nil && r.index == eventIndex && r.events[r.index].Sequence == evt.Sequence {
+				r.index++
+				r.cond.Broadcast()
+			}
+			r.mu.Unlock()
 			continue
 		}
 
-		// Write to outbound buffer; if done is closed, stop.
-		select {
-		case <-r.done:
-			return
-		default:
-			if !r.outbound.Write(r.replayCtx, msg) && r.replayCtx.Err() != nil {
-				r.mu.Lock()
+		// Write to the bounded outbound buffer with cancellation-aware
+		// backpressure. A dropped server event would falsely advance the
+		// capture cursor and let a later client send diverge. Client admission is
+		// tracked separately, so this wait cannot strand the sending goroutine.
+		outcome := r.outbound.WriteWaitContextOrDone(r.replayCtx, r.done, msg)
+		if !outcome.OK() {
+			r.mu.Lock()
+			if r.replayCtx.Err() != nil {
 				r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
-				r.mu.Unlock()
-				return
 			}
+			r.mu.Unlock()
+			return
+		}
+		r.mu.Lock()
+		// The replay loop owns the chronological index. Advance only after the
+		// normalized message is in the public buffer, so chronological
+		// publication cannot advance beyond an undelivered server event.
+		if !r.closed && r.err == nil && r.index == eventIndex && r.events[r.index].Sequence == evt.Sequence {
+			r.index++
+			r.cond.Broadcast()
+		}
+		r.mu.Unlock()
+	}
+}
+
+// nextValidationOutboundLocked finds the next client record from the
+// independent validation cursor. Server records between client messages are
+// intentionally skipped here; the chronological replay cursor still blocks
+// later server delivery until the corresponding client admission is consumed.
+func (r *SessionReplayer) nextValidationOutboundLocked() (int, bool) {
+	for i := r.outboundValidationIndex; i < len(r.events); i++ {
+		if r.events[i].Direction == DirectionClientToServer {
+			return i, true
 		}
 	}
+	return 0, false
 }
 
 func (r *SessionReplayer) watchReplayContext() {
@@ -421,7 +472,7 @@ func (r *SessionReplayer) close() {
 }
 
 func (r *SessionReplayer) nextExpectedOutboundLocked() (CapturedSessionEvent, bool) {
-	for i := r.index; i < len(r.events); i++ {
+	for i := r.outboundValidationIndex; i < len(r.events); i++ {
 		if r.events[i].Direction == DirectionClientToServer {
 			return r.events[i], true
 		}

@@ -11,8 +11,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {

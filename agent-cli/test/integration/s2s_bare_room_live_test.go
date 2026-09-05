@@ -2,6 +2,8 @@
 
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bufio"
 	"bytes"
@@ -16,8 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 const (
@@ -37,17 +38,17 @@ func TestLiveBareRoomRunDefaultDevices(t *testing.T) {
 	if os.Getenv(bareRoomLiveProbeOptInEnv) != "1" {
 		t.Skipf("SKIP: %s!=1; bare-room live probe is explicit opt-in", bareRoomLiveProbeOptInEnv)
 	}
-	apiKey := strings.TrimSpace(os.Getenv(services.DefaultRoomCredentialEnv))
+	apiKey := strings.TrimSpace(os.Getenv(servicetest.DefaultRoomCredentialEnv))
 	if apiKey == "" {
-		t.Skipf("BLOCKED: %s is not set; bare-room live probe has no credential", services.DefaultRoomCredentialEnv)
+		t.Skipf("BLOCKED: %s is not set; bare-room live probe has no credential", servicetest.DefaultRoomCredentialEnv)
 	}
 
-	registry := audio.NewHostDeviceRegistry()
-	input, err := registry.Default(audio.DirectionInput)
+	registry := devicegw.NewHostDeviceRegistry()
+	input, err := registry.Default(devicegw.DirectionInput)
 	if err != nil {
 		t.Skipf("BLOCKED: host default input is unavailable: %v", err)
 	}
-	output, err := registry.Default(audio.DirectionOutput)
+	output, err := registry.Default(devicegw.DirectionOutput)
 	if err != nil {
 		t.Skipf("BLOCKED: host default output is unavailable: %v", err)
 	}
@@ -188,16 +189,16 @@ func bareRoomLiveProbeEnvironment(apiKey string) []string {
 		name, _, ok := strings.Cut(entry, "=")
 		if ok {
 			switch name {
-			case services.DefaultRoomCredentialEnv, "AGENT_MODEL__OPENAI__MODEL", "AGENT_MODEL__OPENAI__BASE_URL", "AGENT_MODEL__PROVIDER":
+			case servicetest.DefaultRoomCredentialEnv, "AGENT_MODEL__OPENAI__MODEL", "AGENT_MODEL__OPENAI__BASE_URL", "AGENT_MODEL__PROVIDER":
 				continue
 			}
 		}
 		environment = append(environment, entry)
 	}
-	return append(environment, services.DefaultRoomCredentialEnv+"="+apiKey)
+	return append(environment, servicetest.DefaultRoomCredentialEnv+"="+apiKey)
 }
 
-func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID audio.DeviceID) (bareRoomLiveReadiness, error) {
+func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID devicegw.DeviceID) (bareRoomLiveReadiness, error) {
 	var readiness bareRoomLiveReadiness
 	startedAt := time.Now()
 	ready := make(map[string]bareRoomLiveReadyParticipant, 2)
@@ -227,13 +228,13 @@ func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID audio.DeviceID) (ba
 				if readyEvents != 2 || len(ready) != 2 {
 					return readiness, fmt.Errorf("participant readiness events=%d identities=%d, want exactly two", readyEvents, len(ready))
 				}
-				customer := ready[services.DefaultRoomCustomerID]
-				agent := ready[services.DefaultRoomAgentID]
+				customer := ready[servicetest.DefaultRoomCustomerID]
+				agent := ready[servicetest.DefaultRoomAgentID]
 				if customer.kind != "human" || customer.input != string(inputID) || customer.output != string(outputID) {
 					return readiness, fmt.Errorf("customer readiness=%+v, want human input=%q output=%q", customer, inputID, outputID)
 				}
-				if agent.kind != "agent" || agent.provider != "openai" || agent.model != services.DefaultOpenAIRealtimeModel || agent.input != "" || agent.output != "" {
-					return readiness, fmt.Errorf("agent readiness=%+v, want openai model=%q without devices", agent, services.DefaultOpenAIRealtimeModel)
+				if agent.kind != "agent" || agent.provider != "openai" || agent.model != servicetest.DefaultOpenAIRealtimeModel || agent.input != "" || agent.output != "" {
+					return readiness, fmt.Errorf("agent readiness=%+v, want openai model=%q without devices", agent, servicetest.DefaultOpenAIRealtimeModel)
 				}
 				readiness.customerInput = customer.input
 				readiness.customerOutput = customer.output
@@ -439,7 +440,7 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 		return fmt.Errorf("run directory %q does not use the fresh room-run prefix", outputDir)
 	}
 
-	manifestPath := filepath.Join(outputDir, services.RoomEvidenceManifestPath)
+	manifestPath := filepath.Join(outputDir, servicetest.RoomEvidenceManifestPath)
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("read terminal manifest: %w", err)
@@ -451,10 +452,10 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return fmt.Errorf("decode terminal manifest: %w", err)
 	}
-	if !manifest.Finalized || manifest.TerminationReason != string(services.RoomTerminationStopped) || manifest.Reason != string(services.RoomTerminationStopped) || manifest.Error != "" {
+	if !manifest.Finalized || manifest.TerminationReason != string(servicetest.RoomTerminationStopped) || manifest.Reason != string(servicetest.RoomTerminationStopped) || manifest.Error != "" {
 		return fmt.Errorf("terminal manifest = %+v, want finalized stopped result without error", manifest)
 	}
-	wantKinds := map[string]string{services.DefaultRoomCustomerID: "human", services.DefaultRoomAgentID: "agent"}
+	wantKinds := map[string]string{servicetest.DefaultRoomCustomerID: "human", servicetest.DefaultRoomAgentID: "agent"}
 	if len(manifest.Participants) != len(wantKinds) || len(manifest.TurnCounts) != len(wantKinds) {
 		return fmt.Errorf("manifest participants=%d turns=%d, want two each", len(manifest.Participants), len(manifest.TurnCounts))
 	}
@@ -463,7 +464,7 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 		if !ok || participant.Kind != kind || !participant.Connected {
 			return fmt.Errorf("manifest participant %q = %+v, want connected %s", id, participant, kind)
 		}
-		if id == services.DefaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
+		if id == servicetest.DefaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
 			return fmt.Errorf("manifest customer devices=%q/%q, want %q/%q", participant.Input, participant.Output, customerInput, customerOutput)
 		}
 		if manifest.TurnCounts[id] != 0 {

@@ -840,6 +840,21 @@ func waitForCustomerSimulationPatienceReprompt(
 			return fmt.Errorf("family E patience dead air: no observable progress for %s", decision.SinceLastProgress)
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
+			// A shipped child may close its provider stream immediately after a
+			// finite response. The runner cancels its context while reaping that
+			// already-completed child, so take the closed-output boundary as the
+			// authoritative terminal signal before classifying the wait as a
+			// customer cancellation. This final observation also captures output
+			// bytes that raced the stdout pump's EOF notification.
+			if progress.OutputClosed() {
+				if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
+					return observeErr
+				}
+				if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
+					return completeErr
+				}
+				return errDuplexInputComplete
+			}
 			return finishCustomerSimulationPatienceOnContext(controller, ctx, err)
 		}
 	}
@@ -899,6 +914,21 @@ func waitForCustomerSimulationPatienceCompletion(
 			return errDuplexInputComplete
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
+			if progress.OutputClosed() {
+				if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
+					return observeErr
+				}
+				if repromptOutputIndex >= 0 && *outputIndex <= repromptOutputIndex {
+					if cancelErr := controller.Cancel(); cancelErr != nil {
+						return cancelErr
+					}
+					return fmt.Errorf("family E patience ended without post-re-prompt product output")
+				}
+				if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
+					return completeErr
+				}
+				return errDuplexInputComplete
+			}
 			return finishCustomerSimulationPatienceOnContext(controller, ctx, err)
 		}
 	}

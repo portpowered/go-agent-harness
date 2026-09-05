@@ -16,6 +16,52 @@ Use `agent session --record` to capture live Grok realtime or OpenAI Realtime se
 
 Replay mode does not require live provider credentials. It reads provider traffic from the capture file and installs a replay dialer instead of a live WebSocket dialer.
 
+## Diagnose a directory recording
+
+For correlated audio, provider wire traffic and tool evidence, record with
+`yui session --record-dir <directory>` along with the desired provider and input
+options. The bundle includes `audio-trace/timeline.jsonl` and the available
+boundary WAVs:
+
+| File | Boundary |
+| --- | --- |
+| `microphone-pre-gate.wav` | Device capture before feedback gating |
+| `microphone-uploaded.wav` | Capture selected for provider upload |
+| `speaker-enqueued.wav` | Audio admitted to local playback |
+| `speaker-rendered.wav` | Complete render callbacks, including underflow silence |
+
+A boundary file can be absent when that source/backend was not used. A backend
+without render callbacks records `audio_render_tap_unavailable`; enqueued audio
+must not be treated as proof of device consumption. The timeline also contains
+provider send/receive operations, audio output, tool call/results, and playback
+control receipts. Successful transport writes indicate local transmission,
+not provider processing acknowledgements.
+
+Listen to the boundary WAVs and compare the associated sample ranges and times
+to find where silence, delay or loss first appears. Render silence is preserved
+rather than removed from the recording. Overflow or incomplete evidence causes
+strict validation to fail. If session finalization fails, the error reports the
+staging location where audio evidence was retained.
+
+The directory replay entrypoint is:
+
+```sh
+yui session replay <directory>
+```
+
+It uses the recorded provider transport and tool results through a headless
+agent loop, with no credentials, live tools or devices. Its result reports the
+verified scope. Recorded render audio remains evidence of the original run;
+replay does not simulate a physical speaker or reproduce the remote model.
+Unsupported protocol shapes fail explicitly rather than falling back to live
+execution. The existing `--replay <capture.json>` path remains the separate
+provider-capture workflow described below.
+
+Replayable session and audio scheduling uses the bundle's injected virtual
+clock; advancing elapsed time is independent of agent-loop ticks. Wall-clock
+timeouts used by the command or test harness only bound external cleanup when
+an owner fails to close and are not replay evidence or simulated device timing.
+
 ## List Saved Sessions
 
 Session history is stored as metadata files under `~/.agent-cli/sessions/` (or

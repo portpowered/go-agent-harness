@@ -1,7 +1,7 @@
 # ADR-0001: Realtime client boundary
 
 Date: 2026-08-22
-Status: accepted
+Status: accepted; audio ownership amended 2026-09-05
 
 ## Decision
 
@@ -11,6 +11,17 @@ gateway-owned `RealtimeTransport` / `RealtimeSession` seam: the gateway keeps
 defining those interfaces and owns lifecycle, error policy, barge-in/cancel,
 and audio plumbing; the library supplies dial/handshake, typed event
 encode/decode, and frame transport beneath them.
+
+## Audio ownership amendment (2026-09-05)
+
+The [audio subsystem and device gateway decision](../audio-subsystem-device-gateway-design.md)
+supersedes this ADR's placement of audio decoding, RMS/DSP and device plumbing
+inside the provider gateway. `go-audio` owns audio payload parsing, DSP,
+buffers and clocks; `go-device-gateway` owns hardware and device workers.
+The provider gateway retains provider protocol envelopes and response/cancel
+coordination. Session services compose those boundaries, and the agent loop
+exchanges bounded memory buffers with audio workers. The wire client decision
+and the historical probe evidence below are unchanged.
 
 ## Evidence
 

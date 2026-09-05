@@ -110,6 +110,7 @@ func safeEndpointForError(endpoint string) string {
 func (s *realtimeSession) start(ctx context.Context) {
 	go s.readLoop(ctx)
 	go s.writeLoop(ctx)
+	go s.responseIntentLoop()
 }
 
 func (s *realtimeSession) readLoop(ctx context.Context) {
@@ -159,6 +160,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			_ = s.Close()
 			return
 		}
+		s.observeResponseLifecycle(event)
 		if err := s.publishRTCMedia(ctx, event); err != nil {
 			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
 		}
@@ -179,6 +181,33 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 	}
 }
 
+func (s *realtimeSession) observeResponseLifecycle(event models.SessionEvent) {
+	switch event.Type {
+	case models.SessionEventResponseCreated:
+		s.observeResponseCreated(event)
+	case models.SessionEventResponseDone:
+		s.observeResponseDone(event)
+	case models.SessionEventResponseOutputItemAdded:
+		// A function-call response supersedes any standalone response request
+		// that was queued for the same audio turn. Keep combined tool-result
+		// intents, which are the continuation needed to complete this call.
+		if firstStringField(event.Data, "item.type") == "function_call" {
+			s.responseMu.Lock()
+			s.responseHasFunctionCall = true
+			s.suppressStandaloneResponseCreate = true
+			s.toolResultAdmitted = false
+			s.responseRetry = nil
+			s.responseSent = false
+			s.responseRetryPending = false
+			s.dropStandaloneResponseIntentsLocked()
+			s.responseMu.Unlock()
+		}
+	case models.SessionEventError:
+		s.observeResponseCancelRejection(event)
+		s.observeResponseCreateActiveError(event)
+	}
+}
+
 func (s *realtimeSession) writeLoop(ctx context.Context) {
 	for {
 		select {
@@ -194,6 +223,7 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 				_ = s.Close()
 				return
 			}
+			s.markResponseRequestSent(event)
 		}
 	}
 }

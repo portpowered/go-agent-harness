@@ -88,11 +88,11 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 	if len(result.Input) != 5 || len(result.Output) == 0 || len(result.Stdout) < 12 {
 		t.Fatalf("stream evidence input=%d output_reads=%d stdout_bytes=%d, want five input frames and three audio responses", len(result.Input), len(result.Output), len(result.Stdout))
 	}
-	for responseNumber := byte(1); responseNumber <= 3; responseNumber++ {
-		wantAudio := []byte{responseNumber, 0x10, 0x20, 0x30}
-		if !bytes.Contains(result.Stdout, wantAudio) {
-			t.Fatalf("captured stdout = %x, missing response audio marker %x", result.Stdout, wantAudio)
-		}
+	// Stdout is the PCM transport, so even a setup diagnostic corrupts audio
+	// and can prematurely release the customer's output-gated interruption.
+	wantAudio := []byte{1, 0x10, 0x20, 0x30, 2, 0x10, 0x20, 0x30, 3, 0x10, 0x20, 0x30}
+	if !bytes.Equal(result.Stdout, wantAudio) {
+		t.Fatalf("captured stdout = %x, want only ordered PCM %x", result.Stdout, wantAudio)
 	}
 	if strings.Contains(result.Command, "hermetic-key") || strings.Contains(strings.Join(result.SanitizedArgs, "\x00"), "hermetic-key") {
 		t.Fatalf("API key leaked into process evidence: command=%q args=%q", result.Command, result.SanitizedArgs)

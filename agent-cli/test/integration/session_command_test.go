@@ -1,5 +1,7 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bytes"
 	"context"
@@ -13,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -704,10 +705,10 @@ func TestSessionCommand_OpenAIRealtimeReplayInvalidVoiceFailsBeforeFixtureLoad(t
 	if err == nil {
 		t.Fatal("expected invalid OpenAI realtime voice error")
 	}
-	if !errors.Is(err, services.ErrInvalidOpenAIRealtimeVoice) {
+	if !errors.Is(err, servicetest.ErrInvalidOpenAIRealtimeVoice) {
 		t.Fatalf("error = %v, want ErrInvalidOpenAIRealtimeVoice", err)
 	}
-	var typed *services.InvalidOpenAIRealtimeVoiceError
+	var typed *servicetest.InvalidOpenAIRealtimeVoiceError
 	if !errors.As(err, &typed) {
 		t.Fatalf("error = %v, want InvalidOpenAIRealtimeVoiceError", err)
 	}

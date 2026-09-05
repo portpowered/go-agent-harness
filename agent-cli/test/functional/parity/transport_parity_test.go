@@ -18,8 +18,8 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/parity"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"

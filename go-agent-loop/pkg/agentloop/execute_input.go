@@ -2,11 +2,11 @@ package agentloop
 
 import (
 	"bytes"
-	"encoding/binary"
 	"image"
 	"image/jpeg"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // Audio holds raw PCM audio samples.
@@ -93,11 +93,7 @@ func encodeAudioToPCM(a *Audio) []byte {
 	if a == nil || len(a.Samples) == 0 {
 		return nil
 	}
-	b := make([]byte, len(a.Samples)*2)
-	for i, s := range a.Samples {
-		binary.LittleEndian.PutUint16(b[i*2:], uint16(s))
-	}
-	return b
+	return codec.EncodePCM16(a.Samples)
 }
 
 // NewExecuteInput creates an ExecuteInput with only text. Convenience for text-only prompts.

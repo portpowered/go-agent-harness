@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 const defaultWatchdogTimeout = 500 * time.Millisecond

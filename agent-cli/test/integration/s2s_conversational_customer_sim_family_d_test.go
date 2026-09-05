@@ -467,21 +467,33 @@ func (f *familyDProviderFixture) handleCustomerUtterance(connection *websocket.C
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "transcript": text}); err != nil {
 		return err
 	}
-	return f.send(connection, map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString([]byte{0xd1, 0x44, 0x44, 0x50}), "format": "pcm16"})
+	if err := f.send(connection, map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString([]byte{0xd1, 0x44, 0x44, 0x50}), "format": "pcm16"}); err != nil {
+		return err
+	}
+	if f.method == probe.TerminationNatural {
+		// The first response is the one that produced the observed output. End
+		// that response before accepting the client's next response.create; a
+		// realtime provider cannot admit another default-conversation response
+		// while this one is still active.
+		f.mu.Lock()
+		f.outputEndedAt = f.elapsedLocked()
+		f.responseTerminals++
+		f.mu.Unlock()
+		if err := f.send(connection, map[string]string{"type": "response.output_audio.done"}); err != nil {
+			return err
+		}
+		if err := f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": probe.FamilyDActiveResponseID, "status": "completed"}}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (f *familyDProviderFixture) finishNatural(connection *websocket.Conn) error {
+	// response.create is the client's explicit close boundary after the
+	// completed output response. It is safe to close the session now without
+	// fabricating a second response terminal.
 	f.mu.Lock()
-	f.outputEndedAt = f.elapsedLocked()
-	f.mu.Unlock()
-	if err := f.send(connection, map[string]string{"type": "response.output_audio.done"}); err != nil {
-		return err
-	}
-	if err := f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": probe.FamilyDActiveResponseID, "status": "completed"}}); err != nil {
-		return err
-	}
-	f.mu.Lock()
-	f.responseTerminals++
 	f.sessionClosed++
 	f.mu.Unlock()
 	return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_d_natural_satisfaction"})
