@@ -162,7 +162,19 @@ func (r *sessionRuntimeObservationRecorder) audioPlaybackReceipt(receipt audio.P
 	r.observe(SessionRuntimeObservationAudioPlaybackReceipt, payload, 0, false, receipt.Err)
 }
 
+// audioInput observes admission to the agent's input buffer. Provider sends
+// may lag admission, so this event cannot define the contents of a commit.
 func (r *sessionRuntimeObservationRecorder) audioInput(payload []byte) {
+	if r == nil {
+		return
+	}
+	r.observe(SessionRuntimeObservationAudioInput, payload, 0, false, nil)
+}
+
+// providerAudioSent accumulates only audio accepted by the session transport.
+// The model runner sends audio and MESSAGE.END in FIFO order, so a later
+// admission cannot contaminate the preceding turn's commit evidence.
+func (r *sessionRuntimeObservationRecorder) providerAudioSent(payload []byte) {
 	if r == nil {
 		return
 	}
@@ -171,7 +183,6 @@ func (r *sessionRuntimeObservationRecorder) audioInput(payload []byte) {
 		r.inputPayload = append(r.inputPayload, payload...)
 	}
 	r.inputMu.Unlock()
-	r.observe(SessionRuntimeObservationAudioInput, payload, 0, false, nil)
 }
 
 // inputCommit records the exact raw PCM accumulated since the previous

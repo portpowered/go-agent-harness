@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"strings"
@@ -19,7 +20,8 @@ type ModelRunner struct {
 	// response, the model runner sends RESPONSE.CANCEL (barge-in) before
 	// forwarding the audio. Zero-filled cadence frames are forwarded without
 	// cancelling the response. Direct writes to this legacy channel use the
-	// interrupting-by-default policy.
+	// interrupting-by-default policy. An accepted PCM slice is retained by the
+	// runner; the caller must not modify it after admission.
 	UserAudioInbox chan []byte
 	// UserEventInbox receives pre-built outbound StreamMessages from the user
 	// side in session mode. Each message is forwarded to the provider session
@@ -28,18 +30,17 @@ type ModelRunner struct {
 	// OpenAI Realtime wire).
 	UserEventInbox chan messages.StreamMessage
 
-	// sessionAudioInputInbox carries audio admitted through the explicit
-	// session helper API. UserAudioInbox remains available for legacy direct
-	// writers, whose unspecified origin defaults to interrupting.
-	sessionAudioInputInbox chan messages.SessionAudioInput
+	// sessionInputInbox is the single ordered ingress for the explicit session
+	// helper API. Keeping audio and control events in one bounded queue prevents
+	// a later audio frame from overtaking the MESSAGE.END that delimits the
+	// preceding turn. UserAudioInbox and UserEventInbox remain available as
+	// legacy direct-input paths and are intentionally independent.
+	sessionInputInbox chan sessionInput
 
 	// sessionInputMu establishes a FIFO boundary for the public session input
-	// helpers. A control event sent after audio must not enter the event inbox
-	// until the earlier audio has reached the provider.
-	sessionInputMu    sync.Mutex
-	audioInputMu      sync.Mutex
-	audioInputPending int
-	audioInputDrained chan struct{}
+	// helpers. Audio and control events are admitted to one bounded ingress in
+	// caller order and then forwarded by the session runner in that order.
+	sessionInputMu sync.Mutex
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
@@ -52,7 +53,7 @@ type ModelRunner struct {
 	sessionToolContinuation sessionToolContinuationState
 
 	// sessionToolEventMu protects the count of tool-result boundary events that
-	// have been accepted into UserEventInbox but not yet consumed by the
+	// have been accepted into the ordered session ingress but not yet consumed by the
 	// session runner. The coordinator can enqueue the follow-up inference
 	// request immediately after the forwarder returns, so the count closes the
 	// race where that request would otherwise send a bare RESPONSE.CREATE
@@ -62,6 +63,24 @@ type ModelRunner struct {
 
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
+}
+
+// ErrSessionInputQueueFull reports that the explicit session ingress is at
+// capacity. Returning this bounded admission result keeps callers such as tool
+// result forwarding from waiting on a provider or an unbounded queue.
+var ErrSessionInputQueueFull = errors.New("session input queue is full")
+
+type sessionInputKind uint8
+
+const (
+	sessionInputAudio sessionInputKind = iota + 1
+	sessionInputEvent
+)
+
+type sessionInput struct {
+	kind  sessionInputKind
+	audio messages.SessionAudioInput
+	event messages.StreamMessage
 }
 
 type sessionToolContinuationState uint8
@@ -143,68 +162,78 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
 func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, config *messages.SessionUpdateConfig) *ModelRunner {
 	return &ModelRunner{
-		sessionInferencer:      si,
-		sessionConfig:          config,
-		Inbox:                  messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
-		DeltaOutbox:            messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
-		UserAudioInbox:         make(chan []byte, 64),
-		UserEventInbox:         make(chan messages.StreamMessage, 8),
-		sessionAudioInputInbox: make(chan messages.SessionAudioInput, 64),
+		sessionInferencer: si,
+		sessionConfig:     config,
+		Inbox:             messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
+		DeltaOutbox:       messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		UserAudioInbox:    make(chan []byte, 64),
+		UserEventInbox:    make(chan messages.StreamMessage, 8),
+		sessionInputInbox: make(chan sessionInput, 72),
 	}
 }
 
 // EnqueueSessionAudioInput queues raw PCM for the session with the legacy
-// interrupting-by-default policy.
+// interrupting-by-default policy. An accepted PCM slice is retained by the
+// runner; the caller must not modify it after admission.
 func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
 	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
 }
 
 // EnqueueSessionAudioInputWithPolicy queues raw PCM with an explicit
-// interruption policy and records it as pending until the session runner
-// forwards it to the provider. The pending state lets EnqueueSessionEvent
-// preserve ordering across the helper API's audio and event boundaries.
+// interruption policy in the same ordered ingress used by session events.
+// An accepted PCM slice is retained and must not be modified by the caller.
 func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
 	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
 }
 
 func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
-	if r == nil || r.UserAudioInbox == nil || r.sessionAudioInputInbox == nil {
+	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("%s: not in session mode", operation)
 	}
 
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
-	r.markAudioInputPending()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	select {
-	case r.sessionAudioInputInbox <- messages.SessionAudioInput{
-		PCM:                pcm,
-		InterruptionPolicy: policy,
-	}:
+	case r.sessionInputInbox <- sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}:
 		return nil
 	case <-ctx.Done():
-		r.completeAudioInput()
 		return ctx.Err()
+	default:
+		return ErrSessionInputQueueFull
 	}
 }
 
-// EnqueueSessionEvent queues a control-plane event after all audio enqueued by
-// an earlier EnqueueSessionAudioInput call has been forwarded to the provider.
+// EnqueueSessionEvent queues a control-plane event in the same ordered ingress
+// as audio admitted by EnqueueSessionAudioInput.
 func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	if r == nil || r.UserEventInbox == nil {
+	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("EnqueueSessionEvent: not in session mode")
 	}
 
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
-	if err := r.waitForAudioInput(ctx); err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	r.markSessionToolEventQueued(msg)
 	select {
-	case r.UserEventInbox <- msg:
-		r.markSessionToolEventQueued(msg)
+	case r.sessionInputInbox <- sessionInput{kind: sessionInputEvent, event: msg}:
 		return nil
 	case <-ctx.Done():
+		r.markSessionToolEventConsumed(msg)
 		return ctx.Err()
+	default:
+		r.markSessionToolEventConsumed(msg)
+		return ErrSessionInputQueueFull
 	}
 }
 
@@ -236,45 +265,6 @@ func (r *ModelRunner) hasPendingSessionToolEvents() bool {
 	r.sessionToolEventMu.Lock()
 	defer r.sessionToolEventMu.Unlock()
 	return r.pendingSessionToolEvents > 0
-}
-
-func (r *ModelRunner) markAudioInputPending() {
-	r.audioInputMu.Lock()
-	defer r.audioInputMu.Unlock()
-	if r.audioInputPending == 0 {
-		r.audioInputDrained = make(chan struct{})
-	}
-	r.audioInputPending++
-}
-
-func (r *ModelRunner) completeAudioInput() {
-	r.audioInputMu.Lock()
-	defer r.audioInputMu.Unlock()
-	if r.audioInputPending == 0 {
-		return
-	}
-	r.audioInputPending--
-	if r.audioInputPending == 0 {
-		close(r.audioInputDrained)
-		r.audioInputDrained = nil
-	}
-}
-
-func (r *ModelRunner) waitForAudioInput(ctx context.Context) error {
-	for {
-		r.audioInputMu.Lock()
-		pending := r.audioInputPending
-		drained := r.audioInputDrained
-		r.audioInputMu.Unlock()
-		if pending == 0 {
-			return nil
-		}
-		select {
-		case <-drained:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // CancelCurrentExecution cancels the per-execution context for the inference
@@ -349,13 +339,6 @@ func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session me
 	state.ensureMaps()
 	for {
 		select {
-		case input, ok := <-r.sessionAudioInputInbox:
-			if !ok {
-				return nil
-			}
-			if err := r.forwardSessionAudioInputWithState(ctx, session, input, state); err != nil {
-				return err
-			}
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return nil
@@ -374,7 +357,6 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 }
 
 func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context, session messages.Session, pcm []byte, policy messages.SessionAudioInputPolicy, state *sessionResponseState) error {
-	defer r.completeAudioInput()
 	state.ensureMaps()
 	if sessionAdmissionClosed(session) {
 		// Room-bound shutdown closes input admission before it cancels the

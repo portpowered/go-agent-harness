@@ -99,10 +99,12 @@ func New(opts ...Option) (*AgentLoop, error) {
 	if cfg.SessionInferencer != nil && cfg.ToolAcknowledgement != nil {
 		policy := *cfg.ToolAcknowledgement
 		toolRunner.ConfigureAcknowledgement(policy.Threshold, policy.IsLongRunning, func(ctx context.Context, _ []messages.ToolCall) {
-			_ = modelRunner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+			if err := modelRunner.EnqueueSessionEvent(ctx, messages.StreamMessage{
 				Type:  messages.StreamTypeResponseCreate,
 				Value: messages.NewToolAcknowledgementResponseCreateValue(),
-			})
+			}); err != nil && cfg.Logger != nil {
+				cfg.Logger.Warn("tool acknowledgement admission failed", logging.Field{Key: "error", Value: err.Error()})
+			}
 		})
 	}
 

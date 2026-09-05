@@ -366,6 +366,25 @@ that every service has already moved.
   canonical quiet-period timer and adds an explicit independent host safety bound
   when a stopped deterministic clock would otherwise strand resources. External
   device/network I/O safety bounds are distinct from media scheduling.
+- Public session audio and control helpers share one bounded FIFO. Admission
+  returns immediately with an explicit full-queue error; a later audio packet
+  cannot overtake its preceding end-of-turn marker. Legacy direct channel
+  writers do not receive this cross-channel ordering guarantee.
+- Input admission and provider-session acceptance have separate accounting.
+  Client commit evidence accumulates only accepted provider-bound PCM, so an
+  early admission from the next turn cannot contaminate the preceding commit.
+  Rejected sends are excluded. Completed wire-write evidence remains a separate
+  transport tap; session acceptance alone is not a remote acknowledgement.
+- Legacy session-capture replay validates client messages with a separate
+  cursor from chronological server publication. At most 64 client admissions
+  may be pending; server publication applies backpressure without dropping
+  records or blocking the caller from subsequently draining its receive buffer.
+  Payload/order mismatches remain synchronous failures. This scheduling fix
+  does not expand the supported canonical offline-replay subset.
+- Fatal provider-bound audio sends publish a terminal delta with the original
+  error before the model runner exits. The outer agent loop therefore observes
+  failure without waiting for its parent deadline; prior output remains marked
+  partial when applicable.
 - Tool-constructor diagnostics go to stderr. The shipped duplex regression
   asserts exact PCM-only stdout and cancellation ordering, preventing setup text
   from corrupting audio or prematurely releasing an output-gated customer turn.
@@ -380,12 +399,16 @@ that every service has already moved.
   library normal tests and coverage runs pass across all four libraries.
   The complete five-module coverage run passes, including the private runtime
   and integration suites; all 112 package registrations and floors pass.
+- The six-crossing V8 duplex regression passes 20 single-CPU runs and ten
+  normal runs with exact per-turn PCM attribution. Regression checks also cover
+  bounded session ingress, replay publication beyond receive-buffer capacity,
+  immediate replay divergence, and fatal audio errors waking the outer loop.
 - Natural-close, device-WAV and serial-tool process checks passed against exact
   continuous-resampling references. A 61-second input-history case passed with
   explicit capture selection and a lookahead callback for its open stream.
 - Live `gpt-realtime-2.1` audio/tool roundtrips passed with exact input/output PCM
   comparisons and one tool continuation. A directory-recording run measured
-  712 ms to first audio and 927 ms from tool result to continuation audio.
+  452 ms to first audio and 603 ms from tool result to continuation audio.
   This rerun also passed assertions for completed wire send/receive events.
   These single-run timings are not percentile guarantees.
 - A native macOS roundtrip passed with the built-in microphone/speaker, capturing

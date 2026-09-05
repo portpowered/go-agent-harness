@@ -196,6 +196,7 @@ func TestAudioTraceDoesNotAccumulateWholeUtterance(t *testing.T) {
 	chunk := make([]byte, 48000)
 	for i := 0; i < 128; i++ {
 		recorder.audioInput(chunk)
+		recorder.providerAudioSent(chunk)
 	}
 	if len(recorder.inputPayload) != 0 || !recorder.providerBoundaryObserving {
 		t.Fatalf("trace retained %d input bytes, provider commits=%v", len(recorder.inputPayload), recorder.providerBoundaryObserving)

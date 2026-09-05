@@ -224,6 +224,11 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 		}
 		return outcome
 	}
+	if msg.Type == messages.StreamTypeAudioDelta && s.runtime != nil {
+		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
+			s.runtime.providerAudioSent(value.Content)
+		}
+	}
 	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
 		s.runtime.inputCommit()
 		s.runtime.responseCreate(msg)

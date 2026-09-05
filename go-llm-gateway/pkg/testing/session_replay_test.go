@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -224,6 +225,95 @@ func TestSessionReplayer_BlocksLaterInboundUntilExpectedOutbound(t *testing.T) {
 	}
 	if delta.Content != "after outbound" {
 		t.Fatalf("delta = %q, want after outbound", delta.Content)
+	}
+}
+
+func TestSessionReplayer_AdmitsBeforeOutboundBufferFills(t *testing.T) {
+	const serverEvents = 80
+	events := make([]CapturedSessionEvent, 0, serverEvents+1)
+	for i := 0; i < serverEvents; i++ {
+		events = append(events, makeCapture(DirectionServerToClient, int64(i), messages.StreamTypeTextDelta, messages.NewTextDeltaValue("server")))
+	}
+	client := messages.NewTextDeltaValue("client after server run")
+	events = append(events, makeCapture(DirectionClientToServer, serverEvents, messages.StreamTypeTextDelta, client))
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "long-server-run.session.json")
+	writeCapture(t, path, events)
+	replayer := mustNewSessionReplayer(t, path)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	outcome := replayer.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: client})
+	if !outcome.OK() {
+		t.Fatalf("Send after long server run failed: %+v", outcome)
+	}
+
+	for i := 0; i < serverEvents; i++ {
+		msg := readReplayMessage(t, replayer)
+		if msg.Type != messages.StreamTypeTextDelta {
+			t.Fatalf("server event[%d] type = %q, want text delta", i, msg.Type)
+		}
+	}
+	select {
+	case <-replayer.Done():
+	case <-ctx.Done():
+		t.Fatalf("replayer did not finish after draining server run: %v", ctx.Err())
+	}
+}
+
+func TestSessionReplayer_BoundsValidatedOutboundAdmission(t *testing.T) {
+	const clientEvents = maxPendingReplayOutbound + 1
+	events := make([]CapturedSessionEvent, 0, clientEvents+1)
+	events = append(events, makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("server")))
+	for i := 0; i < clientEvents; i++ {
+		events = append(events, makeCapture(DirectionClientToServer, int64(i+1), messages.StreamTypeTextDelta, messages.NewTextDeltaValue("client")))
+	}
+	r := &SessionReplayer{
+		events:           events,
+		validateOutbound: true,
+		outbound:         messages.NewTypedBuffer[messages.StreamMessage](8),
+		done:             make(chan struct{}),
+	}
+	r.cond = sync.NewCond(&r.mu)
+
+	for i := 0; i < maxPendingReplayOutbound; i++ {
+		outcome := r.SendWithOutcome(context.Background(), messages.StreamMessage{
+			Type:  messages.StreamTypeTextDelta,
+			Value: messages.NewTextDeltaValue("client"),
+		})
+		if !outcome.OK() {
+			t.Fatalf("admission %d failed: %+v", i, outcome)
+		}
+	}
+	outcome := r.SendWithOutcome(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("client"),
+	})
+	if outcome.Status != messages.SessionSendBufferFull {
+		t.Fatalf("admission beyond bound status = %q, want %q", outcome.Status, messages.SessionSendBufferFull)
+	}
+}
+
+func TestSessionReplayer_ReportsFutureMismatchBeforeServerDrain(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("server")),
+		makeCapture(DirectionClientToServer, 1, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "future-mismatch.session.json")
+	writeCapture(t, path, events)
+	replayer := mustNewSessionReplayer(t, path)
+
+	outcome := replayer.SendWithOutcome(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("wrong"),
+	})
+	if outcome.Status != messages.SessionSendTerminalFailure {
+		t.Fatalf("future mismatch status = %q, want terminal failure", outcome.Status)
+	}
+	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("future mismatch error = %v, want ErrReplayMismatch", outcome.Err)
 	}
 }
 
