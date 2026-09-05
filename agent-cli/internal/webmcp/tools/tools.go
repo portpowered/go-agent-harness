@@ -416,15 +416,27 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 		return webmcp.EncodeToolResult(castDevicesData{Devices: devices}, nil)
 
 	case webmcp.CastTabToolName:
-		controller, ok := s.broker.(webmcp.BrokerCastController)
-		if !ok {
-			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "cast_tab", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
-		}
 		deviceName := stringValue(args, "device_name")
-		if err := controller.CastSelectedTab(ctx, deviceName); err != nil {
-			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
+		mode := webmcp.CastMode(stringValue(args, "mode"))
+		switch mode {
+		case webmcp.CastModeTab:
+			controller, ok := s.broker.(webmcp.BrokerCastController)
+			if !ok {
+				return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "cast_tab", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
+			}
+			if err := controller.CastSelectedTab(ctx, deviceName); err != nil {
+				return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
+			}
+		case webmcp.CastModeMedia:
+			controller, ok := s.broker.(webmcp.BrokerMediaCastController)
+			if !ok {
+				return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support native media casting.", map[string]any{"phase": "cast_media", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_media"})
+			}
+			if err := controller.CastSelectedMedia(ctx, deviceName); err != nil {
+				return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_media"})
+			}
 		}
-		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Status: "cast_started"}, nil)
+		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Mode: mode, Status: "cast_started"}, nil)
 
 	case webmcp.StopCastingToolName:
 		controller, ok := s.broker.(webmcp.BrokerCastController)
@@ -477,6 +489,7 @@ type propertySpec struct {
 	typeName string
 	required bool
 	defaultV any
+	enum     []string
 }
 
 func (s *BrokerToolSet) spec(name string) (toolSpec, bool) {
@@ -503,7 +516,7 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		webmcp.CancelToolName:          {"invocation_id", "reason"},
 		webmcp.ShowPageToolName:        {},
 		webmcp.ListCastDevicesToolName: {},
-		webmcp.CastTabToolName:         {"device_name"},
+		webmcp.CastTabToolName:         {"device_name", "mode"},
 		webmcp.StopCastingToolName:     {"device_name"},
 	}
 	properties := definition.Parameters["properties"].(map[string]any)
@@ -519,6 +532,16 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		schema, _ := properties[name].(map[string]any)
 		valueType, _ := schema["type"].(string)
 		spec := propertySpec{name: name, typeName: valueType, required: requiredSet[name]}
+		switch values := schema["enum"].(type) {
+		case []string:
+			spec.enum = append([]string(nil), values...)
+		case []any:
+			for _, candidate := range values {
+				if value, ok := candidate.(string); ok {
+					spec.enum = append(spec.enum, value)
+				}
+			}
+		}
 		if !spec.required {
 			spec.defaultV = schema["default"]
 		}
@@ -563,6 +586,10 @@ func decodeArguments(raw []byte, spec toolSpec) (map[string]any, []webmcp.ToolRe
 			var value string
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_type"})
+				continue
+			}
+			if len(property.enum) > 0 && !containsString(property.enum, value) {
+				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_value"})
 				continue
 			}
 			result[property.name] = value
@@ -863,8 +890,9 @@ type castDevicesData struct {
 }
 
 type castActionData struct {
-	DeviceName string `json:"device_name"`
-	Status     string `json:"status"`
+	DeviceName string          `json:"device_name"`
+	Mode       webmcp.CastMode `json:"mode,omitempty"`
+	Status     string          `json:"status"`
 }
 
 type navigationData struct {

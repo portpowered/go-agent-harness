@@ -146,9 +146,10 @@ func BrowserToolDefinitions(webCast ...bool) []BrokerToolDefinition {
 		},
 		BrokerToolDefinition{
 			Name:        CastTabToolName,
-			Description: "Start casting the exact selected WebMCP tab to a device returned by webmcp_list_cast_devices. Only call this after the customer explicitly asks to cast.",
+			Description: "Cast the selected page to a device returned by webmcp_list_cast_devices. Use mode=media to hand the active video or audio off to the receiver, or mode=tab to mirror the rendered tab. Only call this after the customer explicitly asks to cast.",
 			Parameters: objectSchema(
 				property("device_name", "string", "Exact Cast device name returned by webmcp_list_cast_devices.", true, nil),
+				enumProperty("mode", "Cast media natively or mirror the complete browser tab.", false, string(CastModeTab), string(CastModeMedia), string(CastModeTab)),
 			),
 		},
 		BrokerToolDefinition{
@@ -225,4 +226,10 @@ func property(name, valueType, description string, required bool, defaultValue a
 		schema["default"] = defaultValue
 	}
 	return brokerProperty{name: name, schema: schema, required: required}
+}
+
+func enumProperty(name, description string, required bool, defaultValue string, values ...string) brokerProperty {
+	entry := property(name, "string", description, required, defaultValue)
+	entry.schema["enum"] = append([]string(nil), values...)
+	return entry
 }

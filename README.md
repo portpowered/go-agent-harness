@@ -36,7 +36,8 @@ and it can use the structured tools provided by any website with WebMCP built
 in. The agent can open pages, switch tabs, discover each page's available
 tools, and perform supported actions through conversation.
 
-To let the agent cast the selected browser tab to a Google Cast device:
+To let the agent cast active page media or mirror the selected browser tab to
+a Google Cast device:
 
 ```bash
 yui session --browser-tools webmcp --web-cast
