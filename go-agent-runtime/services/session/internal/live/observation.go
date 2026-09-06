@@ -65,12 +65,12 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if allowOpening {
 		h.observeOpeningPolicies(ctx, loop, msg)
 	}
-	continuationErr := h.observeToolLifecycle(msg)
+	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
 	if continuationErr != nil {
 		h.Cancel(continuationErr)
 	}
-	responseComplete := h.observeFiniteResponse(msg)
+	responseComplete := h.observeFiniteResponse(msg, toolContinuationComplete)
 	h.finishMessageObservation(msg)
 	if allowOpening && msg.Type == messages.StreamTypeSessionOpen {
 		h.sendOpeningMessage(ctx, loop)
@@ -231,7 +231,7 @@ func (h *handle) markCaptureComplete() {
 	}
 }
 
-func (h *handle) observeFiniteResponse(msg messages.StreamMessage) bool {
+func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuationComplete ...bool) bool {
 	if h == nil || !h.request.FinishAfterResponse {
 		return false
 	}
@@ -241,7 +241,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage) bool {
 		h.mu.Unlock()
 		return false
 	}
-	h.observeFiniteResponseMessage(msg)
+	h.observeFiniteResponseMessage(msg, len(toolContinuationComplete) > 0 && toolContinuationComplete[0])
 	shouldFinish := h.shouldFinishFiniteResponse(msg)
 	h.mu.Unlock()
 	if shouldFinish {
@@ -250,7 +250,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
 }
 
-func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
+func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage, toolContinuationComplete bool) {
 	if msg.Type == messages.StreamTypeMessageStart {
 		if msg.Role != messages.RoleTool {
 			h.responseStarted = true
@@ -268,8 +268,31 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
 		h.responseActive = false
 		h.responsePending = false
+		// The provider's first response can terminate after emitting a tool
+		// call. That boundary is the tool-request response, not the finite
+		// customer-facing response; the tool result and its continuation still
+		// belong to the same invocation.
+		if h.pendingToolCalls > 0 {
+			return
+		}
+		if toolContinuationComplete {
+			return
+		}
+		// A barge-in cancellation closes the interrupted response's wire
+		// boundary, but it is not a completed finite response. Keep the
+		// invocation open for the provider's replacement response; otherwise
+		// an output-time correction can be stopped between its replacement
+		// TOOLCALL.START and the tool result admission.
+		if finiteResponseWasInterrupted(msg) {
+			return
+		}
 		h.replayResponses++
 	}
+}
+
+func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
 }
 
 func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {

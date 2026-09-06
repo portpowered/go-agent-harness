@@ -259,20 +259,20 @@ func (h *handle) Close() error {
 // finishToolContinuations closes the bookkeeping loop for an accepted tool
 // result. A provider MESSAGE.END without observable continuation output is a
 // failed continuation even when the transport itself closed cleanly.
-func (h *handle) finishToolContinuations(msg messages.StreamMessage) error {
+func (h *handle) finishToolContinuations(msg messages.StreamMessage) (error, bool) {
 	if h == nil {
-		return nil
+		return nil, false
 	}
 	status, code, detail := continuationStatus(msg)
 	h.toolMu.Lock()
-	image, tools := h.collectContinuationFailures(status, code, detail, msg.Value)
+	image, tools, completed := h.collectContinuationFailures(status, code, detail, msg.Value)
 	failure := continuationFailure(image, tools)
 	if failure != nil && h.continuationErr == nil {
 		h.continuationErr = failure
 	}
 	stored := h.continuationErr
 	h.toolMu.Unlock()
-	return stored
+	return stored, completed
 }
 
 type continuationFailures struct {
@@ -294,9 +294,10 @@ func continuationStatus(msg messages.StreamMessage) (string, string, string) {
 	return strings.TrimSpace(value.Status), strings.TrimSpace(value.ProviderErrorCode), detail
 }
 
-func (h *handle) collectContinuationFailures(status, code, detail string, raw any) (continuationFailures, continuationFailures) {
+func (h *handle) collectContinuationFailures(status, code, detail string, raw any) (continuationFailures, continuationFailures, bool) {
 	image := newContinuationFailures()
 	tools := newContinuationFailures()
+	completed := false
 	value, ok := raw.(*messages.MessageEndValue)
 	if !ok {
 		value = nil
@@ -314,9 +315,10 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 			target.add(callID, status, code, detail)
 			continue
 		}
+		completed = true
 		delete(h.toolContinuations, callID)
 	}
-	return image, tools
+	return image, tools, completed
 }
 
 func newContinuationFailures() continuationFailures {

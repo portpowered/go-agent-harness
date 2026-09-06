@@ -525,6 +525,55 @@ func TestLateCaptureCompletionRespectsOutstandingResponseWork(t *testing.T) {
 	}
 }
 
+func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
+	h := &handle{
+		request:           session.LiveRequest{FinishAfterResponse: true},
+		captureComplete:   true,
+		responseStartWake: make(chan struct{}),
+	}
+	h.observeFiniteResponse(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-original",
+	})
+	if !h.observeFiniteResponse(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-original",
+		Value: &messages.MessageEndValue{
+			Type:           "message_end",
+			TerminalReason: messages.TerminalReasonPartialOutput,
+			OutputState:    messages.TerminalOutputPartial,
+		},
+	}) {
+		t.Fatal("interrupted response was not recognized as a terminal boundary")
+	}
+	if h.gracefulStop {
+		t.Fatal("interrupted response stopped the finite invocation")
+	}
+	if h.replayResponses != 0 {
+		t.Fatalf("interrupted response count = %d, want 0", h.replayResponses)
+	}
+
+	h.observeFiniteResponse(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-replacement",
+	})
+	h.observeFiniteResponse(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-replacement",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if !h.gracefulStop {
+		t.Fatal("completed replacement response did not stop the finite invocation")
+	}
+	if h.replayResponses != 1 {
+		t.Fatalf("replacement response count = %d, want 1", h.replayResponses)
+	}
+}
+
 func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	err := errors.Join(errors.New("device write"), session.ErrLiveClosed)
 	if !isExpectedMediaPumpError(err) {

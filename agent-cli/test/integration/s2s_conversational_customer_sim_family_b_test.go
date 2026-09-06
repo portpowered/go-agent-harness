@@ -96,7 +96,7 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		t.Fatalf("provider function calls = %+v, want original then replacement", observation.FunctionCalls)
 	}
 	if len(observation.ToolObservations) != 2 || observation.ToolObservations[0].Status != "completed" || observation.ToolObservations[1].Status != "completed" {
-		t.Fatalf("tool observations = %+v, want two completed results", observation.ToolObservations)
+		t.Fatalf("tool observations = %+v, want two completed results; client events = %v; result = %+v; stdout = %x; stderr = %s", observation.ToolObservations, observation.ClientEvents, result, result.Stdout, result.Stderr)
 	}
 	if got, want := strings.Join(observation.ResponseTerminalStatuses, ","), "cancelled,completed"; got != want {
 		t.Fatalf("response terminal statuses = %q, want %q", got, want)
@@ -288,6 +288,7 @@ type familyBFunctionCall struct {
 type familyBProviderObservation struct {
 	ConnectionCount          int
 	SessionUpdates           int
+	ClientEvents             []string
 	FunctionCalls            []familyBFunctionCall
 	ToolObservations         []probe.ToolObservation
 	CustomerTranscript       []probe.TranscriptEvent
@@ -306,6 +307,7 @@ type familyBProviderFixture struct {
 	startedAt                 time.Time
 	connectionCount           int
 	sessionUpdates            int
+	clientEvents              []string
 	functionCalls             []familyBFunctionCall
 	toolObservations          []probe.ToolObservation
 	customerTranscript        []probe.TranscriptEvent
@@ -360,6 +362,7 @@ func (f *familyBProviderFixture) Snapshot() familyBProviderObservation {
 	return familyBProviderObservation{
 		ConnectionCount:    f.connectionCount,
 		SessionUpdates:     f.sessionUpdates,
+		ClientEvents:       append([]string(nil), f.clientEvents...),
 		FunctionCalls:      append([]familyBFunctionCall(nil), f.functionCalls...),
 		ToolObservations:   append([]probe.ToolObservation(nil), f.toolObservations...),
 		CustomerTranscript: append([]probe.TranscriptEvent(nil), f.customerTranscript...),
@@ -420,6 +423,9 @@ func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *htt
 			f.failProtocol("decode client event: " + err.Error())
 			return
 		}
+		f.mu.Lock()
+		f.clientEvents = append(f.clientEvents, event.Type)
+		f.mu.Unlock()
 		switch event.Type {
 		case "session.update":
 			f.mu.Lock()

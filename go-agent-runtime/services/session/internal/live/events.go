@@ -209,29 +209,29 @@ type liveToolContinuation struct {
 	detail                string
 }
 
-func (h *handle) observeToolLifecycle(msg messages.StreamMessage) error {
+func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) {
 	if h == nil {
-		return nil
+		return nil, false
 	}
 	if isProviderToolCallType(msg.Type) {
 		h.observeProviderToolCall(msg)
 		if msg.Type != messages.StreamTypeToolCallStart && msg.Type != messages.StreamTypeToolCallDelta {
 			h.markContinuationOutput()
 		}
-		return nil
+		return nil, false
 	}
 	if isContinuationOutputType(msg.Type) {
 		h.markContinuationOutput()
-		return nil
+		return nil, false
 	}
 	if msg.Type == messages.StreamTypeMessageEnd {
 		if msg.Role == messages.RoleTool {
 			h.markToolResponseComplete()
-			return nil
+			return nil, false
 		}
 		return h.finishToolContinuations(msg)
 	}
-	return nil
+	return nil, false
 }
 
 func isProviderToolCallType(kind messages.StreamMessageType) bool {
