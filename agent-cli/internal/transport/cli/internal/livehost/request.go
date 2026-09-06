@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -247,9 +246,8 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 		return nil, requestPrompt, promptPresent, errors.New("live replay plan is unavailable")
 	}
 	plan := *inspection.LivePlan
-	if plan.OpeningPromptPresent && promptPresent && requestPrompt != plan.OpeningPrompt {
-		return nil, requestPrompt, promptPresent, gateway.NewReplayMismatchError(plan.OpeningPrompt, requestPrompt, nil)
-	}
+	// Explicit caller input is checked by the strict replay transport, which
+	// retains event sequence, JSON location, and bounded divergence details.
 	if hasAudioInput(request) {
 		plan.AudioTurns = nil
 	}

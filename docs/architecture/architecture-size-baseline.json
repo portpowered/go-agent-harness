@@ -9886,16 +9886,6 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
-      "file": "pkg/providers/grok/session.go",
-      "symbol": "*grokSession.readLoop",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
       "file": "pkg/providers/grok/transport_seam_test.go",
       "symbol": "TestTransportSeam_DefaultDialerRoundTripsOverLocalWebSocket",
       "value": 32,
@@ -20149,7 +20139,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
       "file": "pkg/providers/grok/session_test.go",
-      "value": 726,
+      "value": 714,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
