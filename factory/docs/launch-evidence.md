@@ -1,5 +1,26 @@
 # Factory restart evidence — 2026-09-06
 
+## Dashboard rebuild and resume
+
+The dashboard omission was corrected with `make build-all`, recorded in commit
+`8a70c517`. Resume also exposed consumed historical project cycles incorrectly
+marked active; compatibility patch `49a30279` fixes that projection without
+deleting Work history. Recording and runtime package tests passed.
+
+The full build resumed recording `97c2942ccac1496a857c9f09593316a5.json` (SHA-256
+`cd9045f8799e49ef850575fed922c2fba5a8e6ca82667e7eaa733e86b5071d75`) into session
+`b2505f9a-46e3-4571-807c-68fe97883f3d`. Every one of the 56 previously visible Work
+IDs remained present; the successor board contained 57 items at verification.
+The live API reported one in-flight worker, and a Luna max executor process was
+observed. The browser rendered the full dashboard with its event stream connected;
+both production JavaScript and CSS assets returned HTTP 200. The binary hash is
+`35988597a3044c366954ac6e314e49e226887851522147aa2632264da089b9ed`.
+
+The UI can include historical dispatches in its active-run presentation after
+resume; the live session API and process inspection are the execution checks.
+
+## Earlier bootstrap launch
+
 The owned factory resumed at 09:08 UTC on `http://127.0.0.1:7439`.
 Session: `9d5bbd41-a4b3-438a-9e30-2818eaa4d69c`.
 The original admitted project Work remains
