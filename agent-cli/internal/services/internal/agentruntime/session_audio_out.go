@@ -16,14 +16,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-const sessionAudioOutputBufferSize = 256
-
 const (
-	sessionAudioWAVHeaderSize  = 44
-	sessionAudioWAVMaxDataSize = uint64(^uint32(0)) - 36
+	sessionAudioOutputBufferSize = 256
+	sessionAudioWAVHeaderSize    = 44
+	sessionAudioWAVMaxDataSize   = uint64(^uint32(0)) - 36
 )
 
 // RunSessionWithAudioOut runs a session and writes assistant PCM to path. A
@@ -41,7 +41,7 @@ func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunO
 // with assistant audio output. An empty path preserves the normal session
 // output behavior, including the --prompt presence contract.
 func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, seed SessionTextSeed) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -117,7 +117,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 // inside the duration admission plan so accepted deltas are written before
 // the sink is finalized, including clean duration cutoffs.
 func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -262,7 +262,7 @@ func (o *sessionAudioOutput) writeDeviceSamples(ctx context.Context, sampleRate 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
-		return audio.ErrClosed
+		return contract.ErrClosed
 	}
 	if o.sink == nil {
 		sink, err := newSessionAudioSinkAtRate(o.devicePath, o.deviceWriter, sampleRate)
@@ -365,7 +365,7 @@ func (s *sessionAudioSink) WriteFrame(ctx context.Context, frame []int16) error 
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return audio.ErrClosed
+		return contract.ErrClosed
 	}
 	if s.wav && !sessionAudioWAVSizeFits(s.samples+uint64(len(frame))) {
 		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
@@ -389,7 +389,7 @@ func (s *sessionAudioSink) WriteSamples(ctx context.Context, samples []int16) er
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return audio.ErrClosed
+		return contract.ErrClosed
 	}
 	if s.wav && !sessionAudioWAVSizeFits(s.samples+uint64(len(samples))) {
 		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
@@ -528,7 +528,7 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
-		return audio.ErrClosed
+		return contract.ErrClosed
 	}
 	if o.loudness != nil {
 		// Apply this session's fixed voice gain before anything downstream

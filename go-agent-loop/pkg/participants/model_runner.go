@@ -70,19 +70,6 @@ type ModelRunner struct {
 // result forwarding from waiting on a provider or an unbounded queue.
 var ErrSessionInputQueueFull = errors.New("session input queue is full")
 
-type sessionInputKind uint8
-
-const (
-	sessionInputAudio sessionInputKind = iota + 1
-	sessionInputEvent
-)
-
-type sessionInput struct {
-	kind  sessionInputKind
-	audio messages.SessionAudioInput
-	event messages.StreamMessage
-}
-
 type sessionToolContinuationState uint8
 
 const (

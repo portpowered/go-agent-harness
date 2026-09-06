@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
@@ -30,18 +29,18 @@ func TestAtFile_TextFileIncludedInResponse(t *testing.T) {
 	const agentResponse = "I can see the file content."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// Use absolute path so parseAtReferences can find it regardless of cwd.
@@ -84,18 +83,18 @@ func TestAtFile_ImageIncludesImagePart(t *testing.T) {
 	const agentResponse = "I see the image."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	input := "@" + filepath.ToSlash(imagePath) + " describe"
@@ -127,18 +126,18 @@ func TestAtFile_DirectoryListsContents(t *testing.T) {
 	const agentResponse = "I see the directory listing."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	input := "@" + filepath.ToSlash(subDir) + " what is here"
@@ -157,18 +156,18 @@ func TestAtFile_DirectoryListsContents(t *testing.T) {
 func TestAtFile_NonexistentDisplaysError(t *testing.T) {
 	inf := &mockInferencer{response: "should NOT be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "@nonexistent_file_12345.txt tell me about this")

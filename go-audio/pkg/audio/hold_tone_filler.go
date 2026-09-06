@@ -1,6 +1,10 @@
 package audio
 
-import "time"
+import (
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
 
 // holdToneFadeOutSamples bounds the linear ramp used to abandon an
 // in-progress pulse cleanly. It is short enough (a few milliseconds at any
@@ -100,6 +104,45 @@ func (f *HoldToneFiller) NextFrame(now time.Time, n int) []int16 {
 		f.nextPulseAt = now.Add(f.cfg.PulseInterval)
 	}
 	return frame
+}
+
+// PCM16HasSignal reports whether a little-endian PCM16 payload contains any
+// non-zero sample byte. It is intentionally byte-oriented: checking both
+// bytes also handles a non-zero high byte without decoding or allocating.
+func PCM16HasSignal(pcm []byte) bool {
+	for _, value := range pcm {
+		if value != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// ApplyHoldTonePCM16 applies one hold-tone decision to a cadence-sized raw
+// PCM16 frame. A non-silent frame is returned intact after the filler observes
+// real audio; if a pulse was in flight, its short fade-out is prefixed so the
+// transition remains click-free. Silent frames remain unchanged until the
+// configured gap threshold, then receive the next pulse samples. The input
+// frame is never retained.
+func ApplyHoldTonePCM16(filler *HoldToneFiller, now time.Time, frame []byte) []byte {
+	if filler == nil {
+		return frame
+	}
+	if PCM16HasSignal(frame) {
+		if tail := filler.ObserveRealAudio(now); len(tail) > 0 {
+			return append(codec.EncodePCM16(tail), frame...)
+		}
+		return frame
+	}
+	sampleCount := len(frame) / 2
+	if sampleCount <= 0 {
+		return frame
+	}
+	fill := filler.NextFrame(now, sampleCount)
+	if len(fill) == 0 {
+		return frame
+	}
+	return codec.EncodePCM16(fill)
 }
 
 func holdToneFadeOutFrom(last int16) []int16 {

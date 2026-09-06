@@ -23,6 +23,15 @@ type AudioSource interface {
 	Close() error
 }
 
+// SampleSource is an optional extension for sources that can preserve an
+// arbitrary final sample count. AudioSource remains frame-oriented for device
+// compatibility, while finite file and replay adapters use this seam to avoid
+// turning a short artifact tail into invented silence.
+type SampleSource interface {
+	AudioSource
+	ReadSamples(context.Context, []int16) (int, error)
+}
+
 // SliceSource reads PCM samples from an in-memory slice, FrameSize at a time.
 // Useful for testing and offline replay without hardware.
 type SliceSource struct {
@@ -57,5 +66,24 @@ func (s *SliceSource) ReadFrame(_ context.Context, buf []int16) error {
 	return nil
 }
 
+// ReadSamples returns the next available samples without padding a partial
+// final chunk. It is the count-aware companion to ReadFrame.
+func (s *SliceSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	if err := ContextError(ctx); err != nil {
+		return 0, err
+	}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+	if s.pos >= len(s.data) {
+		return 0, io.EOF
+	}
+	n := copy(buf, s.data[s.pos:])
+	s.pos += n
+	return n, nil
+}
+
 // Close is a no-op for SliceSource.
 func (s *SliceSource) Close() error { return nil }
+
+var _ SampleSource = (*SliceSource)(nil)

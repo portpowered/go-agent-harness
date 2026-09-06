@@ -137,19 +137,6 @@ type RTCDeviceSink struct {
 	holdToneFiller *audio.HoldToneFiller
 }
 
-// rtcDevicePlaybackSpan maps one provider response onto the monotonic count
-// of complete samples consumed by the physical device, including underflow
-// silence. Multiple response
-// spans may be queued at once; that is what allows a tool continuation to stay
-// gapless without confusing the latest provider response with the one that is
-// currently audible.
-type rtcDevicePlaybackSpan struct {
-	response audio.PlaybackResponse
-	start    uint64
-	end      uint64
-	complete bool
-}
-
 // NewRTCDeviceSink opens an output device through the shared audio registry.
 // An empty id selects the registry's output default; a non-empty id is passed
 // through as an exact stable device ID.
@@ -325,27 +312,6 @@ func (s *RTCDeviceSink) DiscardPlayback() int {
 	return s.sink.DiscardPlayback()
 }
 
-// StartPlayback opens a provider response on the local device clock. The
-// consumed-sample baseline is captured immediately before the first model
-// frame is admitted, so idle underflow and hold-tone samples are excluded.
-func (s *RTCDeviceSink) StartPlayback(response audio.PlaybackResponse) {
-	if s == nil || s.sink == nil || response.ItemID == "" {
-		return
-	}
-	s.playbackMu.Lock()
-	if s.playbackResponse == response && !s.playbackBlocked {
-		s.playbackMu.Unlock()
-		return
-	}
-	if s.playbackBlocked {
-		s.playbackBlocked = false
-		s.playbackGeneration++
-		s.snapshotEpoch.Store(s.playbackGeneration)
-	}
-	s.playbackResponse = response
-	s.playbackMu.Unlock()
-}
-
 // InterruptPlayback returns the exact duration of model audio consumed by the
 // device callback, then invalidates racing frames and discards queued audio.
 func (s *RTCDeviceSink) InterruptPlayback(response audio.PlaybackResponse) (int, bool) {
@@ -355,8 +321,8 @@ func (s *RTCDeviceSink) InterruptPlayback(response audio.PlaybackResponse) (int,
 
 // InterruptActivePlayback resolves interruption against the callback-consumed
 // response span instead of the media reader's latest dequeued response. This
-// remains correct when a fast provider has already queued a tool continuation
-// behind speech that is still physically audible.
+// remains correct when a fast provider has queued a continuation behind speech
+// that is still physically audible.
 func (s *RTCDeviceSink) InterruptActivePlayback() (audio.PlaybackInterruption, bool) {
 	return s.interruptPlayback(audio.PlaybackResponse{}, false)
 }
@@ -370,7 +336,7 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	// Clear the native queue before sampling its callback clock. A callback
 	// that wins the queue lock is counted as heard; one that runs after the
 	// discard observes underflow, which leaves rendered-minus-underflow
-	// unchanged. This makes the truncation cursor linearizable with discard.
+	// unchanged. This makes truncation linearizable with discard.
 	s.sink.DiscardPlayback()
 	current := consumedPlaybackSamples(s.PlaybackStats())
 	var active rtcDevicePlaybackSpan
@@ -411,60 +377,6 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 		PlaybackResponse: active.response,
 		AudioEndMS:       int(heard * 1000 / uint64(s.deviceRate)),
 	}, true
-}
-
-// finishPlayback retires a fully drained provider response from the device
-// clock. A later server-VAD event belongs to a new user turn and must not
-// truncate the completed response, even if local hold-tone audio has played
-// during the intervening silence.
-func (s *RTCDeviceSink) finishPlayback(response audio.PlaybackResponse) {
-	if s == nil || response.ItemID == "" {
-		return
-	}
-	s.playbackMu.Lock()
-	defer s.playbackMu.Unlock()
-	if s.playbackResponse != response {
-		return
-	}
-	for index := len(s.playbackSpans) - 1; index >= 0; index-- {
-		if s.playbackSpans[index].response == response {
-			s.playbackSpans[index].complete = true
-			break
-		}
-	}
-	s.playbackGeneration++
-	s.snapshotEpoch.Store(s.playbackGeneration)
-	s.playbackResponse = audio.PlaybackResponse{}
-}
-
-func consumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
-	if stats.RenderedSamples < stats.UnderflowSamples {
-		return 0
-	}
-	return stats.RenderedSamples - stats.UnderflowSamples
-}
-
-// resumePlayback opens a new local response boundary. Frames read under a
-// prior generation remain stale even if they race with this transition.
-func (s *RTCDeviceSink) resumePlayback() {
-	if s == nil || s.sink == nil {
-		return
-	}
-	s.playbackMu.Lock()
-	// A normal tool-result continuation can request another response while the
-	// preceding response is still draining to the physical device. Playback is
-	// already open in that case: advancing the generation would make a frame
-	// read just before response.create stale and discard its samples. Only a
-	// prior accepted cancellation sets playbackBlocked and requires a new
-	// generation boundary.
-	if !s.playbackBlocked {
-		s.playbackMu.Unlock()
-		return
-	}
-	s.playbackBlocked = false
-	s.playbackGeneration++
-	s.snapshotEpoch.Store(s.playbackGeneration)
-	s.playbackMu.Unlock()
 }
 
 // Pump reads PCM frames from inbound and synchronously writes them to the

@@ -95,7 +95,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderGrok,
@@ -329,7 +329,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderGrok,

@@ -34,7 +34,7 @@ func TestSessionBrowserRecordingCapturesRedactedInvocationEvidence(t *testing.T)
 			loaded.Browser.Recording.Enabled = true
 			loaded.Browser.Recording.IncludeArguments = testCase.includeArguments
 			loaded.Browser.Recording.IncludeResults = testCase.includeResults
-			recording := newSessionBrowserRecording(SessionRunOptions{
+			recording := newSessionBrowserRecording(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				APIKey:            credential,
 				LoadedConfig:      loaded,
 				BrowserEventWatch: func(context.Context) <-chan webmcp.BrowserEvent { return events },
@@ -104,7 +104,7 @@ func TestSessionDirectoryRecordingPersistsBrowserArtifact(t *testing.T) {
 	events := make(chan webmcp.BrowserEvent, 1)
 	loaded := &config.Config{Browser: config.DefaultBrowserConfig()}
 	loaded.Browser.Recording.Enabled = true
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "recording"), sessionRuntimePlan{}, SessionRunOptions{
+	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "recording"), sessionRuntimePlan{}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		APIKey:       credential,
 		LoadedConfig: loaded,
 		BrowserEventWatch: func(context.Context) <-chan webmcp.BrowserEvent {

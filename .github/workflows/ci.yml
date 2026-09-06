@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -37,6 +39,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Cache pinned analyzer binaries
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
@@ -61,6 +66,14 @@ jobs:
       - name: Verify generated service composition
         if: always()
         run: make wire-check
+
+      - name: Verify service architecture
+        if: always()
+        run: make architecture-check
+
+      - name: Verify package and complexity budgets
+        if: always()
+        run: make size-check
 
       - name: Run go vet
         if: always()
@@ -96,6 +109,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run repository helper module tests
         if: always()
@@ -108,6 +124,10 @@ jobs:
       - name: Build agent-cli binary and library packages
         if: always()
         run: make build
+
+      - name: Verify independent runtime embedding
+        if: always()
+        run: make embed-check
 
       - name: Verify standalone checkout dependency graph
         if: always()
@@ -146,6 +166,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run deterministic integration tests
         if: always()
@@ -182,6 +205,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run coverage profiles and coverage gate
         run: make coverage
@@ -210,6 +236,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run focused RTC race acceptance
         if: always()
@@ -244,6 +273,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run hermetic test pipeline
         run: make test-hermetic
@@ -274,6 +306,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run production-binary cross-process cancellation acceptance
         working-directory: agent-cli
@@ -300,6 +335,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run package-adjacent macOS audio units
         run: go test ./go-audio/... ./go-device-gateway/... -count=1
@@ -338,6 +376,9 @@ jobs:
             go-llm-gateway/go.sum
             go-audio/go.sum
             go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
 
       - name: Run Windows audio queue regressions
         run: go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1

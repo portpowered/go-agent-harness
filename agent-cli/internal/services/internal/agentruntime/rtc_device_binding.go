@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -36,7 +37,7 @@ type RTCDeviceBindingRequest struct {
 	OutputPresent bool
 	// SelfHearingConfig is used only when both local directions are selected.
 	// Zero fields use the documented audio default profile.
-	SelfHearingConfig audio.PCM16SelfHearingConfig
+	SelfHearingConfig selfhearing.PCM16SelfHearingConfig
 	// FeedbackWarningWriter receives the one-time local acoustic-feedback
 	// warning. The CLI supplies command stderr; nil disables presentation while
 	// retaining the audio gate.

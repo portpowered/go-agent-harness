@@ -29,7 +29,8 @@ type realtimeSession struct {
 	// sendQueue buffers outbound wire events (client-to-provider, the
 	// session's input path). Overflow drops are counted by the buffer itself
 	// and logged through the default drop observer attached below.
-	sendQueue *messages.TypedBuffer[models.SessionEvent]
+	sendQueue         *messages.TypedBuffer[models.SessionEvent]
+	writeBackpressure bool
 	// recvBuf buffers translated inbound events (provider-to-client, the
 	// session's output path).
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
@@ -435,27 +436,6 @@ func (s *realtimeSession) publishResponseIntentFailure(outcome messages.SessionS
 	)
 	value.Err = outcome.Err
 	s.recvBuf.WriteTerminal(messages.StreamMessage{Type: messages.StreamTypeError, Value: value})
-}
-
-func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
-	for _, event := range events {
-		// A terminated session reports closed regardless of remaining
-		// outbound buffer capacity.
-		select {
-		case <-s.done:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-		default:
-		}
-		outcome := s.sendQueue.WriteContext(ctx, event)
-		switch outcome.Status {
-		case messages.BufferWriteSucceeded:
-		case messages.BufferWriteBufferFull:
-			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-		default:
-			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-		}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
 
 func (s *realtimeSession) rememberResponseRequest(event models.SessionEvent) {

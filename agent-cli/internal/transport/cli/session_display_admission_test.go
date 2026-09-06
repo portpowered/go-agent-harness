@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 type sessionDisplaySurfaceFake struct {
@@ -40,10 +41,11 @@ func (s *sessionDisplaySurfaceFake) Capture(context.Context, image.Rectangle) (*
 	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 }
 
-func displayAdmissionConfig() *config.Config {
+func displayAdmissionConfig(t *testing.T) *config.Config {
+	t.Helper()
 	browser := config.DefaultBrowserConfig()
 	return &config.Config{
-		Browser: browser,
+		Browser: browser, FilesystemWorkDir: t.TempDir(),
 		Tools: config.ToolsConfig{List: []config.ToolEntry{
 			{ID: "show", Enabled: true},
 			{ID: "mouse", Enabled: true},
@@ -62,7 +64,7 @@ func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testi
 	surface := &sessionDisplaySurfaceFake{capability: tools.UnavailableDisplayCapability("no desktop session")}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig())
+	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -74,7 +76,7 @@ func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testi
 			t.Fatalf("headless definition retained display tool %q", definition.Name)
 		}
 	}
-	if _, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{ID: "headless-show", Name: "show"}); err == nil || !errors.Is(err, tools.ErrToolNotFound) {
+	if _, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{ID: "headless-show", Name: "show"}); err == nil || !errors.Is(err, runtimeTools.ErrToolNotFound) {
 		t.Fatalf("headless show route result = %v, want absent route", err)
 	}
 	if _, ok := findSessionDefinition(capabilities.Definitions, "read_file"); !ok {
@@ -89,7 +91,7 @@ func TestSessionToolCapabilitiesFactoryRetainsShowOnUsableProbe(t *testing.T) {
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig())
+	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -131,7 +133,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 	}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig())
+	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -157,7 +159,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 	if execErr == nil {
 		t.Fatal("show invocation with denied permission succeeded, want a typed denial")
 	}
-	if errors.Is(execErr, tools.ErrToolNotFound) {
+	if errors.Is(execErr, runtimeTools.ErrToolNotFound) {
 		t.Fatal("show was not routable even though it was advertised")
 	}
 	envelope, decodeErr := sight.Decode([]byte(tools.ScreenToolErrorResult(execErr)))
@@ -189,7 +191,7 @@ func TestSessionToolCapabilitiesFactoryCapturesNormallyWhenPermissionGranted(t *
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig())
+	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -230,7 +232,7 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 	t.Cleanup(func() { close(release) })
 	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe)
 	startedAt := time.Now()
-	capabilities, err := factory(displayAdmissionConfig())
+	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -287,3 +289,14 @@ func findSessionDefinition(definitions []messages.ToolDefinition, name string) (
 }
 
 var _ tools.DisplaySurface = (*sessionDisplaySurfaceFake)(nil)
+
+func browserCapabilityConfig(t *testing.T, enabled bool) *config.Config {
+	t.Helper()
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = enabled
+	cfg := &config.Config{Browser: browser, FilesystemWorkDir: t.TempDir()}
+	for _, id := range config.DefaultToolIDs {
+		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "sleep"})
+	}
+	return cfg
+}

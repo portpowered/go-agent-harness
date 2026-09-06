@@ -3,7 +3,9 @@ package transcript
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 )
@@ -185,4 +187,67 @@ func recordingFileContainsCredential(path string, secrets [][]byte) (bool, error
 			return false, readErr
 		}
 	}
+}
+
+func writeAdditionalArtifacts(artifacts []normalizedRecordingArtifact, write func(string, []byte) error, writePath func(string, string) error) error {
+	for _, artifact := range artifacts {
+		var err error
+		if artifact.sourcePath != "" {
+			err = writePath(artifact.path, artifact.sourcePath)
+		} else {
+			err = write(artifact.path, artifact.data)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeAdditionalArtifactData(artifact RecordingArtifact, redactor credentialRedactor) (normalizedRecordingArtifact, error) {
+	result := normalizedRecordingArtifact{path: artifact.Path}
+	var digest string
+	if artifact.SourcePath != "" {
+		if len(artifact.Data) != 0 {
+			return result, errors.New("data and source path are alternatives")
+		}
+		var err error
+		digest, err = digestRedactedArtifact(artifact.SourcePath, redactor)
+		if err != nil {
+			return result, err
+		}
+		result.sourcePath = artifact.SourcePath
+	} else {
+		if len(artifact.Data) == 0 {
+			return result, errors.New("data must be non-empty")
+		}
+		result.data = redactor.apply(artifact.Data)
+		sum := sha256.Sum256(result.data)
+		digest = hex.EncodeToString(sum[:])
+	}
+	if artifact.SHA256 != "" && (!isLowerSHA256(artifact.SHA256) || artifact.SHA256 != digest) {
+		return result, errors.New("sha256 does not match data")
+	}
+	result.sha256 = digest
+	return result, nil
+}
+
+func digestRedactedArtifact(path string, redactor credentialRedactor) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	info, statErr := file.Stat()
+	if statErr != nil {
+		return "", errors.Join(statErr, file.Close())
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return "", errors.Join(errors.New("source must be a non-empty regular file"), file.Close())
+	}
+	hasher := sha256.New()
+	_, copyErr := io.Copy(hasher, newRedactingReader(file, redactor))
+	if err := errors.Join(copyErr, file.Close()); err != nil {
+		return "", fmt.Errorf("read artifact source: %w", err)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

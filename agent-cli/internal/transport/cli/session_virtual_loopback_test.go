@@ -1,13 +1,10 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
+	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"io"
 	"math"
 	"os"
@@ -21,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -687,7 +685,7 @@ func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
 		t.Fatal("coupled echo was never confirmed as feedback (harness setup problem, not a suppression check)")
 	}
 	// The gate's documented contract is detect-then-suppress, not zero
-	// latency: audio.PCM16SelfHearingConfig.MinimumEvidence deliberately
+	// latency: selfhearing.PCM16SelfHearingConfig.MinimumEvidence deliberately
 	// requires ~80ms of paired evidence before classifying a loop as
 	// feedback at all, precisely so a brief coincidental correlation cannot
 	// false-positive. Some of that bounded analysis-window audio can
@@ -752,7 +750,7 @@ func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
 	// emitted from the confirmed suppression point forward: does the
 	// coupled echo's own fingerprint appear anywhere in that received
 	// stream? This uses the same correlation primitive that backs
-	// audio.PCM16SelfHearingMeasurement (self-hearing is judged by
+	// roomanalysis.PCM16SelfHearingMeasurement (self-hearing is judged by
 	// BestAbsoluteCorrelation against a source/received pair) rather than
 	// an exact, frame-by-frame content match, since the gate's internal
 	// batching of independent releases is not part of this harness's
@@ -768,7 +766,7 @@ func TestSessionVirtualDeviceLoopbackSuppressesCoupledFeedback(t *testing.T) {
 	if !measurement.Passed {
 		t.Fatalf("coupled echo correlates with what the capture path emitted to the provider after suppression was confirmed (BestAbsoluteCorrelation=%.3f at lag=%s over %d compared samples): suppression failed", measurement.BestAbsoluteCorrelation, measurement.BestAbsoluteLag, measurement.ComparedSamples)
 	}
-	t.Logf("suppression held: coupled echo vs. post-confirmation provider-received BestAbsoluteCorrelation=%.3f (want < %.2f)", measurement.BestAbsoluteCorrelation, audio.PCM16AnalysisDefaultSelfCorrelation)
+	t.Logf("suppression held: coupled echo vs. post-confirmation provider-received BestAbsoluteCorrelation=%.3f (want < %.2f)", measurement.BestAbsoluteCorrelation, roomanalysis.PCM16AnalysisDefaultSelfCorrelation)
 }
 
 func TestSessionVirtualDeviceLoopbackSuppressesFarFieldFeedbackAndRecordsDevices(t *testing.T) {
@@ -801,16 +799,17 @@ func TestSessionVirtualDeviceLoopbackSuppressesFarFieldFeedbackAndRecordsDevices
 			}
 		}
 		compareSamples := min(len(writes), len(reads)-3840)
-		var correlation audio.PCM16CorrelationMeasurement
+		var correlation roomanalysis.PCM16CorrelationMeasurement
+		var correlationErr error
 		if compareSamples > 0 {
 			duration := time.Duration(compareSamples) * time.Second / loopbackDeviceRate
-			correlation, _ = audio.NormalizedPCM16CrossCorrelation(
-				audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: "writes", ParticipantID: "speaker", SampleRate: loopbackDeviceRate, Samples: writes}, TimelineEnd: time.Duration(len(writes)) * time.Second / loopbackDeviceRate},
-				audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: "reads", ParticipantID: "mic", SampleRate: loopbackDeviceRate, Samples: reads}, TimelineEnd: time.Duration(len(reads)) * time.Second / loopbackDeviceRate},
-				audio.PCM16TimeInterval{ID: "debug", End: duration}, audio.PCM16LagWindow{Min: 240 * time.Millisecond, Max: 240 * time.Millisecond}, audio.PCM16AnalysisSilenceFloorDBFS,
+			correlation, correlationErr = roomanalysis.NormalizedPCM16CrossCorrelation(
+				roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: "writes", ParticipantID: "speaker", SampleRate: loopbackDeviceRate, Samples: writes}, TimelineEnd: time.Duration(len(writes)) * time.Second / loopbackDeviceRate},
+				roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: "reads", ParticipantID: "mic", SampleRate: loopbackDeviceRate, Samples: reads}, TimelineEnd: time.Duration(len(reads)) * time.Second / loopbackDeviceRate},
+				roomanalysis.PCM16TimeInterval{ID: "debug", End: duration}, roomanalysis.PCM16LagWindow{Min: 240 * time.Millisecond, Max: 240 * time.Millisecond}, roomanalysis.PCM16AnalysisSilenceFloorDBFS,
 			)
 		}
-		t.Fatalf("far-field device loop was never confirmed as feedback; writes=%d reads=%d fixed240ms-correlation=%.3f evidence=%d", len(writes), len(reads), correlation.BestAbsoluteCorrelation, correlation.ComparedSamples)
+		t.Fatalf("far-field device loop was never confirmed as feedback; writes=%d reads=%d fixed240ms-correlation=%.3f evidence=%d correlation_error=%v", len(writes), len(reads), correlation.BestAbsoluteCorrelation, correlation.ComparedSamples, correlationErr)
 	}
 
 	// At least one output write and one input read per chunk must cross the
@@ -853,36 +852,36 @@ func TestSessionVirtualDeviceLoopbackSuppressesFarFieldFeedbackAndRecordsDevices
 	}
 }
 
-// measureLoopbackSelfHearing wraps audio.NormalizedPCM16CrossCorrelation --
-// the primitive behind audio.PCM16SelfHearingMeasurement -- to search the
+// measureLoopbackSelfHearing wraps roomanalysis.NormalizedPCM16CrossCorrelation --
+// the primitive behind roomanalysis.PCM16SelfHearingMeasurement -- to search the
 // entire received window (not just a narrow lag around zero) for the
 // source signal's fingerprint, and reports the result as exactly that
 // documented type: "records one participant's sent-to-received correlation.
 // Self-hearing uses BestAbsoluteCorrelation by design."
-func measureLoopbackSelfHearing(t *testing.T, sourceID string, source []int16, receivedID string, received []int16) audio.PCM16SelfHearingMeasurement {
+func measureLoopbackSelfHearing(t *testing.T, sourceID string, source []int16, receivedID string, received []int16) roomanalysis.PCM16SelfHearingMeasurement {
 	t.Helper()
-	sourceStream := audio.PCM16TimedStream{
-		PCM16Input:  audio.PCM16Input{StreamID: sourceID, ParticipantID: sourceID, SampleRate: loopbackDeviceRate, Samples: source},
+	sourceStream := roomanalysis.PCM16TimedStream{
+		PCM16Input:  roomanalysis.PCM16Input{StreamID: sourceID, ParticipantID: sourceID, SampleRate: loopbackDeviceRate, Samples: source},
 		TimelineEnd: time.Duration(len(source)) * time.Second / time.Duration(loopbackDeviceRate),
 	}
-	receivedStream := audio.PCM16TimedStream{
-		PCM16Input:  audio.PCM16Input{StreamID: receivedID, ParticipantID: receivedID, SampleRate: loopbackDeviceRate, Samples: received},
+	receivedStream := roomanalysis.PCM16TimedStream{
+		PCM16Input:  roomanalysis.PCM16Input{StreamID: receivedID, ParticipantID: receivedID, SampleRate: loopbackDeviceRate, Samples: received},
 		TimelineEnd: time.Duration(len(received)) * time.Second / time.Duration(loopbackDeviceRate),
 	}
 	maxLag := receivedStream.TimelineEnd - sourceStream.TimelineEnd
 	if maxLag < 0 {
 		maxLag = 0
 	}
-	interval := audio.PCM16TimeInterval{ID: "echo-window", Start: 0, End: sourceStream.TimelineEnd}
-	lagWindow := audio.PCM16LagWindow{Min: 0, Max: maxLag}
-	correlation, err := audio.NormalizedPCM16CrossCorrelation(sourceStream, receivedStream, interval, lagWindow, audio.PCM16AnalysisSilenceFloorDBFS)
+	interval := roomanalysis.PCM16TimeInterval{ID: "echo-window", Start: 0, End: sourceStream.TimelineEnd}
+	lagWindow := roomanalysis.PCM16LagWindow{Min: 0, Max: maxLag}
+	correlation, err := roomanalysis.NormalizedPCM16CrossCorrelation(sourceStream, receivedStream, interval, lagWindow, roomanalysis.PCM16AnalysisSilenceFloorDBFS)
 	if err != nil {
 		t.Fatalf("measure self-hearing correlation (%s vs %s): %v", sourceID, receivedID, err)
 	}
-	return audio.PCM16SelfHearingMeasurement{
+	return roomanalysis.PCM16SelfHearingMeasurement{
 		PCM16CorrelationMeasurement: correlation,
 		Direction:                   "capture-to-provider",
-		Passed:                      !correlation.HasEvidence() || correlation.BestAbsoluteCorrelation < audio.PCM16AnalysisDefaultSelfCorrelation,
+		Passed:                      !correlation.HasEvidence() || correlation.BestAbsoluteCorrelation < roomanalysis.PCM16AnalysisDefaultSelfCorrelation,
 	}
 }
 

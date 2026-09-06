@@ -10,10 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "prepush.sh"
 PHASES = (
     "fmt",
+    "verify-architecture",
     "vet",
     "lint",
     "staticcheck",
     "build",
+    "embed-check",
     "test",
     "coverage-registration",
     "coverage-changed",
@@ -49,7 +51,7 @@ class PrepushTargetTests(unittest.TestCase):
             phase_log = log_path.read_text(encoding="utf-8").splitlines()
 
             self.assertNotEqual(result.returncode, 0, result.output)
-            self.assertEqual(phase_log, list(PHASES[:4]))
+            self.assertEqual(phase_log, list(PHASES[: PHASES.index("staticcheck") + 1]))
             self.assertIn("==> prepush failed at phase staticcheck", result.output)
             self.assertIn("exit 23", result.output)
             self.assertRegex(
@@ -103,8 +105,22 @@ class PrepushTargetTests(unittest.TestCase):
             self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
             self.assertEqual(
                 log_path.read_text(encoding="utf-8").splitlines(),
-                list(PHASES[:3]),
+                list(PHASES[: PHASES.index("lint") + 1]),
             )
+
+    def test_architecture_failure_blocks_build_and_embedding(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_make, log_path = self._fake_make(Path(temp_dir))
+            result = self._run_pre_push(
+                fake_make,
+                log_path,
+                env={"PREPUSH_FAIL_PHASE": "verify-architecture", "PREPUSH_FAIL_STATUS": "19"},
+            )
+            self.assertNotEqual(result.returncode, 0, result.output)
+            self.assertEqual(log_path.read_text().splitlines(), ["fmt", "verify-architecture"])
+            self.assertIn("failed at phase verify-architecture", result.output)
+            self.assertNotIn("==> prepush phase build", result.output)
+            self.assertNotIn("==> prepush phase embed-check", result.output)
 
     def _run_pre_push(self, fake_make, log_path, env=None):
         process_env = os.environ.copy()

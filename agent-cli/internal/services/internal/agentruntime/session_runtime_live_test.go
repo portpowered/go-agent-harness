@@ -38,7 +38,7 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 		},
 	}
 	definitions := []messages.ToolDefinition{{Name: "browser_test"}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:                config.ProviderGrok,
 		BrowserToolsEnabled:     true,
 		BrowserToolsInteractive: true,
@@ -84,7 +84,7 @@ func TestPlanSessionRuntime_BrowserToolsDefaultProviderFallsBackToOpenAI(t *test
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		LoadedConfig:        loaded,
 		APIKey:              "openai-default-key",
@@ -163,7 +163,7 @@ func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *
 				loaded.Model.Grok = &config.GrokConfig{Model: testCase.model, APIKey: testCase.apiKey}
 			}
 
-			opts := SessionRunOptions{
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:        testCase.provider,
 				LoadedConfig:    loaded,
 				ToolDefinitions: []messages.ToolDefinition{{Name: "live_test"}},
@@ -215,7 +215,7 @@ func TestPlanSessionRuntime_NoCaptureUsesLiveProviderWithoutCaptureLifecycle(t *
 }
 
 func TestPlanSessionRuntime_BrowserToolsRejectsUnsupportedProvider(t *testing.T) {
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:            "unsupported-provider",
 		BrowserToolsEnabled: true,
 	}, sessionRuntimeFactory{
@@ -235,11 +235,11 @@ func TestPlanSessionRuntime_UnsupportedProviderDiagnosticsAreShared(t *testing.T
 	}{
 		{
 			name: "browser tools",
-			opts: SessionRunOptions{Provider: provider, BrowserToolsEnabled: true},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, BrowserToolsEnabled: true},
 		},
 		{
 			name: "recording",
-			opts: SessionRunOptions{Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: provider, RecordPath: filepath.Join(t.TempDir(), "capture.json")},
 		},
 	}
 
@@ -287,7 +287,7 @@ func TestPlanSessionRuntime_RecordDefaultProviderFallsBackToOpenAI(t *testing.T)
 		},
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   recordPath,
 		LoadedConfig: loaded,
 		APIKey:       "openai-default-key",
@@ -327,7 +327,7 @@ func TestPlanOpenAIRecordRuntimeDeviceInputDefaultsServerVAD(t *testing.T) {
 			return inferencer, nil
 		},
 	}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider: config.ProviderOpenAI, Model: openAIRealtimeModel, APIKey: "test-key",
 		RecordPath:       filepath.Join(t.TempDir(), "device-vad.session.json"),
 		RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true},
@@ -396,7 +396,7 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 				}
 			}
 
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:          recordPath,
 				Provider:            testCase.provider,
 				BrowserToolsEnabled: true,
