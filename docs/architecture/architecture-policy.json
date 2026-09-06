@@ -1,0 +1,1108 @@
+{
+  "version": 1,
+  "module_dirs": [
+    "agent-cli",
+    "go-agent-loop",
+    "go-audio",
+    "go-device-gateway",
+    "go-llm-gateway",
+    "go-agent-runtime",
+    "tests/embedding",
+    "tools/architecturegate",
+    "tools/analyzergate",
+    "tools/coveragegate",
+    "tools/rtc-race-gate",
+    "tools/session-race-gate",
+    "tools/timingate",
+    "scripts/webmcp-o0",
+    "test/localai"
+  ],
+  "patterns": [
+    "./..."
+  ],
+  "baseline": "docs/architecture/architecture-size-baseline.json",
+  "service_roots": [
+    "services/*"
+  ],
+  "composition_roots": [
+    "wire",
+    "runtime/wire",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime",
+    "example.com/agent-runtime-consumer"
+  ],
+  "composition_registry": [
+    {
+      "module": "example.com/agent-runtime-consumer",
+      "package": "example.com/agent-runtime-consumer",
+      "reason": "external consumer owns application service composition"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/acceptance",
+      "file": "internal/acceptance/ask_stream_test.go",
+      "reason": "acceptance host assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services",
+      "file": "internal/services/chat_repl_test.go",
+      "reason": "CLI host test assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_test.go",
+      "reason": "runtime host test assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "file": "internal/transport/cli/ask_test.go",
+      "reason": "CLI transport test assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "file": "internal/transport/cli/chat_test.go",
+      "reason": "CLI transport test assembles the public session wire"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "file": "internal/transport/cli/command_path_resolver_test.go",
+      "reason": "CLI path test assembles public service wires"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "file": "internal/transport/cli/room_service_composition_test.go",
+      "reason": "CLI room test assembles public device and room wires"
+    },
+    {
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+      "file": "test/integration/session_service_composition_test.go",
+      "reason": "CLI integration host assembles the public session wire"
+    }
+  ],
+  "module_rules": [
+    {
+      "module": "github.com/portpowered/go-agent-harness/go-agent-runtime",
+      "allowed_top_level": [
+        ".",
+        "services",
+        "wire",
+        "platform"
+      ]
+    },
+    {
+      "module": "example.com/agent-runtime-consumer",
+      "allowed_top_level": [
+        "."
+      ]
+    }
+  ],
+  "reusable_modules": [
+    "github.com/portpowered/go-agent-harness/go-agent-loop",
+    "github.com/portpowered/go-agent-harness/go-audio",
+    "github.com/portpowered/go-agent-harness/go-device-gateway",
+    "github.com/portpowered/go-agent-harness/go-llm-gateway",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime"
+  ],
+  "cli_modules": [
+    "github.com/portpowered/go-agent-harness/agent-cli",
+    "github.com/portpowered/go-agent-harness/agent-cli/**"
+  ],
+  "forbidden_imports": [
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**",
+        "github.com/portpowered/go-agent-harness/go-audio/**",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-agent-runtime",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/**"
+      ],
+      "reason": "lower reusable modules must not depend on the extracted runtime"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-device-gateway",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**"
+      ],
+      "reason": "the execution loop stays independent of device and provider adapters"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-audio/**"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/agent-cli",
+        "github.com/portpowered/go-agent-harness/agent-cli/**",
+        "github.com/portpowered/go-agent-harness/go-agent-loop",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**",
+        "github.com/portpowered/go-agent-harness/go-device-gateway",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/**"
+      ],
+      "reason": "audio primitives remain independent of orchestration and host adapters"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-agent-runtime"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/**/wire"
+      ],
+      "reason": "the runtime entrypoint composes through its module Wire injector"
+    }
+  ],
+  "global_state_scopes": [
+    "github.com/portpowered/go-agent-harness/agent-cli",
+    "github.com/portpowered/go-agent-harness/agent-cli/**",
+    "github.com/portpowered/go-agent-harness/go-agent-loop",
+    "github.com/portpowered/go-agent-harness/go-agent-loop/**",
+    "github.com/portpowered/go-agent-harness/go-audio",
+    "github.com/portpowered/go-agent-harness/go-audio/**",
+    "github.com/portpowered/go-agent-harness/go-device-gateway",
+    "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+    "github.com/portpowered/go-agent-harness/go-llm-gateway",
+    "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime/**",
+    "example.com/agent-runtime-consumer",
+    "example.com/agent-runtime-consumer/**"
+  ],
+  "forbidden_root_imports": [
+    "os",
+    "os/**",
+    "os/exec",
+    "os/signal",
+    "net",
+    "net/**",
+    "net/http",
+    "net/url",
+    "syscall"
+  ],
+  "generated_files": [
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/replay/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/session/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/providers/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "agent-cli",
+      "pattern": "internal/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/tools/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/devices/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/rooms/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    },
+    {
+      "module": "go-agent-runtime",
+      "pattern": "services/recording/wire/wire_gen.go",
+      "generator": "wire",
+      "header": "// Code generated by Wire. DO NOT EDIT."
+    }
+  ],
+  "global_exceptions": [
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices",
+      "file": "services/devices/contract.go",
+      "name": "ErrInvalidRequest",
+      "reason": "public sentinel error identity is part of the device admission contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices",
+      "file": "services/devices/contract.go",
+      "name": "ErrUnavailable",
+      "reason": "public sentinel error identity is part of the device admission contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+      "file": "services/providers/models.go",
+      "name": "ErrUnsupportedRealtimeModel",
+      "reason": "public sentinel error identity is part of the provider model admission contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+      "file": "services/providers/models.go",
+      "name": "ErrModelCatalogRequired",
+      "reason": "public sentinel error identity distinguishes missing composition from unsupported user models"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file",
+      "file": "services/devices/internal/file/capture.go",
+      "name": "errEmptyInput",
+      "reason": "sentinel error distinguishes an admitted finite source with no samples"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "file": "services/rooms/internal/lifecycle/runner.go",
+      "name": "errDurationBound",
+      "reason": "sentinel error identifies the room duration terminal reason"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "file": "services/rooms/internal/lifecycle/runner.go",
+      "name": "errTurnsBound",
+      "reason": "sentinel error identifies the room turn terminal reason"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/composition",
+      "file": "services/tools/internal/composition/composition.go",
+      "name": "ErrToolCompositionCollision",
+      "reason": "sentinel error identity is part of the tools composition contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/composition",
+      "file": "services/tools/internal/composition/composition.go",
+      "name": "ErrToolCompositionInvalid",
+      "reason": "sentinel error identity is part of the tools composition contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+      "file": "services/tools/service.go",
+      "name": "ErrToolNotFound",
+      "reason": "public sentinel error identity preserves errors.Is across the tool capability boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+      "file": "services/tools/service.go",
+      "name": "ErrToolCompositionCollision",
+      "reason": "public sentinel error identity is part of the tools composition contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+      "file": "services/tools/service.go",
+      "name": "ErrToolCompositionInvalid",
+      "reason": "public sentinel error identity is part of the tools composition contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+      "file": "services/tools/service.go",
+      "name": "ErrCapabilityClosePanic",
+      "reason": "public sentinel error identity reports browser cleanup panic across the service boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+      "file": "services/tools/service.go",
+      "name": "ErrCapabilityCloseTimeout",
+      "reason": "public sentinel error identity reports bounded browser cleanup across the service boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenCapture",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenRecordingPermissionDenied",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenCapturePermissionDenied",
+      "reason": "compatibility alias preserves the display capability error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrDisplayUnavailable",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenCaptureCanceled",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenCaptureTimedOut",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/display_contract.go",
+      "name": "ErrScreenCaptureFailed",
+      "reason": "sentinel error identity is part of the display capability contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen.go",
+      "name": "ErrInvalidScreenRecording",
+      "reason": "sentinel error identity is part of the screen recording validation contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen.go",
+      "name": "ErrInvalidScreenRecordingOption",
+      "reason": "compatibility alias preserves the screen recording validation error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_darwin.go",
+      "name": "darwinDisplayResolutionPattern",
+      "reason": "compiled platform parser is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "user32dll",
+      "reason": "platform syscall handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "gdi32dll",
+      "reason": "platform syscall handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procGetDC",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procReleaseDC",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procGetSysMetrics",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procCreateCompatibleDC",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procCreateCompatibleBitmap",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procSelectObject",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procBitBlt",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procGetDIBits",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procDeleteObject",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display",
+      "file": "services/tools/internal/display/tool_screen_windows.go",
+      "name": "procDeleteDC",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/filesystem_policy.go",
+      "name": "ErrInvalidFilesystemRoot",
+      "reason": "sentinel error identity is part of the filesystem policy contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/filesystem_policy.go",
+      "name": "ErrFilesystemAccessDenied",
+      "reason": "sentinel error identity is part of the filesystem policy contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/filesystem_policy.go",
+      "name": "ErrProtectedFilesystemRead",
+      "reason": "sentinel error identity is part of the filesystem policy contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/filesystem_refusal.go",
+      "name": "ErrFilesystemRefused",
+      "reason": "sentinel error identity is part of the filesystem refusal contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/tool_read_image.go",
+      "name": "ErrReadImagePreparerUnavailable",
+      "reason": "sentinel error identity is part of the read_image contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem",
+      "file": "services/tools/internal/filesystem/tool_read_image.go",
+      "name": "ErrReadImageInvalidResult",
+      "reason": "sentinel error identity is part of the read_image contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/mouse",
+      "file": "services/tools/internal/mouse/tool_mouse_windows.go",
+      "name": "user32dll",
+      "reason": "platform syscall handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/mouse",
+      "file": "services/tools/internal/mouse/tool_mouse_windows.go",
+      "name": "procSendInput",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/mouse",
+      "file": "services/tools/internal/mouse/tool_mouse_windows.go",
+      "name": "procSetCursorPos",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/mouse",
+      "file": "services/tools/internal/mouse/tool_mouse_windows.go",
+      "name": "procGetSysMetrics",
+      "reason": "platform syscall procedure handle is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry",
+      "file": "services/tools/internal/registry/registry.go",
+      "name": "ErrDuplicateTool",
+      "reason": "sentinel error identity is part of the registry contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry",
+      "file": "services/tools/internal/registry/registry.go",
+      "name": "ErrToolNotFound",
+      "reason": "sentinel error identity is part of the registry contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry",
+      "file": "services/tools/internal/registry/registry.go",
+      "name": "ErrEmptyToolName",
+      "reason": "sentinel error identity is part of the registry contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry",
+      "file": "services/tools/internal/registry/registry.go",
+      "name": "ErrNilTool",
+      "reason": "sentinel error identity is part of the registry contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry",
+      "file": "services/tools/internal/registry/registry.go",
+      "name": "registryErrorSentinels",
+      "reason": "registry sentinel table is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/shell",
+      "file": "services/tools/internal/shell/tool_shell.go",
+      "name": "defaultDenyPatterns",
+      "reason": "compiled shell policy table is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/stream_types.go",
+      "name": "ErrInvalidPCM16AnalysisInput",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/stream_types.go",
+      "name": "ErrPCM16AnalysisFailed",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/self_hearing_types.go",
+      "name": "ErrClosed",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/self_hearing_types.go",
+      "name": "ErrInvalidPCM16SelfHearingConfig",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/self_hearing_types.go",
+      "name": "ErrInvalidPCM16SelfHearingFrame",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis",
+      "file": "pkg/analysis/room_types.go",
+      "name": "ErrInvalidPCM16RoomAnalysisInput",
+      "reason": "sentinel error identity is part of the analysis contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveNotStarted",
+      "reason": "sentinel error identity is part of the live session contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveClosed",
+      "reason": "sentinel error identity is part of the live session contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveMediaUnavailable",
+      "reason": "sentinel error identity is part of the live media admission contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveScheduledAudioIncomplete",
+      "reason": "sentinel error identity is part of the finite live schedule contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidManifest",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnsupportedSchema",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrMissingBound",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidBound",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrTooFewParticipants",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidParticipant",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownParticipantKind",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrDuplicateParticipant",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrCredential",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownProvider",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownModel",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownTool",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownVoice",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrDuplicateTool",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidRecording",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidDocument",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrNoRoomOpener",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidBrowserTools",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidBrowserEndpoint",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidBrowserOption",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidReplayBundle",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrReplayBundleIncomplete",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrReplaySourceConflict",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrLaunchPathConflict",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrRoomServiceUnavailable",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrRoomClockUnavailable",
+      "reason": "sentinel error identity is part of the room contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+      "file": "pkg/analysis/room/room_types.go",
+      "name": "ErrInvalidPCM16AnalysisInput",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+      "file": "pkg/analysis/room/room_types.go",
+      "name": "ErrInvalidPCM16RoomAnalysisInput",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+      "file": "pkg/analysis/room/room_types.go",
+      "name": "ErrPCM16AnalysisFailed",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing",
+      "file": "pkg/analysis/selfhearing/self_hearing_types.go",
+      "name": "ErrInvalidPCM16SelfHearingConfig",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing",
+      "file": "pkg/analysis/selfhearing/self_hearing_types.go",
+      "name": "ErrInvalidPCM16SelfHearingFrame",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream",
+      "file": "pkg/analysis/stream/stream_types.go",
+      "name": "ErrInvalidPCM16AnalysisInput",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream",
+      "file": "pkg/analysis/stream/stream_types.go",
+      "name": "ErrPCM16AnalysisFailed",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+      "file": "pkg/audio/lifecycle_errors.go",
+      "name": "ErrClosed",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/contract",
+      "file": "pkg/contract/errors.go",
+      "name": "ErrClosed",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrClockUnavailable",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrClosed",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrFrameSizeMismatch",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrInputExists",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrInputMissing",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrInvalidFormat",
+      "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/tool_screen_windows_host.go",
+      "name": "user32dll",
+      "reason": "Windows host adapter ABI binding is a process-wide lazy syscall handle managed by the runtime; exact platform exception, not mutable application state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/tool_screen_windows_host.go",
+      "name": "procGetSysMetrics",
+      "reason": "Windows host adapter ABI binding is a process-wide lazy syscall procedure managed by the runtime; exact platform exception, not mutable application state."
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch",
+      "file": "internal/services/rooms/internal/launch/planner.go",
+      "name": "errDeviceRegistry",
+      "reason": "private sentinel identifies the required host device registry at the CLI room composition boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire",
+      "file": "internal/services/rooms/wire/providers.go",
+      "name": "Set",
+      "reason": "Wire provider set is immutable composition metadata for the room host adapter"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire",
+      "file": "internal/services/wire/wire.go",
+      "name": "RoomSet",
+      "reason": "Wire provider set is immutable compile-time composition metadata for the room service"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire",
+      "file": "internal/services/wire/wire.go",
+      "name": "DeviceSet",
+      "reason": "Wire provider set is immutable compile-time composition metadata for the device service"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "file": "internal/transport/cli/session_live_runtime.go",
+      "name": "errLiveRunnerUnavailable",
+      "reason": "private sentinel identifies a missing live service at the CLI composition boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events",
+      "file": "internal/transport/cli/internal/events/broker.go",
+      "name": "ErrInvalidParticipant",
+      "reason": "host event broker sentinel preserves the invalid participant error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events",
+      "file": "internal/transport/cli/internal/events/broker.go",
+      "name": "ErrUnknownParticipant",
+      "reason": "host event broker sentinel preserves the unknown participant error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveDurationExceeded",
+      "reason": "sentinel error identity is part of the live session timing contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveSessionUpdatedTimeout",
+      "reason": "sentinel error identity is part of the live session timing contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveFirstTurnTimeout",
+      "reason": "sentinel error identity is part of the live session timing contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveRateLimitRetryExhausted",
+      "reason": "sentinel error identity is part of the live session provider retry contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveToolExecutionTimeout",
+      "reason": "sentinel error identity is part of the live session tool timeout contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveSilentProviderEmptyResponse",
+      "reason": "sentinel error identity is part of the live session liveness contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveSilentProviderTimeout",
+      "reason": "sentinel error identity is part of the live session liveness contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveSchedulerUnavailable",
+      "reason": "sentinel error identity is part of the live session scheduling contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live",
+      "file": "services/session/internal/live/policies.go",
+      "name": "rateLimitRetryDelayPattern",
+      "reason": "compiled provider retry parser is immutable after package initialization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate",
+      "file": "services/session/internal/live/mediagate/gate.go",
+      "name": "ErrMediaQueueFull",
+      "reason": "sentinel error identity is part of the live media gate contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate",
+      "file": "services/session/internal/live/mediagate/gate.go",
+      "name": "ErrMediaUnavailable",
+      "reason": "sentinel error identity is part of the live media gate contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+      "file": "pkg/audio/format.go",
+      "name": "ErrInvalidPCM16Duration",
+      "reason": "sentinel error identity is part of the PCM16 duration contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenCapture",
+      "reason": "stable sentinel preserves the display capture error identity across the CLI host boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenRecordingPermissionDenied",
+      "reason": "stable sentinel preserves the macOS display permission error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenCapturePermissionDenied",
+      "reason": "compatibility alias preserves the macOS display permission error identity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrDisplayUnavailable",
+      "reason": "stable sentinel identifies an unavailable display surface"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenCaptureCanceled",
+      "reason": "stable sentinel identifies a canceled display capture"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenCaptureTimedOut",
+      "reason": "stable sentinel identifies a timed out display capture"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+      "file": "internal/tools/display_contract.go",
+      "name": "ErrScreenCaptureFailed",
+      "reason": "stable sentinel identifies a failed display capture"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveImageContinuationIncomplete",
+      "reason": "sentinel error identity is part of the live session image continuation contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveToolContinuationIncomplete",
+      "reason": "sentinel error identity is part of the live session tool continuation contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "file": "pkg/mixer/mixer.go",
+      "name": "ErrContextUnavailable",
+      "reason": "sentinel error identity identifies unavailable mixer scheduling context"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording",
+      "file": "services/recording/service.go",
+      "name": "ErrLiveEvidenceClaimed",
+      "reason": "stable sentinel identifies a recording destination claimed by another invocation"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording",
+      "file": "services/recording/service.go",
+      "name": "ErrLiveEvidenceClosed",
+      "reason": "stable sentinel identifies recording admission after finalization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
+      "file": "services/replay/service.go",
+      "name": "ErrCaptureUnavailable",
+      "reason": "public sentinel error identity preserves errors.Is for unavailable replay captures"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan",
+      "file": "services/replay/internal/plan/capture.go",
+      "name": "errSelfDrivingPlanUnavailable",
+      "reason": "private sentinel distinguishes caller-driven replay captures from unavailable self-driving plans"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+      "file": "pkg/audio/processor.go",
+      "name": "ErrFrameAccumulatorMetadataChanged",
+      "reason": "sentinel error identity distinguishes finite media metadata discontinuity"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+      "file": "pkg/audio/processor.go",
+      "name": "ErrFrameAccumulatorFrameTooLarge",
+      "reason": "sentinel error identity distinguishes an oversized finite media quantum"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+      "file": "pkg/audio/processor.go",
+      "name": "ErrFrameAccumulatorClosed",
+      "reason": "sentinel error identity distinguishes writes after finite media finalization"
+    }
+  ],
+  "limits": {
+    "package_files": 15,
+    "production_file_lines": 400,
+    "test_file_lines": 600,
+    "function_lines": 80,
+    "test_function_lines": 120,
+    "function_statements": 50,
+    "test_function_statements": 80,
+    "cognitive_complexity": 15,
+    "test_cognitive_complexity": 20,
+    "cyclomatic_complexity": 15,
+    "test_cyclomatic_complexity": 20
+  }
+}

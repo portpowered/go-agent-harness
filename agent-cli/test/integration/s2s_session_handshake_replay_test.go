@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -36,12 +37,13 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordDialer := newHandshakeReplayDialer()
 
 	err := servicetest.RunSessionWithInstructions(context.Background(), io.Discard, servicetest.SessionRunOptions{
-		RecordPath: recordPath,
-		Provider:   "openai",
-		Model:      "gpt-realtime",
-		APIKey:     "synthetic-recording-key",
-		ConfigDir:  t.TempDir(),
-		Prompt:     sessionHandshakeReplayPrompt,
+		RecordPath:   recordPath,
+		Provider:     "openai",
+		Model:        "gpt-realtime",
+		APIKey:       "synthetic-recording-key",
+		ConfigDir:    t.TempDir(),
+		ModelCatalog: providerswire.NewModelCatalog(),
+		Prompt:       sessionHandshakeReplayPrompt,
 		ToolDefinitions: []messages.ToolDefinition{{
 			Name:        sessionHandshakeReplayTool,
 			Description: "recorded schema",

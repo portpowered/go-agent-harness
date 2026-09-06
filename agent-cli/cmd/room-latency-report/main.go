@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer, service rooms.ReportingService) error {
+func run(args []string, stdout, stderr io.Writer, service runtimeRooms.ReportingService) error {
 	flags := flag.NewFlagSet("room-latency-report", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	destination := flags.String("out", "", "finalized room evidence directory")

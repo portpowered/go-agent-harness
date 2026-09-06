@@ -1,5 +1,48 @@
 package integration
 
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type cliLiveRecordingManifest struct {
+	Artifacts []struct {
+		Path string `json:"path"`
+	} `json:"artifacts"`
+}
+
+func readCLIRecordingManifest(t *testing.T, destination string) cliLiveRecordingManifest {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read finalized recording manifest: %v", err)
+	}
+	var manifest cliLiveRecordingManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("decode recording manifest: %v", err)
+	}
+	return manifest
+}
+
+func assertCLIRecordingArtifacts(t *testing.T, manifest cliLiveRecordingManifest) {
+	t.Helper()
+	input, output := 0, 0
+	for _, artifact := range manifest.Artifacts {
+		switch {
+		case strings.HasPrefix(artifact.Path, "audio/in-"):
+			input++
+		case strings.HasPrefix(artifact.Path, "audio/out-"):
+			output++
+		}
+	}
+	if input != 1 || output != 1 {
+		t.Fatalf("manifest audio artifacts = input:%d output:%d, want one append-only stream each", input, output)
+	}
+}
+
 // audioTurnReplayFixtureJSON is a real gate-probe recording (s2s-08, 2026-08-30)
 // of a two-turn --audio-in-turn/--record-dir OpenAI realtime session. Its
 // input_audio_buffer.append audio and response.output_audio.delta bytes are

@@ -95,7 +95,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderOpenAI,
@@ -412,7 +412,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderOpenAI,
@@ -599,7 +599,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderOpenAI,

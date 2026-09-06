@@ -1,13 +1,10 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -27,18 +24,10 @@ import (
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
-		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
-		oaiprovider.WithWebSocketDialer(server),
-		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
-	)
-	if err != nil {
-		t.Fatalf("create hermetic OpenAI scheduled session inferencer: %v", err)
-	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		&mockToolExecutor{},
-		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
-		sessionInferencer,
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortTransportDialer, server),
+		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer should not be called")}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
@@ -48,16 +37,8 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 
 func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
-		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
-		oaiprovider.WithWebSocketDialer(server),
-		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
-	)
-	if err != nil {
-		t.Fatalf("create grounded hermetic OpenAI scheduled session inferencer: %v", err)
-	}
 	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
-		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
+		wire.NewPortSwap(wire.PortTransportDialer, server),
 	)
 	if err != nil {
 		t.Fatalf("initialize grounded production CLI: %v", err)
@@ -376,22 +357,6 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 	assertCLILiveRecordingBundle(t, recordDir, 2)
 }
 
-func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) {
-	t.Helper()
-	for turn := 0; turn < turns; turn++ {
-		appendIndex := indexOfTimeline(timeline, "out:input_audio_buffer.append", turn)
-		commitIndex := indexOfTimeline(timeline, "out:input_audio_buffer.commit", turn)
-		responseIndex := indexOfTimeline(timeline, "out:response.create", turn)
-		doneIndex := indexOfTimeline(timeline, "in:response.done", turn)
-		if appendIndex < 0 || commitIndex < 0 || responseIndex < 0 || doneIndex < 0 {
-			t.Fatalf("scheduled turn %d is missing its boundary from %v", turn+1, timeline)
-		}
-		if !(appendIndex < commitIndex && commitIndex < responseIndex && responseIndex < doneIndex) {
-			t.Fatalf("scheduled turn %d lifecycle order = %v, want append < commit < response.create < response.done", turn+1, timeline)
-		}
-	}
-}
-
 func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
 	t.Helper()
 	wavBytes, err := os.ReadFile(speechPath)
@@ -538,12 +503,17 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 	if len(providerErrors) != 0 {
 		t.Fatalf("speech-then-silence provider errors = %v; timeline=%v", providerErrors, timeline)
 	}
-	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 || countTimeline(timeline, "out:input_audio_buffer.commit") != 2 || countTimeline(timeline, "out:response.create") != 2 || countTimeline(timeline, "in:response.done") != 2 {
+	const providerFrameBudget = 48_000
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	if countTimeline(timeline, "out:input_audio_buffer.commit") != 2 || countTimeline(timeline, "out:response.create") != 2 || countTimeline(timeline, "in:response.done") != 2 {
 		t.Fatalf("speech-then-silence scheduled lifecycle = %v, want two complete client-owned turns", timeline)
 	}
-	assertScheduledBoundaryOrder(t, timeline, 2)
+	appendCounts := assertScheduledBoundaryOrder(t, timeline, 2)
+	if len(appendAudio) != appendCounts[0]+appendCounts[1] {
+		t.Fatalf("scheduled append count = %d, want %d from turn boundaries (%v): %v", len(appendAudio), appendCounts[0]+appendCounts[1], appendCounts, timeline)
+	}
 	firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0)
-	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
+	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", appendCounts[0])
 	if firstResponseDone < 0 || secondAppend <= firstResponseDone {
 		t.Fatalf("silence turn crossed the active first response: %v", timeline)
 	}
@@ -551,16 +521,10 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 		t.Fatalf("client-owned scheduled run unexpectedly emitted VAD observations = %v", timeline)
 	}
 
-	appendAudio := audioPayloadsFromOutbound(outbound)
-	if len(appendAudio) != 2 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 {
-		t.Fatalf("speech-then-silence append payloads = %v, want two non-empty scheduled payloads", audioLengths(appendAudio))
-	}
-	if len(appendAudio[0]) != len(appendAudio[1]) {
-		t.Fatalf("speech and exact-silence payload lengths = %v, want equal duration after normalization", audioLengths(appendAudio))
-	}
-	if !hasNonZeroPCM(appendAudio[0]) || hasNonZeroPCM(appendAudio[1]) {
-		t.Fatalf("scheduled payloads do not preserve speech then exact silence: non-zero=%t,%t", hasNonZeroPCM(appendAudio[0]), hasNonZeroPCM(appendAudio[1]))
-	}
+	speech := readScheduledWAVSamples(t, speechPath)
+	silence := readScheduledWAVSamples(t, silencePath)
+	assertScheduledTurnPCM(t, appendAudio[:appendCounts[0]], speech, providerFrameBudget)
+	assertScheduledTurnPCM(t, appendAudio[appendCounts[0]:], silence, providerFrameBudget)
 	for _, output := range []string{strings.Join(timeline, "\n"), strings.Join(providerErrors, "\n"), stdout.String(), stderr.String()} {
 		if strings.Contains(output, "input_audio_buffer_commit_empty") || strings.Contains(output, "conversation_already_has_active_response") {
 			t.Fatalf("speech-then-silence run contains a provider collision: %q", output)
@@ -595,7 +559,7 @@ func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeCo
 		t.Fatal("former server-VAD scheduled configuration unexpectedly completed")
 	}
 
-	timeline, _, providerErrors, _, serverVADEnabled := server.snapshots()
+	timeline, outbound, providerErrors, _, serverVADEnabled := server.snapshots()
 	if !serverVADEnabled {
 		t.Fatalf("negative control did not leave server VAD enabled: %v", timeline)
 	}
@@ -605,12 +569,17 @@ func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeCo
 	if len(providerErrors) != 1 || providerErrors[0] != "input_audio_buffer_commit_empty" {
 		t.Fatalf("negative-control provider errors = %v, want one input_audio_buffer_commit_empty; timeline=%v", providerErrors, timeline)
 	}
-	if countTimeline(timeline, "out:input_audio_buffer.append") != 1 || countTimeline(timeline, "out:input_audio_buffer.commit") != 1 {
+	const providerFrameBudget = 48_000
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	speech := readScheduledWAVSamples(t, speechPath)
+	wantChunks := (len(speech) + providerFrameBudget - 1) / providerFrameBudget
+	if len(appendAudio) != wantChunks || countTimeline(timeline, "out:input_audio_buffer.commit") != 1 {
 		t.Fatalf("negative-control client boundary = %v, want one append and one rejected commit", timeline)
 	}
-	if countTimeline(timeline, "out:input_audio_buffer.append") >= 2 || countTimeline(timeline, "in:response.done") != 0 {
+	if countTimeline(timeline, "in:response.done") != 0 {
 		t.Fatalf("negative-control continued after the provider collision: %v", timeline)
 	}
+	assertScheduledTurnPCM(t, appendAudio, speech, providerFrameBudget)
 	if countTimeline(timeline, "in:input_audio_buffer.speech_started") != 1 || countTimeline(timeline, "in:input_audio_buffer.speech_stopped") != 1 {
 		t.Fatalf("negative-control VAD observations = %v, want one speech start and stop: %v", timeline, timeline)
 	}
@@ -655,4 +624,16 @@ func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
 		}
 	}
 	return audio
+}
+func readScheduledWAVSamples(t *testing.T, path string) []int16 {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read scheduled WAV %q: %v", path, err)
+	}
+	_, samples, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode scheduled WAV %q: %v", path, err)
+	}
+	return samples
 }

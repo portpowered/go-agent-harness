@@ -17,6 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -53,7 +55,7 @@ type roomEvidence struct {
 	secrets        []string
 	participants   map[string]*roomParticipantEvidence
 	providerErrors map[string]struct{}
-	latency        *roomLatencyRecorder
+	latency        runtimeRooms.LatencyRecorder
 	// source is the injectable platform clock the latency recorder samples;
 	// distinct from roomClock below, which anchors offsets to room start.
 	source platformclock.Source
@@ -125,101 +127,22 @@ type roomEvidenceArtifactPaths struct {
 }
 
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, sources ...platformclock.Source) (*roomEvidence, error) {
+	return newRoomEvidenceWithLatency(destination, manifest, format, secrets, startedAt, nil, sources...)
+}
+
+func newRoomEvidenceWithLatency(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time, latencyService runtimeRooms.LatencyService, sources ...platformclock.Source) (*roomEvidence, error) {
 	if strings.TrimSpace(destination) == "" {
 		return nil, errors.New("room evidence output directory is empty")
 	}
-	var source platformclock.Source
-	if len(sources) > 0 {
-		source = sources[0]
+	clock := platformclock.Ensure(roomEvidenceSource(sources))
+	startedAt = roomEvidenceStart(startedAt, clock)
+	format = normalizedRoomEvidenceFormat(format)
+	evidence := newRoomEvidenceState(destination, manifest, format, secrets, startedAt, clock, latencyService)
+	if err := evidence.openTimeline(); err != nil {
+		return nil, err
 	}
-	clock := platformclock.Ensure(source)
-	if startedAt.IsZero() {
-		startedAt = clock.Now().UTC()
-	}
-	if format.SampleRate <= 0 {
-		format = room.DefaultPCM16Format()
-	}
-
-	evidence := &roomEvidence{
-		destination:          filepath.Clean(destination),
-		startedAt:            startedAt.UTC(),
-		manifest:             manifest,
-		secrets:              append([]string(nil), secrets...),
-		participants:         make(map[string]*roomParticipantEvidence, len(manifest.Participants)),
-		participantRecordErr: make(map[string]error, len(manifest.Participants)),
-		artifactRecordErr:    make(map[string]error),
-		audioFormat:          format,
-		latency:              newRoomLatencyRecorder(clock, format),
-		source:               clock,
-		providerErrors:       make(map[string]struct{}, len(manifest.Participants)),
-	}
-	evidence.clock = newRoomClock(evidence.startedAt, clock)
-	evidence.mix = newRoomMixBuffer(format.SampleRate)
-	var err error
-	evidence.timeline, err = newRoomTimeline(filepath.Join(evidence.destination, RoomEvidenceTimelinePath), evidence.clock)
-	if err != nil {
-		evidence.cleanupSetup()
-		return nil, fmt.Errorf("create room timeline evidence: %w", err)
-	}
-
-	stems := roomEvidenceArtifactStems(manifest.Participants)
-	for _, participant := range manifest.Participants {
-		stem := stems[participant.ID]
-		artifactPaths := roomEvidenceArtifactPaths{
-			WAV:         "agent-" + stem + ".wav",
-			Diagnostics: "agent-" + stem + ".diagnostics.jsonl",
-			Deltas:      "agent-" + stem + ".deltas.jsonl",
-			SentPCM:     filepath.Join("participants", stem, "sent.pcm"),
-			ReceivedPCM: filepath.Join("participants", stem, "received.pcm"),
-			Events:      filepath.Join("participants", stem, "events.jsonl"),
-		}
-		if room.NormalizeParticipantKind(participant.Kind) != room.ParticipantKindHuman {
-			artifactPaths.Capture = filepath.Join("participants", stem, "capture.json")
-		}
-		participantEvidence := &roomParticipantEvidence{
-			owner:          evidence,
-			id:             participant.ID,
-			artifacts:      artifactPaths,
-			sentSpeech:     &roomSpeechTracker{},
-			receivedSpeech: &roomSpeechTracker{},
-		}
-		evidence.participants[participant.ID] = participantEvidence
-
-		if err := os.MkdirAll(filepath.Join(evidence.destination, "participants", stem), 0o700); err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q evidence directory: %w", participant.ID, err)
-		}
-
-		participantEvidence.audio, err = newSelfPlayWAVRecorder(filepath.Join(evidence.destination, participantEvidence.artifacts.WAV), format.SampleRate)
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q WAV evidence: %w", participant.ID, err)
-		}
-		participantEvidence.diagnostics, err = newSelfPlayJSONLWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.Diagnostics))
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q diagnostics evidence: %w", participant.ID, err)
-		}
-		participantEvidence.deltas, err = newSelfPlayJSONLWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.Deltas))
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q delta evidence: %w", participant.ID, err)
-		}
-		participantEvidence.events, err = newSelfPlayJSONLWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.Events))
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q event evidence: %w", participant.ID, err)
-		}
-		participantEvidence.sentPCM, err = newRawPCMWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.SentPCM))
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q sent-audio evidence: %w", participant.ID, err)
-		}
-		participantEvidence.receivedPCM, err = newRawPCMWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.ReceivedPCM))
-		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create room participant %q received-audio evidence: %w", participant.ID, err)
-		}
+	if err := evidence.openParticipants(); err != nil {
+		return nil, err
 	}
 	return evidence, nil
 }
@@ -596,7 +519,7 @@ func (p *roomParticipantEvidence) observeSentStream(pcm []byte) error {
 	if p.owner.mix != nil {
 		mixErr = p.owner.mix.mixAt(offset, pcm)
 	}
-	if event := p.sentSpeech.transition(pcm16HasSignal(pcm)); event != "" {
+	if event := p.sentSpeech.transition(audio.PCM16HasSignal(pcm)); event != "" {
 		p.owner.recordTimelineEvent("speech_"+event, p.id, nil)
 	}
 	return errors.Join(writeErr, mixErr)
@@ -632,7 +555,7 @@ func (p *roomParticipantEvidence) observeReceivedAudio(pcm []byte) error {
 		writeErr = p.recordError(p.artifacts.ReceivedPCM, errors.New("room participant received-audio sink is not initialized"))
 	}
 	if p.owner != nil {
-		if event := p.receivedSpeech.transition(pcm16HasSignal(pcm)); event != "" {
+		if event := p.receivedSpeech.transition(audio.PCM16HasSignal(pcm)); event != "" {
 			p.owner.recordTimelineEvent("received_speech_"+event, p.id, nil)
 		}
 	}
@@ -701,28 +624,28 @@ func (e *roomEvidence) observeSpeakerAudio(sourceID string, targetIDs []string, 
 	if e == nil || e.latency == nil {
 		return
 	}
-	e.latency.observeSpeakerAudio(sourceID, targetIDs, pcm)
+	e.latency.ObserveSpeakerBytes(sourceID, targetIDs, len(pcm))
 }
 
 func (e *roomEvidence) observeSpeechStopped(participantID string) {
 	if e == nil || e.latency == nil {
 		return
 	}
-	e.latency.observeSpeechStopped(participantID)
+	e.latency.ObserveSpeechStopped(participantID)
 }
 
 func (e *roomEvidence) observeProviderAudio(participantID string, responseID string) {
 	if e == nil || e.latency == nil {
 		return
 	}
-	e.latency.observeProviderAudio(participantID, responseID)
+	e.latency.ObserveProviderAudio(participantID, responseID)
 }
 
 func (e *roomEvidence) observePeerAudio(sourceID, targetID string, pcm []byte) {
 	if e == nil || e.latency == nil {
 		return
 	}
-	e.latency.observePeerAudio(sourceID, targetID, pcm)
+	e.latency.ObservePeerBytes(sourceID, targetID, len(pcm))
 }
 
 func redactRoomJSONValue(value any, redact func(string) string) any {
@@ -745,86 +668,7 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 	if e == nil {
 		return nil
 	}
-	e.finalizeOnce.Do(func() {
-		reason := result.TerminationReason
-		if reason == "" {
-			reason = result.Reason
-		}
-		// run_terminated's own timestamp is read fresh here, strictly after
-		// the caller captured endedAt. Any real time elapsed between those
-		// two independent clock reads (even nanoseconds) would otherwise let
-		// this final timeline event's own offset exceed the room span the
-		// manifest declares it must fall inside -- which the replay reader
-		// rejects. Recording it through recordFinalTimelineEvent and folding
-		// its own instant into endedAt (never earlier, only later) makes the
-		// declared span the true superset of everything actually recorded,
-		// by construction instead of by racing two clock reads.
-		if finalizedAt := e.recordFinalTimelineEvent("run_terminated", "", map[string]string{"reason": string(reason)}); finalizedAt.After(endedAt) {
-			endedAt = finalizedAt
-		}
-
-		for _, participant := range e.participants {
-			if participant == nil {
-				continue
-			}
-			if participant.audio != nil {
-				if err := participant.audio.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.WAV, err)
-				}
-			}
-			if participant.diagnostics != nil {
-				if err := participant.diagnostics.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.Diagnostics, err)
-				}
-			}
-			if participant.deltas != nil {
-				if err := participant.deltas.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.Deltas, err)
-				}
-			}
-			if participant.events != nil {
-				if err := participant.events.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.Events, err)
-				}
-			}
-			if participant.sentPCM != nil {
-				if err := participant.sentPCM.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.SentPCM, err)
-				}
-			}
-			if participant.receivedPCM != nil {
-				if err := participant.receivedPCM.close(); err != nil {
-					e.recordError(participant.id, participant.artifacts.ReceivedPCM, err)
-				}
-			}
-		}
-		if e.timeline != nil {
-			if err := e.timeline.close(); err != nil {
-				e.recordError("", RoomEvidenceTimelinePath, err)
-			}
-		}
-		if e.mix != nil {
-			span := endedAt.Sub(e.startedAt)
-			if span < 0 {
-				span = 0
-			}
-			if mixErr := e.mix.finalize(span, filepath.Join(e.destination, RoomEvidenceMixPath)); mixErr != nil {
-				e.recordError("", RoomEvidenceMixPath, fmt.Errorf("write room mix evidence: %w", mixErr))
-			}
-		}
-
-		if latencyErr := e.writeLatencyBundle(); latencyErr != nil {
-			e.recordError("", RoomLatencyArtifactPath, latencyErr)
-		}
-		// Recording degradation is deliberately excluded from runErr: the room
-		// result and its runtime termination reason describe live work, while
-		// recording_status/degraded_artifacts describe evidence health.
-		manifestErr := e.writeManifest(result, runErr, endedAt.UTC())
-		if manifestErr != nil {
-			e.recordError("", RoomEvidenceManifestPath, manifestErr)
-		}
-		e.finalizeErr = errors.Join(e.err(), manifestErr)
-	})
+	e.finalizeOnce.Do(func() { e.finalizeResult(result, runErr, endedAt) })
 	return e.finalizeErr
 }
 
@@ -978,7 +822,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		},
 		RoomMix:           RoomEvidenceMixPath,
 		RoomTimeline:      RoomEvidenceTimelinePath,
-		RoomLatency:       RoomLatencyArtifactPath,
+		RoomLatency:       runtimeRooms.RoomLatencyArtifactPath,
 		Artifacts:         make(map[string]string, len(e.manifest.Participants)*7+2),
 		ArtifactIntegrity: make(map[string]roomEvidenceArtifactIntegrity, len(e.manifest.Participants)*7+2),
 		RecordingStatus:   cloneRoomRecordingStatus(recordingStatus),
@@ -1089,7 +933,7 @@ func (e *roomEvidence) writeLatencyBundle() error {
 	if e == nil || e.latency == nil {
 		return nil
 	}
-	return e.latency.write(filepath.Join(e.destination, RoomLatencyArtifactPath), e.secrets)
+	return e.latency.Write(filepath.Join(e.destination, runtimeRooms.RoomLatencyArtifactPath))
 }
 
 func writeRoomEvidenceManifestFile(path string, manifest roomEvidenceManifest, secrets []string) error {

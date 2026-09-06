@@ -10,7 +10,6 @@ import (
 	"sort"
 
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -158,24 +157,3 @@ func toServiceDevice(device devicegw.Device) serviceDevices.Device {
 		Direction: serviceDevices.DeviceDirection(device.Direction),
 	}
 }
-
-// Run executes one live device-tier scenario while keeping the registry and
-// all opened source/sink handles inside this private service package.
-func (s *Service) Run(ctx context.Context, request serviceDevices.DeviceProbeRequest) (probe.ObservationSnapshot, error) {
-	if err := contextErr(ctx); err != nil {
-		return probe.ObservationSnapshot{}, err
-	}
-	if s == nil || s.registry == nil {
-		return probe.ObservationSnapshot{}, errors.New("audio device registry is required")
-	}
-	availability, err := devicegw.ProbeDeviceAvailability(s.registry)
-	if err != nil {
-		return probe.ObservationSnapshot{}, err
-	}
-	if availability.Status != devicegw.DeviceProbeStatusReady {
-		return probe.ObservationSnapshot{}, fmt.Errorf("device probe cannot run with availability status %q", availability.Status)
-	}
-	return runDeviceProbeScenario(ctx, request.Scenario, availability, s.registry, request)
-}
-
-var _ serviceDevices.DeviceProbeService = (*Service)(nil)

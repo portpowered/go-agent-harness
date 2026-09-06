@@ -13,7 +13,7 @@ import (
 func TestTraceStagesOutsideBundleThenAttaches(t *testing.T) {
 	bundle := filepath.Join(t.TempDir(), "session")
 	request := public.Request{RecordDirectory: bundle}
-	options := SessionRunOptions{Clock: clock.NewDeterministic(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Millisecond)}
+	options := SessionRunOptions{ModelCatalog: testModelCatalog(), Clock: clock.NewDeterministic(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Millisecond)}
 	trace, err := prepareTrace(&request, &options, options.Clock)
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestTraceStagesOutsideBundleThenAttaches(t *testing.T) {
 func TestFailedSessionRetainsStagedTraceWithoutModifyingBundle(t *testing.T) {
 	bundle := t.TempDir()
 	request := public.Request{RecordDirectory: bundle}
-	options := SessionRunOptions{Clock: clock.Real{}}
+	options := SessionRunOptions{ModelCatalog: testModelCatalog(), Clock: clock.Real{}}
 	trace, err := prepareTrace(&request, &options, options.Clock)
 	if err != nil {
 		t.Fatal(err)

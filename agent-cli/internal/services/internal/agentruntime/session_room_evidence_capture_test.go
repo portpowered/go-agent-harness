@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,8 +10,17 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
+
+func (s *roomTestSession) publish(events ...messages.StreamMessage) {
+	for _, event := range events {
+		if !s.receive.Write(context.Background(), event) {
+			panic("room test session could not publish event")
+		}
+	}
+}
 
 func TestInjectRoomWallClock_AddsOffsetAndUnixFields(t *testing.T) {
 	stamped, err := injectRoomWallClock([]byte(`{"type":"AUDIO.DELTA"}`), 1500*time.Millisecond, 1700000000123)

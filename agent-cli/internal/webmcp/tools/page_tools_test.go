@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 func pageCatalog() webmcp.ToolCatalogSnapshot {
@@ -246,14 +247,21 @@ func TestComposedSurfaceNeverDeadEndsOnCatalogNames(t *testing.T) {
 	set := NewBrokerToolSet(broker)
 	staticDefinitions := []messages.ToolDefinition{{Name: "exec", Description: "shell"}}
 	set.SetReservedToolNames([]string{"exec"})
-	surface, err := cliTools.ComposeToolSurface(staticStub{}, staticDefinitions, set.Executor(), set.Definitions())
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		Executor:    staticStub{},
+		Definitions: staticDefinitions,
+		Browser: &runtimeTools.BrowserSurface{
+			Executor:    set.Executor(),
+			Definitions: set.Definitions(),
+		},
+	})
 	if err != nil {
 		t.Fatalf("compose surface: %v", err)
 	}
 
 	// A live catalog name that was never in the compose-time definition set
 	// must route through the dynamic fallback, not die on composition.
-	response, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "call-4", Name: "get_cube_state", Arguments: `{}`})
+	response, err := capability.Executor.Execute(context.Background(), messages.ToolCall{ID: "call-4", Name: "get_cube_state", Arguments: `{}`})
 	if err != nil {
 		t.Fatalf("catalog-name call errored: %v", err)
 	}
@@ -264,7 +272,7 @@ func TestComposedSurfaceNeverDeadEndsOnCatalogNames(t *testing.T) {
 
 	// A genuinely unknown name gets model-visible guidance naming the real
 	// catalog and the stable path - never invalid tool composition.
-	response, err = surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "call-5", Name: "cube_state", Arguments: `{}`})
+	response, err = capability.Executor.Execute(context.Background(), messages.ToolCall{ID: "call-5", Name: "cube_state", Arguments: `{}`})
 	if err != nil {
 		t.Fatalf("unknown-name call errored: %v", err)
 	}

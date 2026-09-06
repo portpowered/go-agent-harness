@@ -1,14 +1,17 @@
 package grok
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"os"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -41,8 +44,10 @@ type grokSession struct {
 	// provider-to-client output path of the session.
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
-	done      chan struct{}
-	closeOnce sync.Once
+	done        chan struct{}
+	closeOnce   sync.Once
+	errMu       sync.Mutex
+	terminalErr error
 
 	mediaMu         sync.Mutex
 	media           *sharedaudio.SessionMedia
@@ -171,58 +176,97 @@ func (s *grokSession) Done() <-chan struct{} {
 	return s.done
 }
 
+// TerminalError returns the unexpected provider-side transport or protocol
+// error that terminated the session, if one was observed. A clean caller-side
+// Close and context cancellation do not set this value.
+func (s *grokSession) TerminalError() error {
+	if s == nil {
+		return nil
+	}
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	return s.terminalErr
+}
+
+func (s *grokSession) setTerminalError(err error) {
+	if s == nil || err == nil {
+		return
+	}
+	s.errMu.Lock()
+	if s.terminalErr == nil {
+		s.terminalErr = err
+	}
+	s.errMu.Unlock()
+}
+
+func (s *grokSession) isStopping(ctx context.Context) bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+	}
+	return ctx.Err() != nil
+}
+
+func isExpectedGrokReadClose(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)
+}
+
+func (s *grokSession) handleReadError(ctx context.Context, err error) {
+	if s.isStopping(ctx) {
+		_ = s.Close()
+		return
+	}
+	if isExpectedGrokReadClose(err) &&
+		!transport.IsInjectedFault(err) &&
+		!errors.Is(err, providers.ErrReplayMismatch) {
+		_ = s.Close()
+		return
+	}
+	s.setTerminalError(err)
+	s.logger.Error("grok: websocket read error", logging.Field{Key: "error", Value: err})
+	s.recvBuf.WriteTerminal(messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: providers.NewStreamTransportErrorValue(err),
+	})
+	_ = s.Close()
+}
+
+func (s *grokSession) handleParseError(raw []byte, err error) {
+	s.setTerminalError(err)
+	s.logger.Warn("grok: failed to parse server event",
+		logging.Field{Key: "error", Value: err},
+		logging.Field{Key: "raw", Value: string(raw)},
+	)
+	// An unparseable provider frame is a protocol violation, not a
+	// skippable event: surface a classified terminal ERROR so consumers
+	// can diagnose the failure instead of silently losing the stream.
+	s.recvBuf.WriteTerminal(messages.StreamMessage{
+		Type: messages.StreamTypeError,
+		Value: messages.NewErrorValueWithTerminal(
+			fmt.Sprintf("malformed provider event: %v", err),
+			providers.ErrorClassInvalidRequest,
+			messages.TerminalReasonTerminalFailure,
+			messages.TerminalProvenanceGateway,
+			messages.TerminalOutputNone,
+		),
+	})
+	_ = s.Close()
+}
+
 // readLoop reads messages from the WebSocket, translates them to StreamMessages,
 // and writes them to recvBuf.
 func (s *grokSession) readLoop(ctx context.Context) {
 	for {
 		_, data, err := s.conn.ReadMessage()
 		if err != nil {
-			select {
-			case <-s.done:
-				// Clean shutdown, don't log.
-				return
-			default:
-			}
-			if ctx.Err() != nil {
-				_ = s.Close()
-				return
-			}
-			if !transport.IsInjectedFault(err) {
-				_ = s.Close()
-				return
-			}
-			s.logger.Error("grok: websocket read error", logging.Field{Key: "error", Value: err})
-			// A transport close is a provider-visible terminal failure. Preserve
-			// the typed read error in the stream so callers can distinguish an
-			// abrupt close from an intentional session shutdown.
-			s.recvBuf.WriteTerminal(messages.StreamMessage{
-				Type:  messages.StreamTypeError,
-				Value: providers.NewStreamTransportErrorValue(err),
-			})
-			_ = s.Close()
+			s.handleReadError(ctx, err)
 			return
 		}
 
 		event, err := parseServerEvent(data)
 		if err != nil {
-			s.logger.Warn("grok: failed to parse server event",
-				logging.Field{Key: "error", Value: err},
-				logging.Field{Key: "raw", Value: string(data)},
-			)
-			// An unparseable provider frame is a protocol violation, not a
-			// skippable event: surface a classified terminal ERROR so consumers
-			// can diagnose the failure instead of silently losing the stream.
-			s.recvBuf.WriteTerminal(messages.StreamMessage{
-				Type: messages.StreamTypeError,
-				Value: messages.NewErrorValueWithTerminal(
-					fmt.Sprintf("malformed provider event: %v", err),
-					providers.ErrorClassInvalidRequest,
-					messages.TerminalReasonTerminalFailure,
-					messages.TerminalProvenanceGateway,
-					messages.TerminalOutputNone,
-				),
-			})
-			_ = s.Close()
+			s.handleParseError(data, err)
 			return
 		}
 
@@ -255,6 +299,11 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
+				if s.isStopping(ctx) {
+					_ = s.Close()
+					return
+				}
+				s.setTerminalError(err)
 				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()
 				return

@@ -8,6 +8,10 @@ import serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/interna
 
 import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 
+import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+
+import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -64,15 +68,12 @@ type BrowserStateTransition = impl.BrowserStateTransition
 var ComputeBrowserConversationInputJSONValidity = impl.ComputeBrowserConversationInputJSONValidity
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
-const DefaultRoomAgentID = impl.DefaultRoomAgentID
-const DefaultRoomCredentialEnv = impl.DefaultRoomCredentialEnv
-const DefaultRoomCustomerID = impl.DefaultRoomCustomerID
 
 var DeriveBrowserConversationCorrections = impl.DeriveBrowserConversationCorrections
 var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
 var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
-var ErrRoomLaunchPathConflict = impl.ErrRoomLaunchPathConflict
+var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
 var ErrRoomReplayBundleIncomplete = impl.ErrRoomReplayBundleIncomplete
 var ErrRoomReplaySourceConflict = impl.ErrRoomReplaySourceConflict
 var ErrSessionAudioInputConflict = serviceDevices.ErrSessionAudioInputConflict
@@ -80,7 +81,7 @@ var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
-var ErrSessionScheduledAudioIncomplete = impl.ErrSessionScheduledAudioIncomplete
+var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = impl.ErrSessionUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
@@ -91,7 +92,6 @@ var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessio
 var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealtimeSessionInferencerWithToolsAndOptions
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
 var NewGrokSessionInferencerWithOptions = impl.NewGrokSessionInferencerWithOptions
-var NewRoomEventBroker = impl.NewRoomEventBroker
 
 const ParticipantTerminationEnded = impl.ParticipantTerminationEnded
 const ParticipantTerminationError = impl.ParticipantTerminationError
@@ -106,22 +106,6 @@ var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDev
 
 var RenderBrowserConversationReport = impl.RenderBrowserConversationReport
 
-const RoomCredentialFromEnvironment = impl.RoomCredentialFromEnvironment
-const RoomEvidenceManifestPath = impl.RoomEvidenceManifestPath
-const RoomLaunchModeBare = impl.RoomLaunchModeBare
-const RoomLaunchModeConfigured = impl.RoomLaunchModeConfigured
-
-type RoomParticipantReady = impl.RoomParticipantReady
-type RoomParticipantResult = impl.RoomParticipantResult
-type RoomResult = impl.RoomResult
-type RoomRunOptions = impl.RoomRunOptions
-
-const RoomStreamEventParticipantJoined = impl.RoomStreamEventParticipantJoined
-const RoomTerminationFailed = impl.RoomTerminationFailed
-const RoomTerminationMaxTurnsReached = impl.RoomTerminationMaxTurnsReached
-const RoomTerminationStopped = impl.RoomTerminationStopped
-
-var RunRoom = impl.RunRoom
 var RunSession = impl.RunSession
 var RunSessionWithInstructions = impl.RunSessionWithInstructions
 var RunSessionWithMaxDuration = impl.RunSessionWithMaxDuration
@@ -152,7 +136,7 @@ type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane
 type SessionRunOptions = impl.SessionRunOptions
 type SessionRuntimeSelection = impl.SessionRuntimeSelection
-type SessionScheduledAudioIncompleteError = impl.SessionScheduledAudioIncompleteError
+type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
