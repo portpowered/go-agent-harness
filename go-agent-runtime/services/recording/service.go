@@ -7,6 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 var (
@@ -21,6 +22,28 @@ var (
 // Writer finalizes one capture outside the agent tick. Implementations retain
 // the original persistence error for callers to report incomplete evidence.
 type Writer interface{ FlushToFile(string) error }
+
+// ProviderCaptureOptions selects one bounded raw provider capture. The
+// destination is admitted before provider I/O starts; credentials and other
+// secrets never cross this boundary or appear in capture errors.
+type ProviderCaptureOptions struct {
+	Destination string
+}
+
+// ProviderCaptureSink admits raw provider events without doing filesystem
+// work on the provider goroutine. Abort releases an admitted but unstarted
+// provider session when provider construction fails. FlushToFile publishes a
+// verified capture after all admitted events have drained.
+type ProviderCaptureSink interface {
+	gatewaytesting.SessionCaptureSink
+}
+
+// ProviderCaptureService is a separate composition role for raw provider
+// capture. Runtime provider builders receive it explicitly; they do not
+// discover it through optional type assertions on the semantic recorder.
+type ProviderCaptureService interface {
+	OpenProviderCapture(ProviderCaptureOptions) (ProviderCaptureSink, error)
+}
 
 // SessionCapture joins finalization after the underlying session terminates.
 // Construction is inert. ConnectSession admits at most one provider session.

@@ -26,6 +26,12 @@ func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (sessi
 	return evidence.New(options, s.clock)
 }
 
+func (*Service) OpenProviderCapture(options recording.ProviderCaptureOptions) (recording.ProviderCaptureSink, error) {
+	return evidence.NewProviderCapture(options.Destination)
+}
+
 func (*Service) OpenLiveSemanticEvidence(providerCapturePath string) (session.LiveRecorder, error) {
 	return evidence.NewSemanticSidecar(providerCapturePath)
 }
+
+var _ recording.ProviderCaptureService = (*Service)(nil)

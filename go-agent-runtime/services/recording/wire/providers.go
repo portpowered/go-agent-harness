@@ -17,3 +17,8 @@ func NewService(source clock.Source) recording.Service {
 	wire.Build(service.New, wire.Bind(new(recording.Service), new(*service.Service)))
 	return nil
 }
+
+func NewProviderCaptureService(source clock.Source) recording.ProviderCaptureService {
+	wire.Build(service.New, wire.Bind(new(recording.ProviderCaptureService), new(*service.Service)))
+	return nil
+}

@@ -18,3 +18,8 @@ func NewService(source clock.Source) recording.Service {
 	serviceService := service.New(source)
 	return serviceService
 }
+
+func NewProviderCaptureService(source clock.Source) recording.ProviderCaptureService {
+	serviceService := service.New(source)
+	return serviceService
+}
