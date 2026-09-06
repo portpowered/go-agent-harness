@@ -7,13 +7,17 @@ import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
@@ -359,3 +363,52 @@ func TestGeneratedRootLiveSessionUsesInjectedTransportPort(t *testing.T) {
 		t.Fatalf("transport dials = %d, want one invocation", calls)
 	}
 }
+
+func writeSyntheticRealtimeCapture(t *testing.T) string {
+	t.Helper()
+	capture, err := gatewaytesting.SealSessionCapture(gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
+		Records: []gatewaytesting.CapturedSessionEvent{
+			{
+				Sequence: 1, Direction: gatewaytesting.DirectionClientToServer, Type: "session.update",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"audio":{"input":{"format":{"type":"audio/pcm","rate":16000,"channels":1}},"output":{"format":{"type":"audio/pcm","rate":16000,"channels":1}}}}}`),
+			},
+			{
+				Sequence: 2, Direction: gatewaytesting.DirectionServerToClient, Type: "session.created",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.created"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seal synthetic realtime capture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "synthetic.json")
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal synthetic realtime capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write synthetic realtime capture: %v", err)
+	}
+	return path
+}
+
+type trackingDeviceRegistry struct {
+	inner  *devicegw.VirtualRegistry
+	opened []devicegw.DeviceID
+}
+
+func (r *trackingDeviceRegistry) List() ([]devicegw.Device, error) { return r.inner.List() }
+
+func (r *trackingDeviceRegistry) Default(direction devicegw.Direction) (devicegw.Device, error) {
+	return r.inner.Default(direction)
+}
+
+func (r *trackingDeviceRegistry) Open(id devicegw.DeviceID) (devicegw.OpenedDevice, error) {
+	r.opened = append(r.opened, id)
+	return r.inner.Open(id)
+}
+
+var _ DeviceRegistry = (*trackingDeviceRegistry)(nil)

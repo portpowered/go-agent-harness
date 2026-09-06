@@ -249,7 +249,7 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 	if hasAudioInput(request) {
 		plan.AudioTurns = nil
 	}
-	if !plan.OpeningPromptPresent && len(plan.AudioTurns) == 0 && !plan.StopAfterResponse && !plan.ProviderCloseExpected {
+	if !replayPlanHasActions(plan) {
 		return nil, requestPrompt, promptPresent, nil
 	}
 	if !promptPresent && plan.OpeningPromptPresent {
@@ -257,4 +257,8 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 		promptPresent = true
 	}
 	return &plan, requestPrompt, promptPresent, nil
+}
+
+func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {
+	return plan.OpeningPromptPresent || len(plan.AudioTurns) > 0 || plan.StopAfterResponse || plan.ProviderCloseExpected
 }
