@@ -109,7 +109,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	// same loop boundary as a native provider. Forward the admitted catalog so
 	// fixture providers and shipped sessions observe the exact surface that the
 	// runtime will execute.
-	if h.request.ReplayPlan == nil && (len(toolDefinitions) > 0 || h.request.Capabilities != nil) {
+	if h.request.ReplayPlan == nil && h.request.Replay.InputCapturePath == "" && (len(toolDefinitions) > 0 || h.request.Capabilities != nil) {
 		options = append(options, agentloop.WithSessionConfig(messages.SessionUpdateConfig{
 			Instructions: h.request.Instructions,
 			Model:        h.request.Model,
