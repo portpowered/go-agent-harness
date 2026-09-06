@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -188,6 +189,38 @@ func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	}
 	if !bytes.Equal(got, input.Bytes()) {
 		t.Fatal("canonical frame-aligned WAV round trip changed bytes")
+	}
+}
+
+func TestFileSinkWAVUsesRequestedSampleRate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "output.wav")
+	want := []int16{-32768, 0, 32767}
+	sink, err := NewFileSinkAtSampleRate(path, nil, 24000)
+	if err != nil {
+		t.Fatalf("NewFileSinkAtSampleRate() error = %v", err)
+	}
+	if err := sink.WriteSamples(context.Background(), want); err != nil {
+		if closeErr := sink.Close(); closeErr != nil {
+			t.Fatalf("WriteSamples() error = %v; Close() error = %v", err, closeErr)
+		}
+		t.Fatalf("WriteSamples() error = %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile() error = %v", err)
+	}
+	gotRate, got, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("wavio.Read() error = %v", err)
+	}
+	if gotRate != 24000 {
+		t.Fatalf("WAV sample rate = %d, want 24000", gotRate)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("WAV samples = %v, want %v", got, want)
 	}
 }
 

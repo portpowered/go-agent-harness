@@ -168,7 +168,7 @@ type sessionRuntimePlan struct {
 	signalingEndpoint      string
 	mediaSource            string
 	rtcDeviceRequest       RTCDeviceBindingRequest
-	capabilityCoordinator  *SessionCapabilityCoordinator
+	capabilityCoordinator  SessionCapabilityCoordinator
 	captureClaim           *sessionRecordingClaim
 	captureClaimWired      bool
 	interactivePolicy      *InteractiveToolPolicy
@@ -340,8 +340,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	opts.FilesystemPolicy = filesystemPolicy
 	opts.WorkDir = filesystemPolicy.PrimaryRoot()
 	opts.AllowPaths = filesystemPolicy.AdditionalRoots()
-	opts.ToolExecutor = tools.ApplyFilesystemPolicy(opts.ToolExecutor, filesystemPolicy)
-	var capabilityCoordinator *SessionCapabilityCoordinator
+	var capabilityCoordinator SessionCapabilityCoordinator
 	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		if planErr != nil && recordingClaim != nil {

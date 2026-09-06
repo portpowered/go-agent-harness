@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // Engine is the core loop that orchestrates participants and subsystems.
@@ -30,6 +31,7 @@ type Engine struct {
 	// When set, the hot loop sleeps for the remaining time after each tick
 	// if the tick completed faster than the configured rate.
 	tickRate time.Duration
+	clock    clock.TimerSource
 
 	// Global ordering: assigns strictly increasing indices to consumed messages/deltas.
 	ordering *GlobalOrdering
@@ -67,6 +69,7 @@ func NewEngine(
 	userRunner *participants.UserRunner,
 	kernelRunner *participants.KernelRunner,
 	tools []messages.ToolDefinition,
+	clocks ...clock.TimerSource,
 ) *Engine {
 	var outputs state.OutputBuffers
 	if toolRunner != nil && toolRunner.Inbox != nil {
@@ -88,6 +91,10 @@ func NewEngine(
 		logger:       logger,
 		modelRunner:  modelRunner,
 		kernelRunner: kernelRunner,
+		clock:        clock.Real{},
+	}
+	if len(clocks) > 0 {
+		e.SetClock(clocks[0])
 	}
 	e.ordering = NewGlobalOrdering(modelRunner, toolRunner, userRunner, logger)
 
@@ -213,7 +220,7 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 	for {
 		var tickStart time.Time
 		if e.tickRate > 0 {
-			tickStart = time.Now()
+			tickStart = e.clock.Now()
 		}
 
 		err := e.Tick(ctx)
@@ -221,13 +228,8 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 			return err
 		}
 
-		// Adaptive sleeping: if a tick rate is configured, sleep for the remaining
-		// time so the hot loop doesn't consume more CPU than needed.
-		if e.tickRate > 0 {
-			elapsed := time.Since(tickStart)
-			if remaining := e.tickRate - elapsed; remaining > 0 {
-				time.Sleep(remaining)
-			}
+		if err := e.waitForNextTick(ctx, tickStart); err != nil {
+			return err
 		}
 	}
 }

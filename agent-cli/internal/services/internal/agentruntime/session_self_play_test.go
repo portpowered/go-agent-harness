@@ -35,7 +35,7 @@ func TestRunSelfPlay_BidirectionalPCMAndTextIsolation(t *testing.T) {
 		return pair.assistant, nil
 	}
 
-	result, err := RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+	result, err := runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 		OutputDir:      t.TempDir() + "/run",
 		MaxDuration:    time.Second,
 		MaxTurns:       2,
@@ -368,7 +368,7 @@ func TestRunSelfPlay_MaxDurationStopsBothSides(t *testing.T) {
 	customer := newSelfPlayBlockingInferencer()
 	assistant := newSelfPlayBlockingInferencer()
 	started := time.Now()
-	result, err := RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+	result, err := runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 		OutputDir:           t.TempDir() + "/run",
 		MaxDuration:         20 * time.Millisecond,
 		MaxTurns:            20,
@@ -399,7 +399,7 @@ func TestRunSelfPlay_CallerCancellationPreservesFailureAndShutsDown(t *testing.T
 		err    error
 	}, 1)
 	go func() {
-		result, err := RunSelfPlayWithResult(ctx, io.Discard, SelfPlayRunOptions{
+		result, err := runSelfPlayWithTestDependencies(ctx, io.Discard, SelfPlayRunOptions{
 			OutputDir:           t.TempDir() + "/run",
 			MaxDuration:         time.Second,
 			MaxTurns:            20,
@@ -446,7 +446,7 @@ func TestRunSelfPlay_SideFailureCancelsPeerAndReturnsError(t *testing.T) {
 	customer := &selfPlayConnectFailInferencer{err: wantErr}
 	assistant := newSelfPlayBlockingInferencer()
 
-	result, err := RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+	result, err := runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 		OutputDir:           t.TempDir() + "/run",
 		MaxDuration:         time.Second,
 		MaxTurns:            20,
@@ -471,7 +471,7 @@ func TestRunSelfPlay_RejectsInvalidOptionsBeforeFactory(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+	_, err := runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 		OutputDir:      t.TempDir() + "/run",
 		Provider:       "grok",
 		MaxDuration:    time.Second,
@@ -486,7 +486,7 @@ func TestRunSelfPlay_RejectsInvalidOptionsBeforeFactory(t *testing.T) {
 	}
 
 	factoryCalled = false
-	_, err = RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+	_, err = runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 		OutputDir:      t.TempDir() + "/run",
 		Provider:       SelfPlayDefaultProvider,
 		MaxDuration:    0,
@@ -536,7 +536,7 @@ func TestRunSelfPlay_RejectsUnsafeOutputTargetBeforeFactory(t *testing.T) {
 				factoryCalled = true
 				return nil, nil
 			}
-			_, err := RunSelfPlayWithResult(context.Background(), io.Discard, SelfPlayRunOptions{
+			_, err := runSelfPlayWithTestDependencies(context.Background(), io.Discard, SelfPlayRunOptions{
 				OutputDir:      outputDir,
 				MaxDuration:    time.Second,
 				MaxTurns:       3,

@@ -33,6 +33,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -242,9 +244,25 @@ func (e *toolCallRecordingExecutor) Execute(ctx context.Context, call messages.T
 // swapped into the tool-executor port — over the hermetic record/replay
 // transport with file-backed audio-in and audio-out.
 func runToolSingleCall(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor) (string, error) {
+	return runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, []messages.ToolDefinition{{
+		Name:        toolCallScenarioName,
+		Description: "Look up the weather for one city in the replay fixture.",
+		Parameters: []messages.ToolParameter{{
+			Name: "city", Type: "string", Description: "City to look up.", Required: true,
+		}},
+	}})
+}
+
+func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor, definitions []messages.ToolDefinition) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{
+			Executor:    executor,
+			Definitions: append([]messages.ToolDefinition(nil), definitions...),
+		}, nil
+	})
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(wire.NewToolServicePort(toolService))
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}
@@ -441,6 +459,24 @@ func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
 	}
 }
 
+// TestSessionToolSingleCallRejectsOmittedCustomDefinition proves that a
+// complete tool service is an allowlist boundary as well as an executor
+// injection seam. The provider still emits the recorded get_weather call, but
+// the service advertises no definition for it, so the runtime must reject the
+// call without invoking the paired executor.
+func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
+	wavPath := toolSingleCallWAVPath(t)
+	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
+	executor := &toolCallRecordingExecutor{}
+	_, runErr := runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, nil)
+	if runErr == nil {
+		t.Fatal("session accepted a custom tool call that was omitted from the injected service definition set")
+	}
+	if len(executor.calls) != 0 {
+		t.Fatalf("omitted custom definition invoked executor %d times: %+v", len(executor.calls), executor.calls)
+	}
+}
+
 // TestSessionToolSingleCallSuppressedFailsDeterministically is the negative
 // control: the same CLI flow with the named tool call suppressed must fail the
 // exactly-one invocation assertion deterministically — never via timeout or
@@ -509,4 +545,22 @@ func pcm16LEBytes(samples []int16) []byte {
 		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
 	}
 	return pcm
+}
+
+func toolBargeInCapabilities(executor messages.ToolExecutor) serviceTools.Service {
+	return serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{
+			Executor: executor,
+			Definitions: []messages.ToolDefinition{{
+				Name:        toolBargeInToolName,
+				Description: "Look up one value for the barge-in fixture.",
+				Parameters: []messages.ToolParameter{{
+					Name:        "query",
+					Type:        "string",
+					Description: "The value to look up.",
+					Required:    true,
+				}},
+			}},
+		}, nil
+	})
 }

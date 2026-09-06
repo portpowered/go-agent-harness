@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // defaultSessionToolExecutionTimeout bounds one tool invocation without
@@ -263,7 +264,7 @@ func (e *sessionToolExecutor) pageSightTool(call messages.ToolCall) bool {
 	if e == nil || e.inner == nil {
 		return false
 	}
-	router, ok := e.inner.(cliTools.PageSightToolRouter)
+	router, ok := e.inner.(runtimeTools.PageSightToolRouter)
 	return ok && router.IsPageSightTool(call.Name)
 }
 
@@ -318,7 +319,7 @@ func (e *sessionToolExecutor) screenPermissionDeniedAfterTimeout(ctx context.Con
 	if e == nil || ctx == nil || ctx.Err() != nil || !cliTools.IsPhysicalDisplayToolName(call.Name) || e.pageSightTool(call) {
 		return nil, false
 	}
-	rechecker, ok := e.inner.(cliTools.ScreenRecordingPermissionRechecker)
+	rechecker, ok := sessionScreenPermissionRechecker(e.inner)
 	if !ok || !safeScreenPermissionRecheckSupported(rechecker) {
 		return nil, false
 	}
@@ -344,25 +345,6 @@ func (e *sessionToolExecutor) screenPermissionDeniedAfterTimeout(ctx context.Con
 	case <-recheckCtx.Done():
 		return nil, false
 	}
-}
-
-func safeScreenPermissionRecheckSupported(rechecker cliTools.ScreenRecordingPermissionRechecker) (supported bool) {
-	defer func() {
-		if recover() != nil {
-			supported = false
-		}
-	}()
-	return rechecker.ScreenRecordingPermissionRecheckSupported()
-}
-
-func invokeScreenPermissionRecheck(ctx context.Context, rechecker cliTools.ScreenRecordingPermissionRechecker) (permission cliTools.DisplayPermission, err error) {
-	defer func() {
-		if recover() != nil {
-			permission = cliTools.DisplayPermission{}
-			err = errors.New("screen recording permission re-check panicked")
-		}
-	}()
-	return rechecker.RecheckScreenRecordingPermission(ctx)
 }
 
 // sigintCancelled identifies the one cancellation path that must not be

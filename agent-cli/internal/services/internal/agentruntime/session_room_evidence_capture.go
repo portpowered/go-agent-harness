@@ -73,20 +73,6 @@ func injectRoomWallClock(data []byte, offset time.Duration, unixMs int64) ([]byt
 	return json.Marshal(decoded)
 }
 
-// pcm16HasSignal reports whether a raw little-endian PCM16 buffer contains
-// any non-zero byte. The room mixer emits an exact all-zero frame whenever no
-// active input contributed samples, so this doubles as a cheap silence test
-// for both the room's own energy-based speech-segment tracking and the
-// dropped-audio diagnostic below.
-func pcm16HasSignal(pcm []byte) bool {
-	for _, value := range pcm {
-		if value != 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // roomSpeechTracker turns a stream of per-frame silent/non-silent
 // observations into speech_start/speech_end transitions. It is intentionally
 // energy-based rather than dependent on provider-specific framing events

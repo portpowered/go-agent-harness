@@ -11,7 +11,7 @@ func TestPlanSessionRuntimeClosesTransferredCapabilityOnPlanningFailure(t *testi
 	closeErr := errors.New("capability close failed")
 	closeCalls := 0
 
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Transport:       "unsupported",
 		CapabilityClose: func() error { closeCalls++; return closeErr },
 	}, sessionRuntimeFactory{})

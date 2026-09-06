@@ -3,12 +3,45 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
+
+// finalizeChatHandle persists and releases one completed interactive turn.
+// Bubble Tea updates cannot return an error, so callers report the joined
+// cleanup result through the model's diagnostic writer while preserving every
+// individual failure.
+func finalizeChatHandle(handle session.SessionHandle, recordPath string) error {
+	if handle == nil {
+		return nil
+	}
+	return errors.Join(handle.Save(), handle.Flush(recordPath), handle.Close())
+}
+
+func closeChatHandle(handle session.SessionHandle) error {
+	if handle == nil {
+		return nil
+	}
+	return handle.Close()
+}
+
+func reportChatHandleError(model *ChatModel, operation string, err error) {
+	if err == nil {
+		return
+	}
+	message := fmt.Sprintf("Error %s: %v", operation, err)
+	if model.errOut != nil {
+		if _, writeErr := fmt.Fprintln(model.errOut, message); writeErr == nil {
+			return
+		}
+	}
+	model.lines = append(model.lines, chatLine{kind: chatLineSystem, content: message})
+}
 
 // ChatCommand is a typed chat slash command. Name is the token typed after the
 // leading '/', Summary is the /help description, AutocompleteDescription is the
@@ -126,7 +159,13 @@ func (m ChatModel) handleHelpCommand() (tea.Model, tea.Cmd) {
 func (m ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
 	// Generate a new session ID so cleared history doesn't pollute the old session.
 	cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-	newID, err := m.executor.NewChatSessionID(cfg)
+	if m.service == nil {
+		errLine := chatLine{kind: chatLineSystem, content: "Error creating new session: session service is not configured"}
+		m.lines = append(m.lines, errLine)
+		rendered := strings.TrimSuffix(renderChatLineWrapped(errLine, m.effectiveWidth()), "\n")
+		return m, tea.Println(rendered)
+	}
+	newID, err := m.service.NewSessionID(m.ctx, *cfg)
 	if err != nil {
 		errLine := chatLine{kind: chatLineSystem, content: "Error creating new session: " + err.Error()}
 		m.lines = append(m.lines, errLine)
@@ -143,7 +182,8 @@ func (m ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
 	m.reasoningPartial = ""
 	m.thinkingActive = false
 	m.stream = nil
-	m.runData = nil
+	reportChatHandleError(&m, "closing session", closeChatHandle(m.handle))
+	m.handle = nil
 
 	// Show confirmation after clearing the screen.
 	confirmLine := chatLine{kind: chatLineSystem, content: "Conversation cleared. Starting fresh."}
@@ -187,14 +227,18 @@ func (m ChatModel) handleSkillCommand(skillName string) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tea.Println(confirmRendered), tea.Println(bodyRendered))
 }
 
-// newSkillsLoader creates a skills.Loader using the same workspace and config directories as the executor.
+// newSkillsLoader creates a skills.Loader using the same workspace and config
+// directories selected by the CLI host resolver.
 func (m ChatModel) newSkillsLoader() (*skills.Loader, error) {
-	cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-	storage, err := m.executor.GetSessionStorage(cfg)
+	configDir, err := cliConfigDir(m.globalFlags)
 	if err != nil {
 		return nil, err
 	}
-	return skills.NewLoader(storage.WorkspaceDir(), cfg.ConfigDir), nil
+	workDir, err := cliWorkDir(m.globalFlags)
+	if err != nil {
+		return nil, err
+	}
+	return skills.NewLoader(workDir, configDir), nil
 }
 
 // listSkillNames returns a comma-separated list of available skill names, or empty string if none.
@@ -212,12 +256,22 @@ func (m ChatModel) listSkillNames(loader *skills.Loader) string {
 
 // resolveSystemPrompt loads the system prompt using the same logic as runAgent/BuildLoop.
 func (m ChatModel) resolveSystemPrompt() (string, error) {
-	cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-	storage, err := m.executor.GetSessionStorage(cfg)
+	workDir, err := cliWorkDir(m.globalFlags)
 	if err != nil {
 		return "", err
 	}
-	return m.executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), nil)
+	prompt, err := resolveCLIPrompt(m.askFlags.SystemPrompt, workDir)
+	if err != nil || prompt == "" {
+		return prompt, err
+	}
+	loader, err := m.newSkillsLoader()
+	if err != nil {
+		return prompt, err
+	}
+	if summary, summaryErr := loader.BuildSummary(); summaryErr == nil && summary != "" {
+		prompt += "\n\n---\n\n" + summary
+	}
+	return prompt, nil
 }
 
 // activeAutocomplete returns a pointer to whichever autocomplete is currently active,

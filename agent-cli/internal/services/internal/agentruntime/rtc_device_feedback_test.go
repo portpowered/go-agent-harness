@@ -14,16 +14,17 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
-
 	playback := make([][]int16, 5)
 	for frameIndex := range playback {
 		playback[frameIndex] = feedbackSignal(frameIndex, 17)
@@ -70,13 +71,12 @@ func TestLocalFeedbackGateSuppressesLoopAndWarnsOnce(t *testing.T) {
 		t.Fatalf("repeated feedback emitted another warning %q", extra)
 	default:
 	}
-
 	if err := gate.Close(); err != nil {
 		t.Fatalf("close feedback gate: %v", err)
 	}
 	_, err = gate.FilterCapture(context.Background(), playback[0])
-	if !errors.Is(err, audio.ErrClosed) {
-		t.Fatalf("filter after close = %v, want audio.ErrClosed", err)
+	if !errors.Is(err, contract.ErrClosed) {
+		t.Fatalf("filter after close = %v, want contract.ErrClosed", err)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestLocalFeedbackGateNonIntegralDeviceQuantumStaysMonotonic(t *testing.T) {
 		{name: "coreaudio_48k_variable_quantum", rate: 48000, samples: 683},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), io.Discard, test.rate, test.rate)
+			gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), io.Discard, test.rate, test.rate)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -126,7 +126,7 @@ func TestLocalFeedbackGateFeedbackConfirmedTracksWarningState(t *testing.T) {
 	}
 
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestLocalFeedbackGateFeedbackConfirmedTracksWarningState(t *testing.T) {
 
 func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 
 func TestLocalFeedbackGateReleasesIndependentCaptureOnceInOrder(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestLocalFeedbackGateBlockedWarningWriterCannotBlockMedia(t *testing.T) {
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})
 	writer := blockingFeedbackWarningWriter{started: started, release: release}
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), writer, audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), writer, audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -303,8 +303,8 @@ func TestPairedDeviceBindingDropsLoopedSpeakerFramesBeforeProviderMedia(t *testi
 		t.Fatalf("new virtual feedback registry: %v", err)
 	}
 	warning := make(chan string, 1)
-	feedbackConfig := audio.DefaultSelfHearingConfig()
-	feedbackConfig.CorrelationLagWindow = audio.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
+	feedbackConfig := selfhearing.DefaultSelfHearingConfig()
+	feedbackConfig.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
 	feedbackConfig.MinimumEvidence = 30 * time.Millisecond
 	feedbackConfig.MaximumReleaseLatency = 500 * time.Millisecond
 	binding, err := PrepareRTCDeviceBindings(RTCDeviceBindingRequest{
@@ -432,8 +432,8 @@ func TestPairedDeviceBindingDetectsLoopAtNegotiatedNonDefaultRate(t *testing.T) 
 		t.Fatalf("new virtual feedback registry: %v", err)
 	}
 	warning := make(chan string, 1)
-	feedbackConfig := audio.DefaultSelfHearingConfig()
-	feedbackConfig.CorrelationLagWindow = audio.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
+	feedbackConfig := selfhearing.DefaultSelfHearingConfig()
+	feedbackConfig.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
 	feedbackConfig.MinimumEvidence = 30 * time.Millisecond
 	feedbackConfig.MaximumReleaseLatency = 500 * time.Millisecond
 	binding, err := PrepareRTCDeviceBindings(RTCDeviceBindingRequest{
@@ -505,8 +505,8 @@ func TestPairedDeviceFeedbackPreservesAssistantTerminal(t *testing.T) {
 		t.Fatalf("new virtual session registry: %v", err)
 	}
 	warning := make(chan string, 1)
-	feedbackConfig := audio.DefaultSelfHearingConfig()
-	feedbackConfig.CorrelationLagWindow = audio.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
+	feedbackConfig := selfhearing.DefaultSelfHearingConfig()
+	feedbackConfig.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
 	feedbackConfig.MinimumEvidence = 30 * time.Millisecond
 	feedbackConfig.MaximumReleaseLatency = 500 * time.Millisecond
 	binding, err := PrepareRTCDeviceBindings(RTCDeviceBindingRequest{

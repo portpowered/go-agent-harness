@@ -3,6 +3,8 @@ package audio
 import (
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func testHoldToneConfig() HoldToneConfig {
@@ -174,6 +176,116 @@ func TestHoldToneFillerObserveRealAudioBetweenPulsesReturnsNoTail(t *testing.T) 
 
 	if tail := filler.ObserveRealAudio(start.Add(10 * time.Millisecond)); tail != nil {
 		t.Fatalf("ObserveRealAudio before any pulse fired returned %v, want nil", tail)
+	}
+}
+
+func zeroPCM16Frame(samples int) []byte {
+	return make([]byte, samples*2)
+}
+
+// TestApplyHoldTonePCM16NilFillerIsNoOp keeps the byte-level room adapter
+// contract at the canonical audio owner: disabling the filler must preserve
+// the exact caller-owned frame, including its backing contents.
+func TestApplyHoldTonePCM16NilFillerIsNoOp(t *testing.T) {
+	frame := zeroPCM16Frame(160)
+	frame[1] = 0x80
+	got := ApplyHoldTonePCM16(nil, time.Now(), frame)
+	if len(got) != len(frame) || got[1] != frame[1] {
+		t.Fatalf("ApplyHoldTonePCM16(nil, ...) changed frame: got %d bytes, want %d", len(got), len(frame))
+	}
+}
+
+// TestApplyHoldTonePCM16StaysSilentBeforeThreshold preserves the room
+// integration rule that ordinary conversational pauses remain digital
+// silence. The adapter is driven by explicit timestamps, so it also remains
+// usable with deterministic room clocks.
+func TestApplyHoldTonePCM16StaysSilentBeforeThreshold(t *testing.T) {
+	cfg := testHoldToneConfig()
+	start := time.Unix(1700000000, 0)
+	filler := NewHoldToneFiller(cfg, 24000, start)
+	const samples = 480
+	frame := zeroPCM16Frame(samples)
+	step := 20 * time.Millisecond
+	for elapsed := time.Duration(0); elapsed < cfg.GapThreshold-step; elapsed += step {
+		got := ApplyHoldTonePCM16(filler, start.Add(elapsed+step), frame)
+		if PCM16HasSignal(got) {
+			t.Fatalf("ApplyHoldTonePCM16 at elapsed=%v produced signal before threshold", elapsed+step)
+		}
+	}
+}
+
+// TestApplyHoldTonePCM16FillsAfterThreshold checks the raw PCM boundary that
+// the room speaker consumes: a due pulse keeps the cadence frame size and
+// stays below the configured amplitude.
+func TestApplyHoldTonePCM16FillsAfterThreshold(t *testing.T) {
+	cfg := testHoldToneConfig()
+	start := time.Unix(1700000000, 0)
+	filler := NewHoldToneFiller(cfg, 24000, start)
+	frame := zeroPCM16Frame(480)
+	got := ApplyHoldTonePCM16(filler, start.Add(cfg.GapThreshold+time.Millisecond), frame)
+	if len(got) != len(frame) {
+		t.Fatalf("ApplyHoldTonePCM16 changed frame length: got %d, want %d", len(got), len(frame))
+	}
+	if !PCM16HasSignal(got) {
+		t.Fatal("ApplyHoldTonePCM16 left a due frame silent")
+	}
+	samples, err := codec.DecodePCM16(got)
+	if err != nil {
+		t.Fatalf("decode filler frame: %v", err)
+	}
+	peak := 0
+	for _, sample := range samples {
+		value := int(sample)
+		if value < 0 {
+			value = -value
+		}
+		if value > peak {
+			peak = value
+		}
+	}
+	if peak == 0 || int16(peak) > cfg.Amplitude {
+		t.Fatalf("filler frame peak = %d, want a sane level in (0, %d]", peak, cfg.Amplitude)
+	}
+}
+
+// TestApplyHoldTonePCM16RealAudioStopsAndFades verifies that a real frame is
+// never overwritten by a pending pulse and that the next silent frame waits
+// for a fresh gap. The returned prefix is the only allowed pulse residue.
+func TestApplyHoldTonePCM16RealAudioStopsAndFades(t *testing.T) {
+	cfg := testHoldToneConfig()
+	start := time.Unix(1700000000, 0)
+	filler := NewHoldToneFiller(cfg, 24000, start)
+	silent := zeroPCM16Frame(480)
+	mid := start.Add(cfg.GapThreshold + cfg.PulseDuration/2)
+	if !PCM16HasSignal(ApplyHoldTonePCM16(filler, mid, silent)) {
+		t.Fatal("setup: expected a pending hold-tone pulse")
+	}
+	realSamples := make([]int16, 480)
+	for index := range realSamples {
+		realSamples[index] = int16(-(index%77 + 1))
+	}
+	real := codec.EncodePCM16(realSamples)
+	got := ApplyHoldTonePCM16(filler, mid, real)
+	if len(got) < len(real) {
+		t.Fatalf("real frame was shortened: got %d bytes, want at least %d", len(got), len(real))
+	}
+	tailStart := len(got) - len(real)
+	for index := range real {
+		if got[tailStart+index] != real[index] {
+			t.Fatalf("real frame changed at byte %d", index)
+		}
+	}
+	if tailStart > 0 {
+		tail, err := codec.DecodePCM16(got[:tailStart])
+		if err != nil {
+			t.Fatalf("decode fade tail: %v", err)
+		}
+		if tail[len(tail)-1] != 0 {
+			t.Fatalf("fade tail ends at %d, want zero", tail[len(tail)-1])
+		}
+	}
+	if PCM16HasSignal(ApplyHoldTonePCM16(filler, mid.Add(time.Millisecond), silent)) {
+		t.Fatal("hold tone resumed immediately after real audio")
 	}
 }
 

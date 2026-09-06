@@ -13,8 +13,14 @@ import (
 	"time"
 
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	providers "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+// testModelCatalog keeps external runtime tests on the provider-owned catalog
+// used by the application graph. Production receives this through Wire.
+func testModelCatalog() providers.ModelCatalog { return providerswire.NewModelCatalog() }
 
 // fullStreamServer is a scripted OpenAI Realtime websocket double that counts
 // every client-to-server append, commit, and response.create on the wire and
@@ -165,7 +171,7 @@ func TestFullFixtureStreamsEveryAppendBeforeEndOfTurn(t *testing.T) {
 				runErr <- agentruntime.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
 					context.Background(),
 					os.Stdout,
-					agentruntime.SessionRunOptions{
+					agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 						RecordPath:      filepath.Join(t.TempDir(), "capture.json"),
 						Provider:        "openai",
 						Model:           "gpt-realtime-2.1-mini",

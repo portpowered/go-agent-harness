@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest"
@@ -404,3 +405,60 @@ func writeReplayConformanceCapture(t *testing.T, records []CapturedSessionEvent)
 }
 
 var errDialerTransportExhausted = errors.New("dialer transport fixture exhausted")
+
+type observedReplayClock struct {
+	*clock.Deterministic
+	created chan struct{}
+}
+
+func (c *observedReplayClock) NewTimer(delay time.Duration) clock.Timer {
+	timer := c.Deterministic.NewTimer(delay)
+	c.created <- struct{}{}
+	return timer
+}
+
+func TestReplayCadenceUsesInjectedTimerDomain(t *testing.T) {
+	source := &observedReplayClock{Deterministic: clock.NewDeterministic(time.Unix(123, 0), time.Millisecond), created: make(chan struct{}, 1)}
+	first := websocketCapture(DirectionServerToClient, 1, `{"type":"session.created"}`)
+	second := websocketCapture(DirectionServerToClient, 2, `{"type":"response.done"}`)
+	first.TimestampMs, second.TimestampMs = 0, 25
+	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{first, second})
+	dialer, err := NewReplayWebSocketDialer(path, WithRecordedSessionTiming(), WithReplayClock(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := dialer.Dial("unused", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() { _, _, readErr := conn.ReadMessage(); result <- readErr }()
+	select {
+	case <-source.created:
+	case <-time.After(time.Second):
+		t.Fatal("replay did not register an injected timer")
+	}
+	source.AdvanceBy(24 * time.Millisecond)
+	select {
+	case err := <-result:
+		t.Fatalf("replay released before captured offset: %v", err)
+	default:
+	}
+	source.AdvanceBy(time.Millisecond)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("replay ignored injected clock advance")
+	}
+}

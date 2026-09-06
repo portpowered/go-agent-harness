@@ -32,7 +32,7 @@ func TestRunSessionWithRecordingDirectoryConcurrentClaimHasOneProviderConnection
 		go func() {
 			defer wait.Done()
 			<-start
-			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
+			results <- RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:          config.ProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",
@@ -95,7 +95,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Skipf("symlink unavailable: %v", err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
@@ -120,7 +120,7 @@ func TestSessionRecordingDirectoryClaimRejectsSymlinkAndNonDirectoryBeforeConnec
 			t.Fatal(err)
 		}
 		inferencer := &countingSessionRecordingInferencer{}
-		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
+		err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			Provider:          config.ProviderOpenAI,
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
@@ -147,7 +147,7 @@ func TestSessionRecordingDirectoryClaimRetainsOwnershipThroughFinalization(t *te
 	}
 	defer func() { _ = claim.release() }()
 
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:                   "gpt-realtime",
 		recordingDirectoryClaim: claim,
 	})
@@ -176,7 +176,7 @@ func TestSessionRecordingDirectoryClaimLostPreventsPublication(t *testing.T) {
 		t.Fatalf("acquire directory claim: %v", err)
 	}
 	defer func() { _ = claim.release() }()
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:                   "gpt-realtime",
 		recordingDirectoryClaim: claim,
 	})
