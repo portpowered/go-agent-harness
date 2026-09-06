@@ -29,8 +29,12 @@ var (
 // owns its fixed worker cadence, so a room frame duration is not part of this
 // device request.
 type Request struct {
-	InputDevice     string
-	OutputDevice    string
+	InputDevice  string
+	OutputDevice string
+	// RemoteEndpoint selects an invocation-scoped loopback device server. The
+	// service owns endpoint validation and registry construction; hosts only
+	// pass the opaque endpoint value through this request.
+	RemoteEndpoint  string
 	CaptureEnabled  bool
 	PlaybackEnabled bool
 	SampleRate      int

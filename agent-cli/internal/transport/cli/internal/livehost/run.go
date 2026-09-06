@@ -213,6 +213,7 @@ func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.L
 	return runtimeDevices.Request{
 		InputDevice:     request.AudioInputDevice,
 		OutputDevice:    request.AudioOutputDevice,
+		RemoteEndpoint:  request.AudioDeviceServer,
 		CaptureEnabled:  request.InteractiveDevices || request.AudioInputDevicePresent,
 		PlaybackEnabled: request.InteractiveDevices || request.AudioOutputDevicePresent,
 		SampleRate:      sampleRate,

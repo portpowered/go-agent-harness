@@ -46,15 +46,23 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	if err := f.validateRequest(ctx, request); err != nil {
 		return nil, err
 	}
+	registry := f.registry
+	if endpoint := strings.TrimSpace(request.RemoteEndpoint); endpoint != "" {
+		var err error
+		registry, err = devicegw.NewRemoteDeviceRegistry(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("connect remote audio device server: %w", err)
+		}
+	}
 	rate, err := f.requestFormat(request.SampleRate, request.Channels)
 	if err != nil {
 		return nil, err
 	}
-	input, err := f.openInput(request, rate)
+	input, err := f.openInput(registry, request, rate)
 	if err != nil {
 		return nil, err
 	}
-	output, err := f.openOutput(request, rate)
+	output, err := f.openOutput(registry, request, rate)
 	if err != nil {
 		return nil, errors.Join(err, closeInput(input))
 	}
@@ -62,7 +70,7 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 }
 
 func (f *Factory) validateRequest(ctx context.Context, request devices.Request) error {
-	if f == nil || f.registry == nil {
+	if f == nil || (f.registry == nil && strings.TrimSpace(request.RemoteEndpoint) == "") {
 		return errors.Join(devices.ErrUnavailable, devicegw.ErrNilDeviceRegistry)
 	}
 	if err := contextError(ctx); err != nil {
@@ -74,23 +82,23 @@ func (f *Factory) validateRequest(ctx context.Context, request devices.Request) 
 	return fmt.Errorf("%w: at least one media direction must be enabled", devices.ErrInvalidRequest)
 }
 
-func (f *Factory) openInput(request devices.Request, rate int) (*devicert.RTCDeviceSource, error) {
+func (f *Factory) openInput(registry devicegw.DeviceRegistry, request devices.Request, rate int) (*devicert.RTCDeviceSource, error) {
 	if !request.CaptureEnabled {
 		return nil, nil
 	}
-	input, err := devicert.NewRTCDeviceSourceAtRate(f.registry, devicegw.DeviceID(strings.TrimSpace(request.InputDevice)), rate)
+	input, err := devicert.NewRTCDeviceSourceAtRate(registry, devicegw.DeviceID(strings.TrimSpace(request.InputDevice)), rate)
 	if err != nil {
 		return nil, fmt.Errorf("open input device %q: %w", request.InputDevice, err)
 	}
 	return input, nil
 }
 
-func (f *Factory) openOutput(request devices.Request, rate int) (*devicert.RTCDeviceSink, error) {
+func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.Request, rate int) (*devicert.RTCDeviceSink, error) {
 	if !request.PlaybackEnabled {
 		return nil, nil
 	}
 	output, err := devicert.NewRTCDeviceSinkAtRateWithOptions(
-		f.registry, devicegw.DeviceID(strings.TrimSpace(request.OutputDevice)), rate,
+		registry, devicegw.DeviceID(strings.TrimSpace(request.OutputDevice)), rate,
 		request.PlaybackProfile, nil,
 	)
 	if err != nil {
