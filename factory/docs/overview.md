@@ -1,60 +1,85 @@
 # Go agent harness factory
 
-The checked-in `factory/factory.json` is the legacy delivery graph. It validates
-with the installed `you factory config validate` command, but it is not yet the
-single-project factory proposed for this migration. Configuration validity does
-not prove admission, recovery, or acceptance behavior.
+This is a single-project delivery factory for the audio/runtime migration.
+The admitted project remains open until all criteria in
+[its immutable manifest](../projects/audio-runtime/manifest.json) pass. Integrating
+the baseline into main is the first delivery slice, not project completion.
 
-Read [the handoff plan](handoff-plan.md) for the pinned reference, target graph,
-model assignments, stabilization gates, and remaining migration acceptance.
-
-## Existing graph
+## Graph and models
 
 ```text
-thoughts:init -> ideafy -> thoughts:complete
-idea:init -> plan -> idea:to-complete + plan:init
-plan:init -> setup-workspace -> plan:complete + task:init
-task:init -> process -> task:in-review + review:init
-task:in-review + review:init -> review -> task:to-complete + review:complete
-idea:to-complete + same-name task:to-complete -> consume -> complete
+project admission -> Astra medium project lead -> bounded idea + dependent cycle
+idea admission -> Astra medium planner -> isolated workspace
+ task admission -> Luna max executor -> scripted CI wait -> Luna max reviewer
+                                  ^                         | rejected
+                                  +-------------------------+
+ reviewed merge -> consume slice -> project lead's next cycle
+ immutable build -> fresh customer + engineering Luna max validation
+                 -> deterministic completion evidence check
 ```
 
-The existing graph uses Sol medium for planning and ideation, Luna max for
-implementation and review, and capacities of 16 for execution and planning.
-It has no project work type, admission ownership, separate CI wait, project
-reconciliation, or independent project validation stages. Those are migration
-requirements, not behavior already delivered by this configuration.
+Astra medium owns project leadership, slice planning and meta planning. Luna max
+owns implementation, independent review and validation. One manager slot, two
+shared worker slots, one merge slot and one validation slot bound concurrency.
+Routine meta planning uses `0 */4 * * *` (every four hours on the factory clock).
+Immediate exception routes and project cycles continue independently. A script
+reconciles stranded project leadership every fifteen minutes.
 
-Workspace preparation uses `factory/scripts/setup-workspace.py` and worktrees
-under `.claude/worktrees/<work-item-name>/`. Preserve its existing repository
-handling when adapting the reference factory. Do not replace it blindly with a
-script whose required packet contract differs from the planner output.
+The admission record and process lock live in the repository's Git common
+directory, shared by every checkout. Waiting, blocking, elapsed time and process
+restart do not release ownership. All project/idea/task execution checks the
+admitted project and exact contract revision. Completion checks two distinct
+canonical validation Work records and every immutable criterion against one
+artifact hash. It does not automatically release admission.
 
-## Target operating model
+## Operation
 
-One Astra medium manager owns the admitted project and handles escalations.
-Luna max workers plan, implement, review, and validate, with two shared worker
-slots initially. Deterministic scripts prepare workspaces, wait for CI, classify
-cycles, and reconcile interrupted progress. Single-project ownership persists
-while work waits, validates, or is blocked.
+Build the pinned reference runtime once (source revision
+`a82f2e5a532a25b3e163014b28e72190ac28c354`):
 
-The first delivery slice merges the stabilized, pinned refactor baseline with
-current main through a Luna implementation worker and independent Luna review.
-The parent migration stays open until its immutable acceptance criteria pass.
+```sh
+python3 factory/scripts/build-runtime.py --source /path/to/you-agent-factory
+```
 
-Before transferring ownership, verify the admission and recovery mechanisms,
-packet contracts, failure routes, and a bounded real dispatch. Record the exact
-server endpoint and session; do not reuse another factory's default endpoint.
-No new factory has been launched as part of this design checkpoint.
+This installs privately under the Git common directory and records its executable
+hash. The older global `you` installation failed recording recovery in the launch
+probe; the launcher requires this verified build and prepends it to worker PATH.
 
-## Repository context
+Run from the checkout that owns this factory:
 
-This repository is a Go multi-module agent harness. Use root `AGENTS.md`,
-`go.work`, `docs/architecture/architecture-policy.json`, the migration plans, and
-module-specific instructions. Do not use the reference factory's own Go/React
-product layout or test commands as this project's architecture.
+```sh
+python3 factory/scripts/run-factory.py status
+python3 factory/scripts/run-factory.py start
+python3 factory/scripts/run-factory.py stop
+python3 factory/scripts/run-factory.py restart
+```
 
-For batch syntax, use `you docs batch-inputs`. Always specify the intended server
-and session for remote inspection or submission. Runtime Work and Factory Events
-are authoritative; progress documents explain decisions and evidence but do not
-replace canonical scheduling state.
+The owned endpoint is `http://127.0.0.1:7439`; the launcher records the actual
+session identity, process start identity, integration commit and recording path
+in `factory-runtime.json` in the Git common directory. `factory-supervisor.log`
+and `factory-runs/` are alongside it with private permissions. The checked-in
+factory and source checkout are required; this is not a standalone portable bundle.
+
+A stop retains admission and recording evidence. Startup never substitutes a new
+project for missing/corrupt recovery evidence. Changed graphs require explicit
+recorded-work migration; they are not silently applied to an old session. Check
+status after any ambiguous result instead of invoking a second unmanaged runtime.
+Do not use `you server` for this factory: the owned recorded run is its launcher.
+
+Use explicit server and session for public CLI inspection. `work list --all`
+exposes superseded historical rows: default listing can hide a blocked project
+behind its same-name escalation Work. Inspect successor fields and exact Work
+identities before deciding that work is missing. Progress documents explain
+canonical Work; they do not replace it.
+
+## Verification and remaining migration
+
+`make test-factory-scripts` covers deterministic CI/admission/preflight behavior.
+The installed-runtime smoke uses mocked provider output and exercises delivery,
+review rejection, escalation and recording resume without paid model calls. Configuration validation
+alone does not prove delivery or recording recovery.
+
+Read [operating policy](operating-policy.md), [handoff plan](handoff-plan.md), and
+[baseline status](baseline-status.md) for source identities, architecture ownership,
+first integration requirements and remaining audio/runtime acceptance. Never
+replace the harness's Go workspace gates with the reference factory's test suite.

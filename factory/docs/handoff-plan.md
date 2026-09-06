@@ -1,6 +1,7 @@
 # Lightweight single-project factory handoff
 
-Status: design and bootstrap work in progress. The migration is not complete,
+Status: bootstrap implementation and recovery verification complete; live startup
+evidence is recorded separately. The migration is not complete,
 the baseline has not been merged, and this document does not authorize claiming
 either outcome without the evidence below.
 
@@ -9,7 +10,7 @@ either outcome without the evidence below.
 The requested `~/work/infinite-you` directory is absent. The matching repository
 is `~/work/you-agent-factory`, remote `portpowered/you-agent-factory`. This design
 uses fetched main commit `a82f2e5a532a25b3e163014b28e72190ac28c354`
-(September 5, 2026), read through Git rather than its older checkout.
+(September 5, 2026). The private runtime build uses this exact source revision.
 
 Preserve its project cycle, deterministic workspace preparation and CI wait,
 independent review, validation, failure feedback, loop breakers, and recovery
@@ -19,7 +20,8 @@ unrelated product standards, or acceptance waivers.
 | Responsibility | Configuration | Reason |
 | --- | --- | --- |
 | Project leadership and escalation | One Astra medium manager profile; shared capacity 1 | One accountable decision maker with separate normal and exception entry points |
-| Planning, implementation, review, validation | Luna max; shared capacity 2 | Bounded parallel throughput; independent review remains a separate dispatch |
+| Slice planning | Astra medium; shares manager capacity 1 | Planning stays aligned with project leadership |
+| Implementation, review, validation | Luna max; shared capacity 2 | Bounded parallel throughput; independent review remains a separate dispatch |
 | Workspace setup, CI wait, cycle classification, reconciliation | Python scripts | Waiting and mechanical state transitions consume no model session |
 | Validation | Also takes exclusive validation capacity 1 | Avoid competing physical audio or live-session probes |
 | Merge | Serialized, after independent review and required CI | Avoid invalidating another lane's integration proof |
@@ -35,7 +37,7 @@ the criterion, evidence, attempted correction, impact, and smallest decision.
 ```mermaid
 flowchart TD
     A[Admit one project] --> M[Astra manager]
-    M --> P[Luna planner]
+    M --> P[Astra planner]
     P --> W[Prepare isolated worktree]
     W --> E[Luna implementation]
     E --> C[Scripted CI wait]
@@ -45,7 +47,7 @@ flowchart TD
     Y --> M
     M --> V[Fresh customer and engineering validation]
     V --> Y
-    M -->|All acceptance proved| D[Complete project and release admission]
+    M -->|All acceptance proved| D[Verify completion; retain admission until explicit release]
     P & W & E & C & R & V -->|Failure evidence| X[Astra exception handling]
     X -->|Concrete recovery| M
     X -->|Operator decision required| B[Blocked; retain project ownership]
@@ -81,9 +83,13 @@ Bootstrap must also reconcile prompt/script contracts. In the pinned reference,
 `prepare-validation.py` calls the mandatory `factory-preflight.v1` validator,
 while the manager's example mission omits `preflight`. Our emitted packet must
 carry the project identity, contract revision, hashed source plan/request/
-acceptance, and intended mainline expected by preparation. Verify an actual
-manager-shaped packet through preparation, including wrong hashes and stale
-mainline failures; graph validation alone cannot catch this mismatch.
+acceptance, and intended mainline expected by preparation. The harness uses a smaller versioned manifest plus exact packet identity, immutable
+authority hashes and artifact hashes. Preparation tests cover wrong hashes, stale
+authority and incomplete criteria. Workspace setup fetches current main; the recorded
+mainline SHA is a handoff observation, not a stale-main waiver.
+
+Routine meta planning is scheduled every four hours. Project progress and immediate
+exception routes are independent of this cadence.
 
 No autonomous portfolio generation. The manager works only on the admitted
 project. A blocked project retains admission until explicitly resolved; it does
