@@ -21,7 +21,11 @@ func TestRTCDeviceSinkResetsResamplerAtResponseBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close sink: %v", err)
+		}
+	}()
 	sink.holdToneConfig.GapThreshold = time.Hour
 
 	first := boundaryTestPCM(1800, 900)
@@ -72,7 +76,11 @@ func TestRTCDeviceSinkPreservesPrefetchedContinuationFrames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close sink: %v", err)
+		}
+	}()
 	sink.holdToneConfig.GapThreshold = time.Hour
 
 	first := boundaryTestPCM(1440, 900)
