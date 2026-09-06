@@ -269,7 +269,10 @@ func TestS12LinuxRealCapabilities(t *testing.T) {
 	if err != nil {
 		t.Skipf("%s: unavailable capability: live screen capture (%v)", runtime.GOOS, err)
 	}
-	part := msgs[0].ContentParts[1].(messages.ImagePart)
+	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
+	if !ok {
+		t.Fatalf("live screenshot content part = %T, want messages.ImagePart", msgs[0].ContentParts[1])
+	}
 	if part.MediaType != "image/jpeg" || len(part.Bytes) == 0 {
 		t.Fatalf("live screenshot did not produce non-empty JPEG: %#v", part)
 	}

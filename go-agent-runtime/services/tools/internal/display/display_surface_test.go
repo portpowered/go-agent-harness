@@ -18,6 +18,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight"
 )
 
+const darwinPlatform = "darwin"
+
 type scriptedDisplaySurface struct {
 	capability DisplayCapability
 	probeErr   error
@@ -357,7 +359,7 @@ func assertDeniedScreenEnvelope(t *testing.T, action string, err error) {
 }
 
 func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+	if runtime.GOOS != "linux" && runtime.GOOS != darwinPlatform {
 		t.Skip("display admission process seam is covered only on command-based platforms")
 	}
 	var calls []string

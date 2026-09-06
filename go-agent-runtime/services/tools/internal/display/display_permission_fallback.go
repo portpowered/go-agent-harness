@@ -4,6 +4,7 @@ package display
 
 import (
 	"context"
+	"errors"
 	"runtime"
 )
 
@@ -14,7 +15,7 @@ type darwinDisplayPermissionChecker struct{}
 
 func (darwinDisplayPermissionChecker) Check(ctx context.Context) (DisplayPermission, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return DisplayPermission{}, errors.New("display permission context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return DisplayPermission{}, err
