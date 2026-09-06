@@ -125,7 +125,7 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	browser.Connection.CDPURL = candidate.HTTPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectOff
 	browser.Selection.Persist = true
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderOpenAI,

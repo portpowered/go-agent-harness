@@ -217,7 +217,7 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 	}{
 		{
 			name: "generic minimal caller (a hypothetical future construction site)",
-			opts: SessionRunOptions{},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog()},
 		},
 		{
 			name: "self-play (services.selfPlaySessionRunOptions)",
@@ -233,7 +233,7 @@ func TestPlanSessionRuntimePlaybackObserverNonNilAcrossConstructionPaths(t *test
 			// (session_room_planning.go); Diagnostics is not among the fields
 			// that function sets today.
 			name: "room replay participant (services.buildRoomReplayParticipantPlans shape)",
-			opts: SessionRunOptions{
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:       "openai",
 				Model:          "gpt-realtime",
 				ModelProvided:  true,

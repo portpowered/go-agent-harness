@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
+import rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
 import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 
@@ -22,8 +22,10 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
+const defaultRoomCredentialEnv = "AGENT_MODEL__OPENAI__API_KEY"
+
 func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
-	t.Setenv(servicetest.DefaultRoomCredentialEnv, "fake-openai-key")
+	t.Setenv(defaultRoomCredentialEnv, "fake-openai-key")
 	registry := newBareRoomCLIRegistry(t)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
@@ -44,14 +46,14 @@ func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	if got.LaunchPlan == nil || got.LaunchPlan.Mode != rooms.RoomLaunchModeBare {
 		t.Fatalf("launch plan = %+v, want bare plan", got.LaunchPlan)
 	}
-	if len(got.Manifest.Participants) != 2 || got.Manifest.Participants[0].Kind != room.ParticipantKindHuman || got.Manifest.Participants[1].Kind != room.ParticipantKindAgent {
+	if len(got.Manifest.Participants) != 2 || string(got.Manifest.Participants[0].Kind) != string(room.ParticipantKindHuman) || string(got.Manifest.Participants[1].Kind) != string(room.ParticipantKindAgent) {
 		t.Fatalf("manifest participants = %+v, want human then agent", got.Manifest.Participants)
 	}
 	if got.Manifest.Participants[0].InputDevice != registry.input.ID || got.Manifest.Participants[0].OutputDevice != registry.output.ID {
 		t.Fatalf("customer manifest devices = %q/%q", got.Manifest.Participants[0].InputDevice, got.Manifest.Participants[0].OutputDevice)
 	}
 	agent := got.LaunchPlan.Participants[1]
-	if agent.Provider != "openai" || agent.Model != servicetest.DefaultOpenAIRealtimeModel || agent.CredentialProvenance != string(servicetest.RoomCredentialFromEnvironment) {
+	if agent.Provider != "openai" || agent.Model != servicetest.DefaultOpenAIRealtimeModel || agent.CredentialProvenance != rooms.RoomCredentialFromEnvironment {
 		t.Fatalf("agent plan = %+v", agent)
 	}
 	if registry.defaultCalls != 2 || registry.openCalls != 0 {
@@ -66,7 +68,7 @@ func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 }
 
 func TestRoomRunCommandBareDefaultRecordingUsesFreshConfigDirectoryOnEveryRun(t *testing.T) {
-	t.Setenv(servicetest.DefaultRoomCredentialEnv, "fake-openai-key")
+	t.Setenv(defaultRoomCredentialEnv, "fake-openai-key")
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
 	command := newTestRoomRunCommand(globalFlags, newBareRoomCLIRegistry(t))
@@ -169,7 +171,7 @@ func TestRoomRunCommandConfigRecordingDestinationIsAuthoritative(t *testing.T) {
 }
 
 func TestRoomRunCommandUsesInjectedSignalCancellation(t *testing.T) {
-	t.Setenv(servicetest.DefaultRoomCredentialEnv, "fake-openai-key")
+	t.Setenv(defaultRoomCredentialEnv, "fake-openai-key")
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
 	command := newTestRoomRunCommand(globalFlags, newBareRoomCLIRegistry(t))
@@ -222,7 +224,7 @@ func TestRoomRunCommandUsesInjectedSignalCancellation(t *testing.T) {
 }
 
 func TestRoomRunCommandBareMissingCredentialDoesNotCallRunnerOrOpenDevices(t *testing.T) {
-	t.Setenv(servicetest.DefaultRoomCredentialEnv, "")
+	t.Setenv(defaultRoomCredentialEnv, "")
 	registry := newBareRoomCLIRegistry(t)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
@@ -239,8 +241,8 @@ func TestRoomRunCommandBareMissingCredentialDoesNotCallRunnerOrOpenDevices(t *te
 	// must recommend only a remedy the command actually accepts: the
 	// environment variable, never --api-key (which `room run` would then
 	// reject as an unknown flag, sending the user in a circle).
-	if err == nil || !strings.Contains(err.Error(), servicetest.DefaultRoomCredentialEnv) {
-		t.Fatalf("error = %v, want it to name %s", err, servicetest.DefaultRoomCredentialEnv)
+	if err == nil || !strings.Contains(err.Error(), defaultRoomCredentialEnv) {
+		t.Fatalf("error = %v, want it to name %s", err, defaultRoomCredentialEnv)
 	}
 	if err != nil && strings.Contains(err.Error(), "--api-key") {
 		t.Fatalf("error = %v, want no --api-key mention: room run has no such flag", err)
@@ -421,7 +423,7 @@ func TestRoomRunCommandRejectsConflictingConfigAndManifestPathsBeforeRunner(t *t
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"--config", first, "--manifest", second, "--out", filepath.Join(t.TempDir(), "evidence")})
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil || !errors.Is(err, rooms.ErrRoomLaunchPathConflict) {
+	if err == nil || !errors.Is(err, rooms.ErrLaunchPathConflict) {
 		t.Fatalf("error = %v, want conflicting-path error", err)
 	}
 	if runnerCalls != 0 {

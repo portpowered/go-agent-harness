@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,12 +20,19 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+func runSelfPlayWithTestDependencies(ctx context.Context, out io.Writer, opts SelfPlayRunOptions) (SelfPlayResult, error) {
+	if opts.modelCatalog == nil {
+		opts.modelCatalog = testModelCatalog()
+	}
+	return RunSelfPlayWithResult(ctx, out, opts)
+}
+
 func TestRunSelfPlay_WritesPerAgentEvidenceAndManifest(t *testing.T) {
 	pair := newSelfPlayEchoPair()
 	outputDir := filepath.Join(t.TempDir(), "run")
 	const secret = "sk-self-play-evidence-secret"
 
-	result, err := RunSelfPlayWithResult(context.Background(), nil, SelfPlayRunOptions{
+	result, err := runSelfPlayWithTestDependencies(context.Background(), nil, SelfPlayRunOptions{
 		APIKey:              secret,
 		OutputDir:           outputDir,
 		MaxDuration:         time.Second,
@@ -143,7 +151,7 @@ func TestRunSelfPlay_PreservesFailedEvidenceAndRedactsErrors(t *testing.T) {
 	const secret = "sk-failure-evidence-secret"
 	wantErr := fmt.Errorf("provider authorization: Bearer %s", secret)
 
-	result, err := RunSelfPlayWithResult(context.Background(), nil, SelfPlayRunOptions{
+	result, err := runSelfPlayWithTestDependencies(context.Background(), nil, SelfPlayRunOptions{
 		APIKey:              secret,
 		OutputDir:           outputDir,
 		MaxDuration:         time.Second,

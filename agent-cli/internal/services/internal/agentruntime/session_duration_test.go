@@ -32,7 +32,7 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	err := RunSessionWithMaxDuration(WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
 		AudioPath:      wavPath,
 		TranscriptPath: transcriptPath,
-	}), io.Discard, SessionRunOptions{
+	}), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		SessionInferencer: inferencer,
 	}, -time.Millisecond)
 	if err == nil {
@@ -59,7 +59,7 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	clock := &durationTestClock{}
 	var out bytes.Buffer
-	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{
+	err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 	}, 0, clock)
@@ -171,7 +171,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 			clock := &durationTestClock{}
 			if testCase.maxDuration < 0 {
 				inferencer := &durationTestInferencer{}
-				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{SessionInferencer: inferencer}, testCase.maxDuration, clock)
+				err := RunSessionWithMaxDurationClock(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer}, testCase.maxDuration, clock)
 				var durationErr *SessionMaxDurationError
 				if !errors.As(err, &durationErr) || inferencer.connected || clock.calls != testCase.wantTimerCall {
 					t.Fatalf("negative case error=%v connected=%v timer_calls=%d", err, inferencer.connected, clock.calls)
@@ -181,7 +181,7 @@ func TestRunSessionWithMaxDuration_S2Table(t *testing.T) {
 
 			if testCase.maxDuration == 0 {
 				var out bytes.Buffer
-				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{
+				err := RunSessionWithMaxDurationClock(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 					ReplayPath:        "synthetic.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents()},
 				}, testCase.maxDuration, clock)
@@ -621,7 +621,7 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
@@ -743,7 +743,7 @@ func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)
@@ -840,7 +840,7 @@ func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *tes
 			err := RunSessionWithMaxDurationClock(
 				WithSessionDurationArtifacts(context.Background(), lifecycle),
 				io.Discard,
-				SessionRunOptions{
+				SessionRunOptions{ModelCatalog: testModelCatalog(),
 					ReplayPath:        "artifact-failure.session.json",
 					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
 				},
@@ -947,7 +947,7 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 		TranscriptPath: transcriptPath,
 	})
 	go func() {
-		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
 			SessionInferencer: inferencer,
 		}, time.Nanosecond, clock)

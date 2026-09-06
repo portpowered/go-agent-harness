@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -17,7 +18,10 @@ import (
 type RecordingWebSocketDialer struct {
 	inner    transport.Dialer
 	startAt  time.Time
+	clock    clock.Source
 	capture  SessionCapture
+	sink     SessionCaptureSink
+	sinkErr  error
 	events   []CapturedSessionEvent
 	sequence int
 	mu       sync.Mutex
@@ -27,24 +31,11 @@ var _ transport.Dialer = (*RecordingWebSocketDialer)(nil)
 
 // NewRecordingWebSocketDialer wraps a live WebSocket dialer and records
 // raw JSON messages passing through the returned WebSocket connection.
-func NewRecordingWebSocketDialer(inner transport.Dialer, providerName, model string) *RecordingWebSocketDialer {
-	startAt := time.Now().UTC()
-	d := &RecordingWebSocketDialer{
-		inner:   inner,
-		startAt: startAt,
-		events:  make([]CapturedSessionEvent, 0),
-		capture: SessionCapture{
-			Version: SessionCaptureVersion,
-			Provider: SessionProviderMetadata{
-				Name:  providerName,
-				Model: model,
-			},
-			Session: SessionMetadata{
-				StartedAtUTC: startAt.Format(time.RFC3339Nano),
-			},
-			Records: make([]CapturedSessionEvent, 0),
-		},
-	}
+func NewRecordingWebSocketDialer(inner transport.Dialer, providerName, model string, sources ...clock.Source) *RecordingWebSocketDialer {
+	source := captureClock(sources)
+	startAt := source.Now()
+	d := &RecordingWebSocketDialer{inner: inner, clock: source, startAt: startAt, capture: newCaptureEnvelope(startAt)}
+	d.capture.Provider = SessionProviderMetadata{Name: providerName, Model: model}
 	return d
 }
 
@@ -58,19 +49,6 @@ func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (
 		return nil, err
 	}
 	return &recordingWebSocketConn{inner: conn, recorder: d}, nil
-}
-
-// FlushToFile writes the recorded WebSocket traffic to path.
-func (d *RecordingWebSocketDialer) FlushToFile(path string) error {
-	capture := d.Capture()
-	data, err := json.MarshalIndent(capture, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode session captures: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write session capture file: %w", err)
-	}
-	return nil
 }
 
 // Capture returns a copy of the current capture envelope.
@@ -87,7 +65,7 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 		if event.PayloadType == "" {
 			continue
 		}
-		events = append(events, event)
+		events = append(events, cloneCapturedEvent(event))
 	}
 
 	capture := d.capture
@@ -101,73 +79,11 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 	return capture
 }
 
-func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payload []byte) int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.sequence++
-	sequence := d.sequence
-	d.events = append(d.events, CapturedSessionEvent{
-		Sequence:    sequence,
-		Direction:   dir,
-		TimestampMs: time.Since(d.startAt).Milliseconds(),
-		Type:        websocketPayloadType(payload),
-		PayloadType: SessionPayloadTypeWebSocketMessage,
-		Payload:     append([]byte(nil), payload...),
-	})
-	return sequence
-}
-
-func (d *RecordingWebSocketDialer) discardMessage(sequence int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	for index := range d.events {
-		if d.events[index].Sequence != sequence {
-			continue
-		}
-		d.events[index].PayloadType = ""
-		d.events[index].Payload = nil
-		return
-	}
-}
-
-type recordingWebSocketConn struct {
-	inner    transport.Conn
-	recorder *RecordingWebSocketDialer
-}
-
-var _ transport.Conn = (*recordingWebSocketConn)(nil)
-
-func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
-	messageType, payload, err := c.inner.ReadMessage()
-	if err == nil {
-		c.recorder.recordMessage(DirectionServerToClient, payload)
-	}
-	return messageType, payload, err
-}
-
-func (c *recordingWebSocketConn) WriteMessage(messageType int, payload []byte) error {
-	// Reserve the outbound event before invoking the wrapped connection. A
-	// hermetic provider may synchronously enqueue a response while processing
-	// this write; recording after the call lets that response appear before
-	// its causal client event in the capture.
-	sequence := c.recorder.recordMessage(DirectionClientToServer, payload)
-	if err := c.inner.WriteMessage(messageType, payload); err != nil {
-		c.recorder.discardMessage(sequence)
-		return err
-	}
-	return nil
-}
-
-func (c *recordingWebSocketConn) Close() error {
-	return c.inner.Close()
-}
-
 // ReplayWebSocketDialer replays raw WebSocket messages from a capture.
 type ReplayWebSocketDialer struct {
 	capture        SessionCapture
 	preserveTiming bool
+	clock          clock.TimerSource
 	mu             sync.Mutex
 	conn           *replayWebSocketConn
 	done           chan struct{}
@@ -221,7 +137,7 @@ func NewReplayWebSocketDialerFromCapture(capture SessionCapture, opts ...ReplayW
 			return nil, fmt.Errorf("session capture contains %q payload; expected %q", evt.PayloadType, SessionPayloadTypeWebSocketMessage)
 		}
 	}
-	dialer := &ReplayWebSocketDialer{capture: capture, done: make(chan struct{})}
+	dialer := &ReplayWebSocketDialer{capture: capture, done: make(chan struct{}), clock: clock.Real{}}
 	for _, option := range opts {
 		if option != nil {
 			option(dialer)
@@ -252,7 +168,7 @@ func (d *ReplayWebSocketDialer) WaitForNextOutbound() error {
 func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	events := make([]CapturedSessionEvent, len(d.capture.Records))
 	copy(events, d.capture.Records)
-	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect, d.preserveTiming)
+	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect, d.preserveTiming, d.clock)
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -288,11 +204,12 @@ type replayWebSocketConn struct {
 	preserveTiming     bool
 	timingStartedAt    time.Time
 	firstTimestampMs   int64
+	clock              clock.TimerSource
 }
 
 var _ transport.Conn = (*replayWebSocketConn)(nil)
 
-func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect, preserveTiming bool) *replayWebSocketConn {
+func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect, preserveTiming bool, source clock.TimerSource) *replayWebSocketConn {
 	firstTimestampMs := int64(0)
 	if len(events) > 0 {
 		firstTimestampMs = events[0].TimestampMs
@@ -302,7 +219,8 @@ func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, e
 		done:               done,
 		endsWithDisconnect: endsWithDisconnect,
 		preserveTiming:     preserveTiming,
-		timingStartedAt:    time.Now(),
+		timingStartedAt:    source.Now(),
+		clock:              source,
 		firstTimestampMs:   firstTimestampMs,
 	}
 	conn.cond = sync.NewCond(&conn.mu)
@@ -440,14 +358,14 @@ func (c *replayWebSocketConn) waitForRecordedTimestamp(timestampMs int64) error 
 		return nil
 	}
 	due := c.timingStartedAt.Add(time.Duration(offsetMs) * time.Millisecond)
-	delay := time.Until(due)
+	delay := due.Sub(c.clock.Now())
 	if delay <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(delay)
+	timer := c.clock.NewTimer(delay)
 	defer timer.Stop()
 	select {
-	case <-timer.C:
+	case <-timer.C():
 		return nil
 	case <-c.done:
 		return io.EOF

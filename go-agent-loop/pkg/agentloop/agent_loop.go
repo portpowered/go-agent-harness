@@ -188,7 +188,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 		hlps = append(hlps, notifier)
 	}
 
-	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools)
+	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools, cfg.Clock)
 	// Record real executor availability so subsystems can distinguish
 	// executable tool calls from provider-issued calls that cannot run: the
 	// fallback runner above is idle plumbing, not a public executor.

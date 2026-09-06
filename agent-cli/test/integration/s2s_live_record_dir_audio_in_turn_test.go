@@ -4,6 +4,7 @@ import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/s
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"io"
 	"os"
@@ -38,15 +40,17 @@ func newCLILiveBargeScheduledBoundaryServer() *cliLiveScheduledBoundaryServer {
 type cliLiveRecordingEntry struct {
 	TurnIndex int `json:"turn_index"`
 	Input     struct {
-		AudioBytes    uint64   `json:"audio_bytes"`
-		Committed     bool     `json:"committed"`
-		AudioSegments []string `json:"audio_segments"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		Committed        bool     `json:"committed"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"input"`
 	Response struct {
-		Text          string   `json:"text"`
-		Complete      bool     `json:"complete"`
-		AudioBytes    uint64   `json:"audio_bytes"`
-		AudioSegments []string `json:"audio_segments"`
+		Text             string   `json:"text"`
+		Complete         bool     `json:"complete"`
+		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
+		AudioBytes       uint64   `json:"audio_bytes"`
+		AudioSegments    []string `json:"audio_segments"`
 	} `json:"response"`
 }
 
@@ -91,11 +95,14 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		timeline, outbound, _ := server.snapshots()
-		t.Fatalf("execute live-shaped command: %v; timeline=%v outbound=%v", err, timeline, audioLengthsFromOutbound(outbound))
+	if err := rootCmd.ExecuteContext(ctx); err == nil {
+		t.Fatal("record-dir run without provider capture should report incomplete evidence")
+	} else if !strings.Contains(err.Error(), "finalize provider evidence") {
+		t.Fatalf("record-dir run returned unrelated error for missing provider capture: %v", err)
 	}
-
+	if _, err := os.Stat(filepath.Join(recordDir, "manifest.json")); err != nil {
+		t.Fatalf("incomplete record-dir bundle was not published: %v", err)
+	}
 	timeline, outbound, dialCount := server.snapshots()
 	if dialCount != 1 {
 		t.Fatalf("live provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
@@ -115,17 +122,17 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 		t.Fatalf("turn-zero or response-gated dispatch order is wrong: %v", timeline)
 	}
 
-	appendAudio := make([][]byte, 0, 3)
-	for _, event := range outbound {
-		if event.typeName == "input_audio_buffer.append" {
-			appendAudio = append(appendAudio, event.audio)
-		}
-	}
+	appendAudio := audioPayloadsFromOutbound(outbound)
 	if len(appendAudio) != 3 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 || len(appendAudio[2]) == 0 {
 		t.Fatalf("provider observed scheduled audio payloads = %d with lengths %v, want three non-empty payloads", len(appendAudio), audioLengths(appendAudio))
 	}
 
-	assertCLILiveRecordingBundle(t, recordDir, 3)
+	wantInput := bytes.Join(appendAudio, nil)
+	// The provider fixture emits two PCM16 samples per response. Verify the
+	// append-only stream itself, rather than only checking that each turn has
+	// a non-empty file entry.
+	wantOutput := []byte{1, 0, 11, 0, 2, 0, 12, 0, 3, 0, 13, 0}
+	assertCLILiveRecordingBundle(t, recordDir, 3, wantInput, wantOutput)
 }
 
 func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
@@ -383,46 +390,102 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 	}
 }
 
-func assertCLILiveRecordingBundle(t *testing.T, destination string, turns int) {
+// TestSessionCommand_LiveScheduledAudioSplitsLargeTurnAtProviderBudget keeps
+// one finite turn larger than the provider media-port budget. The runtime must
+// preserve every sample and the single commit/response boundary while the
+// canonical audio accumulator emits bounded append frames.
+func TestSessionCommand_LiveScheduledAudioSplitsLargeTurnAtProviderBudget(t *testing.T) {
+	const sampleCount = 48_001
+	samples := make([]int16, sampleCount)
+	for index := range samples {
+		samples[index] = int16((index % 401) - 200)
+	}
+	var encoded bytes.Buffer
+	if err := wavio.Write(&encoded, wavio.Rate24kHz, samples); err != nil {
+		t.Fatalf("encode large scheduled turn: %v", err)
+	}
+	inputPath := filepath.Join(t.TempDir(), "large-scheduled-turn.wav")
+	if err := os.WriteFile(inputPath, encoded.Bytes(), 0o600); err != nil {
+		t.Fatalf("write large scheduled turn: %v", err)
+	}
+
+	server := newCLILiveScheduledBoundaryServer(false)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIScheduledBoundaryAgent(t, server)
+	recordDir := filepath.Join(t.TempDir(), "large-scheduled-recording")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs(scheduledBoundaryArgs(t.TempDir(), recordDir, inputPath))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil && !strings.Contains(err.Error(), "finalize provider evidence") {
+		timeline, outbound, providerErrors, _, _ := server.snapshots()
+		t.Fatalf("large scheduled turn failed: %v; provider errors=%v; timeline=%v; audio lengths=%v", err, providerErrors, timeline, audioLengthsFromOutbound(outbound))
+	}
+	if _, err := os.Stat(filepath.Join(recordDir, "manifest.json")); err != nil {
+		t.Fatalf("large scheduled record-dir manifest was not published: %v", err)
+	}
+
+	timeline, outbound, providerErrors, dialCount, serverVADEnabled := server.snapshots()
+	if dialCount != 1 || serverVADEnabled || len(providerErrors) != 0 {
+		t.Fatalf("large scheduled provider state = dials:%d server_vad:%t errors:%v timeline=%v", dialCount, serverVADEnabled, providerErrors, timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") < 2 {
+		t.Fatalf("large scheduled turn used one unbounded append: %v", timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.commit") != 1 || countTimeline(timeline, "out:response.create") != 1 || countTimeline(timeline, "in:response.done") != 1 {
+		t.Fatalf("large scheduled turn boundaries = %v, want one commit/response", timeline)
+	}
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	totalBytes := 0
+	for index, payload := range appendAudio {
+		if len(payload) > 2*48_000 {
+			t.Fatalf("large scheduled append %d has %d bytes, exceeds provider frame budget", index, len(payload))
+		}
+		totalBytes += len(payload)
+	}
+	if totalBytes != sampleCount*2 {
+		t.Fatalf("large scheduled audio bytes = %d, want exact %d across %d appends", totalBytes, sampleCount*2, len(appendAudio))
+	}
+	assertScheduledBoundaryOrder(t, timeline, 1)
+}
+
+func assertCLILiveRecordingBundle(t *testing.T, destination string, turns int, expected ...[]byte) {
 	t.Helper()
-	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
-	if err != nil {
-		t.Fatalf("read finalized recording manifest: %v", err)
-	}
-	var manifest struct {
-		Artifacts []struct {
-			Path string `json:"path"`
-		} `json:"artifacts"`
-	}
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		t.Fatalf("decode recording manifest: %v", err)
-	}
+	manifest := readCLIRecordingManifest(t, destination)
+	assertCLIRecordingArtifacts(t, manifest)
+	inputData, outputData := readCLIRecordingAudio(t, destination, expected)
+	entries := readCLIRecordingEntries(t, destination, turns)
+	assertCLIRecordingEntries(t, entries, turns, inputData, outputData)
+}
 
-	inputArtifacts, outputArtifacts := 0, 0
-	for _, artifact := range manifest.Artifacts {
-		switch {
-		case strings.HasPrefix(artifact.Path, "audio/in-"):
-			inputArtifacts++
-		case strings.HasPrefix(artifact.Path, "audio/out-"):
-			outputArtifacts++
+func readCLIRecordingAudio(t *testing.T, destination string, expected [][]byte) ([]byte, []byte) {
+	t.Helper()
+	paths := []string{filepath.Join(destination, "audio/in-000.pcm"), filepath.Join(destination, "audio/out-000.pcm")}
+	data := make([][]byte, len(paths))
+	for index, path := range paths {
+		var err error
+		data[index], err = os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read finalized audio artifact %q: %v", path, err)
 		}
 	}
-	if inputArtifacts != turns || outputArtifacts != turns {
-		t.Fatalf("manifest audio artifacts = input:%d output:%d, want %d each", inputArtifacts, outputArtifacts, turns)
+	if len(data[0]) == 0 || len(data[1]) == 0 {
+		t.Fatalf("finalized append-only audio streams are empty: input=%d output=%d", len(data[0]), len(data[1]))
 	}
-	for index := 0; index < turns; index++ {
-		for _, prefix := range []string{"audio/in-", "audio/out-"} {
-			path := filepath.Join(destination, prefix+threeDigits(index)+".pcm")
-			data, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("read finalized audio artifact %q: %v", path, err)
-			}
-			if len(data) == 0 {
-				t.Fatalf("finalized audio artifact %q is empty", path)
-			}
-		}
+	if len(expected) >= 1 && !bytes.Equal(data[0], expected[0]) {
+		t.Fatalf("concatenated input PCM differs from provider append stream: got %d bytes, want %d", len(data[0]), len(expected[0]))
 	}
+	if len(expected) >= 2 && !bytes.Equal(data[1], expected[1]) {
+		t.Fatalf("concatenated output PCM differs from fixture: got %d bytes %v, want %d %v", len(data[1]), data[1], len(expected[1]), expected[1])
+	}
+	return data[0], data[1]
+}
 
+func readCLIRecordingEntries(t *testing.T, destination string, turns int) []cliLiveRecordingEntry {
+	t.Helper()
 	logFile, err := os.Open(filepath.Join(destination, "session-log.jsonl"))
 	if err != nil {
 		t.Fatalf("open finalized session log: %v", err)
@@ -440,23 +503,35 @@ func assertCLILiveRecordingBundle(t *testing.T, destination string, turns int) {
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("read finalized session log: %v", err)
 	}
+	return entries
+}
+
+func assertCLIRecordingEntries(t *testing.T, entries []cliLiveRecordingEntry, turns int, inputData, outputData []byte) {
+	t.Helper()
 	if len(entries) != turns {
 		t.Fatalf("session log entries = %d, want %d", len(entries), turns)
 	}
+	var inputOffset, outputOffset uint64
 	for index, entry := range entries {
 		if entry.TurnIndex != index+1 || !entry.Input.Committed || entry.Input.AudioBytes == 0 || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
 			t.Fatalf("session log entry %d does not prove a committed input and completed audio response: %#v", index+1, entry)
 		}
+		if len(entry.Input.AudioSegments) != 1 || entry.Input.AudioSegments[0] != "audio/in-000.pcm" || entry.Input.AudioOffsetBytes != inputOffset {
+			t.Fatalf("session log input %d does not preserve append-only offset: %#v", index+1, entry.Input)
+		}
+		if len(entry.Response.AudioSegments) != 1 || entry.Response.AudioSegments[0] != "audio/out-000.pcm" || entry.Response.AudioOffsetBytes != outputOffset {
+			t.Fatalf("session log response %d does not preserve append-only offset: %#v", index+1, entry.Response)
+		}
+		if entry.Input.AudioOffsetBytes+entry.Input.AudioBytes > uint64(len(inputData)) || entry.Response.AudioOffsetBytes+entry.Response.AudioBytes > uint64(len(outputData)) {
+			t.Fatalf("session log entry %d points outside append-only streams: %#v", index+1, entry)
+		}
+		inputOffset += entry.Input.AudioBytes
+		outputOffset += entry.Response.AudioBytes
 		wantText := "response turn " + strconv.Itoa(index+1)
 		if entry.Response.Text != wantText {
-			t.Fatalf("session log response %d text = %q, want %q", index+1, entry.Response.Text, wantText)
+			t.Fatalf("session log response %d text = %q, want %q; entry=%#v", index+1, entry.Response.Text, wantText, entry)
 		}
 	}
-}
-
-func threeDigits(index int) string {
-	value := strconv.Itoa(index)
-	return strings.Repeat("0", 3-len(value)) + value
 }
 
 func containsTimeline(timeline []string, want string) bool {
@@ -503,4 +578,17 @@ func audioLengthsFromOutbound(outbound []cliLiveOutbound) []int {
 		}
 	}
 	return lengths
+}
+
+func scheduledAppendRange(timeline []string, start, end int) (first, count int) {
+	first = -1
+	for index := start; index < end; index++ {
+		if timeline[index] == "out:input_audio_buffer.append" {
+			if first < 0 {
+				first = index
+			}
+			count++
+		}
+	}
+	return first, count
 }

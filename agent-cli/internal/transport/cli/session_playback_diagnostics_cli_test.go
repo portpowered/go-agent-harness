@@ -23,6 +23,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // playbackOverflowSessionReceiveHeadroom covers the small number of non-audio
@@ -80,7 +81,7 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 		frame := make([]int16, audio.FrameSize)
 		for {
 			err := deviceObserver.ReadFrame(ctx, frame)
-			if errors.Is(err, audio.ErrClosed) {
+			if errors.Is(err, contract.ErrClosed) {
 				drainErr <- nil
 				return
 			}

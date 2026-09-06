@@ -15,6 +15,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -325,8 +326,8 @@ func TestSessionWAVSourceCloseIsOnceAndGuardsReads(t *testing.T) {
 	if err := source.Close(); err != nil {
 		t.Fatalf("second close must stay nil: %v", err)
 	}
-	if err := source.ReadFrame(context.Background(), frame); !errors.Is(err, audio.ErrClosed) {
-		t.Fatalf("post-close read = %v, want errors.Is(audio.ErrClosed)", err)
+	if err := source.ReadFrame(context.Background(), frame); !errors.Is(err, contract.ErrClosed) {
+		t.Fatalf("post-close read = %v, want errors.Is(contract.ErrClosed)", err)
 	}
 }
 

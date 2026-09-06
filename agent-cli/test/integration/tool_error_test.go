@@ -14,15 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 )
 
 // s2s-v4c-tool-error vertical: a failing tool call must surface a typed ERROR
@@ -221,15 +220,14 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	registry := tools.NewToolRegistryFromConfig(nil)
-	exec := agent.NewExecutor(executor, services.DefaultToolDefs(registry), &toolCallInferencer{}, true)
+	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, services.DefaultToolDefs(nil))
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	router := cli.NewRouter(
 		globalFlags,
 		rootCommand,
-		cli.NewAskCommand(exec, askFlags, loopFlags, globalFlags),
-		cli.NewChatCommand(exec, askFlags, loopFlags, flags.NewChatFlags(), globalFlags),
+		cli.NewAskCommand(service, askFlags, loopFlags, globalFlags),
+		cli.NewChatCommand(service, askFlags, loopFlags, flags.NewChatFlags(), globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewToolCommand(globalFlags),
 		cli.NewInteractionCommand(),
 		cli.NewInteractionReplayCommand(),
@@ -239,9 +237,9 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewProbeReportCommand(),
 		cli.NewProbeFleetCommand(nil, nil),
 		cli.NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil),
-		cli.NewSessionShowCommand(globalFlags),
-		cli.NewSessionListCommand(globalFlags),
-		cli.NewSessionDeleteCommand(globalFlags),
+		cli.NewSessionShowCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
+		cli.NewSessionListCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
+		cli.NewSessionDeleteCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewSessionReplayCommand(nil),
 		cli.NewRoomRunCommand(globalFlags, nil),
 		cli.NewConfigCommand(),
