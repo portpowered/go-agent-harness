@@ -38,7 +38,7 @@ func (h *handle) finishWhenStopped() {
 		// Done watcher observes the transport error. That boundary asks the
 		// runtime to stop gracefully, but it must not erase an actionable
 		// replay mismatch or provider write/read failure.
-		terminal = providerErr
+		terminal = fmt.Errorf("session error: %w", providerErr)
 	} else if graceful {
 		terminal = nil
 	} else if parent != nil && parent.Err() != nil {
@@ -49,7 +49,7 @@ func (h *handle) finishWhenStopped() {
 	} else if pumpErr != nil {
 		terminal = pumpErr
 	} else if runErr != nil && !errors.Is(runErr, context.Canceled) {
-		terminal = runErr
+		terminal = fmt.Errorf("session error: %w", runErr)
 	}
 	h.finish(terminal)
 }
