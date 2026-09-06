@@ -60,6 +60,14 @@ consumption against the reference runtime. If its semantics cannot preserve the
 permit reliably, use a serialized admission command backed by canonical runtime
 state and a durable lock. Do not present a prompt-only restriction as enforcement.
 
+Bootstrap must also reconcile prompt/script contracts. In the pinned reference,
+`prepare-validation.py` calls the mandatory `factory-preflight.v1` validator,
+while the manager's example mission omits `preflight`. Our emitted packet must
+carry the project identity, contract revision, hashed source plan/request/
+acceptance, and intended mainline expected by preparation. Verify an actual
+manager-shaped packet through preparation, including wrong hashes and stale
+mainline failures; graph validation alone cannot catch this mismatch.
+
 No autonomous portfolio generation. The manager works only on the admitted
 project. A blocked project retains admission until explicitly resolved; it does
 not silently admit a second project. Recovery reconciles canonical Work and
