@@ -44,6 +44,7 @@ func TestSessionCLI_StartupAnnouncementRouting(t *testing.T) {
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatalf("create config directory: %v", err)
 	}
+	wantPCM := []byte{0x01, 0x23, 0x45, 0x67}
 
 	binaryPath := startupAnnouncementBinary(t)
 	result, runErr := probe.RunDuplexSession(context.Background(), probe.DuplexSessionConfig{
@@ -61,6 +62,7 @@ func TestSessionCLI_StartupAnnouncementRouting(t *testing.T) {
 		Segments:         []probe.DuplexAudioSegment{{ID: "startup-proof", PCM16: startupAnnouncementFrame()}},
 	})
 
+	writeStartupAnnouncementCaptures(t, os.Getenv("C06_STARTUP_ANNOUNCEMENT_CAPTURE_DIR"), result.Stdout, result.Stderr, wantPCM)
 	t.Logf("startup routing evidence: binary_sha256=%s stdout_sha256=%x stdout_hex=%x stdout_bytes=%d stderr_sha256=%x stderr_bytes=%d stderr=%q command=%q", fileSHA256(t, binaryPath), sha256.Sum256(result.Stdout), result.Stdout, len(result.Stdout), sha256.Sum256(result.Stderr), len(result.Stderr), result.Stderr, result.Command)
 	if runErr != nil {
 		t.Fatalf("startup announcement routing run: %v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, result, result.Stdout, result.Stderr)
@@ -69,7 +71,6 @@ func TestSessionCLI_StartupAnnouncementRouting(t *testing.T) {
 		t.Fatalf("process lifecycle result = %+v, want a clean shipped-process shutdown", result)
 	}
 
-	wantPCM := []byte{0x01, 0x23, 0x45, 0x67}
 	if !bytes.Equal(result.Stdout, wantPCM) {
 		t.Fatalf("stdout = %x, want byte-exact PCM %x; stderr=%q", result.Stdout, wantPCM, result.Stderr)
 	}
@@ -99,6 +100,26 @@ func TestSessionCLI_StartupAnnouncementRouting(t *testing.T) {
 	}
 	if string(got) != toolContent {
 		t.Fatalf("provider-requested file = %q, want %q", got, toolContent)
+	}
+}
+
+func writeStartupAnnouncementCaptures(t *testing.T, captureDir string, stdout, stderr, expectedPCM []byte) {
+	t.Helper()
+	captureDir = strings.TrimSpace(captureDir)
+	if captureDir == "" {
+		return
+	}
+	if err := os.MkdirAll(captureDir, 0o700); err != nil {
+		t.Fatalf("create startup announcement capture directory: %v", err)
+	}
+	for name, data := range map[string][]byte{
+		"expected-pcm.raw": expectedPCM,
+		"stderr.raw":       stderr,
+		"stdout.raw":       stdout,
+	} {
+		if err := os.WriteFile(filepath.Join(captureDir, name), data, 0o600); err != nil {
+			t.Fatalf("write startup announcement capture %s: %v", name, err)
+		}
 	}
 }
 
