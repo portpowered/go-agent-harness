@@ -1,0 +1,30 @@
+# Task progress
+
+Project: audio-runtime
+Work: audio-runtime-c07-session-update-feedback-recovery
+Dispatch: Luna max implementer; bounded C07-01 recovery/integration checkpoint
+
+Operating policy and admission
+
+- Read `$FACTORY_ROOT/factory/docs/operating-policy.md`, `meta-planner-handoff.md`, and the immutable audio-runtime manifest/request/acceptance/source plan before selecting work. The repository's root AGENTS.md references `$FACTORY_ROOT/RTK.md`, which is absent at that path; no alternate policy was substituted.
+- Pre-edit `python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c07-session-update-feedback-recovery` returned `{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c07-session-update-feedback-recovery"}`.
+- The current branch was `codex/audio-runtime-c07-session-update-feedback-recovery`, matching `prd.branchName`; the worktree was clean at `ddebb8f44346cde4c7e989a1880b8ffac6179df0` before integration.
+- Pre-edit canonical ownership and PR state were rechecked with `project-control.py status`, `you --server "$FACTORY_SERVER_URL" --json work list --session "~default" --max-results 500 --all`, and `gh pr view` for #396/#397. C06 was failed/closed to implementation ownership with no active C06 implementation/review/validation owner; C07 was the admitted successor. PR #396 remained OPEN at `7225708002c381164733a90a658a9f1f6d326d65`; PR #397 remained OPEN at `1e324de57aef74a68c4e2c6eec5f5667c6a4f710`; neither had a merge commit.
+
+Predecessor preservation snapshot
+
+- C06 predecessor `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c06-duplex-stdout-recovery` was clean at `9a8b440ffa2354d96d06618f5756a56a4a0cdc05` on branch `codex/audio-runtime-c06-duplex-stdout-recovery`.
+- C05 predecessor `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c05-baseline-behavior-recovery` was untouched at `ebb7d5ab2096eb8270b747224779ed14bbdfee80` on branch `codex/audio-runtime-c05-baseline-behavior-recovery`, with its four tracked modifications and untracked `session_adapter_test.go` preserved.
+- C05 preservation SHA256 before integration: `prd.json=720b536ac4693e1466cad28a26e67bd8ca82f846c43ef279219865b404e48cb2`; `agent-cli/internal/transport/cli/internal/livehost/run.go=0c949f7f8471248ce2228e05c331293399ff5855c711accf624b552d3fb6a58b`; `agent-cli/internal/transport/cli/session_command_support.go=082b6db20fc5c4c13a49a99d783053f877eb7980b6bd835ed4a87dcbd91d27e7`; `agent-cli/internal/transport/cli/session_observability.go=54397d5d138361a49cd98ed2cdd34a2c835199efefc07c48802d0a6013387a03`; `go-agent-runtime/services/session/internal/live/session_adapter.go=96669a42e085141ab23659c31707bb445fadc796c5e6a80525518b5c3b7cdd31`; untracked `go-agent-runtime/services/session/internal/live/session_adapter_test.go=3003081aa91c8773c01da2c6b4dc6603dfd60a86416b8887be3503d77fb37a4c`.
+
+C07-01 integration checkpoint
+
+- Fetched `origin main` with `git fetch origin main`; resolved revision remained `ddebb8f44346cde4c7e989a1880b8ffac6179df0`.
+- Because setup started at current main, merged the committed C06 candidate first with `git merge --no-ff 9a8b440ffa2354d96d06618f5756a56a4a0cdc05 -m "Merge committed C06 candidate for C07 recovery"`, producing merge `a69ba89d8f7a5d61fc9747ffed4bae95d9472af0`.
+- Integrated the current owning-branch factory follow-ups through `68e42601a1da1c7977791b9da0d44785123dfe46` (including `60f236c017fa740018e31104aadf08e2b1556866`) with `git merge --no-ff 68e42601a1da1c7977791b9da0d44785123dfe46 -m "Merge current factory follow-ups for C07 recovery"`, producing integration checkpoint `85748619a0923613753bd273a0d8b04b012bf3e7`.
+- `git merge-base --is-ancestor` passed for every required revision: baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, C04 `1e324de57aef74a68c4e2c6eec5f5667c6a4f710`, C05 `ebb7d5ab2096eb8270b747224779ed14bbdfee80`, C06 correction `16716aaf0f32fd008addbe7ecc60ee76e39d3cc6`, C06 source `9a8b440ffa2354d96d06618f5756a56a4a0cdc05`, factory follow-up `60f236c017fa740018e31104aadf08e2b1556866`, factory head `68e42601a1da1c7977791b9da0d44785123dfe46`, and freshly fetched main `ddebb8f44346cde4c7e989a1880b8ffac6179df0`.
+- `git diff --check` passed and the candidate worktree is clean at the integration checkpoint. Rechecking the C05 predecessor returned the exact pre-integration SHA256 values above; no predecessor worktree was edited.
+
+Next bounded action
+
+- C07-01 is complete as a reviewable ancestry/ownership checkpoint. Next is C07-02: run `TestFamilyAIterativeBuildUpThroughShippedProcess` against this unchanged committed candidate under the existing 30-second workflow deadline, record executable/source/fixture identities, raw provider event sequence/counts, missing effects, output and exit status, then trace the actual session.created/session.updated origin before choosing a repair. No source repair has been claimed yet.
