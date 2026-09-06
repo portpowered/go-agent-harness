@@ -2,6 +2,8 @@ package participants
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -140,6 +142,10 @@ func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session 
 		return sessionToolResultsFlatFallback
 	}
 
+	return sendCompleteSessionToolResults(ctx, sender, withoutResponse, canDeferResponse, toolResults)
+}
+
+func sendCompleteSessionToolResults(ctx context.Context, sender sessionMessageSender, withoutResponse sessionMessageWithoutResponseSender, canDeferResponse bool, toolResults []messages.Message) sessionToolResultDelivery {
 	for index, result := range toolResults {
 		last := index == len(toolResults)-1
 		if !last && canDeferResponse {
@@ -205,4 +211,124 @@ func sessionToolResultsContainImage(results []messages.Message) bool {
 		}
 	}
 	return false
+}
+
+type sessionInputKind uint8
+
+const (
+	sessionInputAudio sessionInputKind = iota + 1
+	sessionInputEvent
+	sessionInputMessage
+)
+
+type sessionInput struct {
+	kind            sessionInputKind
+	audio           messages.SessionAudioInput
+	event           messages.StreamMessage
+	message         messages.Message
+	requestResponse bool
+}
+
+// EnqueueSessionMessage queues one complete user message in the same bounded
+// ingress as PCM and control events. Complete-message providers use this path
+// for rich opening turns such as image content; requestResponse controls
+// whether the provider starts a response immediately or waits for a later
+// audio commit.
+func (r *ModelRunner) EnqueueSessionMessage(ctx context.Context, msg messages.Message, requestResponse bool) error {
+	if r == nil || r.sessionInputInbox == nil {
+		return fmt.Errorf("EnqueueSessionMessage: not in session mode")
+	}
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	if ctx == nil {
+		return fmt.Errorf("EnqueueSessionMessage: context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case r.sessionInputInbox <- sessionInput{kind: sessionInputMessage, message: msg, requestResponse: requestResponse}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return ErrSessionInputQueueFull
+	}
+}
+
+func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session messages.Session, msg messages.Message, requestResponse bool) error {
+	if requestResponse {
+		sender, ok := session.(sessionMessageSender)
+		if !ok {
+			return errors.New("session does not support complete messages")
+		}
+		if !sender.SendMessage(ctx, msg) {
+			return errors.New("session rejected complete message")
+		}
+		return nil
+	}
+	sender, ok := session.(sessionMessageWithoutResponseSender)
+	if !ok {
+		return errors.New("session does not support complete messages without response")
+	}
+	if !sender.SendMessageWithoutResponse(ctx, msg) {
+		return errors.New("session rejected complete message without response")
+	}
+	return nil
+}
+
+// forwardSessionInput dispatches the ordered ingress without reading a second
+// input or changing the provider lifecycle observation order.
+func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
+	switch input.kind {
+	case sessionInputAudio:
+		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)
+	case sessionInputEvent:
+		r.forwardQueuedSessionEvent(ctx, session, state, input.event)
+	case sessionInputMessage:
+		return r.forwardSessionCompleteMessage(ctx, session, input.message, input.requestResponse)
+	}
+	return nil
+}
+
+func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt messages.StreamMessage) {
+	if isToolAcknowledgementResponseCreate(evt) {
+		state.acknowledgementOutstanding = true
+		state.acknowledgementCancelled = false
+		state.responseCancelSent = false
+		return
+	}
+	state.awaitingContinuation = true
+	r.sessionToolContinuation = sessionToolContinuationAccepted
+}
+
+func (r *ModelRunner) noteAcceptedSessionCancel(state *sessionRunState) {
+	// Live hosts send explicit cancellation through the same ordered control
+	// path as audio admission. Match the automatic barge-in state so late
+	// untagged provider deltas cannot escape from the cancelled response.
+	state.responseCancelSent = true
+	if state.acknowledgementOutstanding {
+		state.acknowledgementCancelled = true
+	}
+	if state.currentResponseID != "" {
+		state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
+	}
+}
+
+func (r *ModelRunner) noteDeferredSessionFailure(state *sessionRunState, evt, failure messages.StreamMessage) {
+	if failure.Type != "" {
+		state.pendingSendErrors = append(state.pendingSendErrors, failure)
+	}
+	if evt.Type == messages.StreamTypeToolCallEnd {
+		state.suppressContinuation = true
+		r.sessionToolContinuation = sessionToolContinuationSuppressed
+	}
+}
+
+func isToolAcknowledgementResponseCreate(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	return ok && value.IsToolAcknowledgement()
 }

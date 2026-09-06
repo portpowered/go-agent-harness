@@ -82,3 +82,11 @@ func WithClientOwnedAudioTurnBoundaries() Option {
 		p.clientOwnsAudioTurnBoundaries = true
 	}
 }
+
+// WithSessionWriteBackpressure makes continuous-session control admission wait
+// for bounded outbound capacity. Cancellation and session closure still stop
+// the wait. Offline replay uses this when producers run faster than wire I/O;
+// the default non-blocking overload contract remains available to other hosts.
+func WithSessionWriteBackpressure() Option {
+	return func(p *OpenAIProvider) { p.sessionWriteBackpressure = true }
+}

@@ -3,6 +3,8 @@ package agentruntime
 import (
 	"reflect"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 )
 
 func nilInterface(value any) bool {
@@ -37,4 +39,12 @@ func sortedRoomIDs(ids []string) []string {
 		result[position] = value
 	}
 	return result
+}
+
+func roomFormatForOptions(opts RoomRunOptions) room.PCM16Format {
+	format := roomMixerConfigForOptions(opts).Format
+	if format == (room.PCM16Format{}) {
+		return room.DefaultPCM16Format()
+	}
+	return format
 }

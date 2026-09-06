@@ -2,7 +2,6 @@ package transcript
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -154,9 +153,12 @@ type ArtifactHash struct {
 // and records the path and digest in Artifacts. Data is copied and generic
 // recording credentials are redacted before it is written.
 type RecordingArtifact struct {
-	Path   string
-	Data   []byte
-	SHA256 string
+	Path string
+	// SourcePath streams a completed artifact from disk instead of retaining
+	// another full in-memory copy. It is mutually exclusive with Data.
+	SourcePath string
+	Data       []byte
+	SHA256     string
 }
 
 // RecordingTerminalSummary is the optional normalized terminal outcome for a
@@ -550,10 +552,8 @@ func WriteRecordingBundle(config RecordingConfig) error {
 			return err
 		}
 	}
-	for _, artifact := range normalized.additional {
-		if err := write(artifact.path, artifact.data); err != nil {
-			return err
-		}
+	if err := writeAdditionalArtifacts(normalized.additional, write, writePath); err != nil {
+		return err
 	}
 	if err := verifyAdditionalArtifactHashes(staging, normalized.additional); err != nil {
 		return recordingError(ErrRecordingWrite, "verify additional artifact hashes", destination, err, redactor)
@@ -618,9 +618,10 @@ type normalizedRecording struct {
 }
 
 type normalizedRecordingArtifact struct {
-	path   string
-	data   []byte
-	sha256 string
+	sourcePath string
+	path       string
+	data       []byte
+	sha256     string
 }
 
 type credentialRedactor struct {
@@ -864,22 +865,11 @@ func normalizeAdditionalRecordingArtifacts(
 			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q duplicates another recording path", artifact.Path), redactor)
 		}
 		seen[artifact.Path] = struct{}{}
-		if len(artifact.Data) == 0 {
-			return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: data must be non-empty", artifact.Path), redactor)
+		item, err := normalizeAdditionalArtifactData(artifact, redactor)
+		if err != nil {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: %w", artifact.Path, err), redactor)
 		}
-		data := redactor.apply(artifact.Data)
-		digest := sha256.Sum256(data)
-		wantDigest := hex.EncodeToString(digest[:])
-		if artifact.SHA256 != "" {
-			if !isLowerSHA256(artifact.SHA256) || artifact.SHA256 != wantDigest {
-				return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: sha256 does not match data", artifact.Path), redactor)
-			}
-		}
-		normalized = append(normalized, normalizedRecordingArtifact{
-			path:   artifact.Path,
-			data:   append([]byte(nil), data...),
-			sha256: wantDigest,
-		})
+		normalized = append(normalized, item)
 	}
 	sort.Slice(normalized, func(i, j int) bool { return normalized[i].path < normalized[j].path })
 	for index := 1; index < len(normalized); index++ {

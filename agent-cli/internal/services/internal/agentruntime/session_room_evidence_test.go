@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -62,10 +64,10 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 	if manifest.Timing.StartedAt == "" || manifest.Timing.EndedAt == "" || !strings.HasSuffix(manifest.Timing.StartedAt, "Z") || !strings.HasSuffix(manifest.Timing.EndedAt, "Z") {
 		t.Fatalf("manifest timing = %+v, want UTC start/end", manifest.Timing)
 	}
-	if manifest.RoomLatency != RoomLatencyArtifactPath {
-		t.Fatalf("room latency artifact = %q, want %q", manifest.RoomLatency, RoomLatencyArtifactPath)
+	if manifest.RoomLatency != runtimeRooms.RoomLatencyArtifactPath {
+		t.Fatalf("room latency artifact = %q, want %q", manifest.RoomLatency, runtimeRooms.RoomLatencyArtifactPath)
 	}
-	if _, err := ReadRoomLatencyBundle(filepath.Join(outputDir, RoomLatencyArtifactPath)); err != nil {
+	if _, err := runtimeRoomsWire.NewLatencyService().ReadBundle(filepath.Join(outputDir, runtimeRooms.RoomLatencyArtifactPath)); err != nil {
 		t.Fatalf("read finalized room latency artifact: %v", err)
 	}
 
@@ -183,7 +185,7 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 	opts.Manifest.Participants[0].Tools = []string{"requested_tool"}
 	opts.ToolCapabilitiesFactory = func(room.Participant) (RoomParticipantToolCapabilities, error) {
 		return RoomParticipantToolCapabilities{
-			Executor:    &roomBrowserCapabilityTestExecutor{participantID: "evidence"},
+			Executor:    roomScopedToolExecutor{participantID: "evidence"},
 			Definitions: []messages.ToolDefinition{{Name: "unexpected_tool"}},
 		}, nil
 	}

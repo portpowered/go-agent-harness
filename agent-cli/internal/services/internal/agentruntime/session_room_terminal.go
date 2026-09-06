@@ -228,9 +228,6 @@ func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence *roomEvi
 		}
 		evidence.recordTimelineEvent("room_bound_shutdown", result.ParticipantID, record.Fields)
 	}
-	if opts.Stream != nil {
-		opts.Stream.RecordDiagnostic(result.ParticipantID, record)
-	}
 	if opts.OnDiagnostic != nil {
 		opts.OnDiagnostic(result.ParticipantID, record)
 	}

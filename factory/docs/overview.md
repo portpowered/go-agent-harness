@@ -1,198 +1,45 @@
-# Factory Overview
+# Go agent harness factory
 
-This factory coordinates autonomous work for **you-agent-factory**: the Go,
-OpenAPI, and React system for scheduling and orchestrating concurrent AI workers
-through the `you` CLI, backend runtime, and dashboard. The **ideafy**
-workstation is the meta-planner. It inspects live factory state, submits batches
-of `idea` work, records planner state, and schedules a `thoughts` loopback so
-planning resumes after each batch completes. The **plan** workstation turns each
-idea into a PRD. **process** and **review** executors implement and gate work in
-isolated worktrees.
+The factory restores the delivery shape from before the project-cycle expansion:
 
-## Read First
+```text
+Astra medium meta-planner -> idea -> Astra medium planner -> isolated workspace
+  -> Luna max implementation -> Luna max independent CI/review/merge -> delivery
+  -> meta-planner -> fresh Luna max runtime probe -> meta-planner assessment
+```
 
-Before submitting work, read:
+The meta-planner owns reconciliation and project completion. It wakes after
+vertical delivery, failure or a probe result, and routinely every four hours.
+There is no 15-minute reconciliation cron or separate project leader. Test success
+must be followed by exercising the built program. Failed probes become bounded
+repairs; final acceptance still requires fresh customer and engineering validation
+of all immutable criteria. See operating-policy.md and probe-contract.md.
 
-* `factory/factory.json`
-* `factory/workstations/ideafy/AGENTS.md`
-* `docs/temp/customer-ask.md` — current customer authorization and goals
-* `docs/temp/progress.md`, `docs/temp/checklist.md`, and `docs/temp/meta.md` —
-  live planner state files (local, not checked in)
-* `factory/docs/batch-inputs.md`
-* `factory/docs/batch-input-example.json`
-* `factory/docs/decision-envelope.md`
-* `you docs agents`
-* `you docs batch-inputs`
+One project remains admitted. The graph has the original nine workstations plus
+two probe preparation/execution stations. A serial manager, two worker slots,
+serial merge and serial validation keep ownership bounded. Model profiles remain
+Astra medium for planning and Luna max for execution, review and probes. All
+agent-worker timeouts are four hours; probe missions retain their own bounded
+execution budgets.
 
-Repository context that shapes planner batches:
+The user authorized a fresh board. meta-planner-handoff.md preserves the earlier
+PRs, branches, current dirty work, exact baseline and outstanding failures. Old
+recordings remain archived in the shared Git directory; they are not resubmitted.
 
-* root `AGENTS.md` — architecture, package map, and verification expectations
-* `docs/architecture/data-model.md` — public vocabulary (`Factory`, `Factory
-  Session`, `Work`, `Work Request`)
-* `docs/reference/` — packaged `you docs <topic>` contracts
-
-## Planner Loop
-
-The meta-planner operates the work queue rather than implementing every feature
-directly:
-
-1. Read the customer ask, factory state, project docs, and codebase.
-2. Maintain direction in `docs/temp/*` state files.
-3. Submit a batch of concrete `idea` work items.
-4. Add a `thoughts` loopback item that depends on those ideas so ideafy runs
-   again after the batch completes.
-5. Append planner progress and update the checklist after submission.
-
-Always dry-run a batch before real submission:
+Build the pinned private runtime with production dashboard assets:
 
 ```sh
-you submit batch --dry-run <path> --session <session_id>
+python3 factory/scripts/build-runtime.py --source /path/to/you-agent-factory
+python3 factory/scripts/run-factory.py status
+python3 factory/scripts/run-factory.py start
+python3 factory/scripts/run-factory.py restart
 ```
 
-Do not submit a real batch until the customer ask, checklist, and live queue
-state agree the next slice of work is ready.
-
-## Work Types
-
-Configured work types:
-
-```txt
-thoughts       meta-planner loopback work
-idea           product/implementation idea submitted by ideafy
-plan           PRD planning output from an idea
-task           executor/review implementation work
-cron-triggers  runtime trigger type
-```
-
-Use `idea`, singular, for implementation proposals.
-Use `thoughts`, plural, for ideafy loopback.
-
-## Workstation Flow
-
-```txt
-thoughts:init -> ideafy -> thoughts:complete
-
-idea:init -> plan -> idea:to-complete + plan:init
-plan:init -> setup-workspace -> plan:complete + task:init
-task:init -> process -> task:in-review
-task:in-review -> review -> task:to-complete
-idea:to-complete + task:to-complete with the same name -> consume
-```
-
-Executor and review workstations run in worktrees under
-`.claude/worktrees/<work-item-name>/`, created by
-`factory/scripts/setup-workspace.py`.
-
-## Batch Submission
-
-Use the canonical `FACTORY_REQUEST_BATCH` shape from `you docs batch-inputs`.
-Human-readable notes live in `factory/docs/batch-inputs.md`.
-
-For a running factory, prefer:
-
-```sh
-you submit batch <path> --session <session_id>
-```
-
-Always dry-run first:
-
-```sh
-you submit batch --dry-run <path> --session <session_id>
-```
-
-For watched-folder operator ingress, use:
-
-```txt
-factory/inputs/BATCH/default/<request_id>.json
-```
-
-The checked-in example is:
-
-```txt
-factory/docs/batch-input-example.json
-```
-
-Each batch should include several concrete `idea` items plus one `thoughts`
-loopback item connected through `DEPENDS_ON` relations so the meta-planner
-re-enters after the ideas complete.
-
-## State Inspection
-
-Before submitting new work, inspect the current queue and active sessions.
-
-Use:
-
-```sh
-you work list --server http://localhost:7439 --session <session_id> --max-results 400
-```
-
-to see current work items, work types, states, names, and whether previous
-batches are still running, blocked, failed, or ready to be consumed.
-
-Use:
-
-```sh
-you session list --server http://localhost:7439
-```
-
-to enumerate active and recent factory sessions. Check both commands before
-deciding that work is stuck or before submitting a new batch. Session list
-answers whether the runtime is alive; work list answers what the queue is doing
-inside a session.
-
-`--server` is mandatory: the CLI defaults to `http://localhost:7437`, a
-DIFFERENT factory, and without it these commands report `FACTORY_UNREACHABLE`
-or `WORK_NOT_FOUND` while appearing to run. `--max-results` is also required
-because the default page size is 50.
-
-Replace `<session_id>` with a live id from `you session list` (for example
-`c803e7f7-1361-4ba6-bb2b-b5c9cfeb2754` on a long-running host).
-
-## Repair
-
-Use:
-
-```sh
-you work move <work-id> <state-name> --server http://localhost:7439 --session <session_id> --request-id <stable-repair-id>
-```
-
-only for deliberate workflow repair. Record every manual move in
-`docs/temp/progress.md` with the work item, old state, new state, reason, and
-expected next workstation. Do not use work moves to skip implementation,
-review, or validation.
-
-## Local State Files
-
-Planner-owned state under `docs/temp/`:
-
-```txt
-docs/temp/customer-ask.md  current customer authorization and goals
-docs/temp/progress.md      append-only meta-planner progress log
-docs/temp/checklist.md     high-level customer-ask and phase tracking
-docs/temp/meta.md          lightweight world-state notes for long-running passes
-```
-
-These files are local planner state. Keep them out of version control when
-possible. The meta-planner creates and maintains them during planning passes.
-Task executors append to the worktree `progress.txt` at the repository root
-during implementation batches.
-
-## Quality Gates
-
-Before opening or merging reconciliation PRs, run from the repository root:
-
-```sh
-make verify-fast   # dashboard typecheck, short UI/unit tests, short Go tests
-make lint          # broader repository lint when touching shared surfaces
-```
-
-For higher-risk runtime, API, or UI changes, use `make verify-pr` or the
-focused targets described in root `AGENTS.md`.
-
-When changing factory-local planner docs or the checked-in batch example, also
-run the narrow verification recipe documented in `factory/docs/batch-inputs.md`:
-
-```sh
-go test ./pkg/services/workers/prompting -run TestPromptRenderer_ResolvesCheckedInPlannerFactoryDocs -count=1
-go test ./pkg/transports/cli/submit -run TestSubmitBatch_DryRunFactoryDocsBatchInputExample -count=1
-```
+The builder runs make build-all from a clean Git archive with checked-in recovery
+patches. Plain go build embeds only a fallback dashboard. The owned endpoint is
+http://127.0.0.1:7439/dashboard/ui. Normal restarts resume the saved board. The
+explicit fresh-board operation requires a committed context file, archives the
+prior runtime and preserves project admission; it is not a routine retry.
+Private runtime and Codex wrappers live in the repository's shared Git directory.
+The Codex wrapper uses the app CLI at its original resource path (companion files
+must remain accessible). This leaves global CLI installations unchanged.

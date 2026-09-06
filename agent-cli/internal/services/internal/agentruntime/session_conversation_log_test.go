@@ -182,7 +182,7 @@ func TestSessionConversationLogJSONEmptyWhenNoTurnObserved(t *testing.T) {
 func TestSessionDirectoryRecordingWritesConversationSessionLog(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	plan := sessionRuntimePlan{provider: sessionProviderOpenAI}
-	recording := newSessionDirectoryRecording(destination, plan, SessionRunOptions{Model: "gpt-realtime"})
+	recording := newSessionDirectoryRecording(destination, plan, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	recording.conversation.now = func() time.Time { return time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC) }
 	inner := newSessionRecordingTestSession()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -320,7 +320,7 @@ func TestSessionDirectoryRecordingCapturesCorrelatedToolLifecycle(t *testing.T) 
 		first:  toolCallEvents("call-1", "inspect_tab", `{"tab":"first"}`),
 		second: toolCallEvents("call-2", "inspect_tab", `{"tab":"second"}`),
 	}
-	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Model:  "gpt-realtime",
 		APIKey: secret,
 	})

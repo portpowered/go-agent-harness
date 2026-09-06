@@ -1,33 +1,28 @@
 package cli
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
-	"strings"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
 
 // ChatCommand wraps the chat subcommand for interactive conversations.
 type ChatCommand struct {
-	executor    *agent.Executor
-	askFlags    *flags.AskFlags
-	loopFlags   *flags.LoopFlags
-	chatFlags   *flags.ChatFlags
-	globalFlags *flags.GlobalFlags
+	service      session.Service
+	storeFactory session.FileStoreFactory
+	askFlags     *flags.AskFlags
+	loopFlags    *flags.LoopFlags
+	chatFlags    *flags.ChatFlags
+	globalFlags  *flags.GlobalFlags
 }
 
 // chatFlagParseError preserves Cobra's flag-error message while giving callers
@@ -46,9 +41,10 @@ var newMicrophoneSource = func() (audio.AudioSource, error) {
 //lint:ignore ST1005 the terminal admission message is an exact customer-facing CLI contract.
 var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage)
 
-// NewChatCommand creates the ChatCommand with the given dependencies.
-func NewChatCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags) *ChatCommand {
-	return &ChatCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
+// NewChatCommand composes the interactive transport with the runtime-owned
+// durable store used by loop trace steering.
+func NewChatCommand(service session.Service, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags, storeFactory session.FileStoreFactory) *ChatCommand {
+	return &ChatCommand{service: service, storeFactory: storeFactory, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
 }
 
 func validateChatFlags(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags) error {
@@ -106,9 +102,9 @@ func (c *ChatCommand) Generate() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("open microphone: %w", err)
 				}
-				return RunChatWithAudio(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), c.executor, c.globalFlags, c.askFlags, src)
+				return RunChatWithAudio(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), c.service, c.globalFlags, c.askFlags, src)
 			}
-			chatService := services.NewChatService(c.executor, c.globalFlags, c.askFlags)
+			chatService := services.NewChatService(c.service, c.globalFlags, c.askFlags)
 			return chatService.Run(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
@@ -129,266 +125,123 @@ func (c *ChatCommand) Generate() *cobra.Command {
 	return cmd
 }
 
-// runLoopChat runs an interactive loop chat session. After each iteration the user
-// can provide steering input (or press Enter to continue with the same task).
-//
-// Ctrl+C during an iteration cancels that iteration and drops back to the interactive
-// prompt — the user can steer and continue, or type "exit" to exit (saving the trace
-// for later resume via --trace-id).
-func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
-	maxIter := c.loopFlags.MaxIterations
-	if maxIter <= 0 {
-		maxIter = 5
+// RunChatWithAudio runs an interactive audio chat session. Audio input is
+// owned by the CLI host; each detected utterance is sent as one runtime turn.
+func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, src audio.AudioSource) error {
+	if service == nil {
+		return fmt.Errorf("session service is not configured")
+	}
+	defer closeAudioSource(src)
+	if done := writeAudioGoodbyeOnCancellation(ctx, out); done {
+		return nil
 	}
 
-	out := cmd.OutOrStdout()
-	in := cmd.InOrStdin()
-	ctx := cmd.Context()
-
-	if _, err := fmt.Fprintf(out, "Port OS Agent Loop Chat (up to %d iterations)\n", maxIter); err != nil {
-		return fmt.Errorf("write chat header: %w", err)
+	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
+	sessionID, done, err := createAudioChatSession(ctx, out, service, *cfg)
+	if err != nil || done {
+		return err
 	}
-	if _, err := fmt.Fprintln(out, "---"); err != nil {
-		return fmt.Errorf("write chat header separator: %w", err)
+	pipeline := audio.NewPipeline(src, audio.NewVAD(audio.DefaultVADConfig), audio.DefaultPipelineConfig)
+	if err := writeAudioChatHeader(out); err != nil {
+		return err
 	}
-
-	cfg := services.BuildAgentConfigFromFlags(c.globalFlags, c.askFlags, nil, "")
-
-	// Get session storage for trace management.
-	sessionStorage, err := c.executor.GetSessionStorage(cfg)
-	if err != nil {
-		return fmt.Errorf("get session storage: %w", err)
-	}
-
-	// Create or load trace record.
-	var trace session.TraceRecord
-	if c.loopFlags.TraceID != "" {
-		existing, loadErr := sessionStorage.LoadTrace(c.loopFlags.TraceID)
-		if loadErr != nil {
-			return fmt.Errorf("load trace %s: %w", c.loopFlags.TraceID, loadErr)
-		}
-		if existing != nil {
-			trace = *existing
-		}
-	}
-
-	scanner := bufio.NewScanner(in)
-
-	// Compute start iteration and restore config when resuming an existing trace.
-	startIter := 1
-	var currentPrompt string
-	if trace.TraceID != "" {
-		// Restore original loop config from the trace so resume uses the same parameters.
-		maxIter = trace.Config.MaxIterations
-		c.loopFlags.StopWord = trace.Config.StopWord
-		currentPrompt = trace.Config.Prompt
-
-		if len(trace.Iterations) > 0 {
-			lastIter := trace.Iterations[len(trace.Iterations)-1]
-			if lastIter.Status == session.IterationStatusInterrupted {
-				// Restart the interrupted iteration fresh — discard its partial record.
-				startIter = lastIter.Iteration
-				trace.Iterations = trace.Iterations[:len(trace.Iterations)-1]
-			} else {
-				startIter = lastIter.Iteration + 1
-			}
-		}
-		if _, err := fmt.Fprintf(out, "[Resuming trace %s from iteration %d/%d]\n", trace.TraceID, startIter, maxIter); err != nil {
-			return fmt.Errorf("write resume trace banner: %w", err)
-		}
-	} else {
-		// Get initial task prompt from user.
-		if _, err := fmt.Fprint(out, "Enter your task: "); err != nil {
-			return fmt.Errorf("write task prompt: %w", err)
-		}
-		if !scanner.Scan() {
-			return nil
-		}
-		currentPrompt = strings.TrimSpace(scanner.Text())
-		if currentPrompt == "" {
-			return fmt.Errorf("no task provided")
-		}
-
-		trace = session.TraceRecord{
-			TraceID: sessionStorage.NewTraceID(),
-			Status:  session.TraceStatusRunning,
-			Config: session.TraceConfig{
-				MaxIterations: maxIter,
-				StopWord:      c.loopFlags.StopWord,
-				Prompt:        currentPrompt,
-			},
-		}
-		if saveErr := sessionStorage.SaveTrace(trace); saveErr != nil {
-			return fmt.Errorf("save trace: %w", saveErr)
-		}
-	}
-	if _, err := fmt.Fprintf(out, "Trace ID: %s\n", trace.TraceID); err != nil {
-		return fmt.Errorf("write trace ID: %w", err)
-	}
-
-	for i := startIter; i <= maxIter; i++ {
-		if _, err := fmt.Fprintf(out, "\n--- Iteration %d/%d ---\n", i, maxIter); err != nil {
-			return fmt.Errorf("write iteration header: %w", err)
-		}
-
-		iterCfg := *cfg
-		iterCfg.SessionID = ""
-		iterCfg.ContinueLastSession = false
-		iterCfg.InitialHistory = nil
-		iterCfg.SystemPromptSuffix = agent.BuildIterationAnnotation(i, maxIter, c.loopFlags.StopWord)
-
-		execInput := agentloop.NewExecuteInput(currentPrompt)
-
-		// Per-iteration signal context: captures Ctrl+C and cancels only this iteration.
-		iterCtx, iterCancel := signal.NotifyContext(ctx, os.Interrupt)
-		text, runErr := c.executor.RunAsk(iterCtx, &iterCfg, execInput, out)
-		// Check for interrupt BEFORE calling iterCancel so iterCtx.Err() is accurate.
-		interrupted := iterCtx.Err() != nil
-		iterCancel() // restore default signal behaviour between iterations
-
-		var iterStatus session.IterationStatus
-		if interrupted {
-			iterStatus = session.IterationStatusInterrupted
-		} else if runErr != nil {
-			iterStatus = session.IterationStatusFailed
-		} else {
-			iterStatus = session.IterationStatusCompleted
-		}
-		trace.CurrentIteration = i
-		trace.Iterations = append(trace.Iterations, session.IterationTrace{
-			Iteration: i,
-			Status:    iterStatus,
-		})
-		_ = sessionStorage.SaveTrace(trace)
-
-		if interrupted {
-			// Drop back to the interactive prompt so the user can steer the next iteration
-			// or exit and resume later.
-			if _, err := fmt.Fprintf(out, "\n[Iteration %d interrupted. Enter steering for next iteration, or 'exit' to quit (resume later with --trace-id %s)]: ", i, trace.TraceID); err != nil {
-				return fmt.Errorf("write interrupted prompt: %w", err)
-			}
-			if !scanner.Scan() {
-				// EOF — mark trace interrupted and exit.
-				trace.Status = session.TraceStatusInterrupted
-				_ = sessionStorage.SaveTrace(trace)
-				return nil
-			}
-			input := strings.TrimSpace(scanner.Text())
-			if strings.ToLower(input) == "exit" {
-				trace.Status = session.TraceStatusInterrupted
-				_ = sessionStorage.SaveTrace(trace)
-				if _, err := fmt.Fprintf(out, "[Loop interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID); err != nil {
-					return fmt.Errorf("write interrupted resume banner: %w", err)
-				}
-				return nil
-			}
-			if input != "" {
-				currentPrompt = input
-			}
-			// Continue to the next iteration (interrupted iteration is not retried here;
-			// use --trace-id resume to restart it fresh).
-			continue
-		}
-
-		if runErr != nil {
-			if _, err := fmt.Fprintf(out, "\n[Iteration %d error: %v]\n", i, runErr); err != nil {
-				return fmt.Errorf("write iteration error: %w", err)
-			}
-		}
-
-		// Check for stop word.
-		if runErr == nil && c.loopFlags.StopWord != "" && strings.Contains(text, c.loopFlags.StopWord) {
-			if _, err := fmt.Fprintf(out, "\n[Completion detected in iteration %d]\n", i); err != nil {
-				return fmt.Errorf("write completion banner: %w", err)
-			}
-			trace.Status = session.TraceStatusCompleted
-			_ = sessionStorage.SaveTrace(trace)
-			return nil
-		}
-
-		if i == maxIter {
-			break
-		}
-
-		// Prompt user for steering input for the next iteration.
-		if _, err := fmt.Fprintf(out, "\n[Iteration %d complete. Enter steering for iteration %d (or press Enter to continue with same task)]: ", i, i+1); err != nil {
-			return fmt.Errorf("write steering prompt: %w", err)
-		}
-		if scanner.Scan() {
-			if steering := strings.TrimSpace(scanner.Text()); steering != "" {
-				currentPrompt = steering
-			}
-		}
-	}
-
-	trace.Status = session.TraceStatusCompleted
-	_ = sessionStorage.SaveTrace(trace)
-
-	if _, err := fmt.Fprintf(out, "\n[Loop complete: %d iteration(s), trace: %s]\n", maxIter, trace.TraceID); err != nil {
-		return fmt.Errorf("write loop completion banner: %w", err)
-	}
-	return nil
+	return runAudioChatLoop(ctx, out, errOut, service, globalFlags, askFlags, sessionID, pipeline)
 }
 
-// RunChatWithAudio runs an interactive audio chat session.
-//
-// It captures audio from src, uses energy-based VAD to detect utterances, and
-// sends each complete utterance to the agent as a single PCM audio chunk.
-// The loop exits when the context is cancelled, the source signals EOF, or an
-// unrecoverable error occurs.
-//
-// This function is exported so it can be exercised directly in tests by
-// injecting a mock AudioSource and agent.Executor.
-func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, executor *agent.Executor, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, src audio.AudioSource) error {
-	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := executor.NewChatSessionID(cfg)
-	if err != nil {
-		return fmt.Errorf("create chat session: %w", err)
+func writeAudioGoodbyeOnCancellation(ctx context.Context, out io.Writer) bool {
+	if err := ctx.Err(); err != nil {
+		writeAudioBestEffort(out, "Goodbye!\n")
+		return true
 	}
-	defer func() { _ = src.Close() }()
+	return false
+}
 
-	vad := audio.NewVAD(audio.DefaultVADConfig)
-	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
+func createAudioChatSession(ctx context.Context, out io.Writer, service session.Service, cfg session.Request) (string, bool, error) {
+	sessionID, err := service.NewSessionID(ctx, cfg)
+	if err == nil {
+		return sessionID, false, nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		writeAudioBestEffort(out, "Goodbye!\n")
+		return "", true, nil
+	}
+	return "", false, fmt.Errorf("create chat session: %w", err)
+}
 
+func writeAudioChatHeader(out io.Writer) error {
 	if _, err := fmt.Fprintln(out, "Port OS Agent Chat - Audio Mode (Ctrl+C to exit)"); err != nil {
 		return fmt.Errorf("write audio chat header: %w", err)
 	}
 	if _, err := fmt.Fprintln(out, "---"); err != nil {
 		return fmt.Errorf("write audio chat header separator: %w", err)
 	}
+	return nil
+}
 
+func closeAudioSource(src audio.AudioSource) {
+	if err := src.Close(); err != nil {
+		return
+	}
+}
+
+func writeAudioBestEffort(out io.Writer, format string, args ...any) {
+	if _, err := fmt.Fprintf(out, format, args...); err != nil {
+		return
+	}
+}
+
+func runAudioChatLoop(ctx context.Context, out, errOut io.Writer, service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, sessionID string, pipeline *audio.Pipeline) error {
 	for {
-		if _, err := fmt.Fprintln(out, "\nListening..."); err != nil {
-			return fmt.Errorf("write listening status: %w", err)
+		if err := writeAudioListening(out); err != nil {
+			return err
 		}
-		samples, err := pipeline.ReadUtterance(ctx)
+		samples, done, err := readAudioUtterance(ctx, pipeline)
+		if done {
+			writeAudioBestEffort(out, "Goodbye!\n")
+			return nil
+		}
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				_, _ = fmt.Fprintln(out, "Goodbye!")
-				return nil
-			}
-			if errors.Is(err, io.EOF) {
-				_, _ = fmt.Fprintln(out, "Goodbye!")
-				return nil
-			}
-			_, _ = fmt.Fprintf(errOut, "Audio pipeline error: %v\n", err)
+			writeAudioBestEffort(errOut, "Audio pipeline error: %v\n", err)
 			continue
 		}
-
 		if _, err := fmt.Fprintln(out, "(speech detected, processing...)"); err != nil {
 			return fmt.Errorf("write speech detected status: %w", err)
 		}
-
-		execInput := agentloop.NewExecuteInput("")
-		execInput.Audio = &agentloop.Audio{
-			Samples:    samples,
-			SampleRate: audio.SampleRate,
-			Channels:   audio.Channels,
-		}
-
-		cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, sessionID)
-		if _, err := executor.RunAskWithSession(ctx, sessionID, cfg, execInput, out); err != nil {
-			_, _ = fmt.Fprintf(errOut, "Error: %v\n", err)
+		if err := runAudioTurn(ctx, out, errOut, service, globalFlags, askFlags, sessionID, samples); err != nil {
+			return err
 		}
 	}
+}
+
+func writeAudioListening(out io.Writer) error {
+	if _, err := fmt.Fprintln(out, "\nListening..."); err != nil {
+		return fmt.Errorf("write listening status: %w", err)
+	}
+	return nil
+}
+
+func readAudioUtterance(ctx context.Context, pipeline *audio.Pipeline) ([]int16, bool, error) {
+	samples, err := pipeline.ReadUtterance(ctx)
+	if err == nil {
+		return samples, false, nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
+		return nil, true, nil
+	}
+	return nil, false, err
+}
+
+func runAudioTurn(ctx context.Context, out, errOut io.Writer, service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, sessionID string, samples []int16) error {
+	execInput := agentloop.NewExecuteInput("")
+	execInput.Audio = &agentloop.Audio{Samples: samples, SampleRate: audio.SampleRate, Channels: audio.Channels}
+	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, sessionID)
+	cfg.Input = execInput
+	result, err := service.Run(ctx, *cfg)
+	if err == nil {
+		_, err = fmt.Fprintln(out, result.Text)
+	}
+	if err != nil {
+		writeAudioBestEffort(errOut, "Error: %v\n", err)
+	}
+	return nil
 }
