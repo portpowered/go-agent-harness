@@ -113,15 +113,26 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 // runtime LiveRunner owns provider/device admission, pumps, cancellation, and
 // terminal joining.
 func (c *SessionCommand) runRuntimeLiveSession(ctx context.Context, out io.Writer, request serviceSession.Request, inspections ...*runtimeReplay.CaptureInspection) error {
+	return c.runRuntimeLiveSessionWithAnnouncements(ctx, out, out, request, inspections...)
+}
+
+func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Context, out, announcementOut io.Writer, request serviceSession.Request, inspections ...*runtimeReplay.CaptureInspection) error {
 	var replayInspection *runtimeReplay.CaptureInspection
 	if len(inspections) > 0 {
 		replayInspection = inspections[0]
+	}
+	if request.AudioOutputPath != "-" {
+		// Text and file-output sessions retain the established stdout startup
+		// contract. A dash output is the duplex PCM transport, so diagnostics
+		// belong on stderr and stdout must remain byte-clean.
+		announcementOut = out
 	}
 	return livehost.Run(ctx, out, request, livehost.Dependencies{
 		LiveService:        c.liveService,
 		ReplayInspection:   replayInspection,
 		BuildRequest:       c.runtimeLiveRequest,
 		WriteAnnouncements: writeRuntimeLiveAnnouncements,
+		AnnouncementOutput: announcementOut,
 		DeviceService:      c.deviceService,
 		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
 		RecordingService:   c.recordingService,

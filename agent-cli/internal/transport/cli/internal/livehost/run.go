@@ -39,6 +39,10 @@ type Dependencies struct {
 	ReplayInspection   *runtimeReplay.CaptureInspection
 	BuildRequest       RequestBuilder
 	WriteAnnouncements AnnouncementWriter
+	// AnnouncementOutput keeps operator-facing startup text off a binary audio
+	// stream. When unset, Run preserves the historical behavior of writing
+	// announcements to out.
+	AnnouncementOutput io.Writer
 	DeviceService      runtimeDevices.Service
 	FileDeviceService  FileDeviceService
 	RecordingService   runtimeRecording.Service
@@ -63,7 +67,11 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 		return err
 	}
 	if deps.WriteAnnouncements != nil {
-		if err := deps.WriteAnnouncements(out, request, liveRequest, deps.ReplayInspection); err != nil {
+		announcementOut := deps.AnnouncementOutput
+		if announcementOut == nil {
+			announcementOut = out
+		}
+		if err := deps.WriteAnnouncements(announcementOut, request, liveRequest, deps.ReplayInspection); err != nil {
 			return err
 		}
 	}

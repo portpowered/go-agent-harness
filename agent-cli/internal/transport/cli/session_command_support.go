@@ -102,7 +102,7 @@ func (c *SessionCommand) runSessionCommand(cmd *cobra.Command, args []string, st
 	if err != nil {
 		return err
 	}
-	return c.runSessionRequest(sessionContext, cmd.OutOrStdout(), request)
+	return c.runSessionRequest(sessionContext, cmd.OutOrStdout(), cmd.ErrOrStderr(), request)
 }
 
 func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, state sessionCommandRunState, selectedTransport string, bareSession, passiveLive, browserToolsInteractive bool, loadedConfig *config.Config, cancellationIntent *serviceSession.SessionCancellationIntent) (serviceSession.Request, error) {
@@ -166,13 +166,13 @@ func validateAudioInterrupt(state sessionCommandRunState) error {
 	return nil
 }
 
-func (c *SessionCommand) runSessionRequest(ctx context.Context, out io.Writer, request serviceSession.Request) error {
+func (c *SessionCommand) runSessionRequest(ctx context.Context, out, errOut io.Writer, request serviceSession.Request) error {
 	useLive, replayInspection, err := c.runtimeLiveAdmission(ctx, request)
 	if err != nil {
 		return err
 	}
 	if useLive {
-		return c.runRuntimeLiveSession(ctx, out, request, replayInspection)
+		return c.runRuntimeLiveSessionWithAnnouncements(ctx, out, errOut, request, replayInspection)
 	}
 	if c.sessionService == nil {
 		return fmt.Errorf("session service is not configured")
