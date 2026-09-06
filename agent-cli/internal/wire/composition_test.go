@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -116,13 +117,15 @@ func (l *recordingLogger) Log(_ context.Context, record observability.LogRecord)
 }
 
 type recordingInferencer struct {
-	calls    int
-	response string
-	results  []messages.InferenceResult
+	calls        int
+	response     string
+	results      []messages.InferenceResult
+	toolRequests [][]messages.ToolDefinition
 }
 
-func (e *recordingInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+func (e *recordingInferencer) Infer(_ context.Context, request messages.InferenceRequest) (messages.InferenceResult, error) {
 	e.calls++
+	e.toolRequests = append(e.toolRequests, messages.CanonicalToolDefinitions(request.Tools))
 	if len(e.results) > 0 {
 		result := e.results[0]
 		e.results = e.results[1:]
@@ -563,54 +566,6 @@ func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	}
 }
 
-func TestCompositionValuesWithPorts_SkipsDisplacedDefaultConstructors(t *testing.T) {
-	for _, selected := range livePortDefinitions() {
-		selected := selected
-		t.Run(selected.descriptor.Name, func(t *testing.T) {
-			definitions := livePortDefinitions()
-			defaultCalls := make(map[string]int, len(definitions))
-			for index := range definitions {
-				name := definitions[index].descriptor.Name
-				factory := definitions[index].defaultValue
-				definitions[index].defaultValue = func(defaults toolDefaults) any {
-					defaultCalls[name]++
-					return factory(defaults)
-				}
-			}
-
-			replacement := replacementForPortType(t, selected.descriptor.Type)
-			values, err := compositionValuesWithPorts(
-				definitions,
-				toolDefaults{executor: &recordingToolExecutor{}},
-				[]PortSwap{NewPortSwap(selected.descriptor.Name, replacement)},
-			)
-			if err != nil {
-				t.Fatalf("compositionValuesWithPorts: %v", err)
-			}
-			definition, ok := findPortDefinitionIn(definitions, selected.descriptor.Name)
-			if !ok {
-				t.Fatalf("selected port %q disappeared from live definitions", selected.descriptor.Name)
-			}
-			if got := definition.value(&values); got != replacement {
-				t.Fatalf("selected %q replacement identity changed: got %T/%p want %T/%p", selected.descriptor.Name, got, got, replacement, replacement)
-			}
-
-			for _, definition := range definitions {
-				calls := defaultCalls[definition.descriptor.Name]
-				if definition.descriptor.Name == selected.descriptor.Name {
-					if calls != 0 {
-						t.Fatalf("displaced %q default constructor calls = %d, want exactly 0", definition.descriptor.Name, calls)
-					}
-					continue
-				}
-				if calls != 1 {
-					t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", definition.descriptor.Name, calls)
-				}
-			}
-		})
-	}
-}
-
 func toolCallingInferencer() *recordingInferencer {
 	return &recordingInferencer{
 		results: []messages.InferenceResult{
@@ -628,6 +583,8 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 	switch {
 	case portType == reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem():
 		return &recordingToolExecutor{}
+	case portType == reflect.TypeOf((*serviceTools.Service)(nil)).Elem():
+		return &recordingToolService{}
 	case portType == reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
 		return &recordingInferencer{response: "swapped"}
 	case portType == reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"reflect"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -13,7 +14,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -26,6 +26,10 @@ type PortName = string
 const (
 	// PortToolExecutor is the required executor used by the agent CLI.
 	PortToolExecutor = "tool-executor"
+	// PortToolService is the optional complete tool capability surface. Hosts
+	// that provide custom tools must supply the service so definitions and
+	// execution routes remain one request-scoped binding.
+	PortToolService = "tool-service"
 	// PortTransportDialer is the required provider-neutral transport seam.
 	PortTransportDialer = "transport-dialer"
 	// PortInferencer is the optional one-shot inference override.
@@ -50,6 +54,7 @@ const (
 	// The *PortName constants make the port contract discoverable to callers
 	// that prefer a name-oriented vocabulary.
 	ToolExecutorPortName           = PortToolExecutor
+	ToolServicePortName            = PortToolService
 	TransportDialerPortName        = PortTransportDialer
 	InferencerPortName             = PortInferencer
 	SessionInferencerPortName      = PortSessionInferencer
@@ -144,6 +149,14 @@ func NewPortSwap(name string, value any) PortSwap {
 	return PortSwap{Name: name, Value: value}
 }
 
+// NewToolServicePort returns the complete tool capability replacement used by
+// hermetic compositions. The service owns the paired executor, definitions,
+// and any request-scoped lifecycle hooks; callers do not provide definitions
+// through a separate composition port.
+func NewToolServicePort(service serviceTools.Service) PortSwap {
+	return NewPortSwap(PortToolService, service)
+}
+
 // SwapPort is a concise alias for NewPortSwap.
 func SwapPort(name string, value any) PortSwap {
 	return NewPortSwap(name, value)
@@ -156,6 +169,7 @@ type CompositionOption func(*compositionOptions) error
 type compositionOptions struct {
 	inferencer           messages.Inferencer
 	sessionInferencer    messages.SessionInferencer
+	toolService          serviceTools.Service
 	runtimeObserver      SessionRuntimeObserver
 	metricSampler        MetricSampler
 	logger               Logger
@@ -177,6 +191,15 @@ func WithInferencer(inferencer messages.Inferencer) CompositionOption {
 func WithSessionInferencer(inferencer messages.SessionInferencer) CompositionOption {
 	return func(options *compositionOptions) error {
 		options.sessionInferencer = inferencer
+		return nil
+	}
+}
+
+// WithToolService supplies a complete request-scoped tool capability service
+// for a composed CLI. A nil value leaves the built-in service graph selected.
+func WithToolService(service serviceTools.Service) CompositionOption {
+	return func(options *compositionOptions) error {
+		options.toolService = service
 		return nil
 	}
 }
@@ -267,6 +290,7 @@ func ComposeAgentCLI(
 		logger:            observability.EnsureLogger(compositionOptions.logger),
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
+		toolService:       compositionOptions.toolService,
 		rtcComponents:     effectiveSessionRTCComponents(compositionOptions),
 	}
 	normalizeClock(&values)
@@ -289,6 +313,7 @@ func ComposeAgentCLI(
 		values.metricSampler,
 		values.logger,
 		toolDefaults.definitions,
+		toolServiceOverride{service: values.toolService},
 		values.inferencer,
 		values.sessionInferencer,
 		values.rtcComponents,
@@ -375,6 +400,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		values.metricSampler,
 		values.logger,
 		toolDefaults.definitions,
+		toolServiceOverride{service: values.toolService},
 		values.inferencer,
 		values.sessionInferencer,
 		values.rtcComponents,
@@ -462,6 +488,7 @@ func applyCompositionOptions(options []CompositionOption) (compositionOptions, e
 
 type compositionValues struct {
 	toolExecutor      messages.ToolExecutor
+	toolService       serviceTools.Service
 	transportDialer   transport.Dialer
 	deviceRegistry    DeviceRegistry
 	audioSource       AudioSource
@@ -476,113 +503,16 @@ type compositionValues struct {
 	defaultCalls      map[string]int
 }
 
+// toolServiceOverride is a distinct Wire input so the generated graph can
+// retain its default service provider while composition callers optionally
+// replace that provider with a complete custom service.
+type toolServiceOverride struct {
+	service serviceTools.Service
+}
+
 func effectiveSessionRTCComponents(options compositionOptions) rtcontract.SessionRTCComponents {
 	if options.rtcComponentsSet {
 		return options.rtcComponents
 	}
 	return defaultSessionRTCComponents()
-}
-
-type portDefinition struct {
-	descriptor   PortDescriptor
-	value        func(*compositionValues) any
-	assign       func(*compositionValues, any)
-	defaultValue func(toolDefaults) any
-}
-
-// normalizeClock is called only by composition entry points. Named swaps are
-// validated first, so an explicit nil clock replacement cannot be defaulted.
-func normalizeClock(values *compositionValues) {
-	values.clockSource = clock.Ensure(values.clockSource)
-}
-
-// LivePorts returns the authoritative live port list in deterministic order.
-func LivePorts() []PortDescriptor {
-	definitions := livePortDefinitions()
-	ports := make([]PortDescriptor, len(definitions))
-	for index, definition := range definitions {
-		ports[index] = definition.descriptor
-	}
-	return ports
-}
-
-// RegisteredPorts is a descriptive alias for LivePorts.
-func RegisteredPorts() []PortDescriptor { return LivePorts() }
-
-func validateDependencies(values *compositionValues) error {
-	return validateDependenciesWithDefinitions(values, livePortDefinitions())
-}
-
-func validateDependenciesWithDefinitions(values *compositionValues, definitions []portDefinition) error {
-	for _, definition := range definitions {
-		if definition.descriptor.Required && isNilPort(definition.value(values)) {
-			return &MissingPortError{Name: definition.descriptor.Name}
-		}
-	}
-	return nil
-}
-
-func findPortDefinitionIn(definitions []portDefinition, name string) (portDefinition, bool) {
-	for _, definition := range definitions {
-		if definition.descriptor.Name == name {
-			return definition, true
-		}
-	}
-	return portDefinition{}, false
-}
-
-func validatePortSwaps(definitions []portDefinition, swaps []PortSwap) error {
-	seen := make(map[string]struct{}, len(swaps))
-	for _, swap := range swaps {
-		definition, ok := findPortDefinitionIn(definitions, swap.Name)
-		if !ok {
-			return &PortSwapError{Name: swap.Name, Reason: "unknown port", cause: ErrUnknownPort}
-		}
-		if _, duplicate := seen[swap.Name]; duplicate {
-			return &PortSwapError{Name: swap.Name, Reason: "duplicate replacement", cause: ErrDuplicatePortSwap}
-		}
-		seen[swap.Name] = struct{}{}
-		if err := validatePortSwap(definition, swap.Value); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validatePortSwap(definition portDefinition, value any) error {
-	if isNilPort(value) {
-		if definition.descriptor.Required {
-			return &PortSwapError{
-				Name:   definition.descriptor.Name,
-				Reason: "required replacement is nil",
-				cause:  ErrInvalidPortSwap,
-			}
-		}
-		return nil
-	}
-
-	actual := reflect.TypeOf(value)
-	if !actual.Implements(definition.descriptor.Type) {
-		return &PortSwapError{
-			Name:     definition.descriptor.Name,
-			Reason:   fmt.Sprintf("replacement type %s does not implement %s", actual, definition.descriptor.Type),
-			Expected: definition.descriptor.Type,
-			Actual:   actual,
-			cause:    ErrIncompatiblePort,
-		}
-	}
-	return nil
-}
-
-func isNilPort(value any) bool {
-	if value == nil {
-		return true
-	}
-	reflected := reflect.ValueOf(value)
-	switch reflected.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return reflected.IsNil()
-	default:
-		return false
-	}
 }

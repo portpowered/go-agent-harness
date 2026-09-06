@@ -47,7 +47,7 @@ func TestBuildOpenAIUsesConfigModelEndpointAndCredential(t *testing.T) {
 		status: http.StatusOK,
 		body:   `{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`,
 	}
-	service := New(&http.Client{Transport: transport}, nil, clock.Real{}, nil, catalog.New())
+	service := New(&http.Client{Transport: transport}, nil, clock.Real{}, nil, catalog.New(), nil)
 	built, err := service.Build(t.Context(), runtimeproviders.Config{
 		Provider: "openai",
 		Model:    "model-from-config",
@@ -91,7 +91,7 @@ func TestBuildOpenAIUsesConfigModelEndpointAndCredential(t *testing.T) {
 }
 
 func TestBuildUsesOpenAICompatibleProviderForNamedEndpoint(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New())
+	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
 	built, err := service.Build(t.Context(), runtimeproviders.Config{
 		Provider: "openrouter",
 		APIKey:   "configured-test-key",
@@ -106,7 +106,7 @@ func TestBuildUsesOpenAICompatibleProviderForNamedEndpoint(t *testing.T) {
 }
 
 func TestBuildSelectsFalAndRequiresProviderConfiguration(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New())
+	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
 	if _, err := service.Build(t.Context(), runtimeproviders.Config{Provider: "fal", Model: fal.ModelQwenTTS}); err == nil {
 		t.Fatal("Build() accepted fal without its provider configuration")
 	}
@@ -125,7 +125,7 @@ func TestBuildSelectsFalAndRequiresProviderConfiguration(t *testing.T) {
 }
 
 func TestBuildHonorsCanceledAdmission(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New())
+	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := service.Build(ctx, runtimeproviders.Config{Provider: "openai", Model: "model"})

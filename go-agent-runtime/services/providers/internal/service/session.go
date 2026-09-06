@@ -206,9 +206,26 @@ func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider, mo
 	if strings.TrimSpace(cfg.RecordPath) == "" {
 		return dialer, nil, nil
 	}
+	return s.recordedSessionDialer(dialer, provider, model, cfg.RecordPath, source)
+}
+
+func (s *Service) recordedSessionDialer(dialer transport.Dialer, provider, model, destination string, source clock.TimerSource) (transport.Dialer, recording.Writer, error) {
+	if s.providerCapture == nil {
+		return nil, nil, errors.New("provider capture service is required")
+	}
 	if s.recording == nil {
 		return nil, nil, errors.New("recording service is required")
 	}
-	recorder := gatewaytesting.NewRecordingWebSocketDialer(dialer, provider, model, source)
+	sink, err := s.providerCapture.OpenProviderCapture(recording.ProviderCaptureOptions{Destination: destination})
+	if err != nil {
+		return nil, nil, fmt.Errorf("open provider capture: %w", err)
+	}
+	if sink == nil {
+		return nil, nil, errors.New("provider capture service returned a nil sink")
+	}
+	recorder, err := gatewaytesting.NewRecordingWebSocketDialerWithSink(dialer, provider, model, sink, source)
+	if err != nil {
+		return nil, nil, errors.Join(err, sink.Abort())
+	}
 	return recorder, recorder, nil
 }

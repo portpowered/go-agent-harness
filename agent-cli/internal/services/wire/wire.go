@@ -34,10 +34,23 @@ func NewDeviceService(registry devicegw.DeviceRegistry) serviceDevices.DeviceSer
 	return devicesservice.New(registry)
 }
 
-// NewDeviceProbeService keeps live probe execution behind the same private
-// registry owner as enumeration and selection.
-func NewDeviceProbeService(registry devicegw.DeviceRegistry) serviceDevices.DeviceProbeService {
-	return devicesservice.New(registry)
+// NewDeviceProbeSessionFactory keeps realtime session construction in the
+// application graph while the reusable runtime device service owns probe
+// execution.
+func NewDeviceProbeSessionFactory(modelCatalog runtimeProviders.ModelCatalog) serviceDevices.DeviceProbeSessionFactory {
+	return func(request serviceDevices.DeviceProbeRequest, instructions string) (messages.SessionInferencer, string, error) {
+		return agentruntime.NewLiveSessionInferencer(agentruntime.SessionRunOptions{
+			Provider: request.Provider, Model: request.Model, APIKey: request.APIKey,
+			BaseURL: request.BaseURL, ConfigDir: request.ConfigDir,
+			ModelCatalog: modelCatalog, WebSocketDialer: request.WebSocketDialer,
+		}, instructions)
+	}
+}
+
+// NewDeviceProbeService exposes the reusable runtime probe service through the
+// CLI's device contract; registry and media workers remain private to runtime.
+func NewDeviceProbeService(registry devicegw.DeviceRegistry, sessionFactory serviceDevices.DeviceProbeSessionFactory) serviceDevices.DeviceProbeService {
+	return runtimeDevicesWire.NewProbeService(registry, sessionFactory)
 }
 
 // NewRoomService keeps room orchestration behind the public room contract. The
@@ -78,7 +91,7 @@ func NewSelfPlayService(factory agentruntime.SessionRuntimeFactory, clockSource 
 
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
-var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
+var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeSessionFactory, NewDeviceProbeService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // SessionDependencies are the process-scoped seams installed by application
 // Wire. Invocation requests carry values only; runtime and capability owners

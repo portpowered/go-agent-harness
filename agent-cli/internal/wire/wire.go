@@ -17,6 +17,7 @@ import (
 	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	toolservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
@@ -31,6 +32,7 @@ import (
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -65,6 +67,7 @@ func provideModelValidation(
 	logger Logger,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
+	toolService toolServiceOverride,
 ) modelValidation {
 	if observer != nil {
 		observer(compositionValues{
@@ -79,6 +82,7 @@ func provideModelValidation(
 			logger:            logger,
 			inferencer:        inferencer,
 			sessionInferencer: sessionInferencer,
+			toolService:       toolService.service,
 		})
 	}
 	return modelValidation{relax: relaxModelValidation}
@@ -126,6 +130,7 @@ func provideTextSessionService(
 	fileStoreFactory session.FileStoreFactory,
 	toolExecutor messages.ToolExecutor,
 	toolDefs []messages.ToolDefinition,
+	runtimeToolService runtimeTools.Service,
 	inferencer messages.Inferencer,
 	validation modelValidation,
 	providerService runtimeproviders.Service,
@@ -134,6 +139,7 @@ func provideTextSessionService(
 	return sessionwire.NewService(sessionwire.Dependencies{
 		ToolExecutor:    toolExecutor,
 		ToolDefinitions: toolDefs,
+		ToolService:     runtimeToolService,
 		Inferencer:      inferencer,
 		RelaxValidation: validation.relax,
 		Resolver:        hostServices.NewSessionResolverWithStoreFactory(globalFlags, fileStoreFactory),
@@ -193,15 +199,20 @@ func provideRecordingService(source Clock) runtimeRecording.Service {
 	return recordingwire.NewService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service) (runtimeproviders.FullService, error) {
+func provideProviderCaptureService(source Clock) runtimeRecording.ProviderCaptureService {
+	return recordingwire.NewProviderCaptureService(source)
+}
+
+func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService) (runtimeproviders.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
 	}
 	return providerswire.NewService(providerswire.Dependencies{
-		HTTPClient: http.DefaultClient,
-		Recording:  recordingService,
-		Clock:      timerSource,
+		HTTPClient:      http.DefaultClient,
+		Recording:       recordingService,
+		ProviderCapture: providerCaptureService,
+		Clock:           timerSource,
 	}), nil
 }
 
@@ -243,6 +254,26 @@ func provideFileDeviceService(source Clock) cli.FileDeviceService {
 	return cli.FileDeviceService{Service: runtimeDevicesWire.NewFileService(), Scheduler: scheduler}
 }
 
+func provideToolCapabilitiesService(override toolServiceOverride, toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
+	if override.service != nil {
+		return override.service
+	}
+	return servicewire.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, displaySurface, runtimeService)
+}
+
+type defaultRuntimeToolService struct{ service runtimeTools.Service }
+
+func provideDefaultRuntimeToolService() defaultRuntimeToolService {
+	return defaultRuntimeToolService{service: runtimeToolsWire.NewService()}
+}
+
+// provideRuntimeToolService supplies the reusable session owner with a
+// runtime-only capability service. A CLI override is adapted once at this
+// composition boundary; session execution never receives CLI config types.
+func provideRuntimeToolService(override toolServiceOverride, defaults defaultRuntimeToolService) runtimeTools.Service {
+	return toolservicewire.NewRuntimeToolServiceAdapter(override.service, defaults.service)
+}
+
 func provideLiveReplayService() runtimeReplay.Service {
 	return runtimeReplayWire.NewService()
 }
@@ -267,9 +298,11 @@ var CliSet = wire.NewSet(
 	servicewire.NewReplayClockFactory,
 	servicewire.NewReplayService,
 	servicewire.NewMetricsCollector,
-	runtimeToolsWire.NewService,
+	provideDefaultRuntimeToolService,
+	provideRuntimeToolService,
 	sessionwire.NewFileStoreFactory,
 	provideRecordingService,
+	provideProviderCaptureService,
 	provideSessionBrowserCapabilityFactory,
 	provideSessionDisplaySurface,
 	provideTextSessionService,
@@ -286,7 +319,7 @@ var CliSet = wire.NewSet(
 	provideLiveReplayService,
 	provideRoomClock,
 	provideSessionDependencies,
-	servicewire.NewToolCapabilitiesServiceForWire,
+	provideToolCapabilitiesService,
 	cli.NewProbeRunCommandWithDeviceService,
 	cli.NewProbeGateCommand,
 	cli.NewProbeReportCommand,
@@ -322,6 +355,7 @@ func assembleAgentCLI(
 	metricSampler MetricSampler,
 	logger Logger,
 	toolDefs []messages.ToolDefinition,
+	toolService toolServiceOverride,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 	rtcComponents rtcontract.SessionRTCComponents,

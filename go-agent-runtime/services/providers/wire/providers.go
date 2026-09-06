@@ -16,7 +16,7 @@ import (
 
 // NewService assembles the provider service from explicit host ports.
 func NewService(deps Dependencies) providers.FullService {
-	wire.Build(NewModelCatalog, wire.FieldsOf(new(Dependencies), "HTTPClient", "Logger", "Clock", "Recording"), service.New, wire.Bind(new(providers.FullService), new(*service.Service)))
+	wire.Build(NewModelCatalog, wire.FieldsOf(new(Dependencies), "HTTPClient", "Logger", "Clock", "Recording", "ProviderCapture"), service.New, wire.Bind(new(providers.FullService), new(*service.Service)))
 	return nil
 }
 

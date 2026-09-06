@@ -24,23 +24,24 @@ var _ providers.ModelCatalog = (*Service)(nil)
 
 // Service implements the built-in provider builders.
 type Service struct {
-	httpClient *http.Client
-	logger     logging.Logger
-	clock      clock.TimerSource
-	recording  recording.Service
-	catalog    providers.ModelCatalog
+	httpClient      *http.Client
+	logger          logging.Logger
+	clock           clock.TimerSource
+	recording       recording.Service
+	providerCapture recording.ProviderCaptureService
+	catalog         providers.ModelCatalog
 }
 
 // New constructs an inert provider service. It does not dial or validate
 // credentials; Build performs those operations when a request is admitted.
-func New(httpClient *http.Client, logger logging.Logger, source clock.TimerSource, captures recording.Service, modelCatalog providers.ModelCatalog) *Service {
+func New(httpClient *http.Client, logger logging.Logger, source clock.TimerSource, captures recording.Service, modelCatalog providers.ModelCatalog, providerCapture recording.ProviderCaptureService) *Service {
 	if logger == nil {
 		logger = logging.DummyLogger()
 	}
 	if source == nil {
 		source = clock.Real{}
 	}
-	return &Service{httpClient: httpClient, logger: logger, clock: source, recording: captures, catalog: modelCatalog}
+	return &Service{httpClient: httpClient, logger: logger, clock: source, recording: captures, providerCapture: providerCapture, catalog: modelCatalog}
 }
 
 func (s *Service) Build(ctx context.Context, cfg providers.Config) (llmproviders.Provider, error) {

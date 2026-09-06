@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -171,6 +172,9 @@ func assertLivePortValues(t *testing.T, observation assemblyObservation, expecte
 		if got != nil && !reflect.TypeOf(got).Implements(definition.descriptor.Type) {
 			t.Fatalf("unswapped port %q has type %T, want %v", name, got, definition.descriptor.Type)
 		}
+		if definition.defaultValue == nil {
+			continue
+		}
 		if calls := observation.values.defaultCalls[name]; calls != 1 {
 			t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", name, calls)
 		}
@@ -184,6 +188,8 @@ func assertSelectedLivePort(t *testing.T, definition portDefinition, replacement
 		assertToolPort(t, definition, replacement, fixtureInferencer, root)
 	case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
 		assertInferencerPort(t, definition, replacement, root)
+	case reflect.TypeOf((*serviceTools.Service)(nil)).Elem():
+		assertUntouchedPort(t, definition, replacement)
 	case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
 		assertSessionInferencerPort(t, definition, replacement, root)
 	case reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
@@ -266,11 +272,24 @@ func testOptionalCapability(t *testing.T, definition portDefinition) {
 		testOptionalInferencer(t, definition)
 	case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
 		testOptionalSessionInferencer(t, definition)
+	case reflect.TypeOf((*serviceTools.Service)(nil)).Elem():
+		testOptionalToolService(t, definition)
 	case reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem():
 		testOptionalRuntimeObserver(t, definition)
 	default:
 		t.Fatalf("no runtime optional-capability observation for %v", definition.descriptor.Type)
 	}
+}
+
+func testOptionalToolService(t *testing.T, definition portDefinition) {
+	t.Helper()
+	t.Run("available_with_option", func(t *testing.T) {
+		service := &recordingToolService{}
+		root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithToolService(service))
+		if err != nil || root == nil {
+			t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
+		}
+	})
 }
 
 func testOptionalInferencer(t *testing.T, definition portDefinition) {

@@ -3676,46 +3676,6 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "*liveDeviceProbeSessionBridge.Run",
-      "value": 33,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "captureLiveDeviceProbeInput",
-      "value": 20,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "newLiveDeviceProbePeerPair",
-      "value": 21,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "runDeviceProbeScenario",
-      "value": 26,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
       "file": "internal/services/internal/devices/service.go",
       "symbol": "*Service.Enumerate",
       "value": 27,
@@ -6799,16 +6759,6 @@
       "file": "internal/webmcp/tools/tools_test.go",
       "symbol": "TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues",
       "value": 25,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/wire",
-      "file": "internal/wire/composition_test.go",
-      "symbol": "TestCompositionValuesWithPorts_SkipsDisplacedDefaultConstructors",
-      "value": 29,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -13256,36 +13206,6 @@
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "*liveDeviceProbeSessionBridge.Run",
-      "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "newLiveDeviceProbePeerPair",
-      "value": 21,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "runDeviceProbeScenario",
-      "value": 28,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
       "file": "internal/services/internal/devices/service.go",
       "symbol": "*Service.Enumerate",
       "value": 18,
@@ -18730,15 +18650,6 @@
     {
       "rule": "file-lines",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "value": 757,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "file-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay",
       "file": "internal/services/internal/replay/service.go",
       "value": 715,
@@ -19443,7 +19354,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/wire",
       "file": "internal/wire/composition.go",
-      "value": 588,
+      "value": 518,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19452,7 +19363,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/wire",
       "file": "internal/wire/composition_test.go",
-      "value": 921,
+      "value": 878,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -21614,26 +21525,6 @@
       "file": "internal/services/internal/agentruntime/session_webmcp_realtime_test.go",
       "symbol": "TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce",
       "value": 187,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "newLiveDeviceProbePeerPair",
-      "value": 93,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "runDeviceProbeScenario",
-      "value": 126,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -25014,36 +24905,6 @@
       "file": "internal/services/internal/agentruntime/session_webmcp_realtime_test.go",
       "symbol": "TestOpenAIRealtimeWebMCPResultsCorrelateAndContinueOnce",
       "value": 110,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "*liveDeviceProbeSessionBridge.Run",
-      "value": 56,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "newLiveDeviceProbePeerPair",
-      "value": 67,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices",
-      "file": "internal/services/internal/devices/probe_runtime.go",
-      "symbol": "runDeviceProbeScenario",
-      "value": 90,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

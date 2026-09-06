@@ -294,7 +294,7 @@ func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTri
 	if len(transports) != 0 {
 		client.Transport = transports[0]
 	}
-	invocation, recorder, err := New(client, nil, clock.Real{}, nil, catalog.New()).httpRuntime(*cfg)
+	invocation, recorder, err := New(client, nil, clock.Real{}, nil, catalog.New(), nil).httpRuntime(*cfg)
 	if err != nil {
 		return providerHTTPTestRuntime{}, err
 	}
@@ -316,7 +316,7 @@ func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 }
 
 func TestHTTPRecordingPreservesProviderCapabilities(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil, catalog.New())
+	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
 	cfg := providers.Config{Provider: "openai", Model: "model", APIKey: "configured-test-key"}
 	plain, err := service.Build(t.Context(), cfg)
 	if err != nil {
