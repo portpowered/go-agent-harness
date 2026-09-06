@@ -23,7 +23,6 @@ import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/s
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -57,6 +56,7 @@ const (
 	asyncCollisionDeltaCount    = 2
 	// Keep the scheduled signal at 30 ms while writing it as a 24 kHz WAV so
 	// the transport oracle compares bytes at the provider boundary.
+	// The file header makes the same rate explicit to the CLI input path.
 	asyncCollisionInputSamples       = wavio.Rate24kHz * 30 / 1000
 	asyncCollisionMaxDuration        = 10 * time.Second
 	asyncCollisionControlMaxDuration = 250 * time.Millisecond
@@ -333,17 +333,7 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	rootCmd.SetErr(writer.Stderr())
 	outputPath := filepath.Join(t.TempDir(), "async-collision-response.wav")
 	inputPath := filepath.Join(t.TempDir(), "async-collision-first-turn.wav")
-	samples := make([]int16, len(inputAudio)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(inputAudio[index*2:]))
-	}
-	var inputWAV bytes.Buffer
-	if err := wavio.Write(&inputWAV, wavio.Rate24kHz, samples); err != nil {
-		t.Fatalf("encode async collision input fixture: %v", err)
-	}
-	if err := os.WriteFile(inputPath, inputWAV.Bytes(), 0o600); err != nil {
-		t.Fatalf("write async collision input fixture: %v", err)
-	}
+	writeAsyncCollisionInputWAV(t, inputPath, inputAudio)
 	recordingDir := filepath.Join(t.TempDir(), "async-collision-recording")
 	rootCmd.SetArgs([]string{
 		"--config-dir", t.TempDir(),

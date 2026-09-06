@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -125,6 +126,21 @@ func asyncCollisionInputAudio() []byte {
 		samples[i] = int16(700 + (i % 29))
 	}
 	return pcm16LEBytes(samples)
+}
+
+func writeAsyncCollisionInputWAV(t *testing.T, path string, inputAudio []byte) {
+	t.Helper()
+	samples := make([]int16, len(inputAudio)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(inputAudio[index*2:]))
+	}
+	var wav bytes.Buffer
+	if err := wavio.Write(&wav, wavio.Rate24kHz, samples); err != nil {
+		t.Fatalf("encode async collision input fixture: %v", err)
+	}
+	if err := os.WriteFile(path, wav.Bytes(), 0o600); err != nil {
+		t.Fatalf("write async collision input fixture: %v", err)
+	}
 }
 
 func inputAudioPayload(audioBytes []byte) string {
