@@ -297,6 +297,7 @@ func ComposeAgentCLI(
 	if err := validateDependencies(&values); err != nil {
 		return nil, err
 	}
+	values.toolExecutor = markToolExecutorReplacement(values.toolExecutor)
 
 	toolDefaults, err := newToolDefaults()
 	if err != nil {
@@ -389,6 +390,9 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 	if err != nil {
 		return nil, err
 	}
+	if hasPortSwap(swaps, PortToolExecutor) {
+		values.toolExecutor = markToolExecutorReplacement(values.toolExecutor)
+	}
 	return assembleAgentCLI(
 		values.toolExecutor,
 		values.transportDialer,
@@ -407,6 +411,42 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		relaxModelValidation,
 		withDefaultCallCounts(observer, values.defaultCalls),
 	)
+}
+
+func hasPortSwap(swaps []PortSwap, name string) bool {
+	for _, swap := range swaps {
+		if swap.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// replacementToolExecutor identifies the compatibility path used by the
+// legacy executor-only initializer. That API predates request-scoped tool
+// capability services and intentionally supplies its own complete execution
+// surface; applying the runtime catalog allowlist to it would reject fixture
+// tools that are not part of the built-in catalog. New compositions should
+// use PortToolService so definitions and execution remain one binding.
+type replacementToolExecutor struct{ messages.ToolExecutor }
+
+func markToolExecutorReplacement(executor messages.ToolExecutor) messages.ToolExecutor {
+	if executor == nil {
+		return nil
+	}
+	if _, marked := executor.(interface{ AllowUnadvertisedTools() bool }); marked {
+		return executor
+	}
+	return &replacementToolExecutor{ToolExecutor: executor}
+}
+
+func (*replacementToolExecutor) AllowUnadvertisedTools() bool { return true }
+
+func (e *replacementToolExecutor) originalToolExecutor() messages.ToolExecutor {
+	if e == nil {
+		return nil
+	}
+	return e.ToolExecutor
 }
 
 func withDefaultCallCounts(observer assemblyObserver, defaultCalls map[string]int) assemblyObserver {
