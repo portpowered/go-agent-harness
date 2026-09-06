@@ -87,6 +87,10 @@ func (r *LiveEventRenderer) renderSessionClose(out io.Writer, event runtimeSessi
 	if r.replay {
 		// Replay completion belongs to the joined runtime result. Provider close
 		// observations remain in the recording and may precede a replay error.
+		if event.Reason != "" {
+			_, err := fmt.Fprintf(out, "\n[session closed: %s]\n", event.Reason)
+			return err
+		}
 		return nil
 	}
 	r.sessionClosed = true
