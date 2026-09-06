@@ -85,6 +85,20 @@ func TestProviderModelAdmissionLeavesCustomProvidersUnrestricted(t *testing.T) {
 	}
 }
 
+func TestProviderModelAdmissionDistinguishesMissingCatalog(t *testing.T) {
+	service := New(nil, nil, clock.Real{}, nil, nil)
+	err := service.ValidateSessionModel("openai", providers.OpenAIRealtimeLegacyModel)
+	if !errors.Is(err, providers.ErrModelCatalogRequired) || errors.Is(err, providers.ErrUnsupportedRealtimeModel) {
+		t.Fatalf("missing catalog admission = %v, want dependency error", err)
+	}
+	_, err = service.BuildSession(t.Context(), providers.SessionConfig{
+		Provider: "openai", Model: providers.OpenAIRealtimeLegacyModel, APIKey: "test-key",
+	})
+	if !errors.Is(err, providers.ErrModelCatalogRequired) {
+		t.Fatalf("BuildSession missing catalog = %v, want dependency error", err)
+	}
+}
+
 func TestProviderModelCatalogReturnsIndependentValues(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New())
 	models := service.RealtimeModels("openai")
