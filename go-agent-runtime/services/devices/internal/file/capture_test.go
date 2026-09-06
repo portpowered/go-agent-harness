@@ -1,0 +1,240 @@
+package file
+
+import (
+	"context"
+	"io"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+)
+
+func TestCapturePacingUsesConsumedSamplesAfterShortRead(t *testing.T) {
+	source := &shortSampleSource{}
+	scheduler := &recordingScheduler{}
+	capture, err := newCapture(devices.FileInput{
+		Source:     source,
+		SampleRate: 16_000,
+		Pace:       true,
+		Scheduler:  scheduler,
+	}, 16_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	outbound := &recordingOutbound{}
+	if err := capture.Pump(context.Background(), outbound); err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+
+	scheduler.mu.Lock()
+	durations := append([]time.Duration(nil), scheduler.durations...)
+	scheduler.mu.Unlock()
+	if len(durations) != 1 {
+		t.Fatalf("paced timer count = %d, want one timer before terminal short read (%v)", len(durations), durations)
+	}
+	if durations[0] != 15*time.Millisecond {
+		t.Fatalf("first paced timer = %s, want 15ms for 240 consumed samples at 16kHz", durations[0])
+	}
+	if len(outbound.frames) != 1 || len(outbound.frames[0].Samples) != sharedaudio.FrameSize {
+		t.Fatalf("provider frames = %d/%d samples, want one 480-sample frame", len(outbound.frames), frameSampleCount(outbound.frames))
+	}
+}
+
+func TestCaptureEndOfTurnFlushesExactTailAndResumes(t *testing.T) {
+	first := make([]int16, sharedaudio.FrameSize+1)
+	first[0] = 11
+	first[len(first)-1] = 12
+	second := []int16{21}
+	source := &markedSampleSource{turns: [][]int16{first, second}, markerAfter: []bool{true, false}}
+	boundaries := 0
+	capture, err := newCapture(devices.FileInput{
+		Source:     source,
+		SampleRate: 16_000,
+		OnTurnBoundary: func(context.Context) error {
+			boundaries++
+			return nil
+		},
+	}, 16_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	outbound := &recordingOutbound{}
+	if err := capture.Pump(context.Background(), outbound); err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+	if boundaries != 2 {
+		t.Fatalf("boundary callbacks = %d, want explicit marker plus final EOF", boundaries)
+	}
+	if len(outbound.frames) != 3 {
+		t.Fatalf("provider frames = %d, want full frame plus two exact tails", len(outbound.frames))
+	}
+	wantLengths := []int{sharedaudio.FrameSize, 1, 1}
+	wantEpochs := []uint64{0, 0, 1}
+	wantSequences := []uint64{0, 1, 0}
+	wantStarts := []uint64{0, sharedaudio.FrameSize, 0}
+	for index, frame := range outbound.frames {
+		if len(frame.Samples) != wantLengths[index] {
+			t.Errorf("frame %d samples = %d, want %d", index, len(frame.Samples), wantLengths[index])
+		}
+		if frame.Epoch != wantEpochs[index] || frame.Sequence != wantSequences[index] || frame.StartSample != wantStarts[index] {
+			t.Errorf("frame %d lineage = epoch %d sequence %d start %d, want epoch %d sequence %d start %d", index, frame.Epoch, frame.Sequence, frame.StartSample, wantEpochs[index], wantSequences[index], wantStarts[index])
+		}
+		if frame.EndOfResponse != (index != 0) {
+			t.Errorf("frame %d EndOfResponse = %t, want %t", index, frame.EndOfResponse, index != 0)
+		}
+	}
+	if got := outbound.frames[1].Samples[0]; got != first[len(first)-1] {
+		t.Errorf("first tail sample = %d, want %d", got, first[len(first)-1])
+	}
+	if got := outbound.frames[2].Samples[0]; got != second[0] {
+		t.Errorf("second turn sample = %d, want %d", got, second[0])
+	}
+}
+
+func TestCaptureEndOfTurnThenEOFDoesNotDuplicateCommit(t *testing.T) {
+	source := &markedSampleSource{
+		turns:       [][]int16{{7}},
+		markerAfter: []bool{true},
+	}
+	boundaries := 0
+	capture, err := newCapture(devices.FileInput{
+		Source:     source,
+		SampleRate: 16_000,
+		OnTurnBoundary: func(context.Context) error {
+			boundaries++
+			return nil
+		},
+	}, 16_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	outbound := &recordingOutbound{}
+	if err := capture.Pump(context.Background(), outbound); err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+	if boundaries != 1 {
+		t.Fatalf("boundary callbacks = %d, want one for marker followed by EOF", boundaries)
+	}
+	if len(outbound.frames) != 1 || len(outbound.frames[0].Samples) != 1 {
+		t.Fatalf("provider frames = %d/%d, want one exact sample", len(outbound.frames), frameSampleCount(outbound.frames))
+	}
+	if !outbound.frames[0].EndOfResponse {
+		t.Fatal("marker-flushed frame did not carry EndOfResponse")
+	}
+}
+
+type markedSampleSource struct {
+	turns       [][]int16
+	markerAfter []bool
+	turn        int
+	position    int
+	marker      bool
+}
+
+func (s *markedSampleSource) ReadFrame(context.Context, []int16) error { return io.EOF }
+
+func (s *markedSampleSource) ReadSamples(_ context.Context, buf []int16) (int, error) {
+	if s.marker {
+		s.marker = false
+		s.turn++
+		s.position = 0
+		return 0, sharedaudio.ErrEndOfTurn
+	}
+	if s.turn >= len(s.turns) {
+		return 0, io.EOF
+	}
+	samples := s.turns[s.turn]
+	if s.position >= len(samples) {
+		return 0, io.EOF
+	}
+	count := copy(buf, samples[s.position:])
+	s.position += count
+	if s.position == len(samples) && s.turn < len(s.markerAfter) && s.markerAfter[s.turn] {
+		s.marker = true
+	}
+	return count, nil
+}
+
+func (*markedSampleSource) Close() error { return nil }
+
+func frameSampleCount(frames []sharedaudio.PCMFrame) int {
+	total := 0
+	for _, frame := range frames {
+		total += len(frame.Samples)
+	}
+	return total
+}
+
+type shortSampleSource struct {
+	read int
+}
+
+func (s *shortSampleSource) ReadFrame(context.Context, []int16) error { return io.EOF }
+
+func (s *shortSampleSource) ReadSamples(_ context.Context, buf []int16) (int, error) {
+	s.read++
+	count := 240
+	for index := 0; index < count; index++ {
+		buf[index] = int16(index + 1)
+	}
+	if s.read == 2 {
+		return count, io.EOF
+	}
+	return count, nil
+}
+
+func (*shortSampleSource) Close() error { return nil }
+
+type recordingOutbound struct {
+	frames []sharedaudio.PCMFrame
+}
+
+func (o *recordingOutbound) WriteFrame(_ context.Context, frame sharedaudio.PCMFrame) error {
+	frame.Samples = append([]int16(nil), frame.Samples...)
+	o.frames = append(o.frames, frame)
+	return nil
+}
+
+func (*recordingOutbound) Close() error { return nil }
+
+type recordingScheduler struct {
+	mu        sync.Mutex
+	durations []time.Duration
+}
+
+func (s *recordingScheduler) Now() time.Time { return time.Unix(0, 0).UTC() }
+
+func (s *recordingScheduler) NewTimer(duration time.Duration) platformclock.Timer {
+	s.mu.Lock()
+	s.durations = append(s.durations, duration)
+	s.mu.Unlock()
+	channel := make(chan time.Time, 1)
+	channel <- s.Now()
+	return recordingTimer{channel: channel}
+}
+
+func (s *recordingScheduler) Wait(ctx context.Context, duration time.Duration) error {
+	return platformclock.Real{}.Wait(ctx, duration)
+}
+
+func (s *recordingScheduler) WithDeadline(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
+	return platformclock.Real{}.WithDeadline(ctx, deadline)
+}
+
+func (s *recordingScheduler) WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return platformclock.Real{}.WithTimeout(ctx, timeout)
+}
+
+type recordingTimer struct {
+	channel <-chan time.Time
+}
+
+func (t recordingTimer) C() <-chan time.Time { return t.channel }
+func (t recordingTimer) Stop() bool          { return true }
+
+var _ sharedaudio.SampleSource = (*shortSampleSource)(nil)
+var _ sharedaudio.OutboundMedia = (*recordingOutbound)(nil)
+var _ platformclock.Scheduler = (*recordingScheduler)(nil)

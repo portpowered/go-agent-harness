@@ -105,28 +105,12 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		v = new(messages.ToolCallDeltaValue)
 	case messages.StreamTypeToolCallEnd:
 		v = new(messages.ToolCallEndValue)
-	case messages.StreamTypeAudioStart:
-		v = new(messages.AudioStartValue)
-	case messages.StreamTypeAudioDelta:
-		v = new(messages.AudioDeltaValue)
-	case messages.StreamTypeAudioEnd:
-		v = new(messages.AudioEndValue)
 	case messages.StreamTypeReasoningStart:
 		v = new(messages.ReasoningStartValue)
 	case messages.StreamTypeReasoningDelta:
 		v = new(messages.ReasoningDeltaValue)
 	case messages.StreamTypeReasoningEnd:
 		v = new(messages.ReasoningEndValue)
-	case messages.StreamTypeVADSpeechStarted:
-		v = new(messages.VADSpeechStartedValue)
-	case messages.StreamTypeVADSpeechStopped:
-		v = new(messages.VADSpeechStoppedValue)
-	case messages.StreamTypeTranscriptStart:
-		v = new(messages.TranscriptStartValue)
-	case messages.StreamTypeTranscriptDelta:
-		v = new(messages.TranscriptDeltaValue)
-	case messages.StreamTypeTranscriptEnd:
-		v = new(messages.TranscriptEndValue)
 	case messages.StreamTypePong:
 		v = new(messages.PongValue)
 	case messages.StreamTypeSessionOpen:
@@ -176,11 +160,76 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 	case messages.StreamTypeLoopEnd:
 		v = new(messages.LoopEndValue)
 	default:
-		return nil, fmt.Errorf("unknown stream message type: %s", t)
+		v = unmarshalAudioValue(t)
+		if v == nil {
+			return nil, fmt.Errorf("unknown stream message type: %s", t)
+		}
 	}
 
 	if err := json.Unmarshal(data, v); err != nil {
 		return nil, fmt.Errorf("unmarshal value for type %s: %w", t, err)
 	}
 	return v, nil
+}
+
+func unmarshalAudioValue(t messages.StreamMessageType) messages.StreamMessageValue {
+	switch t {
+	case messages.StreamTypeAudioStart:
+		return new(messages.AudioStartValue)
+	case messages.StreamTypeAudioDelta:
+		return new(messages.AudioDeltaValue)
+	case messages.StreamTypeAudioEnd:
+		return new(messages.AudioEndValue)
+	case messages.StreamTypeVADSpeechStarted:
+		return new(messages.VADSpeechStartedValue)
+	case messages.StreamTypeVADSpeechStopped:
+		return new(messages.VADSpeechStoppedValue)
+	case messages.StreamTypeTranscriptStart:
+		return new(messages.TranscriptStartValue)
+	case messages.StreamTypeTranscriptDelta:
+		return new(messages.TranscriptDeltaValue)
+	case messages.StreamTypeTranscriptEnd:
+		return new(messages.TranscriptEndValue)
+	case messages.StreamTypeInputItemAdded:
+		return new(messages.InputItemAddedValue)
+	case messages.StreamTypeMessageStart,
+		messages.StreamTypeMessageEnd,
+		messages.StreamTypeTextStart,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart,
+		messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd,
+		messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta,
+		messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta,
+		messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta,
+		messages.StreamTypeReasoningEnd,
+		messages.StreamTypePong,
+		messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel,
+		messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo,
+		messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		return nil
+	default:
+		return nil
+	}
 }

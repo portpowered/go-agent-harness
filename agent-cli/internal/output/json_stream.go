@@ -25,27 +25,37 @@ type streamEventJSON struct {
 // [REFUSAL] prefix. Used for human-readable streaming output.
 func WriteEventStreamToWriter(w io.Writer, errW io.Writer, stream agentloop.Stream) error {
 	for stream.HasNext() {
-		evt := stream.Response()
-		switch evt.Type {
-		case messages.StreamTypeTextDelta:
-			if v, ok := evt.Value.(*messages.TextDeltaValue); ok && v.Content != "" {
-				if _, err := io.WriteString(w, v.Content); err != nil {
-					return err
-				}
-			}
-		case messages.StreamTypeReasoningDelta:
-			if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok && v.Content != "" {
-				if _, err := io.WriteString(w, v.Content); err != nil {
-					return err
-				}
-			}
-		case messages.StreamTypeRefusal:
-			if v, ok := evt.Value.(*messages.RefusalValue); ok && v.Message != "" {
-				WriteRefusal(errW, v.Message)
-			}
+		if err := writeTextStreamEvent(w, errW, stream.Response()); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func writeTextStreamEvent(w, errW io.Writer, event messages.StreamMessage) error {
+	switch value := event.Value.(type) {
+	case *messages.TextDeltaValue:
+		if event.Type == messages.StreamTypeTextDelta {
+			return writeStreamText(w, value.Content)
+		}
+	case *messages.ReasoningDeltaValue:
+		if event.Type == messages.StreamTypeReasoningDelta {
+			return writeStreamText(w, value.Content)
+		}
+	case *messages.RefusalValue:
+		if event.Type == messages.StreamTypeRefusal {
+			return WriteRefusal(errW, value.Message)
+		}
+	}
+	return nil
+}
+
+func writeStreamText(writer io.Writer, content string) error {
+	if content == "" {
+		return nil
+	}
+	_, err := io.WriteString(writer, content)
+	return err
 }
 
 // WriteStreamEventJSON marshals a StreamMessage as a single NDJSON line and writes it to w.

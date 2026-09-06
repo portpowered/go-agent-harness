@@ -183,7 +183,7 @@ func (p *FilesystemPolicy) AuthorizeRead(path string) error {
 	if p == nil {
 		return nil
 	}
-	return newSandboxFs(p).authorizeRead(path)
+	return authorizeFilesystemRead(p, path)
 }
 
 func validateFilesystemRoot(label, path string) (string, error) {

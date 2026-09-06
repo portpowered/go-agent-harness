@@ -7,8 +7,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
+
+func writeCaptureJSONField(writer io.Writer, prefix string, value any) error {
+	if _, err := io.WriteString(writer, prefix); err != nil {
+		return fmt.Errorf("write session capture field: %w", err)
+	}
+	return writeCaptureJSONValue(writer, value)
+}
+
+func writeCaptureJSONValue(writer io.Writer, value any) error {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode session capture field: %w", err)
+	}
+	if _, err := writer.Write(encoded); err != nil {
+		return fmt.Errorf("write session capture field: %w", err)
+	}
+	return nil
+}
 
 const (
 	// SessionCaptureVersion is the current on-disk session capture schema version.
@@ -499,41 +518,4 @@ func validateLegacySessionCaptureStructure(path string, capture SessionCapture) 
 		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, "/version", 0, "", fmt.Sprintf("%d", SessionCaptureLegacyVersion), fmt.Sprintf("%d", capture.Version), ErrSessionCaptureStructure)
 	}
 	return validateSessionCaptureRecords(path, capture)
-}
-
-func validateSessionCaptureRecords(path string, capture SessionCapture) error {
-	previousSequence := 0
-	for index, record := range capture.Records {
-		fieldPrefix := fmt.Sprintf("/records/%d", index)
-		if record.Sequence <= 0 {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/sequence", record.Sequence, "", "positive integer", fmt.Sprintf("%d", record.Sequence), ErrSessionCaptureStructure)
-		}
-		if record.Sequence <= previousSequence {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/sequence", record.Sequence, "", fmt.Sprintf("greater than %d", previousSequence), fmt.Sprintf("%d", record.Sequence), ErrSessionCaptureStructure)
-		}
-		previousSequence = record.Sequence
-		if record.Direction != DirectionClientToServer && record.Direction != DirectionServerToClient {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/direction", record.Sequence, "", "client_to_server or server_to_client", string(record.Direction), ErrSessionCaptureStructure)
-		}
-		if record.TimestampMs < 0 {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/timestamp_ms", record.Sequence, "", "non-negative integer", fmt.Sprintf("%d", record.TimestampMs), ErrSessionCaptureStructure)
-		}
-		if strings.TrimSpace(record.Type) == "" {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/type", record.Sequence, "", "non-empty string", "missing", ErrSessionCaptureStructure)
-		}
-		if record.PayloadType != SessionPayloadTypeStreamMessage && record.PayloadType != SessionPayloadTypeWebSocketMessage {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload_type", record.Sequence, "", SessionPayloadTypeStreamMessage+" or "+SessionPayloadTypeWebSocketMessage, record.PayloadType, ErrSessionCaptureStructure)
-		}
-		payload := eventPayload(record)
-		if len(bytes.TrimSpace(payload)) == 0 {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "non-empty JSON value", "missing", ErrSessionCaptureStructure)
-		}
-		if !json.Valid(payload) {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "valid JSON value", "invalid JSON", ErrSessionCaptureStructure)
-		}
-		if captureJSONType(payload) == "null" {
-			return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "non-null JSON value", "null", ErrSessionCaptureStructure)
-		}
-	}
-	return nil
 }

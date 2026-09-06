@@ -123,7 +123,7 @@ type roomAudioIngressLedger struct {
 func newRoomAudioIngressLedger(participantID string, sink SessionDiagnosticSink) *roomAudioIngressLedger {
 	return &roomAudioIngressLedger{
 		participantID: participantID,
-		roomID:        RoomStreamRoomParticipantID,
+		roomID:        "room",
 		sink:          sink,
 		entries:       make(map[roomAudioIngressKey]roomAudioIngressCount),
 		pending:       make(map[string][]roomAudioIngressAdmission),
@@ -135,11 +135,10 @@ func newRoomParticipantIngress(plan *roomParticipantPlan, opts RoomRunOptions, e
 		return nil
 	}
 	participantID := plan.manifest.ID
-	sink := combineRoomDiagnosticSinks(roomParticipantDiagnosticSinks(
+	sink := combineDiagnosticSinks(roomParticipantDiagnosticSinks(
 		plan,
 		opts,
 		evidenceParticipant(evidence, participantID),
-		roomParticipantStreamSink(opts.Stream, participantID),
 	)...)
 	return newRoomAudioIngressLedger(participantID, sink)
 }
@@ -470,11 +469,4 @@ func evidenceParticipant(evidence *roomEvidence, participantID string) *roomPart
 		return nil
 	}
 	return evidence.participant(participantID)
-}
-
-func roomParticipantStreamSink(stream *RoomEventBroker, participantID string) RoomParticipantEventSink {
-	if stream == nil {
-		return RoomParticipantEventSink{}
-	}
-	return stream.ParticipantSink(participantID)
 }

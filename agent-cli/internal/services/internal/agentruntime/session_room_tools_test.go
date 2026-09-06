@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
 
@@ -60,7 +60,7 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 	requests := make(map[string]inference.SessionRequest, len(manifest.Participants))
 	configDir := t.TempDir()
 	opts := RoomRunOptions{
-		Manifest:         manifest,
+		Manifest: manifest, ModelCatalog: testModelCatalog(),
 		CredentialLookup: lookupCredential,
 		ConfigDir:        configDir,
 		BaseURL:          "ws://room.test/realtime",
@@ -131,8 +131,8 @@ func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContra
 	if _, executeErr := assistant.options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
 		ID:   "ungranted-call",
 		Name: "read_file",
-	}); !errors.Is(executeErr, tools.ErrToolNotFound) {
-		t.Fatalf("assistant ungranted tool error = %v, want tools.ErrToolNotFound", executeErr)
+	}); !errors.Is(executeErr, runtimeTools.ErrToolNotFound) {
+		t.Fatalf("assistant ungranted tool error = %v, want runtime tools.ErrToolNotFound", executeErr)
 	}
 
 	if assistantRequest.Config.Tools[0].Name != assistant.options.ToolDefinitions[0].Name {
@@ -506,7 +506,7 @@ func TestNewLiveSessionInferencerCarriesToolDefinitionsToProviderRequest(t *test
 	}
 	for _, provider := range []string{"openai", "grok"} {
 		t.Run(provider, func(t *testing.T) {
-			inferencer, _, err := NewLiveSessionInferencer(SessionRunOptions{
+			inferencer, _, err := NewLiveSessionInferencer(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:        provider,
 				Model:           map[string]string{"openai": openAIRealtimeDefaultModel, "grok": "grok-session-model"}[provider],
 				APIKey:          "room-test-key",

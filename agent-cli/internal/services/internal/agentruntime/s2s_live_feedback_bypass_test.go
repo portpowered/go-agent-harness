@@ -12,6 +12,7 @@ import (
 
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -65,6 +66,7 @@ func TestRunSessionHeadphoneShapedPlaybackPreservesIndependentSpeech(t *testing.
 			Model:             services.DefaultOpenAIRealtimeModel,
 			APIKey:            "test-key",
 			ConfigDir:         t.TempDir(),
+			ModelCatalog:      providerswire.NewModelCatalog(),
 			BareLive:          true,
 			SessionInferencer: inferencer,
 			RTCDeviceBinding: services.RTCDeviceBindingRequest{
@@ -131,16 +133,7 @@ func TestRunSessionHeadphoneShapedPlaybackPreservesIndependentSpeech(t *testing.
 		t.Fatalf("headphone-shaped session did not finish: %v", ctx.Err())
 	}
 
-	select {
-	case got := <-warning:
-		t.Fatalf("headphone-shaped playback emitted feedback warning %q", got)
-	default:
-	}
-	for _, message := range session.sentSnapshot() {
-		if message.Type == messages.StreamTypeResponseCancel {
-			t.Fatal("headphone-shaped independent speech caused response cancellation")
-		}
-	}
+	assertFeedbackBypassNotInterrupted(t, warning, session)
 	if err := userFeed.Close(); err != nil {
 		t.Fatalf("close virtual microphone feeder: %v", err)
 	}
@@ -366,3 +359,17 @@ var (
 	_ messages.Session           = (*feedbackBypassSession)(nil)
 	_ services.RTCMediaSession   = (*feedbackBypassSession)(nil)
 )
+
+func assertFeedbackBypassNotInterrupted(t *testing.T, warning <-chan string, session *feedbackBypassSession) {
+	t.Helper()
+	select {
+	case got := <-warning:
+		t.Fatalf("headphone-shaped playback emitted feedback warning %q", got)
+	default:
+	}
+	for _, message := range session.sentSnapshot() {
+		if message.Type == messages.StreamTypeResponseCancel {
+			t.Fatal("headphone-shaped independent speech caused response cancellation")
+		}
+	}
+}

@@ -554,10 +554,10 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		executor,
-		&mockInferencer{response: "stateless inferencer should not be called"},
-		sessionInferencer,
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewToolServicePort(toolBargeInCapabilities(executor)),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),
+		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
 	)
 	if err != nil {
 		t.Fatalf("initialize tool barge-in CLI: %v", err)

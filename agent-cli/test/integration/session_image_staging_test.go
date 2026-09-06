@@ -16,10 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -32,9 +33,15 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	recordingDir := filepath.Join(root, "recording")
 
 	session := newExactStagedImageSession(configDir, imageBytes)
-	registry := tools.NewToolRegistry()
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        root,
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		t.Fatalf("resolve runtime tools: %v", err)
+	}
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		tools.NewRegistryExecutor(registry),
+		capability.Executor,
 		&mockInferencerError{err: errors.New("stateless inferencer must not be used")},
 		&exactStagedImageInferencer{session: session},
 	)
@@ -251,7 +258,7 @@ func (s *exactStagedImageSession) captureAdvertisedPath(event messages.StreamMes
 	}
 	const marker = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
 	for _, definition := range value.Tools {
-		if definition.Name != tools.ReadImageToolID {
+		if definition.Name != runtimeTools.ReadImageToolID {
 			continue
 		}
 		for _, parameter := range definition.Parameters {
@@ -285,8 +292,8 @@ func (s *exactStagedImageSession) emitToolCall() {
 	callID := "exact-staged-image-call"
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, tools.ReadImageToolID)},
-		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, tools.ReadImageToolID, string(arguments))},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, runtimeTools.ReadImageToolID)},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, runtimeTools.ReadImageToolID, string(arguments))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
 		if !s.recv.Write(context.Background(), event) {
