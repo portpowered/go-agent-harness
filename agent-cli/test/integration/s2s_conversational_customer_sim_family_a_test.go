@@ -39,8 +39,6 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 
 	fixture := newFamilyAProviderFixture(scenario)
 	defer fixture.Close()
-	binaryPath := buildAgentBinary(t)
-	t.Logf("Family A candidate source_revision=%q executable=%s executable_sha256=%s", os.Getenv("C07_SOURCE_REVISION"), binaryPath, fileSHA256(t, binaryPath))
 	startedAt := time.Now()
 	fixture.SetStartedAt(startedAt)
 	configDir := filepath.Join(t.TempDir(), "config")
@@ -77,7 +75,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 
 	frame := familyAFrame(1)
 	result, runErr := probe.RunDuplexSession(context.Background(), probe.DuplexSessionConfig{
-		BinaryPath:       binaryPath,
+		BinaryPath:       buildAgentBinary(t),
 		RecordDir:        filepath.Join(t.TempDir(), "record"),
 		WorkingDirectory: sandbox,
 		ConfigDir:        configDir,
@@ -101,9 +99,8 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	})
 
 	observation := fixture.Snapshot()
-	t.Logf("Family A pass source_revision=%q client_event_counts=%v server_event_counts=%v event_trace=%v functions=%d tools=%d customer_transcripts=%d product_transcripts=%d stdout=%x input_frames=%d exit=%d child_waited=%t input_finished=%t input_closed=%t stdout_closed=%t stderr_closed=%t", os.Getenv("C07_SOURCE_REVISION"), observation.ClientEventCounts, observation.ServerEventCounts, observation.EventTrace, len(observation.FunctionCalls), len(observation.ToolObservations), len(observation.CustomerTranscript), len(observation.ProductTranscript), result.Stdout, len(result.Input), result.ExitCode, result.ChildWaited, result.InputFinished, result.InputClosed, result.StdoutClosed, result.StderrClosed)
 	if runErr != nil || observation.ProtocolError != "" {
-		t.Fatalf("Family A shipped-process run failed: run=%v provider=%+v client_event_counts=%v server_event_counts=%v event_trace=%v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, observation.ClientEventCounts, observation.ServerEventCounts, observation.EventTrace, result, result.Stdout, result.Stderr)
+		t.Fatalf("Family A shipped-process run failed: run=%v provider=%+v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, result, result.Stdout, result.Stderr)
 	}
 	if observation.ConnectionCount != 1 || observation.SessionUpdates != 1 {
 		t.Fatalf("provider lifecycle = connections:%d session_updates:%d, want one open session and one update", observation.ConnectionCount, observation.SessionUpdates)
@@ -218,9 +215,6 @@ type familyAFunctionCall struct {
 type familyAProviderObservation struct {
 	ConnectionCount    int
 	SessionUpdates     int
-	ClientEventCounts  map[string]int
-	ServerEventCounts  map[string]int
-	EventTrace         []string
 	FunctionCalls      []familyAFunctionCall
 	ToolObservations   []probe.ToolObservation
 	CustomerTranscript []probe.TranscriptEvent
@@ -238,9 +232,6 @@ type familyAProviderFixture struct {
 	startedAt          time.Time
 	connectionCount    int
 	sessionUpdates     int
-	clientEventCounts  map[string]int
-	serverEventCounts  map[string]int
-	eventTrace         []string
 	functionCalls      []familyAFunctionCall
 	toolObservations   []probe.ToolObservation
 	customerTranscript []probe.TranscriptEvent
@@ -255,10 +246,8 @@ type familyAProviderFixture struct {
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
 	fixture := &familyAProviderFixture{
-		upgrader:          websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
-		clientEventCounts: make(map[string]int),
-		serverEventCounts: make(map[string]int),
-		scenario:          scenario,
+		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		scenario: scenario,
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture
@@ -286,9 +275,6 @@ func (f *familyAProviderFixture) Snapshot() familyAProviderObservation {
 	return familyAProviderObservation{
 		ConnectionCount:    f.connectionCount,
 		SessionUpdates:     f.sessionUpdates,
-		ClientEventCounts:  cloneEventCounts(f.clientEventCounts),
-		ServerEventCounts:  cloneEventCounts(f.serverEventCounts),
-		EventTrace:         append([]string(nil), f.eventTrace...),
 		FunctionCalls:      append([]familyAFunctionCall(nil), f.functionCalls...),
 		ToolObservations:   append([]probe.ToolObservation(nil), f.toolObservations...),
 		CustomerTranscript: append([]probe.TranscriptEvent(nil), f.customerTranscript...),
@@ -332,7 +318,6 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 			f.failProtocol("decode client event: " + err.Error())
 			return
 		}
-		f.recordEvent("client", event.Type)
 		switch event.Type {
 		case "session.update":
 			f.mu.Lock()
@@ -557,39 +542,7 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 }
 
 func (f *familyAProviderFixture) send(connection *websocket.Conn, event any) error {
-	data, err := json.Marshal(event)
-	if err != nil {
-		return err
-	}
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return err
-	}
-	f.recordEvent("server", envelope.Type)
 	return connection.WriteJSON(event)
-}
-
-func (f *familyAProviderFixture) recordEvent(direction, eventType string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if direction == "client" {
-		f.clientEventCounts[eventType]++
-	} else {
-		f.serverEventCounts[eventType]++
-	}
-	if len(f.eventTrace) < 16 {
-		f.eventTrace = append(f.eventTrace, direction+":"+eventType)
-	}
-}
-
-func cloneEventCounts(counts map[string]int) map[string]int {
-	clone := make(map[string]int, len(counts))
-	for eventType, count := range counts {
-		clone[eventType] = count
-	}
-	return clone
 }
 
 func (f *familyAProviderFixture) recordCustomerTranscript(event probe.TranscriptEvent) {

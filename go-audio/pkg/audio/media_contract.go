@@ -135,3 +135,38 @@ type ConfigurableMediaSession interface {
 	MediaSession
 	RTCMediaWithOptions(MediaSessionOptions) MediaEndpoints
 }
+
+// NewSessionMediaAtRateWithOptions creates provider-owned media with an
+// explicit inbound framing policy. Continuous inbound mode emits each
+// currently available provider delta as a frame while retaining the response
+// boundary as a separate empty marker when needed.
+func NewSessionMediaAtRateWithOptions(writer SessionMediaWriter, sampleRate int, options MediaSessionOptions) *SessionMedia {
+	media := NewSessionMediaAtRate(writer, sampleRate)
+	media.inbound.emitAvailable = options.InboundContinuous
+	return media
+}
+
+func (m *sessionInboundMedia) appendAvailableFrameLocked() {
+	if len(m.pending) == 0 {
+		return
+	}
+	samples := append([]int16(nil), m.pending...)
+	m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
+	m.pending = nil
+}
+
+func (m *sessionInboundMedia) inboundFramesNeeded(incoming int) int {
+	pending := len(m.pending) + incoming
+	frames := pending / m.frameSamples
+	if m.emitAvailable && pending%m.frameSamples != 0 {
+		frames++
+	}
+	return frames
+}
+
+func (m *sessionInboundMedia) appendInboundFramesLocked() {
+	m.appendCompleteFramesLocked()
+	if m.emitAvailable {
+		m.appendAvailableFrameLocked()
+	}
+}

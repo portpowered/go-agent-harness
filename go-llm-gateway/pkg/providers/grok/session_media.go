@@ -14,6 +14,10 @@ import (
 
 var _ sharedaudio.MediaSession = (*grokSession)(nil)
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started.
+func (*grokSession) InitialSessionConfigSent() bool { return true }
+
 // RTCMedia exposes the provider-owned PCM media endpoints for the live Grok
 // realtime session. The endpoint writer feeds the same input-audio event path
 // used by StreamMessage audio, while inbound provider deltas are fanned out to

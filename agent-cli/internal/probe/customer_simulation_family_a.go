@@ -1,6 +1,11 @@
 package probe
 
-import "time"
+import (
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+)
 
 const (
 	FamilyAScenarioID = "family-a-iterative-project"
@@ -31,6 +36,29 @@ func FamilyASpokenScript() []CustomerScriptTurn {
 		{ActionID: "revise-readme", Text: "Please revise the README so its status says it is ready for review."},
 		{ActionID: "summarize-final-state", Text: "Please tell me what is actually in the finished project, including the final status."},
 	}
+}
+
+func isCustomerSimulationAgentRecord(record transcript.Record) bool {
+	return record.Peer == transcript.PeerAgent && (record.Stream == transcript.StreamRuntimeMessage || record.Stream == transcript.StreamWS)
+}
+
+func customerSimulationMessageIsAssistant(record customerSimulationRecordedMessage) bool {
+	msg := record.message
+	if msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model {
+		return true
+	}
+	return record.dir == transcript.DirectionOut && msg.Role != messages.RoleTool && msg.ActorID != messages.Tool
+}
+
+func customerSimulationResponseOutputBoundaries(response customerSimulationResponse) (time.Duration, time.Duration) {
+	if !response.AudioObserved || response.AudioEnd <= response.AudioStart {
+		return 0, 0
+	}
+	end := response.AudioEnd
+	if response.End > end {
+		end = response.End
+	}
+	return response.AudioStart, end
 }
 
 // NewFamilyAScenario returns the versioned, filesystem-grounded Family A

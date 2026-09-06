@@ -195,3 +195,39 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		t.Fatalf("Wait = %v, want cancellation cause", err)
 	}
 }
+
+func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
+	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-original"})
+	if !h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputPartial}}) {
+		t.Fatal("interrupted response was not recognized as a terminal boundary")
+	}
+	if h.gracefulStop || h.replayResponses != 0 {
+		t.Fatalf("interrupted response stopped/count = %t/%d, want false/0", h.gracefulStop, h.replayResponses)
+	}
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-replacement"})
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-replacement", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if !h.gracefulStop || h.replayResponses != 1 {
+		t.Fatalf("replacement stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
+	}
+}
+
+func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
+	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
+	result := make(chan error, 1)
+	go func() { result <- h.waitOpeningReady(context.Background()) }()
+	select {
+	case err := <-result:
+		t.Fatalf("opening wait returned before admission: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	h.markOpeningAdmitted(nil)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("opening wait after admission = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("opening wait did not release after provider admission")
+	}
+}

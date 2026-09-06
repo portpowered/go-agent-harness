@@ -8008,7 +8008,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
       "symbol": "*ModelRunner.forwardSessionMessageWithState",
-      "value": 44,
+      "value": 42,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -16398,7 +16398,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
       "symbol": "*ModelRunner.forwardSessionMessageWithState",
-      "value": 24,
+      "value": 22,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -17986,7 +17986,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_suite_evidence.go",
-      "value": 843,
+      "value": 832,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19588,7 +19588,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop",
       "file": "pkg/agentloop/agent_loop.go",
-      "value": 623,
+      "value": 622,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19624,7 +19624,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
-      "value": 657,
+      "value": 629,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -23024,7 +23024,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
       "symbol": "*ModelRunner.forwardSessionMessageWithState",
-      "value": 105,
+      "value": 96,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -26204,7 +26204,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
       "symbol": "*ModelRunner.forwardSessionMessageWithState",
-      "value": 54,
+      "value": 53,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

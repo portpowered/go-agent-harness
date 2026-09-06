@@ -63,14 +63,6 @@ func NewSessionMedia(writer SessionMediaWriter) *SessionMedia {
 // compatibility default. Unlike the legacy constructor, a response-final
 // partial frame remains exact rather than being padded with additional audio.
 func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMedia {
-	return NewSessionMediaAtRateWithOptions(writer, sampleRate, MediaSessionOptions{})
-}
-
-// NewSessionMediaAtRateWithOptions creates provider-owned media with an
-// explicit inbound framing policy. Continuous inbound mode emits each
-// currently available provider delta as a frame while retaining the response
-// boundary as a separate empty marker when needed.
-func NewSessionMediaAtRateWithOptions(writer SessionMediaWriter, sampleRate int, options MediaSessionOptions) *SessionMedia {
 	if sampleRate <= 0 {
 		sampleRate = DefaultSessionMediaSampleRate
 	}
@@ -78,10 +70,8 @@ func NewSessionMediaAtRateWithOptions(writer SessionMediaWriter, sampleRate int,
 	if frameSamples <= 0 {
 		frameSamples = DefaultSessionMediaFrameSamples
 	}
-	inbound := newSessionInboundMedia(frameSamples, sampleRate, false)
-	inbound.emitAvailable = options.InboundContinuous
 	return &SessionMedia{
-		inbound:  inbound,
+		inbound:  newSessionInboundMedia(frameSamples, sampleRate, false),
 		outbound: newSessionOutboundMedia(writer),
 	}
 }
@@ -210,19 +200,18 @@ func (m *sessionOutboundMedia) close() {
 }
 
 type sessionInboundMedia struct {
-	mu            sync.Mutex
-	frameSamples  int
-	sampleRate    int
-	padPartial    bool
-	emitAvailable bool
-	pending       []int16
-	frames        []PCMFrame
-	terminal      error
-	closed        bool
-	done          chan struct{}
-	wake          chan struct{}
-	closeOnce     sync.Once
-	response      PlaybackResponse
+	mu                        sync.Mutex
+	frameSamples              int
+	sampleRate                int
+	padPartial, emitAvailable bool
+	pending                   []int16
+	frames                    []PCMFrame
+	terminal                  error
+	closed                    bool
+	done                      chan struct{}
+	wake                      chan struct{}
+	closeOnce                 sync.Once
+	response                  PlaybackResponse
 	// responseSamples retains provider-rate PCM by response. Network delivery
 	// can open later responses while an earlier response is still reaching the
 	// physical device, so one mutable counter cannot cap the audible response's
@@ -439,12 +428,7 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.mu.Unlock()
 		return ErrSessionMediaInboundBacklog
 	}
-	pendingSamples := len(m.pending) + len(samples)
-	completeFrames := pendingSamples / m.frameSamples
-	framesToAppend := completeFrames
-	if m.emitAvailable && pendingSamples%m.frameSamples != 0 {
-		framesToAppend++
-	}
+	framesToAppend := m.inboundFramesNeeded(len(samples))
 	availableFrames := sessionMediaMaxQueuedFrames - len(m.frames)
 	if availableFrames < 0 || framesToAppend > availableFrames {
 		m.mu.Unlock()
@@ -454,10 +438,7 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.responseSamples[m.response] += uint64(len(samples))
 	}
 	m.pending = append(m.pending, samples...)
-	m.appendCompleteFramesLocked()
-	if m.emitAvailable {
-		m.appendAvailableFrameLocked()
-	}
+	m.appendInboundFramesLocked()
 	m.activateQueuedPlaybackLocked()
 	m.mu.Unlock()
 	m.notify()
@@ -559,15 +540,6 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
 		m.pending = m.pending[m.frameSamples:]
 	}
-}
-
-func (m *sessionInboundMedia) appendAvailableFrameLocked() {
-	if len(m.pending) == 0 {
-		return
-	}
-	samples := append([]int16(nil), m.pending...)
-	m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
-	m.pending = nil
 }
 
 func (m *sessionInboundMedia) notify() {

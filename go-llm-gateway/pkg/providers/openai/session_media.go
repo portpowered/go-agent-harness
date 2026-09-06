@@ -15,6 +15,10 @@ import (
 
 var _ sharedaudio.MediaSession = (*realtimeSession)(nil)
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started.
+func (*realtimeSession) InitialSessionConfigSent() bool { return true }
+
 // RTCMedia exposes provider-owned PCM media endpoints for an OpenAI Realtime
 // session. Inbound audio remains available through Receive while also being
 // framed for the local RTC device sink.

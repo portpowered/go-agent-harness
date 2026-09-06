@@ -136,23 +136,9 @@ func (c *fileCapture) processFrame(ctx context.Context, outbound sharedaudio.Out
 		}
 		return 0, 0, false, io.ErrNoProgress
 	}
-	process := c.processor.Process
-	if c.continuous {
-		process = c.processor.ProcessAvailable
-	}
-	frames, err := process(sharedaudio.PCMFrame{Samples: frame[:count], Epoch: c.epoch})
+	frames, err := c.processSourceFrame(frame[:count])
 	if err != nil {
-		return 0, 0, false, fmt.Errorf("process finite audio input: %w", err)
-	}
-	if c.continuous && samplesAreSilent(frame[:count]) {
-		// A live source must preserve a digital-silence frame as silence even
-		// when an upsampler's one-sample interpolation lookahead still carries
-		// the preceding speech frame. The provider's VAD boundary belongs to
-		// the current source quantum; leaking that transition sample turns a
-		// real silence into a second utterance.
-		for index := range frames {
-			clear(frames[index].Samples)
-		}
+		return 0, 0, false, err
 	}
 	c.hasSamples = true
 	c.turnHasSamples = true
@@ -162,15 +148,6 @@ func (c *fileCapture) processFrame(ctx context.Context, outbound sharedaudio.Out
 		return written, count, false, err
 	}
 	return written, count, errors.Is(readErr, io.EOF), nil
-}
-
-func samplesAreSilent(samples []int16) bool {
-	for _, sample := range samples {
-		if sample != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func (c *fileCapture) readFrame(ctx context.Context, frame []int16, source sharedaudio.SampleSource) (int, error) {

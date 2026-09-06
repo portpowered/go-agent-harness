@@ -65,21 +65,6 @@ type ModelRunner struct {
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
 
-// initialSessionConfigSentMarker is an optional provider capability. Native
-// realtime providers send their complete initial session.update while
-// ConnectSession is establishing the transport. The model runner must not
-// echo its compatibility configuration when those providers acknowledge that
-// ownership; injected sessions that omit the marker retain the legacy
-// SESSION.CREATED -> SESSION.UPDATE behavior.
-type initialSessionConfigSentMarker interface {
-	InitialSessionConfigSent() bool
-}
-
-func providerSentInitialSessionConfig(session messages.Session) bool {
-	marker, ok := session.(initialSessionConfigSentMarker)
-	return ok && marker.InitialSessionConfigSent()
-}
-
 // ErrSessionInputQueueFull reports that the explicit session ingress is at
 // capacity. Returning this bounded admission result keeps callers such as tool
 // result forwarding from waiting on a provider or an unbounded queue.
@@ -176,33 +161,10 @@ func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, co
 	}
 }
 
-// EnqueueSessionAudioInput queues raw PCM for the session with the legacy
-// interrupting-by-default policy. An accepted PCM slice is retained by the
-// runner; the caller must not modify it after admission.
-func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
-	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
-}
-
-// EnqueueSessionAudioInputWithPolicy queues raw PCM with an explicit
-// interruption policy in the same ordered ingress used by session events.
-// An accepted PCM slice is retained and must not be modified by the caller.
-func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
-}
-
-// EnqueueSessionAudioInputWithPolicyWaiting admits policy-controlled audio
-// into the same bounded ordered ingress, waiting for capacity until ctx is
-// cancelled. Live finite capture uses this backpressure path so a temporary
-// producer/runner scheduling gap does not turn into a fatal queue overflow.
-func (r *ModelRunner) EnqueueSessionAudioInputWithPolicyWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	return r.enqueueSessionAudioInputWaiting(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicyWaiting")
-}
-
 func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
 	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("%s: not in session mode", operation)
 	}
-
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
 	if ctx == nil {
@@ -212,42 +174,6 @@ func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, 
 		return err
 	}
 	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
-}
-
-func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
-	if r == nil || r.sessionInputInbox == nil {
-		return fmt.Errorf("%s: not in session mode", operation)
-	}
-	if ctx == nil {
-		return fmt.Errorf("%s: nil context", operation)
-	}
-
-	r.sessionInputMu.Lock()
-	defer r.sessionInputMu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, true)
-}
-
-func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, waitForCapacity bool) error {
-	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
-	if waitForCapacity {
-		select {
-		case r.sessionInputInbox <- input:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	select {
-	case r.sessionInputInbox <- input:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return ErrSessionInputQueueFull
-	}
 }
 
 // EnqueueSessionEvent queues a control-plane event in the same ordered ingress
@@ -550,19 +476,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	if isOutputDelta(msg) {
 		state.hasOutput = true
 	}
-	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
-	// session parameters (model, instructions, modalities) if set. Native
-	// providers mark sessions that already sent this configuration during
-	// ConnectSession, so their acknowledgement cannot feed a session.update
-	// loop. Use the same failure-preserving path as mid-session updates for
-	// unmarked sessions so a rejected update cannot silently leave the
-	// advertised surface stale.
-	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil && !providerSentInitialSessionConfig(session) {
-		r.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionUpdate,
-			Value: messages.NewSessionUpdateValue(r.sessionConfig),
-		})
-	}
+	r.forwardInitialSessionConfig(ctx, session, msg)
 	r.DeltaOutbox.Write(ctx, msg)
 	return messageEndOwned
 }

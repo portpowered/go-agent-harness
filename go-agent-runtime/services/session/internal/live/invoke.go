@@ -188,10 +188,8 @@ func (i *liveInvocation) start() error {
 			return err
 		}
 	}
-	if ready, ok := i.handle.(interface{ waitOpeningReady(context.Context) error }); ok {
-		if err := ready.waitOpeningReady(i.ctx); err != nil {
-			return err
-		}
+	if err := waitForOpeningContent(i.handle, i.ctx); err != nil {
+		return err
 	}
 	i.pumpCtx, i.stopPumps = context.WithCancel(i.ctx)
 	i.startPumps()

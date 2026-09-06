@@ -339,3 +339,45 @@ func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) 
 	}
 	return response, err
 }
+
+func (h *handle) openingAdmissionRequired() bool {
+	return h != nil && len(h.request.OpeningContentParts) > 0
+}
+
+func (h *handle) markOpeningAdmitted(err error) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if err != nil && h.openingAdmissionErr == nil {
+		h.openingAdmissionErr = err
+	}
+	h.mu.Unlock()
+	h.openingReadyOnce.Do(func() { close(h.openingReady) })
+}
+
+func (h *handle) waitOpeningReady(ctx context.Context) error {
+	if !h.openingAdmissionRequired() {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("opening admission context is required")
+	}
+	select {
+	case <-h.openingReady:
+		h.mu.Lock()
+		err := h.openingAdmissionErr
+		h.mu.Unlock()
+		return err
+	case <-h.done:
+		h.mu.Lock()
+		err := h.terminalErr
+		h.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		return session.ErrLiveClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}

@@ -151,52 +151,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 	}
 }
 
-// openingAdmissionRequired protects rich opening turns, such as an image
-// queued ahead of a finite audio source. The capture owner must not race that
-// message into the provider's ordered ingress before the opening content has
-// crossed the provider adapter.
-func (h *handle) openingAdmissionRequired() bool {
-	return h != nil && len(h.request.OpeningContentParts) > 0
-}
-
-func (h *handle) markOpeningAdmitted(err error) {
-	if h == nil {
-		return
-	}
-	h.mu.Lock()
-	if err != nil && h.openingAdmissionErr == nil {
-		h.openingAdmissionErr = err
-	}
-	h.mu.Unlock()
-	h.openingReadyOnce.Do(func() { close(h.openingReady) })
-}
-
-func (h *handle) waitOpeningReady(ctx context.Context) error {
-	if !h.openingAdmissionRequired() {
-		return nil
-	}
-	if ctx == nil {
-		return errors.New("opening admission context is required")
-	}
-	select {
-	case <-h.openingReady:
-		h.mu.Lock()
-		err := h.openingAdmissionErr
-		h.mu.Unlock()
-		return err
-	case <-h.done:
-		h.mu.Lock()
-		err := h.terminalErr
-		h.mu.Unlock()
-		if err != nil {
-			return err
-		}
-		return session.ErrLiveClosed
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
 
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
@@ -276,104 +230,6 @@ func (h *handle) markCaptureComplete() {
 	if shouldFinish {
 		h.stopGracefully()
 	}
-}
-
-func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuationComplete ...bool) bool {
-	if h == nil || !h.request.FinishAfterResponse {
-		return false
-	}
-	h.mu.Lock()
-	if h.isToolResponseEnd(msg) {
-		h.pendingToolCalls = 0
-		h.mu.Unlock()
-		return false
-	}
-	h.observeFiniteResponseMessage(msg, len(toolContinuationComplete) > 0 && toolContinuationComplete[0])
-	shouldFinish := h.shouldFinishFiniteResponse(msg)
-	h.mu.Unlock()
-	if shouldFinish {
-		h.stopGracefully()
-	}
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
-}
-
-func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage, toolContinuationComplete bool) {
-	if msg.Type == messages.StreamTypeMessageStart {
-		if msg.Role != messages.RoleTool {
-			h.responseStarted = true
-			h.responseActive = true
-			h.responseObserved++
-			close(h.responseStartWake)
-			h.responseStartWake = make(chan struct{})
-		}
-		return
-	}
-	if msg.Type == messages.StreamTypeToolCallEnd {
-		h.pendingToolCalls++
-		return
-	}
-	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
-		h.responseActive = false
-		h.responsePending = false
-		// The provider's first response can terminate after emitting a tool
-		// call. That boundary is the tool-request response, not the finite
-		// customer-facing response; the tool result and its continuation still
-		// belong to the same invocation.
-		if h.pendingToolCalls > 0 {
-			return
-		}
-		if toolContinuationComplete {
-			return
-		}
-		// A barge-in cancellation closes the interrupted response's wire
-		// boundary, but it is not a completed finite response. Keep the
-		// invocation open for the provider's replacement response; otherwise
-		// an output-time correction can be stopped between its replacement
-		// TOOLCALL.START and the tool result admission.
-		if finiteResponseWasInterrupted(msg) {
-			return
-		}
-		h.replayResponses++
-	}
-}
-
-func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
-}
-
-func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleTool
-}
-
-func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
-		return false
-	}
-	return h.canFinishFiniteResponse()
-}
-
-// canFinishFiniteResponse is called under mu both when response completion
-// arrives and when EOF arrives after an already completed response.
-func (h *handle) canFinishFiniteResponse() bool {
-	if !h.request.FinishAfterResponse || h.responseActive || h.responsePending {
-		return false
-	}
-	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
-	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 &&
-		h.replayResponses >= h.replayResponseTarget() && !h.gracefulStop &&
-		!h.cancelRequested && !providerCloseExpected
-}
-
-func (h *handle) replayResponseTarget() int {
-	target := 1
-	if h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0 {
-		target = len(h.request.ReplayPlan.AudioTurns)
-	}
-	if h.request.ExpectedResponses > 0 {
-		target = h.request.ExpectedResponses
-	}
-	return target
 }
 
 // waitForResponseStart waits for the provider's first response lifecycle
@@ -456,4 +312,85 @@ func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.Strea
 	case <-ctx.Done():
 		timer.Stop()
 	}
+}
+
+func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuationComplete ...bool) bool {
+	if h == nil || !h.request.FinishAfterResponse {
+		return false
+	}
+	h.mu.Lock()
+	if h.isToolResponseEnd(msg) {
+		h.pendingToolCalls = 0
+		h.mu.Unlock()
+		return false
+	}
+	h.observeFiniteResponseMessage(msg, len(toolContinuationComplete) > 0 && toolContinuationComplete[0])
+	shouldFinish := h.shouldFinishFiniteResponse(msg)
+	h.mu.Unlock()
+	if shouldFinish {
+		h.stopGracefully()
+	}
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
+}
+
+func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage, toolContinuationComplete bool) {
+	if msg.Type == messages.StreamTypeMessageStart {
+		if msg.Role != messages.RoleTool {
+			h.responseStarted = true
+			h.responseActive = true
+			h.responseObserved++
+			close(h.responseStartWake)
+			h.responseStartWake = make(chan struct{})
+		}
+		return
+	}
+	if msg.Type == messages.StreamTypeToolCallEnd {
+		h.pendingToolCalls++
+		return
+	}
+	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
+		h.responseActive = false
+		h.responsePending = false
+		if h.pendingToolCalls > 0 || toolContinuationComplete || finiteResponseWasInterrupted(msg) {
+			return
+		}
+		h.replayResponses++
+	}
+}
+
+func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
+}
+
+func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleTool
+}
+
+func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
+		return false
+	}
+	return h.canFinishFiniteResponse()
+}
+
+func (h *handle) canFinishFiniteResponse() bool {
+	if !h.request.FinishAfterResponse || h.responseActive || h.responsePending {
+		return false
+	}
+	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
+	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 &&
+		h.replayResponses >= h.replayResponseTarget() && !h.gracefulStop &&
+		!h.cancelRequested && !providerCloseExpected
+}
+
+func (h *handle) replayResponseTarget() int {
+	target := 1
+	if h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0 {
+		target = len(h.request.ReplayPlan.AudioTurns)
+	}
+	if h.request.ExpectedResponses > 0 {
+		target = h.request.ExpectedResponses
+	}
+	return target
 }

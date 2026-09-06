@@ -40,16 +40,7 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	}
 	mediaAttached := false
 	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
-		var endpoints sharedaudio.MediaEndpoints
-		if i.continuous {
-			if configurable, ok := s.(sharedaudio.ConfigurableMediaSession); ok {
-				endpoints = configurable.RTCMediaWithOptions(sharedaudio.MediaSessionOptions{InboundContinuous: true})
-			} else {
-				endpoints = providerMedia.RTCMedia()
-			}
-		} else {
-			endpoints = providerMedia.RTCMedia()
-		}
+		endpoints := captureMediaEndpoints(s, providerMedia, i.continuous)
 		mediaAttached = endpoints.Inbound != nil
 		i.media.Attach(ctx, endpoints)
 	}
@@ -124,18 +115,6 @@ type orderedSession struct {
 
 func (s *orderedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
-}
-
-// InitialSessionConfigSent preserves the provider-owned startup configuration
-// marker across the runtime's ordering/media wrapper. The model runner uses
-// this optional capability to avoid echoing the initial session.update when a
-// native provider already sent it during ConnectSession.
-func (s *orderedSession) InitialSessionConfigSent() bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
-	return ok && marker.InitialSessionConfigSent()
 }
 
 func (s *orderedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
@@ -404,4 +383,12 @@ func (s *orderedSession) SupportsCompleteMessagesWithoutResponse() bool {
 	}
 	capability, ok := s.inner.(interface{ SupportsCompleteMessagesWithoutResponse() bool })
 	return ok && capability.SupportsCompleteMessagesWithoutResponse()
+}
+
+func (s *orderedSession) InitialSessionConfigSent() bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
+	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
+	return ok && marker.InitialSessionConfigSent()
 }
