@@ -38,14 +38,6 @@ func LookupOpenAIRealtimeModel(model string) (OpenAIRealtimeModel, bool) {
 	return testModelCatalog().LookupRealtimeModel("openai", model)
 }
 
-func SupportedOpenAIRealtimeModelIDs() []string {
-	return testModelCatalog().SupportedRealtimeModelIDs("openai")
-}
-
-func unsupportedOpenAIRealtimeModelError(model string) error {
-	return &UnsupportedRealtimeModelError{Provider: "OpenAI", Model: model, SupportedModels: SupportedOpenAIRealtimeModelIDs()}
-}
-
 func TestOpenAIRealtimeModels_ReturnsOrderedIndependentRegistryCopy(t *testing.T) {
 	models := OpenAIRealtimeModels()
 	if len(models) != 3 {
