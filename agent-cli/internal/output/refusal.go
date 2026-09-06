@@ -22,16 +22,17 @@ type refusalEventJSON struct {
 // WriteRefusal writes a refusal message to w with a [REFUSAL] prefix.
 // When w is os.Stderr and the file descriptor is a terminal, the output
 // is wrapped in yellow ANSI escape codes for visual distinction.
-func WriteRefusal(w io.Writer, refusalText string) {
+func WriteRefusal(w io.Writer, refusalText string) error {
 	if refusalText == "" {
-		return
+		return nil
 	}
 	msg := fmt.Sprintf("[REFUSAL] %s\n", refusalText)
 	if isStderrTTY(w) {
 		// Yellow: \033[33m ... \033[0m
 		msg = "\033[33m" + msg + "\033[0m"
 	}
-	_, _ = fmt.Fprint(w, msg)
+	_, err := fmt.Fprint(w, msg)
+	return err
 }
 
 // WriteRefusalJSON writes a structured JSON refusal event to w.

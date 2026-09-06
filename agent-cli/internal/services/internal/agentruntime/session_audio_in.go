@@ -214,7 +214,7 @@ func sessionAudioInputKindError(kind SessionAudioInputErrorKind) error {
 // selected file or raw stdin through the agent loop's session audio inbox.
 // The ordinary session path remains untouched when the flag is absent.
 func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRunOptions, input SessionAudioInput) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -256,7 +256,7 @@ func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx contex
 // audio-output extensions on the command surface. An empty audioOutPath
 // preserves the established audio-input-only behavior.
 func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)

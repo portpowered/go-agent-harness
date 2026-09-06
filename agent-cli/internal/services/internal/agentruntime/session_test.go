@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	services "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -1436,7 +1436,7 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 func TestChatServiceRun_PropagatesBannerWriteError(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	exec := agent.NewExecutor(nil, nil, stubInferencer{}, true)
+	exec := sessionwire.NewService(sessionwire.Dependencies{Inferencer: stubInferencer{}, RelaxValidation: true})
 	service := services.NewChatService(exec, flags.NewGlobalFlags(), flags.NewAskFlags())
 
 	err := service.Run(

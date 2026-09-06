@@ -17,17 +17,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 func TestPlanSessionRuntime_BindsReadImageWithSessionScopedPreparation(t *testing.T) {
-	sharedRegistry := tools.NewToolRegistryFromConfig(nil)
-	sharedExecutor := tools.NewRegistryExecutor(sharedRegistry)
-	definitions := sharedRegistry.ToAgentLoopDefs()
-
-	dirOne := t.TempDir()
-	dirTwo := t.TempDir()
+	root := t.TempDir()
+	dirOne := filepath.Join(root, "one")
+	dirTwo := filepath.Join(root, "two")
+	if err := os.MkdirAll(dirOne, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dirTwo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sharedExecutor, definitions := newRuntimeReadImageToolSurface(t, root)
 	pathOne := writeSessionReadImagePNG(t, dirOne, "one.png", color.RGBA{R: 255, A: 255})
 	pathTwo := writeSessionReadImagePNG(t, dirTwo, "two.png", color.RGBA{B: 255, A: 255})
 
@@ -49,9 +54,8 @@ func TestPlanSessionRuntime_BindsReadImageWithSessionScopedPreparation(t *testin
 func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := writeSessionReadImagePNG(t, dir, "loop.png", color.RGBA{G: 255, A: 255})
-	registry := tools.NewToolRegistryFromConfig(nil)
-	executor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, dir, dir, executor, registry.ToAgentLoopDefs())
+	executor, definitions := newRuntimeReadImageToolSurface(t, dir)
+	plan := planReadImageTestSession(t, dir, dir, executor, definitions)
 	arguments, err := json.Marshal(map[string]string{"path": imagePath})
 	if err != nil {
 		t.Fatal(err)
@@ -118,9 +122,8 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := writeSessionReadImagePNG(t, dir, "failed.png", color.RGBA{B: 255, A: 255})
-	registry := tools.NewToolRegistryFromConfig(nil)
-	executor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, executor, registry.ToAgentLoopDefs())
+	executor, definitions := newRuntimeReadImageToolSurface(t, dir)
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, executor, definitions)
 	arguments, err := json.Marshal(map[string]string{"path": imagePath})
 	if err != nil {
 		t.Fatal(err)
@@ -167,9 +170,7 @@ func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testi
 
 func TestReadImageSession_InvalidInputsReturnCorrelatedTextOnlyFailures(t *testing.T) {
 	dir := t.TempDir()
-	registry := tools.NewToolRegistryFromConfig(nil)
-	sharedExecutor := tools.NewRegistryExecutor(registry)
-	definitions := registry.ToAgentLoopDefs()
+	sharedExecutor, definitions := newRuntimeReadImageToolSurface(t, dir)
 
 	valid := writeSessionReadImagePNG(t, dir, "valid.png", color.RGBA{R: 255, A: 255})
 	missing := filepath.Join(dir, "missing.png")
@@ -228,9 +229,8 @@ models:
 func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "missing.png")
-	registry := tools.NewToolRegistryFromConfig(nil)
-	sharedExecutor := tools.NewRegistryExecutor(registry)
-	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, sharedExecutor, registry.ToAgentLoopDefs())
+	sharedExecutor, definitions := newRuntimeReadImageToolSurface(t, dir)
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), dir, sharedExecutor, definitions)
 	arguments, err := json.Marshal(map[string]string{"path": missing})
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +242,7 @@ func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
 		out,
 		"session continued after invalid image",
 		"is missing",
-		scriptedTurn{events: toolCallEvents(callID, tools.ReadImageToolID, string(arguments))},
+		scriptedTurn{events: toolCallEvents(callID, runtimeTools.ReadImageToolID, string(arguments))},
 	)
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	var observed []messages.StreamMessage
@@ -290,23 +290,23 @@ func executeReadImageFailure(t *testing.T, executor messages.ToolExecutor, args 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mustExecuteSessionTool(t, executor, messages.ToolCall{ID: callID, Name: tools.ReadImageToolID, Arguments: string(arguments)})
+	return mustExecuteSessionTool(t, executor, messages.ToolCall{ID: callID, Name: runtimeTools.ReadImageToolID, Arguments: string(arguments)})
 }
 
 func assertReadImageFailure(t *testing.T, response messages.ToolCallResponse, callID, wantText string) {
 	t.Helper()
-	if response.ToolCallID != callID || response.Name != tools.ReadImageToolID {
-		t.Fatalf("failure response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, tools.ReadImageToolID)
+	if response.ToolCallID != callID || response.Name != runtimeTools.ReadImageToolID {
+		t.Fatalf("failure response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, runtimeTools.ReadImageToolID)
 	}
 	if response.Content == "" {
 		t.Fatal("failure response is empty")
 	}
-	var result tools.ReadImageResult
+	var result runtimeTools.ReadImageResult
 	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
 		t.Fatalf("failure response envelope = %q: %v", response.Content, err)
 	}
-	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error == "" || !strings.Contains(result.Error, wantText) {
-		t.Fatalf("failure response envelope = %#v, want version %d error containing %q", result, tools.ReadImageResultVersion, wantText)
+	if result.Version != runtimeTools.ReadImageResultVersion || result.Status != runtimeTools.ReadImageResultStatusError || result.Error == "" || !strings.Contains(result.Error, wantText) {
+		t.Fatalf("failure response envelope = %#v, want version %d error containing %q", result, runtimeTools.ReadImageResultVersion, wantText)
 	}
 	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
 		t.Fatalf("failure response unexpectedly carried image metadata: %#v", result)
@@ -338,7 +338,7 @@ func (i *failedReadImageContinuationInferencer) ConnectSession(ctx context.Conte
 		}) {
 			return
 		}
-		for _, event := range toolCallEvents(i.callID, tools.ReadImageToolID, i.arguments) {
+		for _, event := range toolCallEvents(i.callID, runtimeTools.ReadImageToolID, i.arguments) {
 			if !session.recv.Write(ctx, event) {
 				return
 			}
@@ -373,7 +373,7 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 		}) {
 			return
 		}
-		for _, event := range toolCallEvents(i.callID, tools.ReadImageToolID, i.arguments) {
+		for _, event := range toolCallEvents(i.callID, runtimeTools.ReadImageToolID, i.arguments) {
 			if !session.recv.Write(ctx, event) {
 				return
 			}
@@ -435,7 +435,7 @@ func executePlannedReadImage(t *testing.T, plan sessionRuntimePlan, path, callID
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mustExecuteSessionTool(t, plan.loop.ToolExecutor, messages.ToolCall{ID: callID, Name: tools.ReadImageToolID, Arguments: string(arguments)})
+	return mustExecuteSessionTool(t, plan.loop.ToolExecutor, messages.ToolCall{ID: callID, Name: runtimeTools.ReadImageToolID, Arguments: string(arguments)})
 }
 
 func mustExecuteSessionTool(t *testing.T, executor messages.ToolExecutor, call messages.ToolCall) messages.ToolCallResponse {
@@ -452,18 +452,18 @@ func mustExecuteSessionTool(t *testing.T, executor messages.ToolExecutor, call m
 
 func assertReadImageResponse(t *testing.T, response messages.ToolCallResponse, callID string, wantBytes []byte, wantMIME string) {
 	t.Helper()
-	if response.ToolCallID != callID || response.Name != tools.ReadImageToolID {
-		t.Fatalf("response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, tools.ReadImageToolID)
+	if response.ToolCallID != callID || response.Name != runtimeTools.ReadImageToolID {
+		t.Fatalf("response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, runtimeTools.ReadImageToolID)
 	}
 	if response.Content == "" || len(response.ContentParts) != 2 {
 		t.Fatalf("response content = %q parts = %#v, want envelope plus image rich result", response.Content, response.ContentParts)
 	}
-	var result tools.ReadImageResult
+	var result runtimeTools.ReadImageResult
 	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
 		t.Fatalf("response envelope = %q: %v", response.Content, err)
 	}
-	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
-		t.Fatalf("response envelope = %#v, want version %d success", result, tools.ReadImageResultVersion)
+	if result.Version != runtimeTools.ReadImageResultVersion || result.Status != runtimeTools.ReadImageResultStatusSuccess {
+		t.Fatalf("response envelope = %#v, want version %d success", result, runtimeTools.ReadImageResultVersion)
 	}
 	if result.MIMEType != wantMIME || result.ByteLength != len(wantBytes) {
 		t.Fatalf("response envelope metadata = %#v, want %s and %d bytes", result, wantMIME, len(wantBytes))
@@ -472,8 +472,8 @@ func assertReadImageResponse(t *testing.T, response messages.ToolCallResponse, c
 	if result.SHA256 != hex.EncodeToString(digest[:]) {
 		t.Fatalf("response envelope sha256 = %q, want %q", result.SHA256, hex.EncodeToString(digest[:]))
 	}
-	if result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
-		t.Fatalf("response envelope typed projection = %q, want %q", result.TypedProjection, tools.ReadImageResultTypedProjectionInputImage)
+	if result.TypedProjection != runtimeTools.ReadImageResultTypedProjectionInputImage {
+		t.Fatalf("response envelope typed projection = %q, want %q", result.TypedProjection, runtimeTools.ReadImageResultTypedProjectionInputImage)
 	}
 	part, ok := response.ContentParts[1].(messages.ImagePart)
 	if !ok {
@@ -519,4 +519,16 @@ func writeReadImageTestFile(t *testing.T, dir, name string, data []byte) string 
 		t.Fatal(err)
 	}
 	return path
+}
+
+func newRuntimeReadImageToolSurface(t *testing.T, workDir string) (messages.ToolExecutor, []messages.ToolDefinition) {
+	t.Helper()
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        workDir,
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		t.Fatalf("resolve runtime tools: %v", err)
+	}
+	return capability.Executor, capability.Definitions
 }

@@ -12,10 +12,11 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 )
 
 var updateChatGolden = flag.Bool("update", false, "update chat golden files")
@@ -86,9 +87,18 @@ func newChatTestHarness(t *testing.T, responses ...string) *chatTestHarness {
 	askFlags := flags.NewAskFlags()
 	askFlags.NoSystemInformation = true
 	inferencer := &chatTestInferencer{responses: responses}
-	executor := agent.NewExecutor(chatTestToolExecutor{}, nil, inferencer, true)
+	store, err := NewSessionStoreWithFactory(globalFlags, sessionwire.NewFileStoreFactory())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := sessionwire.NewService(sessionwire.Dependencies{
+		ToolExecutor: chatTestToolExecutor{}, Inferencer: inferencer, RelaxValidation: true, Store: store,
+		Resolver: session.ResolverFunc(func(context.Context, session.Request) (session.Resolution, error) {
+			return session.Resolution{Store: store}, nil
+		}),
+	})
 	cfg := BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := executor.NewChatSessionID(cfg)
+	sessionID, err := executor.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}

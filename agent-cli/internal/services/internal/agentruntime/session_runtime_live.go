@@ -6,6 +6,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // planBareLiveSessionRuntime builds the alternate-free live voice path. The
@@ -203,4 +209,141 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && provider == sessionProviderOpenAI,
 		},
 	}, nil
+}
+
+func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
+	// This is the single service-owned boundary between prompt resolution and
+	// provider construction. The tool definitions in opts are the same snapshot
+	// that the runtime planner passes to the provider, so the grounding contract
+	// cannot drift from the advertised tool surface.
+	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
+	instructions = composeSessionInstructions(opts, instructions)
+	planFactory := opts.runtimeFactory
+	if !planFactory.configured() {
+		planFactory = newDefaultSessionRuntimeFactory()
+	}
+	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
+	if useInitialProviderInstructions {
+		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
+	}
+	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	// Caller-owned/injected sessions do not have a provider factory that can
+	// receive the resolved tool surface. Configure them whenever either
+	// instructions or tools are present; an empty instruction remains empty and
+	// does not synthesize a default prompt.
+	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
+		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
+		// The wrapper above owns the complete injected-session configuration.
+		// Suppress ModelRunner's separate tool-only update, which otherwise races
+		// an identical second SESSION.UPDATE onto the provider wire.
+		plan.loop.AdvertiseToolDefinitions = false
+	}
+	return plan, nil
+}
+
+// sessionRuntimeFactoryWithInstructions carries resolved instructions into
+// the provider's initial SessionConfig. The generic session adapter remains
+// the fallback for injected session seams, while live providers receive the
+// same value before ConnectSession can send their initial wire update.
+func sessionRuntimeFactoryWithInstructions(base sessionRuntimeFactory, instructions string) sessionRuntimeFactory {
+	factory := base
+	factory.newBareLiveSessionInferencer = func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
+		return NewLiveSessionInferencer(opts, instructions)
+	}
+	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
+	}
+	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, inputAudioTranscription)
+	}
+	factory.newGrokSessionWithTools = func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
+	}
+	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
+	}
+	factory.newOpenAIScheduledSessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
+	}
+	return factory
+}
+
+func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
+	return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, nil)
+}
+
+func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
+	}
+	providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
+	if strings.TrimSpace(sessionCfg.BaseURL) != "" {
+		providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
+	}
+	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+	if err != nil {
+		return nil, fmt.Errorf("create Grok session gateway: %w", err)
+	}
+	inferenceOpts := []inference.SessionOption{
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionInstructions(instructions),
+	}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, models.InputAudioTranscriptionConfig{})
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, nil, inputAudioTranscription)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription, oaiprovider.WithClientOwnedAudioTurnBoundaries())
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig, extra ...oaiprovider.Option) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
+	}
+	if !isOpenAIRealtimeModel(sessionCfg.Model) {
+		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
+	}
+	providerOpts := []oaiprovider.Option{
+		oaiprovider.WithAPIKey(sessionCfg.APIKey),
+		oaiprovider.WithModel(sessionCfg.Model),
+		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
+		oaiprovider.WithWebSocketDialer(dialer),
+	}
+	providerOpts = append(providerOpts, extra...)
+	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+	if err != nil {
+		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+	}
+	inferenceOpts := []inference.SessionOption{
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionInstructions(instructions),
+		inference.WithSessionInputAudioTranscription(inputAudioTranscription),
+	}
+	if sessionCfg.ReasoningEffort != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionReasoningEffort(sessionCfg.ReasoningEffort))
+	}
+	if voice != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
+	}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }

@@ -1,0 +1,258 @@
+package livehost
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	cliOutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+)
+
+// FileDeviceService is the host-composed file media service and its timing
+// role. The reusable runtime receives only the device service contract.
+type FileDeviceService struct {
+	Service   runtimeDevices.Service
+	Scheduler clock.Scheduler
+}
+
+// RequestBuilder resolves CLI configuration into the neutral runtime request.
+// It is deliberately a callback so this host package does not own provider,
+// capability, or prompt policy.
+type RequestBuilder func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error)
+
+// AnnouncementWriter owns operator-facing startup text at the CLI boundary.
+type AnnouncementWriter func(io.Writer, serviceSession.Request, runtimeSession.LiveRequest, *runtimeReplay.CaptureInspection) error
+
+// Dependencies are the explicit host edges needed to run one live session.
+// No process-wide discovery or default runtime graph is performed here.
+type Dependencies struct {
+	LiveService        runtimeSession.LiveService
+	ReplayInspection   *runtimeReplay.CaptureInspection
+	BuildRequest       RequestBuilder
+	WriteAnnouncements AnnouncementWriter
+	DeviceService      runtimeDevices.Service
+	FileDeviceService  FileDeviceService
+	RecordingService   runtimeRecording.Service
+	CredentialValues   func(serviceSession.Request) ([]string, error)
+	CaptureComplete    func(serviceSession.Request) []runtimeSession.LiveControl
+}
+
+// Run admits a single host invocation into the reusable live runtime. File
+// sources and sinks are opened before admission and remain host-owned until
+// this function joins the runtime. Provider, media, and terminal lifecycle
+// policy remains in runtimeSession.LiveRunner.
+func Run(ctx context.Context, out io.Writer, request serviceSession.Request, deps Dependencies) (runErr error) {
+	runner, err := liveRunner(deps.LiveService)
+	if err != nil {
+		return err
+	}
+	if deps.BuildRequest == nil {
+		return errors.New("live request builder is unavailable")
+	}
+	liveRequest, err := deps.BuildRequest(ctx, request, deps.ReplayInspection)
+	if err != nil {
+		return err
+	}
+	if deps.WriteAnnouncements != nil {
+		if err := deps.WriteAnnouncements(out, request, liveRequest, deps.ReplayInspection); err != nil {
+			return err
+		}
+	}
+	recorder, err := openRecorder(request, &liveRequest, deps)
+	if err != nil {
+		return err
+	}
+	finishRecorder := func(cause error) error {
+		if recorder == nil {
+			return cause
+		}
+		return errors.Join(cause, recorder.Finalize(context.WithoutCancel(ctx), cause))
+	}
+	filePorts, err := OpenFilePorts(request, out, liveRequest.OutputAudioSampleRate)
+	if err != nil {
+		return finishRecorder(err)
+	}
+	if filePorts != nil {
+		defer func() { runErr = errors.Join(runErr, filePorts.Close()) }()
+	}
+	configureLegacyReplayInput(filePorts, request, liveRequest)
+	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps)
+	return runner.RunLive(ctx, options)
+}
+
+func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, error) {
+	if service == nil {
+		return nil, errors.New("live session runner is not configured")
+	}
+	runner, ok := service.(runtimeSession.LiveRunner)
+	if !ok || runner == nil {
+		return nil, errors.New("live session runner is not configured")
+	}
+	return runner, nil
+}
+
+func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
+	if request.RecordDirectory == "" {
+		return nil, nil
+	}
+	if deps.RecordingService == nil {
+		return nil, errors.New("live recording service is unavailable")
+	}
+	if deps.CredentialValues == nil {
+		return nil, errors.New("live credential resolver is unavailable")
+	}
+	credentialRequest := request
+	credentialRequest.ReplayPath = liveRequest.Replay.InputCapturePath
+	credentialRequest.Provider = liveRequest.Provider
+	credentialRequest.Model = liveRequest.Model
+	credentialRequest.BaseURL = liveRequest.BaseURL
+	credentials, err := deps.CredentialValues(credentialRequest)
+	if err != nil {
+		return nil, err
+	}
+	recorder, err := deps.RecordingService.OpenLiveEvidence(runtimeRecording.LiveEvidenceOptions{
+		Destination:         request.RecordDirectory,
+		SessionID:           liveRequest.SessionID,
+		ParticipantID:       liveRequest.ParticipantID,
+		Provider:            liveRequest.Provider,
+		Model:               liveRequest.Model,
+		Credentials:         credentials,
+		ProviderCapturePath: request.RecordPath,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open live recording: %w", err)
+	}
+	if request.RecordPath == "" {
+		if providerCapture, ok := recorder.(runtimeRecording.ProviderCapture); ok {
+			if path := strings.TrimSpace(providerCapture.ProviderCapturePath()); path != "" {
+				configureCapturePath(liveRequest, path)
+			}
+		}
+	}
+	return recorder, nil
+}
+
+// configureCapturePath exists as a narrow hook for the caller-owned request
+// copy. The recorder path is applied in Run before options are built.
+func configureCapturePath(request *runtimeSession.LiveRequest, path string) {
+	if request == nil || path == "" {
+		return
+	}
+	request.Replay.OutputCapturePath = path
+}
+
+func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Request, liveRequest runtimeSession.LiveRequest) {
+	if filePorts == nil || filePorts.Input == nil || request.ReplayPath == "" || liveRequest.ReplayPlan == nil {
+		return
+	}
+	if liveRequest.ReplayPlan.InputAudioSampleRate <= 0 {
+		UseLegacyFrameSource(filePorts.Input)
+	}
+}
+
+func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies) runtimeSession.LiveRunOptions {
+	deviceService := deps.DeviceService
+	deviceRequest := devicesRequest(request, liveRequest)
+	if filePorts != nil {
+		deviceService = deps.FileDeviceService.Service
+		applyFileSchedulers(filePorts, deps.FileDeviceService.Scheduler)
+		deviceRequest.CaptureEnabled = filePorts.Input != nil
+		deviceRequest.PlaybackEnabled = filePorts.Output != nil
+		deviceRequest.FileInput = filePorts.Input
+		deviceRequest.FileOutput = filePorts.Output
+	}
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
+		deviceService = nil
+	}
+	renderer := cliOutput.NewLiveEventRenderer(request.ReplayPath != "")
+	return runtimeSession.LiveRunOptions{
+		Request:                 liveRequest,
+		Devices:                 deviceService,
+		DeviceRequest:           deviceRequest,
+		AudioTurnAdmission:      audioTurnAdmission(request),
+		Recorder:                recorder,
+		CaptureTurns:            captureTurns(filePorts),
+		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
+		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
+			eventOut := outputWriter(request, out)
+			if err := renderer.Render(eventContext, eventOut, event); err != nil {
+				return err
+			}
+			if request.StreamObserver != nil && event.Message != nil {
+				request.StreamObserver(*event.Message)
+			}
+			return nil
+		}),
+	}
+}
+
+func outputWriter(request serviceSession.Request, out io.Writer) io.Writer {
+	if request.AudioOutputPath == "-" {
+		return io.Discard
+	}
+	return out
+}
+
+func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.LiveRequest) runtimeDevices.Request {
+	sampleRate := liveRequest.InputAudioSampleRate
+	if sampleRate <= 0 {
+		sampleRate = liveRequest.OutputAudioSampleRate
+	}
+	if sampleRate <= 0 {
+		sampleRate = 24000
+	}
+	return runtimeDevices.Request{
+		InputDevice:     request.AudioInputDevice,
+		OutputDevice:    request.AudioOutputDevice,
+		CaptureEnabled:  request.InteractiveDevices || request.AudioInputDevicePresent,
+		PlaybackEnabled: request.InteractiveDevices || request.AudioOutputDevicePresent,
+		SampleRate:      sampleRate,
+		Channels:        audio.Channels,
+		PlaybackProfile: "voice",
+	}
+}
+
+func applyFileSchedulers(filePorts *FilePorts, scheduler clock.Scheduler) {
+	if filePorts == nil {
+		return
+	}
+	if filePorts.Input != nil {
+		filePorts.Input.Scheduler = scheduler
+	}
+	for index := range filePorts.InputTurns {
+		filePorts.InputTurns[index].Scheduler = scheduler
+	}
+}
+
+func audioTurnAdmission(request serviceSession.Request) runtimeSession.AudioTurnAdmission {
+	if request.AudioInTurnBarge {
+		return runtimeSession.AudioTurnAdmissionBarge
+	}
+	return runtimeSession.AudioTurnAdmissionCompletionGated
+}
+
+func captureTurns(filePorts *FilePorts) []runtimeDevices.FileInput {
+	if filePorts == nil {
+		return nil
+	}
+	return append([]runtimeDevices.FileInput(nil), filePorts.InputTurns...)
+}
+
+func captureCompleteControls(request serviceSession.Request, custom func(serviceSession.Request) []runtimeSession.LiveControl) []runtimeSession.LiveControl {
+	if custom != nil {
+		return custom(request)
+	}
+	if !request.AudioInput.Present && len(request.AudioTurns) == 0 {
+		return nil
+	}
+	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
+}

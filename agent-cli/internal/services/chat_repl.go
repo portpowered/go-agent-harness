@@ -4,16 +4,17 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // chatLineKind identifies how to style a line in the conversation.
@@ -37,9 +38,9 @@ type chatLine struct {
 
 // streamReadyMsg is sent when the streaming turn has started and the event stream is ready.
 type streamReadyMsg struct {
-	stream  agentloop.Stream
-	runData *agent.RunData
-	err     error
+	stream agentloop.Stream
+	handle session.SessionHandle
+	err    error
 }
 
 // streamEventMsg is sent for each event while draining the stream (partial content).
@@ -49,7 +50,7 @@ type streamEventMsg struct {
 
 // streamDoneMsg is sent when the stream is exhausted; runData is used to save session and flush.
 type streamDoneMsg struct {
-	runData *agent.RunData
+	handle session.SessionHandle
 }
 
 // FocusInputMsg is sent by Init() so that Update can call input.Focus() on the
@@ -67,7 +68,7 @@ type FocusInputMsg struct{}
 // The model can be driven either by a tea.Program (production) or by calling
 // Update directly (unit tests).
 type ChatModel struct {
-	executor    *agent.Executor
+	service     session.Service
 	sessionID   string
 	globalFlags *flags.GlobalFlags
 	askFlags    *flags.AskFlags
@@ -88,7 +89,7 @@ type ChatModel struct {
 
 	// Streaming state: set when a turn is in progress; cleared on streamDoneMsg.
 	stream           agentloop.Stream
-	runData          *agent.RunData
+	handle           session.SessionHandle
 	assistantPartial string     // accumulated text (TEXT.DELTA from assistant only) for the current turn
 	toolTextPartial  string     // accumulated text (TEXT.DELTA from tool only) until TEXT.END
 	reasoningPartial string     // accumulated reasoning (REASONING.DELTA) for the current turn
@@ -97,14 +98,14 @@ type ChatModel struct {
 }
 
 // NewChatModel constructs a ChatModel ready for use.
-func NewChatModel(executor *agent.Executor, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) ChatModel {
+func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) ChatModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
 	ti.PromptStyle = stylePrompt
 	ti.Placeholder = "Type a message..."
 	ti.Width = 78
 	return ChatModel{
-		executor:    executor,
+		service:     service,
 		sessionID:   sessionID,
 		globalFlags: globalFlags,
 		askFlags:    askFlags,
@@ -215,13 +216,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.stream = msg.stream
-		m.runData = msg.runData
+		m.handle = msg.handle
 		m.assistantPartial = ""
 		m.toolTextPartial = ""
 		m.reasoningPartial = ""
 		m.thinkingActive = false
 		m.currentTurnLines = nil
-		return m, consumeOneStreamEvent(msg.stream, msg.runData)
+		return m, consumeOneStreamEvent(msg.stream, msg.handle)
 
 	case streamEventMsg:
 		if msg.evt.Type == messages.StreamTypeError {
@@ -231,7 +232,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.applyStreamEvent(msg.evt)
 		}
-		return m, consumeOneStreamEvent(m.stream, m.runData)
+		return m, consumeOneStreamEvent(m.stream, m.handle)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -246,11 +247,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case streamDoneMsg:
-		if m.runData != nil {
-			_ = m.executor.SaveSession(m.runData)
-			_ = m.executor.FlushRecorder(m.runData, m.askFlags.RecordCapturePath)
-			m.runData.CloseLogger()
-		}
+		cleanupErr := finalizeChatHandle(m.handle, m.askFlags.RecordCapturePath)
+		reportChatHandleError(&m, "finalizing session", cleanupErr)
 		// Flush any remaining tool text (in case TEXT.END was not received), then commit current turn
 		if m.toolTextPartial != "" {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
@@ -273,7 +271,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Clear streaming state.
 		m.stream = nil
-		m.runData = nil
+		m.handle = nil
 		m.assistantPartial = ""
 		m.toolTextPartial = ""
 		m.reasoningPartial = ""
@@ -361,13 +359,13 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 
 // consumeOneStreamEvent returns a Cmd that reads one event from the stream and
 // sends either streamEventMsg or streamDoneMsg.
-func consumeOneStreamEvent(stream agentloop.Stream, runData *agent.RunData) tea.Cmd {
+func consumeOneStreamEvent(stream agentloop.Stream, handle session.SessionHandle) tea.Cmd {
 	return func() tea.Msg {
 		if stream.HasNext() {
 			return streamEventMsg{evt: stream.Response()}
 		}
 		_ = stream.Close()
-		return streamDoneMsg{runData: runData}
+		return streamDoneMsg{handle: handle}
 	}
 }
 
@@ -385,47 +383,31 @@ func (m ChatModel) effectiveWidth() int {
 func (m ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd {
 	return func() tea.Msg {
 		cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-		cfg.Stream = true
-		storage, err := m.executor.GetSessionStorage(cfg)
+		if m.service == nil {
+			return streamReadyMsg{err: fmt.Errorf("session service is not configured")}
+		}
+		handle, err := m.service.Open(m.ctx, *cfg)
 		if err != nil {
 			return streamReadyMsg{err: err}
 		}
-		initialHistory, err := storage.Load(m.sessionID)
+		stream, err := handle.Stream(m.ctx, execInput)
 		if err != nil {
-			return streamReadyMsg{err: err}
+			return streamReadyMsg{err: errors.Join(err, closeChatHandle(handle))}
 		}
-		if initialHistory == nil {
-			initialHistory = []messages.Message{}
-		}
-		cfgWithHistory := *cfg
-		cfgWithHistory.SessionID = m.sessionID
-		cfgWithHistory.InitialHistory = initialHistory
-		if err := cfgWithHistory.Validate(); err != nil {
-			return streamReadyMsg{err: err}
-		}
-		runData, err := m.executor.BuildLoop(m.ctx, &cfgWithHistory)
-		if err != nil {
-			return streamReadyMsg{err: err}
-		}
-		stream, err := m.executor.ExecuteStreamingTurn(m.ctx, runData, execInput, &cfgWithHistory)
-		if err != nil {
-			runData.CloseLogger()
-			return streamReadyMsg{err: err}
-		}
-		return streamReadyMsg{stream: stream, runData: runData}
+		return streamReadyMsg{stream: stream, handle: handle}
 	}
 }
 
 // ChatService runs interactive text chat sessions backed by a bubbletea TUI.
 type ChatService struct {
-	executor    *agent.Executor
+	service     session.Service
 	globalFlags *flags.GlobalFlags
 	askFlags    *flags.AskFlags
 }
 
 // NewChatService creates a ChatService backed by the given agent executor and flags.
-func NewChatService(executor *agent.Executor, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags) *ChatService {
-	return &ChatService{executor: executor, globalFlags: globalFlags, askFlags: askFlags}
+func NewChatService(service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags) *ChatService {
+	return &ChatService{service: service, globalFlags: globalFlags, askFlags: askFlags}
 }
 
 // Run starts the interactive chat loop.
@@ -436,7 +418,10 @@ func NewChatService(executor *agent.Executor, globalFlags *flags.GlobalFlags, as
 // Ctrl+C, or when in reaches EOF.
 func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writer) error {
 	cfg := BuildAgentConfigFromFlags(s.globalFlags, s.askFlags, nil, "")
-	sessionID, err := s.executor.NewChatSessionID(cfg)
+	if s.service == nil {
+		return fmt.Errorf("session service is not configured")
+	}
+	sessionID, err := s.service.NewSessionID(ctx, *cfg)
 	if err != nil {
 		return fmt.Errorf("create chat session: %w", err)
 	}
@@ -448,7 +433,7 @@ func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writ
 		return fmt.Errorf("write chat banner separator: %w", err)
 	}
 
-	model := NewChatModel(s.executor, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
+	model := NewChatModel(s.service, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
 	p := tea.NewProgram(model,
 		tea.WithInput(in),
 		tea.WithOutput(out),

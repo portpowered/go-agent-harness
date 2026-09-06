@@ -1,14 +1,19 @@
 package agentruntime
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 var (
@@ -42,11 +47,11 @@ func roomManifestHasTools(manifest room.Manifest) bool {
 	return false
 }
 
-// newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy loads the config
-// once and creates a fresh registry for every participant, scoped to the
-// given filesystem policy. A fresh full registry is used as the source so
-// selected tool objects, including any mutable callback state, are never
-// shared between room participants.
+// newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy loads the host
+// config once and resolves a fresh runtime tools capability for every
+// participant. The participant allowlist is converted into explicit runtime
+// selections so each capability owns only the tools named by its manifest;
+// the old CLI registry is not used as a second implementation.
 func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir string, policy *tools.FilesystemPolicy) (RoomParticipantToolCapabilitiesFactory, error) {
 	if policy == nil {
 		return nil, fmt.Errorf("resolve filesystem scope: policy is nil")
@@ -59,28 +64,65 @@ func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir string
 	if err != nil {
 		return nil, fmt.Errorf("load room tool config: %w", err)
 	}
+	service := runtimeToolsWire.NewService()
+	skillRoots := roomRuntimeSkillRoots(storage, policy)
 
 	return func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
-		available := tools.NewToolRegistryFromConfigWithPolicy(cfg, policy)
-		selected := tools.NewEmptyToolRegistry()
-		for _, name := range participant.Tools {
-			tool, ok := available.Get(name)
-			if !ok {
-				return RoomParticipantToolCapabilities{}, fmt.Errorf(
-					"participant %q requested tool %q, but it is not available in the configured tool registry",
-					participant.ID,
-					name,
-				)
-			}
-			if err := selected.Register(tool); err != nil {
-				return RoomParticipantToolCapabilities{}, fmt.Errorf("select tool %q for participant %q: %w", name, participant.ID, err)
-			}
+		capability, err := service.Resolve(context.Background(), runtimeTools.Request{
+			WorkDir:          policy.PrimaryRoot(),
+			AllowPaths:       policy.AdditionalRoots(),
+			SkillRoots:       skillRoots,
+			Selections:       roomRuntimeToolSelections(cfg, participant),
+			Exec:             roomRuntimeExecPolicy(cfg),
+			DiagnosticWriter: os.Stderr,
+			UseDefaultTool:   true,
+		})
+		if err != nil {
+			return RoomParticipantToolCapabilities{}, fmt.Errorf("resolve tools for participant %q: %w", participant.ID, err)
 		}
 		return RoomParticipantToolCapabilities{
-			Executor:    tools.NewRegistryExecutor(selected),
-			Definitions: orderedRoomToolDefinitions(selected.ToAgentLoopDefs(), participant.Tools),
+			Executor:    capability.Executor,
+			Definitions: orderedRoomToolDefinitions(capability.Definitions, participant.Tools),
 		}, nil
 	}, nil
+}
+
+func roomRuntimeToolSelections(cfg *config.Config, participant room.Participant) []runtimeTools.ToolSelection {
+	requested := make(map[string]struct{}, len(participant.Tools))
+	for _, name := range participant.Tools {
+		requested[name] = struct{}{}
+	}
+	selections := make([]runtimeTools.ToolSelection, 0, len(config.DefaultToolIDs))
+	for _, id := range config.DefaultToolIDs {
+		_, selected := requested[id]
+		if cfg != nil && !cfg.Tools.ToolEnabled(id) {
+			selected = false
+		}
+		selections = append(selections, runtimeTools.ToolSelection{ID: id, Enabled: selected})
+	}
+	return selections
+}
+
+func roomRuntimeExecPolicy(cfg *config.Config) runtimeTools.ExecPolicy {
+	if cfg == nil {
+		return runtimeTools.ExecPolicy{}
+	}
+	return runtimeTools.ExecPolicy{
+		EnableDenyPatterns: cfg.Tools.Exec.EnableDenyPatterns,
+		CustomDenyPatterns: append([]string(nil), cfg.Tools.Exec.CustomDenyPatterns...),
+		Configured:         true,
+	}
+}
+
+func roomRuntimeSkillRoots(storage *config.ConfigStorage, policy *tools.FilesystemPolicy) []runtimeTools.SkillRoot {
+	roots := make([]runtimeTools.SkillRoot, 0, 2)
+	if policy != nil && policy.PrimaryRoot() != "" {
+		roots = append(roots, runtimeTools.SkillRoot{Directory: filepath.Join(policy.PrimaryRoot(), "skills")})
+	}
+	if storage != nil && storage.Path() != "" {
+		roots = append(roots, runtimeTools.SkillRoot{Directory: filepath.Join(filepath.Dir(storage.Path()), "skills")})
+	}
+	return roots
 }
 
 func orderedRoomToolDefinitions(definitions []messages.ToolDefinition, names []string) []messages.ToolDefinition {

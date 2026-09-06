@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -23,11 +24,12 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -404,12 +406,13 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	}
 	sessionRoot := sessionApp.Generate()
 	sessionRoot.SetOut(io.Discard)
+	capturePath := writeSyntheticRealtimeCapture(t)
 	sessionRoot.SetArgs([]string{
-		"session", "--replay", "synthetic.json",
+		"session", "--replay", capturePath,
 		"--audio-in-device", "virtual:input",
-		"--audio-out-device", "default",
+		"--audio-out-device", "virtual:output",
 	})
-	if err := sessionRoot.Execute(); err == nil || !errors.Is(err, servicetest.ErrRTCSessionMediaUnavailable) {
+	if err := sessionRoot.Execute(); err == nil || !errors.Is(err, runtimeSession.ErrLiveMediaUnavailable) {
 		t.Fatalf("composed session error = %v, want RTC media capability error after preflight", err)
 	}
 	if len(registry.opened) != 2 || registry.opened[0] != "virtual:input" || registry.opened[1] != "virtual:output" {
@@ -418,6 +421,37 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	if got := inner.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
 		t.Fatalf("composed session registry observations = %+v, want two opens and releases", got)
 	}
+}
+
+func writeSyntheticRealtimeCapture(t *testing.T) string {
+	t.Helper()
+	capture, err := gatewaytesting.SealSessionCapture(gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
+		Records: []gatewaytesting.CapturedSessionEvent{
+			{
+				Sequence: 1, Direction: gatewaytesting.DirectionClientToServer, Type: "session.update",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"audio":{"input":{"format":{"type":"audio/pcm","rate":16000,"channels":1}},"output":{"format":{"type":"audio/pcm","rate":16000,"channels":1}}}}}`),
+			},
+			{
+				Sequence: 2, Direction: gatewaytesting.DirectionServerToClient, Type: "session.created",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.created"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seal synthetic realtime capture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "synthetic.json")
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal synthetic realtime capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write synthetic realtime capture: %v", err)
+	}
+	return path
 }
 
 type trackingDeviceRegistry struct {
@@ -575,91 +609,7 @@ func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	for _, definition := range livePortDefinitions() {
 		definition := definition
 		t.Run(definition.descriptor.Name, func(t *testing.T) {
-			replacement := replacementForPortType(t, definition.descriptor.Type)
-			swaps := []PortSwap{{Name: definition.descriptor.Name, Value: replacement}}
-			expectedSwaps := map[string]any{definition.descriptor.Name: replacement}
-			var fixtureInferencer *recordingInferencer
-			if definition.descriptor.Type == reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem() {
-				fixtureInferencer = toolCallingInferencer()
-				swaps = append([]PortSwap{{Name: PortInferencer, Value: fixtureInferencer}}, swaps...)
-				expectedSwaps[PortInferencer] = fixtureInferencer
-			}
-
-			var observation assemblyObservation
-			root, err := initializeAgentCLIWithPorts(true, observation.record, swaps...)
-			if err != nil {
-				t.Fatalf("InitializeMockAgentCLIWithPorts(%q): %v", definition.descriptor.Name, err)
-			}
-			if root == nil {
-				t.Fatalf("InitializeMockAgentCLIWithPorts(%q) returned nil root", definition.descriptor.Name)
-			}
-			if observation.calls != 1 {
-				t.Fatalf("assembly boundary calls for %q = %d, want exactly 1", definition.descriptor.Name, observation.calls)
-			}
-			for _, liveDefinition := range livePortDefinitions() {
-				name := liveDefinition.descriptor.Name
-				got := liveDefinition.value(&observation.values)
-				if expected, replaced := expectedSwaps[name]; replaced {
-					if got != expected {
-						t.Fatalf("assembly boundary value for %q changed identity: got %T/%p want %T/%p", name, got, got, expected, expected)
-					}
-					if calls := observation.values.defaultCalls[name]; calls != 0 {
-						t.Fatalf("displaced %q default constructor calls = %d, want exactly 0", name, calls)
-					}
-					continue
-				}
-				if liveDefinition.descriptor.Required && isNilPort(got) {
-					t.Fatalf("unswapped required port %q has no valid default", name)
-				}
-				if got != nil && !reflect.TypeOf(got).Implements(liveDefinition.descriptor.Type) {
-					t.Fatalf("unswapped port %q has type %T, want %v", name, got, liveDefinition.descriptor.Type)
-				}
-				if calls := observation.values.defaultCalls[name]; calls != 1 {
-					t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", name, calls)
-				}
-			}
-
-			switch definition.descriptor.Type {
-			case reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem():
-				if err := executeAskCommand(t, root); err != nil {
-					t.Fatalf("root ask for %q: %v", definition.descriptor.Name, err)
-				}
-				if got := replacement.(*recordingToolExecutor).calls; got != 1 {
-					t.Fatalf("selected %q replacement calls = %d, want exactly 1", definition.descriptor.Name, got)
-				}
-				if fixtureInferencer.calls != 2 {
-					t.Fatalf("fixture inferencer calls = %d, want the tool turn and final turn", fixtureInferencer.calls)
-				}
-			case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
-				if err := executeAskCommand(t, root); err != nil {
-					t.Fatalf("root ask for %q: %v", definition.descriptor.Name, err)
-				}
-				if got := replacement.(*recordingInferencer).calls; got != 1 {
-					t.Fatalf("selected %q replacement calls = %d, want exactly 1", definition.descriptor.Name, got)
-				}
-			case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
-				if err := executeSessionCommand(t, root, true); err != nil {
-					t.Fatalf("root session for %q: %v", definition.descriptor.Name, err)
-				}
-				if got := replacement.(*recordingSessionInferencer).connects; got != 1 {
-					t.Fatalf("selected %q replacement connects = %d, want exactly 1", definition.descriptor.Name, got)
-				}
-			case reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
-				reflect.TypeOf((*AudioSource)(nil)).Elem(),
-				reflect.TypeOf((*AudioSink)(nil)).Elem(),
-				reflect.TypeOf((*Clock)(nil)).Elem(),
-				reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem(),
-				reflect.TypeOf((*MetricSampler)(nil)).Elem(),
-				reflect.TypeOf((*Logger)(nil)).Elem(),
-				reflect.TypeOf((*transport.Dialer)(nil)).Elem():
-				if definition.descriptor.Name == PortTransportDialer {
-					if got := replacement.(*recordingDialer).dials.Load(); got != 0 {
-						t.Fatalf("selected %q replacement was dialed during construction: %d", definition.descriptor.Name, got)
-					}
-				}
-			default:
-				t.Fatalf("no root-level observation for live port type %v", definition.descriptor.Type)
-			}
+			testLivePortSwap(t, definition)
 		})
 	}
 }
@@ -673,16 +623,16 @@ func TestCompositionValuesWithPorts_SkipsDisplacedDefaultConstructors(t *testing
 			for index := range definitions {
 				name := definitions[index].descriptor.Name
 				factory := definitions[index].defaultValue
-				definitions[index].defaultValue = func(registry *tools.ToolRegistry) any {
+				definitions[index].defaultValue = func(defaults toolDefaults) any {
 					defaultCalls[name]++
-					return factory(registry)
+					return factory(defaults)
 				}
 			}
 
 			replacement := replacementForPortType(t, selected.descriptor.Type)
 			values, err := compositionValuesWithPorts(
 				definitions,
-				nil,
+				toolDefaults{executor: &recordingToolExecutor{}},
 				[]PortSwap{NewPortSwap(selected.descriptor.Name, replacement)},
 			)
 			if err != nil {
@@ -852,66 +802,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 			continue
 		}
 		t.Run(definition.descriptor.Name, func(t *testing.T) {
-			switch definition.descriptor.Type {
-			case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
-				t.Run("unavailable_without_option", func(t *testing.T) {
-					root, err := composeTestAgentCLI(&recordingToolExecutor{})
-					if err != nil || root == nil {
-						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
-					}
-					err = executeAskCommand(t, root)
-					if err == nil || !strings.Contains(err.Error(), "API key") {
-						t.Fatalf("ask without %q did not report the unavailable capability: %v", definition.descriptor.Name, err)
-					}
-				})
-				t.Run("available_with_option", func(t *testing.T) {
-					inferencer := &recordingInferencer{response: "option"}
-					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
-					if err != nil || root == nil {
-						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
-					}
-					if err := executeAskCommand(t, root); err != nil {
-						t.Fatalf("ask with %q: %v", definition.descriptor.Name, err)
-					}
-					if inferencer.calls != 1 {
-						t.Fatalf("supplied %q calls = %d, want exactly 1", definition.descriptor.Name, inferencer.calls)
-					}
-				})
-			case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
-				t.Run("unavailable_without_option", func(t *testing.T) {
-					root, err := composeTestAgentCLI(&recordingToolExecutor{})
-					if err != nil || root == nil {
-						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
-					}
-					err = executeSessionCommand(t, root, false)
-					if err == nil || !strings.Contains(err.Error(), "openai realtime api key is missing") {
-						t.Fatalf("session without %q did not report the unavailable OpenAI capability: %v", definition.descriptor.Name, err)
-					}
-				})
-				t.Run("available_with_option", func(t *testing.T) {
-					sessionInferencer := &recordingSessionInferencer{}
-					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
-					if err != nil || root == nil {
-						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
-					}
-					if err := executeSessionCommand(t, root, true); err != nil {
-						t.Fatalf("session with %q: %v", definition.descriptor.Name, err)
-					}
-					if sessionInferencer.connects != 1 {
-						t.Fatalf("supplied %q connects = %d, want exactly 1", definition.descriptor.Name, sessionInferencer.connects)
-					}
-				})
-			case reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem():
-				t.Run("available_with_option", func(t *testing.T) {
-					observer := recordingSessionRuntimeObserver{}
-					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionRuntimeObserver(observer))
-					if err != nil || root == nil {
-						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
-					}
-				})
-			default:
-				t.Fatalf("no runtime optional-capability observation for %v", definition.descriptor.Type)
-			}
+			testOptionalCapability(t, definition)
 		})
 	}
 }

@@ -1,15 +1,18 @@
 package wire
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	"reflect"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -271,9 +274,10 @@ func ComposeAgentCLI(
 		return nil, err
 	}
 
-	// The registry is an internal source of tool definitions. It is not a
-	// caller-facing dependency bag and is created only after validation.
-	registry := tools.NewToolRegistry()
+	toolDefaults, err := newToolDefaults()
+	if err != nil {
+		return nil, err
+	}
 	return assembleAgentCLI(
 		values.toolExecutor,
 		values.transportDialer,
@@ -284,7 +288,7 @@ func ComposeAgentCLI(
 		values.runtimeObserver,
 		values.metricSampler,
 		values.logger,
-		services.DefaultToolDefs(registry),
+		toolDefaults.definitions,
 		values.inferencer,
 		values.sessionInferencer,
 		values.rtcComponents,
@@ -352,8 +356,11 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 	if err := validatePortSwaps(definitions, swaps); err != nil {
 		return nil, err
 	}
-	registry := tools.NewToolRegistry()
-	values, err := compositionValuesWithPorts(definitions, registry, swaps)
+	toolDefaults, err := newToolDefaults()
+	if err != nil {
+		return nil, err
+	}
+	values, err := compositionValuesWithPorts(definitions, toolDefaults, swaps)
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +374,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		values.runtimeObserver,
 		values.metricSampler,
 		values.logger,
-		services.DefaultToolDefs(registry),
+		toolDefaults.definitions,
 		values.inferencer,
 		values.sessionInferencer,
 		values.rtcComponents,
@@ -386,7 +393,30 @@ func withDefaultCallCounts(observer assemblyObserver, defaultCalls map[string]in
 	}
 }
 
-func compositionValuesWithPorts(definitions []portDefinition, registry *tools.ToolRegistry, swaps []PortSwap) (compositionValues, error) {
+type toolDefaults struct {
+	executor    messages.ToolExecutor
+	definitions []messages.ToolDefinition
+}
+
+// newToolDefaults resolves the reusable runtime's built-in surface at the CLI
+// composition edge. The CLI owns the process working directory resolution;
+// the reusable service never infers host paths from ambient process state.
+func newToolDefaults() (toolDefaults, error) {
+	workdir, err := hostServices.ResolveCLIWorkDir(flags.NewGlobalFlags())
+	if err != nil {
+		return toolDefaults{}, fmt.Errorf("resolve tool working directory: %w", err)
+	}
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        workdir,
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		return toolDefaults{}, fmt.Errorf("resolve default tools: %w", err)
+	}
+	return toolDefaults{executor: capability.Executor, definitions: capability.Definitions}, nil
+}
+
+func compositionValuesWithPorts(definitions []portDefinition, defaults toolDefaults, swaps []PortSwap) (compositionValues, error) {
 	if err := validatePortSwaps(definitions, swaps); err != nil {
 		return compositionValues{}, err
 	}
@@ -404,7 +434,7 @@ func compositionValuesWithPorts(definitions []portDefinition, registry *tools.To
 			continue
 		}
 		values.defaultCalls[definition.descriptor.Name]++
-		definition.assign(&values, definition.defaultValue(registry))
+		definition.assign(&values, definition.defaultValue(defaults))
 	}
 	for _, swap := range swaps {
 		definition, _ := findPortDefinitionIn(definitions, swap.Name)
@@ -457,192 +487,7 @@ type portDefinition struct {
 	descriptor   PortDescriptor
 	value        func(*compositionValues) any
 	assign       func(*compositionValues, any)
-	defaultValue func(*tools.ToolRegistry) any
-}
-
-// livePortDefinitions is the sole live port representation. Validation,
-// public discovery, and mock swapping all iterate this function's result.
-func livePortDefinitions() []portDefinition {
-	return []portDefinition{
-		{
-			descriptor: PortDescriptor{
-				Name:     PortMetricSampler,
-				Required: true,
-				Type:     reflect.TypeOf((*MetricSampler)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.metricSampler },
-			defaultValue: func(*tools.ToolRegistry) any { return observability.NewNoopMetricSampler() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.metricSampler = nil
-					return
-				}
-				values.metricSampler = value.(MetricSampler)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortLogger,
-				Required: true,
-				Type:     reflect.TypeOf((*Logger)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.logger },
-			defaultValue: func(*tools.ToolRegistry) any { return observability.NewNoopLogger() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.logger = nil
-					return
-				}
-				values.logger = value.(Logger)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortToolExecutor,
-				Required: true,
-				Type:     reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem(),
-			},
-			value: func(values *compositionValues) any { return values.toolExecutor },
-			defaultValue: func(registry *tools.ToolRegistry) any {
-				return tools.NewRegistryExecutor(registry)
-			},
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.toolExecutor = nil
-					return
-				}
-				values.toolExecutor = value.(messages.ToolExecutor)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortTransportDialer,
-				Required: true,
-				Type:     reflect.TypeOf((*transport.Dialer)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.transportDialer },
-			defaultValue: func(*tools.ToolRegistry) any { return defaultTransportDialer() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.transportDialer = nil
-					return
-				}
-				values.transportDialer = value.(transport.Dialer)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortInferencer,
-				Required: false,
-				Type:     reflect.TypeOf((*messages.Inferencer)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.inferencer },
-			defaultValue: func(*tools.ToolRegistry) any { return nil },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.inferencer = nil
-					return
-				}
-				values.inferencer = value.(messages.Inferencer)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortSessionInferencer,
-				Required: false,
-				Type:     reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.sessionInferencer },
-			defaultValue: func(*tools.ToolRegistry) any { return nil },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.sessionInferencer = nil
-					return
-				}
-				values.sessionInferencer = value.(messages.SessionInferencer)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortDeviceRegistry,
-				Required: true,
-				Type:     reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.deviceRegistry },
-			defaultValue: func(*tools.ToolRegistry) any { return defaultDeviceRegistry() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.deviceRegistry = nil
-					return
-				}
-				values.deviceRegistry = value.(DeviceRegistry)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortAudioSource,
-				Required: true,
-				Type:     reflect.TypeOf((*AudioSource)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.audioSource },
-			defaultValue: func(*tools.ToolRegistry) any { return defaultAudioSource() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.audioSource = nil
-					return
-				}
-				values.audioSource = value.(AudioSource)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortAudioSink,
-				Required: true,
-				Type:     reflect.TypeOf((*AudioSink)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.audioSink },
-			defaultValue: func(*tools.ToolRegistry) any { return defaultAudioSink() },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.audioSink = nil
-					return
-				}
-				values.audioSink = value.(AudioSink)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortClock,
-				Required: true,
-				Type:     reflect.TypeOf((*Clock)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.clockSource },
-			defaultValue: func(*tools.ToolRegistry) any { return clock.Ensure(nil) },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.clockSource = nil
-					return
-				}
-				values.clockSource = value.(Clock)
-			},
-		},
-		{
-			descriptor: PortDescriptor{
-				Name:     PortSessionRuntimeObserver,
-				Required: false,
-				Type:     reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem(),
-			},
-			value:        func(values *compositionValues) any { return values.runtimeObserver },
-			defaultValue: func(*tools.ToolRegistry) any { return nil },
-			assign: func(values *compositionValues, value any) {
-				if value == nil {
-					values.runtimeObserver = nil
-					return
-				}
-				values.runtimeObserver = value.(SessionRuntimeObserver)
-			},
-		},
-	}
+	defaultValue func(toolDefaults) any
 }
 
 // normalizeClock is called only by composition entry points. Named swaps are

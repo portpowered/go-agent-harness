@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -177,8 +178,7 @@ type RoomObserver func(RoomResult)
 // SessionFactory or SessionInferencers map is intended for deterministic tests;
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
-	runtimeFactory sessionRuntimeFactory
-	Manifest       room.Manifest
+	Manifest room.Manifest
 	// ReplayPath selects a finalized room evidence directory (or its
 	// run-manifest.json) as the sole source of participant runtime settings.
 	// Replay admission never resolves credentials, live config, host devices,
@@ -206,7 +206,7 @@ type RoomRunOptions struct {
 	// can observe the selected devices and credential provenance without
 	// inspecting or reopening a config file. A nil value preserves direct
 	// manifest-driven service callers.
-	LaunchPlan *RoomLaunchPlan
+	LaunchPlan *runtimeRooms.RoomLaunchPlan
 	// OutputDir enables the durable room evidence bundle. An empty value keeps
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
@@ -292,10 +292,6 @@ type RoomRunOptions struct {
 	// onRoomBoundShutdown is an internal deterministic lifecycle seam used by
 	// package tests to release a response after bound admission has closed.
 	onRoomBoundShutdown func(RoomTerminationReason)
-	// Stream optionally receives the room's diagnostic, transcript, and
-	// lifecycle projections. The broker is observational and never carries raw
-	// audio. Callers that expose it over HTTP own the listener lifecycle.
-	Stream *RoomEventBroker
 }
 
 // RoomOptions is a concise alias for RoomRunOptions.

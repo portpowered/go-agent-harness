@@ -146,7 +146,6 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 				markStartupFailure(capabilityErr)
 				continue
 			}
-			capabilities.Executor = tools.ApplyFilesystemPolicy(capabilities.Executor, filesystemPolicy)
 			staticCapabilities = capabilities
 			sessionOptions.ToolExecutor = staticCapabilities.Executor
 			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(staticCapabilities.Definitions)

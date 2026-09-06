@@ -45,6 +45,7 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	p.logger.Info("openai realtime: websocket connected", logging.Field{Key: "endpoint", Value: safeEndpointForError(endpoint)})
 
 	session := newRealtimeSession(conn, p.logger)
+	session.writeBackpressure = p.sessionWriteBackpressure
 	session.mediaSampleRate = int(config.OutputAudioSampleRate)
 	// Queue any immediate server audio before the read loop starts. A caller
 	// that only consumes the normalized stream releases this speculative queue

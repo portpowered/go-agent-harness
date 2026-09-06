@@ -19,8 +19,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 var (
@@ -106,7 +106,7 @@ func completeMessageCapabilities(session messages.Session) (complete, withoutRes
 }
 
 func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -161,7 +161,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 // without a response request; the finite audio source owns the single
 // end-of-turn commit and response boundary.
 func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -664,10 +664,10 @@ func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
 // failures are captured by the preparer so a provider that cannot inspect
 // images can still continue the session and receive a correlated tool failure.
 func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePlan) messages.ToolExecutor {
-	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, tools.ReadImageToolID) {
+	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts.ToolExecutor
 	}
-	binder, ok := opts.ToolExecutor.(tools.SessionImagePreparerBinder)
+	binder, ok := opts.ToolExecutor.(runtimeTools.SessionImagePreparerBinder)
 	if !ok {
 		return opts.ToolExecutor
 	}
@@ -693,7 +693,7 @@ func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePla
 		metadata = *capabilities
 		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
 	}
-	preparer := tools.ImagePartPreparer(func(paths []string) ([]messages.ImagePart, error) {
+	preparer := runtimeTools.ImagePartPreparer(func(paths []string) ([]messages.ImagePart, error) {
 		if resolveErr != nil {
 			return nil, resolveErr
 		}

@@ -12,11 +12,16 @@ import (
 	sessionservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession"
 	devicesservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices"
 	toolsservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools"
-	serviceRooms "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
+	roomwire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire"
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -34,22 +39,34 @@ func NewDeviceProbeService(registry devicegw.DeviceRegistry) serviceDevices.Devi
 	return devicesservice.New(registry)
 }
 
-// NewRoomService keeps room orchestration and its device registry behind the
-// public room contract. The application graph supplies the registry once.
-func NewRoomService(registry devicegw.DeviceRegistry, clockSource clock.Source, factory agentruntime.SessionRuntimeFactory) serviceRooms.Service {
-	return agentruntime.NewRoomService(registry, clockSource, factory)
+// NewRoomService keeps room orchestration behind the public room contract. The
+// application graph supplies the live session and media ports explicitly;
+// registry remains a host-only input to CLI launch planning.
+func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler) runtimeRooms.Service {
+	return roomwire.NewService(roomwire.Dependencies{Live: live, Media: media, Registry: registry, Clock: clockSource})
 }
 
-var RoomSet = wire.NewSet(NewRoomService)
+// NewRoomServiceWithDevices lets application composition inject the complete
+// device service. The room adapter is constructed in the room service wire
+// package, keeping device registries and gateway workers out of room policy.
+func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler) runtimeRooms.Service {
+	return roomwire.NewService(roomwire.Dependencies{Live: live, Devices: deviceService, Registry: registry, Clock: clockSource})
+}
+
+var RoomSet = wire.NewSet(NewRoomServiceWithDevices) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // NewToolCapabilitiesService keeps session tool composition in the private
 // service implementation while allowing the CLI to provide its browser seam.
-func NewToolCapabilitiesService(staticExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe) serviceTools.Service {
-	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displayProbe)
+func NewToolCapabilitiesService(staticExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service) serviceTools.Service {
+	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeService)
 }
 
-func NewToolCapabilitiesServiceForWire(staticExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface) serviceTools.Service {
-	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displaySurface)
+func NewToolCapabilitiesServiceForWire(_ messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
+	// The reusable tools service is the sole owner of the primitive registry.
+	// The composition root still receives the tool executor for commands that
+	// explicitly replace it, but the session capability path must resolve a
+	// fresh runtime surface from each normalized config snapshot.
+	return toolsservice.New(nil, browserFactory, displaySurface, displaySurface, runtimeService)
 }
 
 // NewSelfPlayService keeps the self-play runtime implementation private while
@@ -60,7 +77,7 @@ func NewSelfPlayService(factory agentruntime.SessionRuntimeFactory, clockSource 
 
 // DeviceSet is the device service's complete provider set. Application Wire
 // composition includes this set alongside the existing registry provider.
-var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeService)
+var DeviceSet = wire.NewSet(NewDeviceService, NewDeviceProbeService, runtimeDevicesWire.NewService) //nolint:gochecknoglobals // immutable Wire provider metadata
 
 // SessionDependencies are the process-scoped seams installed by application
 // Wire. Invocation requests carry values only; runtime and capability owners

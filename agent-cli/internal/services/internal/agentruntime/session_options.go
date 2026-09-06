@@ -289,7 +289,7 @@ type SessionRunOptions struct {
 	// SessionCapabilityCoordinator so planning, runtime, and nested wrappers
 	// cannot close the same capability more than once.
 	CapabilityClose       func() error
-	capabilityCoordinator *SessionCapabilityCoordinator
+	capabilityCoordinator SessionCapabilityCoordinator
 
 	// CancellationIntent carries the CLI-owned, run-scoped SIGINT marker into
 	// terminal accounting. A nil value preserves ordinary caller-cancellation

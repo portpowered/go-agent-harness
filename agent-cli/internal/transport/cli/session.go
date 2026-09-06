@@ -5,19 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -268,13 +270,25 @@ func validateSessionTransport(raw string) (string, error) {
 
 // SessionCommand is the session group (parent command); subcommands are wired in core_router.go.
 type SessionCommand struct {
-	askFlags              *flags.AskFlags
-	globalFlags           *flags.GlobalFlags
-	streamObserver        serviceSession.SessionStreamObserver
-	sessionService        serviceSession.Service
-	selfPlayService       serviceSelfPlay.Service
-	feedbackWarningWriter io.Writer
-	imagePaths            []string
+	askFlags        *flags.AskFlags
+	globalFlags     *flags.GlobalFlags
+	storeFactory    runtimeSession.FileStoreFactory
+	streamObserver  serviceSession.SessionStreamObserver
+	sessionService  serviceSession.Service
+	selfPlayService serviceSelfPlay.Service
+	// liveService and deviceService are the embeddable runtime path used by
+	// production composition for continuous sessions. The legacy service
+	// remains optional so focused CLI tests can inject only the text/session
+	// contract without constructing audio or provider transports.
+	liveService             runtimeSession.LiveService
+	liveReplayService       runtimeReplay.Service
+	deviceService           runtimeDevices.Service
+	fileDeviceService       FileDeviceService
+	recordingService        runtimeRecording.Service
+	liveCapabilities        SessionToolCapabilitiesFactory
+	liveCredentialReference LiveCredentialReference
+	feedbackWarningWriter   io.Writer
+	imagePaths              []string
 }
 
 // sessionVoiceFlagValue validates the public voice flag while Cobra parses
@@ -463,70 +477,20 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
-		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
-			defer func() { runErr = decorateSessionCommandError(runErr) }()
-			selectedTransport, err := validateSessionCommandPreflight(sessionCommandPreflight{
-				cmd: cmd, browserTools: browserFlags.Tools, transport: transport,
-				signaling: signaling, mediaSource: mediaSource, audioInTurnBarge: audioInTurnBarge,
-				audioInTurns: len(audioInTurns), maxDuration: maxDuration,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runSessionCommand(cmd, args, sessionCommandRunState{
+				Prompt: prompt, Voice: voice, ReasoningEffort: reasoningEffort,
+				RecordDirectory: recordDirPath, AudioOutputPath: audioOutPath,
+				TraceAudio: traceAudio, Transport: transport, Signaling: signaling,
+				MediaSource: mediaSource, MaxDuration: maxDuration,
+				WaitForClose: waitForClose, NoInputTranscription: noInputTranscription,
+				ComputerUse: computerUse, ExperimentalTools: experimentalTools,
+				NoTerminalTools: noTerminalTools, AudioInputPath: audioIn,
+				AudioTurns: append([]string(nil), audioInTurns...), AudioTurnBarge: audioInTurnBarge,
+				AudioInterrupts: append([]string(nil), audioInterrupts...), AudioInterruptTool: audioInterruptTool,
+				AudioInputDevice: audioInDevice, AudioOutputDevice: audioOutDevice,
+				AudioDeviceServer: audioDeviceServer, BrowserTools: browserFlags.Tools, BrowserFlags: browserFlags,
 			})
-			if err != nil {
-				return err
-			}
-			hasSessionMode := sessionHasExplicitMode(cmd, args, c.imagePaths)
-			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
-			if err != nil {
-				return err
-			}
-			if !hasSessionMode && !browserToolsAdmission(cmd) && !bareSession {
-				return cmd.Help()
-			}
-			passiveLive := isPassiveLiveInvocation(cmd, args, c.imagePaths)
-			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || passiveLive)
-			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
-			defer stopSignal()
-
-			seed := serviceSession.TextSeed{
-				Value:   prompt,
-				Present: cmd.Flags().Changed("prompt"),
-			}
-			audioInput := sessionAudioInputFromCommand(cmd, audioIn)
-			// Validate command-only combinations before browser setup; ownership transfers to the service coordinator after construction.
-			if len(audioInTurns) > 0 {
-				if audioInput.Present || audioInput.DevicePresent {
-					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
-				}
-				// A replay drives its scheduled audio turns from the recorded
-				// capture rather than a live provider; --record-dir observes a
-				// live recording and is not required to replay one.
-				if recordDirPath == "" && c.askFlags.ReplayCapturePath == "" {
-					return fmt.Errorf("--audio-in-turn requires --record-dir")
-				}
-			}
-			if len(audioInterrupts) == 0 && strings.TrimSpace(audioInterruptTool) != "" {
-				return fmt.Errorf("--audio-interrupt-on-tool requires --audio-interrupt")
-			}
-			request := serviceSession.Request{
-				RecordPath: c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath, ReplayTiming: c.askFlags.ReplayTiming,
-				Provider: c.askFlags.Provider, ProviderProvided: cmd.Flags().Changed("provider"), Model: c.askFlags.Model, ModelProvided: cmd.Flags().Changed("model"),
-				NoInputTranscription: noInputTranscription, APIKey: c.askFlags.APIKey, BaseURL: c.askFlags.BaseURL, ConfigDir: c.globalFlags.ConfigDir(),
-				WorkDir: globalWorkDir(c.globalFlags), AllowPaths: globalAllowPaths(c.globalFlags), Prompt: strings.Join(args, " "),
-				PromptProvided: cmd.Flags().Changed("prompt") || len(args) > 0, Voice: voice, ReasoningEffort: reasoningEffort,
-				Transport: selectedTransport, TransportProvided: cmd.Flags().Changed("transport"), Signaling: signaling, MediaSource: mediaSource,
-				CancellationIntent: cancellationIntent, LoadedConfig: loadedConfig, BrowserToolsEnabled: !bareSession && browserConfigEnablesTools(loadedConfig), BareLive: bareSession || passiveLive,
-				BrowserToolsInteractive: browserToolsInteractive, ToolDiagnostics: sessionToolDiagnosticSink(cmd.ErrOrStderr()),
-				Diagnostics: sessionAudioDiagnosticSink(cmd.ErrOrStderr()), WaitForClose: waitForClose || passiveLive, StreamObserver: c.streamObserver,
-				AudioInTurnBarge: audioInTurnBarge, InteractiveDevices: browserToolsInteractive || passiveLive || bareSession,
-				TraceAudio: traceAudio, RecordDirectory: recordDirPath, AudioOutputPath: audioOutPath, MaxDuration: maxDuration, TextSeed: seed,
-				AudioInput: audioInput, AudioTurns: append([]string(nil), audioInTurns...), AudioInterrupts: append([]string(nil), audioInterrupts...),
-				AudioInterruptTool: audioInterruptTool, SystemPrompt: c.askFlags.SystemPrompt, ImagePaths: append([]string(nil), c.imagePaths...),
-				AudioInputDevice: string(audioInDevice), AudioOutputDevice: string(audioOutDevice), AudioInputDevicePresent: cmd.Flags().Changed("audio-in-device"), AudioOutputDevicePresent: cmd.Flags().Changed("audio-out-device"),
-				AudioDeviceServer: audioDeviceServer, FeedbackWarningWriter: c.feedbackWarningWriter, ComputerUse: computerUse, ExperimentalTools: experimentalTools, NoTerminalTools: noTerminalTools,
-			}
-			if c.sessionService == nil {
-				return fmt.Errorf("session service is not configured")
-			}
-			return c.sessionService.Run(sessionContext, cmd.OutOrStdout(), request)
 		},
 	}
 	c.registerSessionFlags(cmd, sessionFlagTargets{
@@ -663,23 +627,15 @@ func validateSessionMediaSource(transport, source string, provided, audioInProvi
 	return nil
 }
 
-// getSessionStorage resolves workspace from global flags and returns session storage.
-func getSessionStorage(globalFlags *flags.GlobalFlags) (*session.Storage, error) {
-	configDir := globalFlags.ConfigDir()
-	workspaceDir := configDir
-	if workspaceDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get workspace dir: %w", err)
-		}
-		configDir = filepath.Join(home, config.ConfigDirName)
-		workspaceDir = configDir
+// getSessionStorage opens the runtime-owned store for a CLI command. Paths
+// are resolved by the host, while persistence and its codecs remain owned by
+// services/session. A nil factory is retained only for help-only compatibility
+// constructors; executable production commands are always wired with one.
+func getSessionStorage(globalFlags *flags.GlobalFlags, storeFactory runtimeSession.FileStoreFactory) (runtimeSession.ManagedStore, error) {
+	if storeFactory == nil {
+		return nil, errors.New("session file store factory is required")
 	}
-	configDir, err := filepath.Abs(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("get config dir: %w", err)
-	}
-	return session.NewStorageWithWorkspace(configDir, workspaceDir), nil
+	return hostServices.NewSessionStoreWithFactory(globalFlags, storeFactory)
 }
 
 func globalWorkDir(globalFlags *flags.GlobalFlags) string {
@@ -698,12 +654,14 @@ func globalAllowPaths(globalFlags *flags.GlobalFlags) []string {
 
 // SessionShowCommand wraps the session show subcommand.
 type SessionShowCommand struct {
-	flags *flags.GlobalFlags
+	flags        *flags.GlobalFlags
+	storeFactory runtimeSession.FileStoreFactory
 }
 
-// NewSessionShowCommand creates the SessionShowCommand with the given flags.
-func NewSessionShowCommand(flags *flags.GlobalFlags) *SessionShowCommand {
-	return &SessionShowCommand{flags: flags}
+// NewSessionShowCommand composes the session show transport with the
+// runtime-owned durable store.
+func NewSessionShowCommand(flags *flags.GlobalFlags, storeFactory runtimeSession.FileStoreFactory) *SessionShowCommand {
+	return &SessionShowCommand{flags: flags, storeFactory: storeFactory}
 }
 
 // Generate returns the cobra command for session show.
@@ -714,12 +672,12 @@ func (c *SessionShowCommand) Generate() *cobra.Command {
 		Long:  "Load and print the conversation history for the given session.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			storage, err := getSessionStorage(c.flags)
+			storage, err := getSessionStorage(c.flags, c.storeFactory)
 			if err != nil {
 				return err
 			}
 			sessionID := args[0]
-			msgs, err := storage.Load(sessionID)
+			msgs, err := storage.Load(cmd.Context(), sessionID)
 			if err != nil {
 				return err
 			}
@@ -747,17 +705,19 @@ func writeSessionTo(w io.Writer, sessionID string, msgs []messages.Message) erro
 
 // SessionListCommand wraps the session list subcommand.
 type SessionListCommand struct {
-	flags *flags.GlobalFlags
+	flags        *flags.GlobalFlags
+	storeFactory runtimeSession.FileStoreFactory
 }
 
-// NewSessionListCommand creates the SessionListCommand with the given flags.
-func NewSessionListCommand(flags *flags.GlobalFlags) *SessionListCommand {
-	return &SessionListCommand{flags: flags}
+// NewSessionListCommand composes the session list transport with the
+// runtime-owned durable store.
+func NewSessionListCommand(flags *flags.GlobalFlags, storeFactory runtimeSession.FileStoreFactory) *SessionListCommand {
+	return &SessionListCommand{flags: flags, storeFactory: storeFactory}
 }
 
 // Generate returns the cobra command for session list.
 func (c *SessionListCommand) Generate() *cobra.Command {
-	limitValue := session.DefaultSessionListLimit
+	limitValue := runtimeSession.DefaultSessionListLimit
 	sinceValue := ""
 	filterValue := ""
 	cmd := &cobra.Command{
@@ -765,7 +725,7 @@ func (c *SessionListCommand) Generate() *cobra.Command {
 		Short: "List saved sessions",
 		Long: fmt.Sprintf("List session IDs with last modified time, newest first. By default, the %d newest\n"+
 			"matching sessions are shown. Use --limit, --since, and --filter together to narrow the\n"+
-			"result set.", session.DefaultSessionListLimit),
+			"result set.", runtimeSession.DefaultSessionListLimit),
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -773,11 +733,11 @@ func (c *SessionListCommand) Generate() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			storage, err := getSessionStorage(c.flags)
+			storage, err := getSessionStorage(c.flags, c.storeFactory)
 			if err != nil {
 				return err
 			}
-			infos, err := storage.ListWithOptions(options)
+			infos, err := storage.List(cmd.Context(), options)
 			if err != nil {
 				return err
 			}
@@ -793,43 +753,45 @@ func (c *SessionListCommand) Generate() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&limitValue, "limit", limitValue, fmt.Sprintf("Maximum number of sessions to print (1-%d; default %d)", session.MaxSessionListLimit, session.DefaultSessionListLimit))
+	cmd.Flags().IntVar(&limitValue, "limit", limitValue, fmt.Sprintf("Maximum number of sessions to print (1-%d; default %d)", runtimeSession.MaxSessionListLimit, runtimeSession.DefaultSessionListLimit))
 	cmd.Flags().StringVar(&sinceValue, "since", sinceValue, "Include sessions modified at or after this RFC3339 timestamp")
 	cmd.Flags().StringVar(&filterValue, "filter", filterValue, "Case-insensitive literal substring to match in session IDs")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		if strings.Contains(err.Error(), "--limit") {
-			return fmt.Errorf("--limit must be an integer between 1 and %d: %w", session.MaxSessionListLimit, err)
+			return fmt.Errorf("--limit must be an integer between 1 and %d: %w", runtimeSession.MaxSessionListLimit, err)
 		}
 		return err
 	})
 	return cmd
 }
 
-func parseSessionListOptions(limitValue int, sinceValue, filterValue string) (session.SessionListOptions, error) {
-	if limitValue < 1 || limitValue > session.MaxSessionListLimit {
-		return session.SessionListOptions{}, fmt.Errorf("--limit must be between 1 and %d: got %d", session.MaxSessionListLimit, limitValue)
+func parseSessionListOptions(limitValue int, sinceValue, filterValue string) (runtimeSession.SessionListOptions, error) {
+	if limitValue < 1 || limitValue > runtimeSession.MaxSessionListLimit {
+		return runtimeSession.SessionListOptions{}, fmt.Errorf("--limit must be between 1 and %d: got %d", runtimeSession.MaxSessionListLimit, limitValue)
 	}
 
 	var since *time.Time
 	if sinceValue != "" {
 		parsed, parseErr := time.Parse(time.RFC3339, sinceValue)
 		if parseErr != nil {
-			return session.SessionListOptions{}, fmt.Errorf("--since must be an RFC3339 timestamp (for example 2026-08-31T00:00:00Z): %q", sinceValue)
+			return runtimeSession.SessionListOptions{}, fmt.Errorf("--since must be an RFC3339 timestamp (for example 2026-08-31T00:00:00Z): %q", sinceValue)
 		}
 		since = &parsed
 	}
 
-	return session.SessionListOptions{Limit: limitValue, Since: since, Filter: filterValue}, nil
+	return runtimeSession.SessionListOptions{Limit: limitValue, Since: since, Filter: filterValue}, nil
 }
 
 // SessionDeleteCommand wraps the session delete subcommand.
 type SessionDeleteCommand struct {
-	flags *flags.GlobalFlags
+	flags        *flags.GlobalFlags
+	storeFactory runtimeSession.FileStoreFactory
 }
 
-// NewSessionDeleteCommand creates the SessionDeleteCommand with the given flags.
-func NewSessionDeleteCommand(flags *flags.GlobalFlags) *SessionDeleteCommand {
-	return &SessionDeleteCommand{flags: flags}
+// NewSessionDeleteCommand composes the session delete transport with the
+// runtime-owned durable store.
+func NewSessionDeleteCommand(flags *flags.GlobalFlags, storeFactory runtimeSession.FileStoreFactory) *SessionDeleteCommand {
+	return &SessionDeleteCommand{flags: flags, storeFactory: storeFactory}
 }
 
 // Generate returns the cobra command for session delete.
@@ -840,12 +802,12 @@ func (c *SessionDeleteCommand) Generate() *cobra.Command {
 		Long:  "Remove the session file. Use session list to see IDs.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			storage, err := getSessionStorage(c.flags)
+			storage, err := getSessionStorage(c.flags, c.storeFactory)
 			if err != nil {
 				return err
 			}
 			sessionID := args[0]
-			if err := storage.Delete(sessionID); err != nil {
+			if err := storage.Delete(cmd.Context(), sessionID); err != nil {
 				return err
 			}
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted session %s\n", sessionID); err != nil {

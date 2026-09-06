@@ -836,21 +836,7 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 		t.Fatalf("response state after normal next turn = %+v, want completed and uncancelled", state)
 	}
 
-	var nextEnd *messages.MessageEndValue
-	for {
-		delta, ok := runner.DeltaOutbox.Read()
-		if !ok {
-			t.Fatal("next response ended without MESSAGE.END")
-		}
-		if delta.Type == messages.StreamTypeMessageEnd {
-			var ok bool
-			nextEnd, ok = delta.Value.(*messages.MessageEndValue)
-			if !ok {
-				t.Fatalf("next MESSAGE.END value = %T, want *MessageEndValue", delta.Value)
-			}
-			break
-		}
-	}
+	nextEnd := readNextSessionMessageEnd(t, runner.DeltaOutbox)
 	if nextEnd.TerminalReason == messages.TerminalReasonPartialOutput {
 		t.Fatalf("next normal MESSAGE.END retained interrupted terminal reason: %+v", nextEnd)
 	}

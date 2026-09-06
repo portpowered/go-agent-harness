@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 
-	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -22,7 +21,6 @@ import (
 type BrokerToolSet struct {
 	broker      webmcp.Broker
 	definitions []webmcp.BrokerToolDefinition
-	tools       []cliTools.Tool
 	executor    *Executor
 	webCast     bool
 
@@ -44,10 +42,6 @@ func NewBrokerToolSet(broker webmcp.Broker, webCast ...bool) *BrokerToolSet {
 		definitions: definitions,
 		webCast:     castEnabled,
 	}
-	set.tools = make([]cliTools.Tool, 0, len(definitions))
-	for _, definition := range definitions {
-		set.tools = append(set.tools, &brokerTool{set: set, definition: definition})
-	}
 	set.executor = &Executor{set: set}
 	return set
 }
@@ -65,14 +59,6 @@ func NewWebMCPToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
 // NewExecutor creates the direct agent-loop executor for broker.
 func NewExecutor(broker webmcp.Broker, webCast ...bool) *Executor {
 	return NewBrokerToolSet(broker, webCast...).Executor()
-}
-
-// Tools returns the CLI-compatible broker tools in frozen order.
-func (s *BrokerToolSet) Tools() []cliTools.Tool {
-	if s == nil {
-		return nil
-	}
-	return append([]cliTools.Tool(nil), s.tools...)
 }
 
 // Definitions returns the provider-neutral flat definitions used by the
@@ -113,26 +99,6 @@ func (s *BrokerToolSet) FunctionDefinitions() []map[string]any {
 	return s.DefinitionSchemas()
 }
 
-// Registry returns an isolated CLI registry containing only the broker tools.
-// It never mutates a caller's static registry.
-func (s *BrokerToolSet) Registry() (*cliTools.ToolRegistry, error) {
-	registry := cliTools.NewEmptyToolRegistry()
-	if s == nil {
-		return registry, nil
-	}
-	for _, tool := range s.tools {
-		if err := registry.Register(tool); err != nil {
-			return nil, err
-		}
-	}
-	return registry, nil
-}
-
-// NewRegistry is an alias for Registry.
-func (s *BrokerToolSet) NewRegistry() (*cliTools.ToolRegistry, error) {
-	return s.Registry()
-}
-
 // Executor returns the correlated textual executor for the tool set.
 func (s *BrokerToolSet) Executor() *Executor {
 	if s == nil {
@@ -160,41 +126,6 @@ func BrokerToolDefinitions() []map[string]any {
 	return StableDefinitions()
 }
 
-type brokerTool struct {
-	set        *BrokerToolSet
-	definition webmcp.BrokerToolDefinition
-}
-
-func (t *brokerTool) Name() string { return t.definition.Name }
-
-func (t *brokerTool) Description() string { return t.definition.Description }
-
-func (t *brokerTool) Parameters() map[string]any {
-	return cloneMap(t.definition.Parameters)
-}
-
-// Execute keeps the existing CLI Tool contract usable for direct command
-// paths. Failures are ordinary tool messages containing the same envelope as
-// the direct ToolExecutor path.
-func (t *brokerTool) Execute(ctx context.Context, args map[string]any) ([]messages.Message, error) {
-	if t == nil || t.set == nil {
-		encoded, err := disabledEnvelope()
-		if err != nil {
-			return nil, err
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	encoded, imagePart, err := t.set.executeMapRich(ctx, t.definition.Name, args)
-	if err != nil {
-		return nil, err
-	}
-	parts := []messages.ContentPart{messages.TextPart{Text: string(encoded)}}
-	if len(imagePart.Bytes) > 0 {
-		parts = append(parts, imagePart)
-	}
-	return []messages.Message{{Role: messages.RoleTool, ContentParts: parts}}, nil
-}
-
 // Executor adapts a broker to messages.ToolExecutor. Ordinary broker calls
 // return one correlated textual response; show_page additionally preserves
 // its one validated image projection for multimodal providers.
@@ -203,7 +134,6 @@ type Executor struct {
 }
 
 var _ messages.ToolExecutor = (*Executor)(nil)
-var _ cliTools.Tool = (*brokerTool)(nil)
 
 // Execute validates the broker function object before any broker method is
 // called. It returns invalid input as a correlated tool result, not a Go
@@ -265,32 +195,6 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 	}
 	response.Content = string(encoded)
 	return response, nil
-}
-
-func (s *BrokerToolSet) executeMapRich(ctx context.Context, name string, args map[string]any) ([]byte, messages.ImagePart, error) {
-	spec, ok := s.spec(name)
-	if !ok {
-		encoded, err := invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
-		return encoded, messages.ImagePart{}, err
-	}
-	if args == nil {
-		args = map[string]any{}
-	}
-	raw, err := json.Marshal(args)
-	if err != nil {
-		encoded, encodeErr := invalidEnvelope(spec.definition.Parameters, stringValue(nil, "tool_ref"), []webmcp.ToolResultIssue{{Path: "/", Code: "invalid_json"}})
-		return encoded, messages.ImagePart{}, encodeErr
-	}
-	validated, issues := decodeArguments(raw, spec)
-	if len(issues) > 0 {
-		encoded, encodeErr := invalidEnvelope(spec.definition.Parameters, stringValue(validated, "tool_ref"), issues)
-		return encoded, messages.ImagePart{}, encodeErr
-	}
-	if spec.definition.Name == webmcp.ShowPageToolName {
-		return s.capturePageRich(ctx)
-	}
-	encoded, err := s.executeValidated(ctx, spec, validated)
-	return encoded, messages.ImagePart{}, err
 }
 
 func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, args map[string]any) ([]byte, error) {

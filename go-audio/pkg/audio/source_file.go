@@ -18,8 +18,6 @@ import (
 const rawFrameBytes = FrameSize * 2
 
 var (
-	// ErrClosed indicates that an operation was attempted after Close.
-	ErrClosed = errors.New("audio adapter is closed")
 	// ErrInvalidFrameSize indicates that a frame buffer is not FrameSize samples.
 	ErrInvalidFrameSize = errors.New("audio frame has an invalid size")
 	// ErrUnsupportedFormat indicates that a path does not select a supported format.
@@ -189,6 +187,7 @@ type FileSource struct {
 }
 
 var _ AudioSource = (*FileSource)(nil)
+var _ SampleSource = (*FileSource)(nil)
 
 // NewFileSource opens path as a file-backed AudioSource. A path of "-" reads
 // raw PCM16 from stdin. The supplied stdin is caller-owned and is never closed.
@@ -262,6 +261,29 @@ func (s *FileSource) ReadFrame(ctx context.Context, buf []int16) error {
 		return s.readDecodedFrame(buf)
 	}
 	return s.readRawFrame(buf)
+}
+
+// ReadSamples returns up to len(buf) decoded samples without padding a short
+// final chunk. It is intentionally an optional extension to AudioSource so
+// finite consumers can preserve artifact tails while frame-oriented device
+// callers continue using ReadFrame.
+func (s *FileSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	if err := ContextError(ctx); err != nil {
+		return 0, err
+	}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.readStateError(); err != nil {
+		return 0, err
+	}
+	if s.format == formatWAV {
+		return s.readWAVSamples(buf)
+	}
+	return s.readRawSamples(buf)
 }
 
 func (s *FileSource) readDecodedFrame(buf []int16) error {

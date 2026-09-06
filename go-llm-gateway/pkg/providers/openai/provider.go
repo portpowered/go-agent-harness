@@ -39,6 +39,7 @@ type OpenAIProvider struct {
 	realtimeDialer                transport.Dialer
 	realtimeLegacySessionUpdate   bool
 	clientOwnsAudioTurnBoundaries bool
+	sessionWriteBackpressure      bool
 }
 
 var _ providers.Provider = (*OpenAIProvider)(nil)

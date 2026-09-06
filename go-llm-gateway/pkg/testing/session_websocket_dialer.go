@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -17,6 +18,7 @@ import (
 type RecordingWebSocketDialer struct {
 	inner    transport.Dialer
 	startAt  time.Time
+	clock    clock.Source
 	capture  SessionCapture
 	events   []CapturedSessionEvent
 	sequence int
@@ -27,24 +29,11 @@ var _ transport.Dialer = (*RecordingWebSocketDialer)(nil)
 
 // NewRecordingWebSocketDialer wraps a live WebSocket dialer and records
 // raw JSON messages passing through the returned WebSocket connection.
-func NewRecordingWebSocketDialer(inner transport.Dialer, providerName, model string) *RecordingWebSocketDialer {
-	startAt := time.Now().UTC()
-	d := &RecordingWebSocketDialer{
-		inner:   inner,
-		startAt: startAt,
-		events:  make([]CapturedSessionEvent, 0),
-		capture: SessionCapture{
-			Version: SessionCaptureVersion,
-			Provider: SessionProviderMetadata{
-				Name:  providerName,
-				Model: model,
-			},
-			Session: SessionMetadata{
-				StartedAtUTC: startAt.Format(time.RFC3339Nano),
-			},
-			Records: make([]CapturedSessionEvent, 0),
-		},
-	}
+func NewRecordingWebSocketDialer(inner transport.Dialer, providerName, model string, sources ...clock.Source) *RecordingWebSocketDialer {
+	source := captureClock(sources)
+	startAt := source.Now()
+	d := &RecordingWebSocketDialer{inner: inner, clock: source, startAt: startAt, capture: newCaptureEnvelope(startAt)}
+	d.capture.Provider = SessionProviderMetadata{Name: providerName, Model: model}
 	return d
 }
 
@@ -87,7 +76,7 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 		if event.PayloadType == "" {
 			continue
 		}
-		events = append(events, event)
+		events = append(events, cloneCapturedEvent(event))
 	}
 
 	capture := d.capture
@@ -110,7 +99,7 @@ func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payl
 	d.events = append(d.events, CapturedSessionEvent{
 		Sequence:    sequence,
 		Direction:   dir,
-		TimestampMs: time.Since(d.startAt).Milliseconds(),
+		TimestampMs: d.clock.Now().Sub(d.startAt).Milliseconds(),
 		Type:        websocketPayloadType(payload),
 		PayloadType: SessionPayloadTypeWebSocketMessage,
 		Payload:     append([]byte(nil), payload...),
@@ -168,6 +157,7 @@ func (c *recordingWebSocketConn) Close() error {
 type ReplayWebSocketDialer struct {
 	capture        SessionCapture
 	preserveTiming bool
+	clock          clock.TimerSource
 	mu             sync.Mutex
 	conn           *replayWebSocketConn
 	done           chan struct{}
@@ -221,7 +211,7 @@ func NewReplayWebSocketDialerFromCapture(capture SessionCapture, opts ...ReplayW
 			return nil, fmt.Errorf("session capture contains %q payload; expected %q", evt.PayloadType, SessionPayloadTypeWebSocketMessage)
 		}
 	}
-	dialer := &ReplayWebSocketDialer{capture: capture, done: make(chan struct{})}
+	dialer := &ReplayWebSocketDialer{capture: capture, done: make(chan struct{}), clock: clock.Real{}}
 	for _, option := range opts {
 		if option != nil {
 			option(dialer)
@@ -252,7 +242,7 @@ func (d *ReplayWebSocketDialer) WaitForNextOutbound() error {
 func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	events := make([]CapturedSessionEvent, len(d.capture.Records))
 	copy(events, d.capture.Records)
-	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect, d.preserveTiming)
+	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect, d.preserveTiming, d.clock)
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -288,11 +278,12 @@ type replayWebSocketConn struct {
 	preserveTiming     bool
 	timingStartedAt    time.Time
 	firstTimestampMs   int64
+	clock              clock.TimerSource
 }
 
 var _ transport.Conn = (*replayWebSocketConn)(nil)
 
-func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect, preserveTiming bool) *replayWebSocketConn {
+func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect, preserveTiming bool, source clock.TimerSource) *replayWebSocketConn {
 	firstTimestampMs := int64(0)
 	if len(events) > 0 {
 		firstTimestampMs = events[0].TimestampMs
@@ -302,7 +293,8 @@ func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, e
 		done:               done,
 		endsWithDisconnect: endsWithDisconnect,
 		preserveTiming:     preserveTiming,
-		timingStartedAt:    time.Now(),
+		timingStartedAt:    source.Now(),
+		clock:              source,
 		firstTimestampMs:   firstTimestampMs,
 	}
 	conn.cond = sync.NewCond(&conn.mu)
@@ -440,14 +432,14 @@ func (c *replayWebSocketConn) waitForRecordedTimestamp(timestampMs int64) error 
 		return nil
 	}
 	due := c.timingStartedAt.Add(time.Duration(offsetMs) * time.Millisecond)
-	delay := time.Until(due)
+	delay := due.Sub(c.clock.Now())
 	if delay <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(delay)
+	timer := c.clock.NewTimer(delay)
 	defer timer.Stop()
 	select {
-	case <-timer.C:
+	case <-timer.C():
 		return nil
 	case <-c.done:
 		return io.EOF

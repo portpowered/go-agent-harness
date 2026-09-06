@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 const sessionImageToolPathDescription = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
@@ -19,7 +19,7 @@ const sessionImageToolPathDescription = "Session-staged image path(s) (use one o
 // inline image turn still uses the validated parts supplied by the caller;
 // staging is only needed for a later model-issued read_image call.
 func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (SessionRunOptions, func(), error) {
-	if !sessionHasTool(opts.ToolDefinitions, tools.ReadImageToolID) {
+	if !sessionHasTool(opts.ToolDefinitions, runtimeTools.ReadImageToolID) {
 		return opts, func() {}, nil
 	}
 	if len(sourcePaths) != len(parts) {
@@ -112,7 +112,7 @@ func advertiseSessionImagePaths(definitions []messages.ToolDefinition, paths []s
 	advertisement := sessionImageToolPathDescription + strings.Join(paths, "\n- ")
 	updated := messages.CanonicalToolDefinitions(definitions)
 	for index := range updated {
-		if updated[index].Name != tools.ReadImageToolID {
+		if updated[index].Name != runtimeTools.ReadImageToolID {
 			continue
 		}
 		pathParameter := -1

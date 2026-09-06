@@ -7,19 +7,35 @@
 package wire
 
 import (
-	wire2 "github.com/google/wire"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"context"
+	"fmt"
+	wire5 "github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+	wire2 "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	tools2 "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	wire4 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	wire7 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
+	wire6 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	wire8 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	wire3 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"net/http"
 )
 
 // Injectors from wire.go:
@@ -30,42 +46,60 @@ import (
 func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents transports.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, metricSampler, logger, inferencer, sessionInferencer)
-	executor := agent.NewExecutor(toolExecutor, toolDefs, inferencer, v...)
+	fileStoreFactory := wire.NewFileStoreFactory()
+	wireModelValidation := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, metricSampler, logger, inferencer, sessionInferencer)
+	service := provideRecordingService(clockSource)
+	fullService, err := provideProviderService(clockSource, service)
+	if err != nil {
+		return nil, err
+	}
+	providersService := provideProviderServiceRole(fullService)
+	loggingLogger := provideSessionLogger(logger)
+	sessionService := provideTextSessionService(globalFlags, fileStoreFactory, toolExecutor, toolDefs, inferencer, wireModelValidation, providersService, loggingLogger)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
-	askCommand := cli.NewAskCommand(executor, askFlags, loopFlags, globalFlags)
+	askCommand := cli.NewAskCommand(sessionService, askFlags, loopFlags, globalFlags)
 	chatFlags := flags.NewChatFlags()
-	chatCommand := cli.NewChatCommand(executor, askFlags, loopFlags, chatFlags, globalFlags)
+	chatCommand := cli.NewChatCommand(sessionService, askFlags, loopFlags, chatFlags, globalFlags, fileStoreFactory)
 	toolCommand := cli.NewToolCommand(globalFlags)
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	probeCommand := cli.NewProbeCommand()
-	deviceService := wire.NewDeviceService(deviceRegistry)
-	deviceProbeService := wire.NewDeviceProbeService(deviceRegistry)
-	v2 := wire.NewSessionRuntimeFactory()
-	metricsCollector := wire.NewMetricsCollector(clockSource, v2)
+	deviceService := wire2.NewDeviceService(deviceRegistry)
+	deviceProbeService := wire2.NewDeviceProbeService(deviceRegistry)
+	v := wire2.NewSessionRuntimeFactory()
+	metricsCollector := wire2.NewMetricsCollector(clockSource, v)
 	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, deviceProbeService, metricsCollector)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
 	browserFactory := provideSessionBrowserCapabilityFactory()
-	displaySurface := provideSessionDisplaySurface()
-	service := wire.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, displaySurface)
+	v2 := provideSessionDisplaySurface()
+	toolsService := wire3.NewService()
+	service2 := wire2.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, v2, toolsService)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
-	runtime := wire.NewSessionRuntime(clockSource, service, v2, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger)
-	sessionDependencies := provideSessionDependencies(clockSource, service, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
-	sessionService := wire.NewSessionService(sessionDependencies)
+	runtime := wire2.NewSessionRuntime(clockSource, service2, v, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger)
+	sessionDependencies := provideSessionDependencies(clockSource, service2, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
+	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v3 := provideFleetEntryExecutors()
-	probeFleetCommand := cli.NewProbeFleetCommand(sessionService, metricsCollector, v3...)
-	selfplayService := wire.NewSelfPlayService(v2, clockSource)
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionService, selfplayService)
-	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
-	sessionListCommand := cli.NewSessionListCommand(globalFlags)
-	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
-	clockFactory := wire.NewReplayClockFactory()
-	replayService := wire.NewReplayService(clockFactory)
-	sessionReplayCommand := cli.NewSessionReplayCommand(replayService)
-	roomsService := wire.NewRoomService(deviceRegistry, clockSource, v2)
+	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v3...)
+	selfplayService := wire2.NewSelfPlayService(v, clockSource)
+	providersSessionService := provideProviderSessionServiceRole(fullService)
+	wireLiveCredentialVault := provideLiveCredentialVault()
+	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, wireLiveCredentialVault)
+	replayService := provideLiveReplayService()
+	devicesService := wire4.NewService(deviceRegistry)
+	fileDeviceService := provideFileDeviceService(clockSource)
+	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(service2)
+	liveCredentialReference := provideLiveCredentialReference(wireLiveCredentialVault)
+	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, service)
+	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
+	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
+	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
+	clockFactory := wire2.NewReplayClockFactory()
+	service3 := wire2.NewReplayService(clockFactory)
+	sessionReplayCommand := cli.NewSessionReplayCommand(service3)
+	scheduler := provideRoomClock(clockSource)
+	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler)
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
@@ -83,7 +117,11 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 // provider-neutral contracts while leaving runtime side effects lazy until a
 // session actually starts.
 func provideSessionRTCRuntimeFactory(components transports.SessionRTCComponents, metricSampler MetricSampler, logger Logger) transports.SessionRTCRuntimeFactory {
-	return wire.NewSessionRTCRuntimeFactory(components, metricSampler, logger)
+	return wire2.NewSessionRTCRuntimeFactory(components, metricSampler, logger)
+}
+
+type modelValidation struct {
+	relax bool
 }
 
 func provideModelValidation(
@@ -100,7 +138,7 @@ func provideModelValidation(
 	logger Logger,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
-) []bool {
+) modelValidation {
 	if observer != nil {
 		observer(compositionValues{
 			toolExecutor:      toolExecutor,
@@ -116,11 +154,11 @@ func provideModelValidation(
 			sessionInferencer: sessionInferencer,
 		})
 	}
-	return []bool{relaxModelValidation}
+	return modelValidation{relax: relaxModelValidation}
 }
 
 // FlagsSet provides global and command-specific CLI flags.
-var FlagsSet = wire2.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
+var FlagsSet = wire5.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
 
 // provideFleetEntryExecutors keeps the production fleet command on its
 // default transport dispatcher while leaving the executor injectable for
@@ -148,15 +186,148 @@ func provideSessionDisplaySurface() tools2.DisplaySurface {
 	return tools2.NewHostDisplaySurface()
 }
 
-func provideSessionDependencies(clockSource Clock, resolver tools.Service, runtimeFactory transports.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, observer SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, runtime agentruntime.Runtime) wire.SessionDependencies {
-	return wire.SessionDependencies{Clock: clockSource, ToolService: resolver, RuntimeFactory: runtimeFactory, SessionInferencer: inferencer, ToolExecutor: toolExecutor, DeviceRegistry: deviceRegistry, RuntimeObserver: observer, MetricSampler: metricSampler, Logger: logger, Runtime: runtime}
+// provideTextSessionService is the CLI composition edge for the reusable
+// session owner. Global flags are translated by the host resolver and never
+// enter the public runtime request.
+func provideTextSessionService(
+	globalFlags *flags.GlobalFlags,
+	fileStoreFactory session.FileStoreFactory,
+	toolExecutor messages.ToolExecutor,
+	toolDefs []messages.ToolDefinition,
+	inferencer messages.Inferencer,
+	validation modelValidation,
+	providerService providers.Service,
+	loopLogger logging.Logger,
+) session.Service {
+	return wire.NewService(wire.Dependencies{
+		ToolExecutor:    toolExecutor,
+		ToolDefinitions: toolDefs,
+		Inferencer:      inferencer,
+		RelaxValidation: validation.relax,
+		Resolver:        services.NewSessionResolverWithStoreFactory(globalFlags, fileStoreFactory),
+		ProviderService: providerService,
+		Logger:          loopLogger,
+	})
+}
+
+// provideSessionLogger adapts the application's explicit logging port to the
+// neutral loop logger contract. The runtime receives only this narrow port and
+// never discovers the CLI logger or its filesystem policy.
+func provideSessionLogger(logger Logger) logging.Logger {
+	return sessionLoopLogger{sink: logger}
+}
+
+type sessionLoopLogger struct{ sink observability.Logger }
+
+func (l sessionLoopLogger) emit(level, message string, fields []logging.Field) {
+	if l.sink == nil {
+		return
+	}
+	values := make(observability.Fields, len(fields))
+	for _, field := range fields {
+		values[field.Key] = fmt.Sprint(field.Value)
+	}
+	_ = l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values})
+}
+
+func (l sessionLoopLogger) Debug(message string, fields ...logging.Field) {
+	l.emit("debug", message, fields)
+}
+
+func (l sessionLoopLogger) Info(message string, fields ...logging.Field) {
+	l.emit("info", message, fields)
+}
+
+func (l sessionLoopLogger) Warn(message string, fields ...logging.Field) {
+	l.emit("warn", message, fields)
+}
+
+func (l sessionLoopLogger) Error(message string, fields ...logging.Field) {
+	l.emit("error", message, fields)
+}
+
+func (l sessionLoopLogger) Fatal(message string, fields ...logging.Field) {
+	l.emit("fatal", message, fields)
+}
+
+func (l sessionLoopLogger) Panic(message string, fields ...logging.Field) {
+	l.emit("panic", message, fields)
+}
+
+// provideProviderService keeps the concrete provider graph at the host
+// composition edge. The runtime receives only providers.Service and never
+// discovers an HTTP client or credential source on its own.
+func provideRecordingService(source Clock) recording.Service {
+	return wire6.NewService(source)
+}
+
+func provideProviderService(clockSource Clock, recordingService recording.Service) (providers.FullService, error) {
+	timerSource, err := clock.RequireTimerSource(clockSource)
+	if err != nil {
+		return nil, fmt.Errorf("provider clock: %w", err)
+	}
+	return wire7.NewService(wire7.Dependencies{
+		HTTPClient: http.DefaultClient,
+		Recording:  recordingService,
+		Clock:      timerSource,
+	}), nil
+}
+
+func provideProviderServiceRole(service providers.FullService) providers.Service {
+	return service
+}
+
+func provideProviderSessionServiceRole(service providers.FullService) providers.SessionService {
+	return service
+}
+
+// provideRoomClock narrows the shared host clock to the scheduler role needed
+// by room duration and media orchestration. Production clocks implement the
+// complete contract; a timestamp-only test clock leaves rooms unavailable
+// instead of silently changing their timing domain.
+func provideRoomClock(source Clock) clock.Scheduler {
+	if scheduler, ok := source.(clock.Scheduler); ok {
+		return scheduler
+	}
+	return nil
+}
+
+// provideFileDeviceService keeps finite file conversion and pump ownership in
+// the reusable runtime device service. The CLI opens paths into canonical
+// audio ports, then injects those ports at invocation time.
+func provideFileDeviceService(source Clock) cli.FileDeviceService {
+	var scheduler clock.Scheduler
+	if value, ok := source.(clock.Scheduler); ok {
+		scheduler = value
+	}
+	return cli.FileDeviceService{Service: wire4.NewFileService(), Scheduler: scheduler}
+}
+
+func provideLiveReplayService() replay.Service {
+	return wire8.NewService()
+}
+
+func provideSessionDependencies(clockSource Clock, resolver tools.Service, runtimeFactory transports.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, observer SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, runtime agentruntime.Runtime) wire2.SessionDependencies {
+	return wire2.SessionDependencies{Clock: clockSource, ToolService: resolver, RuntimeFactory: runtimeFactory, SessionInferencer: inferencer, ToolExecutor: toolExecutor, DeviceRegistry: deviceRegistry, RuntimeObserver: observer, MetricSampler: metricSampler, Logger: logger, Runtime: runtime}
 }
 
 // CliSet provides CLI commands, router, and root.
-var CliSet = wire2.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire.DeviceSet, wire.RoomSet, wire.SessionSet, wire.NewReplayClockFactory, wire.NewReplayService, wire.NewMetricsCollector, provideSessionBrowserCapabilityFactory,
+var CliSet = wire5.NewSet(
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayClockFactory, wire2.NewReplayService, wire2.NewMetricsCollector, wire3.NewService, wire.NewFileStoreFactory, provideRecordingService,
+	provideSessionBrowserCapabilityFactory,
 	provideSessionDisplaySurface,
-	provideSessionDependencies, wire.NewToolCapabilitiesServiceForWire, cli.NewProbeRunCommandWithDeviceService, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
+	provideTextSessionService,
+	provideSessionLogger,
+	provideProviderService,
+	provideProviderServiceRole,
+	provideProviderSessionServiceRole,
+	provideLiveCredentialVault,
+	provideLiveCredentialReference,
+	provideLiveService,
+	provideFileDeviceService,
+	provideLiveReplayService,
+	provideRoomClock,
+	provideSessionDependencies, wire2.NewToolCapabilitiesServiceForWire, cli.NewProbeRunCommandWithDeviceService, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	provideSessionRTCRuntimeFactory, cli.NewSessionCommand, wire.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

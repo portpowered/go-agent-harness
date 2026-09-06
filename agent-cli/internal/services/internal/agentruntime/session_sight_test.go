@@ -18,6 +18,8 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 func TestSessionToolExecutorScreenFailureUsesTypedEnvelope(t *testing.T) {
@@ -90,15 +92,22 @@ func TestDirectScreenToolErrorResultRetainsOperatorGuidance(t *testing.T) {
 
 func TestComposedScreenToolDeliversOneProjectionAndRemainsUsable(t *testing.T) {
 	surface := &sessionSightDisplaySurface{
-		capability: cliTools.UsableDisplayCapability(1),
+		capability: runtimeTools.DisplayCapability{State: runtimeTools.ScreenCaptureGranted, Available: true, DisplayCount: 1},
 		frame:      image.NewRGBA(image.Rect(0, 0, 2, 2)),
 	}
-	registry := cliTools.NewEmptyToolRegistry()
-	if err := registry.Register(cliTools.NewScreenToolWithDisplaySurface(surface)); err != nil {
-		t.Fatalf("register screen tool: %v", err)
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:              t.TempDir(),
+		DisplaySurface:       surface,
+		DisplayCapability:    surface.capability,
+		DisplayCapabilitySet: true,
+		Selections:           screenOnlyToolSelections(),
+		UseDefaultTool:       true,
+	})
+	if err != nil {
+		t.Fatalf("resolve screen tool: %v", err)
 	}
-	executor := cliTools.NewRegistryExecutor(registry)
-	call := messages.ToolCall{ID: "screen-composed-1", Name: cliTools.ScreenToolID, Arguments: `{}`}
+	executor := capability.Executor
+	call := messages.ToolCall{ID: "screen-composed-1", Name: runtimeTools.ScreenToolID, Arguments: `{}`}
 	response, err := newSessionToolExecutor(executor).Execute(context.Background(), call)
 	if err != nil {
 		t.Fatalf("composed screen execute: %v", err)
@@ -128,18 +137,20 @@ func TestComposedScreenToolDeliversOneProjectionAndRemainsUsable(t *testing.T) {
 func TestComposedPageSightTimeoutDoesNotRecheckHostPermission(t *testing.T) {
 	static := &sessionPageSightTimeoutExecutor{}
 	broker := &sessionPageSightTimeoutExecutor{}
-	surface, err := cliTools.ComposeToolSurface(
-		static,
-		[]messages.ToolDefinition{{Name: cliTools.ScreenToolID}},
-		broker,
-		[]messages.ToolDefinition{{Name: cliTools.PageSightToolID}},
-	)
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		Executor:    static,
+		Definitions: []messages.ToolDefinition{{Name: runtimeTools.ScreenToolID}},
+		Browser: &runtimeTools.BrowserSurface{
+			Executor:    broker,
+			Definitions: []messages.ToolDefinition{{Name: cliTools.PageSightToolID}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("compose page sight surface: %v", err)
 	}
 
-	call := messages.ToolCall{ID: "page-timeout", Name: cliTools.ScreenToolID, Arguments: `{}`}
-	response, err := newSessionToolExecutorWithTimeout(surface.Executor, 10*time.Millisecond).Execute(context.Background(), call)
+	call := messages.ToolCall{ID: "page-timeout", Name: runtimeTools.ScreenToolID, Arguments: `{}`}
+	response, err := newSessionToolExecutorWithTimeout(capability.Executor, 10*time.Millisecond).Execute(context.Background(), call)
 	if err != nil {
 		t.Fatalf("page sight timeout returned Go error: %v", err)
 	}
@@ -164,12 +175,14 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 			},
 		},
 	}
-	surface, err := cliTools.ComposeToolSurface(
-		static,
-		[]messages.ToolDefinition{{Name: cliTools.ScreenToolID, Description: "legacy host capture"}},
-		broker,
-		[]messages.ToolDefinition{{Name: cliTools.PageSightToolID, Description: "selected page capture"}},
-	)
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		Executor:    static,
+		Definitions: []messages.ToolDefinition{{Name: runtimeTools.ScreenToolID, Description: "legacy host capture"}},
+		Browser: &runtimeTools.BrowserSurface{
+			Executor:    broker,
+			Definitions: []messages.ToolDefinition{{Name: cliTools.PageSightToolID, Description: "selected page capture"}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("compose page sight surface: %v", err)
 	}
@@ -179,14 +192,14 @@ func TestRunAgentLoopSession_PageSightUsesOneSourceForSuccessiveQuestions(t *tes
 		out,
 		"page sight continuation",
 		"",
-		scriptedTurn{events: toolCallEvents("broad-page-call", cliTools.ScreenToolID, `{}`)},
+		scriptedTurn{events: toolCallEvents("broad-page-call", runtimeTools.ScreenToolID, `{}`)},
 		scriptedTurn{events: toolCallEvents("literal-page-call", cliTools.PageSightToolID, `{}`), after: `"source":"browser_page"`},
 	)
 	if err := runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
 		MaxDuration:     2 * time.Second,
 		WaitForClose:    true,
-		ToolExecutor:    surface.Executor,
-		ToolDefinitions: surface.Definitions,
+		ToolExecutor:    capability.Executor,
+		ToolDefinitions: capability.Definitions,
 	}); err != nil {
 		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
 	}
@@ -271,7 +284,7 @@ func TestSessionDirectoryRecordingPersistsScreenCaptureEvidence(t *testing.T) {
 }
 
 type sessionSightDisplaySurface struct {
-	capability cliTools.DisplayCapability
+	capability runtimeTools.DisplayCapability
 	frame      *image.RGBA
 	captures   int
 }
@@ -301,9 +314,9 @@ func (e *sessionSightPageExecutor) ScreenRecordingPermissionRecheckSupported() b
 	return true
 }
 
-func (e *sessionSightPageExecutor) RecheckScreenRecordingPermission(context.Context) (cliTools.DisplayPermission, error) {
+func (e *sessionSightPageExecutor) RecheckScreenRecordingPermission(context.Context) (runtimeTools.DisplayPermission, error) {
 	e.rechecks++
-	return cliTools.DisplayPermission{State: cliTools.DisplayPermissionGranted}, nil
+	return runtimeTools.DisplayPermission{State: runtimeTools.DisplayPermissionGranted}, nil
 }
 
 func (e *sessionPageSightTimeoutExecutor) Execute(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -316,12 +329,12 @@ func (e *sessionPageSightTimeoutExecutor) ScreenRecordingPermissionRecheckSuppor
 	return true
 }
 
-func (e *sessionPageSightTimeoutExecutor) RecheckScreenRecordingPermission(context.Context) (cliTools.DisplayPermission, error) {
+func (e *sessionPageSightTimeoutExecutor) RecheckScreenRecordingPermission(context.Context) (runtimeTools.DisplayPermission, error) {
 	e.rechecks++
-	return cliTools.DisplayPermission{State: cliTools.DisplayPermissionDenied}, nil
+	return runtimeTools.DisplayPermission{State: runtimeTools.DisplayPermissionDenied}, nil
 }
 
-func (s *sessionSightDisplaySurface) Probe(context.Context) (cliTools.DisplayCapability, error) {
+func (s *sessionSightDisplaySurface) Probe(context.Context) (runtimeTools.DisplayCapability, error) {
 	return s.capability, nil
 }
 
@@ -340,4 +353,16 @@ func (s *sessionSightDisplaySurface) Capture(context.Context, image.Rectangle) (
 
 func stringDigest(digest [sha256.Size]byte) string {
 	return hex.EncodeToString(digest[:])
+}
+
+func screenOnlyToolSelections() []runtimeTools.ToolSelection {
+	selections := make([]runtimeTools.ToolSelection, 0, 13)
+	for _, id := range []string{
+		"exec", "read_file", runtimeTools.ReadImageToolID, "write_file", "edit_file",
+		"append_file", "list_dir", "web_fetch", "web_search", runtimeTools.ScreenToolID,
+		"mouse", "load_skill", "sleep",
+	} {
+		selections = append(selections, runtimeTools.ToolSelection{ID: id, Enabled: id == runtimeTools.ScreenToolID})
+	}
+	return selections
 }
