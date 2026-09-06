@@ -183,6 +183,11 @@ func (h *handle) newDurationTimer() (platformclock.Timer, error) {
 }
 
 func (h *handle) prepareReplayCompletion() {
+	// An explicit capture source owns the invocation boundary; a replay opening
+	// prompt must not cancel a scheduled audio pump before its bytes are sent.
+	if h.captureSourceIsActive() {
+		return
+	}
 	plan := h.request.ReplayPlan
 	if plan != nil && len(plan.AudioTurns) > 0 {
 		return

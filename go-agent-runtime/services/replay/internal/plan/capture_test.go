@@ -89,6 +89,28 @@ func TestPlannerDoesNotWaitForLateSetupAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestInspectCaptureRetainsLifecycleMetadataForCallerDrivenActions(t *testing.T) {
+	path := writePlanCapture(t,
+		clientRecord("session.update", `{"type":"session.update","session":{"audio":{"input":{"format":{"rate":24000}},"output":{"format":{"rate":24000}}}}}`),
+		clientRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}`),
+		clientRecord("response.cancel", `{"type":"response.cancel"}`),
+		serverRecord("session.closed", `{"type":"session.closed"}`),
+	)
+	inspection, err := New().InspectCapture(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.LivePlan == nil {
+		t.Fatal("caller-driven realtime capture lost lifecycle plan metadata")
+	}
+	if !inspection.LivePlan.ProviderCloseExpected || inspection.LivePlan.StopAfterResponse {
+		t.Fatalf("caller-driven lifecycle plan=%+v, want provider-close wait", *inspection.LivePlan)
+	}
+	if inspection.LivePlan.InputAudioSampleRate != 24000 || inspection.LivePlan.OutputAudioSampleRate != 24000 {
+		t.Fatalf("caller-driven lifecycle rates=%+v, want 24 kHz", *inspection.LivePlan)
+	}
+}
+
 func TestPlannerAdmissionPreservesCancellationAndErrors(t *testing.T) {
 	cause := errors.New("host stopped replay")
 	ctx, cancel := context.WithCancelCause(t.Context())

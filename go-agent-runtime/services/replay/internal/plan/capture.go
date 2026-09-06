@@ -67,7 +67,13 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	if errors.Is(err, errSelfDrivingPlanUnavailable) {
 		// A caller-driven capture is still a valid realtime artifact. The host
 		// may provide its own prompt/audio actions; only the optional
-		// self-driving plan is unavailable for this action sequence.
+		// self-driving actions are unavailable. Retain lifecycle metadata so a
+		// recorded provider close remains authoritative after those actions run.
+		metadata, metadataErr := replayLifecyclePlan(capturePath, loaded.Capture.Records)
+		if metadataErr != nil {
+			return inspection, metadataErr
+		}
+		inspection.LivePlan = &metadata
 		return inspection, nil
 	}
 	if err != nil {
@@ -75,6 +81,21 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 	}
 	inspection.LivePlan = &plan
 	return inspection, nil
+}
+
+func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, error) {
+	inputRate, outputRate, err := replayAudioSampleRates(records)
+	if err != nil {
+		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
+	}
+	providerCloseExpected := replayProviderCloseExpected(records)
+	return session.LiveReplayPlan{
+		WaitForSessionUpdated: replayHasSessionUpdated(records),
+		StopAfterResponse:     !providerCloseExpected,
+		ProviderCloseExpected: providerCloseExpected,
+		InputAudioSampleRate:  inputRate,
+		OutputAudioSampleRate: outputRate,
+	}, nil
 }
 
 // LoadLivePlan extracts a narrow self-driving action sequence from an

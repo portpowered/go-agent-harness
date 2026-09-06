@@ -153,6 +153,9 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 	if err != nil {
 		t.Fatalf("load OpenAI replay baseline: %v", err)
 	}
+	// Keep the provider and artifact media at the negotiated 24 kHz boundary so
+	// the byte-exact audio oracle measures ordering and retention, not sink DSP.
+	base.Records[0].Payload = json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime","type":"realtime","audio":{"input":{"format":{"rate":24000}},"output":{"format":{"rate":24000}}}}}`)
 	records := []gwtesting.CapturedSessionEvent{base.Records[0], base.Records[1]}
 	add := func(direction gwtesting.SessionEventDirection, eventType, payload string) {
 		records = append(records, gwtesting.CapturedSessionEvent{
