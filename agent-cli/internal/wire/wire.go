@@ -71,7 +71,7 @@ func provideModelValidation(
 ) modelValidation {
 	if observer != nil {
 		observer(compositionValues{
-			toolExecutor:      toolExecutor,
+			toolExecutor:      unmarkToolExecutorReplacement(toolExecutor),
 			transportDialer:   transportDialer,
 			deviceRegistry:    deviceRegistry,
 			audioSource:       audioSource,
@@ -86,6 +86,13 @@ func provideModelValidation(
 		})
 	}
 	return modelValidation{relax: relaxModelValidation}
+}
+
+func unmarkToolExecutorReplacement(executor messages.ToolExecutor) messages.ToolExecutor {
+	if replacement, ok := executor.(interface{ originalToolExecutor() messages.ToolExecutor }); ok {
+		return replacement.originalToolExecutor()
+	}
+	return executor
 }
 
 // FlagsSet provides global and command-specific CLI flags.

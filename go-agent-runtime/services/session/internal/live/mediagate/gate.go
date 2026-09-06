@@ -260,7 +260,7 @@ func (g *Gate) bridgeInbound(ctx context.Context, source sharedaudio.InboundMedi
 			g.report(err)
 			return
 		}
-		if err := g.inbound.push(frame); err != nil {
+		if err := g.inbound.push(ctx, frame); err != nil {
 			g.report(err)
 			return
 		}

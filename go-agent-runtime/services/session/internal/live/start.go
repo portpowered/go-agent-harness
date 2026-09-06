@@ -105,6 +105,17 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
 	}
+	// An injected session inferencer receives provider configuration through the
+	// same loop boundary as a native provider. Forward the admitted catalog so
+	// fixture providers and shipped sessions observe the exact surface that the
+	// runtime will execute.
+	if h.request.ReplayPlan == nil && h.request.Replay.InputCapturePath == "" && (len(toolDefinitions) > 0 || h.request.Capabilities != nil) {
+		options = append(options, agentloop.WithSessionConfig(messages.SessionUpdateConfig{
+			Instructions: h.request.Instructions,
+			Model:        h.request.Model,
+			Tools:        toolDefinitions,
+		}))
+	}
 	return agentloop.New(options...)
 }
 
@@ -116,6 +127,9 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 // provider apply its own continuation/replay validation and prevents an
 // unavailable call from being mistaken for a clean assistant completion.
 func restrictToolExecutor(executor messages.ToolExecutor, definitions []messages.ToolDefinition, enforceEmpty bool) messages.ToolExecutor {
+	if replacement, ok := executor.(interface{ AllowUnadvertisedTools() bool }); ok && replacement.AllowUnadvertisedTools() {
+		return executor
+	}
 	if executor == nil || (!enforceEmpty && len(definitions) == 0) {
 		return executor
 	}

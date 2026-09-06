@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -130,6 +131,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,
@@ -444,6 +446,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,
@@ -634,6 +637,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,

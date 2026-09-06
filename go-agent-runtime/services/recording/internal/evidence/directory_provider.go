@@ -30,6 +30,15 @@ func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bo
 	path := r.ProviderCapturePath()
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
+		if r != nil && r.options.ProviderCapturePath == "" {
+			// An injected or otherwise provider-independent session may have no
+			// raw wire writer. The private spool path is only a best-effort
+			// location for that optional artifact; absence must remain visible in
+			// metadata without turning an otherwise complete semantic bundle
+			// partial. An explicitly requested --record path is authoritative and
+			// still fails closed when its provider capture is missing.
+			return transcript.RecordingArtifact{}, false, nil
+		}
 		return transcript.RecordingArtifact{}, false, recordingWriteError("finalize provider evidence", err)
 	}
 	if err != nil {

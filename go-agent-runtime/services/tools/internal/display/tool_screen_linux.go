@@ -78,7 +78,7 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, proces
 
 func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("screen capture context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -93,9 +93,9 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, proces
 // screenCaptureDisplayWithContextAndProcess uses scrot to capture the given
 // screen region. Linux currently has one geometry surface, so display is
 // intentionally ignored while the index remains part of the seam.
-func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, process DisplayProcess) (result *image.RGBA, resultErr error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("screen capture context is required")
 	}
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
 		return nil, err
@@ -107,11 +107,10 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
 	path := f.Name()
-	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("close temp file: %w", err)
+	if closeErr := f.Close(); closeErr != nil {
+		return nil, closeScreenCaptureTempFileAfterCloseFailure(path, closeErr)
 	}
-	defer func() { _ = os.Remove(path) }()
+	defer func() { result, resultErr = finishScreenCapture(result, resultErr, path) }()
 
 	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	args := []string{"-a", area, path}
@@ -136,12 +135,12 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	return img, nil
 }
 
-func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, error) {
+func loadPNGasRGBAWithContext(ctx context.Context, path string) (result *image.RGBA, resultErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open screenshot: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() { result, resultErr = finishScreenshotFile(result, resultErr, f) }()
 
 	img, err := png.Decode(contextReader{ctx: ctx, r: f})
 	if err != nil {
@@ -154,4 +153,37 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	rgba := image.NewRGBA(img.Bounds())
 	draw.Draw(rgba, rgba.Bounds(), img, img.Bounds().Min, draw.Src)
 	return rgba, nil
+}
+
+func cleanupScreenCaptureTempFile(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func closeScreenCaptureTempFileAfterCloseFailure(path string, closeErr error) error {
+	removeErr := cleanupScreenCaptureTempFile(path)
+	if removeErr == nil {
+		return fmt.Errorf("close temp file: %w", closeErr)
+	}
+	return errors.Join(
+		fmt.Errorf("close temp file: %w", closeErr),
+		fmt.Errorf("remove temp file: %w", removeErr),
+	)
+}
+
+func finishScreenCapture(result *image.RGBA, resultErr error, path string) (*image.RGBA, error) {
+	removeErr := cleanupScreenCaptureTempFile(path)
+	if removeErr == nil {
+		return result, resultErr
+	}
+	return nil, errors.Join(resultErr, fmt.Errorf("remove screenshot temp file: %w", removeErr))
+}
+
+func finishScreenshotFile(result *image.RGBA, resultErr error, file *os.File) (*image.RGBA, error) {
+	if closeErr := file.Close(); closeErr != nil {
+		return nil, errors.Join(resultErr, fmt.Errorf("close screenshot file: %w", closeErr))
+	}
+	return result, resultErr
 }
