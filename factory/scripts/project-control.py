@@ -38,7 +38,12 @@ def verify_work(root, kind, name, payload):
     if kind == "task":
         packet = task_packet(root, name, contract)
     else:
-        packet = json.loads(payload)
+        # Public Work moves / restored tokens can omit the old input payload.
+        # Project identity is already uniquely fixed by admission and its name.
+        if kind == "project" and not payload.strip():
+            packet = {"project":contract["project"], "contractRevision":contract["contractRevision"]}
+        else:
+            packet = json.loads(payload)
         check_packet(packet, contract)
     return {"status": "admitted", "project": contract["project"], "name": name}
 

@@ -547,7 +547,13 @@ def verify_admission(
         raise ReconcileError("admission contract does not match the project manifest")
     recorded_session, recorded_server = _admission_session_identity(record)
     if recorded_session != session_id:
-        raise ReconcileError("admission is bound to a different session")
+        if session_id != "~default" or recorded_server != server:
+            raise ReconcileError("admission is bound to a different session")
+        # The engine templates its compatibility alias even when the public
+        # session has a UUID. Resolve it on the already-owned endpoint first.
+        observed = _cli_json(_run_command, server, "session", "show", session_id)
+        if not isinstance(observed, Mapping) or observed.get("id") != recorded_session:
+            raise ReconcileError("default session alias does not resolve to the admission owner")
     if recorded_server != server:
         raise ReconcileError("admission is bound to a different server")
     return owner_project

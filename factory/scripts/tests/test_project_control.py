@@ -255,6 +255,12 @@ class ProjectControlAndValidationTests(unittest.TestCase):
         ):
             PROJECT_CONTROL.verify_completion(self.root, "other-project")
 
+    def test_project_reentry_reconstructs_empty_payload_from_durable_owner(self):
+        result = PROJECT_CONTROL.verify_work(self.root, "project", self.fixture.project, "")
+        self.assertEqual(result["status"], "admitted")
+        with self.assertRaises(project_contract.ContractError):
+            PROJECT_CONTROL.verify_work(self.root, "project", "another-project", "")
+
     def test_artifact_tamper_is_rejected_before_staging_and_completion(self):
         packet = self.fixture.validation_packet()
         build_path = Path(packet["build"]["path"])
