@@ -214,13 +214,13 @@ func isExpectedGrokReadClose(err error) bool {
 
 func (s *grokSession) handleReadError(ctx context.Context, err error) {
 	if s.isStopping(ctx) {
-		_ = s.Close()
+		s.closeWithLog()
 		return
 	}
 	if isExpectedGrokReadClose(err) &&
 		!transport.IsInjectedFault(err) &&
 		!errors.Is(err, providers.ErrReplayMismatch) {
-		_ = s.Close()
+		s.closeWithLog()
 		return
 	}
 	s.setTerminalError(err)
@@ -229,7 +229,7 @@ func (s *grokSession) handleReadError(ctx context.Context, err error) {
 		Type:  messages.StreamTypeError,
 		Value: providers.NewStreamTransportErrorValue(err),
 	})
-	_ = s.Close()
+	s.closeWithLog()
 }
 
 func (s *grokSession) handleParseError(raw []byte, err error) {
@@ -251,7 +251,7 @@ func (s *grokSession) handleParseError(raw []byte, err error) {
 			messages.TerminalOutputNone,
 		),
 	})
-	_ = s.Close()
+	s.closeWithLog()
 }
 
 // readLoop reads messages from the WebSocket, translates them to StreamMessages,
@@ -278,7 +278,7 @@ func (s *grokSession) readLoop(ctx context.Context) {
 				case <-s.done:
 					return
 				case <-ctx.Done():
-					_ = s.Close()
+					s.closeWithLog()
 					return
 				default:
 					// Buffer full — drop the message (onDrop callback can log if set).
@@ -300,7 +300,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
 				if s.isStopping(ctx) {
-					_ = s.Close()
+					s.closeWithLog()
 					return
 				}
 				s.setTerminalError(err)
@@ -346,4 +346,10 @@ func (s *grokSession) Close() error {
 		closeErr = s.conn.Close()
 	})
 	return closeErr
+}
+
+func (s *grokSession) closeWithLog() {
+	if err := s.Close(); err != nil {
+		s.logger.Warn("grok: session close error", logging.Field{Key: "error", Value: err})
+	}
 }

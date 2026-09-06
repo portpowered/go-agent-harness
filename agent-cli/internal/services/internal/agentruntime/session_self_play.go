@@ -545,7 +545,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		observer.turnAdmission = func(messages.StreamMessage) bool {
 			return stop.recordTurn(side, opts.MaxTurns)
 		}
-		observer.streamObserver = selfPlayStreamObserver(name, sideEvidence, evidence, stop, output)
+		observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
 
 		err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
 			Prompt:        prompt,
@@ -604,7 +604,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	return result, errors.Join(runErr, finalizeErr)
 }
 
-func selfPlayStreamObserver(name string, sideEvidence *selfPlaySideEvidence, evidence *selfPlayEvidence, stop *selfPlayStopState, output *selfPlayPCMBridge) func(messages.StreamMessage) {
+func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *selfPlaySideEvidence, evidence *selfPlayEvidence, stop *selfPlayStopState, output *selfPlayPCMBridge) func(messages.StreamMessage) {
 	return func(msg messages.StreamMessage) {
 		if err := sideEvidence.observeStreamDelta(msg); err != nil {
 			wrapped := fmt.Errorf("%s stream delta evidence: %w", name, err)
@@ -622,7 +622,7 @@ func selfPlayStreamObserver(name string, sideEvidence *selfPlaySideEvidence, evi
 		if err := output.write(value.Content); err != nil && !isSessionCancellation(err) && !stop.stopped() {
 			stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
 		}
-		if err := sideEvidence.observeAudio(value.Content); err != nil {
+		if err := sideEvidence.observeAudio(ctx, value.Content); err != nil {
 			wrapped := fmt.Errorf("%s WAV evidence: %w", name, err)
 			evidence.fail(wrapped)
 			stop.fail(wrapped)
