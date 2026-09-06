@@ -309,7 +309,10 @@ func TestSemanticSidecarAdmissionDoesNotWaitForDisk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := value.(*sidecarRecorder)
+	r, ok := value.(*sidecarRecorder)
+	if !ok {
+		t.Fatalf("semantic recorder type = %T", value)
+	}
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	r.writeSpool = func(file *os.File, data []byte) error {

@@ -17,6 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
+const semanticSidecarQueueCapacity = 8
+
 // durationSidecarPath is derived from the explicit provider capture path. The
 // sidecar is semantic runtime evidence and therefore lives beside, rather
 // than inside, the raw provider capture. An empty capture path deliberately
@@ -95,7 +97,7 @@ func NewSemanticSidecar(providerCapturePath string) (session.LiveRecorder, error
 	if path == "" {
 		return nil, errors.New("semantic evidence requires a provider capture path")
 	}
-	recorder := &sidecarRecorder{path: path, queue: make(chan sidecarEvent, 8), done: make(chan struct{}), writeSpool: writeAll}
+	recorder := &sidecarRecorder{path: path, queue: make(chan sidecarEvent, semanticSidecarQueueCapacity), done: make(chan struct{}), writeSpool: writeAll}
 	go recorder.run()
 	return recorder, nil
 }
