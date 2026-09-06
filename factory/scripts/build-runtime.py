@@ -37,7 +37,7 @@ def build(source, root):
             for patch in patches:
                 subprocess.run(["git", "-C", str(checkout), "apply", "--check", str(patch)], check=True)
                 subprocess.run(["git", "-C", str(checkout), "apply", str(patch)], check=True)
-            subprocess.run(["go", "build", "-o", str(temporary), "./cmd/factory"], cwd=checkout,
+            subprocess.run(["go", "build", "-trimpath", "-o", str(temporary), "./cmd/factory"], cwd=checkout,
                            env=dict(os.environ, GOWORK="off"), check=True)
         temporary.chmod(0o700)
         proof = {"sourceMode":"git-archive", "sourceRevision":revision, "sha256":digest(temporary),
