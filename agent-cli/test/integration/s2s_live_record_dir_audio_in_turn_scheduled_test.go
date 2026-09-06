@@ -1,13 +1,10 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -27,18 +24,10 @@ import (
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
-		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
-		oaiprovider.WithWebSocketDialer(server),
-		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
-	)
-	if err != nil {
-		t.Fatalf("create hermetic OpenAI scheduled session inferencer: %v", err)
-	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		&mockToolExecutor{},
-		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
-		sessionInferencer,
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortTransportDialer, server),
+		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer should not be called")}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
@@ -48,16 +37,8 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 
 func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
-		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
-		oaiprovider.WithWebSocketDialer(server),
-		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
-	)
-	if err != nil {
-		t.Fatalf("create grounded hermetic OpenAI scheduled session inferencer: %v", err)
-	}
 	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
-		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
+		wire.NewPortSwap(wire.PortTransportDialer, server),
 	)
 	if err != nil {
 		t.Fatalf("initialize grounded production CLI: %v", err)

@@ -27,4 +27,3 @@ func (e *composedToolExecutor) WithSessionImagePreparer(preparer public.ImagePar
 	}
 	return &composedToolExecutor{routes: routes, dynamicFallback: dynamicFallback}
 }
-
