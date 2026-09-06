@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -33,25 +34,27 @@ type directoryRecorder struct {
 	queue chan directoryEvidenceItem
 	done  chan struct{}
 
-	mu           sync.Mutex
-	queuedBytes  int64
-	closed       bool
-	recordErr    error
-	workerErr    error
-	sequence     uint64
-	client       *os.File
-	inputFile    *os.File
-	outputFile   *os.File
-	inputBytes   uint64
-	outputBytes  uint64
-	writeSpool   func(*os.File, []byte) error
-	agent        *os.File
-	clientPath   string
-	agentPath    string
-	inputPaths   []string
-	outputPaths  []string
-	terminal     *transcript.RecordingTerminalSummary
-	conversation evidenceConversation
+	mu             sync.Mutex
+	queuedBytes    int64
+	closed         bool
+	recordErr      error
+	workerErr      error
+	sequence       uint64
+	client         *os.File
+	inputFile      *os.File
+	outputFile     *os.File
+	inputBytes     uint64
+	outputBytes    uint64
+	sidecar        *os.File
+	sidecarWritten bool
+	writeSpool     func(*os.File, []byte) error
+	agent          *os.File
+	clientPath     string
+	agentPath      string
+	inputPaths     []string
+	outputPaths    []string
+	terminal       *transcript.RecordingTerminalSummary
+	conversation   evidenceConversation
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -64,6 +67,7 @@ type directoryEvidenceItem struct {
 	timestamp time.Time
 	payload   []byte
 	frame     sharedaudio.PCMFrame
+	terminal  *messages.SessionCloseValue
 	bytes     int64
 }
 
@@ -202,7 +206,12 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		r.latch(recordingWriteError("encode runtime event", err))
 		return nil
 	}
-	return r.enqueue(directoryEvidenceItem{kind: evidenceEvent, direction: session.LiveRecordAgent, timestamp: event.Timestamp, payload: payload, bytes: int64(len(payload)) * 2})
+	item := directoryEvidenceItem{kind: evidenceEvent, direction: session.LiveRecordAgent, timestamp: event.Timestamp, payload: payload, bytes: int64(len(payload)) * 2}
+	if event.Terminal != nil {
+		terminal := *event.Terminal
+		item.terminal = &terminal
+	}
+	return r.enqueue(item)
 }
 
 func (r *directoryRecorder) retainTerminal(summary *transcript.RecordingTerminalSummary) {
@@ -255,6 +264,9 @@ func (r *directoryRecorder) run() {
 		case evidenceEvent:
 			if r.workerErr == nil {
 				r.workerErr = r.writeTranscript(item, transcript.StreamRuntimeEvent, item.payload)
+			}
+			if r.workerErr == nil && item.terminal != nil {
+				r.workerErr = r.writeDurationSidecarTerminal(item.timestamp, item.terminal)
 			}
 		}
 		r.mu.Lock()

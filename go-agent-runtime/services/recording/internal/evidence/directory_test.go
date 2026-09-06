@@ -185,6 +185,166 @@ func TestDirectoryRecorderMissingTerminalCannotClaimProviderCompletion(t *testin
 	}
 }
 
+func TestDirectoryRecorderWritesOneDurationSidecarTerminal(t *testing.T) {
+	root := t.TempDir()
+	rawPath := filepath.Join(root, "cutoff.session.json")
+	if err := os.WriteFile(rawPath, []byte(`{"provider":"partial"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination:         filepath.Join(root, "recording"),
+		ProviderCapturePath: rawPath,
+		ClockBase:           evidenceTime(),
+		WallClockStart:      evidenceTime(),
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		"fixture", "max_duration", "max_duration", messages.TerminalReason("max_duration"),
+		messages.TerminalProvenanceLoop, messages.TerminalOutputPartial,
+	)
+	for range 2 {
+		if err := r.RecordEvent(t.Context(), session.LiveEvent{Kind: string(session.LiveEventTerminal), Timestamp: evidenceTime(), Terminal: terminal}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	sidecarPath := strings.TrimSuffix(rawPath, filepath.Ext(rawPath)) + ".jsonl"
+	data, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		t.Fatalf("read duration sidecar: %v", err)
+	}
+	count := 0
+	for _, line := range bytes.Split(bytes.TrimSpace(data), []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		value, ok := decodeDurationSidecarTerminal(t, line)
+		if !ok {
+			continue
+		}
+		count++
+		if value.TerminalReason != messages.TerminalReason("max_duration") || value.TerminalProvenance != messages.TerminalProvenanceLoop || value.OutputState != messages.TerminalOutputPartial {
+			t.Fatalf("duration sidecar terminal = %+v", value)
+		}
+	}
+	if count != 1 {
+		t.Fatalf("duration sidecar terminal count = %d, want 1", count)
+	}
+}
+
+func decodeDurationSidecarTerminal(t *testing.T, line []byte) (messages.SessionCloseValue, bool) {
+	t.Helper()
+	record, err := transcript.Decode(line)
+	if err != nil {
+		t.Fatalf("decode duration sidecar: %v", err)
+	}
+	if record.Stream != transcript.StreamRuntimeEvent {
+		t.Fatalf("duration sidecar stream = %q, want %q", record.Stream, transcript.StreamRuntimeEvent)
+	}
+	var event struct {
+		Type  messages.StreamMessageType `json:"type"`
+		Value messages.SessionCloseValue `json:"value"`
+	}
+	if err := json.Unmarshal(record.Payload, &event); err != nil {
+		t.Fatalf("decode duration sidecar payload: %v", err)
+	}
+	if event.Type != messages.StreamTypeSessionClose {
+		return messages.SessionCloseValue{}, false
+	}
+	return event.Value, true
+}
+
+func TestSemanticSidecarPreservesInvalidTimestampAndRuntimeStream(t *testing.T) {
+	root := t.TempDir()
+	rawPath := filepath.Join(root, "cutoff.session.json")
+	r, err := NewSemanticSidecar(rawPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		"fixture", "max_duration", "max_duration", messages.TerminalReason("max_duration"),
+		messages.TerminalProvenanceLoop, messages.TerminalOutputPartial,
+	)
+	if err := r.RecordEvent(t.Context(), session.LiveEvent{Kind: string(session.LiveEventTerminal), Terminal: terminal}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Finalize(t.Context(), nil); err == nil {
+		t.Fatal("missing event timestamp was not preserved as an evidence error")
+	}
+
+	data, err := os.ReadFile(strings.TrimSuffix(rawPath, filepath.Ext(rawPath)) + ".jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := transcript.Decode(bytes.TrimSpace(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Stream != transcript.StreamRuntimeEvent {
+		t.Fatalf("sidecar stream = %q, want %q", record.Stream, transcript.StreamRuntimeEvent)
+	}
+	if record.Tick != 1 {
+		t.Fatalf("sidecar sequence = %d, want 1", record.Tick)
+	}
+	wantTimestamp := time.Time{}.UTC().Format(time.RFC3339Nano)
+	if record.Timestamp != wantTimestamp {
+		t.Fatalf("invalid timestamp = %q, want preserved zero timestamp %q", record.Timestamp, wantTimestamp)
+	}
+	if err := r.RecordMessage(t.Context(), session.LiveRecord{}); !errors.Is(err, recording.ErrLiveEvidenceClosed) {
+		t.Fatalf("post-finalize message admission = %v, want closed error", err)
+	}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{}); !errors.Is(err, recording.ErrLiveEvidenceClosed) {
+		t.Fatalf("post-finalize audio admission = %v, want closed error", err)
+	}
+}
+
+func TestSemanticSidecarAdmissionDoesNotWaitForDisk(t *testing.T) {
+	rawPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	value, err := NewSemanticSidecar(rawPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := value.(*sidecarRecorder)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	r.writeSpool = func(file *os.File, data []byte) error {
+		once.Do(func() { close(entered) })
+		<-release
+		return writeAll(file, data)
+	}
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		"fixture", "max_duration", "max_duration", messages.TerminalReason("max_duration"),
+		messages.TerminalProvenanceLoop, messages.TerminalOutputPartial,
+	)
+	if err := r.RecordEvent(t.Context(), session.LiveEvent{Timestamp: evidenceTime(), Terminal: terminal}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("sidecar worker did not receive terminal")
+	}
+	admitted := make(chan error, 1)
+	go func() { admitted <- r.RecordMessage(t.Context(), session.LiveRecord{}) }()
+	select {
+	case err := <-admitted:
+		if err != nil {
+			t.Fatalf("message admission = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("message admission waited for blocked sidecar disk write")
+	}
+	close(release)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDirectoryRecorderOverflowIsDurablyPartial(t *testing.T) {
 	r := newEvidenceRecorder(t)
 	entered, release := blockEvidenceWriter(r)

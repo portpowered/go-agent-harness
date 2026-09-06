@@ -32,7 +32,7 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	// The drain worker has stopped. No observation can mutate these files or
 	// snapshots, so durability operations never hold the admission mutex.
 	result := errors.Join(r.recordErr, r.workerErr)
-	for _, file := range []*os.File{r.client, r.agent, r.inputFile, r.outputFile} {
+	for _, file := range []*os.File{r.client, r.agent, r.inputFile, r.outputFile, r.sidecar} {
 		if file != nil {
 			result = errors.Join(result, file.Sync(), file.Close())
 		}

@@ -147,6 +147,69 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	}
 }
 
+func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T) {
+	fixture := newMaxDurationWebSocketFixture()
+	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
+	defer server.Close()
+
+	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: os.ErrNotExist},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--record", recordPath,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--base-url", strings.Replace(server.URL, "http://", "ws://", 1) + "/v1/realtime",
+		"--max-duration", "100ms",
+		"respond while streaming",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
+	select {
+	case <-fixture.partialSent:
+	case <-time.After(3 * time.Second):
+		t.Fatal("hermetic provider did not send its mid-response output")
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("record-only max-duration CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("load raw provider capture: %v", err)
+	}
+	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_text.delta") {
+		t.Fatalf("raw capture omitted the observed response delta: %+v", capture.Records)
+	}
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == "response.done" || record.Type == "session.closed") {
+			t.Fatalf("raw capture fabricated provider terminal %q: %+v", record.Type, record)
+		}
+	}
+
+	sidecarPath := strings.TrimSuffix(recordPath, filepath.Ext(recordPath)) + ".jsonl"
+	terminal := readSessionDurationSidecarTerminal(t, sidecarPath)
+	if terminal.count != 1 {
+		t.Fatalf("record-only duration sidecar terminal count = %d, want exactly one", terminal.count)
+	}
+	assertMaxDurationTerminalFields(t, "record-only duration sidecar", terminal.fields)
+}
+
 func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T) {
 	const responseText = "prompt-only response"
 	server := newCLILiveRecordDirPromptServer(responseText)

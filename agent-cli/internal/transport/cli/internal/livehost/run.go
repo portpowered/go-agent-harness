@@ -155,7 +155,7 @@ func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, 
 
 func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
 	if request.RecordDirectory == "" {
-		return nil, nil
+		return openSemanticRecorder(request.RecordPath, deps.RecordingService)
 	}
 	if deps.RecordingService == nil {
 		return nil, errors.New("live recording service is unavailable")
@@ -190,6 +190,20 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 				configureCapturePath(liveRequest, path)
 			}
 		}
+	}
+	return recorder, nil
+}
+
+func openSemanticRecorder(recordPath string, service runtimeRecording.Service) (runtimeSession.LiveRecorder, error) {
+	if recordPath == "" {
+		return nil, nil
+	}
+	if service == nil {
+		return nil, errors.New("live recording service is unavailable")
+	}
+	recorder, err := service.OpenLiveSemanticEvidence(recordPath)
+	if err != nil {
+		return nil, fmt.Errorf("open live semantic recording: %w", err)
 	}
 	return recorder, nil
 }

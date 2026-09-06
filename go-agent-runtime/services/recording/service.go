@@ -57,4 +57,9 @@ type ProviderCapture interface{ ProviderCapturePath() string }
 type Service interface {
 	TrackSession(messages.SessionInferencer, Writer, string) (SessionCapture, error)
 	OpenLiveEvidence(LiveEvidenceOptions) (session.LiveRecorder, error)
+	// OpenLiveSemanticEvidence creates the semantic lifecycle sidecar associated
+	// with an explicitly requested provider capture. The recording service owns
+	// the sibling artifact path and writes only normalized runtime observations;
+	// it never changes or synthesizes the provider capture.
+	OpenLiveSemanticEvidence(string) (session.LiveRecorder, error)
 }

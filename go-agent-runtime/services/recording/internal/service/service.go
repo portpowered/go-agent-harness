@@ -25,3 +25,7 @@ func (*Service) TrackSession(inner messages.SessionInferencer, writer recording.
 func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (session.LiveRecorder, error) {
 	return evidence.New(options, s.clock)
 }
+
+func (*Service) OpenLiveSemanticEvidence(providerCapturePath string) (session.LiveRecorder, error) {
+	return evidence.NewSemanticSidecar(providerCapturePath)
+}
