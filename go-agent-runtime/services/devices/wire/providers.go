@@ -12,9 +12,9 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
-	deviceprobe "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
 	filemedia "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
+	deviceprobe "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )

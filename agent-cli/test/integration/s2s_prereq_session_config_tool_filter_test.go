@@ -125,11 +125,11 @@ tools:
 			args := []string{
 				"--config-dir", configDir,
 				"--workdir", filepath.Dir(toolInput),
+				"--api-key", "unused",
 				"session",
 			}
 			args = append(args, tc.commandArgs...)
 			args = append(args,
-				"--replay", filepath.Join(configDir, "deterministic.session.json"),
 				"--wait-for-close",
 				"invoke", "scripted", "tool",
 			)
@@ -175,8 +175,8 @@ tools:
 				if strings.Contains(resultText.String(), "Slept for 0s (no-op).") {
 					t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText.String())
 				}
-				if len(results) == 0 || !strings.Contains(results[0].Content, `tool "sleep" failed`) {
-					t.Fatalf("disabled sleep result = %#v, want a correlated failure", results)
+				if len(results) == 0 || !isRejectedSleepResult(results[0]) {
+					t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
 				}
 				if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
 					t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
@@ -184,6 +184,10 @@ tools:
 			}
 		})
 	}
+}
+
+func isRejectedSleepResult(result sessionConfigToolResult) bool {
+	return strings.Contains(result.Content, `tool "sleep"`) && !strings.Contains(result.Content, "Slept for 0s (no-op).")
 }
 
 func TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect(t *testing.T) {

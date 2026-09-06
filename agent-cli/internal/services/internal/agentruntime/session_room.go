@@ -237,9 +237,9 @@ type RoomRunOptions struct {
 	Validation       room.ValidationOptions
 	CredentialLookup func(string) (string, bool)
 
-	PairFactory room.PairFactory
-	BaseURL     string
-	ConfigDir   string
+	PairFactory  room.PairFactory
+	BaseURL      string
+	ConfigDir    string
 	ModelCatalog runtimeProviders.ModelCatalog
 	// WorkDir and AllowPaths are the canonical customer filesystem scope for
 	// room participant tools. FilesystemPolicy is the immutable snapshot shared

@@ -5,6 +5,7 @@ package wire
 
 import (
 	"github.com/google/wire"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
@@ -75,12 +76,34 @@ func NewToolCapabilitiesService(staticExecutor messages.ToolExecutor, browserFac
 	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeService)
 }
 
-func NewToolCapabilitiesServiceForWire(_ messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
+func NewToolCapabilitiesServiceForWire(toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
 	// The reusable tools service is the sole owner of the primitive registry.
 	// The composition root still receives the tool executor for commands that
 	// explicitly replace it, but the session capability path must resolve a
 	// fresh runtime surface from each normalized config snapshot.
-	return toolsservice.New(nil, browserFactory, displaySurface, displaySurface, runtimeService)
+	base := toolsservice.New(nil, browserFactory, displaySurface, displaySurface, runtimeService)
+	if replacement, ok := toolExecutor.(interface{ AllowUnadvertisedTools() bool }); ok && replacement.AllowUnadvertisedTools() {
+		return legacyToolCapabilitiesService{base: base, executor: toolExecutor}
+	}
+	return base
+}
+
+// legacyToolCapabilitiesService preserves the executor-only composition API.
+// That API predates the request-scoped capability service and its executor is
+// therefore the complete injected surface; the service still supplies the
+// host's lifecycle and catalog metadata around it.
+type legacyToolCapabilitiesService struct {
+	base     serviceTools.Service
+	executor messages.ToolExecutor
+}
+
+func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
+	capabilities, err := s.base.Resolve(cfg)
+	if err != nil {
+		return serviceTools.Capabilities{}, err
+	}
+	capabilities.Executor = s.executor
+	return capabilities, nil
 }
 
 // NewSelfPlayService keeps the self-play runtime implementation private while

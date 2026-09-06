@@ -13,6 +13,8 @@ type inboundPort struct {
 	done               chan struct{}
 	closeOnce          sync.Once
 	err                error
+	spaceMu            sync.Mutex
+	space              chan struct{}
 	controllerMu       sync.Mutex
 	playbackController sharedaudio.PlaybackController
 	onController       func(sharedaudio.PlaybackController)
@@ -45,7 +47,7 @@ func (p *inboundPort) getPlaybackController() sharedaudio.PlaybackController {
 }
 
 func newInboundPort(capacity int) *inboundPort {
-	return &inboundPort{frames: make(chan sharedaudio.PCMFrame, capacity), done: make(chan struct{})}
+	return &inboundPort{frames: make(chan sharedaudio.PCMFrame, capacity), done: make(chan struct{}), space: make(chan struct{})}
 }
 
 func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
@@ -56,11 +58,13 @@ func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 	// provider's final frame before observing the terminal operation error.
 	select {
 	case frame := <-p.frames:
+		p.notifySpace()
 		return frame, nil
 	default:
 	}
 	select {
 	case frame := <-p.frames:
+		p.notifySpace()
 		return frame, nil
 	case <-p.done:
 		return sharedaudio.PCMFrame{}, p.operationError()
@@ -69,24 +73,70 @@ func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 	}
 }
 
-func (p *inboundPort) push(frame sharedaudio.PCMFrame) error {
+func (p *inboundPort) push(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	if p == nil {
 		return ErrMediaUnavailable
+	}
+	if ctx == nil {
+		return mediaContextRequired()
 	}
 	if len(frame.Samples) > maxMediaFrameSamples {
 		p.fail(ErrMediaQueueFull)
 		return ErrMediaQueueFull
 	}
 	frame.Samples = append([]int16(nil), frame.Samples...)
+	for {
+		select {
+		case <-p.done:
+			return p.operationError()
+		case <-ctx.Done():
+			return ctx.Err()
+		case p.frames <- frame:
+			return nil
+		default:
+			if err := p.waitForSpace(ctx); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// waitForSpace keeps inbound media lossless while the physical device drains
+// the bounded bridge. The provider read loop is allowed to apply transport
+// backpressure, but it must never turn a burst into a fabricated queue-full
+// terminal error.
+func (p *inboundPort) waitForSpace(ctx context.Context) error {
+	if p == nil {
+		return ErrMediaUnavailable
+	}
+	if ctx == nil {
+		return mediaContextRequired()
+	}
+	p.spaceMu.Lock()
+	if len(p.frames) < cap(p.frames) {
+		p.spaceMu.Unlock()
+		return nil
+	}
+	space := p.space
+	p.spaceMu.Unlock()
 	select {
+	case <-space:
+		return nil
 	case <-p.done:
 		return p.operationError()
-	case p.frames <- frame:
-		return nil
-	default:
-		p.fail(ErrMediaQueueFull)
-		return ErrMediaQueueFull
+	case <-ctx.Done():
+		return ctx.Err()
 	}
+}
+
+func (p *inboundPort) notifySpace() {
+	if p == nil {
+		return
+	}
+	p.spaceMu.Lock()
+	close(p.space)
+	p.space = make(chan struct{})
+	p.spaceMu.Unlock()
 }
 
 func (p *inboundPort) fail(err error) {

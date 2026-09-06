@@ -111,7 +111,7 @@ func extractArchiveEntry(reader *tar.Reader, header *tar.Header, destination str
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return os.MkdirAll(target, bootstrapDirectoryMode)
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeReg:
 		return extractArchiveFile(reader, target)
 	case tar.TypeXHeader, tar.TypeXGlobalHeader, tar.TypeGNUSparse:
 		// Git may include PAX metadata records. archive/tar exposes the

@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 // TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale is the customer
@@ -33,7 +34,6 @@ import (
 func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-persisted",
 		Source:   webmcp.DiscoverySourceExplicit,
@@ -157,6 +157,7 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,
