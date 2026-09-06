@@ -46,6 +46,9 @@ hash, plus any checked-in compatibility patch hashes. Build input comes from
 `git archive`, excluding untracked and ignored source files. The older global
 `you` installation failed recording recovery in the launch
 probe; the launcher requires this verified build and prepends it to worker PATH.
+The builder runs `make build-all` so the production dashboard is embedded in the
+CLI. A plain `go build` embeds only the fallback shell on a clean checkout.
+Installation requires both the generated dashboard entry page and embed source.
 
 The initial host also had Codex CLI 0.145.0 on PATH, which the provider rejected
 for Astra. The factory now resolves a private `factory-bin/codex` wrapper to
