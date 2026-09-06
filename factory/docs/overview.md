@@ -42,8 +42,18 @@ python3 factory/scripts/build-runtime.py --source /path/to/you-agent-factory
 ```
 
 This installs privately under the Git common directory and records its executable
-hash. The older global `you` installation failed recording recovery in the launch
+hash, plus any checked-in compatibility patch hashes. Build input comes from
+`git archive`, excluding untracked and ignored source files. The older global
+`you` installation failed recording recovery in the launch
 probe; the launcher requires this verified build and prepends it to worker PATH.
+
+The initial host also had Codex CLI 0.145.0 on PATH, which the provider rejected
+for Astra. The factory now resolves a private `factory-bin/codex` wrapper to
+`/Applications/ChatGPT.app/Contents/Resources/codex` (0.153.4). Both Astra medium
+and Luna max completed a read-only tool-use probe. Keep the executable's companion
+resources available: directly symlinking the binary into a new directory caused
+the code-mode host lookup to fail; the wrapper executes its original absolute path.
+This is local runtime configuration, not a global CLI replacement.
 
 Run from the checkout that owns this factory:
 

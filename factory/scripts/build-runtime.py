@@ -33,10 +33,15 @@ def build(source, root):
                             "--output", str(archive), revision], check=True)
             with tarfile.open(archive) as stream:
                 stream.extractall(checkout, filter="data")
+            patches = sorted((root / "factory/patches").glob("*.patch"))
+            for patch in patches:
+                subprocess.run(["git", "-C", str(checkout), "apply", "--check", str(patch)], check=True)
+                subprocess.run(["git", "-C", str(checkout), "apply", str(patch)], check=True)
             subprocess.run(["go", "build", "-o", str(temporary), "./cmd/factory"], cwd=checkout,
                            env=dict(os.environ, GOWORK="off"), check=True)
         temporary.chmod(0o700)
-        proof = {"sourceMode":"git-archive", "sourceRevision":revision, "sha256":digest(temporary)}
+        proof = {"sourceMode":"git-archive", "sourceRevision":revision, "sha256":digest(temporary),
+                 "patches":[{"path":str(p.relative_to(root)),"sha256":digest(p)} for p in patches]}
         os.replace(temporary, directory / "you")
         # Launcher validates both files together and fails closed during replacement.
         (directory / "runtime.json").write_text(json.dumps(proof, indent=2) + "\n")

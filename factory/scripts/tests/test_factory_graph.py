@@ -145,6 +145,23 @@ class FactoryGraphTest(unittest.TestCase):
                 self.assertNotEqual(resumed["runtime"]["sessionId"],first_session)
                 self.assertEqual(resumed["admission"]["sessionId"],resumed["runtime"]["sessionId"])
                 self.assertEqual(json.loads((root/"counts.json").read_text())["lead"],2)
+                project_id = "batch-admit-audio-runtime-audio-runtime-v1-audio-runtime"
+                subprocess.run([YOU,"--server",launcher.SERVER,"work","move",project_id,"init",
+                                "--session",resumed["runtime"]["sessionId"],"--request-id","smoke-operator-correction"],
+                               check=True,capture_output=True)
+                deadline = time.monotonic()+20
+                while time.monotonic()<deadline:
+                    board=get(launcher.SERVER,"/factory-sessions/"+resumed["runtime"]["sessionId"]+"/work?maxResults=100&includeSuperseded=true")
+                    if (json.loads((root/"counts.json").read_text()).get("lead",0)>=3 and
+                        any(w.get("workId")==project_id and w.get("state",{}).get("name")=="blocked" for w in board["results"])):
+                        break
+                    time.sleep(0.1)
+                else:
+                    self.fail("operator correction did not finish its project cycle")
+                launcher.stop(root)
+                after_move=launcher.start(root)
+                self.assertTrue(after_move["running"])
+                self.assertEqual(json.loads((root/"counts.json").read_text())["lead"],3)
                 launcher.stop(root)
                 runtime_path = root/".git/factory-runtime.json"
                 retained = runtime_path.read_text()
