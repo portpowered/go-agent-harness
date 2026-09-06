@@ -80,7 +80,7 @@ func (s *pcm16RoomAnalysisState) appendDriftFailure(timedStream PCM16TimedStream
 	failure.Measured = durationMilliseconds(drift.Drift)
 	failure.Comparison = ">"
 	failure.Bound = durationMilliseconds(drift.Bound)
-	failure.Unit = "milliseconds"
+	failure.Unit = durationUnitMilliseconds
 	failure.Detail = fmt.Sprintf("sample-duration=%s timestamp-span=%s", drift.SampleDuration, drift.TimestampSpan)
 	s.result.Failures = append(s.result.Failures, failure)
 }

@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	pcm16FullScale    = 32768.0
-	pcm16DBFSDecibels = 20
+	pcm16FullScale           = 32768.0
+	pcm16DBFSDecibels        = 20
+	durationUnitMilliseconds = "milliseconds"
 )
 
 func NormalizedPCM16CrossCorrelation(source, received PCM16TimedStream, interval PCM16TimeInterval, lagWindow PCM16LagWindow, silenceFloorDBFS float64) (PCM16CorrelationMeasurement, error) {
@@ -187,7 +188,7 @@ func appendBargeInFailures(failures *[]PropertyFailure, measurement PCM16BargeIn
 		failure.Measured = math.Inf(1)
 		failure.Comparison = ">"
 		failure.Bound = durationMilliseconds(maxLatency)
-		failure.Unit = "milliseconds"
+		failure.Unit = durationUnitMilliseconds
 		failure.Detail = fmt.Sprintf("no interrupted-stream stop was observed before interval end %s; last-active=%s", measurement.End, measurement.InterruptedLastActive)
 		*failures = append(*failures, failure)
 		return
@@ -202,7 +203,7 @@ func appendBargeInFailures(failures *[]PropertyFailure, measurement PCM16BargeIn
 		failure.Measured = durationMilliseconds(measurement.Latency)
 		failure.Comparison = ">"
 		failure.Bound = durationMilliseconds(maxLatency)
-		failure.Unit = "milliseconds"
+		failure.Unit = durationUnitMilliseconds
 		failure.Detail = fmt.Sprintf("interrupted frame=%d stopped at %s", measurement.InterruptedFrameIndex, measurement.InterruptedLastActive)
 		*failures = append(*failures, failure)
 	}

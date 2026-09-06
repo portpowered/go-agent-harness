@@ -41,7 +41,9 @@ func (s *grokSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedau
 	endpoints := s.media.Endpoints()
 	s.mediaMu.Unlock()
 	if previous != nil {
-		_ = previous.Close()
+		if err := previous.Close(); err != nil {
+			s.setTerminalError(fmt.Errorf("close replaced Grok RTC media: %w", err))
+		}
 	}
 	return endpoints
 }

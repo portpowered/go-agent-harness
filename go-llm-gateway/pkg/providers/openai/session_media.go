@@ -41,7 +41,9 @@ func (s *realtimeSession) rtcMedia(options sharedaudio.MediaSessionOptions) shar
 	endpoints := s.media.Endpoints()
 	s.mediaMu.Unlock()
 	if previous != nil {
-		_ = previous.Close()
+		if err := previous.Close(); err != nil {
+			s.setTerminalError(fmt.Errorf("close replaced OpenAI RTC media: %w", err))
+		}
 	}
 	return endpoints
 }

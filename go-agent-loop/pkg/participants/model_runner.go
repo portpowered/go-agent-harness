@@ -199,14 +199,6 @@ func (r *ModelRunner) EnqueueSessionAudioInputWithPolicyWaiting(ctx context.Cont
 }
 
 func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
-	return r.enqueueSessionAudioInputMode(ctx, pcm, policy, operation, false)
-}
-
-func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
-	return r.enqueueSessionAudioInputMode(ctx, pcm, policy, operation, true)
-}
-
-func (r *ModelRunner) enqueueSessionAudioInputMode(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string, waitForCapacity bool) error {
 	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("%s: not in session mode", operation)
 	}
@@ -219,6 +211,26 @@ func (r *ModelRunner) enqueueSessionAudioInputMode(ctx context.Context, pcm []by
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
+	if r == nil || r.sessionInputInbox == nil {
+		return fmt.Errorf("%s: not in session mode", operation)
+	}
+	if ctx == nil {
+		return fmt.Errorf("%s: nil context", operation)
+	}
+
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, true)
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, waitForCapacity bool) error {
 	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
 	if waitForCapacity {
 		select {
