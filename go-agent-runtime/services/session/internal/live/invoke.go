@@ -280,10 +280,15 @@ func (i *liveInvocation) completeCapturePump(pumpErr error) error {
 }
 
 func shouldCancelMediaPump(pumpErr error, ctx context.Context) bool {
-	if pumpErr == nil || errors.Is(pumpErr, io.EOF) {
+	if isExpectedMediaPumpError(pumpErr) {
 		return false
 	}
 	return ctx == nil || ctx.Err() == nil
+}
+
+func isExpectedMediaPumpError(err error) bool {
+	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed)
 }
 
 func (i *liveInvocation) wait() error {
@@ -325,7 +330,7 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	var pumpErr error
 	for count := 0; count < i.count; count++ {
 		candidate := <-i.pumps
-		if candidate != nil && !errors.Is(candidate, io.EOF) && !errors.Is(candidate, context.Canceled) && !errors.Is(candidate, context.DeadlineExceeded) {
+		if !isExpectedMediaPumpError(candidate) {
 			pumpErr = errors.Join(pumpErr, candidate)
 		}
 	}

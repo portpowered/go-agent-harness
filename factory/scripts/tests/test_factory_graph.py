@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 import urllib.request
 
 
@@ -91,12 +92,12 @@ class FactoryGraphTest(unittest.TestCase):
                 "command":sys.executable, "args":[str(fixture), role]}} for worker,role in
                 [("project-lead","lead"),("planner","plan"),("processor","process"),("reviewer","review"),("ideafier","meta")]]
             entries += [{"workerName":worker,"runType":"accept"} for worker in ("workspace-setup","ci-waiter","project-reconciler")]
-            mock = root / "mock.json"
-            mock.write_text(json.dumps({"unmatchedDispatchPolicy":"passthrough","mockWorkers":entries}))
+            mock_config = root / "mock.json"
+            mock_config.write_text(json.dumps({"unmatchedDispatchPolicy":"passthrough","mockWorkers":entries}))
             private = root / ".git/factory-bin"
             private.mkdir()
             executable = private / "you"
-            executable.write_text("#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a and a[0]=='run': a += ['--with-mock-workers',"+repr(str(mock))+"]\nos.execv("+repr(YOU)+",["+repr(YOU)+"]+a)\n")
+            executable.write_text("#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a and a[0]=='run': a += ['--with-mock-workers',"+repr(str(mock_config))+"]\nos.execv("+repr(YOU)+",["+repr(YOU)+"]+a)\n")
             executable.write_text(executable.read_text().replace("a=sys.argv[1:]\n", "a=sys.argv[1:]\nif '--resume' in a and os.path.exists("+repr(str(root / "fail-resume"))+"): sys.exit(23)\n"))
             executable.chmod(0o700)
             (private / "runtime.json").write_text(json.dumps({"sourceRevision":"test-only-mock-wrapper","sha256":hashlib.sha256(executable.read_bytes()).hexdigest()}))
@@ -119,10 +120,9 @@ class FactoryGraphTest(unittest.TestCase):
                 original_manifest = saved_manifest.read_text()
                 changed = json.loads(original_manifest)
                 changed["contractRevision"] = "conflicting-revision"
-                saved_manifest.write_text(json.dumps(changed))
-                with self.assertRaisesRegex(ValueError,"ownership is mismatched"):
-                    launcher.start(root)
-                saved_manifest.write_text(original_manifest)
+                with mock.patch.object(launcher, "manifest", return_value=changed):
+                    with self.assertRaisesRegex(ValueError,"ownership is mismatched"):
+                        launcher.start(root)
                 first_session = started["runtime"]["sessionId"]
                 deadline = time.monotonic() + 20
                 while time.monotonic() < deadline:

@@ -163,6 +163,17 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 	if deps.CredentialValues == nil {
 		return nil, errors.New("live credential resolver is unavailable")
 	}
+	replayInputPath := ""
+	if liveRequest != nil {
+		replayInputPath = strings.TrimSpace(liveRequest.Replay.InputCapturePath)
+	}
+	providerCapturePath := request.RecordPath
+	if providerCapturePath == "" && replayInputPath != "" {
+		// A replay-backed directory has a verified provider capture already. Use
+		// that source as the immutable provider artifact instead of asking an
+		// injected replay session to manufacture a second raw capture.
+		providerCapturePath = replayInputPath
+	}
 	credentialRequest := request
 	credentialRequest.ReplayPath = liveRequest.Replay.InputCapturePath
 	credentialRequest.Provider = liveRequest.Provider
@@ -179,12 +190,12 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		Provider:            liveRequest.Provider,
 		Model:               liveRequest.Model,
 		Credentials:         credentials,
-		ProviderCapturePath: request.RecordPath,
+		ProviderCapturePath: providerCapturePath,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
-	if request.RecordPath == "" {
+	if request.RecordPath == "" && replayInputPath == "" {
 		if providerCapture, ok := recorder.(runtimeRecording.ProviderCapture); ok {
 			if path := strings.TrimSpace(providerCapture.ProviderCapturePath()); path != "" {
 				configureCapturePath(liveRequest, path)

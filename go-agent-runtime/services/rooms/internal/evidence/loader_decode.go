@@ -83,9 +83,9 @@ func timestamp(value object, name string) (time.Time, error) {
 }
 
 func mismatch(field string, err error) error {
-	return &rooms.RoomReplayBundleError{Kind: rooms.RoomReplayBundleMismatch, Field: field, Err: fmt.Errorf("%w: %v", rooms.ErrInvalidReplayBundle, err)}
+	return &rooms.RoomReplayBundleError{Kind: rooms.RoomReplayBundleMismatch, Field: field, Err: fmt.Errorf("%w: %w", rooms.ErrInvalidReplayBundle, err)}
 }
 
 func incomplete(field string, err error) error {
-	return &rooms.RoomReplayBundleError{Kind: rooms.RoomReplayBundleIncomplete, Field: field, Err: fmt.Errorf("%w: %v", rooms.ErrReplayBundleIncomplete, err)}
+	return &rooms.RoomReplayBundleError{Kind: rooms.RoomReplayBundleIncomplete, Field: field, Err: fmt.Errorf("%w: %w", rooms.ErrReplayBundleIncomplete, err)}
 }

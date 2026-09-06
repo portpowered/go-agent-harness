@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -127,6 +128,21 @@ func asyncCollisionInputAudio() []byte {
 	return pcm16LEBytes(samples)
 }
 
+func writeAsyncCollisionInputWAV(t *testing.T, path string, inputAudio []byte) {
+	t.Helper()
+	samples := make([]int16, len(inputAudio)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(inputAudio[index*2:]))
+	}
+	var wav bytes.Buffer
+	if err := wavio.Write(&wav, wavio.Rate24kHz, samples); err != nil {
+		t.Fatalf("encode async collision input fixture: %v", err)
+	}
+	if err := os.WriteFile(path, wav.Bytes(), 0o600); err != nil {
+		t.Fatalf("write async collision input fixture: %v", err)
+	}
+}
+
 func inputAudioPayload(audioBytes []byte) string {
 	payload, _ := json.Marshal(map[string]string{
 		"type":  "input_audio_buffer.append",
@@ -153,6 +169,9 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 	if err != nil {
 		t.Fatalf("load OpenAI replay baseline: %v", err)
 	}
+	// Keep the provider and artifact media at the negotiated 24 kHz boundary so
+	// the byte-exact audio oracle measures ordering and retention, not sink DSP.
+	base.Records[0].Payload = json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime","type":"realtime","audio":{"input":{"format":{"rate":24000}},"output":{"format":{"rate":24000}}}}}`)
 	records := []gwtesting.CapturedSessionEvent{base.Records[0], base.Records[1]}
 	add := func(direction gwtesting.SessionEventDirection, eventType, payload string) {
 		records = append(records, gwtesting.CapturedSessionEvent{

@@ -40,7 +40,11 @@ func TestSession_TerminalErrorPreservesUnexpectedReadError(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close session: %v", err)
+		}
+	}()
 
 	got := readFromSession(t, ctx, session, "unexpected read error")
 	if got.Type != messages.StreamTypeError {
@@ -64,7 +68,11 @@ func TestSession_TerminalErrorRemainsNilForCleanEOF(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close session: %v", err)
+		}
+	}()
 
 	waitForGrokSignal(t, session.Done(), "clean EOF")
 	if err := session.TerminalError(); err != nil {

@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -78,7 +79,6 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 			t.Errorf("close scripted browser runtime: %v", closeErr)
 		}
 	}()
-
 	discoveryService := &singlePageWireDiscovery{
 		candidate: discovery.BrowserCandidate{
 			ID:       string(candidate.ID),
@@ -130,6 +130,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,
@@ -263,9 +264,8 @@ type sessionUpdateWire struct {
 	updates chan json.RawMessage
 	inbound chan []byte
 	done    chan struct{}
-
-	mu     sync.Mutex
-	closed bool
+	mu      sync.Mutex
+	closed  bool
 }
 
 func newSessionUpdateWire() *sessionUpdateWire {
@@ -348,7 +348,6 @@ var _ transport.Conn = (*sessionUpdateWire)(nil)
 func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-late",
 		Source:   webmcp.DiscoverySourceExplicit,
@@ -444,6 +443,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,
@@ -509,7 +509,6 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-switch",
 		Source:   webmcp.DiscoverySourceExplicit,
@@ -634,6 +633,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
 			Provider:               config.ProviderOpenAI,
 			Model:                  "gpt-realtime",
+			ModelCatalog:           providerswire.NewModelCatalog(),
 			APIKey:                 "unused",
 			LoadedConfig:           cfg,
 			BrowserToolsEnabled:    true,

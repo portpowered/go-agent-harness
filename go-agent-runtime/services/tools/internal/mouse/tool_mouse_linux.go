@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const mouseDragPause = 30 * time.Millisecond
+const (
+	mouseDragPause        = 30 * time.Millisecond
+	mouseDoubleClickPause = 50 * time.Millisecond
+)
 
 // xdotoolButton maps a button name to the xdotool button number.
 func xdotoolButton(button string) string {
@@ -48,7 +51,7 @@ func mouseDoubleClick(x, y int, button string) error {
 	if err := mouseClick(x, y, button); err != nil {
 		return err
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(mouseDoubleClickPause)
 	return mouseClick(x, y, button)
 }
 
@@ -80,8 +83,12 @@ func mouseDrag(fromX, fromY, toX, toY int, button string) error {
 		ix := fromX + (toX-fromX)*i/steps
 		iy := fromY + (toY-fromY)*i/steps
 		if err := runXdotool("mousemove", strconv.Itoa(ix), strconv.Itoa(iy)); err != nil {
-			_ = runXdotool("mouseup", xdotoolButton(button)) // best-effort release
-			return fmt.Errorf("drag step %d: %w", i, err)
+			releaseErr := runXdotool("mouseup", xdotoolButton(button))
+			stepErr := fmt.Errorf("drag step %d: %w", i, err)
+			if releaseErr != nil {
+				return errors.Join(stepErr, fmt.Errorf("drag release: %w", releaseErr))
+			}
+			return stepErr
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

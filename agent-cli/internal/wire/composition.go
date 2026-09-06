@@ -303,7 +303,7 @@ func ComposeAgentCLI(
 		return nil, err
 	}
 	return assembleAgentCLI(
-		values.toolExecutor,
+		markToolExecutorReplacement(values.toolExecutor),
 		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,
@@ -390,7 +390,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		return nil, err
 	}
 	return assembleAgentCLI(
-		values.toolExecutor,
+		markToolExecutorReplacementIfSwapped(values.toolExecutor, swaps),
 		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,

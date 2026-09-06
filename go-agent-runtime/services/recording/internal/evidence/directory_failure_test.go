@@ -219,7 +219,7 @@ func TestDirectoryRecorderDoesNotInvalidateProtectedCaptureToRedactIt(t *testing
 
 func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
 	for _, sourceKind := range []string{"missing", "empty", "directory"} {
-		r := newEvidenceRecorder(t)
+		r := newEvidenceRecorderWithProviderPath(t)
 		if err := os.Remove(r.ProviderCapturePath()); err != nil {
 			t.Fatal(err)
 		}
@@ -240,6 +240,70 @@ func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
 		if status := evidenceManifest(t, r).RecordingStatus; status == nil || status.State != transcript.RecordingStatusPartial {
 			t.Fatal("unavailable provider source not marked partial")
 		}
+	}
+}
+
+func newEvidenceRecorderWithProviderPath(t *testing.T) *directoryRecorder {
+	t.Helper()
+	root := t.TempDir()
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination:         filepath.Join(root, "capture"),
+		ProviderCapturePath: filepath.Join(root, "provider.json"),
+		ClockBase:           evidenceTime(),
+		WallClockStart:      evidenceTime(),
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := r.Finalize(t.Context(), nil); err != nil {
+			t.Logf("recording cleanup: %v", err)
+		}
+	})
+	return r
+}
+
+func TestDirectoryRecorderAllowsAbsentImplicitProviderCapture(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	if err := os.Remove(r.ProviderCapturePath()); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceText(t, r, "semantic-only session")
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatalf("implicit provider capture absence = %v", err)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.RecordingStatus != nil {
+		t.Fatalf("semantic-only bundle marked partial: %+v", manifest.RecordingStatus)
+	}
+	if got := manifest.Configuration["provider_capture"]; got != "unavailable" {
+		t.Fatalf("provider capture metadata = %q, want unavailable", got)
+	}
+	if _, err := os.Stat(filepath.Join(r.destination, "provider.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("absent implicit provider capture was fabricated: %v", err)
+	}
+}
+
+func TestDirectoryRecorderMarksAudioPartialWhenImplicitProviderCaptureIsMissing(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	if err := os.Remove(r.ProviderCapturePath()); err != nil {
+		t.Fatal(err)
+	}
+	frame := sharedaudio.PCMFrame{Samples: []int16{13, -14, 15}, Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing provider evidence error = %v, want os.ErrNotExist", err)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("audio bundle without provider evidence was not partial: %+v", manifest.RecordingStatus)
 	}
 }
 

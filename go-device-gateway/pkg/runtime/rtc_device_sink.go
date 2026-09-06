@@ -471,7 +471,7 @@ func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.P
 		if len(frame.Samples) == 0 {
 			continue
 		}
-		if err := s.observedWritePlayback(ctx, frame.Samples, generation, blocked, true); err != nil {
+		if err := s.observedWritePlaybackForResponse(ctx, frame.Samples, generation, blocked, true, frame.PlaybackResponse); err != nil {
 			return err
 		}
 	}
@@ -494,7 +494,7 @@ func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *audi
 		if len(final.Samples) == 0 {
 			continue
 		}
-		if err := s.observedWritePlayback(ctx, final.Samples, generation, blocked, true); err != nil {
+		if err := s.observedWritePlaybackForResponse(ctx, final.Samples, generation, blocked, true, final.PlaybackResponse); err != nil {
 			return err
 		}
 	}
@@ -505,11 +505,15 @@ func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *audi
 }
 
 // observedWritePlayback routes a device-rate playback chunk through the
-// optional self-hearing observer before it reaches the device adapter, so a
-// local feedback gate always sees exactly the PCM this sink accepted.
+// optional self-hearing observer before it reaches the device adapter. The
+// callback sees exactly the PCM this sink accepts.
 func (s *RTCDeviceSink) observedWritePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool) error {
+	return s.observedWritePlaybackForResponse(ctx, samples, generation, blocked, modelAudio, audio.PlaybackResponse{})
+}
+
+func (s *RTCDeviceSink) observedWritePlaybackForResponse(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, response audio.PlaybackResponse) error {
 	write := func() error {
-		return s.writePlayback(ctx, samples, generation, blocked, modelAudio)
+		return s.writePlayback(ctx, samples, generation, blocked, modelAudio, response)
 	}
 	if s.observer != nil {
 		return s.observer.WritePlayback(ctx, samples, write)
@@ -532,21 +536,14 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	blocked := s.playbackBlocked
-	if response.ItemID != "" && response != s.playbackResponse {
-		blocked = true
-	}
-	return s.playbackGeneration, blocked
+	// Prefetched continuation identity is not stale; accepted interruption
+	// alone changes generation, while frame identity remains in span accounting.
+	return s.playbackGeneration, s.playbackBlocked
 }
 
-// writePlayback admits a frame only if the playback boundary is unchanged
-// since its inbound read. Holding playbackMu across the device enqueue makes
-// cancel and enqueue linearizable: cancellation either removes this frame or
-// marks it stale before it can reach the local queue. The optional physical
-// drain wait runs after the enqueue decision is settled and the mutex is
-// released, so a concurrent barge-in cancel is never held up behind a slow
-// native backend's playback pacing.
-func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool) error {
+// writePlayback admits only at an unchanged boundary and keeps cancellation
+// linearizable; capacity waits happen outside playbackMu so barge-in can proceed.
+func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
 	}
@@ -561,12 +558,15 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		return err
 	}
 	s.playbackMu.Lock()
+	response := frameResponse
+	if response.ItemID == "" {
+		response = s.playbackResponse
+	}
 	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
 		s.playbackMu.Unlock()
 		return nil
 	}
 	statsBefore := s.PlaybackStats()
-	response := s.playbackResponse
 	var err error
 	if len(samples) == audio.FrameSize {
 		err = s.sink.WriteFrame(ctx, samples)
