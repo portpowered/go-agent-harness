@@ -9,9 +9,13 @@ package devices
 import (
 	"context"
 	"errors"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 var (
@@ -130,4 +134,33 @@ type Handle interface {
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
+}
+
+// ProbeRequest is the transport-neutral configuration for a live device
+// probe. Provider construction is supplied by the application graph through
+// SessionFactory; registry and media workers stay private to the runtime
+// device service.
+type ProbeRequest struct {
+	Scenario             probe.Scenario
+	Provider             string
+	Model                string
+	APIKey               string
+	BaseURL              string
+	ConfigDir            string
+	CaptureTime          time.Duration
+	SessionInferencer    messages.SessionInferencer
+	Instructions         string
+	InstructionsObserved func(string)
+	WebSocketDialer      transport.Dialer
+}
+
+// ProbeSessionFactory constructs the provider session used by a live probe.
+// It is an application composition seam, so the reusable device runtime does
+// not depend on a session implementation or a CLI package.
+type ProbeSessionFactory func(ProbeRequest, string) (messages.SessionInferencer, string, error)
+
+// ProbeService runs a physical device probe while owning device selection,
+// negotiated media, and worker lifetimes.
+type ProbeService interface {
+	Run(context.Context, ProbeRequest) (probe.ObservationSnapshot, error)
 }

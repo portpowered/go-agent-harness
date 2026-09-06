@@ -12,6 +12,7 @@ import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
+	deviceprobe "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
 	filemedia "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
@@ -31,6 +32,13 @@ func NewService(registry devicegw.DeviceRegistry) devices.Service {
 func NewFileService() devices.Service {
 	wire.Build(newFileFactory, wire.Bind(new(devices.Service), new(*filemedia.Factory)))
 	return nil
+}
+
+// NewProbeService assembles the reusable physical-device probe runner. The
+// application graph supplies provider session construction; this package owns
+// all negotiated media and device worker lifetimes.
+func NewProbeService(registry devicegw.DeviceRegistry, sessionFactory devices.ProbeSessionFactory) devices.ProbeService {
+	return deviceprobe.New(registry, sessionFactory)
 }
 
 func newFactory(registry devicegw.DeviceRegistry) *composite.Factory {
