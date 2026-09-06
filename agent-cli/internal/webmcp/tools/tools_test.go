@@ -15,10 +15,11 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
-	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T) {
@@ -122,7 +123,6 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		t.Fatal("stable definitions share mutable schema state")
 	}
 }
-
 func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 	if got := NewBrokerToolSet(nil).Definitions(); len(got) != 9 {
 		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
@@ -179,7 +179,6 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 		t.Fatalf("navigate-tab URL = %q", broker.lastNavigate)
 	}
 }
-
 func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
 	broker := &recordingBroker{}
 	response, err := NewBrokerToolSet(broker, true).Executor().Execute(context.Background(), messages.ToolCall{
@@ -196,7 +195,6 @@ func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
 		t.Fatalf("invalid cast mode reached broker: %v", broker.calls)
 	}
 }
-
 func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
 	want := webmcp.PageContext{
 		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
@@ -229,7 +227,6 @@ func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
 		t.Fatalf("open-tab selection = %+v, want %+v", selected, want)
 	}
 }
-
 func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	imageBytes := testPNG(t, 3, 2)
 	broker := &recordingBroker{
@@ -270,7 +267,6 @@ func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 		t.Fatalf("broker calls = %#v, want one capture call", got)
 	}
 }
-
 func TestComposedShowPagePreservesItsSingleImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 2, 2)
 	broker := &recordingBroker{
@@ -278,7 +274,12 @@ func TestComposedShowPagePreservesItsSingleImageProjection(t *testing.T) {
 		screenshot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: imageBytes},
 	}
 	set := NewBrokerToolSet(broker)
-	composed, err := cliTools.ComposeToolSurface(nil, nil, set.Executor(), set.Definitions())
+	composed, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		Browser: &runtimeTools.BrowserSurface{
+			Executor:    set.Executor(),
+			Definitions: set.Definitions(),
+		},
+	})
 	if err != nil {
 		t.Fatalf("compose browser surface: %v", err)
 	}
@@ -292,7 +293,6 @@ func TestComposedShowPagePreservesItsSingleImageProjection(t *testing.T) {
 	}
 	assertShowPageRichResponse(t, response, "composed-show-call", imageBytes, 2, 2)
 }
-
 func TestShowPageReturnsClassifiedErrorsWithoutImageData(t *testing.T) {
 	valid := testPNG(t, 2, 2)
 	cases := []struct {
@@ -467,11 +467,15 @@ func assertNoPageSelectedContextError(t *testing.T, envelope webmcp.ToolResultEn
 }
 
 func TestShowPageNamespaceIsPreflightedWithStaticTools(t *testing.T) {
-	err := cliTools.ValidateToolDefinitionNamespaces(
+	validator, ok := runtimeToolsWire.NewService().(runtimeTools.DefinitionValidator)
+	if !ok {
+		t.Fatal("runtime tools service does not expose definition validation")
+	}
+	err := validator.ValidateToolDefinitionNamespaces(
 		[]messages.ToolDefinition{{Name: webmcp.ShowPageToolName}},
 		NewBrokerToolSet(nil).Definitions(),
 	)
-	if !errors.Is(err, cliTools.ErrToolCompositionCollision) {
+	if !errors.Is(err, runtimeTools.ErrToolCompositionCollision) {
 		t.Fatalf("show_page namespace error = %v, want collision before composition", err)
 	}
 }
@@ -740,48 +744,44 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 	}
 }
 
-func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
+func TestToolSetExecutorUsesTheSameTextualContract(t *testing.T) {
 	broker := &recordingBroker{selected: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1}}
 	set := NewToolSet(broker)
-	registry, err := set.Registry()
+	if got := len(set.Definitions()); got != 9 {
+		t.Fatalf("definition count = %d, want six stable tools plus open-tab, navigate-tab, and show_page", got)
+	}
+	response, err := set.Executor().Execute(context.Background(), messages.ToolCall{
+		ID: "call-get-context", Name: webmcp.GetContextToolName, Arguments: `{"refresh":false}`,
+	})
 	if err != nil {
-		t.Fatalf("registry: %v", err)
+		t.Fatalf("executor execute: %v", err)
 	}
-	if got := registry.List(); len(got) != 9 {
-		t.Fatalf("registry names = %#v, want six stable tools plus open-tab, navigate-tab, and show_page", got)
+	if response.Content == "" {
+		t.Fatalf("executor result = %#v, want one textual tool response", response)
 	}
-	msgs, err := registry.Execute(context.Background(), webmcp.GetContextToolName, map[string]any{"refresh": false})
-	if err != nil {
-		t.Fatalf("registry execute: %v", err)
-	}
-	if len(msgs) != 1 || msgs[0].Role != messages.RoleTool || len(msgs[0].ContentParts) != 1 {
-		t.Fatalf("registry result = %#v, want one plain tool message", msgs)
-	}
-	if _, err := webmcp.UnmarshalToolResult([]byte(msgs[0].TextContent())); err != nil {
-		t.Fatalf("registry result envelope: %v", err)
+	if _, err := webmcp.UnmarshalToolResult([]byte(response.Content)); err != nil {
+		t.Fatalf("executor result envelope: %v", err)
 	}
 }
 
-func TestToolSetRegistryPreservesShowPageImageProjection(t *testing.T) {
+func TestToolSetExecutorPreservesShowPageImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 1, 1)
 	set := NewToolSet(&recordingBroker{
 		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
 		screenshot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: imageBytes},
 	})
-	registry, err := set.Registry()
+	response, err := set.Executor().Execute(context.Background(), messages.ToolCall{
+		ID: "call-show-page", Name: webmcp.ShowPageToolName, Arguments: `{}`,
+	})
 	if err != nil {
-		t.Fatalf("registry: %v", err)
+		t.Fatalf("executor show_page: %v", err)
 	}
-	msgs, err := registry.Execute(context.Background(), webmcp.ShowPageToolName, map[string]any{})
-	if err != nil {
-		t.Fatalf("registry show_page: %v", err)
+	if len(response.ContentParts) != 2 {
+		t.Fatalf("executor show_page result = %#v, want metadata plus one image part", response)
 	}
-	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
-		t.Fatalf("registry show_page result = %#v, want metadata plus one image part", msgs)
-	}
-	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
+	part, ok := response.ContentParts[1].(messages.ImagePart)
 	if !ok || !bytes.Equal(part.Bytes, imageBytes) || part.MediaType != "image/png" {
-		t.Fatalf("registry show_page image = %#v, want exact PNG projection", msgs[0].ContentParts[1])
+		t.Fatalf("executor show_page image = %#v, want exact PNG projection", response.ContentParts[1])
 	}
 }
 

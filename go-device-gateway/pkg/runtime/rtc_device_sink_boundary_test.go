@@ -21,7 +21,11 @@ func TestRTCDeviceSinkResetsResamplerAtResponseBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close sink: %v", err)
+		}
+	}()
 	sink.holdToneConfig.GapThreshold = time.Hour
 
 	first := boundaryTestPCM(1800, 900)
@@ -60,6 +64,79 @@ func TestRTCDeviceSinkResetsResamplerAtResponseBoundary(t *testing.T) {
 		t.Fatalf("response-boundary playback differs at filter reset: got %d samples, want %d", len(got), len(want))
 	}
 }
+
+// TestRTCDeviceSinkPreservesPrefetchedContinuationFrames keeps an earlier
+// response audible when the media bridge has already opened a faster tool
+// continuation. The latest response identity is not a cancellation boundary;
+// only an accepted interruption may invalidate frames already in the device
+// queue.
+func TestRTCDeviceSinkPreservesPrefetchedContinuationFrames(t *testing.T) {
+	registry := newRTCDeviceSinkRateRegistry(t, audio.SampleRate)
+	sink, err := NewRTCDeviceSinkAtRate(registry, "virtual:output", wavio.Rate24kHz)
+	if err != nil {
+		t.Fatalf("open sink: %v", err)
+	}
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close sink: %v", err)
+		}
+	}()
+	sink.holdToneConfig.GapThreshold = time.Hour
+
+	first := boundaryTestPCM(1440, 900)
+	second := boundaryTestPCM(1440, 3100)
+	firstResponse := audio.PlaybackResponse{ResponseID: "response-1", ItemID: "item-1"}
+	secondResponse := audio.PlaybackResponse{ResponseID: "response-2", ItemID: "item-2"}
+	inbound := &prefetchedRTCInboundMedia{
+		responses: [2]audio.PlaybackResponse{firstResponse, secondResponse},
+		frames: []audio.PCMFrame{
+			{Samples: first[:720], PlaybackResponse: firstResponse},
+			{Samples: first[720:], EndOfResponse: true, PlaybackResponse: firstResponse},
+			{Samples: second[:720], PlaybackResponse: secondResponse},
+			{Samples: second[720:], EndOfResponse: true, PlaybackResponse: secondResponse},
+		},
+	}
+
+	var got []int16
+	sink.SetPlaybackSamplesObserver(func(_ context.Context, _ int, samples []int16) error {
+		got = append(got, samples...)
+		return nil
+	})
+	if err := sink.Pump(context.Background(), inbound); err != nil {
+		t.Fatalf("pump prefetched continuation: %v", err)
+	}
+
+	want := append(boundaryTestResample(t, first), boundaryTestResample(t, second)...)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("prefetched continuation playback differs: got %d samples, want %d", len(got), len(want))
+	}
+}
+
+type prefetchedRTCInboundMedia struct {
+	responses [2]audio.PlaybackResponse
+	frames    []audio.PCMFrame
+	index     int
+}
+
+func (m *prefetchedRTCInboundMedia) SetPlaybackController(controller audio.PlaybackController) {
+	if controller != nil {
+		controller.StartPlayback(m.responses[0])
+		controller.StartPlayback(m.responses[1])
+	}
+}
+
+func (m *prefetchedRTCInboundMedia) ReadFrame(context.Context) (audio.PCMFrame, error) {
+	if m.index >= len(m.frames) {
+		return audio.PCMFrame{}, io.EOF
+	}
+	frame := m.frames[m.index]
+	m.index++
+	return frame, nil
+}
+
+func (*prefetchedRTCInboundMedia) Close() error { return nil }
+
+var _ audio.PlaybackControlledInbound = (*prefetchedRTCInboundMedia)(nil)
 
 func boundaryTestPCM(count int, seed int16) []int16 {
 	samples := make([]int16, count)

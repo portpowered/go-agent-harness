@@ -1,7 +1,5 @@
 package cli
 
-import serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
 	"errors"
@@ -18,14 +16,16 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/spf13/cobra"
 )
 
 const (
 	// DefaultRoomOutputDir is retained for configured-room compatibility when
 	// --out is omitted. Bare rooms use a fresh config-directory child instead.
-	DefaultRoomOutputDir = rooms.DefaultRoomOutputDir
+	DefaultRoomOutputDir = runtimeRooms.DefaultRoomOutputDir
 
 	roomStreamShutdownTimeout = 5 * time.Second
 )
@@ -33,7 +33,7 @@ const (
 // RoomRunFunc is the service seam used by the room command. Keeping the seam
 // at the structured-result boundary makes command tests independent of live
 // provider credentials and network connections.
-type RoomRunFunc func(context.Context, io.Writer, rooms.RoomRunOptions) (rooms.RoomResult, error)
+type RoomRunFunc func(context.Context, io.Writer, runtimeRooms.RoomRunOptions) (runtimeRooms.RoomResult, error)
 
 // RoomSignalContextFunc owns signal/cancellation setup for one room command.
 // The production implementation listens for SIGINT and SIGTERM; tests can
@@ -43,13 +43,13 @@ type RoomSignalContextFunc func(context.Context) (context.Context, func())
 // RoomRunCommand implements `yui room run`.
 type RoomRunCommand struct {
 	globalFlags   *flags.GlobalFlags
-	service       rooms.Service
+	service       runtimeRooms.Service
 	signalContext RoomSignalContextFunc
 	run           RoomRunFunc
 }
 
 // NewRoomRunCommand injects room orchestration without device construction.
-func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service rooms.Service) *RoomRunCommand {
+func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service) *RoomRunCommand {
 	command := &RoomRunCommand{globalFlags: globalFlags, service: service, signalContext: defaultRoomSignalContext}
 	if service != nil {
 		command.run = service.Run
@@ -196,54 +196,16 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if c == nil || c.service == nil {
 		return errors.New("room service is required")
 	}
-	var err error
-
-	replayPath = strings.TrimSpace(replayPath)
-	var launchPlan rooms.RoomLaunchPlan
-	var replayPlan rooms.RoomReplayPlan
-	var replayMode bool
-	if replayPath != "" {
-		if strings.TrimSpace(configPath) != "" || strings.TrimSpace(manifestPath) != "" {
-			return fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", rooms.ErrRoomReplaySourceConflict)
-		}
-		replayPlan, err = c.service.LoadReplayPlan(replayPath)
-		if err != nil {
-			return err
-		}
-		replayMode = true
-	} else {
-		launchPlan, err = c.service.ResolveLaunchPlan(rooms.RoomLaunchOptions{
-			ConfigPath:   configPath,
-			ManifestPath: manifestPath,
-			ConfigDir:    roomConfigDir(roomRunGlobalFlags(c)),
-		})
-		if err != nil {
-			return err
-		}
+	plans, err := c.resolveRoomRunPlans(configPath, manifestPath, replayPath)
+	if err != nil {
+		return err
 	}
-	roomManifest := replayPlan.Manifest()
-	if !replayMode {
-		roomManifest = launchPlan.Manifest
-	}
+	roomManifest := plans.manifest
 
 	outputExplicit := cmd.Flags().Changed("out")
-	if replayMode {
-		outputDir = resolveRoomReplayCommandOutputDir(outputDir)
-	} else {
-		outputDir, err = resolveRoomCommandOutputDir(c.service, launchPlan, outputDir, outputExplicit)
-		if err != nil {
-			return err
-		}
-	}
-	if outputDir != "" {
-		if replayMode {
-			if err := c.service.ValidateReplayOutput(replayPlan, outputDir); err != nil {
-				return fmt.Errorf("validate --out %q: %w", outputDir, err)
-			}
-		}
-		if err := c.service.ValidateEvidenceOutput(outputDir); err != nil {
-			return fmt.Errorf("validate --out %q: %w", outputDir, err)
-		}
+	outputDir, err = c.resolveRoomOutput(plans, outputDir, outputExplicit)
+	if err != nil {
+		return err
 	}
 
 	outputLabel := outputDir
@@ -262,10 +224,10 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		participantIDs = append(participantIDs, participant.ID)
 	}
 
-	var broker rooms.EventBroker
+	var broker *events.Broker
 	var eventServer *roomEventServer
 	if strings.TrimSpace(streamAddress) != "" {
-		broker, err = c.service.NewEventBroker(participantIDs)
+		broker, err = events.New(participantIDs, events.Options{})
 		if err != nil {
 			return fmt.Errorf("configure room stream: %w", err)
 		}
@@ -278,6 +240,9 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		if output.err() != nil {
 			_ = eventServer.shutdown(broker)
 			return output.err()
+		}
+		for _, participantID := range participantIDs {
+			broker.Publish(events.EventParticipantJoined, participantID, "")
 		}
 	}
 
@@ -301,41 +266,41 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	}
 	defer stopSignals()
 
-	options := rooms.RoomRunOptions{
+	options := runtimeRooms.RoomRunOptions{
 		Manifest:   roomManifest,
-		ReplayPath: replayPath,
+		ReplayPath: plans.replayPath,
 		OutputDir:  outputDir,
 		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
 		WorkDir:    globalWorkDir(roomRunGlobalFlags(c)),
 		AllowPaths: globalAllowPaths(roomRunGlobalFlags(c)),
 		ReplayPlan: nil,
 		LaunchPlan: nil,
-		Stream:     broker,
-		OnDiagnostic: func(participantID string, record serviceSession.SessionDiagnosticRecord) {
+		EventSink:  events.NewLiveSink(broker),
+		OnDiagnostic: func(participantID string, record runtimeRooms.RoomDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},
-		OnParticipantReady: func(ready rooms.RoomParticipantReady) {
+		OnParticipantReady: func(ready runtimeRooms.RoomParticipantReady) {
 			output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
 			readyParticipants++
 			if readyParticipants == len(roomManifest.Participants) {
 				output.printf("room running: participants=%d\n", len(roomManifest.Participants))
 			}
 		},
-		OnParticipantTerminated: func(result rooms.RoomParticipantResult) {
+		OnParticipantTerminated: func(result runtimeRooms.RoomParticipantResult) {
 			output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
 		},
 	}
-	if replayMode {
-		options.ReplayPlan = &replayPlan
+	if plans.replayMode {
+		options.ReplayPlan = &plans.replayPlan
 		options.ConfigDir = ""
 	} else {
-		options.LaunchPlan = &launchPlan
+		options.LaunchPlan = &plans.launchPlan
 		options.BrowserCapabilitiesFactory = NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c)))
 	}
 
-	var result rooms.RoomResult
+	var result runtimeRooms.RoomResult
 	var runErr error
-	if c == nil || c.run == nil {
+	if c.run == nil {
 		runErr = errors.New("room run service is not configured")
 	} else {
 		result, runErr = c.run(runContext, io.Discard, options)
@@ -360,13 +325,13 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 // check runs only after that result comes back, purely to fix the exit code:
 // it fires exclusively when there is no surviving peer at all, so a genuine
 // partial failure (or full success) still exits 0 exactly as before.
-func roomAllParticipantsFailedError(result rooms.RoomResult) error {
+func roomAllParticipantsFailedError(result runtimeRooms.RoomResult) error {
 	if len(result.Participants) == 0 {
 		return nil
 	}
 	ids := make([]string, 0, len(result.Participants))
 	for id, participant := range result.Participants {
-		if participant.TerminationReason != rooms.ParticipantTerminationError {
+		if participant.TerminationReason != runtimeRooms.ParticipantTerminationError {
 			return nil
 		}
 		ids = append(ids, id)
@@ -387,7 +352,7 @@ func resolveRoomReplayCommandOutputDir(requested string) string {
 	return requested
 }
 
-func resolveRoomCommandOutputDir(service rooms.Service, plan rooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
+func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
 	if !plan.Manifest.Room.RecordingEnabled() {
 		return "", nil
 	}
@@ -395,7 +360,7 @@ func resolveRoomCommandOutputDir(service rooms.Service, plan rooms.RoomLaunchPla
 		if destination := plan.Manifest.Room.RecordingDirectory(); destination != "" {
 			return destination, nil
 		}
-		if plan.Mode == rooms.RoomLaunchModeBare {
+		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
 			return service.CreateFreshRunDirectory(plan.ConfigDir)
 		}
 	}
@@ -424,7 +389,7 @@ func roomConfigDir(globalFlags *flags.GlobalFlags) string {
 	return globalFlags.ConfigDir()
 }
 
-func writeRoomDiagnosticProgress(output *roomCommandOutput, participantID string, record serviceSession.SessionDiagnosticRecord) {
+func writeRoomDiagnosticProgress(output *roomCommandOutput, participantID string, record runtimeRooms.RoomDiagnosticRecord) {
 	if output == nil {
 		return
 	}
@@ -442,7 +407,7 @@ func writeRoomDiagnosticProgress(output *roomCommandOutput, participantID string
 	}
 }
 
-func writeRoomResult(output *roomCommandOutput, result rooms.RoomResult) {
+func writeRoomResult(output *roomCommandOutput, result runtimeRooms.RoomResult) {
 	if output == nil {
 		return
 	}
@@ -451,7 +416,7 @@ func writeRoomResult(output *roomCommandOutput, result rooms.RoomResult) {
 		reason = result.Reason
 	}
 	if reason == "" {
-		reason = rooms.RoomTerminationFailed
+		reason = runtimeRooms.RoomTerminationFailed
 	}
 	output.printf("room stopped: reason=%s participants=%d active=%d\n", reason, len(result.Participants), len(result.ActiveParticipants))
 	ids := make([]string, 0, len(result.Participants))
@@ -513,7 +478,7 @@ type roomEventServer struct {
 	done     chan error
 }
 
-func startRoomEventServer(address string, broker rooms.EventBroker) (*roomEventServer, error) {
+func startRoomEventServer(address string, broker *events.Broker) (*roomEventServer, error) {
 	address = strings.TrimSpace(address)
 	if address == "" {
 		return nil, errors.New("room stream address is empty")
@@ -544,7 +509,7 @@ func startRoomEventServer(address string, broker rooms.EventBroker) (*roomEventS
 	return eventServer, nil
 }
 
-func (s *roomEventServer) shutdown(broker rooms.EventBroker) error {
+func (s *roomEventServer) shutdown(broker *events.Broker) error {
 	if s == nil {
 		return nil
 	}

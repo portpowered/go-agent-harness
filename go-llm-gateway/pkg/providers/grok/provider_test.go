@@ -4,12 +4,96 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
+
+func TestSession_TerminalErrorPreservesReplayMismatchFromWrite(t *testing.T) {
+	conn := newMockConn()
+	conn.writeErr = errors.Join(errors.New("strict replay payload mismatch"), providers.ErrReplayMismatch)
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx := newGrokTestContext(t)
+	session.start(ctx)
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{1, 2}),
+	}) {
+		t.Fatal("Send returned false before the injected write failure")
+	}
+	waitForGrokSignal(t, session.Done(), "write failure")
+	if err := session.TerminalError(); !errors.Is(err, providers.ErrReplayMismatch) {
+		t.Fatalf("TerminalError = %v, want replay mismatch", err)
+	}
+}
+
+func TestSession_TerminalErrorPreservesUnexpectedReadError(t *testing.T) {
+	readErr := errors.Join(errors.New("strict replay read mismatch"), providers.ErrReplayMismatch)
+	conn := newMockConn()
+	conn.readErr = readErr
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx := newGrokTestContext(t)
+	session.start(ctx)
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close session: %v", err)
+		}
+	}()
+
+	got := readFromSession(t, ctx, session, "unexpected read error")
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("type = %q, want %q", got.Type, messages.StreamTypeError)
+	}
+	value, ok := got.Value.(*messages.ErrorValue)
+	if !ok || value == nil {
+		t.Fatalf("value = %T, want *messages.ErrorValue", got.Value)
+	}
+	if !errors.Is(value.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("stream error = %v, want replay mismatch cause", value.Err)
+	}
+	if !errors.Is(session.TerminalError(), providers.ErrReplayMismatch) {
+		t.Fatalf("TerminalError = %v, want replay mismatch cause", session.TerminalError())
+	}
+}
+
+func TestSession_TerminalErrorRemainsNilForCleanEOF(t *testing.T) {
+	conn := newMockConn()
+	conn.readErr = io.EOF
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx := newGrokTestContext(t)
+	session.start(ctx)
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close session: %v", err)
+		}
+	}()
+
+	waitForGrokSignal(t, session.Done(), "clean EOF")
+	if err := session.TerminalError(); err != nil {
+		t.Fatalf("TerminalError after clean EOF = %v, want nil", err)
+	}
+}
+
+func TestSession_ContextCancellation(t *testing.T) {
+	conn := newMockConn()
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithCancel(context.Background())
+	session.start(ctx)
+
+	// Cancel context — should trigger session close.
+	cancel()
+
+	waitForGrokSignal(t, session.done, "session close after context cancellation")
+	if err := session.TerminalError(); err != nil {
+		t.Fatalf("TerminalError after context cancellation = %v, want nil", err)
+	}
+}
 
 func TestConnectSession_HappyPath(t *testing.T) {
 	conn := newMockConn()

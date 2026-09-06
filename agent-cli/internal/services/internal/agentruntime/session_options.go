@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -137,8 +138,11 @@ type SessionRunOptions struct {
 	// It is intentionally unexported so transport requests cannot construct
 	// provider gateways or dialers.
 	runtimeFactory sessionRuntimeFactory
-	RecordPath     string
-	ReplayPath     string
+	// ModelCatalog is installed by service composition and owns the immutable
+	// provider capability metadata used during session planning.
+	ModelCatalog runtimeproviders.ModelCatalog
+	RecordPath   string
+	ReplayPath   string
 	// ReplayTiming selects whether websocket replay runs as fast as causal
 	// ordering permits (immediate) or preserves capture timestamp_ms cadence
 	// (recorded). Empty retains the immediate compatibility default.
@@ -289,7 +293,7 @@ type SessionRunOptions struct {
 	// SessionCapabilityCoordinator so planning, runtime, and nested wrappers
 	// cannot close the same capability more than once.
 	CapabilityClose       func() error
-	capabilityCoordinator *SessionCapabilityCoordinator
+	capabilityCoordinator SessionCapabilityCoordinator
 
 	// CancellationIntent carries the CLI-owned, run-scoped SIGINT marker into
 	// terminal accounting. A nil value preserves ordinary caller-cancellation
@@ -614,7 +618,7 @@ func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error)
 
 func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAIConfig, error) {
 	if opts.ModelProvided && opts.Model == "" {
-		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(opts.Model)
+		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, opts.Model)
 	}
 
 	loadedCfg := opts.LoadedConfig
@@ -652,11 +656,11 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		if active.Model == "" && !opts.ModelProvided && opts.Model == "" {
 			active.Model = openAIRealtimeModel
 		} else {
-			return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(active.Model)
+			return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, active.Model)
 		}
 	}
-	if !isOpenAIRealtimeModel(active.Model) {
-		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(active.Model)
+	if _, ok := lookupOpenAIRealtimeModel(opts, active.Model); !ok {
+		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, active.Model)
 	}
 	active.ReasoningEffort = strings.TrimSpace(opts.ReasoningEffort)
 	if active.ReasoningEffort == "" && loadedCfg.Session != nil {
@@ -666,17 +670,12 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		return config.OpenAIConfig{}, err
 	}
 	if active.ReasoningEffort != "" {
-		metadata, _ := LookupOpenAIRealtimeModel(active.Model)
+		metadata, _ := lookupOpenAIRealtimeModel(opts, active.Model)
 		if !metadata.SupportsReasoning {
 			return config.OpenAIConfig{}, fmt.Errorf("OpenAI model %q does not support --reasoning-effort; use %q", active.Model, openAIRealtime21Model)
 		}
 	}
 	return *active, nil
-}
-
-func isOpenAIRealtimeModel(model string) bool {
-	_, ok := LookupOpenAIRealtimeModel(model)
-	return ok
 }
 
 // NewGrokSessionInferencer builds the session-capable Grok realtime inferencer.
@@ -734,9 +733,6 @@ func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg co
 }
 
 func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg config.OpenAIConfig, voice string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
-	if !isOpenAIRealtimeModel(sessionCfg.Model) {
-		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
-	}
 	providerOpts := []oaiprovider.Option{
 		oaiprovider.WithAPIKey(sessionCfg.APIKey),
 		oaiprovider.WithModel(sessionCfg.Model),

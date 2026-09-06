@@ -56,3 +56,38 @@ func TestSendSessionEvent_ContextCancelled(t *testing.T) {
 		t.Fatalf("got %v, want context.Canceled", err)
 	}
 }
+
+func TestSendSessionMessage_EnqueuesRichOrderedInput(t *testing.T) {
+	al, err := New(
+		WithMode(engine.DuplexSession),
+		WithSessionInferencer(noopSessionInferencer{}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	msg := messages.Message{
+		Role: messages.RoleUser,
+		ContentParts: []messages.ContentPart{
+			messages.TextPart{Text: "describe this"},
+			messages.ImagePart{Bytes: []byte{0x89, 'P', 'N', 'G'}, MediaType: "image/png"},
+		},
+	}
+	if err := al.SendSessionMessage(context.Background(), msg, false); err != nil {
+		t.Fatalf("SendSessionMessage: %v", err)
+	}
+}
+
+func TestSendSessionMessage_ContextCancelled(t *testing.T) {
+	al, err := New(
+		WithMode(engine.DuplexSession),
+		WithSessionInferencer(noopSessionInferencer{}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := al.SendSessionMessage(ctx, messages.Message{Role: messages.RoleUser}, true); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want context.Canceled", err)
+	}
+}

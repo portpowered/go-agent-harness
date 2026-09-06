@@ -216,8 +216,8 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 	if rejection == nil {
 		t.Fatalf("missing bob rejection diagnostic: %v", sink.all())
 	}
-	if got := rejection.Fields[SessionDiagnosticFieldRoomID]; got != RoomStreamRoomParticipantID {
-		t.Fatalf("rejection room_id=%q, want %q", got, RoomStreamRoomParticipantID)
+	if got := rejection.Fields[SessionDiagnosticFieldRoomID]; got != "room" {
+		t.Fatalf("rejection room_id=%q, want %q", got, "room")
 	}
 	if got := rejection.Fields[SessionDiagnosticFieldSourcePeer]; got != "alice" {
 		t.Fatalf("rejection source_peer=%q, want alice", got)

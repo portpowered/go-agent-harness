@@ -16,6 +16,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 var sessionFileWorkingDirectoryMu sync.Mutex
@@ -47,27 +49,18 @@ func enterSessionFileWorkingDirectory(t *testing.T, directory string) string {
 
 func newSessionFileToolSurface(t *testing.T, workspace string) (messages.ToolExecutor, []messages.ToolDefinition) {
 	t.Helper()
-	registry := tools.NewEmptyToolRegistry()
-	for _, tool := range []tools.Tool{
-		tools.NewReadFileTool(workspace, true),
-		tools.NewWriteFileTool(workspace, true),
-		tools.NewAppendFileTool(workspace, true),
-		tools.NewExecTool(workspace, true),
-	} {
-		if err := registry.Register(tool); err != nil {
-			t.Fatalf("register %q: %v", tool.Name(), err)
-		}
-	}
-
-	staticExecutor := tools.NewRegistryExecutor(registry)
-	surface, err := tools.ComposeToolSurface(staticExecutor, registry.ToAgentLoopDefs(), nil, nil)
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        workspace,
+		Selections:     runtimeFileToolSelections("exec", "read_file", "write_file", "append_file"),
+		UseDefaultTool: true,
+	})
 	if err != nil {
-		t.Fatalf("compose registry-backed file tool surface: %v", err)
+		t.Fatalf("resolve runtime file tool surface: %v", err)
 	}
-	if surface.Executor == nil || len(surface.Definitions) != 4 {
-		t.Fatalf("file tool surface = %#v, want composed executor and four definitions", surface)
+	if capability.Executor == nil || len(capability.Definitions) != 4 {
+		t.Fatalf("file tool surface = %#v, want composed executor and four definitions", capability)
 	}
-	return surface.Executor, surface.Definitions
+	return capability.Executor, capability.Definitions
 }
 
 func newPolicySessionWriteToolSurface(t *testing.T, workspace string) (messages.ToolExecutor, []messages.ToolDefinition, *tools.FilesystemPolicy) {
@@ -76,16 +69,29 @@ func newPolicySessionWriteToolSurface(t *testing.T, workspace string) (messages.
 	if err != nil {
 		t.Fatalf("resolve filesystem policy: %v", err)
 	}
-	registry := tools.NewEmptyToolRegistry()
-	if err := registry.Register(tools.NewWriteFileToolWithPolicy(policy)); err != nil {
-		t.Fatalf("register write_file: %v", err)
-	}
-	staticExecutor := tools.NewRegistryExecutor(registry)
-	surface, err := tools.ComposeToolSurface(staticExecutor, registry.ToAgentLoopDefs(), nil, nil)
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        policy.PrimaryRoot(),
+		Selections:     runtimeFileToolSelections("write_file"),
+		UseDefaultTool: true,
+	})
 	if err != nil {
 		t.Fatalf("compose policy-backed write surface: %v", err)
 	}
-	return surface.Executor, surface.Definitions, policy
+	return capability.Executor, capability.Definitions, policy
+}
+
+func runtimeFileToolSelections(enabled ...string) []runtimeTools.ToolSelection {
+	allow := make(map[string]struct{}, len(enabled))
+	for _, id := range enabled {
+		allow[id] = struct{}{}
+	}
+	ids := []string{"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir", "web_fetch", "web_search", "show", "mouse", "load_skill", "sleep"}
+	selections := make([]runtimeTools.ToolSelection, 0, len(ids))
+	for _, id := range ids {
+		_, selected := allow[id]
+		selections = append(selections, runtimeTools.ToolSelection{ID: id, Enabled: selected})
+	}
+	return selections
 }
 
 func marshalSessionFileArguments(t *testing.T, args map[string]string) string {

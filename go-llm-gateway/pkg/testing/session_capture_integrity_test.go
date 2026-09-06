@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -264,3 +265,259 @@ func marshalProtectedTestCapture(t *testing.T) []byte {
 	}
 	return data
 }
+
+func TestWriteSessionCaptureFromReaderMatchesCanonicalDigest(t *testing.T) {
+	records := []CapturedSessionEvent{
+		{
+			Sequence: 1, Direction: DirectionClientToServer, TimestampMs: 0,
+			Type: "session.update", PayloadType: SessionPayloadTypeWebSocketMessage,
+			Payload: json.RawMessage(`{"type":"session.update","nested":{"quote":"a\\n\\\"b"}}`),
+		},
+		{
+			Sequence: 2, Direction: DirectionClientToServer, TimestampMs: 15,
+			Type: "response.create", PayloadType: SessionPayloadTypeWebSocketMessage,
+			Payload: json.RawMessage(`{"type":"response.create","items":[1,true,null]}`),
+		},
+	}
+	capture := SessionCapture{
+		Version:            SessionCaptureVersion,
+		Provider:           SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Session:            SessionMetadata{ID: "session-1", StartedAtUTC: "2026-09-05T12:00:00Z"},
+		Records:            records,
+		EndsWithDisconnect: true,
+	}
+	canonical, err := SealSessionCapture(capture)
+	if err != nil {
+		t.Fatalf("SealSessionCapture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "capture.json")
+	reader := &sliceCaptureReader{records: append([]CapturedSessionEvent(nil), records...)}
+	if err := WriteSessionCaptureFromReader(path, capture, reader); err != nil {
+		t.Fatalf("WriteSessionCaptureFromReader: %v", err)
+	}
+	loaded, err := LoadSessionCapture(path)
+	if err != nil {
+		t.Fatalf("LoadSessionCapture: %v", err)
+	}
+	if loaded.Integrity != canonical.Integrity {
+		t.Fatalf("integrity = %#v, want canonical %#v", loaded.Integrity, canonical.Integrity)
+	}
+	if !reflect.DeepEqual(loaded.Records, records) {
+		t.Fatalf("records = %#v, want %#v", loaded.Records, records)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat capture: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("capture mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestWriteSessionCaptureFromReaderSupportsEmptyCaptureVariants(t *testing.T) {
+	for _, endsWithDisconnect := range []bool{false, true} {
+		t.Run(map[bool]string{false: "complete", true: "disconnect"}[endsWithDisconnect], func(t *testing.T) {
+			capture := SessionCapture{
+				Version:            SessionCaptureVersion,
+				Provider:           SessionProviderMetadata{Name: "provider", Model: "model"},
+				Session:            SessionMetadata{StartedAtUTC: "2026-09-05T12:00:00Z"},
+				EndsWithDisconnect: endsWithDisconnect,
+			}
+			sealed, err := SealSessionCapture(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "empty.json")
+			if err := WriteSessionCaptureFromReader(path, capture, &sliceCaptureReader{}); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := LoadSessionCapture(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded.Integrity != sealed.Integrity || len(loaded.Records) != 0 {
+				t.Fatalf("loaded = %#v, want empty capture with integrity %#v", loaded, sealed.Integrity)
+			}
+		})
+	}
+}
+
+func TestWriteSessionCaptureFromReaderUsesCanonicalRecordValidation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid.json")
+	reader := &sliceCaptureReader{records: []CapturedSessionEvent{{
+		Sequence: 1, Direction: DirectionClientToServer, Type: " ",
+		PayloadType: SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"invalid"}`),
+	}}}
+	err := WriteSessionCaptureFromReader(path, SessionCapture{Version: SessionCaptureVersion}, reader)
+	if !errors.Is(err, ErrSessionCaptureStructure) {
+		t.Fatalf("error = %v, want structure error", err)
+	}
+	var validationErr *SessionCaptureValidationError
+	if !errors.As(err, &validationErr) || validationErr.FieldPath != "/records/0/type" {
+		t.Fatalf("validation error = %#v, want canonical type path", validationErr)
+	}
+}
+
+func TestWriteSessionCaptureFromReaderRejectsEmptyPayloadType(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid.json")
+	err := WriteSessionCaptureFromReader(path, SessionCapture{Version: SessionCaptureVersion}, &sliceCaptureReader{records: []CapturedSessionEvent{{
+		Sequence:  1,
+		Direction: DirectionClientToServer,
+		Type:      "session.update",
+		Payload:   json.RawMessage(`{"type":"session.update"}`),
+	}}})
+	if !errors.Is(err, ErrSessionCaptureStructure) {
+		t.Fatalf("error = %v, want structure error", err)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("capture path stat error = %v, want unpublished path", statErr)
+	}
+}
+
+type sliceCaptureReader struct {
+	records []CapturedSessionEvent
+	index   int
+}
+
+func (r *sliceCaptureReader) Next() (CapturedSessionEvent, bool, error) {
+	if r.index == len(r.records) {
+		return CapturedSessionEvent{}, false, nil
+	}
+	record := r.records[r.index]
+	r.index++
+	return record, true, nil
+}
+
+var _ SessionCaptureRecordReader = (*sliceCaptureReader)(nil)
+
+func TestStreamingRecordingDialerSettlesProviderReservations(t *testing.T) {
+	sink := &recordingSink{}
+	live := &testWebSocketDialer{conn: &testWebSocketConn{inbound: [][]byte{[]byte(`{"type":"session.created"}`)}}}
+	dialer, err := NewRecordingWebSocketDialerWithSink(live, "provider", "model", sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := dialer.Dial("wss://example.invalid", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sink.commits, []int{1, 2}) {
+		t.Fatalf("commits = %v, want [1 2]", sink.commits)
+	}
+	if len(sink.discards) != 0 || len(sink.events) != 2 {
+		t.Fatalf("sink events = %d discards = %v, want two events and no discards", len(sink.events), sink.discards)
+	}
+}
+
+func TestStreamingRecordingDialerDiscardsFailedOutboundReservation(t *testing.T) {
+	sink := &recordingSink{}
+	dialer, err := NewRecordingWebSocketDialerWithSink(&testWebSocketDialer{conn: failingWriteConn{}}, "provider", "model", sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := dialer.Dial("wss://example.invalid", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeErr := conn.WriteMessage(1, []byte(`{"type":"session.update"}`))
+	if !errors.Is(writeErr, errFailedWrite) {
+		t.Fatalf("WriteMessage error = %v, want failed write", writeErr)
+	}
+	if !reflect.DeepEqual(sink.commits, []int(nil)) || !reflect.DeepEqual(sink.discards, []int{1}) {
+		t.Fatalf("commits = %v discards = %v, want no commits and discard [1]", sink.commits, sink.discards)
+	}
+}
+
+func TestStreamingRecordingDialerDoesNotPublishAfterAdmissionFailure(t *testing.T) {
+	admissionErr := errors.New("capture admission failed")
+	sink := &recordingSink{appendErr: admissionErr}
+	dialer, err := NewRecordingWebSocketDialerWithSink(&testWebSocketDialer{conn: &testWebSocketConn{}}, "provider", "model", sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := dialer.Dial("wss://example.invalid", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"session.update"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"response.create"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := dialer.FlushToFile(filepath.Join(t.TempDir(), "capture.json")); !errors.Is(err, admissionErr) {
+		t.Fatalf("flush error = %v, want admission failure", err)
+	}
+	if sink.flushCalled {
+		t.Fatal("failed sink was asked to publish a partial capture")
+	}
+	if !sink.abortCalled {
+		t.Fatal("failed sink was not aborted")
+	}
+	if sink.appendCalls != 1 {
+		t.Fatalf("sink append calls = %d, want one after the latched admission failure", sink.appendCalls)
+	}
+}
+
+func TestStreamingRecordingDialerRejectsNilSink(t *testing.T) {
+	if _, err := NewRecordingWebSocketDialerWithSink(nil, "provider", "model", nil); err == nil {
+		t.Fatal("nil sink was accepted")
+	}
+}
+
+type recordingSink struct {
+	events      []CapturedSessionEvent
+	commits     []int
+	discards    []int
+	appendErr   error
+	appendCalls int
+	flushCalled bool
+	abortCalled bool
+}
+
+func (s *recordingSink) Append(event CapturedSessionEvent) error {
+	s.appendCalls++
+	if s.appendErr != nil {
+		return s.appendErr
+	}
+	s.events = append(s.events, cloneCapturedEvent(event))
+	return nil
+}
+
+func (s *recordingSink) Commit(sequence int) error {
+	s.commits = append(s.commits, sequence)
+	return nil
+}
+
+func (s *recordingSink) Discard(sequence int) error {
+	s.discards = append(s.discards, sequence)
+	return nil
+}
+
+func (s *recordingSink) FlushToFile(string, SessionCapture) error {
+	s.flushCalled = true
+	return nil
+}
+
+func (s *recordingSink) Abort() error {
+	s.abortCalled = true
+	return nil
+}
+
+type failingWriteConn struct{}
+
+func (failingWriteConn) ReadMessage() (int, []byte, error) { return 0, nil, os.ErrClosed }
+func (failingWriteConn) WriteMessage(int, []byte) error    { return errFailedWrite }
+func (failingWriteConn) Close() error                      { return nil }
+
+type captureTestError string
+
+func (e captureTestError) Error() string { return string(e) }
+
+const errFailedWrite captureTestError = "write failed"

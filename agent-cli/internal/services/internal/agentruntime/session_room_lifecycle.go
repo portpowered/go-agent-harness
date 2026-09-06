@@ -52,7 +52,7 @@ type roomParticipantPlan struct {
 	tracker               *roomConnectTrackingInferencer
 	participant           *roomParticipantRuntime
 	inputAudioSampleRate  int
-	capabilityCoordinator *SessionCapabilityCoordinator
+	capabilityCoordinator SessionCapabilityCoordinator
 }
 
 type roomParticipantRuntime struct {

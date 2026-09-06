@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
+import rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
@@ -23,6 +22,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/spf13/cobra"
 )
@@ -167,11 +168,10 @@ func TestRouterPreRunResolvesAskTildeAttachmentBeforeReadingIt(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	askFlags := flags.NewAskFlags()
-	loopFlags := flags.NewLoopFlags()
-	owner := NewAskCommand(agent.NewExecutor(nil, nil, nil), askFlags, loopFlags, globalFlags)
+	owner := NewAskCommand(sessionwire.NewService(sessionwire.Dependencies{}), askFlags, flags.NewLoopFlags(), globalFlags)
 	var gotInput agentloop.ExecuteInput
 	var calls int
-	owner.runAsk = func(_ context.Context, _ *agent.Config, input agentloop.ExecuteInput, _ io.Writer) (string, error) {
+	owner.runAsk = func(_ context.Context, _ *session.Request, input agentloop.ExecuteInput) (string, error) {
 		calls++
 		gotInput = input
 		return "ok", nil
@@ -203,9 +203,9 @@ func TestRouterPreRunResolvesAskTildeAttachmentBeforeReadingIt(t *testing.T) {
 func TestRouterPreRunRejectsAskTildeAttachmentBeforeCommandExecution(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
-	owner := NewAskCommand(agent.NewExecutor(nil, nil, nil), askFlags, flags.NewLoopFlags(), globalFlags)
+	owner := NewAskCommand(sessionwire.NewService(sessionwire.Dependencies{}), askFlags, flags.NewLoopFlags(), globalFlags)
 	var calls int
-	owner.runAsk = func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error) {
+	owner.runAsk = func(context.Context, *session.Request, agentloop.ExecuteInput) (string, error) {
 		calls++
 		return "", nil
 	}

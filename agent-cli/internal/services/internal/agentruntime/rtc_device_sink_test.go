@@ -13,6 +13,7 @@ import (
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 func TestRTCDeviceSinkDefaultPumpsInboundFramesToOutput(t *testing.T) {
@@ -279,7 +280,7 @@ func TestRTCDeviceSinkCloseStopsBlockedPump(t *testing.T) {
 	}
 	select {
 	case err := <-pumpDone:
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, audio.ErrClosed) && !errors.Is(err, devicert.ErrRTCDeviceSinkClosed) {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, contract.ErrClosed) && !errors.Is(err, devicert.ErrRTCDeviceSinkClosed) {
 			t.Fatalf("blocked Pump error = %v, want a close identity", err)
 		}
 	case <-time.After(time.Second):

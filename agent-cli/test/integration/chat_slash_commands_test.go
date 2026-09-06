@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
@@ -17,18 +16,18 @@ import (
 func TestSlashCommand_SystemShowsPrompt(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/system")
@@ -47,18 +46,18 @@ func TestSlashCommand_SystemShowsPrompt(t *testing.T) {
 func TestSlashCommand_SystemDoesNotAddUserMessage(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/system")
@@ -80,18 +79,18 @@ func TestSlashCommand_SystemDoesNotAddUserMessage(t *testing.T) {
 func TestSlashCommand_HelpShowsCommands(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/help")
@@ -111,18 +110,18 @@ func TestSlashCommand_HelpShowsCommands(t *testing.T) {
 func TestSlashCommand_HelpDoesNotAddUserMessage(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/help")
@@ -139,18 +138,18 @@ func TestSlashCommand_HelpDoesNotAddUserMessage(t *testing.T) {
 func TestSlashCommand_ClearResetsHistory(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"first response", "second response"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// Have a conversation first.
@@ -189,18 +188,18 @@ func TestSlashCommand_ClearResetsHistory(t *testing.T) {
 func TestSlashCommand_ClearNewSessionID(t *testing.T) {
 	inf := &mockInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	originalID := model.SessionID()
@@ -225,18 +224,18 @@ func TestSlashCommand_ClearNewSessionID(t *testing.T) {
 func TestSlashCommand_ClearModelStillFunctional(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"before clear", "after clear response"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// Send a message before clear.

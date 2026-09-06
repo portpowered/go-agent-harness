@@ -25,7 +25,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:          sessionProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",

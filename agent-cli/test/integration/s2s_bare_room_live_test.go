@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -26,6 +27,9 @@ const (
 	bareRoomLiveProbeStartupTimeout  = 10 * time.Second
 	bareRoomLiveProbeTeardownTimeout = 10 * time.Second
 	bareRoomLiveProbeKillTimeout     = 2 * time.Second
+	bareRoomCredentialEnv            = "AGENT_MODEL__OPENAI__API_KEY"
+	defaultRoomCustomerID            = "customer"
+	defaultRoomAgentID               = "agent"
 )
 
 // TestLiveBareRoomRunDefaultDevices is the one bounded, credential-gated
@@ -38,9 +42,9 @@ func TestLiveBareRoomRunDefaultDevices(t *testing.T) {
 	if os.Getenv(bareRoomLiveProbeOptInEnv) != "1" {
 		t.Skipf("SKIP: %s!=1; bare-room live probe is explicit opt-in", bareRoomLiveProbeOptInEnv)
 	}
-	apiKey := strings.TrimSpace(os.Getenv(servicetest.DefaultRoomCredentialEnv))
+	apiKey := strings.TrimSpace(os.Getenv(bareRoomCredentialEnv))
 	if apiKey == "" {
-		t.Skipf("BLOCKED: %s is not set; bare-room live probe has no credential", servicetest.DefaultRoomCredentialEnv)
+		t.Skipf("BLOCKED: %s is not set; bare-room live probe has no credential", bareRoomCredentialEnv)
 	}
 
 	registry := devicegw.NewHostDeviceRegistry()
@@ -189,13 +193,13 @@ func bareRoomLiveProbeEnvironment(apiKey string) []string {
 		name, _, ok := strings.Cut(entry, "=")
 		if ok {
 			switch name {
-			case servicetest.DefaultRoomCredentialEnv, "AGENT_MODEL__OPENAI__MODEL", "AGENT_MODEL__OPENAI__BASE_URL", "AGENT_MODEL__PROVIDER":
+			case bareRoomCredentialEnv, "AGENT_MODEL__OPENAI__MODEL", "AGENT_MODEL__OPENAI__BASE_URL", "AGENT_MODEL__PROVIDER":
 				continue
 			}
 		}
 		environment = append(environment, entry)
 	}
-	return append(environment, servicetest.DefaultRoomCredentialEnv+"="+apiKey)
+	return append(environment, bareRoomCredentialEnv+"="+apiKey)
 }
 
 func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID devicegw.DeviceID) (bareRoomLiveReadiness, error) {
@@ -228,8 +232,8 @@ func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID devicegw.DeviceID) 
 				if readyEvents != 2 || len(ready) != 2 {
 					return readiness, fmt.Errorf("participant readiness events=%d identities=%d, want exactly two", readyEvents, len(ready))
 				}
-				customer := ready[servicetest.DefaultRoomCustomerID]
-				agent := ready[servicetest.DefaultRoomAgentID]
+				customer := ready[defaultRoomCustomerID]
+				agent := ready[defaultRoomAgentID]
 				if customer.kind != "human" || customer.input != string(inputID) || customer.output != string(outputID) {
 					return readiness, fmt.Errorf("customer readiness=%+v, want human input=%q output=%q", customer, inputID, outputID)
 				}
@@ -440,7 +444,7 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 		return fmt.Errorf("run directory %q does not use the fresh room-run prefix", outputDir)
 	}
 
-	manifestPath := filepath.Join(outputDir, servicetest.RoomEvidenceManifestPath)
+	manifestPath := filepath.Join(outputDir, runtimeRooms.RoomReplayBundleManifestPath)
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("read terminal manifest: %w", err)
@@ -452,10 +456,10 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return fmt.Errorf("decode terminal manifest: %w", err)
 	}
-	if !manifest.Finalized || manifest.TerminationReason != string(servicetest.RoomTerminationStopped) || manifest.Reason != string(servicetest.RoomTerminationStopped) || manifest.Error != "" {
+	if !manifest.Finalized || manifest.TerminationReason != string(runtimeRooms.RoomTerminationStopped) || manifest.Reason != string(runtimeRooms.RoomTerminationStopped) || manifest.Error != "" {
 		return fmt.Errorf("terminal manifest = %+v, want finalized stopped result without error", manifest)
 	}
-	wantKinds := map[string]string{servicetest.DefaultRoomCustomerID: "human", servicetest.DefaultRoomAgentID: "agent"}
+	wantKinds := map[string]string{defaultRoomCustomerID: "human", defaultRoomAgentID: "agent"}
 	if len(manifest.Participants) != len(wantKinds) || len(manifest.TurnCounts) != len(wantKinds) {
 		return fmt.Errorf("manifest participants=%d turns=%d, want two each", len(manifest.Participants), len(manifest.TurnCounts))
 	}
@@ -464,7 +468,7 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 		if !ok || participant.Kind != kind || !participant.Connected {
 			return fmt.Errorf("manifest participant %q = %+v, want connected %s", id, participant, kind)
 		}
-		if id == servicetest.DefaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
+		if id == defaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
 			return fmt.Errorf("manifest customer devices=%q/%q, want %q/%q", participant.Input, participant.Output, customerInput, customerOutput)
 		}
 		if manifest.TurnCounts[id] != 0 {

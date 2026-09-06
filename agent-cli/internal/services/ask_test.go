@@ -11,12 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 type failingReader struct {
@@ -243,9 +242,8 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 		ReplayCapturePath:     "replay.json",
 	}
 
-	want := &agent.Config{
+	want := &session.Request{
 		SystemPrompt:          askFlags.SystemPrompt,
-		NoSystemInformation:   askFlags.NoSystemInformation,
 		SessionID:             askFlags.SessionID,
 		ContinueLastSession:   askFlags.ContinueLastSession,
 		InitialHistory:        initialHistory,
@@ -253,19 +251,11 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 		Provider:              askFlags.Provider,
 		APIKey:                askFlags.APIKey,
 		BaseURL:               askFlags.BaseURL,
-		Stream:                askFlags.Stream,
-		OutputJSON:            askFlags.OutputJSON,
-		OutputReasoningTokens: askFlags.OutputReasoningTokens,
 		OutputModality:        askFlags.OutputModality,
 		ModelConfig:           askFlags.ModelConfig,
+		OutputReasoningTokens: askFlags.OutputReasoningTokens,
 		RecordCapturePath:     askFlags.RecordCapturePath,
 		ReplayCapturePath:     askFlags.ReplayCapturePath,
-		ConfigDir:             globalFlags.ConfigDirPath,
-		WorkDir:               globalFlags.WorkDirPath,
-		AllowPaths:            globalFlags.AllowPathList,
-		Verbose:               true,
-		VerbosityLevel:        globalFlags.VerboseMode,
-		LogToStdout:           globalFlags.LogToStdout,
 	}
 
 	got := BuildAgentConfigFromFlags(globalFlags, askFlags, initialHistory, "call-session")
@@ -274,20 +264,18 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 	}
 }
 
-func TestBuildAgentConfigFromFlags_DefaultWorkDirUsesLaunchDirectory(t *testing.T) {
+func TestCLIHostDefaultWorkDirUsesLaunchDirectory(t *testing.T) {
 	launchDir := t.TempDir()
 	t.Chdir(launchDir)
 
-	cfg := BuildAgentConfigFromFlags(
-		&flags.GlobalFlags{ConfigDirPath: t.TempDir()},
-		flags.NewAskFlags(),
-		nil,
-		"",
-	)
+	workDir, err := cliWorkDir(&flags.GlobalFlags{ConfigDirPath: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got, err := os.Getwd(); err != nil {
 		t.Fatalf("get launch directory: %v", err)
-	} else if cfg.WorkDir != got {
-		t.Fatalf("default WorkDir = %q, want launch directory %q", cfg.WorkDir, got)
+	} else if workDir != got {
+		t.Fatalf("default WorkDir = %q, want launch directory %q", workDir, got)
 	}
 }
 
@@ -296,19 +284,20 @@ func TestBuildAgentConfigFromFlags_UsesCallSessionWithoutGlobalFlags(t *testing.
 	if got.SessionID != "call-session" {
 		t.Errorf("SessionID = %q, want call-session", got.SessionID)
 	}
-	if got.ConfigDir != "" || got.Verbose || got.VerbosityLevel != 0 || got.LogToStdout {
-		t.Errorf("global defaults = %#v, want zero values", got)
-	}
 }
 
 func TestDefaultToolDefs_DelegatesToRegistry(t *testing.T) {
-	registry := tools.NewToolRegistry()
-	defs := DefaultToolDefs(registry)
-	if len(defs) != registry.Count() {
-		t.Fatalf("definition count = %d, want registry count %d", len(defs), registry.Count())
+	input := []messages.ToolDefinition{{Name: "read_file", Description: "read a file"}}
+	defs := DefaultToolDefs(input)
+	if len(defs) != len(input) {
+		t.Fatalf("definition count = %d, want input count %d", len(defs), len(input))
 	}
 	if len(defs) == 0 {
 		t.Fatal("DefaultToolDefs() returned no definitions for the default registry")
+	}
+	defs[0].Name = "mutated"
+	if input[0].Name == "mutated" {
+		t.Fatal("DefaultToolDefs returned aliased definitions")
 	}
 	for _, def := range defs {
 		if def.Name == "" || def.Description == "" {

@@ -57,7 +57,7 @@ func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionR
 // RunSessionWithMaxDurationClock is the deterministic-clock seam for the
 // duration path. Production callers should use RunSessionWithMaxDuration.
 func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -99,7 +99,7 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 // wrapper's audio sink. A zero duration delegates to the existing text-seed
 // path so omitted-duration behavior remains unchanged.
 func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)

@@ -1,7 +1,16 @@
 version: "2"
 
 run:
-  tests: false
+  # New code in tests must follow the same error/context/suppression policy as
+  # production. The architecture gate separately keeps the stronger physical
+  # test budgets.
+  tests: true
+
+issues:
+  # The repository has a deletion-only AST baseline for old debt. Keeping the
+  # no-new-debt filter here makes direct invocations and the pinned CI command
+  # converge on the same rule; CI must fetch the selected base ref first.
+  new-from-rev: origin/main
 
 linters:
   default: none
@@ -9,6 +18,27 @@ linters:
     - funlen
     - gocognit
     - revive
+
+    # Correctness and error-flow checks.
+    - errcheck
+    - ineffassign
+    - unused
+    - nilerr
+    - errorlint
+    - bodyclose
+    - contextcheck
+    - durationcheck
+
+    # Policy values and finite state transitions.
+    - goconst
+    - mnd
+    - exhaustive
+
+    # Package state, prohibited effects, and suppression hygiene.
+    - gochecknoglobals
+    - gochecknoinits
+    - forbidigo
+    - nolintlint
 
   settings:
     funlen:
@@ -24,3 +54,52 @@ linters:
             - max: 1307
               skip-comments: false
               skip-blank-lines: false
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      check:
+        - switch
+      # A default branch must not silently hide a newly added enum member.
+      default-signifies-exhaustive: false
+      package-scope-only: true
+    goconst:
+      min-len: 4
+      min-occurrences: 3
+      match-constant: true
+      numbers: false
+      ignore-calls: true
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+        - assign
+      # Language and wire protocol sentinels are intentionally readable as
+      # literals. Meaningful policy values still require named constants.
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "10"
+        - "100"
+        - "255"
+    forbidigo:
+      forbid:
+        - pattern: '^os\.Getwd$'
+          msg: inject the working directory through a host boundary
+        - pattern: '^os\.UserHomeDir$'
+          msg: inject host directories through a boundary
+        - pattern: '^fmt\.(Print|Printf|Println)$'
+          msg: return diagnostics through an injected writer or typed result
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false

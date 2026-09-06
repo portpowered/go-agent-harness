@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -82,18 +81,18 @@ func TestChatModel_BasicInput(t *testing.T) {
 
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// --- type the message ---
@@ -138,18 +137,18 @@ func TestChatModel_MultiTurn(t *testing.T) {
 
 	inf := &mockInferencerSequence{responses: []string{resp1, resp2}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// Turn 1.
@@ -180,15 +179,16 @@ func TestChatModel_ExitCommand(t *testing.T) {
 		t.Run(exitWord, func(t *testing.T) {
 			inf := &mockInferencer{response: "never reached"}
 			exec := &mockToolExecutor{}
-			agentExec := agent.NewExecutor(exec, nil, inf)
 			globalFlags := flags.NewGlobalFlags()
 			askFlags := flags.NewAskFlags()
+			askFlags.SystemPrompt = "none"
 			cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-			sessionID, _ := agentExec.NewChatSessionID(cfg)
+			chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+			sessionID := newChatSessionID(t, chatService, *cfg)
 
 			var out bytes.Buffer
 			ctx := context.Background()
-			model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+			model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 			model = runInit(model)
 
 			model = typeInput(model, exitWord)
@@ -211,15 +211,15 @@ func TestChatModel_ExitCommand(t *testing.T) {
 func TestChatModel_BackspaceEditing(t *testing.T) {
 	inf := &mockInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, _ := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID := newChatSessionID(t, chatService, *cfg)
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	// Type "hello" then backspace twice → "hel"
@@ -243,15 +243,15 @@ func TestChatModel_BackspaceEditing(t *testing.T) {
 func TestChatModel_EmptyInput(t *testing.T) {
 	inf := &mockInferencer{response: "should not appear"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, _ := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID := newChatSessionID(t, chatService, *cfg)
 
 	var out, errOut bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &errOut)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &errOut)
 
 	// Press Enter without typing anything.
 	model, _ = pressEnter(model)
@@ -273,15 +273,15 @@ func TestChatModel_EmptyInput(t *testing.T) {
 func TestChatModel_EmptyInputWhitespaceOnly(t *testing.T) {
 	inf := &mockInferencer{response: "should not appear"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, _ := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID := newChatSessionID(t, chatService, *cfg)
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 
 	model = typeInput(model, "   ")
 	model, _ = pressEnter(model)
@@ -300,15 +300,15 @@ func TestChatModel_ErrorHandling(t *testing.T) {
 	const errMsg = "inference failed: rate limit"
 	inf := &mockInferencerError{err: errors.New(errMsg)}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, _ := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID := newChatSessionID(t, chatService, *cfg)
 
 	var out, errOut bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &errOut)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &errOut)
 	model = runInit(model)
 
 	model = typeInput(model, "hello")
@@ -331,18 +331,18 @@ func TestChatModel_ErrorHandling(t *testing.T) {
 func TestChatModel_SessionPersistence(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"first", "second"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "first message")
@@ -453,18 +453,18 @@ func TestChatModel_StreamingPartials(t *testing.T) {
 	chunks := []string{"One ", "two ", "three"}
 	inf := &mockChunkedInferencer{chunks: chunks}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "count")
@@ -521,18 +521,18 @@ func TestChatModel_MarkdownRendering(t *testing.T) {
 	const mdResponse = "Here is **bold** and _italic_ text.\n\n- List item one\n- List item two"
 	inf := &mockInferencer{response: mdResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "show markdown")
@@ -552,28 +552,32 @@ func TestChatModel_MarkdownRendering(t *testing.T) {
 	}
 }
 
-// TestExecutor_ExecuteStreamingTurn_ReturnsStream verifies that ExecuteStreamingTurn
-// returns an event stream that the caller can drain and assemble into the expected text.
+// TestSessionService_Open_ReturnsStream verifies that the public session
+// service returns an event stream that the caller can drain and assemble into
+// the expected text.
 func TestExecutor_ExecuteStreamingTurn_ReturnsStream(t *testing.T) {
 	const expected = "streamed response"
 	inf := &mockInferencer{response: expected}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	cfg.Stream = true
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
 
 	ctx := context.Background()
-	runData, err := agentExec.BuildLoop(ctx, cfg)
+	handle, err := chatService.Open(ctx, *cfg)
 	if err != nil {
-		t.Fatalf("BuildLoop: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
-	defer runData.CloseLogger()
+	defer func() {
+		if err := handle.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
 
-	stream, err := agentExec.ExecuteStreamingTurn(ctx, runData, agentloop.NewExecuteInput("hello"), cfg)
+	stream, err := handle.Stream(ctx, agentloop.NewExecuteInput("hello"))
 	if err != nil {
-		t.Fatalf("ExecuteStreamingTurn: %v", err)
+		t.Fatalf("Stream: %v", err)
 	}
 	defer func() { _ = stream.Close() }()
 

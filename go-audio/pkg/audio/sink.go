@@ -9,3 +9,12 @@ type AudioSink interface {
 	// Close finalizes the sink and releases any owned resources.
 	Close() error
 }
+
+// SampleSink is an optional count-aware extension to AudioSink. File and
+// replay consumers use it when a response ends between fixed device quanta;
+// ordinary device sinks can continue implementing AudioSink alone and must
+// reject an unsupported partial tail explicitly.
+type SampleSink interface {
+	AudioSink
+	WriteSamples(context.Context, []int16) error
+}

@@ -1,0 +1,52 @@
+--- a/pkg/services/factory_runtime/internal/services/orchestration/runtime/restored_work_recovery.go
++++ b/pkg/services/factory_runtime/internal/services/orchestration/runtime/restored_work_recovery.go
+@@ -254,6 +254,12 @@
+ 			placeID := strings.TrimSpace(records[index].ToPlaceID)
+ 			if placeID == "" {
+ 				continue
++			}
++			// Occupancy and active dispatch inputs describe the current runtime
++			// marking. A state-change record is historical fallback only, so it
++			// must not replace or conflict with an authoritative current place.
++			if _, exists := placements[workID]; exists {
++				break
+ 			}
+ 			if err := addRestoredPlacement(placements, workID, placeID); err != nil {
+ 				return err
+--- a/pkg/services/factory_runtime/internal/services/orchestration/runtime/factory_resume_wake_test.go
++++ b/pkg/services/factory_runtime/internal/services/orchestration/runtime/factory_resume_wake_test.go
+@@ -279,8 +279,8 @@
+ 	}
+ }
+ 
+-func TestNew_RejectsConflictingCurrentWorkPlacements(t *testing.T) {
+-	workItem := work.FactoryWorkItem{ID: "work-conflicting-current-places", WorkTypeID: "task"}
++func TestNew_PrefersCurrentOccupancyOverHistoricalWorkStateChange(t *testing.T) {
++	workItem := work.FactoryWorkItem{ID: "work-current-place-wins", WorkTypeID: "task"}
+ 	restored := &interfaces.FactoryWorldState{
+ 		WorkItemsByID: map[string]work.FactoryWorkItem{workItem.ID: workItem},
+ 		PlaceOccupancyByID: map[string]interfaces.FactoryPlaceOccupancy{
+@@ -293,10 +293,20 @@
+ 			}},
+ 		},
+ 	}
+-	_, err := newTestFactory(withNet(buildSimpleNet()), withRestoredWorldState(restored))
+-	if err == nil || !strings.Contains(err.Error(), "conflicting current places") {
+-		t.Fatalf("New error = %v, want fail-closed conflicting-current-places error", err)
++	f, err := newTestFactory(withNet(buildSimpleNet()), withRestoredWorldState(restored))
++	if err != nil {
++		t.Fatalf("New: %v", err)
++	}
++	snapshot, err := f.GetEngineStateSnapshot(context.Background())
++	if err != nil {
++		t.Fatalf("GetEngineStateSnapshot: %v", err)
+ 	}
++	if !markingContainsWorkAtPlace(&snapshot.Marking, workItem.ID, "task:init") {
++		t.Fatalf("restored Work marking = %#v, want authoritative task:init occupancy", snapshot.Marking.PlaceTokens)
++	}
++	if markingContainsWorkAtPlace(&snapshot.Marking, workItem.ID, "task:done") {
++		t.Fatalf("historical Work state change was restored over current occupancy: %#v", snapshot.Marking.PlaceTokens)
++	}
+ }
+ 
+ func TestNew_RestoresFailedDispatchReferencesWithoutDroppingFailedWork(t *testing.T) {
