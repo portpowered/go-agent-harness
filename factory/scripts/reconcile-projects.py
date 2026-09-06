@@ -626,6 +626,11 @@ def reconcile(
             projects = [work for work in projects if _work_id(work) == selected_project]
         else:
             projects = [work for work in projects if _work_name(work) == selected_project]
+            current_projects = [
+                work for work in projects if not _is_superseded(work)
+            ]
+            if current_projects:
+                projects = current_projects
         if not projects:
             raise ReconcileError(
                 f"admitted project {selected_project!r} is absent from the work list"

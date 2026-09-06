@@ -97,6 +97,7 @@ class FactoryGraphTest(unittest.TestCase):
             private.mkdir()
             executable = private / "you"
             executable.write_text("#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a and a[0]=='run': a += ['--with-mock-workers',"+repr(str(mock))+"]\nos.execv("+repr(YOU)+",["+repr(YOU)+"]+a)\n")
+            executable.write_text(executable.read_text().replace("a=sys.argv[1:]\n", "a=sys.argv[1:]\nif '--resume' in a and os.path.exists("+repr(str(root / "fail-resume"))+"): sys.exit(23)\n"))
             executable.chmod(0o700)
             (private / "runtime.json").write_text(json.dumps({"sourceRevision":"test-only-mock-wrapper","sha256":hashlib.sha256(executable.read_bytes()).hexdigest()}))
             with socket.socket() as sock:
@@ -114,6 +115,14 @@ class FactoryGraphTest(unittest.TestCase):
             try:
                 started = launcher.start(root)
                 self.assertTrue(started["running"])
+                saved_manifest = root/"factory/projects/audio-runtime/manifest.json"
+                original_manifest = saved_manifest.read_text()
+                changed = json.loads(original_manifest)
+                changed["contractRevision"] = "conflicting-revision"
+                saved_manifest.write_text(json.dumps(changed))
+                with self.assertRaisesRegex(ValueError,"ownership is mismatched"):
+                    launcher.start(root)
+                saved_manifest.write_text(original_manifest)
                 first_session = started["runtime"]["sessionId"]
                 deadline = time.monotonic() + 20
                 while time.monotonic() < deadline:
@@ -124,11 +133,25 @@ class FactoryGraphTest(unittest.TestCase):
                 else:
                     self.fail("mock delivery did not block before launcher restart")
                 self.assertFalse(launcher.stop(root)["running"])
+                (root/"fail-resume").touch()
+                with self.assertRaisesRegex(ValueError, "factory supervisor failed"):
+                    launcher.start(root)
+                failed = launcher.status(root)["runtime"]
+                self.assertEqual(failed["sessionId"],first_session)
+                self.assertIn("recoveryInput",failed)
+                (root/"fail-resume").unlink()
                 resumed = launcher.start(root)
                 self.assertTrue(resumed["running"])
                 self.assertNotEqual(resumed["runtime"]["sessionId"],first_session)
                 self.assertEqual(resumed["admission"]["sessionId"],resumed["runtime"]["sessionId"])
                 self.assertEqual(json.loads((root/"counts.json").read_text())["lead"],2)
+                launcher.stop(root)
+                runtime_path = root/".git/factory-runtime.json"
+                retained = runtime_path.read_text()
+                runtime_path.unlink()
+                with self.assertRaisesRegex(ValueError,"refusing to seed another project"):
+                    launcher.start(root)
+                runtime_path.write_text(retained)
             except Exception as error:
                 self.fail(str(error)+"\n"+(root/".git/factory-supervisor.log").read_text()[-15000:])
             finally:

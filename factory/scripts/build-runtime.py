@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
+import tarfile
 import uuid
 
 from project_contract import digest, root_path
@@ -23,10 +25,18 @@ def build(source, root):
     directory.mkdir(mode=0o700, exist_ok=True)
     temporary = directory / ("you-" + uuid.uuid4().hex)
     try:
-        subprocess.run(["go", "build", "-o", str(temporary), "./cmd/factory"], cwd=source,
-                       env=dict(os.environ, GOWORK="off"), check=True)
+        with tempfile.TemporaryDirectory(prefix="factory-source-") as scratch:
+            archive = Path(scratch) / "source.tar"
+            checkout = Path(scratch) / "source"
+            checkout.mkdir()
+            subprocess.run(["git", "-C", str(source), "archive", "--format=tar",
+                            "--output", str(archive), revision], check=True)
+            with tarfile.open(archive) as stream:
+                stream.extractall(checkout, filter="data")
+            subprocess.run(["go", "build", "-o", str(temporary), "./cmd/factory"], cwd=checkout,
+                           env=dict(os.environ, GOWORK="off"), check=True)
         temporary.chmod(0o700)
-        proof = {"sourceRevision":revision, "sha256":digest(temporary)}
+        proof = {"sourceMode":"git-archive", "sourceRevision":revision, "sha256":digest(temporary)}
         os.replace(temporary, directory / "you")
         # Launcher validates both files together and fails closed during replacement.
         (directory / "runtime.json").write_text(json.dumps(proof, indent=2) + "\n")

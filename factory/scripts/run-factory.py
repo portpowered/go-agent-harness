@@ -125,6 +125,8 @@ def serve(root):
     except BlockingIOError as error:
         raise ContractError("a factory supervisor already owns this repository") from error
     previous = read_json(record_path) if record_path.exists() else None
+    if previous is None and project_admission.status(root) is not None:
+        raise ContractError("admission exists without runtime evidence; refusing to seed another project")
     if running(previous):
         raise ContractError("an owned factory process is already running")
     if previous and (previous.get("project") != contract["project"] or
@@ -145,10 +147,15 @@ def serve(root):
                "--record", str(recording)]
     evidence = None
     if previous:
-        source = Path(previous.get("recording", "")).resolve()
+        recovery = previous.get("recoveryInput") if previous.get("status") in {"starting", "failed"} else None
+        source = Path(recovery["path"] if recovery else previous.get("recording", "")).resolve()
         if not source.is_relative_to(runs.resolve()) or not source.is_file():
             raise ContractError("owned recovery recording is unavailable; do not resubmit work")
-        evidence = {"path": str(source), "sha256": digest(source)}
+        source_hash = digest(source)
+        expected_hash = recovery.get("sha256") if recovery else previous.get("recordingSha256")
+        if expected_hash and expected_hash != source_hash:
+            raise ContractError("owned recovery recording has changed since it was saved")
+        evidence = {"path": str(source), "sha256": source_hash}
         command += ["--resume", str(source)]
     else:
         batch = {"requestId": "admit-" + contract["project"] + "-" + contract["contractRevision"],
@@ -159,25 +166,34 @@ def serve(root):
         command += ["--work", str(startup)]
     environment = dict(runtime_environment(root), FACTORY_ROOT=str(root), FACTORY_SERVER_URL=SERVER,
                        FACTORY_PROJECT_MANIFEST=str(root / "factory/projects/audio-runtime/manifest.json"))
-    child = subprocess.Popen(command, cwd=root, env=environment)
+    child = None
     stopped = False
     def terminate(signum, frame):
         nonlocal stopped
         stopped = True
-        if child.poll() is None:
+        if child is not None and child.poll() is None:
             child.send_signal(signal.SIGINT)
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGINT, terminate)
     record = {"project": contract["project"], "contractRevision": contract["contractRevision"],
               "root": str(root), "server": SERVER, "pid": os.getpid(),
-              "processStart": process_start(os.getpid()), "childPid": child.pid,
+              "processStart": process_start(os.getpid()), "childPid": None,
               "recording": str(recording), "definitionSha256": definition_hash,
               "runtimeBuild": read_json(common / "factory-bin/runtime.json"),
-              "integrationRevision": subprocess.check_output(["git", "-C", str(root),
+              "integrationRevision": previous["integrationRevision"] if previous else subprocess.check_output(["git", "-C", str(root),
                                          "rev-parse", "HEAD"], text=True).strip(),
               "status": "starting"}
+    if previous and previous.get("sessionId"):
+        record["sessionId"] = previous["sessionId"]
+    if evidence:
+        record["recoveryInput"] = evidence
     write_record(record_path, record)
     try:
+        if stopped:
+            raise ContractError("startup cancelled before runtime activation")
+        child = subprocess.Popen(command, cwd=root, env=environment)
+        record["childPid"] = child.pid
+        write_record(record_path, record)
         deadline = time.monotonic() + 45
         session_id = None
         while not stopped and child.poll() is None and time.monotonic() < deadline:
@@ -194,13 +210,14 @@ def serve(root):
         else:
             project_admission.bind_session(root, contract["project"], contract["contractRevision"], SERVER, session_id)
         record.update(status="running", sessionId=session_id)
+        record.pop("recoveryInput", None)
         if previous:
             record["predecessor"] = evidence
         write_record(record_path, record)
         result = child.wait()
         record.update(status="stopped" if stopped else "exited", exitCode=result)
     except BaseException as error:
-        if child.poll() is None:
+        if child is not None and child.poll() is None:
             child.terminate()
             try:
                 child.wait(timeout=20)
@@ -210,15 +227,29 @@ def serve(root):
         record.update(status="failed", error=str(error))
         raise
     finally:
+        if recording.is_file():
+            record["recordingSha256"] = digest(recording)
         write_record(record_path, record)
         fcntl.flock(lock, fcntl.LOCK_UN)
         lock.close()
 
 
 def start(root):
+    contract = manifest(root)
     observed = status(root)
     if observed["running"]:
+        record, owner = observed["runtime"], observed["admission"]
+        if (record.get("root") != str(root) or record.get("server") != SERVER or
+            record.get("project") != contract["project"] or
+            record.get("contractRevision") != contract["contractRevision"] or
+            record.get("status") != "running" or not owner or
+            owner.get("project") != contract["project"] or
+            owner.get("contractRevision") != contract["contractRevision"] or
+            owner.get("sessionId") != record.get("sessionId")):
+            raise ContractError("live runtime ownership is mismatched or startup is incomplete")
         return observed
+    if observed["runtime"] is None and observed["admission"] is not None:
+        raise ContractError("admission exists without runtime evidence; refusing to seed another project")
     subprocess.run(["you", "factory", "config", "validate", str(root / "factory/factory.json")],
                    cwd=root, env=runtime_environment(root), check=True, capture_output=True)
     manifest(root)
