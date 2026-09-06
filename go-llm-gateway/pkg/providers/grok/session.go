@@ -81,6 +81,11 @@ func (s *grokSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 	return s.SendWithOutcome(ctx, msg).OK()
 }
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started. The runtime uses
+// this optional marker to avoid echoing that configuration on session.created.
+func (*grokSession) InitialSessionConfigSent() bool { return true }
+
 // SendWithOutcome writes a StreamMessage to the outbound queue and reports the
 // precise public lifecycle outcome.
 func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {

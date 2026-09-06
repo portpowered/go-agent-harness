@@ -108,6 +108,11 @@ func (s *realtimeSession) Send(ctx context.Context, msg messages.StreamMessage) 
 	return s.SendWithOutcome(ctx, msg).OK()
 }
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started. The runtime uses
+// this optional marker to avoid echoing that configuration on session.created.
+func (*realtimeSession) InitialSessionConfigSent() bool { return true }
+
 // SendWithOutcome admits a StreamMessage to the session's outbound wire queue
 // or bounded response-intent queue and reports that local admission outcome.
 // A response intent accepted while another response is active is dispatched by

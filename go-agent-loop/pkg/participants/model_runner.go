@@ -65,6 +65,21 @@ type ModelRunner struct {
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
 
+// initialSessionConfigSentMarker is an optional provider capability. Native
+// realtime providers send their complete initial session.update while
+// ConnectSession is establishing the transport. The model runner must not
+// echo its compatibility configuration when those providers acknowledge that
+// ownership; injected sessions that omit the marker retain the legacy
+// SESSION.CREATED -> SESSION.UPDATE behavior.
+type initialSessionConfigSentMarker interface {
+	InitialSessionConfigSent() bool
+}
+
+func providerSentInitialSessionConfig(session messages.Session) bool {
+	marker, ok := session.(initialSessionConfigSentMarker)
+	return ok && marker.InitialSessionConfigSent()
+}
+
 // ErrSessionInputQueueFull reports that the explicit session ingress is at
 // capacity. Returning this bounded admission result keeps callers such as tool
 // result forwarding from waiting on a provider or an unbounded queue.
@@ -142,8 +157,10 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // persistent session via the given SessionInferencer and forwards all
 // inbound session events (from session.Receive()) to DeltaOutbox.
 // The Inbox is allocated but not read in session mode.
-// When config is non-nil, a SESSION.UPDATE message is sent to the session
-// immediately after SESSION.CREATED is received from the provider.
+// When config is non-nil, a SESSION.UPDATE message is sent to an unmarked
+// session immediately after SESSION.CREATED is received from the provider.
+// Provider sessions that already sent their initial configuration during
+// ConnectSession opt out through the optional InitialSessionConfigSent marker.
 // UserAudioInbox is a buffered channel for accepting raw PCM audio input;
 // contentful audio arriving while the model is streaming triggers barge-in
 // (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
@@ -277,8 +294,9 @@ func (r *ModelRunner) Run(ctx context.Context) error {
 // session.Receive() to DeltaOutbox. It runs until the context is cancelled or
 // the session terminates. This is the session-mode counterpart to runInference.
 //
-// When sessionConfig is set, a SESSION.UPDATE message is sent to the session
-// immediately after SESSION.CREATED is received (before forwarding it to DeltaOutbox).
+// When sessionConfig is set, a SESSION.UPDATE message is sent to an unmarked
+// session immediately after SESSION.CREATED is received (before forwarding it
+// to DeltaOutbox). Provider-owned initial configuration is not echoed.
 //
 // When UserAudioInbox is set, this method also selects on it. If audio arrives
 // while the model has a non-terminal response (from MESSAGE.START through
@@ -496,10 +514,13 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 		state.hasOutput = true
 	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
-	// session parameters (model, instructions, modalities) if set. Use the
-	// same failure-preserving path as mid-session updates so a rejected
-	// provider update cannot silently leave the advertised surface stale.
-	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil {
+	// session parameters (model, instructions, modalities) if set. Native
+	// providers mark sessions that already sent this configuration during
+	// ConnectSession, so their acknowledgement cannot feed a session.update
+	// loop. Use the same failure-preserving path as mid-session updates for
+	// unmarked sessions so a rejected update cannot silently leave the
+	// advertised surface stale.
+	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil && !providerSentInitialSessionConfig(session) {
 		r.forwardSessionEvent(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionUpdate,
 			Value: messages.NewSessionUpdateValue(r.sessionConfig),

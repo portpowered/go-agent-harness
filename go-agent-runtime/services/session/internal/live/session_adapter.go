@@ -113,6 +113,18 @@ func (s *orderedSession) Send(ctx context.Context, msg messages.StreamMessage) b
 	return s.SendWithOutcome(ctx, msg).OK()
 }
 
+// InitialSessionConfigSent preserves the provider-owned startup configuration
+// marker across the runtime's ordering/media wrapper. The model runner uses
+// this optional capability to avoid echoing the initial session.update when a
+// native provider already sent it during ConnectSession.
+func (s *orderedSession) InitialSessionConfigSent() bool {
+	if s == nil || s.inner == nil {
+		return false
+	}
+	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
+	return ok && marker.InitialSessionConfigSent()
+}
+
 func (s *orderedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	if s == nil || s.inner == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
