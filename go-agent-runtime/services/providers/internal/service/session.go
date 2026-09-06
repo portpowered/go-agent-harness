@@ -39,12 +39,14 @@ func (s *Service) BuildSession(ctx context.Context, cfg runtimeproviders.Session
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
 	providerName := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	if providerName == "" {
 		providerName = providerOpenAI
 	}
 	model := strings.TrimSpace(cfg.Model)
+	if err := s.ValidateSessionModel(providerName, model); err != nil {
+		return nil, err
+	}
 	if model == "" {
 		return nil, fmt.Errorf("realtime provider %q requires a model", providerName)
 	}

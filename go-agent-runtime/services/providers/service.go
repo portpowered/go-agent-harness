@@ -45,6 +45,8 @@ type Service interface {
 type FullService interface {
 	Service
 	SessionService
+	ModelAdmission
+	ModelCatalog
 }
 
 // SessionService builds provider-backed continuous sessions from resolved

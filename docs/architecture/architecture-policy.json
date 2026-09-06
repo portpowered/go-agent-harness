@@ -258,6 +258,18 @@
       "reason": "public sentinel error identity is part of the device admission contract"
     },
     {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+      "file": "services/providers/models.go",
+      "name": "ErrUnsupportedRealtimeModel",
+      "reason": "public sentinel error identity is part of the provider model admission contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+      "file": "services/providers/models.go",
+      "name": "ErrModelCatalogRequired",
+      "reason": "public sentinel error identity distinguishes missing composition from unsupported user models"
+    },
+    {
       "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file",
       "file": "services/devices/internal/file/capture.go",
       "name": "errEmptyInput",

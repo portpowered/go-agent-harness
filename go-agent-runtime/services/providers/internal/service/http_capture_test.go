@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"io"
@@ -293,7 +294,7 @@ func buildProviderHTTPRuntime(cfg *providers.Config, transports ...http.RoundTri
 	if len(transports) != 0 {
 		client.Transport = transports[0]
 	}
-	invocation, recorder, err := New(client, nil, clock.Real{}, nil).httpRuntime(*cfg)
+	invocation, recorder, err := New(client, nil, clock.Real{}, nil, catalog.New()).httpRuntime(*cfg)
 	if err != nil {
 		return providerHTTPTestRuntime{}, err
 	}
@@ -315,7 +316,7 @@ func closeHTTPResponseForTest(t *testing.T, response *http.Response) {
 }
 
 func TestHTTPRecordingPreservesProviderCapabilities(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil)
+	service := New(nil, nil, clock.Real{}, nil, catalog.New())
 	cfg := providers.Config{Provider: "openai", Model: "model", APIKey: "configured-test-key"}
 	plain, err := service.Build(t.Context(), cfg)
 	if err != nil {

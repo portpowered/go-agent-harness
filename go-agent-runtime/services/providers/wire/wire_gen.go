@@ -8,6 +8,7 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/service"
 )
 
@@ -19,6 +20,13 @@ func NewService(deps Dependencies) providers.FullService {
 	logger := deps.Logger
 	timerSource := deps.Clock
 	recordingService := deps.Recording
-	serviceService := service.New(client, logger, timerSource, recordingService)
+	modelCatalog := NewModelCatalog()
+	serviceService := service.New(client, logger, timerSource, recordingService, modelCatalog)
 	return serviceService
 }
+
+// providers.go:
+
+// NewModelCatalog installs the provider-owned immutable model catalog at the
+// application composition boundary.
+func NewModelCatalog() providers.ModelCatalog { return catalog.New() }

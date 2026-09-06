@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -46,7 +47,7 @@ func TestBuildOpenAIUsesConfigModelEndpointAndCredential(t *testing.T) {
 		status: http.StatusOK,
 		body:   `{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`,
 	}
-	service := New(&http.Client{Transport: transport}, nil, clock.Real{}, nil)
+	service := New(&http.Client{Transport: transport}, nil, clock.Real{}, nil, catalog.New())
 	built, err := service.Build(t.Context(), runtimeproviders.Config{
 		Provider: "openai",
 		Model:    "model-from-config",
@@ -90,7 +91,7 @@ func TestBuildOpenAIUsesConfigModelEndpointAndCredential(t *testing.T) {
 }
 
 func TestBuildUsesOpenAICompatibleProviderForNamedEndpoint(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil)
+	service := New(nil, nil, clock.Real{}, nil, catalog.New())
 	built, err := service.Build(t.Context(), runtimeproviders.Config{
 		Provider: "openrouter",
 		APIKey:   "configured-test-key",
@@ -105,7 +106,7 @@ func TestBuildUsesOpenAICompatibleProviderForNamedEndpoint(t *testing.T) {
 }
 
 func TestBuildSelectsFalAndRequiresProviderConfiguration(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil)
+	service := New(nil, nil, clock.Real{}, nil, catalog.New())
 	if _, err := service.Build(t.Context(), runtimeproviders.Config{Provider: "fal", Model: fal.ModelQwenTTS}); err == nil {
 		t.Fatal("Build() accepted fal without its provider configuration")
 	}
@@ -124,7 +125,7 @@ func TestBuildSelectsFalAndRequiresProviderConfiguration(t *testing.T) {
 }
 
 func TestBuildHonorsCanceledAdmission(t *testing.T) {
-	service := New(nil, nil, clock.Real{}, nil)
+	service := New(nil, nil, clock.Real{}, nil, catalog.New())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := service.Build(ctx, runtimeproviders.Config{Provider: "openai", Model: "model"})
