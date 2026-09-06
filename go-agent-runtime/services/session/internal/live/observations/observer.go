@@ -93,7 +93,20 @@ func (o *Observer) Frame(outbound bool, frame audio.PCMFrame) {
 	if frame.Format == (audio.DeviceFormat{}) && rate > 0 {
 		frame.Format = audio.PCM16DeviceFormat(rate)
 	}
-	o.Audio(session.LiveAudioRecord{Direction: direction, Frame: frame})
+	o.Audio(session.LiveAudioRecord{Direction: direction, Admission: session.LiveAudioMediaBridged, Frame: frame})
+}
+
+// QueueFrame records local capture after the bounded loop input queue accepts
+// it. This is deliberately separate from Frame: queue admission is not a
+// provider transport acknowledgement.
+func (o *Observer) QueueFrame(frame audio.PCMFrame) {
+	if o == nil {
+		return
+	}
+	if frame.Format == (audio.DeviceFormat{}) && o.inputRate > 0 {
+		frame.Format = audio.PCM16DeviceFormat(o.inputRate)
+	}
+	o.Audio(session.LiveAudioRecord{Direction: session.LiveRecordClient, Admission: session.LiveAudioQueueAdmitted, Frame: frame})
 }
 
 func (o *Observer) Audio(record session.LiveAudioRecord) {
@@ -146,5 +159,5 @@ func (o *Observer) messageAudio(record session.LiveRecord) {
 	} else {
 		frame.EndOfResponse = true
 	}
-	o.Audio(session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: record.Timestamp, Frame: frame})
+	o.Audio(session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: record.Timestamp, Frame: frame})
 }

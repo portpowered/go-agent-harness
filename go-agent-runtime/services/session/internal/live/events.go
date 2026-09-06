@@ -1,12 +1,37 @@
 package live
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
+
+func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
+	if events == nil {
+		return
+	}
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if sink == nil || *sinkErr != nil {
+				continue
+			}
+			if err := sink.Publish(ctx, event); err != nil {
+				*sinkErr = fmt.Errorf("publish live event: %w", err)
+				handle.Cancel(*sinkErr)
+			}
+		default:
+			return
+		}
+	}
+}
 
 func eventFromMessage(sessionID string, msg messages.StreamMessage) session.LiveEvent {
 	observed := msg

@@ -110,7 +110,7 @@ func TestDirectoryRecorderAdmissionDoesNotWaitForDiskAndOwnsPayloads(t *testing.
 	frame := sharedaudio.PCMFrame{Samples: samples, Format: sharedaudio.PCM16DeviceFormat(24000), Sequence: 7, StartSample: 42, Epoch: 3, EndOfResponse: true}
 	admitted := make(chan error, 1)
 	go func() {
-		admitted <- r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame})
+		admitted <- r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordClient, Admission: session.LiveAudioQueueAdmitted, Timestamp: evidenceTime(), Frame: frame})
 	}()
 	select {
 	case err := <-admitted:
@@ -126,14 +126,14 @@ func TestDirectoryRecorderAdmissionDoesNotWaitForDiskAndOwnsPayloads(t *testing.
 	if err := r.Finalize(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := readEvidenceFile(t, r, "audio/out-000.pcm"); !bytes.Equal(got, codec.EncodePCM16([]int16{1, -2, 32767})) {
+	if got := readEvidenceFile(t, r, "audio/in-000.pcm"); !bytes.Equal(got, codec.EncodePCM16([]int16{1, -2, 32767})) {
 		t.Fatalf("recorded PCM changed: %v", got)
 	}
 	log := string(readEvidenceFile(t, r, "session-log.jsonl"))
 	if !strings.Contains(log, "firstimmutable") || strings.Contains(log, "mutated") {
 		t.Fatalf("async recorder retained caller mutation: %s", log)
 	}
-	assertEvidenceAudioBoundary(t, r, frame)
+	assertEvidenceAudioBoundary(t, r, frame, session.LiveAudioQueueAdmitted)
 	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Frame: frame, Timestamp: evidenceTime()}); !errors.Is(err, recording.ErrLiveEvidenceClosed) {
 		t.Fatalf("late admission = %v", err)
 	}
@@ -142,7 +142,7 @@ func TestDirectoryRecorderAdmissionDoesNotWaitForDiskAndOwnsPayloads(t *testing.
 	}
 }
 
-func assertEvidenceAudioBoundary(t *testing.T, r *directoryRecorder, want sharedaudio.PCMFrame) {
+func assertEvidenceAudioBoundary(t *testing.T, r *directoryRecorder, want sharedaudio.PCMFrame, wantAdmission session.LiveAudioAdmission) {
 	t.Helper()
 	for _, line := range bytes.Split(readEvidenceFile(t, r, "client.transcript.jsonl"), []byte{'\n'}) {
 		if len(line) == 0 {
@@ -159,7 +159,7 @@ func assertEvidenceAudioBoundary(t *testing.T, r *directoryRecorder, want shared
 		if err := json.Unmarshal(record.Payload, &boundary); err != nil {
 			t.Fatal(err)
 		}
-		if boundary.Frame.Format != want.Format || boundary.Frame.Sequence != want.Sequence || boundary.Frame.Epoch != want.Epoch || boundary.Frame.StartSample != want.StartSample || !boundary.Frame.EndOfResponse || boundary.SampleCount != len(want.Samples) || boundary.ByteOffset != 0 {
+		if boundary.Frame.Format != want.Format || boundary.Frame.Sequence != want.Sequence || boundary.Frame.Epoch != want.Epoch || boundary.Frame.StartSample != want.StartSample || !boundary.Frame.EndOfResponse || boundary.SampleCount != len(want.Samples) || boundary.ByteOffset != 0 || boundary.Admission != wantAdmission {
 			t.Fatalf("frame metadata changed: %+v", boundary)
 		}
 		if record.Timestamp != evidenceTime().UTC().Format(time.RFC3339Nano) {

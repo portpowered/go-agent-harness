@@ -393,26 +393,3 @@ func drainPlayback(parent context.Context, playback devices.Playback, timeout ti
 	}
 	return nil
 }
-
-func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
-	if events == nil {
-		return
-	}
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return
-			}
-			if sink == nil || *sinkErr != nil {
-				continue
-			}
-			if err := sink.Publish(ctx, event); err != nil {
-				*sinkErr = fmt.Errorf("publish live event: %w", err)
-				handle.Cancel(*sinkErr)
-			}
-		default:
-			return
-		}
-	}
-}

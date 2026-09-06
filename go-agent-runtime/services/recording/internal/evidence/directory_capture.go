@@ -58,11 +58,12 @@ func (r *directoryRecorder) writeTranscript(item directoryEvidenceItem, stream t
 }
 
 type evidenceAudioBoundary struct {
-	Kind        string               `json:"kind"`
-	Segment     string               `json:"segment"`
-	ByteOffset  uint64               `json:"byte_offset"`
-	SampleCount int                  `json:"sample_count"`
-	Frame       sharedaudio.PCMFrame `json:"frame"`
+	Kind        string                     `json:"kind"`
+	Segment     string                     `json:"segment"`
+	ByteOffset  uint64                     `json:"byte_offset"`
+	SampleCount int                        `json:"sample_count"`
+	Admission   session.LiveAudioAdmission `json:"admission,omitempty"`
+	Frame       sharedaudio.PCMFrame       `json:"frame"`
 }
 
 func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
@@ -94,7 +95,7 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 func (r *directoryRecorder) writeAudioBoundary(item directoryEvidenceItem, segment string, offset uint64) error {
 	frame := item.frame
 	frame.Samples = nil
-	boundary := evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: len(item.frame.Samples), Frame: frame}
+	boundary := evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: len(item.frame.Samples), Admission: item.admission, Frame: frame}
 	payload, err := json.Marshal(boundary)
 	if err == nil {
 		err = r.writeTranscript(item, transcript.StreamRuntimeAudio, payload)

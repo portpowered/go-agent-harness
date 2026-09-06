@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -94,35 +93,6 @@ func (i *capturingInferencer) FlushCapture() error {
 		return nil
 	}
 	return flush()
-}
-
-// sendAudioInput keeps local capture on the model runner's ordered ingress.
-// Peer media in a room continues to use Gate directly so its explicit
-// non-interrupting policy remains owned by the room graph.
-func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	if h == nil {
-		return errors.New("live audio input handle is unavailable")
-	}
-	h.mu.Lock()
-	loop := h.loop
-	started, closed := h.started, h.closed
-	h.mu.Unlock()
-	if !started || loop == nil {
-		return session.ErrLiveNotStarted
-	}
-	if closed {
-		return session.ErrLiveClosed
-	}
-	return loop.SendAudioInputWithPolicy(ctx, pcm, policy)
-}
-
-func (h *handle) recordCapturedAudio(frame sharedaudio.PCMFrame) {
-	if h == nil {
-		return
-	}
-	if observer := h.observationPort(); observer != nil {
-		observer.Frame(true, frame)
-	}
 }
 
 // orderedSession serializes every provider ingress operation with the public

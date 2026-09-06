@@ -60,6 +60,7 @@ type directoryRecorder struct {
 type directoryEvidenceItem struct {
 	kind      evidenceItemKind
 	direction session.LiveRecordDirection
+	admission session.LiveAudioAdmission
 	timestamp time.Time
 	payload   []byte
 	frame     sharedaudio.PCMFrame
@@ -166,7 +167,7 @@ func (r *directoryRecorder) RecordAudio(ctx context.Context, record session.Live
 	}
 	frame := record.Frame
 	item := directoryEvidenceItem{
-		kind: evidenceAudio, direction: record.Direction, timestamp: record.Timestamp,
+		kind: evidenceAudio, direction: record.Direction, admission: record.Admission, timestamp: record.Timestamp,
 		frame: frame, bytes: int64(len(frame.Samples)) * 2,
 	}
 	return r.enqueue(item)
