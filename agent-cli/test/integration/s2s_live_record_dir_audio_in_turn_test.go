@@ -579,3 +579,16 @@ func audioLengthsFromOutbound(outbound []cliLiveOutbound) []int {
 	}
 	return lengths
 }
+
+func scheduledAppendRange(timeline []string, start, end int) (first, count int) {
+	first = -1
+	for index := start; index < end; index++ {
+		if timeline[index] == "out:input_audio_buffer.append" {
+			if first < 0 {
+				first = index
+			}
+			count++
+		}
+	}
+	return first, count
+}

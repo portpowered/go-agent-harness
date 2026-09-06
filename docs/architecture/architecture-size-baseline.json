@@ -15847,16 +15847,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/s2s_live_record_dir_audio_in_turn_scheduled_test.go",
-      "symbol": "TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
-      "file": "test/integration/s2s_live_record_dir_audio_in_turn_scheduled_test.go",
       "symbol": "TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding",
       "value": 34,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
