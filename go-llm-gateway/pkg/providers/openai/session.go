@@ -77,6 +77,7 @@ type realtimeSession struct {
 	mediaMu         sync.Mutex
 	media           *sharedaudio.SessionMedia
 	mediaClaimed    bool
+	mediaContinuous bool
 	mediaSampleRate int
 }
 

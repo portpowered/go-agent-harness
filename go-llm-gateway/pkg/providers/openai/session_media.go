@@ -19,19 +19,38 @@ var _ sharedaudio.MediaSession = (*realtimeSession)(nil)
 // session. Inbound audio remains available through Receive while also being
 // framed for the local RTC device sink.
 func (s *realtimeSession) RTCMedia() sharedaudio.MediaEndpoints {
+	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
+}
+
+func (s *realtimeSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	return s.rtcMedia(options)
+}
+
+func (s *realtimeSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
 	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
+	var previous *sharedaudio.SessionMedia
+	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
+		previous = s.media
+		s.media = nil
+	}
 	s.mediaClaimed = true
 	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
+		s.mediaContinuous = options.InboundContinuous
 	}
-	return s.media.Endpoints()
+	endpoints := s.media.Endpoints()
+	s.mediaMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return endpoints
 }
 
 func (s *realtimeSession) prepareRTCMedia() {
 	s.mediaMu.Lock()
 	if s.media == nil {
 		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.mediaContinuous = false
 	}
 	s.mediaMu.Unlock()
 }
@@ -44,6 +63,7 @@ func (s *realtimeSession) releaseUnclaimedRTCMedia() {
 	}
 	media := s.media
 	s.media = nil
+	s.mediaContinuous = false
 	s.mediaMu.Unlock()
 	_ = media.Close()
 }

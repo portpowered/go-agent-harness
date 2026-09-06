@@ -19,19 +19,38 @@ var _ sharedaudio.MediaSession = (*grokSession)(nil)
 // used by StreamMessage audio, while inbound provider deltas are fanned out to
 // the media reader without removing them from the normal session stream.
 func (s *grokSession) RTCMedia() sharedaudio.MediaEndpoints {
+	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
+}
+
+func (s *grokSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	return s.rtcMedia(options)
+}
+
+func (s *grokSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
 	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
+	var previous *sharedaudio.SessionMedia
+	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
+		previous = s.media
+		s.media = nil
+	}
 	s.mediaClaimed = true
 	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
+		s.mediaContinuous = options.InboundContinuous
 	}
-	return s.media.Endpoints()
+	endpoints := s.media.Endpoints()
+	s.mediaMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return endpoints
 }
 
 func (s *grokSession) prepareRTCMedia() {
 	s.mediaMu.Lock()
 	if s.media == nil {
 		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.mediaContinuous = false
 	}
 	s.mediaMu.Unlock()
 }
@@ -44,6 +63,7 @@ func (s *grokSession) releaseUnclaimedRTCMedia() {
 	}
 	media := s.media
 	s.media = nil
+	s.mediaContinuous = false
 	s.mediaMu.Unlock()
 	_ = media.Close()
 }

@@ -119,3 +119,19 @@ type MediaEndpoints struct {
 type MediaSession interface {
 	RTCMedia() MediaEndpoints
 }
+
+// MediaSessionOptions selects optional provider-media behavior for a live
+// session owner. InboundContinuous is intended for a raw streaming sink that
+// must observe each provider delta promptly; ordinary RTC playback keeps the
+// negotiated frame cadence and should leave it false.
+type MediaSessionOptions struct {
+	InboundContinuous bool
+}
+
+// ConfigurableMediaSession is an optional extension of MediaSession. Providers
+// that can choose their inbound framing implement it without forcing every
+// embedded session or test double to grow a provider-specific method.
+type ConfigurableMediaSession interface {
+	MediaSession
+	RTCMediaWithOptions(MediaSessionOptions) MediaEndpoints
+}

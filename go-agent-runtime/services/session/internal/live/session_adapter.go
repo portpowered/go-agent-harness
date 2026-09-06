@@ -16,6 +16,7 @@ import (
 type capturingInferencer struct {
 	inner           messages.SessionInferencer
 	media           *mediagate.Gate
+	continuous      bool
 	onDispatch      func(messages.StreamMessage)
 	onToolResult    func(string, string, bool)
 	onContinuation  func()
@@ -38,7 +39,16 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	}
 	mediaAttached := false
 	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
-		endpoints := providerMedia.RTCMedia()
+		var endpoints sharedaudio.MediaEndpoints
+		if i.continuous {
+			if configurable, ok := s.(sharedaudio.ConfigurableMediaSession); ok {
+				endpoints = configurable.RTCMediaWithOptions(sharedaudio.MediaSessionOptions{InboundContinuous: true})
+			} else {
+				endpoints = providerMedia.RTCMedia()
+			}
+		} else {
+			endpoints = providerMedia.RTCMedia()
+		}
 		mediaAttached = endpoints.Inbound != nil
 		i.media.Attach(ctx, endpoints)
 	}

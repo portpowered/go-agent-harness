@@ -42,7 +42,11 @@ type LiveRequest struct {
 	OutputAudioFormat       string
 	InputAudioSampleRate    int
 	OutputAudioSampleRate   int
-	TurnDetection           *LiveTurnDetection
+	// OutputAudioContinuous asks an optional provider media adapter to expose
+	// inbound PCM deltas as soon as they arrive. Hosts use it for raw streaming
+	// output; ordinary RTC playback keeps its negotiated frame cadence.
+	OutputAudioContinuous bool
+	TurnDetection         *LiveTurnDetection
 	// ClientOwnsAudioTurnBoundaries disables provider-side VAD when true. It
 	// is used by finite room/replay feeds that admit one explicit commit per
 	// audio turn.

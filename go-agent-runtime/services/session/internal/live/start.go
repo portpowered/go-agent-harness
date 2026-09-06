@@ -70,6 +70,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	capturing := &capturingInferencer{
 		inner:           inferencer,
 		media:           h.media,
+		continuous:      h.request.OutputAudioContinuous,
 		onDispatch:      h.observeProviderDispatch,
 		onToolResult:    h.observeToolResult,
 		onContinuation:  h.observeContinuationRequested,

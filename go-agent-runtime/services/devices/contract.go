@@ -82,10 +82,13 @@ type FileInput struct {
 // FileOutput is a host-opened sink for provider PCM. SampleRate describes the
 // sink's native rate; a non-positive value selects audio.SampleRate. The
 // runtime worker performs provider-to-sink conversion and closes the sink as
-// part of its invocation handle.
+// part of its invocation handle. Continuous output emits each available
+// provider delta promptly; finite output retains one quantum so an explicit
+// response boundary can mark the final frame.
 type FileOutput struct {
 	Sink       audio.AudioSink
 	SampleRate int
+	Continuous bool
 }
 
 // Capture pumps local input samples into a provider-owned outbound media

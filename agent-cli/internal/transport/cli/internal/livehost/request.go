@@ -162,6 +162,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		OutputAudioFormat:             string(models.AudioFormatPCM16),
 		InputAudioSampleRate:          inputs.inputRate,
 		OutputAudioSampleRate:         inputs.outputRate,
+		OutputAudioContinuous:         request.AudioOutputPath == "-",
 		TurnDetection:                 turnDetectionPolicy(inputs.effective),
 		ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries || len(request.AudioTurns) > 0,
 		Replay: runtimeSession.LiveReplayPolicy{

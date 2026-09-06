@@ -12,9 +12,10 @@ import (
 )
 
 type filePlayback struct {
-	sink      sharedaudio.AudioSink
-	processor *sharedaudio.Processor
-	ended     bool
+	sink       sharedaudio.AudioSink
+	processor  *sharedaudio.Processor
+	continuous bool
+	ended      bool
 
 	closeOnce sync.Once
 	closeErr  error
@@ -40,10 +41,11 @@ func newPlayback(output devices.FileOutput, providerRate int) (*filePlayback, er
 		return nil, fmt.Errorf("create finite output processor: %w", err)
 	}
 	return &filePlayback{
-		sink:      output.Sink,
-		processor: processor,
-		pumpStart: make(chan struct{}),
-		pumpDone:  make(chan struct{}),
+		sink:       output.Sink,
+		processor:  processor,
+		continuous: output.Continuous,
+		pumpStart:  make(chan struct{}),
+		pumpDone:   make(chan struct{}),
 	}, nil
 }
 
@@ -140,7 +142,11 @@ func (p *filePlayback) consumeFrame(ctx context.Context, frame sharedaudio.PCMFr
 	if err := p.resetAfterResponse(); err != nil {
 		return err
 	}
-	frames, err := p.processor.Process(frame)
+	process := p.processor.Process
+	if p.continuous {
+		process = p.processor.ProcessAvailable
+	}
+	frames, err := process(frame)
 	if err != nil {
 		return fmt.Errorf("process finite audio output: %w", err)
 	}

@@ -75,7 +75,7 @@ func OpenFilePorts(request serviceSession.Request, out io.Writer, outputRate int
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("--audio-out %q: %w", request.AudioOutputPath, err), ports.Close())
 		}
-		ports.Output = &runtimeDevices.FileOutput{Sink: sink, SampleRate: outputRate}
+		ports.Output = &runtimeDevices.FileOutput{Sink: sink, SampleRate: outputRate, Continuous: request.AudioOutputPath == "-"}
 	}
 	return ports, nil
 }
