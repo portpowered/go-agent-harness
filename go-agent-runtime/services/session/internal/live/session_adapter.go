@@ -14,16 +14,17 @@ import (
 // agent loop has established its session. A factory can return any
 // messages.Session implementation; media is an optional capability.
 type capturingInferencer struct {
-	inner           messages.SessionInferencer
-	media           *mediagate.Gate
-	continuous      bool
-	onDispatch      func(messages.StreamMessage)
-	onToolResult    func(string, string, bool)
-	onContinuation  func()
-	onProviderDone  func(error)
-	onMediaAttached func(bool)
-	captureMu       sync.Mutex
-	captureFlush    func() error
+	inner             messages.SessionInferencer
+	media             *mediagate.Gate
+	continuous        bool
+	onDispatch        func(messages.StreamMessage)
+	onToolResult      func(string, string, bool)
+	onContinuation    func()
+	onOpeningAdmitted func()
+	onProviderDone    func(error)
+	onMediaAttached   func(bool)
+	captureMu         sync.Mutex
+	captureFlush      func() error
 }
 
 func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -81,11 +82,12 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 		}()
 	}
 	return &orderedSession{
-		inner:          s,
-		media:          i.media,
-		onDispatch:     i.onDispatch,
-		onToolResult:   i.onToolResult,
-		onContinuation: i.onContinuation,
+		inner:             s,
+		media:             i.media,
+		onDispatch:        i.onDispatch,
+		onToolResult:      i.onToolResult,
+		onContinuation:    i.onContinuation,
+		onOpeningAdmitted: i.onOpeningAdmitted,
 	}, nil
 }
 
@@ -112,11 +114,12 @@ func (i *capturingInferencer) FlushCapture() error {
 // control is dispatched, later media and provider traffic wait for its wire
 // acknowledgement.
 type orderedSession struct {
-	inner          messages.Session
-	media          *mediagate.Gate
-	onDispatch     func(messages.StreamMessage)
-	onToolResult   func(string, string, bool)
-	onContinuation func()
+	inner             messages.Session
+	media             *mediagate.Gate
+	onDispatch        func(messages.StreamMessage)
+	onToolResult      func(string, string, bool)
+	onContinuation    func()
+	onOpeningAdmitted func()
 }
 
 func (s *orderedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -349,6 +352,9 @@ func (s *orderedSession) SendMessage(ctx context.Context, msg messages.Message) 
 	sender, ok := s.inner.(completeMessageSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
 		accepted := sender.SendMessage(ctx, msg)
+		if accepted && s.onOpeningAdmitted != nil {
+			s.onOpeningAdmitted()
+		}
 		if accepted && s.onDispatch != nil {
 			s.onDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 		}
@@ -370,6 +376,9 @@ func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg mes
 	sender, ok := s.inner.(completeMessageWithoutResponseSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
 		accepted := sender.SendMessageWithoutResponse(ctx, msg)
+		if accepted && s.onOpeningAdmitted != nil {
+			s.onOpeningAdmitted()
+		}
 		if accepted {
 			s.observeAdmission(messages.StreamMessage{
 				Type:       messages.StreamTypeToolCallEnd,

@@ -160,6 +160,9 @@ type handle struct {
 	sequence            uint64
 	dropped             uint64
 	openingSent         bool
+	openingReady        chan struct{}
+	openingReadyOnce    sync.Once
+	openingAdmissionErr error
 	captureSourceActive bool
 	replayReady         chan struct{}
 	replayReadyOnce     sync.Once
@@ -306,6 +309,7 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		replayResponseWake:       make(chan struct{}),
 		responseStartWake:        make(chan struct{}),
 		replayReady:              make(chan struct{}),
+		openingReady:             make(chan struct{}),
 		providerDoneSignal:       make(chan struct{}),
 		terminalObserved:         make(chan struct{}),
 		livenessWake:             make(chan struct{}, 1),

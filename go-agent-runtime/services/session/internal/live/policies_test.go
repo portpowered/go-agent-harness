@@ -574,6 +574,29 @@ func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
+	h := newHandle(session.LiveRequest{
+		OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}},
+	}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
+	result := make(chan error, 1)
+	go func() { result <- h.waitOpeningReady(context.Background()) }()
+
+	select {
+	case err := <-result:
+		t.Fatalf("opening wait returned before admission: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	h.markOpeningAdmitted(nil)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("opening wait after admission = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("opening wait did not release after provider admission")
+	}
+}
+
 func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	err := errors.Join(errors.New("device write"), session.ErrLiveClosed)
 	if !isExpectedMediaPumpError(err) {

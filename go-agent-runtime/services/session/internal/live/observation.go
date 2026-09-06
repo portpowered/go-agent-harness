@@ -151,6 +151,52 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 	}
 }
 
+// openingAdmissionRequired protects rich opening turns, such as an image
+// queued ahead of a finite audio source. The capture owner must not race that
+// message into the provider's ordered ingress before the opening content has
+// crossed the provider adapter.
+func (h *handle) openingAdmissionRequired() bool {
+	return h != nil && len(h.request.OpeningContentParts) > 0
+}
+
+func (h *handle) markOpeningAdmitted(err error) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if err != nil && h.openingAdmissionErr == nil {
+		h.openingAdmissionErr = err
+	}
+	h.mu.Unlock()
+	h.openingReadyOnce.Do(func() { close(h.openingReady) })
+}
+
+func (h *handle) waitOpeningReady(ctx context.Context) error {
+	if !h.openingAdmissionRequired() {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("opening admission context is required")
+	}
+	select {
+	case <-h.openingReady:
+		h.mu.Lock()
+		err := h.openingAdmissionErr
+		h.mu.Unlock()
+		return err
+	case <-h.done:
+		h.mu.Lock()
+		err := h.terminalErr
+		h.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		return session.ErrLiveClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
 
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
@@ -183,6 +229,7 @@ func (h *handle) failOpeningMessage(err error) {
 	if err == nil {
 		return
 	}
+	h.markOpeningAdmitted(err)
 	h.mu.Lock()
 	h.pumpErr = err
 	h.mu.Unlock()
