@@ -12,19 +12,21 @@ import (
 )
 
 type cliLiveRecordDirServer struct {
-	mu             sync.Mutex
-	timeline       []string
-	outbound       []cliLiveOutbound
-	responses      chan int
-	events         chan []byte
-	closed         chan struct{}
-	closeOnce      sync.Once
-	dialOnce       sync.Once
-	dialCount      int
-	nextTurn       int
-	providerError  bool
-	readErr        error
-	closeAfterTurn int
+	mu                 sync.Mutex
+	timeline           []string
+	outbound           []cliLiveOutbound
+	responses          chan int
+	events             chan []byte
+	closed             chan struct{}
+	closeOnce          sync.Once
+	dialOnce           sync.Once
+	dialCount          int
+	nextTurn           int
+	providerError      bool
+	readErr            error
+	closeAfterTurn     int
+	closeAfterResponse bool
+	responseText       string
 }
 
 type cliLiveOutbound struct {
@@ -54,6 +56,13 @@ func newCLILiveRecordDirCloseAfterTurnServer(turn int) *cliLiveRecordDirServer {
 	return server
 }
 
+func newCLILiveRecordDirPromptServer(responseText string) *cliLiveRecordDirServer {
+	server := newCLILiveRecordDirCloseAfterTurnServer(1)
+	server.closeAfterResponse = true
+	server.responseText = responseText
+	return server
+}
+
 func (s *cliLiveRecordDirServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	s.mu.Lock()
 	s.dialCount++
@@ -74,34 +83,30 @@ func (s *cliLiveRecordDirServer) serve() {
 		select {
 		case turn := <-s.responses:
 			responseID := "resp_" + strconv.Itoa(turn)
-			transcriptText := "response turn " + strconv.Itoa(turn)
+			transcriptText := s.responseText
+			if transcriptText == "" {
+				transcriptText = "response turn " + strconv.Itoa(turn)
+			}
 			audio := base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 10), 0})
 			s.sendEvent(`{"type":"response.created","response":{"id":"` + responseID + `"}}`)
-			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
+			closeAfterTurn := s.closeAfterTurn > 0 && turn == s.closeAfterTurn
+			if closeAfterTurn && !s.closeAfterResponse {
 				// Put the provider terminal event ahead of this response's
 				// terminal boundary. The session runner must drain the queued
 				// response but must not mistake the close for completion of any
 				// still-undispatched scheduled input.
 				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
-				s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
-				s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
-				s.sendEvent(`{"type":"response.output_audio.done"}`)
-				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
-				return
 			}
 			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
 			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
 			s.sendEvent(`{"type":"response.output_audio.done"}`)
-			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
-				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
-				// Put the terminal provider event ahead of the final response
-				// boundary. The loop drains the queued response.done during
-				// shutdown, proving that turn 2 completed without allowing its
-				// terminal event to release the undispatched turn 3.
-				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+			if closeAfterTurn {
+				if s.closeAfterResponse {
+					s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
+				}
 				return
 			}
-			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
 		case <-s.closed:
 			return
 		}
