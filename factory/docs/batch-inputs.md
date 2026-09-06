@@ -1,16 +1,13 @@
-# Project cycle batches
+# Meta-planner batches
 
-Project leadership returns {"request": <FACTORY_REQUEST_BATCH>}. The worker
-output requires this wrapper; file/CLI batch ingress takes the bare batch in
-batch-input-example.json. Inside request use requestId,
-type, works and relations, as in batch-input-example.json. Never invent items or
-workType aliases. A unique idea name is also its task name; branchName in its
-PRD is codex/<idea-name>. Every idea carries project and contractRevision.
-The one project-cycle has the same name as its parent project and a literal
-string payload: continue, complete or blocked. Its DEPENDS_ON edges target every
-emitted idea/validation at requiredState complete. Failed prerequisites flow back
-through the graph; do not silently treat them as completed prerequisites.
+Return {"request": <FACTORY_REQUEST_BATCH>} when issuing Work; the worker boundary
+requires the wrapper. File/CLI ingress takes the bare batch. Use requestId, type,
+works and relations as in batch-input-example.json. Emit ideas or validation only;
+no project-cycle tokens or thoughts loopbacks. A healthy active vertical requires
+no new batch. Every payload carries project and contractRevision.
 
-Only the launcher admits a project. The manager emits no thoughts loopbacks;
-routine meta planning is scheduled every four hours. Use the explicit server
-and session for inspection. For canonical syntax run `you docs batch-inputs`.
+One idea becomes a plan, isolated task, independent review and completed delivery.
+Its completion wakes the meta-planner, which issues an independent runtime probe
+before accepting that vertical. Failed delivery/probes also wake the meta-planner.
+Routine meta inspection runs every four hours. Use explicit server/session.
+For canonical syntax run `you docs batch-inputs`.
