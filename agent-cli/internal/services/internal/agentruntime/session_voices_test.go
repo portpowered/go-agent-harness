@@ -97,7 +97,7 @@ func TestVoiceLoudnessGainDBAppliesOnlyMeasuredCorrections(t *testing.T) {
 }
 
 func TestRunSession_InvalidVoiceFailsBeforeReplayConsumption(t *testing.T) {
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: filepath.Join(t.TempDir(), "missing.session.json"),
 		Voice:      "not-a-voice",
 	})

@@ -11,19 +11,17 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
-	registry := tools.NewToolRegistry()
-	execTool, ok := registry.Get("exec")
-	if !ok {
-		t.Fatal("default registry does not contain exec")
-	}
-	definitions := registry.ToAgentLoopDefs()
+	capability := defaultRuntimeToolCapability(t)
+	const execName = "exec"
+	execDescription := runtimeToolDescription(t, capability, execName)
 
 	configDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte("model:\n  provider: openai\n"), 0o600); err != nil {
@@ -34,15 +32,16 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+	var err error
+	err = agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        "openai",
 		Model:           "gpt-realtime",
 		APIKey:          "test-api-key",
 		ConfigDir:       configDir,
 		Prompt:          "advertise the default tools",
-		ToolExecutor:    tools.NewRegistryExecutor(registry),
-		ToolDefinitions: definitions,
+		ToolExecutor:    capability.Executor,
+		ToolDefinitions: capability.Definitions,
 		WebSocketDialer: &recordingRealtimeTestDialer{conn: conn},
 	})
 	if err != nil {
@@ -91,7 +90,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	advertisedIndex := -1
 	for i := range envelope.Session.Tools {
 		tool := &envelope.Session.Tools[i]
-		if tool.Name == execTool.Name() {
+		if tool.Name == execName {
 			advertisedIndex = i
 			break
 		}
@@ -103,8 +102,8 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	if advertised.Type != "function" {
 		t.Fatalf("exec wire type = %q, want function", advertised.Type)
 	}
-	if advertised.Description != execTool.Description() {
-		t.Fatalf("exec wire description = %q, want registry description %q", advertised.Description, execTool.Description())
+	if advertised.Description != execDescription {
+		t.Fatalf("exec wire description = %q, want runtime tool description %q", advertised.Description, execDescription)
 	}
 	if advertised.Parameters.Type != "object" {
 		t.Fatalf("exec parameter schema type = %q, want object", advertised.Parameters.Type)
@@ -122,24 +121,44 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 }
 
 func TestPlainSessionDefinitionsAdvertisePhysicalScreenCapture(t *testing.T) {
-	registry := tools.NewToolRegistry()
-	definitions := registry.ToAgentLoopDefs()
+	capability := defaultRuntimeToolCapability(t)
+	definitions := capability.Definitions
 	for _, definition := range definitions {
-		if definition.Name == tools.ScreenToolID {
+		if definition.Name == runtimeTools.ScreenToolID {
 			if definition.Description == "" {
 				t.Fatal("show definition has an empty description")
 			}
 			return
 		}
 	}
-	t.Fatalf("plain session definitions omitted %q: %#v", tools.ScreenToolID, definitions)
+	t.Fatalf("plain session definitions omitted %q: %#v", runtimeTools.ScreenToolID, definitions)
+}
+
+func defaultRuntimeToolCapability(t *testing.T) runtimeTools.Capability {
+	t.Helper()
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        t.TempDir(),
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		t.Fatalf("resolve default runtime tools: %v", err)
+	}
+	return capability
+}
+
+func runtimeToolDescription(t *testing.T, capability runtimeTools.Capability, name string) string {
+	t.Helper()
+	for _, definition := range capability.Definitions {
+		if definition.Name == name {
+			return definition.Description
+		}
+	}
+	t.Fatalf("runtime tool surface does not contain %q", name)
+	return ""
 }
 
 func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
-	cfg := &config.Config{
-		Model:   config.ModelConfig{Provider: config.ProviderOpenAI},
-		Browser: config.DefaultBrowserConfig(),
-	}
+	cfg := &config.Config{FilesystemWorkDir: t.TempDir(), Model: config.ModelConfig{Provider: config.ProviderOpenAI}, Browser: config.DefaultBrowserConfig()}
 	for _, id := range config.DefaultToolIDs {
 		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "sleep"})
 	}
@@ -159,7 +178,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	conn := newRecordingRealtimeTestConn()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+	if err := agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:            config.ProviderOpenAI,
 		Model:               "gpt-realtime",
 		APIKey:              "test-api-key",

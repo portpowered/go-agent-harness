@@ -2,6 +2,7 @@ go 1.26.7
 
 use (
 	./agent-cli
+	./go-agent-runtime
 	./go-agent-loop
 	./go-audio
 	./go-device-gateway

@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // AgentLoopConfig holds configuration for creating an AgentLoop.
@@ -30,6 +31,7 @@ type AgentLoopConfig struct {
 	Logger            logging.Logger
 	InferenceDefaults *messages.InferenceDefaults
 	TickRate          time.Duration
+	Clock             clock.TimerSource
 	// SessionConfig, when set, is sent as SESSION.UPDATE immediately after the
 	// inference provider emits SESSION.CREATED. Only used in DuplexSession mode.
 	SessionConfig *messages.SessionUpdateConfig
@@ -62,6 +64,12 @@ type ToolAcknowledgementPolicy struct {
 
 // Option is a functional option for configuring an AgentLoop.
 type Option func(*AgentLoopConfig)
+
+// WithClock supplies the canonical time domain for optional hot-loop pacing.
+// Nil retains the default real clock; manual ticks never wait on this clock.
+func WithClock(source clock.TimerSource) Option {
+	return func(c *AgentLoopConfig) { c.Clock = source }
+}
 
 // WithAudioSubsystem attaches buffer observation/control to ticks. Its media
 // workers are started and stopped by the owning runtime outside the loop.

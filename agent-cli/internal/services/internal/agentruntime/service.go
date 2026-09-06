@@ -15,6 +15,7 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -32,6 +33,7 @@ type Dependencies struct {
 	DeviceRegistry    devicegw.DeviceRegistry
 	RuntimeObserver   SessionRuntimeObserver
 	Observability     observability.Dependencies
+	ModelCatalog      runtimeproviders.ModelCatalog
 }
 
 type Dispatcher struct{ deps Dependencies }
@@ -183,14 +185,13 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
 		runtimeFactory: d.deps.PlanFactory,
+		ModelCatalog:   d.deps.ModelCatalog,
 	}
 	if err := validateSessionCaptureOptions(options); err != nil {
 		return SessionRunOptions{}, err
 	}
-	// Populate the request's device selection before bare-session preflight so
-	// that the resolver can apply persisted defaults without acquiring a
-	// registry or provider.  Bare sessions must fail with their typed
-	// credential error before any external setup begins.
+	// Populate device selection before bare-session preflight so persisted
+	// defaults resolve without acquiring external resources.
 	options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.AudioInputDevice)
 	options.RTCDeviceBinding.OutputDevice = devicegw.DeviceID(request.AudioOutputDevice)
 	options.RTCDeviceBinding.InputPresent = request.AudioInputDevicePresent
@@ -231,9 +232,9 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.LoadedConfig = applyToolVisibility(request.LoadedConfig, request.ComputerUse, request.ExperimentalTools, request.NoTerminalTools)
 	}
 	if d.deps.ToolService != nil {
-		capabilities, err := d.deps.ToolService.Resolve(options.LoadedConfig)
+		capabilities, err := d.resolveSessionToolCapabilities(request, options.LoadedConfig)
 		if err != nil {
-			return SessionRunOptions{}, fmt.Errorf("configure session tools: %w", err)
+			return SessionRunOptions{}, err
 		}
 		if capabilities.Initialize != nil {
 			if err := capabilities.Initialize(ctx); err != nil {
@@ -256,7 +257,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	}
 	options.FilesystemPolicy = policy
 	options.WorkDir, options.AllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
-	options.ToolExecutor = cliTools.ApplyFilesystemPolicy(options.ToolExecutor, policy)
 	if options.LoadedConfig != nil {
 		copyCfg := *options.LoadedConfig
 		copyCfg.FilesystemWorkDir, copyCfg.FilesystemAllowPaths = policy.PrimaryRoot(), policy.AdditionalRoots()
@@ -280,6 +280,29 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.AudioInterruptions = interruptions
 	}
 	return options, nil
+}
+
+// resolveSessionToolCapabilities applies request-scoped filesystem values to
+// a private config snapshot before asking the injected service for a surface.
+// The config file is a policy source; resolving it before --workdir and
+// --allow-path overrides would bind filesystem tools to the process cwd.
+func (d *Dispatcher) resolveSessionToolCapabilities(request public.Request, cfg *config.Config) (serviceTools.Capabilities, error) {
+	toolConfig := cfg
+	if toolConfig == nil {
+		toolConfig = &config.Config{}
+	} else {
+		copyConfig := *toolConfig
+		copyConfig.Tools.List = append([]config.ToolEntry(nil), toolConfig.Tools.List...)
+		copyConfig.FilesystemAllowPaths = append([]string(nil), toolConfig.FilesystemAllowPaths...)
+		toolConfig = &copyConfig
+	}
+	toolConfig.FilesystemWorkDir = request.WorkDir
+	toolConfig.FilesystemAllowPaths = append([]string(nil), request.AllowPaths...)
+	capabilities, err := d.deps.ToolService.Resolve(toolConfig)
+	if err != nil {
+		return serviceTools.Capabilities{}, fmt.Errorf("configure session tools: %w", err)
+	}
+	return capabilities, nil
 }
 
 func applyToolVisibility(cfg *config.Config, computerUse, experimentalTools, noTerminalTools bool) *config.Config {

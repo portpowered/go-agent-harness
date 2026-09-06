@@ -36,7 +36,7 @@ func TestSessionWireObservationSeparatesCompletedTransportOperations(t *testing.
 	source := clock.NewDeterministic(time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), time.Millisecond)
 	observer := &wireTraceObserver{}
 	failure := io.ErrClosedPipe
-	dialer := observeSessionWire(wireTraceDialer{wireTraceConn{failure: failure}}, SessionRunOptions{Clock: source, RuntimeObserver: observer})
+	dialer := observeSessionWire(wireTraceDialer{wireTraceConn{failure: failure}}, SessionRunOptions{ModelCatalog: testModelCatalog(), Clock: source, RuntimeObserver: observer})
 	conn, err := dialer.Dial("unused", nil)
 	if err != nil {
 		t.Fatal(err)

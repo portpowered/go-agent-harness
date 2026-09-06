@@ -1240,7 +1240,7 @@ func TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride(t *testing.T) 
 		return messages.ToolCallResponse{}, nil
 	})
 
-	plan, err := planSessionRuntime(SessionRunOptions{
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:           "unused.json",
 		SessionInferencer:    stubPlanSessionInferencer{},
 		ToolExecutor:         executor,
@@ -1256,7 +1256,7 @@ func TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride(t *testing.T) 
 		t.Fatalf("plan.loop.ToolExecutionTimeout = %s, want 7ms", plan.loop.ToolExecutionTimeout)
 	}
 
-	defaultPlan, err := planSessionRuntime(SessionRunOptions{
+	defaultPlan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "unused.json",
 		SessionInferencer: stubPlanSessionInferencer{},
 		ToolExecutor:      executor,

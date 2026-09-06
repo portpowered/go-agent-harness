@@ -97,6 +97,54 @@ func TestModelRunner_ForwardSessionEventReportsProviderBoundaryOutcomes(t *testi
 	})
 }
 
+func TestModelRunner_ResponseCancelStateTracksAdmissionOutcome(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		outcome       messages.SessionSendOutcome
+		wantSent      bool
+		wantForwarded int
+	}{
+		{
+			name:          "accepted cancel",
+			outcome:       messages.SessionSendOutcome{Status: messages.SessionSendSucceeded},
+			wantSent:      true,
+			wantForwarded: 1,
+		},
+		{
+			name:          "rejected cancel",
+			outcome:       messages.SessionSendOutcome{Status: messages.SessionSendBufferFull},
+			wantSent:      false,
+			wantForwarded: 0,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			session := &outcomeRecordingSession{
+				recordingSession: newRecordingSession(),
+				outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+					messages.StreamTypeResponseCancel: test.outcome,
+				},
+			}
+			runner := NewSessionModelRunner(nil, 8, nil)
+			state := &sessionRunState{
+				responseInFlight:  true,
+				currentResponseID: "response-1",
+			}
+			state.ensureMaps()
+
+			runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{
+				Type: messages.StreamTypeResponseCancel,
+			})
+
+			if state.responseCancelSent != test.wantSent {
+				t.Fatalf("responseCancelSent = %t, want %t", state.responseCancelSent, test.wantSent)
+			}
+			if got := len(session.sentMessages()); got != test.wantForwarded {
+				t.Fatalf("provider cancel messages = %d, want %d", got, test.wantForwarded)
+			}
+		})
+	}
+}
+
 func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
@@ -478,5 +526,23 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeToolCallEnd || sent[1].Type != messages.StreamTypeResponseCreate {
 		t.Fatalf("forwarded tool boundary = %#v, want TOOLCALL.END then RESPONSE.CREATE", sent)
+	}
+}
+
+func readNextSessionMessageEnd(t *testing.T, deltas *messages.TypedBuffer[messages.StreamMessage]) *messages.MessageEndValue {
+	t.Helper()
+	for {
+		delta, ok := deltas.Read()
+		if !ok {
+			t.Fatal("next response ended without MESSAGE.END")
+		}
+		if delta.Type != messages.StreamTypeMessageEnd {
+			continue
+		}
+		value, ok := delta.Value.(*messages.MessageEndValue)
+		if !ok || value == nil {
+			t.Fatalf("next MESSAGE.END value = %T, want non-nil *MessageEndValue", delta.Value)
+		}
+		return value
 	}
 }

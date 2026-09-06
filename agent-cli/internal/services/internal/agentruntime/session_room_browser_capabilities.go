@@ -6,9 +6,10 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 var (
@@ -36,6 +37,7 @@ type RoomParticipantBrowserCapabilities struct {
 	ToolDefinitionBase     []messages.ToolDefinition
 	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
 	BrowserWatch           func(context.Context) <-chan webmcp.BrokerEvent
+	BrowserEventWatch      func(context.Context) <-chan webmcp.BrowserEvent
 	Initialize             func(context.Context) error
 	Close                  func() error
 }
@@ -84,13 +86,15 @@ func composeRoomParticipantBrowserCapabilities(
 	if err := validateRoomParticipantBrowserCapabilities(participant, browser); err != nil {
 		return RoomParticipantBrowserCapabilities{}, err
 	}
-	compose := func(browserDefinitions []messages.ToolDefinition) (tools.ToolSurface, error) {
-		return tools.ComposeToolSurface(
-			static.Executor,
-			static.Definitions,
-			browser.Executor,
-			browserDefinitions,
-		)
+	compose := func(browserDefinitions []messages.ToolDefinition) (runtimeTools.Capability, error) {
+		return runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+			Executor:    static.Executor,
+			Definitions: static.Definitions,
+			Browser: &runtimeTools.BrowserSurface{
+				Executor:    browser.Executor,
+				Definitions: browserDefinitions,
+			},
+		})
 	}
 	initial, err := compose(browser.Definitions)
 	if err != nil {
@@ -111,6 +115,7 @@ func composeRoomParticipantBrowserCapabilities(
 		Definitions:        cloneRoomToolDefinitions(initial.Definitions),
 		ToolDefinitionBase: cloneRoomToolDefinitions(base.Definitions),
 		BrowserWatch:       browser.BrowserWatch,
+		BrowserEventWatch:  browser.BrowserEventWatch,
 		Initialize:         browser.Initialize,
 		Close:              browser.Close,
 	}

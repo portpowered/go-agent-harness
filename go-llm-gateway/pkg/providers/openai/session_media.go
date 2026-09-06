@@ -157,3 +157,37 @@ func decodeOpenAIRealtimeAudioDelta(data []byte) ([]byte, error) {
 	}
 	return decoded, nil
 }
+
+func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
+	for _, event := range events {
+		// A terminated session reports closed regardless of remaining
+		// outbound buffer capacity.
+		select {
+		case <-s.done:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+		default:
+		}
+		outcome := s.enqueueWireEvent(ctx, event)
+		switch outcome.Status {
+		case messages.BufferWriteSucceeded:
+		case messages.BufferWriteBufferFull:
+			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+		case messages.BufferWriteStopped:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed, Err: outcome.Err}
+		case messages.BufferWriteCancelled:
+			return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: outcome.Err}
+		case messages.BufferWriteTimedOut:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: outcome.Err}
+		default:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+		}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func (s *realtimeSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
+	if s.writeBackpressure {
+		return s.sendQueue.WriteWaitContextOrDone(ctx, s.done, event)
+	}
+	return s.sendQueue.WriteContext(ctx, event)
+}

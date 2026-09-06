@@ -7,6 +7,7 @@ import (
 	"io"
 
 	public "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -16,12 +17,13 @@ var _ public.Service = (*SelfPlayService)(nil)
 // service contract. Keeping this adapter in agentruntime avoids a sideways
 // dependency between sibling private services.
 type SelfPlayService struct {
-	factory sessionRuntimeFactory
-	clock   platformclock.Source
+	factory      sessionRuntimeFactory
+	clock        platformclock.Source
+	modelCatalog runtimeproviders.ModelCatalog
 }
 
-func NewSelfPlayService(factory SessionRuntimeFactory, clockSource platformclock.Source) public.Service {
-	return &SelfPlayService{factory: factory, clock: clockSource}
+func NewSelfPlayService(factory SessionRuntimeFactory, clockSource platformclock.Source, modelCatalog runtimeproviders.ModelCatalog) public.Service {
+	return &SelfPlayService{factory: factory, clock: clockSource, modelCatalog: modelCatalog}
 }
 
 func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public.RunOptions) error {
@@ -45,6 +47,7 @@ func (s *SelfPlayService) Run(ctx context.Context, out io.Writer, options public
 		MaxTurns:       options.MaxTurns,
 		clock:          s.clock,
 		runtimeFactory: s.factory,
+		modelCatalog:   s.modelCatalog,
 	})
 	return err
 }
