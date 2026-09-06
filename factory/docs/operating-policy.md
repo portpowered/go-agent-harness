@@ -43,3 +43,15 @@ budget. Never print credentials. New tests should prove behavior or failure
 handling; do not write implementation-mirroring assertions just to raise counts.
 No automatic unchanged-failure retries by the meta-planner. Investigate, narrow,
 checkpoint, or state the precise external blocker. Preserve admission when blocked.
+
+## Stabilization and executor ownership
+
+Admit one ready Work at a time, with the meta-planner explicitly inspecting each
+outcome before adding the next. Prove the single-work execution, review and probe
+path before increasing independent work. Executors keep ownership through CONTINUE
+while actionable implementation or required test repair remains; a red check is
+not itself an escalation. Escalation requires ambiguity, conflicting ownership,
+unavailable prerequisites or demonstrated lack of progress requiring replanning.
+These rules supersede earlier task packets that required stopping at a small fix
+while known necessary candidate repairs remained. Hourly operator checks supplement
+the four-hour meta cadence while terminal-failure notification is being repaired.
