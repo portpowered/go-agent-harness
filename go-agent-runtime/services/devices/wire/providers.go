@@ -11,6 +11,7 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
 	filemedia "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
@@ -20,7 +21,7 @@ import (
 // NewService creates the process-scoped device service. It is inert until a
 // caller invokes Open with a normalized request.
 func NewService(registry devicegw.DeviceRegistry) devices.Service {
-	wire.Build(newFactory, wire.Bind(new(devices.Service), new(*media.Factory)))
+	wire.Build(newFactory, wire.Bind(new(devices.Service), new(*composite.Factory)))
 	return nil
 }
 
@@ -32,8 +33,8 @@ func NewFileService() devices.Service {
 	return nil
 }
 
-func newFactory(registry devicegw.DeviceRegistry) *media.Factory {
-	return media.NewFactory(registry, mixer.DefaultFormat())
+func newFactory(registry devicegw.DeviceRegistry) *composite.Factory {
+	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), filemedia.NewFactory())
 }
 
 func newFileFactory() *filemedia.Factory { return filemedia.NewFactory() }

@@ -102,6 +102,16 @@ type PlaybackControllerProvider interface {
 	PlaybackController() audio.PlaybackController
 }
 
+// PlaybackSamplesObserverProvider is an optional physical playback tap. The
+// callback runs after conversion and queue admission, so a secondary recorder
+// can retain the negotiated device-rate PCM without consuming the provider
+// stream a second time. Implementations must invoke the callback
+// synchronously and preserve its error; the device service owns any bounded
+// buffering behind that callback.
+type PlaybackSamplesObserverProvider interface {
+	SetPlaybackSamplesObserver(func(context.Context, int, []int16) error)
+}
+
 // MediaPorts are the optional local workers admitted for one device request.
 // The service handle owns both endpoints and must be closed exactly once by
 // its caller. One-way media is supported by leaving either field nil.

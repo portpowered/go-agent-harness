@@ -230,12 +230,10 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 	deviceService := deps.DeviceService
 	deviceRequest := devicesRequest(request, liveRequest)
 	if filePorts != nil {
-		deviceService = deps.FileDeviceService.Service
 		applyFileSchedulers(filePorts, deps.FileDeviceService.Scheduler)
-		deviceRequest.CaptureEnabled = filePorts.Input != nil
-		deviceRequest.PlaybackEnabled = filePorts.Output != nil
 		deviceRequest.FileInput = filePorts.Input
 		deviceRequest.FileOutput = filePorts.Output
+		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
 	}
 	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
 		deviceService = nil
@@ -260,6 +258,30 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 			return nil
 		}),
 	}
+}
+
+func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
+	if filePorts == nil {
+		return physical, deviceRequest
+	}
+	if filePorts.Input != nil {
+		// The public device handle exposes one capture port. A finite source
+		// therefore owns capture whenever it is present; an explicit physical
+		// output can still be admitted alongside it.
+		deviceRequest.CaptureEnabled = false
+	}
+	if deviceRequest.CaptureEnabled || deviceRequest.PlaybackEnabled {
+		return physical, deviceRequest
+	}
+	if filePorts.Input != nil || filePorts.Output != nil {
+		deviceRequest.CaptureEnabled = filePorts.Input != nil
+		deviceRequest.PlaybackEnabled = filePorts.Output != nil
+		return finite, deviceRequest
+	}
+	if len(filePorts.InputTurns) > 0 {
+		return finite, deviceRequest
+	}
+	return nil, deviceRequest
 }
 
 func outputWriter(request serviceSession.Request, out io.Writer) io.Writer {

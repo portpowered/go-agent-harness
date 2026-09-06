@@ -8,6 +8,7 @@ package wire
 
 import (
 	devices2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
@@ -33,8 +34,8 @@ func NewFileService() devices2.Service {
 
 // providers.go:
 
-func newFactory(registry devices.DeviceRegistry) *media.Factory {
-	return media.NewFactory(registry, mixer.DefaultFormat())
+func newFactory(registry devices.DeviceRegistry) *composite.Factory {
+	return composite.NewFactory(media.NewFactory(registry, mixer.DefaultFormat()), file.NewFactory())
 }
 
 func newFileFactory() *file.Factory { return file.NewFactory() }

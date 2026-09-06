@@ -71,16 +71,23 @@ func OpenFilePorts(request serviceSession.Request, out io.Writer, outputRate int
 		ports.InputTurns = append(ports.InputTurns, runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: path != "-"})
 	}
 	if request.AudioOutputPath != "" {
-		if outputRate <= 0 {
-			outputRate = audio.SampleRate
-		}
-		sink, err := audio.NewFileSinkAtSampleRate(request.AudioOutputPath, out, outputRate)
+		sink, err := openAudioOutput(request, out, outputRate)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("--audio-out %q: %w", request.AudioOutputPath, err), ports.Close())
 		}
 		ports.Output = &runtimeDevices.FileOutput{Sink: sink, SampleRate: outputRate}
 	}
 	return ports, nil
+}
+
+func openAudioOutput(request serviceSession.Request, out io.Writer, outputRate int) (audio.AudioSink, error) {
+	if outputRate <= 0 {
+		outputRate = audio.SampleRate
+	}
+	if request.AudioOutputDevicePresent || request.InteractiveDevices {
+		return newNegotiatedFileSink(request.AudioOutputPath, out, outputRate)
+	}
+	return audio.NewFileSinkAtSampleRate(request.AudioOutputPath, out, outputRate)
 }
 
 func openAudioInput(input serviceSession.AudioInput) (audio.AudioSource, int, error) {
