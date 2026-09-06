@@ -52,33 +52,36 @@ type Gate struct {
 	inbound  *inboundPort
 	outbound *outboundPort
 
-	mu            sync.Mutex
-	closed        bool
-	closeErr      error
-	closeDone     chan struct{}
-	target        sharedaudio.MediaEndpoints
-	ready         chan struct{}
-	readyOnce     sync.Once
-	bridgeCtx     context.Context
-	bridgeCancel  context.CancelFunc
-	inboundDone   chan struct{}
-	inboundOnce   sync.Once
-	inboundLinked bool
-	onError       func(error)
-	frameMu       sync.RWMutex
-	onFrame       FrameObserver
-	orderMu       sync.Mutex
-	orderChanged  chan struct{}
-	active        bool
-	activeControl string
-	mediaNext     uint64
-	mediaDone     uint64
-	mediaFinished map[uint64]struct{}
-	controls      map[string]uint64
-	ackMu         sync.Mutex
-	acks          map[string]*controlAck
-	nextAckID     uint64
-	wg            sync.WaitGroup
+	mu              sync.Mutex
+	closed          bool
+	closeErr        error
+	closeDone       chan struct{}
+	target          sharedaudio.MediaEndpoints
+	ready           chan struct{}
+	readyOnce       sync.Once
+	bridgeCtx       context.Context
+	bridgeCancel    context.CancelFunc
+	inboundDone     chan struct{}
+	inboundOnce     sync.Once
+	inboundLinked   bool
+	inboundSealed   bool
+	inboundSealDone chan struct{}
+	inboundSealErr  error
+	onError         func(error)
+	frameMu         sync.RWMutex
+	onFrame         FrameObserver
+	orderMu         sync.Mutex
+	orderChanged    chan struct{}
+	active          bool
+	activeControl   string
+	mediaNext       uint64
+	mediaDone       uint64
+	mediaFinished   map[uint64]struct{}
+	controls        map[string]uint64
+	ackMu           sync.Mutex
+	acks            map[string]*controlAck
+	nextAckID       uint64
+	wg              sync.WaitGroup
 }
 
 type controlAck struct {
@@ -315,48 +318,4 @@ func (g *Gate) bridgeOutbound(ctx context.Context, target sharedaudio.OutboundMe
 		g.outbound.complete()
 		release()
 	}
-}
-
-func (g *Gate) Close() error {
-	if g == nil {
-		return nil
-	}
-	g.mu.Lock()
-	if g.closed {
-		closeDone := g.closeDone
-		g.mu.Unlock()
-		<-closeDone
-		g.mu.Lock()
-		closeErr := g.closeErr
-		g.mu.Unlock()
-		return closeErr
-	}
-	g.closed = true
-	target := g.target
-	cancel := g.bridgeCancel
-	g.mu.Unlock()
-
-	// Wake provider and media admission waiters before joining bridge workers.
-	// Close is a teardown boundary, so no waiter may remain behind a pending
-	// control or an unconsumed media barrier.
-	g.orderMu.Lock()
-	g.notifyOrderLocked()
-	g.orderMu.Unlock()
-
-	if cancel != nil {
-		cancel()
-	}
-	// A control sender may be waiting for the provider session's synchronous
-	// acknowledgement while teardown closes the provider. Wake it before
-	// joining bridge workers so Close remains cancellation-prioritized.
-	g.cancelAcks()
-	g.inbound.close()
-	g.outbound.close()
-	closeErr := closeMediaEndpoints(target)
-	g.mu.Lock()
-	g.closeErr = closeErr
-	g.mu.Unlock()
-	g.wg.Wait()
-	close(g.closeDone)
-	return closeErr
 }

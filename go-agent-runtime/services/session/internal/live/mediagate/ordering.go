@@ -271,13 +271,129 @@ func (g *Gate) releaseMedia(id uint64) {
 	g.markMediaDone(id)
 }
 
+// SealInbound closes the provider-owned inbound endpoint while keeping the
+// host-facing inbound queue open. A graceful provider completion must seal
+// its source before waiting for bridgeInbound: the source otherwise has no
+// reason to return after its final frame, and Gate.Close cannot be used first
+// because it closes the host queue and would discard frames still in flight.
+// The queued source frames remain readable before the endpoint reports its
+// close error, so this is a lossless end-of-stream boundary for frames already
+// admitted by the provider. It does not flush a provider's partial pending
+// frame; graceful providers must flush that tail before sealing.
+func (g *Gate) SealInbound() error {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	if g.closed {
+		done := g.closeDone
+		g.mu.Unlock()
+		<-done
+		g.mu.Lock()
+		err := g.closeErr
+		g.mu.Unlock()
+		return err
+	}
+	target := g.target.Inbound
+	linked := g.inboundLinked
+	var done chan struct{}
+	if linked && target != nil {
+		if g.inboundSealed {
+			done = g.inboundSealDone
+			g.mu.Unlock()
+			<-done
+			g.mu.Lock()
+			err := g.inboundSealErr
+			g.mu.Unlock()
+			return err
+		}
+		// Mark the endpoint before releasing the mutex. Close may race with
+		// this operation, and must observe that this endpoint has already
+		// entered its one-owner seal/close lifecycle.
+		g.inboundSealed = true
+		g.inboundSealDone = make(chan struct{})
+		done = g.inboundSealDone
+	}
+	g.mu.Unlock()
+	if !linked || target == nil {
+		return nil
+	}
+	err := target.Close()
+	g.mu.Lock()
+	g.inboundSealErr = err
+	close(done)
+	g.mu.Unlock()
+	return err
+}
+
+func (g *Gate) Close() error {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	if g.closed {
+		closeDone := g.closeDone
+		g.mu.Unlock()
+		<-closeDone
+		g.mu.Lock()
+		closeErr := g.closeErr
+		g.mu.Unlock()
+		return closeErr
+	}
+	g.closed = true
+	target := g.target
+	inboundSealed := g.inboundSealed
+	inboundSealDone := g.inboundSealDone
+	cancel := g.bridgeCancel
+	g.mu.Unlock()
+
+	// Wake provider and media admission waiters before joining bridge workers.
+	// Close is a teardown boundary, so no waiter may remain behind a pending
+	// control or an unconsumed media barrier.
+	g.orderMu.Lock()
+	g.notifyOrderLocked()
+	g.orderMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	// A control sender may be waiting for the provider session's synchronous
+	// acknowledgement while teardown closes the provider. Wake it before
+	// joining bridge workers so Close remains cancellation-prioritized.
+	g.cancelAcks()
+	g.inbound.close()
+	g.outbound.close()
+	var inboundSealErr error
+	if inboundSealed && inboundSealDone != nil {
+		<-inboundSealDone
+		g.mu.Lock()
+		inboundSealErr = g.inboundSealErr
+		g.mu.Unlock()
+	}
+	var closeErr error
+	closeErr = errors.Join(closeErr, inboundSealErr)
+	if !inboundSealed {
+		closeErr = errors.Join(closeErr, closeMediaEndpoint(target.Inbound))
+	}
+	closeErr = errors.Join(closeErr, closeMediaEndpoint(target.Outbound))
+	g.mu.Lock()
+	g.closeErr = closeErr
+	g.mu.Unlock()
+	g.wg.Wait()
+	close(g.closeDone)
+	return closeErr
+}
+
 func closeMediaEndpoints(endpoints sharedaudio.MediaEndpoints) error {
 	var closeErr error
-	if endpoints.Inbound != nil {
-		closeErr = errors.Join(closeErr, endpoints.Inbound.Close())
-	}
-	if endpoints.Outbound != nil {
-		closeErr = errors.Join(closeErr, endpoints.Outbound.Close())
-	}
+	closeErr = errors.Join(closeErr, closeMediaEndpoint(endpoints.Inbound))
+	closeErr = errors.Join(closeErr, closeMediaEndpoint(endpoints.Outbound))
 	return closeErr
+}
+
+func closeMediaEndpoint(endpoint sharedaudio.MediaEndpoint) error {
+	if endpoint == nil {
+		return nil
+	}
+	return endpoint.Close()
 }

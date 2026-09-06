@@ -240,10 +240,13 @@ func (h *handle) finishMedia(err error) error {
 		// Normal completion drains the provider queue into the bounded host
 		// port before closure. Failed or canceled sessions abort immediately.
 		drainCtx, cancel := context.WithTimeout(h.evidenceContext(), defaultPlaybackDrainTimeout)
+		if sealErr := h.media.SealInbound(); sealErr != nil {
+			err = errors.Join(err, fmt.Errorf("seal live inbound media: %w", sealErr))
+		}
 		drainErr := h.media.DrainInbound(drainCtx)
 		cancel()
 		if drainErr != nil {
-			err = fmt.Errorf("drain live inbound media: %w", drainErr)
+			err = errors.Join(err, fmt.Errorf("drain live inbound media: %w", drainErr))
 		}
 	}
 	return errors.Join(err, h.media.Close())
