@@ -101,7 +101,7 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 	}
 	inspection, err := c.liveReplayService.InspectCapture(ctx, request.ReplayPath)
 	if err != nil {
-		return false, nil, err
+		return false, nil, fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
 	}
 	return inspection.IsRealtime(), &inspection, nil
 }

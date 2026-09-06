@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -102,6 +103,9 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 }
 
 func requireLiveConfig(request serviceSession.Request) (*config.Config, error) {
+	if request.RecordPath != "" && !strings.EqualFold(filepath.Ext(request.RecordPath), ".json") {
+		return nil, fmt.Errorf("--record path %q must end with .json", request.RecordPath)
+	}
 	if request.LoadedConfig == nil {
 		return nil, errors.New("live session configuration is unavailable")
 	}

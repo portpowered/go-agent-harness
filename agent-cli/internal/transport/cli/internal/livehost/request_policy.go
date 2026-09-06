@@ -86,7 +86,10 @@ func applyProviderOverrides(request serviceSession.Request, apiKey, model, baseU
 
 func validateProviderCredential(provider, apiKey, replayPath string) error {
 	if apiKey == "" && provider != config.ProviderLocal && replayPath == "" {
-		return fmt.Errorf("%s realtime api key is missing", provider)
+		if provider == config.ProviderGrok {
+			return fmt.Errorf("grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in %s)", config.ConfigFileName)
+		}
+		return fmt.Errorf("%s realtime api key is missing (set AGENT_MODEL__%s__API_KEY, pass --api-key, or configure the provider in %s)", provider, strings.ToUpper(provider), config.ConfigFileName)
 	}
 	return nil
 }
