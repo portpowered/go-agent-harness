@@ -211,6 +211,7 @@ func writeRuntimeLiveAnnouncements(out io.Writer, request serviceSession.Request
 	if liveRequest.Capabilities != nil {
 		definitions = liveRequest.Capabilities.Definitions
 	}
+	definitions = announcedReplayTools(definitions, replayInspection)
 	definitions = messages.CanonicalToolDefinitions(definitions)
 	names := make([]string, 0, len(definitions))
 	seen := make(map[string]struct{}, len(definitions))
@@ -301,4 +302,23 @@ func bindRuntimeLiveImagePreparer(executor messages.ToolExecutor) messages.ToolE
 		}
 		return parts, nil
 	})
+}
+
+// announcedReplayTools shows the initially advertised tools that the current
+// host can execute. Recorded metadata cannot expand the current allowlist.
+func announcedReplayTools(definitions []messages.ToolDefinition, inspection *runtimeReplay.CaptureInspection) []messages.ToolDefinition {
+	if inspection == nil || !inspection.InitialToolsKnown {
+		return definitions
+	}
+	names := make(map[string]bool, len(inspection.InitialTools))
+	for _, name := range inspection.InitialTools {
+		names[name] = true
+	}
+	selected := make([]messages.ToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if names[definition.Name] {
+			selected = append(selected, definition)
+		}
+	}
+	return selected
 }

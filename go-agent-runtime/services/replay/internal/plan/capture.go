@@ -59,6 +59,7 @@ func (s *Service) InspectCapture(ctx context.Context, path string) (replay.Captu
 		Model:            loaded.Capture.Provider.Model,
 		IntegrityWarning: loaded.IntegrityWarning(sourcePath),
 	}
+	inspection.InitialTools, inspection.InitialToolsKnown = initialToolNames(loaded.Capture.Records)
 	if !inspection.IsRealtime() {
 		return inspection, nil
 	}

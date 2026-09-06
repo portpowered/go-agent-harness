@@ -44,3 +44,21 @@ func TestPlannerRejectsOrphanToolOutput(t *testing.T) {
 		t.Fatal("orphan tool output accepted")
 	}
 }
+
+func TestInitialToolsDescribeFirstAdvertisementOnly(t *testing.T) {
+	records := []gatewaytesting.CapturedSessionEvent{
+		clientRecord(replaySessionUpdate, `{"type":"session.update","session":{"tools":[{"name":"exec"}]}}`),
+		clientRecord(replaySessionUpdate, `{"type":"session.update","session":{"tools":[{"name":"later_tool"}]}}`),
+	}
+	names, known := initialToolNames(records)
+	if !known || len(names) != 1 || names[0] != "exec" {
+		t.Fatalf("initial tools = %v, known=%t", names, known)
+	}
+	names, known = initialToolNames([]gatewaytesting.CapturedSessionEvent{clientRecord(replaySessionUpdate, `{"type":"session.update","session":{}}`)})
+	if !known || len(names) != 0 {
+		t.Fatalf("empty advertisement = %v, known=%t", names, known)
+	}
+	if _, known = initialToolNames(nil); known {
+		t.Fatal("missing advertisement was reported as known")
+	}
+}

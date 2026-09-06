@@ -84,6 +84,11 @@ func (r *LiveEventRenderer) renderSessionClose(out io.Writer, event runtimeSessi
 	if err := r.finishVisibleText(out); err != nil {
 		return err
 	}
+	if r.replay {
+		// Replay completion belongs to the joined runtime result. Provider close
+		// observations remain in the recording and may precede a replay error.
+		return nil
+	}
 	r.sessionClosed = true
 	if event.Reason != "" {
 		if _, err := fmt.Fprintf(out, "\n[session closed: %s]\n", event.Reason); err != nil {
@@ -106,6 +111,11 @@ func (r *LiveEventRenderer) renderTerminal(out io.Writer, event runtimeSession.L
 		}
 		_, err := fmt.Fprintf(out, "live session terminated: %v\n", event.Error)
 		return err
+	}
+	if r.replay && event.Terminal != nil && event.Terminal.TerminalReason == messages.TerminalReasonReplayComplete {
+		if _, err := io.WriteString(out, "\n"); err != nil {
+			return err
+		}
 	}
 	return writeLiveTerminal(out, event.Terminal, r.replay)
 }

@@ -75,11 +75,10 @@ func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, li
 }
 
 func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
-	if value != nil && value.TerminalReason != "" {
+	if value != nil && value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
 		return value
 	}
-	if request.Replay.InputCapturePath != "" &&
-		(request.ReplayPlan == nil || request.ReplayPlan.StopAfterResponse) {
+	if request.Replay.InputCapturePath != "" {
 		return messages.NewSessionCloseValueWithTerminal(
 			request.SessionID,
 			"",

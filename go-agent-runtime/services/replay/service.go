@@ -31,6 +31,10 @@ type CaptureInspection struct {
 	Model            string
 	IntegrityWarning string
 	LivePlan         *session.LiveReplayPlan
+	// InitialTools describes the recorded initial provider advertisement, not
+	// execution authorization. Hosts must retain their current tool policy.
+	InitialTools      []string
+	InitialToolsKnown bool
 }
 
 // IsRealtime reports whether the admitted capture can drive a continuous
