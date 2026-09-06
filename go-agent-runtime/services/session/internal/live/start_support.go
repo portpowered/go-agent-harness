@@ -44,6 +44,99 @@ func (h *handle) requiresScheduler() bool {
 	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
 }
 
+func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
+	if value == nil {
+		return messages.NewSessionCloseValueWithTerminal(
+			sessionID,
+			liveness.Classification,
+			liveness.Classification,
+			liveness.TerminalReason,
+			liveness.TerminalProvenance,
+			liveness.OutputState,
+		)
+	}
+	copy := *value
+	copy.Classification = liveness.Classification
+	copy.TerminalReason = liveness.TerminalReason
+	copy.TerminalProvenance = liveness.TerminalProvenance
+	copy.OutputState = liveness.OutputState
+	if copy.Reason == "" {
+		copy.Reason = liveness.Classification
+	}
+	return &copy
+}
+
+func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
+	if value != nil && value.TerminalReason != "" {
+		return value
+	}
+	if request.Replay.InputCapturePath != "" &&
+		(request.ReplayPlan == nil || request.ReplayPlan.StopAfterResponse) {
+		return messages.NewSessionCloseValueWithTerminal(
+			request.SessionID,
+			"",
+			string(messages.TerminalReasonReplayComplete),
+			messages.TerminalReasonReplayComplete,
+			messages.TerminalProvenanceReplay,
+			messages.TerminalOutputComplete,
+		)
+	}
+	if value != nil && value.Reason != "" {
+		return value
+	}
+	return messages.NewSessionCloseValueWithTerminal(
+		request.SessionID,
+		"",
+		string(messages.TerminalReasonProviderAuthoredCompletion),
+		messages.TerminalReasonProviderAuthoredCompletion,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputComplete,
+	)
+}
+
+func (h *handle) configureCaptureSource(active bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.captureSourceActive = active
+	h.mu.Unlock()
+}
+
+func (h *handle) captureSourceIsActive() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.captureSourceActive
+}
+
+// A recorder can fail on the terminal observation itself. That failure must
+// affect Wait and the delivered terminal even though the failed recorder
+// cannot be asked recursively to record its own error.
+func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
+	recordErr := h.recorderError()
+	if recordErr == nil {
+		return
+	}
+	if !errors.Is(event.Error, recordErr) {
+		event.Error = errors.Join(event.Error, recordErr)
+	}
+	event.Terminal = finalizeLiveTerminalValue(h.request, event.Error, event.Terminal, event.Liveness)
+	h.mu.Lock()
+	h.terminalErr = event.Error
+	h.mu.Unlock()
+}
+
 func (h *handle) watchDuration(ctx context.Context, timer platformclock.Timer) {
 	defer h.runWG.Done()
 	if timer == nil {
@@ -214,7 +307,9 @@ func (h *handle) providerDone(terminalErr error) {
 	h.providerDoneOnce.Do(func() { close(h.providerDoneSignal) })
 	select {
 	case <-h.terminalObserved:
-		h.stopGracefully()
+		if !h.deferProviderClose() {
+			h.stopGracefully()
+		}
 	case <-h.done:
 	}
 }

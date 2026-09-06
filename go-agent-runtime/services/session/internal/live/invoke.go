@@ -60,6 +60,12 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 		captureBoundaryOwned: captureBoundaryOwned,
 		endpoints:            handle.Media(),
 	}
+	if runtimeHandle, ok := handle.(interface{ configureScheduledAudio(int, int) }); ok {
+		runtimeHandle.configureScheduledAudio(len(options.CaptureTurns), captureResponseTarget(options.Request))
+	}
+	if runtimeHandle, ok := handle.(interface{ configureCaptureSource(bool) }); ok {
+		runtimeHandle.configureCaptureSource(options.DeviceRequest.CaptureEnabled || len(options.CaptureTurns) > 0)
+	}
 	invocation.attachRecorder()
 	if err := invocation.validateDeviceAdmission(); err != nil {
 		return invocation.closeWithError(err)
@@ -357,16 +363,6 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 	// context was canceled, so retain the parent's values while removing only
 	// its cancellation signal.
 	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
-}
-
-func shouldDrainPlayback(ctx context.Context, waitErr error) bool {
-	if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, session.ErrLiveDurationExceeded) {
-		return false
-	}
-	if ctx != nil && ctx.Err() != nil {
-		return false
-	}
-	return true
 }
 
 func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration) error {

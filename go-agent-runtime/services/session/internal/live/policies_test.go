@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -118,6 +119,102 @@ rateLimitObserved:
 	handle.Cancel(stop)
 	if err := handle.Wait(); !errors.Is(err, stop) {
 		t.Fatalf("Wait = %v, want cancellation cause", err)
+	}
+}
+
+func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
+	unscheduled := &handle{}
+	for index := 0; index < 128; index++ {
+		unscheduled.observeResponseTerminal(messages.StreamMessage{
+			Type:       messages.StreamTypeMessageEnd,
+			Role:       messages.RoleAssistant,
+			ResponseID: fmt.Sprintf("ordinary-%d", index),
+		})
+	}
+	unscheduled.mu.Lock()
+	ordinaryCount := unscheduled.observedResponseTerminals
+	ordinaryIDs := unscheduled.observedResponseIDs
+	unscheduled.mu.Unlock()
+	if ordinaryCount != 0 || ordinaryIDs != nil {
+		t.Fatalf("ordinary response ledger retained state: count=%d ids=%d", ordinaryCount, len(ordinaryIDs))
+	}
+
+	scheduled := &handle{scheduledAudioCount: 2}
+	message := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "scheduled-1",
+	}
+	scheduled.observeResponseTerminal(message)
+	scheduled.observeResponseTerminal(message)
+	scheduled.observeResponseTerminal(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "scheduled-2",
+	})
+	scheduled.mu.Lock()
+	scheduledCount := scheduled.observedResponseTerminals
+	scheduledIDs := scheduled.observedResponseIDs
+	scheduled.mu.Unlock()
+	if scheduledCount != 2 || scheduledIDs != nil {
+		t.Fatalf("scheduled response ledger did not deduplicate and release: count=%d ids=%d", scheduledCount, len(scheduledIDs))
+	}
+}
+
+func TestProviderCloseBlocksUndispatchedFiniteTurnAndRetainsMetadata(t *testing.T) {
+	h := &handle{
+		request:                   session.LiveRequest{SessionID: "finite-close"},
+		scheduledAudioCount:       3,
+		dispatchedAudioCount:      2,
+		observedResponseTerminals: 2,
+		terminalValue:             nil,
+		terminalObserved:          make(chan struct{}),
+	}
+	providerClose := messages.NewSessionCloseValueWithTerminal(
+		"finite-close",
+		"scheduled_fixture_complete",
+		"transport",
+		messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputPartial,
+	)
+	h.observeTerminalValue(messages.StreamMessage{
+		Type:  messages.StreamTypeSessionClose,
+		Value: providerClose,
+	})
+	// The response terminal may already be queued behind SESSION.CLOSE. It
+	// must not replace the provider's concrete close classification or reopen
+	// finite source admission.
+	h.observeTerminalValue(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonProviderAuthoredCompletion},
+	})
+
+	h.mu.Lock()
+	observed := h.providerCloseObserved
+	terminal := cloneLiveTerminalValue(h.terminalValue)
+	h.mu.Unlock()
+	if !observed || terminal == nil || terminal.Reason != "scheduled_fixture_complete" || terminal.TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("provider close metadata = observed:%t terminal:%+v, want concrete provider close", observed, terminal)
+	}
+	err := h.ensureCaptureTurnAdmissible()
+	var incomplete *session.LiveScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) || incomplete.Completed != 2 || incomplete.Dispatched != 2 || incomplete.Scheduled != 3 {
+		t.Fatalf("finite admission error = %v, want completed=2 dispatched=2 scheduled=3", err)
+	}
+}
+
+func TestScheduledAudioErrorRequiresEveryTurnDispatched(t *testing.T) {
+	h := &handle{
+		scheduledAudioCount:       2,
+		dispatchedAudioCount:      1,
+		observedResponseTerminals: 2,
+	}
+	err := h.scheduledAudioError()
+	var incomplete *session.LiveScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) || incomplete.Completed != 2 || incomplete.Dispatched != 1 || incomplete.Scheduled != 2 {
+		t.Fatalf("scheduled audio error = %v, want completed=2 dispatched=1 scheduled=2", err)
 	}
 }
 
@@ -257,6 +354,28 @@ func TestFinalizationFailureCannotRetainSuccessfulTerminalClassification(t *test
 	}
 	if observed.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
 		t.Fatal("original provider observation mutated")
+	}
+}
+
+func TestMaxDurationRetainsPartialTerminalClassification(t *testing.T) {
+	observed := messages.NewSessionCloseValueWithTerminal(
+		"fixture",
+		"provider closed",
+		"provider_close",
+		messages.TerminalReasonProviderClose,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputPartial,
+	)
+	terminal := finalizeLiveTerminalValue(
+		session.LiveRequest{SessionID: "fixture"},
+		session.ErrLiveDurationExceeded,
+		observed,
+		nil,
+	)
+	if terminal.TerminalReason != messages.TerminalReason("max_duration") ||
+		terminal.TerminalProvenance != messages.TerminalProvenanceLoop ||
+		terminal.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("max-duration terminal = %+v, want loop partial max_duration", terminal)
 	}
 }
 

@@ -26,8 +26,16 @@ func (i *liveInvocation) runCaptureTurns(ctx context.Context) error {
 	}
 	responseTarget := captureResponseTarget(i.options.Request)
 	for index, input := range i.options.CaptureTurns {
+		if guard, ok := i.handle.(interface{ ensureCaptureTurnAdmissible() error }); ok {
+			if err := guard.ensureCaptureTurnAdmissible(); err != nil {
+				return err
+			}
+		}
 		if err := i.runCaptureTurn(ctx, index, input, admission); err != nil {
 			return err
+		}
+		if runtimeHandle, ok := i.handle.(*handle); ok {
+			runtimeHandle.noteCaptureDispatched()
 		}
 		responseTarget++
 		if err := i.waitForNextCaptureTurn(ctx, index, admission, responseTarget, len(i.options.CaptureTurns)); err != nil {
@@ -199,11 +207,18 @@ func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages
 	h.mu.Lock()
 	loop := h.loop
 	started, closed := h.started, h.closed
+	providerClosed := h.providerCloseObserved
 	h.mu.Unlock()
 	if !started || loop == nil {
 		return session.ErrLiveNotStarted
 	}
 	if closed {
+		return session.ErrLiveClosed
+	}
+	if providerClosed {
+		if err := h.scheduledAudioError(); err != nil {
+			return err
+		}
 		return session.ErrLiveClosed
 	}
 	return loop.SendAudioInputWithPolicy(ctx, pcm, policy)

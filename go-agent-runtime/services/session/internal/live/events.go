@@ -159,6 +159,38 @@ func applyMessageSessionID(event *session.LiveEvent, sessionID string, msg messa
 	}
 }
 
+func terminalValueForMessage(msg messages.StreamMessage) *messages.SessionCloseValue {
+	if msg.Type == messages.StreamTypeSessionClose {
+		candidate, ok := msg.Value.(*messages.SessionCloseValue)
+		if !ok || candidate == nil {
+			return nil
+		}
+		copy := *candidate
+		return &copy
+	}
+	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
+		return nil
+	}
+	candidate, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || candidate == nil {
+		return nil
+	}
+	return sessionCloseValueFromMessageEnd(candidate)
+}
+
+func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.SessionCloseValue {
+	if value == nil {
+		return nil
+	}
+	return &messages.SessionCloseValue{
+		Type:               "session_close",
+		Classification:     "",
+		TerminalReason:     value.TerminalReason,
+		TerminalProvenance: value.TerminalProvenance,
+		OutputState:        value.OutputState,
+	}
+}
+
 // liveToolContinuation records the provider-side lifecycle of one tool result.
 // The model runner acknowledges a result and requests its continuation through
 // callbacks on orderedSession, while provider output is observed on the delta

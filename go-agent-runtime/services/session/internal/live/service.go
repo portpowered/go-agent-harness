@@ -138,20 +138,31 @@ type handle struct {
 	responseStartWake  chan struct{}
 	replayResponses    int
 	replayResponseWake chan struct{}
-	pendingToolCalls   int
-	terminalValue      *messages.SessionCloseValue
+	// scheduledAudioCount is configured by the invocation owner when finite
+	// sources are admitted. These counters are deliberately kept on the handle
+	// so the terminal event and Wait result carry the same outcome, even when a
+	// provider closes before the capture worker returns its own error.
+	scheduledAudioCount       int
+	dispatchedAudioCount      int
+	scheduledResponseBase     int
+	observedResponseTerminals int
+	observedResponseIDs       map[string]struct{}
+	pendingToolCalls          int
+	terminalValue             *messages.SessionCloseValue
+	providerCloseObserved     bool
 
 	runWG       sync.WaitGroup
 	finishOnce  sync.Once
 	startFinish sync.Once
 
-	eventMu         sync.Mutex
-	eventsClosed    bool
-	sequence        uint64
-	dropped         uint64
-	openingSent     bool
-	replayReady     chan struct{}
-	replayReadyOnce sync.Once
+	eventMu             sync.Mutex
+	eventsClosed        bool
+	sequence            uint64
+	dropped             uint64
+	openingSent         bool
+	captureSourceActive bool
+	replayReady         chan struct{}
+	replayReadyOnce     sync.Once
 	// providerDone is raised by the provider-session adapter after its
 	// transport closes. terminalObserved is raised when the model runner has
 	// forwarded the corresponding SessionClose boundary. Keeping these as

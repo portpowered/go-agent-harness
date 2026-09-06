@@ -58,8 +58,9 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 	}
 }
 
-func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) {
+func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
 	h.observeTerminalValue(msg)
+	h.observeResponseTerminal(msg)
 	h.observeProviderLiveness(ctx, msg)
 	if allowOpening {
 		h.observeOpeningPolicies(ctx, loop, msg)
@@ -69,11 +70,25 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if continuationErr != nil {
 		h.Cancel(continuationErr)
 	}
-	h.observeFiniteResponse(msg)
+	responseComplete := h.observeFiniteResponse(msg)
 	h.finishMessageObservation(msg)
 	if allowOpening && msg.Type == messages.StreamTypeSessionOpen {
 		h.sendOpeningMessage(ctx, loop)
 	}
+	if responseComplete {
+		h.signalResponseWake()
+	}
+	return responseComplete
+}
+
+func (h *handle) signalResponseWake() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	close(h.replayResponseWake)
+	h.replayResponseWake = make(chan struct{})
+	h.mu.Unlock()
 }
 
 func (h *handle) observeOpeningPolicies(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage) {
@@ -95,7 +110,7 @@ func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
 	// SESSION.CLOSE is the provider's terminal application boundary. Publish
 	// it before initiating cleanup; transport Done remains the join signal,
 	// not a prerequisite for asking an otherwise-open connection to close.
-	if msg.Type == messages.StreamTypeSessionClose {
+	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
 		h.stopGracefully()
 	}
 }
@@ -119,15 +134,24 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 		// A rich message that requested a response is itself the finite turn
 		// boundary. A queued rich message remains open for the following audio
 		// commit, which owns the response boundary instead.
-		if requestResponse && h.request.FinishAfterResponse {
+		if requestResponse && h.request.FinishAfterResponse && !h.captureSourceIsActive() {
 			h.markCaptureComplete()
 		}
 		return
 	}
 	if err := loop.Send(ctx, []messages.Message{messages.NewTextMessage(messages.RoleUser, prompt)}); err != nil {
 		h.failOpeningMessage(err)
+		return
+	}
+	if h.request.FinishAfterResponse && !h.captureSourceIsActive() {
+		// A plain opening prompt is a finite turn boundary only when this
+		// invocation has no separately admitted capture source. Persistent and
+		// scheduled audio must reach their own EOF/boundary policy first.
+		h.markCaptureComplete()
 	}
 }
+
+const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
 
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
 	h.mu.Lock()
@@ -137,7 +161,22 @@ func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.
 		return "", nil, session.LiveOpeningMessageQueued, false
 	}
 	h.openingSent = true
-	return h.request.OpeningPrompt, input.CloneContentParts(h.request.OpeningContentParts), h.request.OpeningMessageResponse, true
+	prompt := h.request.OpeningPrompt
+	parts := input.CloneContentParts(h.request.OpeningContentParts)
+	if prompt == "" && h.request.OpeningMessageResponse == session.LiveOpeningMessageQueued && hasImageContentPart(parts) {
+		prompt = deferredImageOpeningPrompt
+	}
+	return prompt, parts, h.request.OpeningMessageResponse, true
+}
+
+func hasImageContentPart(parts []messages.ContentPart) bool {
+	for _, part := range parts {
+		switch part.(type) {
+		case messages.ImagePart:
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handle) failOpeningMessage(err error) {
@@ -164,41 +203,19 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 		return
 	}
 	h.mu.Lock()
-	h.terminalValue = value
+	if msg.Type == messages.StreamTypeSessionClose {
+		// A provider SESSION.CLOSE is an irreversible admission boundary. Keep
+		// its concrete reason/classification even when a queued MESSAGE.END is
+		// observed afterward and would otherwise synthesize a blank summary.
+		if !h.providerCloseObserved || h.terminalValue == nil {
+			h.terminalValue = value
+		}
+		h.providerCloseObserved = true
+	} else if !h.providerCloseObserved {
+		h.terminalValue = value
+	}
 	h.mu.Unlock()
 	h.terminalOnce.Do(func() { close(h.terminalObserved) })
-}
-
-func terminalValueForMessage(msg messages.StreamMessage) *messages.SessionCloseValue {
-	if msg.Type == messages.StreamTypeSessionClose {
-		candidate, ok := msg.Value.(*messages.SessionCloseValue)
-		if !ok || candidate == nil {
-			return nil
-		}
-		copy := *candidate
-		return &copy
-	}
-	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
-		return nil
-	}
-	candidate, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok || candidate == nil {
-		return nil
-	}
-	return sessionCloseValueFromMessageEnd(candidate)
-}
-
-func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.SessionCloseValue {
-	if value == nil {
-		return nil
-	}
-	return &messages.SessionCloseValue{
-		Type:               "session_close",
-		Classification:     "",
-		TerminalReason:     value.TerminalReason,
-		TerminalProvenance: value.TerminalProvenance,
-		OutputState:        value.OutputState,
-	}
 }
 
 func (h *handle) markCaptureComplete() {
@@ -214,15 +231,15 @@ func (h *handle) markCaptureComplete() {
 	}
 }
 
-func (h *handle) observeFiniteResponse(msg messages.StreamMessage) {
+func (h *handle) observeFiniteResponse(msg messages.StreamMessage) bool {
 	if h == nil || !h.request.FinishAfterResponse {
-		return
+		return false
 	}
 	h.mu.Lock()
 	if h.isToolResponseEnd(msg) {
 		h.pendingToolCalls = 0
 		h.mu.Unlock()
-		return
+		return false
 	}
 	h.observeFiniteResponseMessage(msg)
 	shouldFinish := h.shouldFinishFiniteResponse(msg)
@@ -230,6 +247,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage) {
 	if shouldFinish {
 		h.stopGracefully()
 	}
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
 }
 
 func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
@@ -251,8 +269,6 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		h.responseActive = false
 		h.responsePending = false
 		h.replayResponses++
-		close(h.replayResponseWake)
-		h.replayResponseWake = make(chan struct{})
 	}
 }
 

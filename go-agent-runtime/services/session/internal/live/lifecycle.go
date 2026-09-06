@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -74,7 +75,7 @@ func (h *handle) finish(err error) {
 				err = errors.Join(err, fmt.Errorf("flush live capture: %w", flushErr))
 			}
 		}
-		err = errors.Join(h.finishMedia(err), h.recorderError())
+		err = errors.Join(h.finishMedia(err), h.recorderError(), h.scheduledAudioError())
 		h.mu.Lock()
 		h.terminalErr = err
 		h.mu.Unlock()
@@ -88,20 +89,25 @@ func (h *handle) finish(err error) {
 	})
 }
 
-func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
-	if value == nil {
-		return nil
-	}
-	copy := *value
-	return &copy
-}
-
 func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
 	if liveness != nil {
 		return terminalForLiveness(request.SessionID, value, liveness)
 	}
 	if err == nil {
 		return successfulLiveTerminal(request, value)
+	}
+	if errors.Is(err, session.ErrLiveDurationExceeded) {
+		// MaxDuration is a deliberate loop boundary. Preserve the partial
+		// response that was already published while making the terminal reason
+		// explicit, even when the provider had emitted a close value first.
+		return messages.NewSessionCloseValueWithTerminal(
+			request.SessionID,
+			"max_duration",
+			"max_duration",
+			messages.TerminalReason("max_duration"),
+			messages.TerminalProvenanceLoop,
+			messages.TerminalOutputPartial,
+		)
 	}
 	if value != nil && value.TerminalReason != "" &&
 		value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion &&
@@ -213,28 +219,6 @@ func (h *handle) reserveCriticalEventLocked() {
 	}
 }
 
-func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
-	if value == nil {
-		return messages.NewSessionCloseValueWithTerminal(
-			sessionID,
-			liveness.Classification,
-			liveness.Classification,
-			liveness.TerminalReason,
-			liveness.TerminalProvenance,
-			liveness.OutputState,
-		)
-	}
-	copy := *value
-	copy.Classification = liveness.Classification
-	copy.TerminalReason = liveness.TerminalReason
-	copy.TerminalProvenance = liveness.TerminalProvenance
-	copy.OutputState = liveness.OutputState
-	if copy.Reason == "" {
-		copy.Reason = liveness.Classification
-	}
-	return &copy
-}
-
 func (h *handle) finishMedia(err error) error {
 	if err == nil {
 		// Normal completion drains the provider queue into the bounded host
@@ -252,51 +236,159 @@ func (h *handle) finishMedia(err error) error {
 	return errors.Join(err, h.media.Close())
 }
 
+func shouldDrainPlayback(ctx context.Context, waitErr error) bool {
+	if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, session.ErrLiveDurationExceeded) {
+		return false
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	return true
+}
+
 func isContextTermination(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
-	if value != nil && value.TerminalReason != "" {
-		return value
-	}
-	if request.Replay.InputCapturePath != "" &&
-		(request.ReplayPlan == nil || request.ReplayPlan.StopAfterResponse) {
-		return messages.NewSessionCloseValueWithTerminal(
-			request.SessionID,
-			"",
-			string(messages.TerminalReasonReplayComplete),
-			messages.TerminalReasonReplayComplete,
-			messages.TerminalProvenanceReplay,
-			messages.TerminalOutputComplete,
-		)
-	}
-	if value != nil && value.Reason != "" {
-		return value
-	}
-	return messages.NewSessionCloseValueWithTerminal(
-		request.SessionID,
-		"",
-		string(messages.TerminalReasonProviderAuthoredCompletion),
-		messages.TerminalReasonProviderAuthoredCompletion,
-		messages.TerminalProvenanceProvider,
-		messages.TerminalOutputComplete,
-	)
-}
-
-// A recorder can fail on the terminal observation itself. That failure must
-// affect Wait and the delivered terminal even though the failed recorder
-// cannot be asked recursively to record its own error.
-func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
-	recordErr := h.recorderError()
-	if recordErr == nil {
+// observeResponseTerminal keeps a response count independent of
+// FinishAfterResponse. Scheduled finite feeds use this count to report a
+// truthful outcome even when a provider closes a persistent session before
+// the normal finite-response policy is enabled.
+func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
+	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool ||
+		(msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return
 	}
-	if !errors.Is(event.Error, recordErr) {
-		event.Error = errors.Join(event.Error, recordErr)
-	}
-	event.Terminal = finalizeLiveTerminalValue(h.request, event.Error, event.Terminal, event.Liveness)
 	h.mu.Lock()
-	h.terminalErr = event.Error
+	// Ordinary live sessions use their normal finite-response bookkeeping and
+	// do not need a second response identity ledger. Keeping this accounting
+	// behind the scheduled-audio admission also bounds the ledger by the
+	// caller's finite schedule rather than by the lifetime of a conversation.
+	if h.scheduledAudioCount <= 0 {
+		h.mu.Unlock()
+		return
+	}
+	completed := h.observedResponseTerminals - h.scheduledResponseBase
+	if completed >= h.scheduledAudioCount {
+		h.mu.Unlock()
+		return
+	}
+	if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" {
+		if h.observedResponseIDs == nil {
+			h.observedResponseIDs = make(map[string]struct{})
+		}
+		if _, seen := h.observedResponseIDs[responseID]; seen {
+			h.mu.Unlock()
+			return
+		}
+		h.observedResponseIDs[responseID] = struct{}{}
+	}
+	h.observedResponseTerminals++
+	if h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
+		// The schedule has a complete set of terminal dispositions. Release the
+		// identity set so a long lived handle cannot retain it after completion.
+		h.observedResponseIDs = nil
+	}
 	h.mu.Unlock()
+}
+
+func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
+	if h == nil || scheduled <= 0 {
+		return
+	}
+	h.mu.Lock()
+	h.scheduledAudioCount = scheduled
+	if responseBase > 0 {
+		h.scheduledResponseBase = responseBase
+	}
+	h.mu.Unlock()
+}
+
+func (h *handle) noteCaptureDispatched() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if h.dispatchedAudioCount < h.scheduledAudioCount {
+		h.dispatchedAudioCount++
+	}
+	h.mu.Unlock()
+}
+
+// ensureCaptureTurnAdmissible checks the provider boundary before opening a
+// new caller-owned finite source. A provider close remains authoritative even
+// if its already queued response terminal is delivered afterward; admitting
+// another source would report a false dispatch and could write after close.
+func (h *handle) ensureCaptureTurnAdmissible() error {
+	if h == nil {
+		return session.ErrLiveClosed
+	}
+	h.mu.Lock()
+	providerClosed := h.providerCloseObserved
+	scheduled := h.scheduledAudioCount
+	dispatched := h.dispatchedAudioCount
+	completed := h.observedResponseTerminals - h.scheduledResponseBase
+	terminal := cloneLiveTerminalValue(h.terminalValue)
+	h.mu.Unlock()
+	if !providerClosed {
+		return nil
+	}
+	if incomplete := newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal); incomplete != nil {
+		return incomplete
+	}
+	return session.ErrLiveClosed
+}
+
+func (h *handle) scheduledAudioError() error {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	scheduled := h.scheduledAudioCount
+	dispatched := h.dispatchedAudioCount
+	completed := h.observedResponseTerminals - h.scheduledResponseBase
+	terminal := cloneLiveTerminalValue(h.terminalValue)
+	h.mu.Unlock()
+	return newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal)
+}
+
+func newScheduledAudioIncompleteError(scheduled, dispatched, completed int, terminal *messages.SessionCloseValue) error {
+	if scheduled <= 0 {
+		return nil
+	}
+	if completed < 0 {
+		completed = 0
+	}
+	if completed > scheduled {
+		completed = scheduled
+	}
+	if dispatched > scheduled {
+		dispatched = scheduled
+	}
+	if completed >= scheduled && dispatched >= scheduled {
+		return nil
+	}
+	incomplete := &session.LiveScheduledAudioIncompleteError{
+		Completed:  completed,
+		Dispatched: dispatched,
+		Scheduled:  scheduled,
+	}
+	if terminal != nil {
+		incomplete.ProviderStatus = terminal.Classification
+		incomplete.ProviderDetails = terminal.Reason
+	}
+	return incomplete
+}
+
+// deferProviderClose lets a finite scheduled feed drain provider response
+// terminals that were already queued before SESSION.CLOSE. Ordinary live
+// sessions retain the eager close behavior; the provider Done boundary still
+// ends the loop when an undispatched scheduled source remains.
+func (h *handle) deferProviderClose() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
 }
