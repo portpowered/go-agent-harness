@@ -52,13 +52,30 @@ flowchart TD
 ```
 
 One running manager is insufficient to enforce one active project: projects
-spend most of their lifetime waiting on children. Admission must retain ownership
-through waiting, validation, restart, and blocked states. The proposed graph
-permit consumes a single free slot at admission and releases it only at project
-completion. Before adoption, verify actual multi-input propagation and atomic
-consumption against the reference runtime. If its semantics cannot preserve the
-permit reliably, use a serialized admission command backed by canonical runtime
-state and a durable lock. Do not present a prompt-only restriction as enforcement.
+spend most of their lifetime waiting on children. Use a small durable admission
+owner with atomic `Admit(projectID, contractRevision)` and
+`Release(projectID, terminalEvidence)` operations. Store the owner under the
+repository's shared Git directory, so separate checkouts use the same admission
+record and interprocess lock. Preserve ownership through waiting, validation,
+restart, and blocked states. Repeating admission for the same project is
+idempotent; a different project is rejected. A crash or elapsed lease age never
+releases ownership automatically. Before resume, reconcile the recorded session
+and project against canonical runtime state; uncertainty fails closed.
+
+Keep this record limited to admission identity, contract revision, session, and
+release evidence. Child task scheduling stays entirely in the factory runtime.
+The supported launcher and project submission path must enforce admission;
+manager prompts alone are insufficient. Prevent a second launcher from opening
+another project session, and reject cross-project child packets before dispatch.
+Test those boundaries rather than treating a local lock file as sufficient.
+
+The reference's workstation resources return capacity after a dispatch and
+therefore cannot represent project ownership. Its multi-input matching is atomic,
+but same-type output propagation preserves that input's identity: a free-slot
+input does not automatically become a same-name slot owned by the admitted
+project. A graph permit would require additional verified identity transfer and
+restart/idempotency behavior. The durable admission owner keeps this invariant
+explicit without modifying the factory engine for our bootstrap.
 
 Bootstrap must also reconcile prompt/script contracts. In the pinned reference,
 `prepare-validation.py` calls the mandatory `factory-preflight.v1` validator,
