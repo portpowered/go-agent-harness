@@ -600,6 +600,12 @@
       "reason": "sentinel error identity is part of the live media admission contract"
     },
     {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "file": "services/session/live_errors.go",
+      "name": "ErrLiveScheduledAudioIncomplete",
+      "reason": "sentinel error identity is part of the finite live schedule contract"
+    },
+    {
       "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
       "file": "services/rooms/errors.go",
       "name": "ErrInvalidManifest",

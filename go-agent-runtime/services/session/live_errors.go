@@ -54,6 +54,12 @@ var (
 	// ErrLiveToolContinuationIncomplete identifies an ordinary tool result that
 	// reached the provider but did not receive a completed model continuation.
 	ErrLiveToolContinuationIncomplete = errors.New("session ended before the tool continuation")
+	// ErrLiveScheduledAudioIncomplete identifies a finite scheduled-audio
+	// invocation that ended before every admitted source received a terminal
+	// response disposition. The runtime keeps this cause separate from a
+	// provider, cancellation, or recording error so hosts can join all of the
+	// evidence while still classifying the schedule failure.
+	ErrLiveScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 )
 
 // LiveImageContinuationError carries the read_image call IDs whose result was
@@ -125,4 +131,44 @@ func formatLiveContinuationFailureIDs(ids []string, statuses, codes, details map
 		formatted = append(formatted, fmt.Sprintf("%s (%s)", id, strings.Join(annotations, "; ")))
 	}
 	return strings.Join(formatted, ", ")
+}
+
+// LiveScheduledAudioIncompleteError carries the deterministic schedule
+// counters observed at a terminal boundary. Completed counts terminal
+// response dispositions, Dispatched counts finite sources that crossed the
+// runtime's media/control admission, and Scheduled is the caller's total
+// source count. Provider fields retain bounded terminal context when a
+// provider close caused the incomplete schedule.
+type LiveScheduledAudioIncompleteError struct {
+	Completed         int
+	Dispatched        int
+	Scheduled         int
+	ProviderStatus    string
+	ProviderErrorCode string
+	ProviderDetails   string
+}
+
+func (e *LiveScheduledAudioIncompleteError) Error() string {
+	if e == nil {
+		return ErrLiveScheduledAudioIncomplete.Error()
+	}
+	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrLiveScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	annotations := make([]string, 0, 3)
+	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
+		annotations = append(annotations, "status="+status)
+	}
+	if code := strings.TrimSpace(e.ProviderErrorCode); code != "" {
+		annotations = append(annotations, "code="+code)
+	}
+	if detail := strings.TrimSpace(e.ProviderDetails); detail != "" {
+		annotations = append(annotations, "detail="+detail)
+	}
+	if len(annotations) > 0 {
+		message += " (" + strings.Join(annotations, "; ") + ")"
+	}
+	return message
+}
+
+func (*LiveScheduledAudioIncompleteError) Unwrap() error {
+	return ErrLiveScheduledAudioIncomplete
 }

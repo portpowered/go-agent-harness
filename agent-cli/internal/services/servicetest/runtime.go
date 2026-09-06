@@ -10,6 +10,8 @@ import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services
 
 import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
+import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
 type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
@@ -79,7 +81,7 @@ var ErrSessionAudioOutputConflict = serviceDevices.ErrSessionAudioOutputConflict
 var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBargeRequiresSequence
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
-var ErrSessionScheduledAudioIncomplete = impl.ErrSessionScheduledAudioIncomplete
+var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = impl.ErrSessionUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
@@ -134,7 +136,7 @@ type SessionRTCComponents = impl.SessionRTCComponents
 type SessionRTCDataPlane = impl.SessionRTCDataPlane
 type SessionRunOptions = impl.SessionRunOptions
 type SessionRuntimeSelection = impl.SessionRuntimeSelection
-type SessionScheduledAudioIncompleteError = impl.SessionScheduledAudioIncompleteError
+type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioIncompleteError
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
