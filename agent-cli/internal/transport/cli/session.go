@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -285,6 +286,7 @@ type SessionCommand struct {
 	deviceService           runtimeDevices.Service
 	fileDeviceService       FileDeviceService
 	recordingService        runtimeRecording.Service
+	modelAdmission          runtimeProviders.ModelAdmission
 	liveCapabilities        SessionToolCapabilitiesFactory
 	liveCredentialReference LiveCredentialReference
 	feedbackWarningWriter   io.Writer
@@ -589,16 +591,6 @@ func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValu
 		}
 		return err
 	})
-}
-
-func sessionAudioInputFromCommand(cmd *cobra.Command, path string) serviceSession.AudioInput {
-	return serviceSession.AudioInput{
-		Path:               path,
-		Stdin:              cmd.InOrStdin(),
-		CloseStdinOnCancel: path == "-",
-		Present:            cmd.Flags().Changed("audio-in"),
-		DevicePresent:      cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-	}
 }
 
 func validateSessionSignaling(transport, signaling string, provided bool) error {

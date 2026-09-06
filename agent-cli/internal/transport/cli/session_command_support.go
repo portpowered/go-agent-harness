@@ -149,6 +149,16 @@ func validateScheduledAudio(state sessionCommandRunState, audioInput serviceSess
 	return nil
 }
 
+func sessionAudioInputFromCommand(cmd *cobra.Command, path string) serviceSession.AudioInput {
+	return serviceSession.AudioInput{
+		Path:               path,
+		Stdin:              cmd.InOrStdin(),
+		CloseStdinOnCancel: path == "-",
+		Present:            cmd.Flags().Changed("audio-in"),
+		DevicePresent:      cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+	}
+}
+
 func validateAudioInterrupt(state sessionCommandRunState) error {
 	if len(state.AudioInterrupts) == 0 && strings.TrimSpace(state.AudioInterruptTool) != "" {
 		return fmt.Errorf("--audio-interrupt-on-tool requires --audio-interrupt")

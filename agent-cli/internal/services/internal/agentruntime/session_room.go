@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -239,6 +240,7 @@ type RoomRunOptions struct {
 	PairFactory room.PairFactory
 	BaseURL     string
 	ConfigDir   string
+	ModelCatalog runtimeProviders.ModelCatalog
 	// WorkDir and AllowPaths are the canonical customer filesystem scope for
 	// room participant tools. FilesystemPolicy is the immutable snapshot shared
 	// by every participant that receives a filesystem tool.

@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -73,13 +74,14 @@ func NewSessionCommandWithLive(
 	credentialReference LiveCredentialReference,
 	storeFactory runtimeSession.FileStoreFactory,
 	recordingService runtimeRecording.Service,
+	modelAdmission runtimeProviders.ModelAdmission,
 ) *SessionCommand {
 	return &SessionCommand{
 		askFlags: askFlags, globalFlags: globalFlags, sessionService: sessionService,
 		selfPlayService: selfPlayService, liveService: liveService,
 		liveReplayService: liveReplayService,
 		deviceService:     deviceService, fileDeviceService: fileDeviceService, liveCapabilities: liveCapabilities,
-		liveCredentialReference: credentialReference, storeFactory: storeFactory, recordingService: recordingService,
+		liveCredentialReference: credentialReference, storeFactory: storeFactory, recordingService: recordingService, modelAdmission: modelAdmission,
 	}
 }
 
@@ -130,6 +132,7 @@ func (c *SessionCommand) runRuntimeLiveSession(ctx context.Context, out io.Write
 func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
 	return livehost.BuildRequest(ctx, request, replayInspection, livehost.RequestDependencies{
 		ReplayService:       c.liveReplayService,
+		ModelAdmission:      c.modelAdmission,
 		CredentialReference: c.liveCredentialReference,
 		Capabilities:        c.runtimeLiveCapabilities,
 		BindImagePreparer:   bindRuntimeLiveImagePreparer,

@@ -317,9 +317,6 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTr
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
-	if !isOpenAIRealtimeModel(sessionCfg.Model) {
-		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
-	}
 	providerOpts := []oaiprovider.Option{
 		oaiprovider.WithAPIKey(sessionCfg.APIKey),
 		oaiprovider.WithModel(sessionCfg.Model),

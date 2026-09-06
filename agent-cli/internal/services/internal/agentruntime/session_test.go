@@ -45,7 +45,7 @@ model:
 	var gotCfg config.OpenAIConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
 		Provider:   config.ProviderOpenAI,
 		Model:      "gpt-realtime",
@@ -137,7 +137,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			}
 			testCase.configure(&factory)
 
-			plan, err := testCase.plan(SessionRunOptions{
+			plan, err := testCase.plan(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath: recordPath,
 				Provider:   testCase.provider,
 				Model:      testCase.model,
@@ -187,7 +187,7 @@ model:
 	var gotCfg config.GrokConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-override-model",
@@ -240,7 +240,7 @@ model:
     api_key: xai-config-key
 `)
 
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:   config.ProviderGrok,
 		ConfigDir:  configDir,
@@ -265,7 +265,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 		done:              make(chan struct{}),
 	}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: filepath.Join("..", "..", "..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
 		Prompt:     "hello realtime",
 		Voice:      "cedar",
@@ -346,7 +346,7 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				done:              make(chan struct{}),
 			}
 			var gotProviderDefinitions []messages.ToolDefinition
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:      path,
 				ToolDefinitions: []messages.ToolDefinition{definition},
 			}, sessionRuntimeFactory{
@@ -1221,7 +1221,7 @@ func TestRunSession_WithInjectedSessionInferencer_UsesAgentLoopSessionPath(t *te
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{
+	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		Prompt:            "hello session",
 		SessionInferencer: sessionInf,
@@ -1250,7 +1250,7 @@ func TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer_UsesSessionPath(t
 	}
 	var out bytes.Buffer
 
-	if err := RunSession(context.Background(), &out, SessionRunOptions{
+	if err := RunSession(context.Background(), &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1274,7 +1274,7 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 	sessionInf := &closingSessionInferencer{}
 	started := time.Now()
 
-	if err := RunSession(context.Background(), io.Discard, SessionRunOptions{
+	if err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
@@ -1296,7 +1296,7 @@ func TestRunSession_SessionProviderCloseExitsPromptly(t *testing.T) {
 func TestRunSession_OpenAISessionRejectsNonRealtimeModelBeforeDial(t *testing.T) {
 	dialer := &failingDialer{}
 
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-4o",
@@ -1328,7 +1328,7 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{
+	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderGrok,
 		Model:           "grok-record-test",
@@ -1390,7 +1390,7 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 		capturedStreamEvent(gwtesting.DirectionServerToClient, 2, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after cancel")),
 	})
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: capturePath,
 	}, sessionRuntimeFactory{
 		newReplayInferencer: func(path string) messages.SessionInferencer {

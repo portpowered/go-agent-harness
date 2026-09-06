@@ -213,6 +213,14 @@ func provideProviderSessionServiceRole(service runtimeproviders.FullService) run
 	return service
 }
 
+func provideProviderModelAdmission(service runtimeproviders.FullService) runtimeproviders.ModelAdmission {
+	return service
+}
+
+func provideProviderModelCatalog(service runtimeproviders.FullService) runtimeproviders.ModelCatalog {
+	return service
+}
+
 // provideRoomClock narrows the shared host clock to the scheduler role needed
 // by room duration and media orchestration. Production clocks implement the
 // complete contract; a timestamp-only test clock leaves rooms unavailable
@@ -269,6 +277,8 @@ var CliSet = wire.NewSet(
 	provideProviderService,
 	provideProviderServiceRole,
 	provideProviderSessionServiceRole,
+	provideProviderModelAdmission,
+	provideProviderModelCatalog,
 	provideLiveCredentialVault,
 	provideLiveCredentialReference,
 	provideLiveService,

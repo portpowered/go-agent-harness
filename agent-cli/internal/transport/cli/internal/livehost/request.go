@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -20,6 +21,7 @@ import (
 // behavior stay behind the injected session and replay services.
 type RequestDependencies struct {
 	ReplayService       runtimeReplay.Service
+	ModelAdmission      runtimeProviders.ModelAdmission
 	CredentialReference func(string) string
 	Capabilities        func(*config.Config) (*runtimeSession.LiveCapabilities, error)
 	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
@@ -72,6 +74,11 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	provider, model, apiKey, baseURL, err := ProviderValues(effective, request, inspection)
 	if err != nil {
 		return requestInputs{}, err
+	}
+	if deps.ModelAdmission != nil {
+		if err := deps.ModelAdmission.ValidateSessionModel(provider, model); err != nil {
+			return requestInputs{}, err
+		}
 	}
 	instructions, err := ResolvePrompt(request.SystemPrompt, request.WorkDir)
 	if err != nil {

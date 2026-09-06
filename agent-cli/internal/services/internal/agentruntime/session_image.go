@@ -438,7 +438,7 @@ func resolveSessionImageCapabilities(opts SessionRunOptions) (SessionImageCapabi
 		}
 		model = resolved.Model
 	}
-	realtimeModel, ok := LookupOpenAIRealtimeModel(model)
+	realtimeModel, ok := lookupOpenAIRealtimeModel(opts, model)
 	if !ok || !realtimeModel.SupportsImageInput {
 		return SessionImageCapabilities{}, sessionImageCapabilityError(model)
 	}

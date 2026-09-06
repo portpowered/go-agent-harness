@@ -77,12 +77,13 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	toolsService := wire3.NewService()
 	service2 := wire2.NewToolCapabilitiesServiceForWire(toolExecutor, browserFactory, v2, toolsService)
 	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents, metricSampler, logger)
-	runtime := wire2.NewSessionRuntime(clockSource, service2, v, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger)
+	modelCatalog := provideProviderModelCatalog(fullService)
+	runtime := wire2.NewSessionRuntime(clockSource, service2, v, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, modelCatalog)
 	sessionDependencies := provideSessionDependencies(clockSource, service2, sessionRTCRuntimeFactory, sessionInferencer, toolExecutor, deviceRegistry, runtimeObserver, metricSampler, logger, runtime)
 	agentsessionSessionService := wire2.NewSessionService(sessionDependencies)
 	v3 := provideFleetEntryExecutors()
 	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, v3...)
-	selfplayService := wire2.NewSelfPlayService(v, clockSource)
+	selfplayService := wire2.NewSelfPlayService(v, clockSource, modelCatalog)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	wireLiveCredentialVault := provideLiveCredentialVault()
 	liveService := provideLiveService(providersSessionService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, wireLiveCredentialVault)
@@ -91,7 +92,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	fileDeviceService := provideFileDeviceService(clockSource)
 	sessionToolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(service2)
 	liveCredentialReference := provideLiveCredentialReference(wireLiveCredentialVault)
-	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, service)
+	modelAdmission := provideProviderModelAdmission(fullService)
+	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, service, modelAdmission)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
@@ -281,6 +283,14 @@ func provideProviderSessionServiceRole(service providers.FullService) providers.
 	return service
 }
 
+func provideProviderModelAdmission(service providers.FullService) providers.ModelAdmission {
+	return service
+}
+
+func provideProviderModelCatalog(service providers.FullService) providers.ModelCatalog {
+	return service
+}
+
 // provideRoomClock narrows the shared host clock to the scheduler role needed
 // by room duration and media orchestration. Production clocks implement the
 // complete contract; a timestamp-only test clock leaves rooms unavailable
@@ -321,6 +331,8 @@ var CliSet = wire5.NewSet(
 	provideProviderService,
 	provideProviderServiceRole,
 	provideProviderSessionServiceRole,
+	provideProviderModelAdmission,
+	provideProviderModelCatalog,
 	provideLiveCredentialVault,
 	provideLiveCredentialReference,
 	provideLiveService,

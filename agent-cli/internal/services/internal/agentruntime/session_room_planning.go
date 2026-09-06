@@ -101,12 +101,12 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 			continue
 		}
 		sessionOptions := SessionRunOptions{
-			Provider:         participant.Provider,
-			Model:            participant.Model,
-			ModelProvided:    true,
-			APIKey:           value,
-			BaseURL:          opts.BaseURL,
-			ConfigDir:        opts.ConfigDir,
+			Provider:      participant.Provider,
+			Model:         participant.Model,
+			ModelProvided: true,
+			APIKey:        value,
+			BaseURL:       opts.BaseURL,
+			ConfigDir:     opts.ConfigDir, ModelCatalog: opts.ModelCatalog,
 			Clock:            opts.Clock,
 			LivenessClock:    opts.LivenessClock,
 			WorkDir:          opts.WorkDir,
@@ -291,7 +291,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan,
 			// Replay planning reads provider configuration from the captured
 			// session.update. Keep ConfigDir and APIKey empty so no live config
 			// or credential path can be consulted accidentally.
-			ConfigDir:     "",
+			ConfigDir: "", ModelCatalog: opts.ModelCatalog,
 			Clock:         opts.Clock,
 			LivenessClock: opts.LivenessClock,
 			WaitForClose:  false,

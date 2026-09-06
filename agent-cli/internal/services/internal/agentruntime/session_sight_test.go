@@ -229,7 +229,7 @@ func TestSessionDirectoryRecordingPersistsScreenCaptureEvidence(t *testing.T) {
 	}
 	imageBytes := append([]byte(nil), pixels.Bytes()...)
 	call := messages.ToolCall{ID: "screen-call-1", Name: "show", Arguments: `{"action":"screenshot"}`}
-	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "screen-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording := newSessionDirectoryRecording(filepath.Join(t.TempDir(), "screen-recording"), sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
 	writeSyntheticRecordingTranscript(t, recording, "client", "agent")
 	recording.observeToolCall(call)
 	recording.observeToolResult(call, messages.ToolCallResponse{

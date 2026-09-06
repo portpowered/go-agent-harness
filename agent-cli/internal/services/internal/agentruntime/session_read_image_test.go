@@ -411,7 +411,7 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 
 func planReadImageTestSession(t *testing.T, configDir, workDir string, executor messages.ToolExecutor, definitions []messages.ToolDefinition) sessionRuntimePlan {
 	t.Helper()
-	plan, err := planSessionRuntime(SessionRunOptions{
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:           "synthetic.json",
 		Provider:             "openai",
 		Model:                "gpt-realtime",

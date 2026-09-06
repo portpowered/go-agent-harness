@@ -69,7 +69,7 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 
 	model := strings.TrimSpace(opts.Model)
 	if opts.ModelProvided && model == "" {
-		return SessionRunOptions{}, unsupportedOpenAIRealtimeModelError(model)
+		return SessionRunOptions{}, unsupportedOpenAIRealtimeModelErrorFor(opts, model)
 	}
 	if model == "" && loadedCfg.Session != nil {
 		model = strings.TrimSpace(loadedCfg.Session.Model)
@@ -84,20 +84,12 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 	if model == "" {
 		return SessionRunOptions{}, fmt.Errorf("%s session model is required for bare live session (configure model.%s.model or session.model in %s)", provider, provider, configPath)
 	}
-	if provider == sessionProviderOpenAI && !isOpenAIRealtimeModel(model) {
-		return SessionRunOptions{}, unsupportedOpenAIRealtimeModelError(model)
+	if err := validateBareSessionModel(opts, provider, model); err != nil {
+		return SessionRunOptions{}, err
 	}
 	resolved.Model = model
 
-	if strings.TrimSpace(opts.APIKey) == "" {
-		if providerCfg != nil && strings.TrimSpace(providerCfg.APIKey) != "" {
-			resolved.APIKey = providerCfg.APIKey
-		} else if provider == sessionProviderOpenAI {
-			if fallback, ok := os.LookupEnv("OPENAI_API_KEY"); ok && strings.TrimSpace(fallback) != "" {
-				resolved.APIKey = fallback
-			}
-		}
-	}
+	resolved.APIKey = bareSessionAPIKey(opts, provider, providerCfg)
 	if strings.TrimSpace(resolved.APIKey) == "" {
 		if provider == sessionProviderOpenAI {
 			return SessionRunOptions{}, &BareSessionCredentialError{ConfigPath: configPath}
@@ -138,6 +130,21 @@ func ResolveBareSessionOptions(opts SessionRunOptions) (SessionRunOptions, error
 	resolved.RTCDeviceBinding.OutputPresent = true
 
 	return resolved, nil
+}
+
+func bareSessionAPIKey(opts SessionRunOptions, provider string, providerCfg *config.OpenAIConfig) string {
+	if strings.TrimSpace(opts.APIKey) != "" {
+		return opts.APIKey
+	}
+	if providerCfg != nil && strings.TrimSpace(providerCfg.APIKey) != "" {
+		return providerCfg.APIKey
+	}
+	if provider == sessionProviderOpenAI {
+		if fallback, ok := os.LookupEnv("OPENAI_API_KEY"); ok && strings.TrimSpace(fallback) != "" {
+			return fallback
+		}
+	}
+	return ""
 }
 
 func loadBareSessionConfig(opts SessionRunOptions) (*config.Config, string, error) {
