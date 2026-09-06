@@ -105,7 +105,7 @@ func sessionAudioDiagnosticSink(out io.Writer) services.SessionDiagnosticSink {
 // sessionRTCDeviceBinding resolves which audio devices the session should
 // open. interactiveDevices covers both live-session shapes that get implicit
 // default microphone/speaker devices: a --browser-tools interactive session
-// and a record-only-live invocation (see isRecordOnlyLiveInvocation).
+// and a passive live invocation (see isPassiveLiveInvocation).
 func (c *SessionCommand) sessionRTCDeviceBinding(cmd *cobra.Command, registry audio.DeviceRegistry, input, output audio.DeviceID, loadedConfig *config.Config, interactiveDevices bool) services.RTCDeviceBindingRequest {
 	feedbackWriter := c.feedbackWarningWriter
 	if feedbackWriter == nil {
@@ -506,6 +506,7 @@ var sessionModeFlagNames = []string{
 	"system-prompt",
 	"audio-in",
 	"audio-out",
+	"trace-audio",
 	"audio-in-turn",
 	"audio-in-turn-barge",
 	"audio-interrupt",
@@ -554,11 +555,11 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 	return true
 }
 
-// isRecordOnlyLiveInvocation reports whether --record is the only driving
-// session mode flag present, with no prompt, input audio, scheduled turn, or
-// image alongside it. Passive --audio-out capture and browser flags are
-// allowed: observing an interactive WebMCP voice session must preserve the
-// same lifetime and implicit audio devices as the unrecorded browser session.
+// isPassiveLiveInvocation reports whether every explicit session-mode flag is
+// a passive observer (--record and/or --audio-out), with no prompt, input
+// audio, scheduled turn, or image alongside it. Browser and device-selection
+// flags are modifiers rather than session drivers. Observing an interactive
+// voice session must preserve its lifetime and implicit audio devices.
 // This is the operator's flagship
 // shape: an otherwise-bare live microphone conversation that additionally
 // captures a side recording. Unlike a fully bare invocation (which admits
@@ -568,15 +569,15 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 // semantics that bare mode gets. Without this, the mere presence of --record
 // silently dropped both, and the session closed within milliseconds of
 // opening instead of running the interactive conversation it was recording.
-func isRecordOnlyLiveInvocation(cmd *cobra.Command, args []string, imagePaths []string) bool {
+func isPassiveLiveInvocation(cmd *cobra.Command, args []string, imagePaths []string) bool {
 	if cmd == nil || len(args) > 0 || len(imagePaths) > 0 {
 		return false
 	}
-	if !cmd.Flags().Changed("record") {
+	if !cmd.Flags().Changed("record") && !cmd.Flags().Changed("audio-out") && !cmd.Flags().Changed("trace-audio") {
 		return false
 	}
 	for _, name := range sessionModeFlagNames {
-		if name != "record" && name != "audio-out" && cmd.Flags().Changed(name) {
+		if name != "record" && name != "audio-out" && name != "trace-audio" && cmd.Flags().Changed(name) {
 			return false
 		}
 	}
@@ -606,6 +607,7 @@ func resolveSessionAdmission(globalFlags *flags.GlobalFlags, cmd *cobra.Command,
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt, voice, reasoningEffort, audioIn string
 	recordDirPath, audioOutPath := "", ""
+	var traceAudio bool
 	transport := SessionTransportWebSocket
 	signaling, mediaSource := "", ""
 	var maxDuration time.Duration
@@ -629,35 +631,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		PreRunE:      func(_ *cobra.Command, _ []string) error { return validateSessionModelOptions(voice, reasoningEffort) },
 		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
 			defer func() { runErr = decorateSessionCommandError(runErr) }()
-			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
-				return err
-			}
-			if err := validateBrowserToolsBackend(browserFlags.Tools, browserToolsAdmission(cmd)); err != nil {
-				return err
-			}
-			selectedTransport, err := validateSessionTransport(transport)
+			selectedTransport, err := validateSessionCommandPreflight(sessionCommandPreflight{
+				cmd: cmd, browserTools: browserFlags.Tools, transport: transport,
+				signaling: signaling, mediaSource: mediaSource, audioInTurnBarge: audioInTurnBarge,
+				audioInTurns: len(audioInTurns), maxDuration: maxDuration,
+			})
 			if err != nil {
 				return err
-			}
-			if err := validateSessionSignaling(selectedTransport, signaling, cmd.Flags().Changed("signaling")); err != nil {
-				return err
-			}
-			if err := validateSessionMediaSource(selectedTransport, mediaSource, cmd.Flags().Changed("media-source"), cmd.Flags().Changed("audio-in")); err != nil {
-				return err
-			}
-			if err := services.ValidateSessionAudioDeviceConflicts(
-				cmd.Flags().Changed("audio-in"),
-				cmd.Flags().Changed("audio-out"),
-				cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-				cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
-			); err != nil {
-				return err
-			}
-			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
-				return err
-			}
-			if selectedTransport == SessionTransportWebRTC {
-				return &SessionWebRTCUnavailableError{}
 			}
 			deviceRegistry, filesystemPolicy, err := c.sessionRuntimeDependencies(audioDeviceServer)
 			if err != nil {
@@ -673,8 +653,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			}
 			loadedConfig = withFilesystemPolicyMetadata(loadedConfig, filesystemPolicy)
 			loadedConfig = applySessionToolVisibility(loadedConfig, computerUse, experimentalTools, noTerminalTools)
-			recordOnlyLive := isRecordOnlyLiveInvocation(cmd, args, c.imagePaths)
-			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || recordOnlyLive)
+			passiveLive := isPassiveLiveInvocation(cmd, args, c.imagePaths)
+			browserToolsInteractive := browserToolsAdmission(cmd) && (!hasSessionMode || passiveLive)
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
 			defer stopSignal()
 			if maxDuration > 0 {
@@ -749,6 +729,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rtcDeviceRequest := c.sessionRTCDeviceBinding(cmd, deviceRegistry, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || passiveLive)
+			audioTrace, runtimeObserver, err := prepareSessionAudioTrace(traceAudio, &rtcDeviceRequest, c.runtimeObserver)
+			if err != nil {
+				return err
+			}
+			defer closeSessionAudioTrace(audioTrace, &runErr)
 			sessionOptions := services.SessionRunOptions{
 				RecordPath: c.askFlags.RecordCapturePath, ReplayPath: c.askFlags.ReplayCapturePath,
 				ReplayTiming:            c.askFlags.ReplayTiming,
@@ -792,13 +778,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				// keep-open-until-provider-closes semantics as bare mode: it is
 				// an interactive microphone conversation, not a scripted
 				// prompt/audio-in exchange, so it must not self-close as soon as
-				// the session opens (see isRecordOnlyLiveInvocation).
-				WaitForClose:     waitForClose || recordOnlyLive,
+				// the session opens (see isPassiveLiveInvocation).
+				WaitForClose:     waitForClose || passiveLive,
 				StreamObserver:   c.streamObserver,
 				Clock:            c.clockSource,
-				RuntimeObserver:  c.runtimeObserver,
+				RuntimeObserver:  runtimeObserver,
 				AudioInTurnBarge: audioInTurnBarge,
-				RTCDeviceBinding: c.sessionRTCDeviceBinding(cmd, deviceRegistry, audioInDevice, audioOutDevice, loadedConfig, browserToolsInteractive || recordOnlyLive),
+				RTCDeviceBinding: rtcDeviceRequest,
 			}
 			if bareSession {
 				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)
@@ -897,6 +883,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		audioInterrupts: &audioInterrupts, audioInterruptTool: &audioInterruptTool,
 		audioInDevice: &audioInDevice, audioOutPath: &audioOutPath,
 		audioOutDevice: &audioOutDevice, audioDeviceServer: &audioDeviceServer,
+		traceAudio:  &traceAudio,
 		mediaSource: &mediaSource, transport: &transport, signaling: &signaling,
 	})
 	return cmd
@@ -926,6 +913,7 @@ type sessionFlagTargets struct {
 	audioOutPath         *string
 	audioOutDevice       *audio.DeviceID
 	audioDeviceServer    *string
+	traceAudio           *bool
 	mediaSource          *string
 	transport            *string
 	signaling            *string
@@ -959,6 +947,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(t.audioInterruptTool, "audio-interrupt-on-tool", "", "With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one")
 	cmd.Flags().StringVar(t.audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
 	cmd.Flags().StringVar(t.audioOutPath, "audio-out", "", "Write assistant PCM16 to a .wav/.pcm/.raw path or -; with --audio-out-device, tap device-bound PCM")
+	cmd.Flags().BoolVar(t.traceAudio, "trace-audio", false, "Record microphone/upload/playback edge WAVs and timing JSONL in ./audio-trace")
 	cmd.Flags().StringVar(t.audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(t.audioDeviceServer, "audio-device-server", "", "Use a loopback audio-device server host:port instead of platform devices")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")

@@ -255,6 +255,40 @@ func TestRenderCallbackReportsExactZeroFilledUnderrun(t *testing.T) {
 	}
 }
 
+func TestPlaybackRenderObserverSeesOnlyConsumedPCMOutsideQueueLock(t *testing.T) {
+	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(16000), time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observed []int16
+	q.SetRenderObserver(func(rate int, samples []int16) {
+		if rate != 16000 {
+			t.Fatalf("observer rate = %d", rate)
+		}
+		// Snapshot taking the queue mutex proves callbacks run outside it.
+		_ = q.Snapshot()
+		observed = append(observed, samples...)
+	})
+	q.Enqueue([]int16{4, 5, 6})
+	rendered := make([]int16, 5)
+	if got := q.RenderInto(rendered); got != 3 {
+		t.Fatalf("RenderInto = %d", got)
+	}
+	if !reflect.DeepEqual(observed, []int16{4, 5, 6}) {
+		t.Fatalf("observer included underflow silence or changed PCM: %v", observed)
+	}
+
+	observed = nil
+	q.Enqueue([]int16{-7, 8})
+	raw := make([]byte, 6)
+	if got := q.readPCM16(raw); got != 2 {
+		t.Fatalf("readPCM16 = %d", got)
+	}
+	if !reflect.DeepEqual(observed, []int16{-7, 8}) {
+		t.Fatalf("native observer PCM = %v", observed)
+	}
+}
+
 func TestPlaybackQueueRingWrapPreservesFIFO(t *testing.T) {
 	q, err := NewPlaybackQueueWithLatency(PCM16DeviceFormat(16000), time.Millisecond)
 	if err != nil {

@@ -16,27 +16,33 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
-// TestIsRecordOnlyLiveInvocationMatrix pins the operator's flagship-path
+// TestIsPassiveLiveInvocationMatrix pins the operator's flagship-path
 // regression: `agent session --record <file>.json` alone (no --prompt, no
 // --audio-in, no --image, no browser flag) must be recognized as an
 // otherwise-bare live microphone conversation. sessionModeFlagNames
 // deliberately keeps --record in the explicit-mode list (so it still routes
 // to real capture-recording setup instead of a bare live session that never
-// wraps a recorder), but isRecordOnlyLiveInvocation is the narrower signal
+// wraps a recorder), but isPassiveLiveInvocation is the narrower signal
 // used to restore bare mode's implicit devices and keep-open semantics on
 // top of that.
-func TestIsRecordOnlyLiveInvocationMatrix(t *testing.T) {
+func TestIsPassiveLiveInvocationMatrix(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 		want bool
 	}{
 		{name: "record alone", args: []string{"--record", "cap.json"}, want: true},
+		{name: "audio-out alone", args: []string{"--audio-out", "device.wav"}, want: true},
+		{name: "trace-audio alone", args: []string{"--trace-audio"}, want: true},
+		{name: "trace-audio default directory", args: []string{"--trace-audio"}, want: true},
+		{name: "record audio-out and trace", args: []string{"--record", "cap.json", "--audio-out", "device.wav", "--trace-audio"}, want: true},
+		{name: "audio-out with WebMCP Cast", args: []string{"--audio-out", "device.wav", "--audio-out-device", "default", "--browser-tools", "webmcp", "--web-cast"}, want: true},
 		{name: "bare invocation has no record flag", args: nil, want: false},
 		{name: "record-dir alone is not record-only-live", args: []string{"--record-dir", "dir"}, want: false},
 		{name: "replay alone is not record-only-live", args: []string{"--replay", "cap.json"}, want: false},
 		{name: "record with prompt is a scripted exchange", args: []string{"--record", "cap.json", "--prompt", "hi"}, want: false},
 		{name: "record with audio-in is a scripted exchange", args: []string{"--record", "cap.json", "--audio-in", "in.wav"}, want: false},
+		{name: "trace with prompt is a scripted exchange", args: []string{"--trace-audio", "--prompt", "hi"}, want: false},
 		{name: "record with image is a scripted exchange", args: []string{"--record", "cap.json", "--image", "photo.png"}, want: false},
 		{name: "record with browser-tools remains interactive", args: []string{"--record", "cap.json", "--browser-tools", "webmcp"}, want: true},
 		{name: "record with device WAV and WebMCP Cast remains interactive", args: []string{"--record", "cap.json", "--audio-out", "device.wav", "--audio-out-device", "default", "--browser-tools", "webmcp", "--web-cast"}, want: true},
@@ -50,9 +56,9 @@ func TestIsRecordOnlyLiveInvocationMatrix(t *testing.T) {
 			if err := command.ParseFlags(tt.args); err != nil {
 				t.Fatalf("parse flags %v: %v", tt.args, err)
 			}
-			got := isRecordOnlyLiveInvocation(command, command.Flags().Args(), nil)
+			got := isPassiveLiveInvocation(command, command.Flags().Args(), nil)
 			if got != tt.want {
-				t.Fatalf("isRecordOnlyLiveInvocation(%v) = %v, want %v", tt.args, got, tt.want)
+				t.Fatalf("isPassiveLiveInvocation(%v) = %v, want %v", tt.args, got, tt.want)
 			}
 		})
 	}
@@ -197,6 +203,79 @@ model:
 		}
 	case <-ctx.Done():
 		t.Fatal("recorded WebMCP session did not return after provider close")
+	}
+}
+
+// TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive reproduces the
+// operator's exact command shape: --audio-out is a passive copy of the audio
+// already headed to the selected device, not an input that should turn an
+// interactive browser session into a finite scripted exchange. In
+// particular, omitting --record must not remove the implicit microphone or
+// cause the client to close immediately after session.open.
+func TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive(t *testing.T) {
+	configDir := t.TempDir()
+	configYAML := `
+model:
+  provider: openai
+  openai:
+    model: gpt-realtime-2.1
+    api_key: test-key
+`
+	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual device registry: %v", err)
+	}
+
+	inferencer := newRecordOnlyLiveInferencer()
+	owner := NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry)
+	command := owner.Generate()
+	command.SetOut(io.Discard)
+	audioPath := filepath.Join(t.TempDir(), "32.wav")
+	command.SetArgs([]string{
+		"--model", "gpt-realtime-2.1",
+		"--browser-tools", "webmcp",
+		"--web-cast",
+		"--audio-out-device", "default",
+		"--audio-out", audioPath,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- command.ExecuteContext(ctx) }()
+
+	select {
+	case <-inferencer.opened:
+	case <-ctx.Done():
+		t.Fatal("unrecorded WebMCP session never connected to the provider")
+	}
+
+	select {
+	case <-inferencer.session.closeRequested:
+		t.Fatal("unrecorded WebMCP session sent client_close immediately after opening")
+	case err := <-runErr:
+		t.Fatalf("unrecorded WebMCP session returned before provider close: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	if observations := registry.Observations(); observations.OpenCount != 2 {
+		t.Fatalf("device observations = %+v, want the implicit microphone and speaker both opened", observations)
+	}
+
+	inferencer.endFromProvider(ctx)
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("unrecorded WebMCP session command: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("unrecorded WebMCP session did not return after provider close")
 	}
 }
 

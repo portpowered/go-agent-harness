@@ -33,6 +33,7 @@ const (
 	OperationCapturePageScreenshot OperationKind = "capture_page_screenshot"
 	OperationListCastDevices       OperationKind = "list_cast_devices"
 	OperationCastTab               OperationKind = "cast_tab"
+	OperationCastMedia             OperationKind = "cast_media"
 	OperationStopCasting           OperationKind = "stop_casting"
 	OperationEnableAcknowledged    OperationKind = "enable_webmcp_acknowledged"
 	OperationInvoke                OperationKind = "invoke_tool"

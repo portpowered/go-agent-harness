@@ -183,6 +183,17 @@ func (s *productionTargetSession) CastTab(ctx context.Context, deviceName string
 	return controller.CastTab(ctx, deviceName)
 }
 
+func (s *productionTargetSession) CastMedia(ctx context.Context, deviceName string) error {
+	if s == nil || s.raw == nil {
+		return webmcp.ErrClosed
+	}
+	controller, ok := s.raw.(webmcp.TargetMediaCastController)
+	if !ok {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the selected browser page does not support native media casting", map[string]any{"phase": "cast_media", "reason_code": "unsupported_operation"})
+	}
+	return controller.CastMedia(ctx, deviceName)
+}
+
 func (s *productionTargetSession) StopCasting(ctx context.Context, deviceName string) error {
 	if s == nil || s.raw == nil {
 		return webmcp.ErrClosed
@@ -195,6 +206,7 @@ func (s *productionTargetSession) StopCasting(ctx context.Context, deviceName st
 }
 
 var _ webmcp.TargetCastController = (*productionTargetSession)(nil)
+var _ webmcp.TargetMediaCastController = (*productionTargetSession)(nil)
 
 // NavigateTab preserves the raw target's optional in-place navigation
 // capability through the production identity/event bridge.

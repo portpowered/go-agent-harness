@@ -439,6 +439,15 @@ func (h *coreAudioHandle) PlaybackStats() PlaybackQueueStats {
 	return h.playback.Snapshot()
 }
 
+func (h *coreAudioHandle) SetPlaybackRenderObserver(observer PlaybackRenderObserver) {
+	if h == nil || h.direction != DirectionOutput {
+		return
+	}
+	h.mu.Lock()
+	h.ensurePlaybackQueueLocked().SetRenderObserver(observer)
+	h.mu.Unlock()
+}
+
 func (h *coreAudioHandle) CaptureStats() CaptureQueueStats {
 	if h == nil || h.capture == nil {
 		return CaptureQueueStats{}

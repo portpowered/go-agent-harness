@@ -7,9 +7,34 @@ import (
 	"time"
 
 	cdpCast "github.com/chromedp/cdproto/cast"
+	cdpRuntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
+
+const castActiveMediaExpression = `(async () => {
+  const videos = Array.from(document.querySelectorAll("video"));
+  const media = videos.find((item) => {
+    const rect = item.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) || videos[0] || document.querySelector("audio");
+  let remoteError = "";
+  if (media && media.remote && typeof media.remote.prompt === "function") {
+    try {
+      await media.remote.prompt();
+      return { route: "remote_playback", state: media.remote.state || "unknown" };
+    } catch (error) {
+      remoteError = error && error.message ? error.message : String(error);
+    }
+  }
+  const castButton = document.querySelector(".ytp-remote-button, .ytp-cast-button");
+  if (castButton instanceof HTMLElement && castButton.getAttribute("aria-disabled") !== "true") {
+    castButton.click();
+    return { route: "page_cast_control", state: "requested" };
+  }
+  const detail = remoteError ? ": " + remoteError : "";
+  throw new Error("The selected page has no usable native media Cast route" + detail);
+})()`
 
 const (
 	castDiscoveryWait       = 3 * time.Second
@@ -128,28 +153,14 @@ func (s *targetSession) ListCastDevices(ctx context.Context) ([]webmcp.CastDevic
 }
 
 func (s *targetSession) CastTab(ctx context.Context, deviceName string) error {
-	deviceName = strings.TrimSpace(deviceName)
-	if deviceName == "" {
-		return webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the Cast device name is required", map[string]any{"phase": "cast_tab", "reason_code": "device_name_required"})
+	deviceName, err := s.requireCastDevice(ctx, deviceName, "cast_tab")
+	if err != nil {
+		return err
 	}
 	// Models may call cast_tab directly when the customer already named a
 	// receiver. Chrome requires Cast.enable before StartTabMirroring, so make
 	// the mutation independently usable instead of relying on list_devices as
 	// an undocumented ordering prerequisite.
-	devices, err := s.ListCastDevices(ctx)
-	if err != nil {
-		return err
-	}
-	found := false
-	for _, device := range devices {
-		if device.Name == deviceName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the requested Cast device is not available", map[string]any{"phase": "cast_tab", "reason_code": "device_not_found", "device_name": deviceName})
-	}
 	err = s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		s.recordWireBeforeDispatch(webmcp.CastStartTabMirroringMethod, "")
 		return cdpCast.StartTabMirroring(deviceName).Do(ctx)
@@ -158,6 +169,56 @@ func (s *targetSession) CastTab(ctx context.Context, deviceName string) error {
 		return classifySessionError(s, webmcp.ErrorBrowserProtocol, "cast_tab", err)
 	}
 	return nil
+}
+
+// CastMedia selects the receiver for the page's next Cast/Remote Playback
+// request, then asks its active media element to hand playback off natively.
+// YouTube's visible Cast control is a fallback for pages whose player uses the
+// Cast SDK instead of exposing HTMLMediaElement.remote.
+func (s *targetSession) CastMedia(ctx context.Context, deviceName string) error {
+	deviceName, err := s.requireCastDevice(ctx, deviceName, "cast_media")
+	if err != nil {
+		return err
+	}
+	err = s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		s.recordWireBeforeDispatch(webmcp.CastSetSinkToUseMethod, "")
+		if err := cdpCast.SetSinkToUse(deviceName).Do(ctx); err != nil {
+			return err
+		}
+		_, exception, err := cdpRuntime.Evaluate(castActiveMediaExpression).
+			WithAwaitPromise(true).
+			WithReturnByValue(true).
+			WithUserGesture(true).
+			Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exception != nil {
+			return exception
+		}
+		return nil
+	}))
+	if err != nil {
+		return classifySessionError(s, webmcp.ErrorBrowserProtocol, "cast_media", err)
+	}
+	return nil
+}
+
+func (s *targetSession) requireCastDevice(ctx context.Context, deviceName, phase string) (string, error) {
+	deviceName = strings.TrimSpace(deviceName)
+	if deviceName == "" {
+		return "", webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the Cast device name is required", map[string]any{"phase": phase, "reason_code": "device_name_required"})
+	}
+	devices, err := s.ListCastDevices(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, device := range devices {
+		if device.Name == deviceName {
+			return deviceName, nil
+		}
+	}
+	return "", webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "the requested Cast device is not available", map[string]any{"phase": phase, "reason_code": "device_not_found", "device_name": deviceName})
 }
 
 func (s *targetSession) StopCasting(ctx context.Context, deviceName string) error {
@@ -176,3 +237,4 @@ func (s *targetSession) StopCasting(ctx context.Context, deviceName string) erro
 }
 
 var _ webmcp.TargetCastController = (*targetSession)(nil)
+var _ webmcp.TargetMediaCastController = (*targetSession)(nil)

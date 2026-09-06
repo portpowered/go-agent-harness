@@ -325,6 +325,13 @@ func (s *SimulatedDuplexStream) Write(ctx context.Context, raw []byte) error {
 func (s *SimulatedDuplexStream) PlaybackStats() PlaybackQueueStats {
 	return s.registry.playback.Snapshot()
 }
+
+func (s *SimulatedDuplexStream) SetPlaybackRenderObserver(observer PlaybackRenderObserver) {
+	if s == nil || s.registry == nil || s.direction != DirectionOutput {
+		return
+	}
+	s.registry.playback.SetRenderObserver(observer)
+}
 func (s *SimulatedDuplexStream) CaptureStats() CaptureQueueStats {
 	return s.registry.CaptureStats()
 }

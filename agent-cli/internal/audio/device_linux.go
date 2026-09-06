@@ -406,6 +406,15 @@ func (d *linuxOpenedDevice) PlaybackStats() PlaybackQueueStats {
 	return d.playback.Snapshot()
 }
 
+func (d *linuxOpenedDevice) SetPlaybackRenderObserver(observer PlaybackRenderObserver) {
+	if d == nil || d.direction != DirectionOutput {
+		return
+	}
+	d.mu.Lock()
+	d.ensurePlaybackQueueLocked().SetRenderObserver(observer)
+	d.mu.Unlock()
+}
+
 func (d *linuxOpenedDevice) CaptureStats() CaptureQueueStats {
 	if d == nil || d.microphone == nil {
 		return CaptureQueueStats{}

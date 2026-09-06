@@ -90,6 +90,13 @@ type TargetCastController interface {
 	StopCasting(context.Context, string) error
 }
 
+// TargetMediaCastController is the optional native-media companion to tab
+// mirroring. It remains separate so existing browser adapters keep satisfying
+// TargetCastController until they intentionally support media handoff.
+type TargetMediaCastController interface {
+	CastMedia(context.Context, string) error
+}
+
 // TargetTabNavigator changes the document loaded by an already attached page
 // target. Keeping the same target identity is what allows Chrome tab mirroring
 // to continue across navigation.
@@ -134,6 +141,12 @@ type BrokerCastController interface {
 	ListCastDevices(context.Context) ([]CastDevice, error)
 	CastSelectedTab(context.Context, string) error
 	StopCasting(context.Context, string) error
+}
+
+// BrokerMediaCastController exposes native media handoff for the selected
+// target without changing the compatibility surface of BrokerCastController.
+type BrokerMediaCastController interface {
+	CastSelectedMedia(context.Context, string) error
 }
 
 // BrowserEventWatcher is an optional broker extension for callers that need
