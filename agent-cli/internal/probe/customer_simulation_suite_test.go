@@ -170,6 +170,47 @@ func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T)
 	}
 }
 
+func TestReadCustomerSimulationStreamIgnoresNonMessageAgentFrames(t *testing.T) {
+	root := t.TempDir()
+	base := time.Unix(0, 0)
+	var data bytes.Buffer
+	sequence := uint64(0)
+	write := func(stream transcript.Stream, payload []byte) {
+		t.Helper()
+		sequence++
+		encoded, err := transcript.Encode(transcript.NewRecord(sequence, base.Add(time.Duration(sequence)*time.Millisecond), transcript.PeerAgent, transcript.DirectionOut, stream, payload))
+		if err != nil {
+			t.Fatalf("Encode(%s): %v", stream, err)
+		}
+		data.Write(encoded)
+	}
+
+	write(transcript.StreamRuntimeEvent, []byte(`{"event":{"kind":"session"}}`))
+	write(transcript.StreamRuntimeAudio, []byte(`{"kind":"audio.frame"}`))
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, ResponseID: "response-1", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeMessageEnd, ResponseID: "response-1", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		payload, err := gatewaytesting.MarshalStreamMessage(message)
+		if err != nil {
+			t.Fatalf("MarshalStreamMessage(%s): %v", message.Type, err)
+		}
+		write(transcript.StreamRuntimeMessage, payload)
+	}
+	write(transcript.StreamRuntimeEvent, []byte(`{"event":{"kind":"terminal"}}`))
+
+	if err := os.WriteFile(filepath.Join(root, "agent.transcript.jsonl"), data.Bytes(), 0o600); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0)
+	if err != nil {
+		t.Fatalf("readCustomerSimulationStream: %v", err)
+	}
+	if len(facts.responses) != 1 || facts.responses[0].ID != "response-1" || !facts.responses[0].Complete {
+		t.Fatalf("responses = %+v, want one complete response-1 from runtime-message frames", facts.responses)
+	}
+}
+
 func TestReadCustomerSimulationStreamUsesRecordedCorrectionBoundaries(t *testing.T) {
 	root := t.TempDir()
 	base := time.Unix(0, 0)

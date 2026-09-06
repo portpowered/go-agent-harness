@@ -151,7 +151,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if decodeErr != nil {
 			return facts, fmt.Errorf("decode product transcript: %v", decodeErr)
 		}
-		if record.Peer != transcript.PeerAgent {
+		if record.Peer != transcript.PeerAgent || (record.Stream != transcript.StreamRuntimeMessage && record.Stream != transcript.StreamWS) {
 			continue
 		}
 		wallAt, parseErr := time.Parse(time.RFC3339Nano, record.Timestamp)
@@ -204,11 +204,15 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 		p.lastWallAt = record.wallAt
 	}
 	msg := record.message
-	// The shipped recorder's agent transcript preserves provider output as
-	// DirectionOut and tool-result delivery as DirectionIn. Provider adapters
-	// do not consistently retain role/actor fields on every neutralized
-	// message, so direction is the primary response-side discriminator.
-	isAssistant := record.dir == transcript.DirectionOut || msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model
+	// The shipped recorder preserves provider output as DirectionOut, but it
+	// also writes tool-result messages on that side. Provider adapters do not
+	// consistently retain role/actor fields on every neutralized model
+	// message, so direction remains the primary discriminator except for
+	// explicit tool-owned frames.
+	isAssistant := msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model
+	if !isAssistant && record.dir == transcript.DirectionOut && msg.Role != messages.RoleTool && msg.ActorID != messages.Tool {
+		isAssistant = true
+	}
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		p.consumeMessageStart(record, isAssistant)
@@ -485,7 +489,15 @@ func customerSimulationResponseOutputBoundaries(response customerSimulationRespo
 	if !response.AudioObserved || response.AudioEnd <= response.AudioStart {
 		return 0, 0
 	}
-	return response.AudioStart, response.AudioEnd
+	end := response.AudioEnd
+	// A correction can arrive after the final PCM delta but before the
+	// provider emits the response terminal message. Keep that open-response
+	// interval in the ledger while retaining the first audible output as the
+	// start boundary.
+	if response.End > end {
+		end = response.End
+	}
+	return response.AudioStart, end
 }
 
 func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {
