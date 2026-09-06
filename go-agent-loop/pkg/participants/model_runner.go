@@ -190,7 +190,23 @@ func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pc
 	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
 }
 
+// EnqueueSessionAudioInputWithPolicyWaiting admits policy-controlled audio
+// into the same bounded ordered ingress, waiting for capacity until ctx is
+// cancelled. Live finite capture uses this backpressure path so a temporary
+// producer/runner scheduling gap does not turn into a fatal queue overflow.
+func (r *ModelRunner) EnqueueSessionAudioInputWithPolicyWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	return r.enqueueSessionAudioInputWaiting(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicyWaiting")
+}
+
 func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
+	return r.enqueueSessionAudioInputMode(ctx, pcm, policy, operation, false)
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
+	return r.enqueueSessionAudioInputMode(ctx, pcm, policy, operation, true)
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputMode(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string, waitForCapacity bool) error {
 	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("%s: not in session mode", operation)
 	}
@@ -203,8 +219,17 @@ func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
+	if waitForCapacity {
+		select {
+		case r.sessionInputInbox <- input:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	select {
-	case r.sessionInputInbox <- sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}:
+	case r.sessionInputInbox <- input:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

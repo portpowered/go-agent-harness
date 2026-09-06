@@ -417,6 +417,26 @@ func TestSessionModelRunnerOrderedIngressReportsFullWithoutBlocking(t *testing.T
 	}
 }
 
+func TestSessionModelRunnerWaitingAudioIngressBackpressuresUntilCapacity(t *testing.T) {
+	runner := NewSessionModelRunner(nil, 8, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for i := 0; i < cap(runner.sessionInputInbox); i++ {
+		if err := runner.EnqueueSessionAudioInput(ctx, []byte{byte(i)}); err != nil {
+			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
+		}
+	}
+
+	admitted := make(chan error, 1)
+	go func() {
+		admitted <- runner.EnqueueSessionAudioInputWithPolicyWaiting(ctx, []byte{0xff}, messages.SessionAudioInputPolicyDefault)
+	}()
+	<-runner.sessionInputInbox
+	if err := <-admitted; err != nil {
+		t.Fatalf("waiting audio admission = %v, want capacity backpressure then success", err)
+	}
+}
+
 func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
