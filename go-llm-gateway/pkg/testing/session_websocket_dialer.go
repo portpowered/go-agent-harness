@@ -20,6 +20,8 @@ type RecordingWebSocketDialer struct {
 	startAt  time.Time
 	clock    clock.Source
 	capture  SessionCapture
+	sink     SessionCaptureSink
+	sinkErr  error
 	events   []CapturedSessionEvent
 	sequence int
 	mu       sync.Mutex
@@ -49,19 +51,6 @@ func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (
 	return &recordingWebSocketConn{inner: conn, recorder: d}, nil
 }
 
-// FlushToFile writes the recorded WebSocket traffic to path.
-func (d *RecordingWebSocketDialer) FlushToFile(path string) error {
-	capture := d.Capture()
-	data, err := json.MarshalIndent(capture, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode session captures: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write session capture file: %w", err)
-	}
-	return nil
-}
-
 // Capture returns a copy of the current capture envelope.
 func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 	d.mu.Lock()
@@ -88,69 +77,6 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 		capture = sealed
 	}
 	return capture
-}
-
-func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payload []byte) int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.sequence++
-	sequence := d.sequence
-	d.events = append(d.events, CapturedSessionEvent{
-		Sequence:    sequence,
-		Direction:   dir,
-		TimestampMs: d.clock.Now().Sub(d.startAt).Milliseconds(),
-		Type:        websocketPayloadType(payload),
-		PayloadType: SessionPayloadTypeWebSocketMessage,
-		Payload:     append([]byte(nil), payload...),
-	})
-	return sequence
-}
-
-func (d *RecordingWebSocketDialer) discardMessage(sequence int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	for index := range d.events {
-		if d.events[index].Sequence != sequence {
-			continue
-		}
-		d.events[index].PayloadType = ""
-		d.events[index].Payload = nil
-		return
-	}
-}
-
-type recordingWebSocketConn struct {
-	inner    transport.Conn
-	recorder *RecordingWebSocketDialer
-}
-
-var _ transport.Conn = (*recordingWebSocketConn)(nil)
-
-func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
-	messageType, payload, err := c.inner.ReadMessage()
-	if err == nil {
-		c.recorder.recordMessage(DirectionServerToClient, payload)
-	}
-	return messageType, payload, err
-}
-
-func (c *recordingWebSocketConn) WriteMessage(messageType int, payload []byte) error {
-	// Reserve the outbound event before invoking the wrapped connection. A
-	// hermetic provider may synchronously enqueue a response while processing
-	// this write; recording after the call lets that response appear before
-	// its causal client event in the capture.
-	sequence := c.recorder.recordMessage(DirectionClientToServer, payload)
-	if err := c.inner.WriteMessage(messageType, payload); err != nil {
-		c.recorder.discardMessage(sequence)
-		return err
-	}
-	return nil
-}
-
-func (c *recordingWebSocketConn) Close() error {
-	return c.inner.Close()
 }
 
 // ReplayWebSocketDialer replays raw WebSocket messages from a capture.
