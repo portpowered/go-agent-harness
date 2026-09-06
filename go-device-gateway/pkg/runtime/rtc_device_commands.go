@@ -105,14 +105,19 @@ func (s *RTCDeviceSink) finishPlayback(response audio.PlaybackResponse) {
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	if s.playbackResponse != response {
-		return
-	}
 	for index := len(s.playbackSpans) - 1; index >= 0; index-- {
 		if s.playbackSpans[index].response == response {
 			s.playbackSpans[index].complete = true
 			break
 		}
+	}
+	// A continuation may already be the latest prefetched response when the
+	// preceding response reaches its provider boundary. Retire only the
+	// response that is currently active; completing an older span must not
+	// advance the shared generation and invalidate the continuation's queued
+	// frames.
+	if s.playbackResponse != response {
+		return
 	}
 	s.playbackGeneration++
 	s.snapshotEpoch.Store(s.playbackGeneration)
