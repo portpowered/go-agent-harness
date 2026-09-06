@@ -79,7 +79,6 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 			t.Errorf("close scripted browser runtime: %v", closeErr)
 		}
 	}()
-
 	discoveryService := &singlePageWireDiscovery{
 		candidate: discovery.BrowserCandidate{
 			ID:       string(candidate.ID),
@@ -265,9 +264,8 @@ type sessionUpdateWire struct {
 	updates chan json.RawMessage
 	inbound chan []byte
 	done    chan struct{}
-
-	mu     sync.Mutex
-	closed bool
+	mu      sync.Mutex
+	closed  bool
 }
 
 func newSessionUpdateWire() *sessionUpdateWire {
@@ -350,7 +348,6 @@ var _ transport.Conn = (*sessionUpdateWire)(nil)
 func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-late",
 		Source:   webmcp.DiscoverySourceExplicit,
@@ -512,7 +509,6 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-switch",
 		Source:   webmcp.DiscoverySourceExplicit,

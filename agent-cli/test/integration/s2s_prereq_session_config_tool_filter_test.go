@@ -175,7 +175,7 @@ tools:
 				if strings.Contains(resultText.String(), "Slept for 0s (no-op).") {
 					t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText.String())
 				}
-				if len(results) == 0 || !strings.Contains(results[0].Content, `tool "sleep"`) || strings.Contains(results[0].Content, "Slept for 0s (no-op).") {
+				if len(results) == 0 || !isRejectedSleepResult(results[0]) {
 					t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
 				}
 				if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
@@ -184,6 +184,10 @@ tools:
 			}
 		})
 	}
+}
+
+func isRejectedSleepResult(result sessionConfigToolResult) bool {
+	return strings.Contains(result.Content, `tool "sleep"`) && !strings.Contains(result.Content, "Slept for 0s (no-op).")
 }
 
 func TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect(t *testing.T) {

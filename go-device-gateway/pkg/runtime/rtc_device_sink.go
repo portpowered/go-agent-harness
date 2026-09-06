@@ -505,8 +505,8 @@ func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *audi
 }
 
 // observedWritePlayback routes a device-rate playback chunk through the
-// optional self-hearing observer before it reaches the device adapter, so a
-// local feedback gate always sees exactly the PCM this sink accepted.
+// optional self-hearing observer before it reaches the device adapter. The
+// callback sees exactly the PCM this sink accepts.
 func (s *RTCDeviceSink) observedWritePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool) error {
 	return s.observedWritePlaybackForResponse(ctx, samples, generation, blocked, modelAudio, audio.PlaybackResponse{})
 }
@@ -536,22 +536,13 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	// The media bridge can prefetch a continuation while earlier response
-	// frames are still queued in the device-facing port. A response identity
-	// that differs from the latest prefetched identity is therefore not stale
-	// by itself; only an accepted interruption invalidates the shared
-	// generation. The frame's own identity is carried through to span
-	// accounting by observedWritePlaybackForResponse.
+	// Prefetched continuation identity is not stale; accepted interruption
+	// alone changes generation, while frame identity remains in span accounting.
 	return s.playbackGeneration, s.playbackBlocked
 }
 
-// writePlayback admits a frame only if the playback boundary is unchanged
-// since its inbound read. Holding playbackMu across the device enqueue makes
-// cancel and enqueue linearizable: cancellation either removes this frame or
-// marks it stale before it can reach the local queue. The optional physical
-// drain wait runs after the enqueue decision is settled and the mutex is
-// released, so a concurrent barge-in cancel is never held up behind a slow
-// native backend's playback pacing.
+// writePlayback admits only at an unchanged boundary and keeps cancellation
+// linearizable; capacity waits happen outside playbackMu so barge-in can proceed.
 func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed

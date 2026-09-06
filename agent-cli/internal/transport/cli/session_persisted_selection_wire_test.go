@@ -34,7 +34,6 @@ import (
 func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
 	candidate := webmcp.BrowserCandidate{
 		ID:       "browser-cube-persisted",
 		Source:   webmcp.DiscoverySourceExplicit,
