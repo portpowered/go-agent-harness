@@ -288,6 +288,25 @@ func TestDirectoryRecorderAllowsAbsentImplicitProviderCapture(t *testing.T) {
 	}
 }
 
+func TestDirectoryRecorderMarksAudioPartialWhenImplicitProviderCaptureIsMissing(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	if err := os.Remove(r.ProviderCapturePath()); err != nil {
+		t.Fatal(err)
+	}
+	frame := sharedaudio.PCMFrame{Samples: []int16{13, -14, 15}, Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing provider evidence error = %v, want os.ErrNotExist", err)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("audio bundle without provider evidence was not partial: %+v", manifest.RecordingStatus)
+	}
+}
+
 func TestConversationTranscriptCompletionReplacesDeltasPerItemAndRole(t *testing.T) {
 	var conversation evidenceConversation
 	for _, role := range []messages.Role{messages.RoleUser, messages.RoleAssistant} {
