@@ -101,6 +101,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	})
 
 	observation := fixture.Snapshot()
+	t.Logf("Family A pass source_revision=%q client_event_counts=%v server_event_counts=%v event_trace=%v functions=%d tools=%d customer_transcripts=%d product_transcripts=%d stdout=%x input_frames=%d exit=%d child_waited=%t input_finished=%t input_closed=%t stdout_closed=%t stderr_closed=%t", os.Getenv("C07_SOURCE_REVISION"), observation.ClientEventCounts, observation.ServerEventCounts, observation.EventTrace, len(observation.FunctionCalls), len(observation.ToolObservations), len(observation.CustomerTranscript), len(observation.ProductTranscript), result.Stdout, len(result.Input), result.ExitCode, result.ChildWaited, result.InputFinished, result.InputClosed, result.StdoutClosed, result.StderrClosed)
 	if runErr != nil || observation.ProtocolError != "" {
 		t.Fatalf("Family A shipped-process run failed: run=%v provider=%+v client_event_counts=%v server_event_counts=%v event_trace=%v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, observation.ClientEventCounts, observation.ServerEventCounts, observation.EventTrace, result, result.Stdout, result.Stderr)
 	}

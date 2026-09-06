@@ -61,14 +61,14 @@ func OpenFilePorts(request serviceSession.Request, out io.Writer, outputRate int
 		if err != nil {
 			return nil, err
 		}
-		ports.Input = &runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: request.AudioInput.Path != "-"}
+		ports.Input = &runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: request.AudioInput.Path != "-", Continuous: request.AudioInput.Path == "-"}
 	}
 	for index, path := range request.AudioTurns {
 		source, rate, err := openAudioInput(serviceSession.AudioInput{Path: path})
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("--audio-in-turn %d %q: %w", index+1, path, err), ports.Close())
 		}
-		ports.InputTurns = append(ports.InputTurns, runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: path != "-"})
+		ports.InputTurns = append(ports.InputTurns, runtimeDevices.FileInput{Source: source, SampleRate: rate, Pace: path != "-", Continuous: path == "-"})
 	}
 	if request.AudioOutputPath != "" {
 		sink, err := openAudioOutput(request, out, outputRate)

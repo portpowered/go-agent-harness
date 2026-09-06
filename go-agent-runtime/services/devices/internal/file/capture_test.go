@@ -43,6 +43,74 @@ func TestCapturePacingUsesConsumedSamplesAfterShortRead(t *testing.T) {
 	}
 }
 
+func TestContinuousCaptureForwardsFirstProcessedFrameBeforeNextRead(t *testing.T) {
+	readNext := make(chan struct{})
+	source := &gatedSampleSource{releaseNext: readNext}
+	capture, err := newCapture(devices.FileInput{
+		Source:     source,
+		SampleRate: 16_000,
+		Continuous: true,
+	}, 16_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	outbound := &recordingOutbound{frameReady: make(chan struct{}, 16)}
+	errCh := make(chan error, 1)
+	go func() { errCh <- capture.Pump(context.Background(), outbound) }()
+
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	select {
+	case <-outbound.frameReady:
+	case <-deadline.C:
+		t.Fatal("continuous capture withheld its first processed frame")
+	}
+	frames := outbound.snapshot()
+	if got := len(frames[0].Samples); got != sharedaudio.FrameSize {
+		t.Fatalf("first continuous frame samples = %d, want %d", got, sharedaudio.FrameSize)
+	}
+	close(readNext)
+	if err := <-errCh; err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+}
+
+func TestContinuousCaptureKeepsSilenceZeroAcrossResamplingBoundary(t *testing.T) {
+	releaseEOF := make(chan struct{})
+	source := &speechThenSilenceSource{releaseEOF: releaseEOF}
+	capture, err := newCapture(devices.FileInput{
+		Source:     source,
+		SampleRate: 16_000,
+		Continuous: true,
+	}, 24_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	outbound := &recordingOutbound{frameReady: make(chan struct{}, 16)}
+	errCh := make(chan error, 1)
+	go func() { errCh <- capture.Pump(context.Background(), outbound) }()
+
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	for index := 0; index < 2; index++ {
+		select {
+		case <-outbound.frameReady:
+		case <-deadline.C:
+			t.Fatal("continuous capture did not emit speech and silence frames")
+		}
+	}
+	frames := outbound.snapshot()
+	for _, sample := range frames[1].Samples {
+		if sample != 0 {
+			t.Fatalf("resampled silence leaked sample %d", sample)
+		}
+	}
+	close(releaseEOF)
+	if err := <-errCh; err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+}
+
 func TestCaptureEndOfTurnFlushesExactTailAndResumes(t *testing.T) {
 	first := make([]int16, sharedaudio.FrameSize+1)
 	first[0] = 11
@@ -188,14 +256,92 @@ func (s *shortSampleSource) ReadSamples(_ context.Context, buf []int16) (int, er
 
 func (*shortSampleSource) Close() error { return nil }
 
+type gatedSampleSource struct {
+	releaseNext <-chan struct{}
+	read        int
+}
+
+func (s *gatedSampleSource) ReadFrame(context.Context, []int16) error { return io.EOF }
+
+func (s *gatedSampleSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	s.read++
+	if s.read > 1 {
+		select {
+		case <-s.releaseNext:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+		return 0, io.EOF
+	}
+	for index := range buf {
+		buf[index] = int16(index + 1)
+	}
+	return len(buf), nil
+}
+
+func (*gatedSampleSource) Close() error { return nil }
+
+type speechThenSilenceSource struct {
+	releaseEOF <-chan struct{}
+	read       int
+}
+
+func (s *speechThenSilenceSource) ReadFrame(context.Context, []int16) error { return io.EOF }
+
+func (s *speechThenSilenceSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	s.read++
+	switch s.read {
+	case 1:
+		for index := range buf {
+			buf[index] = 257
+		}
+		return len(buf), nil
+	case 2:
+		clear(buf)
+		return len(buf), nil
+	default:
+		select {
+		case <-s.releaseEOF:
+			return 0, io.EOF
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	}
+}
+
+func (*speechThenSilenceSource) Close() error { return nil }
+
 type recordingOutbound struct {
-	frames []sharedaudio.PCMFrame
+	mu         sync.Mutex
+	frames     []sharedaudio.PCMFrame
+	frameReady chan struct{}
 }
 
 func (o *recordingOutbound) WriteFrame(_ context.Context, frame sharedaudio.PCMFrame) error {
 	frame.Samples = append([]int16(nil), frame.Samples...)
+	o.mu.Lock()
 	o.frames = append(o.frames, frame)
+	if o.frameReady == nil {
+		o.frameReady = make(chan struct{}, 16)
+	}
+	ready := o.frameReady
+	o.mu.Unlock()
+	select {
+	case ready <- struct{}{}:
+	default:
+	}
 	return nil
+}
+
+func (o *recordingOutbound) snapshot() []sharedaudio.PCMFrame {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	frames := make([]sharedaudio.PCMFrame, len(o.frames))
+	for index, frame := range o.frames {
+		frames[index] = frame
+		frames[index].Samples = append([]int16(nil), frame.Samples...)
+	}
+	return frames
 }
 
 func (*recordingOutbound) Close() error { return nil }
@@ -236,5 +382,7 @@ func (t recordingTimer) C() <-chan time.Time { return t.channel }
 func (t recordingTimer) Stop() bool          { return true }
 
 var _ sharedaudio.SampleSource = (*shortSampleSource)(nil)
+var _ sharedaudio.SampleSource = (*gatedSampleSource)(nil)
+var _ sharedaudio.SampleSource = (*speechThenSilenceSource)(nil)
 var _ sharedaudio.OutboundMedia = (*recordingOutbound)(nil)
 var _ platformclock.Scheduler = (*recordingScheduler)(nil)

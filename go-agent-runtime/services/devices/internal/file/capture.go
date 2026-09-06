@@ -20,6 +20,7 @@ type fileCapture struct {
 	processor      *sharedaudio.Processor
 	sourceRate     int
 	pace           bool
+	continuous     bool
 	scheduler      platformclock.Scheduler
 	onTurnBoundary func(context.Context) error
 	pending        *sharedaudio.PCMFrame
@@ -58,7 +59,7 @@ func newCapture(input devices.FileInput, providerRate int) (*fileCapture, error)
 		return nil, fmt.Errorf("create finite input processor: %w", err)
 	}
 	return &fileCapture{
-		source: input.Source, processor: processor, sourceRate: sourceRate, pace: input.Pace,
+		source: input.Source, processor: processor, sourceRate: sourceRate, pace: input.Pace, continuous: input.Continuous,
 		scheduler: input.Scheduler, onTurnBoundary: input.OnTurnBoundary,
 	}, nil
 }
@@ -135,9 +136,23 @@ func (c *fileCapture) processFrame(ctx context.Context, outbound sharedaudio.Out
 		}
 		return 0, 0, false, io.ErrNoProgress
 	}
-	frames, err := c.processor.Process(sharedaudio.PCMFrame{Samples: frame[:count], Epoch: c.epoch})
+	process := c.processor.Process
+	if c.continuous {
+		process = c.processor.ProcessAvailable
+	}
+	frames, err := process(sharedaudio.PCMFrame{Samples: frame[:count], Epoch: c.epoch})
 	if err != nil {
 		return 0, 0, false, fmt.Errorf("process finite audio input: %w", err)
+	}
+	if c.continuous && samplesAreSilent(frame[:count]) {
+		// A live source must preserve a digital-silence frame as silence even
+		// when an upsampler's one-sample interpolation lookahead still carries
+		// the preceding speech frame. The provider's VAD boundary belongs to
+		// the current source quantum; leaking that transition sample turns a
+		// real silence into a second utterance.
+		for index := range frames {
+			clear(frames[index].Samples)
+		}
 	}
 	c.hasSamples = true
 	c.turnHasSamples = true
@@ -147,6 +162,15 @@ func (c *fileCapture) processFrame(ctx context.Context, outbound sharedaudio.Out
 		return written, count, false, err
 	}
 	return written, count, errors.Is(readErr, io.EOF), nil
+}
+
+func samplesAreSilent(samples []int16) bool {
+	for _, sample := range samples {
+		if sample != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *fileCapture) readFrame(ctx context.Context, frame []int16, source sharedaudio.SampleSource) (int, error) {
@@ -171,6 +195,13 @@ func (c *fileCapture) writeOpenFrames(ctx context.Context, outbound sharedaudio.
 	written := 0
 	for _, frame := range frames {
 		if len(frame.Samples) == 0 {
+			continue
+		}
+		if c.continuous {
+			if err := writeCaptureFrame(ctx, outbound, frame); err != nil {
+				return written, err
+			}
+			written += len(frame.Samples)
 			continue
 		}
 		if c.pending != nil {

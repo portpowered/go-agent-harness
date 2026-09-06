@@ -62,6 +62,12 @@ type FileInput struct {
 	Source     audio.AudioSource
 	SampleRate int
 	Pace       bool
+	// Continuous keeps processed PCM flowing as soon as a provider frame is
+	// available. Finite inputs retain one frame of lookahead so an explicit
+	// source boundary can mark the final frame EndOfResponse; a continuously
+	// open source cannot wait for that lookahead without stalling its first
+	// utterance.
+	Continuous bool
 	// OnTurnBoundary is called after a persistent source reaches an explicit
 	// audio.ErrEndOfTurn marker, and once at final EOF when the last turn did
 	// not already carry a marker. It is optional so finite callers can retain
