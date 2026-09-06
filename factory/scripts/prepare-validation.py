@@ -12,6 +12,60 @@ from project_contract import ContractError, artifact, check_packet, digest, mani
 MAX_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
 
 
+def _text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _validation_scope(packet):
+    """Validate and normalize the scope metadata for a validation mission."""
+    scope = packet.get("scope", "project")
+    if not isinstance(scope, str) or scope not in {"project", "vertical"}:
+        raise ContractError("validation scope must be project or vertical")
+
+    if scope == "vertical":
+        names = [packet[key] for key in ("vertical", "verticalName") if key in packet]
+        if not names or any(not _text(value) for value in names) or len(set(names)) != 1:
+            raise ContractError("vertical validation requires one nonempty vertical name")
+        revisions = [
+            packet[key]
+            for key in ("sourceRevision", "mergedRevision")
+            if key in packet
+        ]
+        if not revisions or any(not _text(value) for value in revisions) or len(set(revisions)) != 1:
+            raise ContractError(
+                "vertical validation requires one nonempty source or merged revision"
+            )
+        # Keep stable names for validators even when a caller uses the more
+        # descriptive aliases.  Existing fields remain in the packet too.
+        packet["vertical"] = names[0]
+        packet["sourceRevision"] = revisions[0]
+
+    packet["scope"] = scope
+    return scope
+
+
+def _criteria(packet, contract, scope):
+    allowed = {entry["id"]: entry["rubric"] for entry in contract["criteria"]}
+    criteria = packet.get("criteria")
+    if not isinstance(criteria, list) or not criteria or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("id"), str)
+        or item.get("id") not in allowed
+        or item.get("rubric") != allowed.get(item.get("id"))
+        for item in criteria
+    ):
+        raise ContractError("validation criteria must preserve immutable rubrics")
+    ids = [item["id"] for item in criteria]
+    if len(set(ids)) != len(ids):
+        raise ContractError("duplicate validation criterion")
+    if scope == "project" and set(ids) != set(allowed):
+        raise ContractError(
+            "validation criteria must preserve immutable rubrics and every criterion"
+        )
+    if scope == "vertical" and not set(ids).issubset(allowed):
+        raise ContractError("validation criteria must preserve immutable rubrics")
+
+
 def prepare(root, name, payload):
     contract = manifest(root)
     check_packet(project_admission.status(root), contract)
@@ -22,17 +76,8 @@ def prepare(root, name, payload):
     check_packet(packet, contract)
     if packet.get("role") not in {"customer", "engineering", "retrospective"}:
         raise ContractError("unknown validation role")
-    allowed = {entry["id"]: entry["rubric"] for entry in contract["criteria"]}
-    criteria = packet.get("criteria")
-    if not isinstance(criteria, list) or not criteria or any(
-        not isinstance(item, dict) or not isinstance(item.get("id"), str) or item.get("id") not in allowed or item.get("rubric") != allowed.get(item.get("id"))
-        for item in criteria
-    ):
-        raise ContractError("validation criteria must preserve immutable rubrics")
-    if {item["id"] for item in criteria} != set(allowed):
-        raise ContractError("validation criteria must preserve immutable rubrics and every criterion")
-    if len({item["id"] for item in criteria}) != len(criteria):
-        raise ContractError("duplicate validation criterion")
+    scope = _validation_scope(packet)
+    _criteria(packet, contract, scope)
     budget = packet.get("budget", {})
     if budget.get("timeSeconds") != 1800 or not isinstance(packet.get("mission"), str):
         raise ContractError("mission requires a 1800-second budget and description")

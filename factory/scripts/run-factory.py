@@ -133,7 +133,8 @@ def serve(root):
                      previous.get("root") != str(root) or previous.get("server") != SERVER):
         raise ContractError("saved runtime belongs to another project/root/endpoint")
     definition_hash = digest(root / "factory/factory.json")
-    if previous and previous.get("definitionSha256") != definition_hash:
+    fresh = bool(previous and previous.get("launchMode") == "fresh")
+    if previous and not fresh and previous.get("definitionSha256") != definition_hash:
         raise ContractError("saved graph differs; migrate recorded work before restarting changed configuration")
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -146,7 +147,7 @@ def serve(root):
     command = ["you", "run", "--continuously", "--with-server", "--listen", LISTEN,
                "--record", str(recording)]
     evidence = None
-    if previous:
+    if previous and not fresh:
         recovery = previous.get("recoveryInput") if previous.get("status") in {"starting", "failed"} else None
         source = Path(recovery["path"] if recovery else previous.get("recording", "")).resolve()
         if not source.is_relative_to(runs.resolve()) or not source.is_file():
@@ -158,10 +159,18 @@ def serve(root):
         evidence = {"path": str(source), "sha256": source_hash}
         command += ["--resume", str(source)]
     else:
+        context = previous.get("freshBoardContext") if fresh else None
+        if context:
+            if digest(Path(context["path"])) != context["sha256"]:
+                raise ContractError("fresh-board handoff changed after authorization")
+            evidence = previous["freshBoardPredecessor"]
         batch = {"requestId": "admit-" + contract["project"] + "-" + contract["contractRevision"],
                  "type": "FACTORY_REQUEST_BATCH", "works": [{"name": contract["project"],
                  "workTypeName": "project", "payload": {"project": contract["project"],
-                 "contractRevision": contract["contractRevision"]}}]}
+                 "contractRevision": contract["contractRevision"]}},
+                 {"name": "meta-bootstrap", "workTypeName": "thoughts",
+                  "payload": {"project": contract["project"], "contractRevision": contract["contractRevision"],
+                              "handoff": context or "factory/docs/meta-planner-handoff.md"}}]}
         write_record(startup, batch)
         command += ["--work", str(startup)]
     environment = dict(runtime_environment(root), FACTORY_ROOT=str(root), FACTORY_SERVER_URL=SERVER,
@@ -183,6 +192,9 @@ def serve(root):
               "integrationRevision": previous["integrationRevision"] if previous else subprocess.check_output(["git", "-C", str(root),
                                          "rev-parse", "HEAD"], text=True).strip(),
               "status": "starting"}
+    if fresh:
+        record.update(launchMode="fresh", freshBoardContext=previous["freshBoardContext"],
+                      freshBoardPredecessor=previous["freshBoardPredecessor"])
     if previous and previous.get("sessionId"):
         record["sessionId"] = previous["sessionId"]
     if evidence:
@@ -210,6 +222,7 @@ def serve(root):
         else:
             project_admission.bind_session(root, contract["project"], contract["contractRevision"], SERVER, session_id)
         record.update(status="running", sessionId=session_id)
+        record.pop("launchMode", None)
         record.pop("recoveryInput", None)
         if previous:
             record["predecessor"] = evidence
@@ -274,16 +287,56 @@ def start(root):
     raise ContractError("factory startup not confirmed; inspect " + str(log))
 
 
+def fresh_board(root, context):
+    """Explicit user-directed graph reset; preserve code, admission and context."""
+    root = root.resolve()
+    common, record_path = paths(root)
+    context = context.resolve()
+    if not context.is_relative_to(root) or not context.is_file():
+        raise ContractError("fresh-board requires a context file in the owning checkout")
+    relative = str(context.relative_to(root))
+    committed = subprocess.check_output(["git", "-C", str(root), "show", "HEAD:" + relative])
+    if committed != context.read_bytes():
+        raise ContractError("commit the exact meta-planner context before a fresh board")
+    subprocess.run(["you", "factory", "config", "validate", str(root / "factory/factory.json")],
+                   cwd=root, env=runtime_environment(root), check=True, capture_output=True)
+    with (common / "factory-runtime.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        previous = read_json(record_path)
+        if running(previous) or previous.get("status") != "stopped":
+            raise ContractError("stop the owned factory before explicitly replacing its board")
+        if previous.get("root") != str(root) or previous.get("server") != SERVER:
+            raise ContractError("saved runtime belongs to another checkout or endpoint")
+        owner = project_admission.status(root)
+        if not owner or owner.get("sessionId") != previous.get("sessionId"):
+            raise ContractError("saved admission does not match the stopped session")
+        source = Path(previous["recording"])
+        source_hash = digest(source)
+        if source_hash != previous.get("recordingSha256"):
+            raise ContractError("stopped recording changed; preserve it and inspect")
+        archive = common / "factory-runs" / (uuid.uuid4().hex + "-before-fresh-board.json")
+        write_record(archive, previous)
+        previous.update(launchMode="fresh", freshBoardContext={"path":str(context),"sha256":digest(context)},
+                        freshBoardPredecessor={"path":str(source),"sha256":source_hash})
+        write_record(record_path, previous)
+    return start(root)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["start", "stop", "restart", "status", "serve"])
+    parser.add_argument("operation", choices=["start", "stop", "restart", "status", "serve", "fresh-board"])
     parser.add_argument("--root", type=Path, default=root_path())
+    parser.add_argument("--context", type=Path)
     args = parser.parse_args()
     root = args.root.resolve()
     if args.operation == "serve":
         serve(root)
         return
-    if args.operation == "restart":
+    if args.operation == "fresh-board":
+        if not args.context:
+            parser.error("fresh-board requires --context")
+        result = fresh_board(root, args.context)
+    elif args.operation == "restart":
         stop(root)
         result = start(root)
     else:

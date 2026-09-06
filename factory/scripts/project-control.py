@@ -64,6 +64,29 @@ def completed_validation(work_id, session_id, server):
         raise ContractError("validation Work has not completed in canonical runtime state")
 
 
+def validate_report(report, contract, role, build, expected):
+    """Validate one final project-scope report without trusting its claims."""
+    check_packet(report, contract)
+    # A missing scope is the legacy final-report shape.  Explicit vertical
+    # reports must never satisfy the whole-project completion gate, even when a
+    # worker accidentally reports every criterion.
+    if report.get("scope", "project") != "project":
+        raise ContractError("project completion requires scope=project validation reports")
+    report_build = report.get("build")
+    if (
+        report.get("role") != role
+        or not isinstance(report_build, dict)
+        or report_build.get("sha256") != build["sha256"]
+    ):
+        raise ContractError("validation role/artifact mismatch")
+    criteria = report.get("criteria", {})
+    if not isinstance(criteria, dict) or set(criteria) != expected or any(
+        not isinstance(value, dict) or value.get("verdict") != "PASS" or
+        not str(value.get("evidence", "")).strip() for value in criteria.values()
+    ):
+        raise ContractError("all immutable criteria need independent PASS evidence")
+
+
 def verify_completion(root, name):
     contract = manifest(root)
     owner(root, contract)
@@ -83,15 +106,7 @@ def verify_completion(root, name):
         if not report_path.is_relative_to(root / "docs/temp/projects" / name):
             raise ContractError("report is outside the admitted project")
         report = read_json(report_path)
-        check_packet(report, contract)
-        if report.get("role") != role or report.get("build", {}).get("sha256") != build["sha256"]:
-            raise ContractError("validation role/artifact mismatch")
-        criteria = report.get("criteria", {})
-        if set(criteria) != expected or any(
-            not isinstance(value, dict) or value.get("verdict") != "PASS" or
-            not str(value.get("evidence", "")).strip() for value in criteria.values()
-        ):
-            raise ContractError("all immutable criteria need independent PASS evidence")
+        validate_report(report, contract, role, build, expected)
         work_id = report.get("validationWorkId")
         if not isinstance(work_id, str) or not work_id or work_id in seen:
             raise ContractError("validation must use distinct canonical Work identities")

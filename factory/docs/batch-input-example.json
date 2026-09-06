@@ -26,19 +26,7 @@
           "PARITY"
         ]
       }
-    },
-    {
-      "name": "audio-runtime",
-      "workTypeName": "project-cycle",
-      "payload": "continue"
     }
   ],
-  "relations": [
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "audio-runtime",
-      "targetWorkName": "audio-runtime-c01-baseline",
-      "requiredState": "complete"
-    }
-  ]
+  "relations": []
 }

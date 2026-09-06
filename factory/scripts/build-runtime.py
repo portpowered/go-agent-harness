@@ -37,10 +37,13 @@ def build(source, root):
             for patch in patches:
                 subprocess.run(["git", "-C", str(checkout), "apply", "--check", str(patch)], check=True)
                 subprocess.run(["git", "-C", str(checkout), "apply", str(patch)], check=True)
-            subprocess.run(["go", "build", "-o", str(temporary), "./cmd/factory"], cwd=checkout,
+            subprocess.run(["make", "build-all", "GO_BUILD_FLAGS=-trimpath",
+                            "BIN_DIR=" + str(directory), "BINARY_NAME=" + temporary.name], cwd=checkout,
                            env=dict(os.environ, GOWORK="off"), check=True)
+            if not (checkout / "ui/dist/index.html").is_file() or not (checkout / "ui/dist_embed_generated.go").is_file():
+                raise ValueError("full runtime build did not produce the embedded dashboard")
         temporary.chmod(0o700)
-        proof = {"sourceMode":"git-archive", "sourceRevision":revision, "sha256":digest(temporary),
+        proof = {"sourceMode":"git-archive", "buildTarget":"build-all", "sourceRevision":revision, "sha256":digest(temporary),
                  "patches":[{"path":str(p.relative_to(root)),"sha256":digest(p)} for p in patches]}
         os.replace(temporary, directory / "you")
         # Launcher validates both files together and fails closed during replacement.

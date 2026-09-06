@@ -117,7 +117,17 @@ class ProjectFixture:
             "sha256": hashlib.sha256(content).hexdigest(),
         }
 
-    def validation_packet(self, name="audio-runtime-c1-customer", role="customer"):
+    def validation_packet(
+        self,
+        name="audio-runtime-c1-customer",
+        role="customer",
+        *,
+        scope=None,
+        criterion_ids=None,
+        vertical=None,
+        source_revision=None,
+        merged_revision=None,
+    ):
         contract = project_contract.manifest(self.root)
         build = self.artifact()
         report_path = (
@@ -128,7 +138,7 @@ class ProjectFixture:
             / self.project
             / f"{name}.json"
         )
-        return {
+        packet = {
             "project": self.project,
             "contractRevision": self.contract_revision,
             "role": role,
@@ -146,8 +156,30 @@ class ProjectFixture:
             "build": build,
             "fixtures": [],
         }
+        if criterion_ids is not None:
+            packet["criteria"] = [
+                {"id": entry["id"], "rubric": entry["rubric"]}
+                for entry in contract["criteria"]
+                if entry["id"] in criterion_ids
+            ]
+        if scope is not None:
+            packet["scope"] = scope
+        if vertical is not None:
+            packet["vertical"] = vertical
+        if source_revision is not None:
+            packet["sourceRevision"] = source_revision
+        if merged_revision is not None:
+            packet["mergedRevision"] = merged_revision
+        return packet
 
-    def completion_record(self, build, *, missing_role=None, same_work_id=False):
+    def completion_record(
+        self,
+        build,
+        *,
+        missing_role=None,
+        same_work_id=False,
+        report_scope=None,
+    ):
         contract = project_contract.manifest(self.root)
         criteria = {
             entry["id"]: {
@@ -181,6 +213,8 @@ class ProjectFixture:
                     else "validation-engineering"
                 ),
             }
+            if report_scope is not None:
+                reports[role]["scope"] = report_scope
             report_path.write_text(
                 json.dumps(reports[role]),
                 encoding="utf-8",
@@ -364,7 +398,78 @@ class ProjectControlAndValidationTests(unittest.TestCase):
             mission["authority"],
             project_contract.manifest(self.root)["authority"],
         )
+        self.assertEqual(mission["scope"], "project")
         self.assertEqual(mission["build"]["path"], str(staged_build))
+
+    def test_prepare_validation_accepts_a_scoped_vertical_probe(self):
+        name = "audio-runtime-c1-vertical"
+        packet = self.fixture.validation_packet(
+            name,
+            scope="vertical",
+            criterion_ids=["AUDIO"],
+            vertical="audio-runtime-c1",
+            merged_revision="merge-c1",
+        )
+
+        result = PREPARE_VALIDATION.prepare(self.root, name, json.dumps(packet))
+
+        mission = json.loads(
+            (Path(result["directory"]) / "mission.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(mission["scope"], "vertical")
+        self.assertEqual(mission["vertical"], "audio-runtime-c1")
+        self.assertEqual(mission["sourceRevision"], "merge-c1")
+        self.assertEqual([item["id"] for item in mission["criteria"]], ["AUDIO"])
+
+    def test_vertical_probe_requires_name_and_source_revision(self):
+        missing_name = self.fixture.validation_packet(
+            "audio-runtime-c1-no-vertical",
+            scope="vertical",
+            criterion_ids=["AUDIO"],
+            source_revision="merge-c1",
+        )
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "vertical validation requires one nonempty vertical name",
+        ):
+            PREPARE_VALIDATION.prepare(
+                self.root,
+                "audio-runtime-c1-no-vertical",
+                json.dumps(missing_name),
+            )
+
+        missing_revision = self.fixture.validation_packet(
+            "audio-runtime-c1-no-revision",
+            scope="vertical",
+            criterion_ids=["AUDIO"],
+            vertical="audio-runtime-c1",
+        )
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "vertical validation requires one nonempty source or merged revision",
+        ):
+            PREPARE_VALIDATION.prepare(
+                self.root,
+                "audio-runtime-c1-no-revision",
+                json.dumps(missing_revision),
+            )
+
+    def test_project_scope_requires_every_immutable_criterion(self):
+        packet = self.fixture.validation_packet(
+            "audio-runtime-c1-project-subset",
+            scope="project",
+            criterion_ids=["AUDIO"],
+        )
+
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "validation criteria must preserve immutable rubrics and every criterion",
+        ):
+            PREPARE_VALIDATION.prepare(
+                self.root,
+                "audio-runtime-c1-project-subset",
+                json.dumps(packet),
+            )
 
     def test_completion_accepts_two_independent_validation_evidence_records(self):
         self.fixture.bind_runtime()
@@ -418,6 +523,21 @@ class ProjectControlAndValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             project_contract.ContractError,
             "all immutable criteria need independent PASS evidence",
+        ):
+            with mock.patch.object(PROJECT_CONTROL, "completed_validation"):
+                PROJECT_CONTROL.verify_completion(
+                    self.root,
+                    self.fixture.project,
+                )
+
+    def test_completion_rejects_vertical_report_even_with_all_criteria(self):
+        self.fixture.bind_runtime()
+        build = self.fixture.artifact()
+        self.fixture.completion_record(build, report_scope="vertical")
+
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "project completion requires scope=project validation reports",
         ):
             with mock.patch.object(PROJECT_CONTROL, "completed_validation"):
                 PROJECT_CONTROL.verify_completion(

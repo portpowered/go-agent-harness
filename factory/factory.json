@@ -2,23 +2,23 @@
   "name": "go-agent-harness",
   "resources": [
     {
-      "id": "manager-slot",
-      "name": "manager-slot",
-      "capacity": 1
-    },
-    {
       "id": "executor-slot",
       "name": "executor-slot",
       "capacity": 2
     },
     {
-      "id": "validation-slot",
-      "name": "validation-slot",
+      "id": "concurrent-planners",
+      "name": "concurrent-planners",
       "capacity": 1
     },
     {
       "id": "merge-slot",
       "name": "merge-slot",
+      "capacity": 1
+    },
+    {
+      "id": "validation-slot",
+      "name": "validation-slot",
       "capacity": 1
     }
   ],
@@ -46,83 +46,6 @@
       ]
     },
     {
-      "id": "project",
-      "name": "project",
-      "states": [
-        {
-          "id": "init",
-          "name": "init",
-          "type": "INITIAL"
-        },
-        {
-          "id": "waiting",
-          "name": "waiting",
-          "type": "PROCESSING"
-        },
-        {
-          "id": "complete",
-          "name": "complete",
-          "type": "TERMINAL"
-        },
-        {
-          "id": "blocked",
-          "name": "blocked",
-          "type": "FAILED"
-        },
-        {
-          "id": "needs-supervision",
-          "name": "needs-supervision",
-          "type": "PROCESSING"
-        },
-        {
-          "id": "admitted",
-          "name": "admitted",
-          "type": "PROCESSING"
-        },
-        {
-          "id": "validating-completion",
-          "name": "validating-completion",
-          "type": "PROCESSING"
-        }
-      ]
-    },
-    {
-      "id": "project-cycle",
-      "name": "project-cycle",
-      "states": [
-        {
-          "id": "init",
-          "name": "init",
-          "type": "INITIAL"
-        },
-        {
-          "id": "continue",
-          "name": "continue",
-          "type": "PROCESSING"
-        },
-        {
-          "id": "complete",
-          "name": "complete",
-          "type": "TERMINAL"
-        },
-        {
-          "id": "failed",
-          "name": "failed",
-          "type": "FAILED"
-        },
-        {
-          "id": "blocked",
-          "name": "blocked",
-          "type": "FAILED"
-        },
-        {
-          "id": "fin",
-          "name": "fin",
-          "type": "TERMINAL"
-        }
-      ]
-    },
-    {
       "id": "task",
       "name": "task",
       "states": [
@@ -130,11 +53,6 @@
           "id": "init",
           "name": "init",
           "type": "INITIAL"
-        },
-        {
-          "id": "awaiting-ci",
-          "name": "awaiting-ci",
-          "type": "PROCESSING"
         },
         {
           "id": "in-review",
@@ -155,11 +73,6 @@
           "id": "failed",
           "name": "failed",
           "type": "FAILED"
-        },
-        {
-          "id": "admitted",
-          "name": "admitted",
-          "type": "PROCESSING"
         }
       ]
     },
@@ -186,11 +99,6 @@
           "id": "failed",
           "name": "failed",
           "type": "FAILED"
-        },
-        {
-          "id": "admitted",
-          "name": "admitted",
-          "type": "PROCESSING"
         }
       ]
     },
@@ -216,11 +124,6 @@
       ]
     },
     {
-      "id": "cron-triggers",
-      "name": "cron-triggers",
-      "states": []
-    },
-    {
       "id": "review",
       "name": "review",
       "states": [
@@ -237,6 +140,27 @@
         {
           "id": "fin",
           "name": "fin",
+          "type": "FAILED"
+        }
+      ]
+    },
+    {
+      "id": "project",
+      "name": "project",
+      "states": [
+        {
+          "id": "init",
+          "name": "init",
+          "type": "INITIAL"
+        },
+        {
+          "id": "complete",
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        {
+          "id": "blocked",
+          "name": "blocked",
           "type": "FAILED"
         }
       ]
@@ -266,51 +190,9 @@
           "type": "FAILED"
         }
       ]
-    },
-    {
-      "id": "project-reconcile",
-      "name": "project-reconcile",
-      "states": [
-        {
-          "id": "init",
-          "name": "init",
-          "type": "INITIAL"
-        },
-        {
-          "id": "complete",
-          "name": "complete",
-          "type": "TERMINAL"
-        },
-        {
-          "id": "failed",
-          "name": "failed",
-          "type": "FAILED"
-        }
-      ]
     }
   ],
   "workers": [
-    {
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-6-astra",
-      "reasoningEffort": "medium",
-      "id": "project-lead",
-      "name": "project-lead",
-      "skipPermissions": true,
-      "type": "AGENT_WORKER",
-      "timeout": "1h"
-    },
-    {
-      "args": [
-        "factory/scripts/decide-project-cycle.py",
-        "{{ (index .Inputs 0).Payload }}"
-      ],
-      "command": "python3",
-      "id": "project-cycle-decider",
-      "name": "project-cycle-decider",
-      "type": "SCRIPT_WORKER"
-    },
     {
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
@@ -319,17 +201,7 @@
       "name": "processor",
       "skipPermissions": true,
       "type": "AGENT_WORKER",
-      "timeout": "1h"
-    },
-    {
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-5.6-luna",
-      "reasoningEffort": "max",
-      "name": "reviewer",
-      "skipPermissions": true,
-      "type": "AGENT_WORKER",
-      "timeout": "1h"
+      "timeout": "4h"
     },
     {
       "args": [
@@ -342,16 +214,6 @@
       "type": "SCRIPT_WORKER"
     },
     {
-      "args": [
-        "factory/scripts/ci-wait.py",
-        "codex/{{ (index .Inputs 0).Name }}"
-      ],
-      "command": "python3",
-      "id": "ci-waiter",
-      "name": "ci-waiter",
-      "type": "SCRIPT_WORKER"
-    },
-    {
       "executorProvider": "SCRIPT_WRAP",
       "modelProvider": "codex",
       "model": "gpt-6-astra",
@@ -360,7 +222,7 @@
       "name": "planner",
       "skipPermissions": true,
       "type": "AGENT_WORKER",
-      "timeout": "1h"
+      "timeout": "4h"
     },
     {
       "executorProvider": "SCRIPT_WRAP",
@@ -371,7 +233,17 @@
       "name": "ideafier",
       "skipPermissions": true,
       "type": "AGENT_WORKER",
-      "timeout": "1h"
+      "timeout": "4h"
+    },
+    {
+      "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-5.6-luna",
+      "reasoningEffort": "max",
+      "name": "reviewer",
+      "skipPermissions": true,
+      "type": "AGENT_WORKER",
+      "timeout": "4h"
     },
     {
       "id": "validation-setup",
@@ -393,304 +265,10 @@
       "model": "gpt-5.6-luna",
       "reasoningEffort": "max",
       "skipPermissions": true,
-      "timeout": "30m"
-    },
-    {
-      "id": "project-reconciler",
-      "name": "project-reconciler",
-      "type": "SCRIPT_WORKER",
-      "command": "python3",
-      "args": [
-        "factory/scripts/reconcile-projects.py",
-        "--server",
-        "http://127.0.0.1:7439",
-        "--session",
-        "{{ .Context.SessionID }}"
-      ]
-    },
-    {
-      "id": "admit-project",
-      "name": "admit-project",
-      "type": "SCRIPT_WORKER",
-      "command": "python3",
-      "args": [
-        "factory/scripts/project-control.py",
-        "verify-work",
-        "--type",
-        "project",
-        "--name",
-        "{{ (index .Inputs 0).Name }}",
-        "--payload",
-        "{{ (index .Inputs 0).Payload }}"
-      ]
-    },
-    {
-      "id": "admit-idea",
-      "name": "admit-idea",
-      "type": "SCRIPT_WORKER",
-      "command": "python3",
-      "args": [
-        "factory/scripts/project-control.py",
-        "verify-work",
-        "--type",
-        "idea",
-        "--name",
-        "{{ (index .Inputs 0).Name }}",
-        "--payload",
-        "{{ (index .Inputs 0).Payload }}"
-      ]
-    },
-    {
-      "id": "admit-task",
-      "name": "admit-task",
-      "type": "SCRIPT_WORKER",
-      "command": "python3",
-      "args": [
-        "factory/scripts/project-control.py",
-        "verify-work",
-        "--type",
-        "task",
-        "--name",
-        "{{ (index .Inputs 0).Name }}",
-        "--payload",
-        "{{ (index .Inputs 0).Payload }}"
-      ]
-    },
-    {
-      "id": "completion-checker",
-      "name": "completion-checker",
-      "type": "SCRIPT_WORKER",
-      "command": "python3",
-      "args": [
-        "factory/scripts/project-control.py",
-        "verify-completion",
-        "--name",
-        "{{ (index .Inputs 0).Name }}"
-      ]
+      "timeout": "4h"
     }
   ],
   "workstations": [
-    {
-      "id": "project-lead",
-      "inputs": [
-        {
-          "state": "admitted",
-          "workType": "project"
-        }
-      ],
-      "name": "project-lead",
-      "onFailure": [
-        {
-          "state": "needs-supervision",
-          "workType": "project"
-        }
-      ],
-      "outputs": [
-        {
-          "state": "waiting",
-          "workType": "project"
-        }
-      ],
-      "resources": [
-        {
-          "name": "manager-slot",
-          "capacity": 1
-        }
-      ],
-      "type": "AGENT_RUN",
-      "worker": "project-lead",
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
-    },
-    {
-      "classificationRoutes": [
-        {
-          "label": "continue",
-          "outputs": [
-            {
-              "state": "continue",
-              "workType": "project-cycle"
-            }
-          ]
-        },
-        {
-          "label": "complete",
-          "outputs": [
-            {
-              "state": "complete",
-              "workType": "project-cycle"
-            }
-          ]
-        },
-        {
-          "label": "blocked",
-          "outputs": [
-            {
-              "state": "blocked",
-              "workType": "project-cycle"
-            }
-          ]
-        }
-      ],
-      "id": "decide-project-cycle",
-      "inputs": [
-        {
-          "state": "init",
-          "workType": "project-cycle"
-        }
-      ],
-      "name": "decide-project-cycle",
-      "onFailure": [
-        {
-          "state": "failed",
-          "workType": "project-cycle"
-        }
-      ],
-      "type": "CLASSIFIER_WORKSTATION",
-      "worker": "project-cycle-decider"
-    },
-    {
-      "id": "continue-project",
-      "inputs": [
-        {
-          "guards": [
-            {
-              "matchInput": "project-cycle",
-              "type": "SAME_NAME"
-            }
-          ],
-          "state": "waiting",
-          "workType": "project"
-        },
-        {
-          "state": "continue",
-          "workType": "project-cycle"
-        }
-      ],
-      "name": "continue-project",
-      "outputs": [
-        {
-          "state": "init",
-          "workType": "project"
-        },
-        {
-          "workType": "project-cycle",
-          "state": "fin"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
-    {
-      "id": "complete-project",
-      "inputs": [
-        {
-          "guards": [
-            {
-              "matchInput": "project-cycle",
-              "type": "SAME_NAME"
-            }
-          ],
-          "state": "waiting",
-          "workType": "project"
-        },
-        {
-          "state": "complete",
-          "workType": "project-cycle"
-        }
-      ],
-      "name": "complete-project",
-      "outputs": [
-        {
-          "state": "validating-completion",
-          "workType": "project"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
-    {
-      "id": "retry-project-after-cycle-failure",
-      "inputs": [
-        {
-          "guards": [
-            {
-              "matchInput": "project-cycle",
-              "type": "SAME_NAME"
-            }
-          ],
-          "state": "waiting",
-          "workType": "project"
-        },
-        {
-          "state": "failed",
-          "workType": "project-cycle"
-        }
-      ],
-      "name": "retry-project-after-cycle-failure",
-      "outputs": [
-        {
-          "state": "init",
-          "workType": "project"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
-    {
-      "id": "block-project",
-      "inputs": [
-        {
-          "guards": [
-            {
-              "matchInput": "project-cycle",
-              "type": "SAME_NAME"
-            }
-          ],
-          "state": "waiting",
-          "workType": "project"
-        },
-        {
-          "state": "blocked",
-          "workType": "project-cycle"
-        }
-      ],
-      "name": "block-project",
-      "outputs": [
-        {
-          "state": "needs-supervision",
-          "workType": "project"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
-    {
-      "guards": [
-        {
-          "maxVisits": 12,
-          "type": "VISIT_COUNT",
-          "workstation": "project-lead"
-        }
-      ],
-      "id": "project-loop-breaker",
-      "inputs": [
-        {
-          "state": "admitted",
-          "workType": "project"
-        }
-      ],
-      "name": "project-loop-breaker",
-      "outputs": [
-        {
-          "state": "needs-supervision",
-          "workType": "project"
-        }
-      ],
-      "type": "LOGICAL_MOVE",
-      "worker": ""
-    },
     {
       "id": "ideafy",
       "inputs": [
@@ -714,8 +292,8 @@
       ],
       "resources": [
         {
-          "name": "manager-slot",
-          "capacity": 1
+          "capacity": 1,
+          "name": "concurrent-planners"
         }
       ],
       "type": "AGENT_RUN",
@@ -725,7 +303,7 @@
       "id": "plan",
       "inputs": [
         {
-          "state": "admitted",
+          "state": "init",
           "workType": "idea"
         }
       ],
@@ -734,12 +312,20 @@
         {
           "state": "failed",
           "workType": "idea"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
-          "workType": "idea",
-          "state": "failed"
+          "state": "failed",
+          "workType": "idea"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
@@ -754,7 +340,7 @@
       ],
       "resources": [
         {
-          "name": "manager-slot",
+          "name": "concurrent-planners",
           "capacity": 1
         }
       ],
@@ -765,6 +351,10 @@
         {
           "workType": "idea",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ]
     },
@@ -795,6 +385,10 @@
         {
           "state": "complete",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -813,6 +407,10 @@
         {
           "state": "failed",
           "workType": "plan"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
@@ -829,35 +427,11 @@
       "worker": "workspace-setup"
     },
     {
-      "id": "ci-wait",
-      "inputs": [
-        {
-          "state": "awaiting-ci",
-          "workType": "task"
-        }
-      ],
-      "name": "ci-wait",
-      "onFailure": [
-        {
-          "state": "failed",
-          "workType": "task"
-        }
-      ],
-      "outputs": [
-        {
-          "state": "in-review",
-          "workType": "task"
-        }
-      ],
-      "type": "SCRIPT_RUN",
-      "worker": "ci-waiter"
-    },
-    {
       "behavior": "REPEATER",
       "id": "process",
       "inputs": [
         {
-          "state": "admitted",
+          "state": "init",
           "workType": "task"
         }
       ],
@@ -872,17 +446,25 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
           "workType": "task",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
         {
-          "state": "awaiting-ci",
+          "state": "in-review",
           "workType": "task"
         },
         {
@@ -902,7 +484,6 @@
       "outcomeFormat": "decision-envelope"
     },
     {
-      "behavior": "REPEATER",
       "id": "review",
       "inputs": [
         {
@@ -910,27 +491,17 @@
           "workType": "task"
         },
         {
+          "state": "init",
+          "workType": "review",
           "guards": [
             {
-              "matchInput": "task",
-              "type": "SAME_NAME"
+              "type": "SAME_NAME",
+              "matchInput": "task"
             }
-          ],
-          "state": "init",
-          "workType": "review"
+          ]
         }
       ],
       "name": "review",
-      "onContinue": [
-        {
-          "state": "awaiting-ci",
-          "workType": "task"
-        },
-        {
-          "state": "init",
-          "workType": "review"
-        }
-      ],
       "onFailure": [
         {
           "state": "failed",
@@ -939,6 +510,10 @@
         {
           "state": "fin",
           "workType": "review"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
@@ -963,8 +538,8 @@
       ],
       "resources": [
         {
-          "name": "executor-slot",
-          "capacity": 1
+          "capacity": 1,
+          "name": "executor-slot"
         },
         {
           "name": "merge-slot",
@@ -974,18 +549,21 @@
       "type": "AGENT_RUN",
       "worker": "reviewer",
       "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}",
-      "outcomeFormat": "decision-envelope"
+      "outcomeFormat": "decision-envelope",
+      "onContinue": [
+        {
+          "workType": "task",
+          "state": "in-review"
+        },
+        {
+          "workType": "review",
+          "state": "init"
+        }
+      ]
     },
     {
       "guards": [
         {
-          "logicalRoundTrip": {
-            "maxRawVisits": 24,
-            "workstations": [
-              "process",
-              "review"
-            ]
-          },
           "maxVisits": 12,
           "type": "VISIT_COUNT",
           "workstation": "process"
@@ -994,7 +572,7 @@
       "id": "executor-loop-breaker",
       "inputs": [
         {
-          "state": "admitted",
+          "state": "init",
           "workType": "task"
         }
       ],
@@ -1003,6 +581,10 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -1011,14 +593,7 @@
     {
       "guards": [
         {
-          "logicalRoundTrip": {
-            "maxRawVisits": 24,
-            "workstations": [
-              "process",
-              "review"
-            ]
-          },
-          "maxVisits": 12,
+          "maxVisits": 10,
           "type": "VISIT_COUNT",
           "workstation": "review"
         }
@@ -1035,6 +610,10 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -1058,70 +637,6 @@
       "worker": ""
     },
     {
-      "id": "escalate-plan-failure",
-      "name": "escalate-plan-failure",
-      "type": "LOGICAL_MOVE",
-      "worker": "",
-      "inputs": [
-        {
-          "workType": "idea",
-          "state": "to-complete",
-          "guards": [
-            {
-              "type": "SAME_NAME",
-              "matchInput": "plan"
-            }
-          ]
-        },
-        {
-          "workType": "plan",
-          "state": "failed"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "idea",
-          "state": "failed"
-        },
-        {
-          "workType": "plan",
-          "state": "failed"
-        }
-      ]
-    },
-    {
-      "id": "escalate-task-failure",
-      "name": "escalate-task-failure",
-      "type": "LOGICAL_MOVE",
-      "worker": "",
-      "inputs": [
-        {
-          "workType": "idea",
-          "state": "to-complete",
-          "guards": [
-            {
-              "type": "SAME_NAME",
-              "matchInput": "task"
-            }
-          ]
-        },
-        {
-          "workType": "task",
-          "state": "failed"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "idea",
-          "state": "failed"
-        },
-        {
-          "workType": "task",
-          "state": "failed"
-        }
-      ]
-    },
-    {
       "id": "prepare-validation",
       "name": "prepare-validation",
       "type": "SCRIPT_RUN",
@@ -1142,6 +657,10 @@
         {
           "workType": "validation",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "workPropagation": {
@@ -1164,24 +683,40 @@
         {
           "workType": "validation",
           "state": "complete"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onFailure": [
         {
           "workType": "validation",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
           "workType": "validation",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onContinue": [
         {
           "workType": "validation",
           "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "resources": [
@@ -1195,162 +730,6 @@
         }
       ],
       "workingDirectory": "docs/temp/probes/{{ (index .Inputs 0).Name }}"
-    },
-    {
-      "id": "escalate-project",
-      "name": "escalate-project",
-      "type": "LOGICAL_MOVE",
-      "inputs": [
-        {
-          "workType": "project",
-          "state": "needs-supervision"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "project",
-          "state": "blocked"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ]
-    },
-    {
-      "id": "project-reconcile",
-      "name": "project-reconcile",
-      "type": "SCRIPT_RUN",
-      "behavior": "CRON",
-      "cron": {
-        "schedule": "*/15 * * * *"
-      },
-      "worker": "project-reconciler",
-      "inputs": [],
-      "outputs": [
-        {
-          "workType": "project-reconcile",
-          "state": "complete"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "project-reconcile",
-          "state": "failed"
-        },
-        {
-          "workType": "thoughts",
-          "state": "init"
-        }
-      ]
-    },
-    {
-      "id": "admit-project",
-      "name": "admit-project",
-      "type": "SCRIPT_RUN",
-      "worker": "admit-project",
-      "inputs": [
-        {
-          "workType": "project",
-          "state": "init"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "project",
-          "state": "admitted"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "project",
-          "state": "needs-supervision"
-        }
-      ],
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
-    },
-    {
-      "id": "admit-idea",
-      "name": "admit-idea",
-      "type": "SCRIPT_RUN",
-      "worker": "admit-idea",
-      "inputs": [
-        {
-          "workType": "idea",
-          "state": "init"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "idea",
-          "state": "admitted"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "idea",
-          "state": "failed"
-        }
-      ],
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
-    },
-    {
-      "id": "admit-task",
-      "name": "admit-task",
-      "type": "SCRIPT_RUN",
-      "worker": "admit-task",
-      "inputs": [
-        {
-          "workType": "task",
-          "state": "init"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "task",
-          "state": "admitted"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "task",
-          "state": "failed"
-        }
-      ],
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
-    },
-    {
-      "id": "verify-project-completion",
-      "name": "verify-project-completion",
-      "type": "SCRIPT_RUN",
-      "worker": "completion-checker",
-      "inputs": [
-        {
-          "workType": "project",
-          "state": "validating-completion"
-        }
-      ],
-      "outputs": [
-        {
-          "workType": "project",
-          "state": "complete"
-        }
-      ],
-      "onFailure": [
-        {
-          "workType": "project",
-          "state": "needs-supervision"
-        }
-      ],
-      "workPropagation": {
-        "mode": "PRESERVE_INPUT"
-      }
     }
   ]
 }

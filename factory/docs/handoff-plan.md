@@ -1,3 +1,6 @@
+> Historical bootstrap design, superseded by overview.md and operating-policy.md.
+> The separate project-cycle and reconciliation graph below is no longer active.
+
 # Lightweight single-project factory handoff
 
 Status: bootstrap implementation and recovery verification complete; live startup

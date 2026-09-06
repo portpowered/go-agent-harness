@@ -35,7 +35,7 @@ AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
-FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects
+FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board
 RELEASE_VERSION ?= v0.0.2
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
