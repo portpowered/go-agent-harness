@@ -111,6 +111,38 @@ func TestContinuousCaptureKeepsSilenceZeroAcrossResamplingBoundary(t *testing.T)
 	}
 }
 
+func TestContinuousCaptureUsesBoundaryWithoutFiniteResamplerTail(t *testing.T) {
+	outbound := &recordingOutbound{}
+	boundaryFrames := -1
+	capture, err := newCapture(devices.FileInput{
+		Source:     &shortSampleSource{},
+		SampleRate: 16_000,
+		Continuous: true,
+		OnTurnBoundary: func(context.Context) error {
+			boundaryFrames = len(outbound.snapshot())
+			return nil
+		},
+	}, 24_000)
+	if err != nil {
+		t.Fatalf("newCapture: %v", err)
+	}
+	if err := capture.Pump(context.Background(), outbound); err != nil {
+		t.Fatalf("Pump: %v", err)
+	}
+	frames := outbound.snapshot()
+	if boundaryFrames != len(frames) {
+		t.Fatalf("frames at continuous boundary = %d, final frames = %d; boundary callback must follow all admitted media", boundaryFrames, len(frames))
+	}
+	if len(frames) != 2 {
+		t.Fatalf("continuous resampled frames = %d, want two available frames without a finite EOF tail", len(frames))
+	}
+	for index, frame := range frames {
+		if frame.EndOfResponse {
+			t.Fatalf("continuous frame %d carried EndOfResponse, want explicit capture boundary control", index)
+		}
+	}
+}
+
 func TestCaptureEndOfTurnFlushesExactTailAndResumes(t *testing.T) {
 	first := make([]int16, sharedaudio.FrameSize+1)
 	first[0] = 11

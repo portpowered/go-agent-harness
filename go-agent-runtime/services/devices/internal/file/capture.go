@@ -223,12 +223,19 @@ func (c *fileCapture) writeOpenFrames(ctx context.Context, outbound sharedaudio.
 // admission succeeds, preserving the same ordering as the legacy loop's
 // audio-then-commit path.
 func (c *fileCapture) finishTurn(ctx context.Context, outbound sharedaudio.OutboundMedia, reset bool) error {
-	frames, err := c.processor.Process(sharedaudio.PCMFrame{Epoch: c.epoch, EndOfResponse: true})
-	if err != nil {
-		return fmt.Errorf("flush finite audio input: %w", err)
-	}
-	if err := c.writeFlushedTurn(ctx, outbound, frames); err != nil {
-		return err
+	if c.continuous {
+		// ProcessAvailable already emitted every provider-visible frame as the
+		// live source advanced. Do not append the resampler's finite-source tail
+		// after EOF; the explicit capture boundary below is the authoritative
+		// commit for this open stream.
+	} else {
+		frames, err := c.processor.Process(sharedaudio.PCMFrame{Epoch: c.epoch, EndOfResponse: true})
+		if err != nil {
+			return fmt.Errorf("flush finite audio input: %w", err)
+		}
+		if err := c.writeFlushedTurn(ctx, outbound, frames); err != nil {
+			return err
+		}
 	}
 	if reset {
 		return c.resetTurn(ctx)
