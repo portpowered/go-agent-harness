@@ -45,6 +45,10 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 		{"https://maps.google.com/", GoogleMapsName},
 		{"https://capitaloneshopping.com/", CapitalOneShoppingName},
 		{"https://www.capitaloneshopping.com/deals", CapitalOneShoppingName},
+		{"https://x.com/home", XName},
+		{"https://www.x.com/compose/post", XName},
+		{"https://twitter.com/home", XName},
+		{"https://www.twitter.com/example", XName},
 	} {
 		script, ok := ForURL(candidate.rawURL)
 		if !ok || script.Name != candidate.name || script.Source == "" {
@@ -67,6 +71,9 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 		"http://capitaloneshopping.com/",
 		"https://capitaloneshopping.com.example.test/",
 		"https://www.capitaloneshopping.com@evil.test/",
+		"http://x.com/home",
+		"https://x.com.example.test/home",
+		"https://twitter.com@evil.test/home",
 	} {
 		if script, ok := ForURL(rawURL); ok {
 			t.Errorf("ForURL(%q) selected unexpected adapter %+v", rawURL, script)
@@ -76,11 +83,11 @@ func TestForURLSelectsEveryBundledAdapterAndRejectsLookalikes(t *testing.T) {
 
 func TestSupportedRegistryIsCompleteAndDefensive(t *testing.T) {
 	infos := Supported()
-	if len(infos) != 6 {
-		t.Fatalf("Supported() has %d adapters, want 6", len(infos))
+	if len(infos) != 7 {
+		t.Fatalf("Supported() has %d adapters, want 7", len(infos))
 	}
 	want := map[string]string{
-		YouTubeName: "youtube_", SpotifyName: "spotify_", WikipediaName: "wikipedia_", RedditName: "reddit_", GoogleMapsName: "google_maps_", CapitalOneShoppingName: "capital_one_shopping_",
+		YouTubeName: "youtube_", SpotifyName: "spotify_", WikipediaName: "wikipedia_", RedditName: "reddit_", GoogleMapsName: "google_maps_", CapitalOneShoppingName: "capital_one_shopping_", XName: "x_",
 	}
 	for _, info := range infos {
 		if want[info.Name] != info.ToolPrefix || len(info.URLPatterns) == 0 {
@@ -124,6 +131,8 @@ func adapterInstallStem(name string) string {
 		return "GoogleMaps"
 	case CapitalOneShoppingName:
 		return "CapitalOneShopping"
+	case XName:
+		return "X"
 	default:
 		return "missing"
 	}
@@ -187,6 +196,36 @@ func TestCapitalOneShoppingScriptHasBoundedReadOnlyScanContract(t *testing.T) {
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("Capital One Shopping scan contract omits %q", required)
+		}
+	}
+}
+
+func TestXScriptHasExactOneUsePublishContract(t *testing.T) {
+	script, ok := Source(XName)
+	if !ok || script == "" {
+		t.Fatal("X adapter source is missing")
+	}
+	for _, host := range []string{"x.com", "www.x.com", "twitter.com", "www.twitter.com"} {
+		if !strings.Contains(script, `"`+host+`"`) {
+			t.Errorf("X script omits origin gate for %s", host)
+		}
+	}
+	for _, tool := range []string{"x_get_context", "x_prepare_post", "x_publish_post", "x_clear_draft"} {
+		if strings.Count(script, `name: "`+tool+`"`) != 1 {
+			t.Errorf("tool %s is not registered exactly once", tool)
+		}
+	}
+	for _, required := range []string{
+		"const MAX_POST_LENGTH = 280",
+		`const: true`,
+		`text !== state.draftText`,
+		`state.consumedTokens.add(token)`,
+		`one native editing sequence`,
+		`publish_status_unknown`,
+		`Do not retry automatically`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("X publish contract omits %q", required)
 		}
 	}
 }

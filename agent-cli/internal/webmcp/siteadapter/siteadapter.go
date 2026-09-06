@@ -16,6 +16,7 @@ const (
 	RedditName             = "reddit"
 	GoogleMapsName         = "google_maps"
 	CapitalOneShoppingName = "capital_one_shopping"
+	XName                  = "x"
 )
 
 //go:embed extensions/youtube/youtube.js
@@ -35,6 +36,9 @@ var googleMapsSource string
 
 //go:embed extensions/capital_one_shopping/capital_one_shopping.js
 var capitalOneShoppingSource string
+
+//go:embed extensions/x/x.js
+var xSource string
 
 // Script is a main-world page adapter selected for one target URL.
 type Script struct {
@@ -110,6 +114,18 @@ var registry = []definition{
 		match: func(parsed *url.URL) bool {
 			switch strings.ToLower(parsed.Hostname()) {
 			case "capitaloneshopping.com", "www.capitaloneshopping.com":
+				return true
+			default:
+				return false
+			}
+		},
+	},
+	{
+		info:   Info{Name: XName, URLPatterns: []string{"https://x.com/*", "https://www.x.com/*", "https://twitter.com/*", "https://www.twitter.com/*"}, ToolPrefix: "x_"},
+		source: xSource,
+		match: func(parsed *url.URL) bool {
+			switch strings.ToLower(parsed.Hostname()) {
+			case "x.com", "www.x.com", "twitter.com", "www.twitter.com":
 				return true
 			default:
 				return false

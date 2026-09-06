@@ -2,7 +2,7 @@
 
 ## Overview
 
-`yui session --browser-tools webmcp` includes six default-on site adapters.
+`yui session --browser-tools webmcp` includes seven default-on site adapters.
 They are bundled into the executable and need no Chrome extension,
 Tampermonkey script, or per-site feature flag.
 
@@ -14,14 +14,16 @@ Tampermonkey script, or per-site feature flag.
 | Reddit | `reddit.com`, `www.reddit.com`, `old.reddit.com` | Search/list non-promoted posts; open a returned post; read bounded title/body | Reddit may show a humanity or login challenge depending on network reputation. |
 | Google Maps | `www.google.com/maps/*`, `maps.google.com/*` | Search/read a place; request/read directions | Current-location routes use Maps' browser location. Browser/OS permission or an unavailable position is reported explicitly. |
 | [Capital One Shopping](sites/capitaloneshopping.md) | `capitaloneshopping.com`, `www.capitaloneshopping.com` | Scan and filter lazy-loaded offers | See the site-specific tool, data, operation, and test reference. |
+| [X](sites/x.md) | `x.com`, `www.x.com`, `twitter.com`, `www.twitter.com` | Prepare, review, publish, or clear a text post | Requires an already signed-in browser account. Publishing is externally visible and uses a one-use exact-text token. |
 
 Tool names are prefixed with `youtube_`, `spotify_`, `wikipedia_`, `reddit_`,
-`google_maps_`, or `capital_one_shopping_`. This keeps a mixed-tab model
+`google_maps_`, `capital_one_shopping_`, or `x_`. This keeps a mixed-tab model
 session unambiguous.
 
 Site-specific contracts and operator instructions live under `docs/webmcp/sites/`.
 See [Capital One Shopping](sites/capitaloneshopping.md) for its bespoke tools,
 offer data model, matching rules, manual CLI trigger, and test gates.
+See [X](sites/x.md) for its two-step posting contract and direct CLI invocation.
 
 ## How installation works
 

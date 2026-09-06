@@ -17,6 +17,7 @@ import (
 
 const siteAdaptersIntegrationEnv = "WEBMCP_SITE_ADAPTER_INTEGRATION"
 const capitalOneShoppingAdapterIntegrationEnv = "WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_INTEGRATION"
+const xAdapterIntegrationEnv = "WEBMCP_X_ADAPTER_INTEGRATION"
 
 func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	if os.Getenv(siteAdaptersIntegrationEnv) != "1" {
@@ -27,6 +28,7 @@ func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	t.Run("reddit", testRedditAdapterJourney)
 	t.Run("google_maps", testGoogleMapsAdapterJourney)
 	t.Run("capital_one_shopping", testCapitalOneShoppingAdapterJourney)
+	t.Run("x", testXAdapterJourney)
 }
 
 func TestCapitalOneShoppingAdapterStockChromeJourney(t *testing.T) {
@@ -34,6 +36,13 @@ func TestCapitalOneShoppingAdapterStockChromeJourney(t *testing.T) {
 		t.Skipf("set %s=1 to run the stock-Chrome Capital One Shopping adapter journey", capitalOneShoppingAdapterIntegrationEnv)
 	}
 	testCapitalOneShoppingAdapterJourney(t)
+}
+
+func TestXAdapterStockChromeJourney(t *testing.T) {
+	if os.Getenv(xAdapterIntegrationEnv) != "1" {
+		t.Skipf("set %s=1 to run the stock-Chrome X adapter journey", xAdapterIntegrationEnv)
+	}
+	testXAdapterJourney(t)
 }
 
 type adapterFixture struct {
@@ -94,7 +103,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
-	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4}[name]
+	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4, "x": 4}[name]
 	tools := waitForAdapterCatalog(t, ctx, session, "adapter catalog", expected)
 	return adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
 }
@@ -371,6 +380,47 @@ func testCapitalOneShoppingAdapterJourney(t *testing.T) {
 	t.Logf("WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_PASS chrome=%s pages=%d offers=%d", fixture.version, scan.Data.PagesScanned, scan.Data.OffersObserved)
 }
 
+func testXAdapterJourney(t *testing.T) {
+	source, _ := siteadapter.Source(siteadapter.XName)
+	handler := func(writer http.ResponseWriter, _ *http.Request) {
+		adapterFixtureHeaders(writer)
+		_, _ = fmt.Fprint(writer, xAdapterFixtureHTML)
+	}
+	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
+
+	contextOutput := invokeAdapterTool(t, fixture, "x_get_context", `{}`)
+	if !strings.Contains(string(contextOutput), `"signed_in":true`) || !strings.Contains(string(contextOutput), `"account_handle":"@fixture_user"`) {
+		t.Fatalf("X context = %s", contextOutput)
+	}
+	preparedOutput := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"this is a test of the webmcp connection"}`)
+	var prepared struct {
+		Data struct {
+			Token string `json:"draft_token"`
+			Text  string `json:"text"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(preparedOutput, &prepared); err != nil || prepared.Data.Token == "" || prepared.Data.Text != "this is a test of the webmcp connection" {
+		t.Fatalf("decode X prepared draft: %v: %s", err, preparedOutput)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"changed","confirm":true}`, prepared.Data.Token), "text_mismatch")
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":false}`, prepared.Data.Token, prepared.Data.Text), "confirmation_required")
+	published := invokeAdapterTool(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text))
+	if !strings.Contains(string(published), `"published":true`) || !strings.Contains(string(published), `"duplicate_retry_blocked":true`) {
+		t.Fatalf("X publish result = %s", published)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text), "already_published")
+
+	second := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"draft to clear"}`)
+	if err := json.Unmarshal(second, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("decode second X draft: %v: %s", err, second)
+	}
+	cleared := invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
+	if !strings.Contains(string(cleared), `"cleared":true`) || !strings.Contains(string(cleared), `"published":false`) {
+		t.Fatalf("X clear result = %s", cleared)
+	}
+	t.Logf("WEBMCP_X_ADAPTER_PASS chrome=%s one_use_publish=true", fixture.version)
+}
+
 const capitalOneShoppingAdapterFixtureHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Capital One Shopping adapter fixture</title>
 <style>body{margin:0}#offers{min-height:1400px}.offer{display:block;margin:24px;height:180px;width:640px}.spacer{height:900px}</style></head>
@@ -409,5 +459,25 @@ addEventListener("scroll", () => {
   if (batch === 2) offers.querySelectorAll("button")[0]?.remove();
   render(batches[batch]);
   document.querySelector(".spacer").style.height = (900 + batch * 700) + "px";
+});
+</script></body></html>`
+
+const xAdapterFixtureHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><title>X adapter fixture</title></head>
+<body>
+<nav><a data-testid="AppTabBar_Profile_Link" aria-label="Profile" href="/fixture_user">Profile</a><a data-testid="SideNav_NewTweet_Button" href="/compose/post">Post</a></nav>
+<main>
+  <div data-testid="tweetTextarea_0" role="textbox" contenteditable="true"></div>
+  <button data-testid="tweetButtonInline">Post</button>
+  <div id="published"></div>
+</main>
+<script>
+document.querySelector('[data-testid="tweetButtonInline"]').addEventListener("click", () => {
+  const composer = document.querySelector('[data-testid="tweetTextarea_0"]');
+  const post = document.createElement("article");
+  post.textContent = composer.innerText || composer.textContent;
+  document.querySelector("#published").appendChild(post);
+  composer.textContent = "";
+  composer.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"deleteContentBackward"}));
 });
 </script></body></html>`
