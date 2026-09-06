@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"errors"
@@ -255,7 +257,7 @@ type SourceCapabilities = MediaCapabilities
 type MediaSourceCapabilities = MediaCapabilities
 
 type MediaStream struct {
-	Inbound, Media InboundMedia
+	Inbound, Media sharedaudio.InboundMedia
 	Capabilities   MediaCapabilities
 	close          func() error
 	look           func(context.Context) (VisualObservation, error)
@@ -264,9 +266,9 @@ type MediaStream struct {
 }
 type MediaSourceStream = MediaStream
 
-func (s *MediaStream) ReadFrame(ctx context.Context) (PCMFrame, error) {
+func (s *MediaStream) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if s == nil || s.Inbound == nil {
-		return PCMFrame{}, ErrPeerNotConnected
+		return sharedaudio.PCMFrame{}, ErrPeerNotConnected
 	}
 	return s.Inbound.ReadFrame(ctx)
 }

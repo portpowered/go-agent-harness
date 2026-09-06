@@ -2,23 +2,23 @@
 
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -239,11 +239,11 @@ func validateScheduledAudioBargeInRuntime(t *testing.T, observations []liveBarge
 	turns, outputBytes, terminals := 0, 0, 0
 	for _, observation := range observations {
 		switch observation.Kind {
-		case services.SessionRuntimeObservationTurnCompleted:
+		case runtimecontract.SessionRuntimeObservationTurnCompleted:
 			turns++
-		case services.SessionRuntimeObservationAudioOutput:
+		case runtimecontract.SessionRuntimeObservationAudioOutput:
 			outputBytes += observation.PayloadBytes
-		case services.SessionRuntimeObservationTerminal:
+		case runtimecontract.SessionRuntimeObservationTerminal:
 			terminals++
 			if !observation.Clean || observation.HasError || !observation.HasAccounting {
 				t.Fatalf("scheduled runtime terminal was not clean and accounted: %s", liveBargeInRuntimeEvidence(observations))

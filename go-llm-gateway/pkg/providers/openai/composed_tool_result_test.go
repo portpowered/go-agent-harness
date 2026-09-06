@@ -178,6 +178,10 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	if got, _ := fco["output"].(string); got != toolOut {
 		t.Errorf("function_call_output output = %q, want serialized result %q", got, toolOut)
 	}
+	// The continuation response is now admission-tracked by the provider. End
+	// that scripted response before admitting the unrelated text turn below.
+	addServerEvent(conn, "response.created", nil)
+	addServerEvent(conn, "response.done", nil)
 
 	// Turn 2: plain user-text turn must keep the unchanged pairing.
 	if err := al.SendSessionEvent(ctx, messages.StreamMessage{

@@ -2,6 +2,8 @@
 
 package functional
 
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 import (
 	"context"
 	"errors"
@@ -9,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // TestCoreAudioVoiceProcessingDeviceLoop exercises the physical CoreAudio
@@ -20,12 +22,12 @@ func TestCoreAudioVoiceProcessingDeviceLoop(t *testing.T) {
 	if os.Getenv("AGENT_TEST_REAL_AUDIO") != "1" {
 		t.Skip("set AGENT_TEST_REAL_AUDIO=1 to exercise physical AUVoiceIO devices")
 	}
-	registry := audio.NewCoreAudioDeviceRegistry()
-	input, err := registry.Default(audio.DirectionInput)
+	registry := devicegw.NewCoreAudioDeviceRegistry()
+	input, err := registry.Default(devicegw.DirectionInput)
 	if err != nil {
 		t.Fatalf("resolve default CoreAudio input: %v", err)
 	}
-	output, err := registry.Default(audio.DirectionOutput)
+	output, err := registry.Default(devicegw.DirectionOutput)
 	if err != nil {
 		t.Fatalf("resolve default CoreAudio output: %v", err)
 	}
@@ -38,8 +40,8 @@ func TestCoreAudioVoiceProcessingDeviceLoop(t *testing.T) {
 		_ = inputHandle.Close()
 		_ = outputHandle.Close()
 	})
-	for name, handle := range map[string]audio.OpenedDevice{"input": inputHandle, "output": outputHandle} {
-		provider, ok := handle.(audio.VoiceProcessingProvider)
+	for name, handle := range map[string]devicegw.OpenedDevice{"input": inputHandle, "output": outputHandle} {
+		provider, ok := handle.(devicegw.VoiceProcessingProvider)
 		if !ok || !provider.VoiceProcessingActive() {
 			t.Fatalf("%s endpoint %T is not backed by native voice processing", name, handle)
 		}

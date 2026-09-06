@@ -452,7 +452,7 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 	}
 
 	// The coordinator's inference request can reach the session runner while
-	// these events are still in UserEventInbox. It must wait for the queued
+	// these events are still in the ordered session ingress. It must wait for the queued
 	// boundary instead of requesting a bare response itself.
 	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{Messages: history})
 	if sent := session.sentMessages(); len(sent) != 0 {
@@ -462,8 +462,11 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 	state := newSessionResponseState()
 	for i := 0; i < 2; i++ {
 		select {
-		case evt := <-runner.UserEventInbox:
-			runner.forwardQueuedSessionEvent(ctx, session, state, evt)
+		case input := <-runner.sessionInputInbox:
+			if input.kind != sessionInputEvent {
+				t.Fatalf("queued session input kind = %d, want event", input.kind)
+			}
+			runner.forwardQueuedSessionEvent(ctx, session, state, input.event)
 		default:
 			t.Fatal("queued tool boundary was not available")
 		}

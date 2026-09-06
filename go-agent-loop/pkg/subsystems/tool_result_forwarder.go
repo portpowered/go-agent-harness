@@ -20,8 +20,8 @@ import (
 //	StreamMessage{Type: StreamTypeToolCallEnd, Value: NewToolCallEndValue(callID, name, output)}
 //
 // per completed call, in call order, into the session model runner's
-// UserEventInbox — the same outbound path used for user audio and control
-// plane turns. Providers translate TOOLCALL.END into their wire shape (e.g.
+// ordered session ingress — the same outbound path used for user audio and
+// control-plane turns. Providers translate TOOLCALL.END into their wire shape (e.g.
 // conversation.item.create with a function_call_output item on OpenAI
 // Realtime). After the batch, it emits one StreamTypeResponseCreate so the
 // provider generates the grounded continuation without a second user turn.
@@ -51,8 +51,8 @@ func NewToolResultForwarder(sessionEvents chan<- messages.StreamMessage, logger 
 
 // NewToolResultForwarderWithEnqueuer routes tool results through the model
 // runner's serialized session-input path. This keeps an internal tool result
-// from overtaking a public audio end-of-turn event that is waiting for its
-// preceding audio frame to reach the provider.
+// from overtaking a previously admitted audio frame or end-of-turn event.
+// Admission is bounded and does not wait for provider I/O.
 func NewToolResultForwarderWithEnqueuer(enqueue func(context.Context, messages.StreamMessage) error, logger logging.Logger) *ToolResultForwarder {
 	return &ToolResultForwarder{
 		enqueueSessionEvent: enqueue,

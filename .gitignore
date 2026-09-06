@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Local CLI build outputs
+/agent-cli/bin/
+
 # Test binary, built with `go test -c`
 *.test
 

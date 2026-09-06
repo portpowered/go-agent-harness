@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // The v2b proof deliberately executes the built agent binary. The temporary

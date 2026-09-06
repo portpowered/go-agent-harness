@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"errors"
@@ -11,7 +13,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const (
@@ -147,7 +149,7 @@ type InboundTrack struct {
 	closeErr  error
 }
 type frameResult struct {
-	frame PCMFrame
+	frame sharedaudio.PCMFrame
 	err   error
 }
 type packetEvent struct {
@@ -155,7 +157,7 @@ type packetEvent struct {
 	err    error
 }
 
-var _ InboundMedia = (*InboundTrack)(nil)
+var _ sharedaudio.InboundMedia = (*InboundTrack)(nil)
 
 func NewInboundTrack(source, opus any, config InboundTrackConfig) (*InboundTrack, error) {
 	cfg, err := config.normalize()
@@ -240,7 +242,7 @@ func (t *InboundTrack) readSource(events chan<- packetEvent) {
 }
 func (t *InboundTrack) emit(samples []int16) error {
 	select {
-	case t.frames <- frameResult{frame: PCMFrame{Samples: samples}}:
+	case t.frames <- frameResult{frame: sharedaudio.PCMFrame{Samples: samples}}:
 		return nil
 	case <-t.done:
 		return ErrInboundTrackClosed
@@ -257,35 +259,35 @@ func (t *InboundTrack) finish(err error) {
 	close(t.frames)
 }
 
-func (t *InboundTrack) ReadFrame(ctx context.Context) (PCMFrame, error) {
+func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if t.closed.Load() {
-		return PCMFrame{}, ErrInboundTrackClosed
+		return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 	}
 	select {
 	case <-ctx.Done():
-		return PCMFrame{}, ctx.Err()
+		return sharedaudio.PCMFrame{}, ctx.Err()
 	default:
 	}
 	select {
 	case <-t.done:
-		return PCMFrame{}, ErrInboundTrackClosed
+		return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 	case <-ctx.Done():
-		return PCMFrame{}, ctx.Err()
+		return sharedaudio.PCMFrame{}, ctx.Err()
 	case result, ok := <-t.frames:
 		if t.closed.Load() {
-			return PCMFrame{}, ErrInboundTrackClosed
+			return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 		}
 		if !ok {
-			return PCMFrame{}, io.EOF
+			return sharedaudio.PCMFrame{}, io.EOF
 		}
 		if result.err != nil {
-			return PCMFrame{}, result.err
+			return sharedaudio.PCMFrame{}, result.err
 		}
 		if len(result.frame.Samples) != t.config.outputSamples {
-			return PCMFrame{}, trackError(ErrInboundTrackFrame, "frame", fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples))
+			return sharedaudio.PCMFrame{}, trackError(ErrInboundTrackFrame, "frame", fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples))
 		}
 		return result.frame, nil
 	}

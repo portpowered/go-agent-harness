@@ -1,5 +1,9 @@
 package wire
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"bytes"
 	"context"
@@ -8,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
@@ -19,16 +23,16 @@ import (
 // device/runtime side effect can occur.
 func TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects(t *testing.T) {
 	var signalingCalls, dataPlaneCalls, mediaSourceCalls int
-	components := services.SessionRTCComponents{
+	components := servicetest.SessionRTCComponents{
 		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
 			signalingCalls++
 			return nil, errors.New("signaling resolver should not be reached")
 		},
-		NewDataPlane: func(context.Context, rtc.Signaling) (services.SessionRTCDataPlane, error) {
+		NewDataPlane: func(context.Context, rtc.Signaling) (servicetest.SessionRTCDataPlane, error) {
 			dataPlaneCalls++
 			return nil, errors.New("RTC data-plane factory should not be reached")
 		},
-		OpenMediaSource: func(context.Context, string) (rtc.InboundMedia, error) {
+		OpenMediaSource: func(context.Context, string) (sharedaudio.InboundMedia, error) {
 			mediaSourceCalls++
 			return nil, errors.New("media-source opener should not be reached")
 		},

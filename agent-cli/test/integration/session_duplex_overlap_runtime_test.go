@@ -1,14 +1,15 @@
 package integration
 
+import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
+
 import (
 	"bytes"
 	"context"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"os"
 	"path/filepath"
@@ -164,7 +165,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		turnsBound: v8TurnBound,
 	}
 	for name, result := range harnesses {
-		terminalObservation, err := v8RuntimeObservation(result.Runtime, services.SessionRuntimeObservationTerminal)
+		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
 			t.Fatalf("harness %s terminal runtime observation: %v", name, err)
 		}
@@ -307,7 +308,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		turnsBound: v8MultiTurnCount,
 	}
 	for name, result := range harnesses {
-		terminalObservation, err := v8RuntimeObservation(result.Runtime, services.SessionRuntimeObservationTerminal)
+		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
 			t.Fatalf("harness %s terminal runtime observation: %v", name, err)
 		}

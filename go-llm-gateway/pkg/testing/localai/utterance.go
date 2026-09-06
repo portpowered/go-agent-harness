@@ -2,8 +2,9 @@ package localai
 
 import (
 	_ "embed"
-	"encoding/base64"
 	"fmt"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // deterministicPCM16Fixture is a checked-in, mono 16 kHz PCM16 utterance.
@@ -13,7 +14,7 @@ import (
 var deterministicPCM16Fixture string
 
 func deterministicPCM16Utterance() []byte {
-	audio, err := base64.StdEncoding.DecodeString(deterministicPCM16Fixture)
+	audio, err := codec.DecodeBase64(deterministicPCM16Fixture)
 	if err != nil {
 		panic(fmt.Sprintf("decode checked-in PCM16 fixture: %v", err))
 	}

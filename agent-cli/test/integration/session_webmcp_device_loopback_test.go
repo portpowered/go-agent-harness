@@ -1,5 +1,11 @@
 package integration
 
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 import (
 	"bytes"
 	"context"
@@ -11,14 +17,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
@@ -43,9 +49,7 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	globalFlags.WorkDirPath = t.TempDir()
-	owner := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
-		flags.NewAskFlags(), globalFlags, nil, provider, nil, nil, capabilityFactory, registry,
-	)
+	owner := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: provider, ToolService: cli.SessionToolCapabilitiesFactory(capabilityFactory), DeviceRegistry: registry}), nil)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
 	command.SetErr(io.Discard)
@@ -124,17 +128,17 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	}
 }
 
-func newWebMCPDeviceRegistry(t *testing.T) *audio.VirtualRegistry {
+func newWebMCPDeviceRegistry(t *testing.T) *devicegw.VirtualRegistry {
 	t.Helper()
-	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+	registry, err := devicegw.NewVirtualRegistry(devicegw.VirtualBackendConfig{
 		RecordPCM: true,
-		Devices: []audio.VirtualDeviceConfig{
-			{ID: "mic", Name: "WebMCP Mic", Direction: audio.DirectionInput, LoopbackID: "mic-feed"},
-			{ID: "mic-feed", Name: "WebMCP Mic Feed", Direction: audio.DirectionOutput, LoopbackID: "mic"},
-			{ID: "speaker", Name: "WebMCP Speaker", Direction: audio.DirectionOutput, LoopbackID: "speaker-tap"},
-			{ID: "speaker-tap", Name: "WebMCP Speaker Tap", Direction: audio.DirectionInput, LoopbackID: "speaker"},
+		Devices: []devicegw.VirtualDeviceConfig{
+			{ID: "mic", Name: "WebMCP Mic", Direction: devicegw.DirectionInput, LoopbackID: "mic-feed"},
+			{ID: "mic-feed", Name: "WebMCP Mic Feed", Direction: devicegw.DirectionOutput, LoopbackID: "mic"},
+			{ID: "speaker", Name: "WebMCP Speaker", Direction: devicegw.DirectionOutput, LoopbackID: "speaker-tap"},
+			{ID: "speaker-tap", Name: "WebMCP Speaker Tap", Direction: devicegw.DirectionInput, LoopbackID: "speaker"},
 		},
-		Defaults: map[audio.Direction]string{audio.DirectionInput: "mic", audio.DirectionOutput: "speaker"},
+		Defaults: map[devicegw.Direction]string{devicegw.DirectionInput: "mic", devicegw.DirectionOutput: "speaker"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -142,9 +146,9 @@ func newWebMCPDeviceRegistry(t *testing.T) *audio.VirtualRegistry {
 	return registry
 }
 
-func openWebMCPVirtualStream(t *testing.T, registry *audio.VirtualRegistry, nativeID string) *audio.VirtualStream {
+func openWebMCPVirtualStream(t *testing.T, registry *devicegw.VirtualRegistry, nativeID string) *devicegw.VirtualStream {
 	t.Helper()
-	id, err := audio.NewDeviceID(audio.VirtualBackendName, nativeID)
+	id, err := devicegw.NewDeviceID(devicegw.VirtualBackendName, nativeID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +156,7 @@ func openWebMCPVirtualStream(t *testing.T, registry *audio.VirtualRegistry, nati
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream := opened.(*audio.VirtualStream)
+	stream := opened.(*devicegw.VirtualStream)
 	t.Cleanup(func() { _ = stream.Close() })
 	return stream
 }
@@ -198,13 +202,13 @@ func newWebMCPCubeBroker(t *testing.T) (*webmcp.StatefulBroker, *testkit.Scripte
 }
 
 type webMCPDeviceInbound struct {
-	frames chan rtc.PCMFrame
+	frames chan audio.PCMFrame
 	done   chan struct{}
 	read   chan struct{}
 	once   sync.Once
 }
 
-func (m *webMCPDeviceInbound) ReadFrame(ctx context.Context) (rtc.PCMFrame, error) {
+func (m *webMCPDeviceInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
 	select {
 	case frame := <-m.frames:
 		select {
@@ -217,10 +221,10 @@ func (m *webMCPDeviceInbound) ReadFrame(ctx context.Context) (rtc.PCMFrame, erro
 		case frame := <-m.frames:
 			return frame, nil
 		default:
-			return rtc.PCMFrame{}, rtc.ErrPeerClosed
+			return audio.PCMFrame{}, rtc.ErrPeerClosed
 		}
 	case <-ctx.Done():
-		return rtc.PCMFrame{}, ctx.Err()
+		return audio.PCMFrame{}, ctx.Err()
 	}
 }
 func (m *webMCPDeviceInbound) Close() error { m.once.Do(func() { close(m.done) }); return nil }
@@ -230,7 +234,7 @@ type webMCPDeviceOutbound struct {
 	onAudio func()
 }
 
-func (m *webMCPDeviceOutbound) WriteFrame(ctx context.Context, _ rtc.PCMFrame) error {
+func (m *webMCPDeviceOutbound) WriteFrame(ctx context.Context, _ audio.PCMFrame) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -250,8 +254,8 @@ type webMCPDeviceSession struct {
 	continueOnce sync.Once
 }
 
-func (s *webMCPDeviceSession) RTCMedia() rtc.MediaEndpoints {
-	return rtc.MediaEndpoints{Inbound: s.inbound, Outbound: s.outbound}
+func (s *webMCPDeviceSession) RTCMedia() audio.MediaEndpoints {
+	return audio.MediaEndpoints{Inbound: s.inbound, Outbound: s.outbound}
 }
 func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamMessage) bool {
 	if err := ctx.Err(); err != nil {
@@ -273,7 +277,7 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 				time.Sleep(25 * time.Millisecond)
 				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
 				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
-				s.inbound.frames <- rtc.PCMFrame{Samples: webMCPDeviceSignal(720, 9300), EndOfResponse: true}
+				s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 9300), EndOfResponse: true}
 				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextStartValue()})
 				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextDeltaValue("Cube moves queued.")})
 				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextEndValue()})
@@ -300,7 +304,7 @@ func (s *webMCPDeviceSession) emitCubeCall() {
 	ctx := context.Background()
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewMessageStartValue()})
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewAudioStartValue()})
-	s.inbound.frames <- rtc.PCMFrame{Samples: webMCPDeviceSignal(720, 7300), EndOfResponse: true}
+	s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 7300), EndOfResponse: true}
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewAudioEndValue()})
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewToolCallStartValue("cube-call", "queue_cube_moves")})
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewToolCallEndValue("cube-call", "queue_cube_moves", `{"moves":["R","U"]}`)})
@@ -320,7 +324,7 @@ func newWebMCPDeviceProvider() *webMCPDeviceProvider {
 func (p *webMCPDeviceProvider) ConnectSession(context.Context) (messages.Session, error) {
 	session := &webMCPDeviceSession{
 		recv: messages.NewTypedBuffer[messages.StreamMessage](64), done: make(chan struct{}),
-		inbound: &webMCPDeviceInbound{frames: make(chan rtc.PCMFrame, 4), done: make(chan struct{}), read: make(chan struct{}, 1)}, result: p.toolResult,
+		inbound: &webMCPDeviceInbound{frames: make(chan audio.PCMFrame, 4), done: make(chan struct{}), read: make(chan struct{}, 1)}, result: p.toolResult,
 	}
 	session.outbound = &webMCPDeviceOutbound{onAudio: func() {
 		p.frames.Add(1)
@@ -352,6 +356,6 @@ func webMCPAllZero(samples []int16) bool {
 
 var _ messages.SessionInferencer = (*webMCPDeviceProvider)(nil)
 var _ messages.Session = (*webMCPDeviceSession)(nil)
-var _ rtc.MediaSession = (*webMCPDeviceSession)(nil)
-var _ rtc.InboundMedia = (*webMCPDeviceInbound)(nil)
-var _ rtc.OutboundMedia = (*webMCPDeviceOutbound)(nil)
+var _ audio.MediaSession = (*webMCPDeviceSession)(nil)
+var _ audio.InboundMedia = (*webMCPDeviceInbound)(nil)
+var _ audio.OutboundMedia = (*webMCPDeviceOutbound)(nil)

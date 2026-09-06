@@ -9,8 +9,8 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
-	github.com/ebitengine/purego v0.11.0
-	github.com/gen2brain/malgo v0.11.24
+	github.com/ebitengine/purego v0.11.0 // indirect
+	github.com/gen2brain/malgo v0.11.24 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/google/wire v0.7.0
 	github.com/gorilla/websocket v1.5.3
@@ -99,3 +99,15 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )
+
+require github.com/portpowered/go-agent-harness/go-audio v0.0.0
+
+replace github.com/portpowered/go-agent-harness/go-audio => ../go-audio
+
+require github.com/portpowered/go-agent-harness/go-device-gateway v0.0.0
+
+replace github.com/portpowered/go-agent-harness/go-device-gateway => ../go-device-gateway
+
+replace github.com/portpowered/go-agent-harness/go-agent-loop => ../go-agent-loop
+
+replace github.com/portpowered/go-agent-harness/go-llm-gateway => ../go-llm-gateway

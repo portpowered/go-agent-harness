@@ -1,5 +1,9 @@
 package integration
 
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
 import (
 	"bytes"
 	"context"
@@ -12,11 +16,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // This suite proves, through the shipped 'agent session' CLI over the
@@ -57,10 +61,13 @@ func loadCorpusHarnessSamples(t *testing.T, wavPath string) []int16 {
 	if err != nil {
 		t.Fatalf("parse corpus WAV: %v", err)
 	}
-	if rate == audio.SampleRate {
-		return samples
+	padded := make([]int16, (len(samples)+audio.FrameSize-1)/audio.FrameSize*audio.FrameSize)
+	copy(padded, samples)
+	converter, err := wavio.NewPCM16Resampler(rate, audio.SampleRate)
+	if err != nil {
+		t.Fatal(err)
 	}
-	resampled, err := wavio.Resample(samples, rate, audio.SampleRate)
+	resampled, err := converter.Process(padded, true)
 	if err != nil {
 		t.Fatalf("resample corpus WAV to harness rate: %v", err)
 	}
@@ -114,12 +121,10 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		})
 	}
 
-	// One append per streamed frame; the final short frame is zero-padded by
-	// the source exactly as ReadFrame documents.
-	frame := make([]int16, audio.FrameSize)
+	// Source padding precedes continuous conversion; the converted tail is exact.
 	for start := 0; start < len(samples); start += audio.FrameSize {
-		clear(frame)
-		copy(frame, samples[start:])
+		end := min(start+audio.FrameSize, len(samples))
+		frame := samples[start:end]
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  "input_audio_buffer.append",
 			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
@@ -177,7 +182,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 // the hermetic replay transport with --audio-in and returns stdout.
 func runSessionAudioIn(t *testing.T, wavPath, wirePath, audioOutPath string) (string, error) {
 	t.Helper()
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
 	stdout := &testStdoutBuffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(io.Discard)

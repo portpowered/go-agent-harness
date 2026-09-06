@@ -1,20 +1,22 @@
 package integration
 
+import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,7 +27,7 @@ import (
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
@@ -46,7 +48,7 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 
 func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),

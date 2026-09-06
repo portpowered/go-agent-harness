@@ -115,6 +115,21 @@ func TestRealtimeInboundMessages_InactiveCancelHandlingRequiresExactProviderFiel
 	}
 }
 
+func TestRealtimeInboundMessages_ActiveResponseCreateRejectionIsNonTerminal(t *testing.T) {
+	raw := json.RawMessage(`{"type":"error","error":{"type":"invalid_request_error","code":"conversation_already_has_active_response","message":"Conversation already has an active response."}}`)
+	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventError, Data: raw})
+	if len(got) != 1 {
+		t.Fatalf("active-response error normalization = %#v, want one event", got)
+	}
+	value, ok := got[0].Value.(*messages.ErrorValue)
+	if !ok || value == nil {
+		t.Fatalf("active-response error value = %T, want *messages.ErrorValue", got[0].Value)
+	}
+	if !value.IsNonTerminal() || value.Classification != realtimeResponseCreateActiveClass || value.Code != realtimeResponseCreateActiveCode {
+		t.Fatalf("active-response error metadata = %#v, want nonterminal recoverable diagnostic", value)
+	}
+}
+
 func TestRealtimeInboundMessagesResponseDonePreservesFailureStatus(t *testing.T) {
 	raw := json.RawMessage(`{"type":"response.done","response":{"status":"failed","status_details":{"reason":"max_output_tokens","error":{"code":"too_many_tokens","message":"response exceeded the model limit"}}}}`)
 	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventResponseDone, Data: raw})

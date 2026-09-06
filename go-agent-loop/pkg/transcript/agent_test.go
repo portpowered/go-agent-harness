@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestAgentCaptureRecordsFixedBidirectionalScenario(t *testing.T) {

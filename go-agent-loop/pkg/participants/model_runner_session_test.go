@@ -327,6 +327,27 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 	}
 }
 
+func TestSessionModelRunnerOrderedIngressReportsFullWithoutBlocking(t *testing.T) {
+	runner := NewSessionModelRunner(nil, 8, nil)
+	ctx := context.Background()
+	for i := 0; i < cap(runner.sessionInputInbox); i++ {
+		if err := runner.EnqueueSessionAudioInput(ctx, []byte{byte(i)}); err != nil {
+			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
+		}
+	}
+
+	err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-full", "tool", "result"),
+	})
+	if !errors.Is(err, ErrSessionInputQueueFull) {
+		t.Fatalf("full ordered session ingress error = %v, want ErrSessionInputQueueFull", err)
+	}
+	if runner.hasPendingSessionToolEvents() {
+		t.Fatal("rejected full-queue tool event remained marked pending")
+	}
+}
+
 func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
@@ -832,6 +853,53 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 	}
 	if nextEnd.TerminalReason == messages.TerminalReasonPartialOutput {
 		t.Fatalf("next normal MESSAGE.END retained interrupted terminal reason: %+v", nextEnd)
+	}
+}
+
+func TestSessionModelRunner_QueuedAudioAndMessageEndRemainFIFO(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	state := newSessionResponseState()
+
+	// Forward the first frame through the normal session-input path before
+	// queueing the next turn. This leaves MESSAGE.END and the next frame
+	// pending together, which is the boundary where separate inbox selects can
+	// reorder a commit ahead of (or behind) its following audio turn.
+	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1, 2, 3}); err != nil {
+		t.Fatalf("enqueue first audio: %v", err)
+	}
+	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
+		t.Fatalf("drain first audio: %v", err)
+	}
+	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+		t.Fatalf("enqueue message end: %v", err)
+	}
+	if err := runner.EnqueueSessionAudioInput(ctx, []byte{4, 5, 6}); err != nil {
+		t.Fatalf("enqueue second audio: %v", err)
+	}
+
+	if handled, closed, err := runner.forwardPendingSessionInputs(ctx, session, state); err != nil {
+		t.Fatalf("forward queued session inputs: %v", err)
+	} else if !handled || closed {
+		t.Fatalf("forward queued session inputs = handled:%t closed:%t, want handled open", handled, closed)
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 3 {
+		t.Fatalf("provider sent %d messages, want 3: %#v", len(sent), sent)
+	}
+	wantTypes := []messages.StreamMessageType{messages.StreamTypeAudioDelta, messages.StreamTypeMessageEnd, messages.StreamTypeAudioDelta}
+	wantPayloads := [][]byte{{1, 2, 3}, nil, {4, 5, 6}}
+	for index, msg := range sent {
+		if msg.Type != wantTypes[index] {
+			t.Fatalf("provider message %d type = %s, want %s; sent=%#v", index, msg.Type, wantTypes[index], sent)
+		}
+		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
+			if string(value.Content) != string(wantPayloads[index]) {
+				t.Fatalf("provider message %d payload = %v, want %v", index, value.Content, wantPayloads[index])
+			}
+		}
 	}
 }
 

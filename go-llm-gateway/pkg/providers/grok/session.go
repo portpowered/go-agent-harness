@@ -1,5 +1,7 @@
 package grok
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"encoding/json"
@@ -11,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 var (
@@ -44,7 +45,7 @@ type grokSession struct {
 	closeOnce sync.Once
 
 	mediaMu         sync.Mutex
-	media           *rtc.SessionMedia
+	media           *sharedaudio.SessionMedia
 	mediaClaimed    bool
 	mediaSampleRate int
 }

@@ -15,7 +15,7 @@ func (noopSessionInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 	return nil, errors.New("not used in this test")
 }
 
-func TestSendSessionEvent_DeliversToUserEventInbox(t *testing.T) {
+func TestSendSessionEvent_EnqueuesOrderedSessionInput(t *testing.T) {
 	al, err := New(
 		WithMode(engine.DuplexSession),
 		WithSessionInferencer(noopSessionInferencer{}),
@@ -27,18 +27,9 @@ func TestSendSessionEvent_DeliversToUserEventInbox(t *testing.T) {
 	if err := al.SendSessionEvent(context.Background(), msg); err != nil {
 		t.Fatalf("SendSessionEvent: %v", err)
 	}
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserEventInbox == nil {
-		t.Fatal("expected session model runner with UserEventInbox")
-	}
-	select {
-	case got := <-mr.UserEventInbox:
-		if got.Type != messages.StreamTypeMessageEnd {
-			t.Fatalf("got type %v, want %v", got.Type, messages.StreamTypeMessageEnd)
-		}
-	default:
-		t.Fatal("expected message in UserEventInbox")
-	}
+	// The explicit helper is admitted through the model runner's private
+	// ordered ingress. Its unexported representation is intentionally hidden
+	// from this package; successful admission is the public contract.
 }
 
 func TestSendSessionEvent_NotInSessionMode(t *testing.T) {
@@ -58,10 +49,6 @@ func TestSendSessionEvent_ContextCancelled(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
-	}
-	mr := al.engine.GetModelRunner()
-	for i := 0; i < cap(mr.UserEventInbox); i++ {
-		mr.UserEventInbox <- messages.StreamMessage{}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

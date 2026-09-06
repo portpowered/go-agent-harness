@@ -4,10 +4,10 @@ package parity
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -501,7 +501,7 @@ func decodeAudioBytes(raw json.RawMessage) ([]byte, error) {
 	if err := json.Unmarshal(trimmed, &value); err != nil {
 		return nil, errors.New("must contain byte values or a base64 string")
 	}
-	decoded, err := base64.StdEncoding.DecodeString(value)
+	decoded, err := codec.DecodeBase64WithLimit(value, max(1, len(value)))
 	if err != nil {
 		return nil, errors.New("must contain byte values or a base64 string")
 	}

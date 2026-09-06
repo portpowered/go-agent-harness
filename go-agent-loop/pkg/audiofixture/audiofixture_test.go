@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"os"
 	"path/filepath"

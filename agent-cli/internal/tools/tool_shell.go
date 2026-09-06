@@ -125,7 +125,8 @@ func NewExecTool(workingDir string, restrict bool) *ExecTool {
 }
 
 func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Config) *ExecTool {
-	return newExecToolWithDiagnosticWriter(workingDir, restrict, config, os.Stdout)
+	// Constructor diagnostics must not corrupt structured or binary stdout.
+	return newExecToolWithDiagnosticWriter(workingDir, restrict, config, os.Stderr)
 }
 
 func newExecToolWithDiagnosticWriter(workingDir string, restrict bool, config *config.Config, diagnosticWriter io.Writer) *ExecTool {

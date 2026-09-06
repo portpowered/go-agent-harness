@@ -1,21 +1,22 @@
 package openai
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
-	"encoding/base64"
 	"encoding/json"
 	"reflect"
 	"sync"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockWebSocketConn()
 	session := newRealtimeSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
-	owner, ok := any(session).(rtc.MediaSession)
+	owner, ok := any(session).(sharedaudio.MediaSession)
 	if !ok {
 		t.Fatal("OpenAI Realtime session does not expose rtc.MediaSession")
 	}
@@ -28,7 +29,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	for index := range want {
 		want[index] = int16((index*97)%24000 - 12000) //nolint:gosec // bounded test tone
 	}
-	if err := endpoints.Outbound.WriteFrame(ctx, rtc.PCMFrame{Samples: want}); err != nil {
+	if err := endpoints.Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: want}); err != nil {
 		t.Fatalf("write RTC outbound frame: %v", err)
 	}
 
@@ -47,12 +48,12 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	if eventType != "input_audio_buffer.append" {
 		t.Fatalf("RTC outbound event type = %q, want input_audio_buffer.append", eventType)
 	}
-	if got, wantBytes := encoded, base64.StdEncoding.EncodeToString(encodePCM16(want)); got != wantBytes {
+	if got, wantBytes := encoded, codec.EncodePCM16Base64(want); got != wantBytes {
 		t.Fatalf("RTC outbound PCM payload = %q, want %q", got, wantBytes)
 	}
 
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
-		"delta":  base64.StdEncoding.EncodeToString(encodePCM16(want)),
+		"delta":  codec.EncodePCM16Base64(want),
 		"format": "pcm16",
 	})
 	conn.addServerEvent("response.output_audio.done", nil)
@@ -70,7 +71,7 @@ func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) 
 	session := newRealtimeSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
 	endpoints := session.RTCMedia()
-	controlled, ok := endpoints.Inbound.(rtc.PlaybackControlledInbound)
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	if !ok {
 		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
 	}
@@ -83,13 +84,13 @@ func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) 
 	want := make([]int16, 24000*2)
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
 		"response_id": "resp-vad", "item_id": "item-vad", "content_index": 3,
-		"delta": base64.StdEncoding.EncodeToString(encodePCM16(want)), "format": "pcm16",
+		"delta": codec.EncodePCM16Base64(want), "format": "pcm16",
 	})
 	frame, err := endpoints.Inbound.ReadFrame(ctx)
 	if err != nil {
 		t.Fatalf("read response frame before VAD: %v", err)
 	}
-	response := rtc.PlaybackResponse{ResponseID: "resp-vad", ItemID: "item-vad", ContentIndex: 3}
+	response := sharedaudio.PlaybackResponse{ResponseID: "resp-vad", ItemID: "item-vad", ContentIndex: 3}
 	started, _ := controller.snapshot()
 	if frame.PlaybackResponse != response || started != response {
 		t.Fatalf("playback response frame/controller = %+v/%+v, want %+v", frame.PlaybackResponse, started, response)
@@ -126,7 +127,7 @@ func TestRealtimeSession_ServerVADNeverTruncatesBeyondReceivedAudio(t *testing.T
 	session := newRealtimeSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
 	endpoints := session.RTCMedia()
-	controlled := endpoints.Inbound.(rtc.PlaybackControlledInbound)
+	controlled := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	controlled.SetPlaybackController(&openAIPlaybackController{audioEndMS: 3300})
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
@@ -135,7 +136,7 @@ func TestRealtimeSession_ServerVADNeverTruncatesBeyondReceivedAudio(t *testing.T
 	providerPCM := make([]int16, 24000*2200/1000)
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
 		"response_id": "resp-eac13", "item_id": "item-eac13", "content_index": 0,
-		"delta": base64.StdEncoding.EncodeToString(encodePCM16(providerPCM)), "format": "pcm16",
+		"delta": codec.EncodePCM16Base64(providerPCM), "format": "pcm16",
 	})
 	if _, err := controlled.ReadFrame(ctx); err != nil {
 		t.Fatalf("read eac13 response frame: %v", err)
@@ -160,25 +161,25 @@ func TestRealtimeSession_ServerVADNeverTruncatesBeyondReceivedAudio(t *testing.T
 
 type openAIPlaybackController struct {
 	mu          sync.Mutex
-	started     rtc.PlaybackResponse
-	interrupted rtc.PlaybackResponse
+	started     sharedaudio.PlaybackResponse
+	interrupted sharedaudio.PlaybackResponse
 	audioEndMS  int
 }
 
-func (c *openAIPlaybackController) StartPlayback(response rtc.PlaybackResponse) {
+func (c *openAIPlaybackController) StartPlayback(response sharedaudio.PlaybackResponse) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.started = response
 }
 
-func (c *openAIPlaybackController) InterruptPlayback(response rtc.PlaybackResponse) (int, bool) {
+func (c *openAIPlaybackController) InterruptPlayback(response sharedaudio.PlaybackResponse) (int, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.interrupted = response
 	return c.audioEndMS, true
 }
 
-func (c *openAIPlaybackController) snapshot() (rtc.PlaybackResponse, rtc.PlaybackResponse) {
+func (c *openAIPlaybackController) snapshot() (sharedaudio.PlaybackResponse, sharedaudio.PlaybackResponse) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.started, c.interrupted

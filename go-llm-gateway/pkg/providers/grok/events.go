@@ -1,7 +1,6 @@
 package grok
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -320,7 +320,7 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		if !ok || v == nil {
 			return models.SessionEvent{}, false
 		}
-		encoded := base64.StdEncoding.EncodeToString(v.Content)
+		encoded := codec.EncodeBase64(v.Content)
 		return models.NewAudioBufferAppendEvent(encoded), true
 
 	case messages.StreamTypeResponseCancel:
@@ -409,7 +409,7 @@ func extractAudioBytes(data json.RawMessage) []byte {
 	if encoded == "" {
 		return nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	decoded, err := codec.DecodeBase64(encoded)
 	if err != nil {
 		return nil
 	}

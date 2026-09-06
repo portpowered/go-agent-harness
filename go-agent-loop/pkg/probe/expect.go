@@ -3,9 +3,10 @@ package probe
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const (
@@ -531,15 +532,7 @@ func observedIDs(ids []string) string {
 }
 
 func pcm16RMS(samples []int16) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, sample := range samples {
-		value := float64(sample)
-		sum += value * value
-	}
-	return math.Sqrt(sum / float64(len(samples)))
+	return audio.PCM16RMSEnergy(samples)
 }
 func observedBufferDisposition(value string) string {
 	if value == "" {

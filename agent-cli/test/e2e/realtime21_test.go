@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	audiorecording "github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -41,6 +44,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 
 	capturePath := filepath.Join(tmp, "gpt-realtime-2.1-tool.json")
 	outputPath := filepath.Join(tmp, "gpt-realtime-2.1-tool.wav")
+	recordDir := filepath.Join(tmp, "recording")
 	inputPath := filepath.Join(root, "go-agent-loop", "testdata", "audio", "utt_short_24k.wav")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -49,6 +53,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 		"--model", "gpt-realtime-2.1",
 		"--reasoning-effort", "low",
 		"--record", capturePath,
+		"--record-dir", recordDir,
 		"--audio-in", inputPath,
 		"--audio-out", outputPath,
 		"--max-duration", "60s",
@@ -58,6 +63,37 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	cmd.Env = os.Environ()
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("live binary: %v\n%s", err, output)
+	}
+
+	replay, err := audiorecording.OpenReplay(filepath.Join(recordDir, "audio-trace"))
+	if err != nil {
+		t.Fatalf("validate live audio trace: %v", err)
+	}
+	traceTools, traceResults, traceOutput := 0, 0, 0
+	traceSends, traceReceives := 0, 0
+	for {
+		event, _, err := replay.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch event.RuntimeKind {
+		case "tool_call":
+			traceTools++
+		case "tool_result":
+			traceResults++
+		case "audio_output":
+			traceOutput++
+		case "provider_wire_send":
+			traceSends++
+		case "provider_wire_receive":
+			traceReceives++
+		}
+	}
+	if traceTools != 1 || traceResults != 1 || traceOutput == 0 || traceSends == 0 || traceReceives == 0 {
+		t.Fatalf("live trace evidence: calls=%d results=%d output=%d sends=%d receives=%d", traceTools, traceResults, traceOutput, traceSends, traceReceives)
 	}
 
 	var capture struct {

@@ -1,12 +1,12 @@
 package sessiontiming
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -164,7 +164,7 @@ func AnalyzeCapture(capture gwtesting.SessionCapture) (Report, error) {
 				state.timing.FirstAudioMS = int64Pointer(record.TimestampMs)
 			}
 			state.lastAudioMS = record.TimestampMs
-			decoded, err := base64.StdEncoding.DecodeString(event.Delta)
+			decoded, err := codec.DecodeBase64(event.Delta)
 			if err != nil {
 				return Report{}, fmt.Errorf("decode audio delta at record %d: %w", record.Sequence, err)
 			}

@@ -41,7 +41,15 @@ func (r *UserRunner) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if r.outChannel != nil {
-			r.outChannel <- req
+			// The turn-taking loop stops selecting userOut as soon as its
+			// context is cancelled. Make publication cancellation-aware so a
+			// model response racing shutdown cannot strand this participant and
+			// prevent AgentLoop.Run from joining its workers.
+			select {
+			case r.outChannel <- req:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 }

@@ -1,29 +1,29 @@
 package grok
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
-	"encoding/base64"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
-var _ rtc.MediaSession = (*grokSession)(nil)
+var _ sharedaudio.MediaSession = (*grokSession)(nil)
 
 // RTCMedia exposes the provider-owned PCM media endpoints for the live Grok
 // realtime session. The endpoint writer feeds the same input-audio event path
 // used by StreamMessage audio, while inbound provider deltas are fanned out to
 // the media reader without removing them from the normal session stream.
-func (s *grokSession) RTCMedia() rtc.MediaEndpoints {
+func (s *grokSession) RTCMedia() sharedaudio.MediaEndpoints {
 	s.mediaMu.Lock()
 	defer s.mediaMu.Unlock()
 	s.mediaClaimed = true
 	if s.media == nil {
-		s.media = rtc.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
 	}
 	return s.media.Endpoints()
 }
@@ -31,7 +31,7 @@ func (s *grokSession) RTCMedia() rtc.MediaEndpoints {
 func (s *grokSession) prepareRTCMedia() {
 	s.mediaMu.Lock()
 	if s.media == nil {
-		s.media = rtc.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
 	}
 	s.mediaMu.Unlock()
 }
@@ -48,16 +48,20 @@ func (s *grokSession) releaseUnclaimedRTCMedia() {
 	_ = media.Close()
 }
 
-func (s *grokSession) currentRTCMedia() *rtc.SessionMedia {
+func (s *grokSession) currentRTCMedia() *sharedaudio.SessionMedia {
 	s.mediaMu.Lock()
 	defer s.mediaMu.Unlock()
 	return s.media
 }
 
-func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame rtc.PCMFrame) error {
+func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
+	encoded, err := codec.EncodePCM16WithLimit(frame.Samples, codec.MaxPCM16Bytes)
+	if err != nil {
+		return fmt.Errorf("encode Grok RTC audio: %w", err)
+	}
 	outcome := s.SendWithOutcome(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
-		Value: messages.NewAudioDeltaValue(encodePCM16(frame.Samples)),
+		Value: messages.NewAudioDeltaValue(encoded),
 	})
 	if outcome.OK() {
 		return nil
@@ -81,12 +85,16 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 		if decodeErr != nil {
 			err = decodeErr
 		} else if len(data) > 0 {
-			err = media.PushInbound(decodePCM16(data))
+			var samples []int16
+			samples, err = codec.DecodePCM16(data)
+			if err == nil {
+				err = media.PushInbound(samples)
+			}
 		}
 	case models.SessionEventResponseOutputAudioDone, grokSessionEventResponseAudioDone:
 		err = media.FlushInbound()
 	}
-	if err != nil && !errors.Is(err, rtc.ErrSessionMediaClosed) {
+	if err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
 		media.FailInbound(err)
 	}
 	return err
@@ -97,28 +105,12 @@ func decodeGrokAudioDelta(data []byte) ([]byte, error) {
 	if encoded == "" {
 		return nil, nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	decoded, err := codec.DecodeBase64(encoded)
 	if err != nil {
 		return nil, fmt.Errorf("decode Grok RTC audio delta: %w", err)
 	}
-	if len(decoded)%2 != 0 {
-		return nil, fmt.Errorf("decode Grok RTC audio delta: PCM16 payload has %d odd bytes", len(decoded))
+	if err := codec.ValidatePCM16(decoded, codec.MaxPCM16Bytes); err != nil {
+		return nil, fmt.Errorf("decode Grok RTC audio delta: %w", err)
 	}
 	return decoded, nil
-}
-
-func decodePCM16(data []byte) []int16 {
-	samples := make([]int16, len(data)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(data[index*2:])) //nolint:gosec // PCM16 bit pattern is intentional
-	}
-	return samples
-}
-
-func encodePCM16(samples []int16) []byte {
-	data := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(data[index*2:], uint16(sample)) //nolint:gosec // PCM16 bit pattern is intentional
-	}
-	return data
 }

@@ -5,7 +5,7 @@ package chrome
 // This is the opt-in stock-Chrome/production-CLI proof for the scheduled
 // audio interrupt path. It intentionally keeps provider traffic live only
 // when the operator asks for it; the ordinary hermetic regression lives in
-// agent-cli/internal/cli/session_audio_interrupt_integration_test.go.
+// agent-cli/internal/transport/cli/session_audio_interrupt_integration_test.go.
 
 import (
 	"context"

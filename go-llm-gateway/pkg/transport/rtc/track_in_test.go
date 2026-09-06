@@ -1,5 +1,7 @@
 package rtc
 
+import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 import (
 	"context"
 	"encoding/base64"
@@ -12,7 +14,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // These payloads are the first three 20 ms, 48 kHz Opus packets from a
@@ -859,7 +861,7 @@ func testRTPPacket(sequence uint16, timestamp uint32, id byte) *rtp.Packet {
 	}
 }
 
-func readTestFrame(t testing.TB, track *InboundTrack) PCMFrame {
+func readTestFrame(t testing.TB, track *InboundTrack) sharedaudio.PCMFrame {
 	t.Helper()
 	frame, err := track.ReadFrame(context.Background())
 	if err != nil {
@@ -868,9 +870,9 @@ func readTestFrame(t testing.TB, track *InboundTrack) PCMFrame {
 	return frame
 }
 
-func readTestFrames(t testing.TB, track *InboundTrack, count int) []PCMFrame {
+func readTestFrames(t testing.TB, track *InboundTrack, count int) []sharedaudio.PCMFrame {
 	t.Helper()
-	frames := make([]PCMFrame, count)
+	frames := make([]sharedaudio.PCMFrame, count)
 	for index := range frames {
 		frames[index] = readTestFrame(t, track)
 	}

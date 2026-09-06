@@ -1,0 +1,304 @@
+package agentruntime_test
+
+import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
+
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
+import (
+	"context"
+	"errors"
+	"io"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
+	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+)
+
+func TestPrepareRTCDeviceBindingsUsesRegistryDefaultsAndClosesExactlyOnce(t *testing.T) {
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+
+	binding, err := agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{
+		Registry:      registry,
+		InputPresent:  true,
+		OutputPresent: true,
+	})
+	if err != nil {
+		t.Fatalf("prepare device bindings: %v", err)
+	}
+	if binding == nil || binding.Source == nil || binding.Sink == nil {
+		t.Fatalf("binding = %#v, want both directional endpoints", binding)
+	}
+	if binding.Source.DeviceID() != "virtual:input" {
+		t.Fatalf("source device = %q, want virtual:input", binding.Source.DeviceID())
+	}
+	if binding.Sink.DeviceID() != "virtual:output" {
+		t.Fatalf("sink device = %q, want virtual:output", binding.Sink.DeviceID())
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 0 {
+		t.Fatalf("observations before close = %+v, want two opens and no releases", got)
+	}
+
+	if err := binding.Close(); err != nil {
+		t.Fatalf("first binding close: %v", err)
+	}
+	if err := binding.Close(); err != nil {
+		t.Fatalf("second binding close: %v", err)
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("observations after close = %+v, want two opens and two releases", got)
+	}
+}
+
+func TestRTCDeviceBindingPublishesCaptureSnapshotAfterCallbackStops(t *testing.T) {
+	registry, err := devicegw.NewSimulatedDuplexRegistry(devicegw.DuplexScenario{
+		Render:       devicegw.ClockSpec{NominalRate: 48000, Quanta: []int{480}},
+		Capture:      devicegw.ClockSpec{NominalRate: 48000, Quanta: []int{480}},
+		CaptureQueue: devicegw.QueueSpec{LatencyNanos: 1, DropPolicy: "drop_oldest"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got audio.CaptureQueueStats
+	observerCalls := 0
+	binding, err := agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{
+		Registry: registry, InputPresent: true, InputSampleRate: 48000,
+		CaptureObserver: func(_ devicegw.DeviceID, stats audio.CaptureQueueStats) { got = stats; observerCalls++ },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Advance(2); err != nil {
+		t.Fatal(err)
+	}
+	if err := binding.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if observerCalls != 1 || got.DropPolicy != "drop_oldest" || got.DroppedSamples == 0 || got.SequenceGaps == 0 {
+		t.Fatalf("capture observation = %+v", got)
+	}
+	previous := got
+	if err := binding.Close(); err != nil || got != previous || observerCalls != 1 {
+		t.Fatalf("repeated close republished or failed: calls=%d stats=%+v err=%v", observerCalls, got, err)
+	}
+}
+
+func TestPrepareRTCDeviceBindingsAcceptsDefaultKeywordAndExactIDs(t *testing.T) {
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+
+	binding, err := agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{
+		Registry:     registry,
+		InputDevice:  "DeFaUlT",
+		OutputDevice: "virtual:output",
+	})
+	if err != nil {
+		t.Fatalf("prepare exact/default device bindings: %v", err)
+	}
+	defer binding.Close()
+	if binding.Source.DeviceID() != "virtual:input" || binding.Sink.DeviceID() != "virtual:output" {
+		t.Fatalf("resolved devices = input:%q output:%q, want virtual defaults", binding.Source.DeviceID(), binding.Sink.DeviceID())
+	}
+}
+
+func TestPrepareRTCDeviceBindingsPreservesTypedRegistryErrors(t *testing.T) {
+	cases := []struct {
+		name     string
+		request  agentruntime.RTCDeviceBindingRequest
+		want     error
+		wantFlag string
+		wantID   devicegw.DeviceID
+	}{
+		{
+			name: "missing exact input",
+			request: agentruntime.RTCDeviceBindingRequest{
+				Registry:     virtualRTCRegistry(t),
+				InputDevice:  "virtual:missing",
+				InputPresent: true,
+			},
+			want:     devicegw.ErrDeviceNotFound,
+			wantFlag: "--audio-in-device",
+			wantID:   "virtual:missing",
+		},
+		{
+			name: "wrong input direction",
+			request: agentruntime.RTCDeviceBindingRequest{
+				Registry:     virtualRTCRegistry(t),
+				InputDevice:  "virtual:output",
+				InputPresent: true,
+			},
+			want:     devicegw.ErrDeviceDirectionMismatch,
+			wantFlag: "--audio-in-device",
+			wantID:   "virtual:output",
+		},
+		{
+			name: "nil registry",
+			request: agentruntime.RTCDeviceBindingRequest{
+				InputDevice:  "virtual:input",
+				InputPresent: true,
+			},
+			want:     devicegw.ErrNilDeviceRegistry,
+			wantFlag: "--audio-in-device",
+			wantID:   "virtual:input",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			binding, err := agentruntime.PrepareRTCDeviceBindings(tc.request)
+			if err == nil {
+				if binding != nil {
+					binding.Close()
+				}
+				t.Fatal("expected typed registry error")
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("error = %v, want errors.Is(%v)", err, tc.want)
+			}
+			var bindingErr *agentruntime.RTCDeviceBindingError
+			if !errors.As(err, &bindingErr) {
+				t.Fatalf("error = %v, want RTCDeviceBindingError", err)
+			}
+			if bindingErr.Flag != tc.wantFlag || bindingErr.DeviceID != tc.wantID {
+				t.Fatalf("binding error = %+v, want flag %q and ID %q", bindingErr, tc.wantFlag, tc.wantID)
+			}
+		})
+	}
+}
+
+func TestPrepareRTCDeviceBindingsReleasesInputWhenOutputOpenFails(t *testing.T) {
+	registry := virtualRTCRegistry(t)
+	held, err := registry.Open("virtual:exclusive")
+	if err != nil {
+		t.Fatalf("hold exclusive output: %v", err)
+	}
+	defer held.Close()
+
+	_, err = agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{
+		Registry:      registry,
+		InputPresent:  true,
+		OutputDevice:  "virtual:exclusive",
+		OutputPresent: true,
+	})
+	if err == nil || !errors.Is(err, devicegw.ErrDeviceInUse) {
+		t.Fatalf("prepare error = %v, want device-in-use error", err)
+	}
+	var bindingErr *agentruntime.RTCDeviceBindingError
+	if !errors.As(err, &bindingErr) || bindingErr.Flag != "--audio-out-device" {
+		t.Fatalf("error = %v, want typed output binding error", err)
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 1 {
+		t.Fatalf("observations after partial failure = %+v, want held+input opens and input release", got)
+	}
+}
+
+func TestPrepareRTCDeviceBindingsNoSelectionDoesNotTouchRegistry(t *testing.T) {
+	binding, err := agentruntime.PrepareRTCDeviceBindings(agentruntime.RTCDeviceBindingRequest{})
+	if err != nil {
+		t.Fatalf("no-selection preparation: %v", err)
+	}
+	if binding != nil {
+		t.Fatalf("binding = %#v, want nil when no device flag is present", binding)
+	}
+}
+
+func TestValidateSessionAudioDeviceConflictsPreservesInputErrorAndAllowsIndependentOutputs(t *testing.T) {
+	inputErr := serviceDevices.ValidateSessionAudioDeviceConflicts(true, false, true, false)
+	if inputErr == nil || !errors.Is(inputErr, serviceDevices.ErrSessionAudioInputConflict) || !errors.Is(inputErr, devicegw.ErrDeviceSelectionConflict) {
+		t.Fatalf("input conflict = %v, want session and shared conflict identities", inputErr)
+	}
+	var sharedErr *devicegw.DeviceSelectionConflictError
+	if !errors.As(inputErr, &sharedErr) {
+		t.Fatalf("input conflict = %v, want typed shared conflict", inputErr)
+	}
+
+	if outputErr := serviceDevices.ValidateSessionAudioDeviceConflicts(false, true, false, true); outputErr != nil {
+		t.Fatalf("independent file/device outputs = %v, want no conflict", outputErr)
+	}
+}
+
+func TestSessionCommandWiresBothRTCDeviceSelectorsBeforeProviderConnect(t *testing.T) {
+	registry := virtualRTCRegistry(t)
+	inferencer := &countingSessionInferencer{}
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newInjectedSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer, DeviceRegistry: registry}), nil).Generate()
+	cmd.SetOut(io.Discard)
+	cmd.SetArgs([]string{
+		"--replay", "synthetic.json",
+		"--audio-in-device", "virtual:input",
+		"--audio-out-device", "virtual:output",
+	})
+
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "provider connection should not be attempted") {
+		t.Fatalf("command error = %v, want injected provider connection error", err)
+	}
+	if inferencer.connects != 1 {
+		t.Fatalf("provider connects = %d, want one after device preflight", inferencer.connects)
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("device observations = %+v, want both devices opened and released", got)
+	}
+}
+
+func TestSessionCommandAllowsAudioOutputFileAndDeviceToReachDevicePreflight(t *testing.T) {
+	inferencer := &countingSessionInferencer{}
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newInjectedSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, SessionInferencer: inferencer}), nil).Generate()
+	cmd.SetOut(io.Discard)
+	audioOutPath := filepath.Join(t.TempDir(), "response.raw")
+	cmd.SetArgs([]string{
+		"--replay", "synthetic.json",
+		"--audio-out", audioOutPath,
+		"--audio-out-device", "virtual:output",
+	})
+
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || errors.Is(err, serviceDevices.ErrSessionAudioOutputConflict) || !errors.Is(err, devicegw.ErrNilDeviceRegistry) {
+		t.Fatalf("command error = %v, want device preflight after output validation", err)
+	}
+	if inferencer.connects != 0 {
+		t.Fatalf("provider connects = %d, want zero for failed device preflight", inferencer.connects)
+	}
+}
+
+func TestRunSessionRTCDevicePreflightHappensBeforeProviderConnect(t *testing.T) {
+	registry := virtualRTCRegistry(t)
+	inferencer := &countingSessionInferencer{}
+	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{
+		ReplayPath:        "synthetic.json",
+		SessionInferencer: inferencer,
+		RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
+			Registry:     registry,
+			InputDevice:  "virtual:missing",
+			InputPresent: true,
+		},
+	})
+	if err == nil || !errors.Is(err, devicegw.ErrDeviceNotFound) {
+		t.Fatalf("session error = %v, want typed preflight not-found error", err)
+	}
+	if inferencer.connects != 0 {
+		t.Fatalf("provider connects = %d, want zero before failed device preflight", inferencer.connects)
+	}
+	if got := registry.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
+		t.Fatalf("device observations = %+v, want no acquisition on failed lookup", got)
+	}
+}
+
+func virtualRTCRegistry(t *testing.T) *devicegw.VirtualRegistry {
+	t.Helper()
+	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+	return registry
+}

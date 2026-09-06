@@ -1,5 +1,7 @@
 package main
 
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 import (
 	"encoding/json"
 	"flag"
@@ -9,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func main() {
@@ -29,15 +31,15 @@ func main() {
 		_ = listener.Close()
 		fatal(fmt.Errorf("audio-device server must listen on loopback, got %q", listener.Addr()))
 	}
-	registry, err := audio.NewSimulatedDuplexRegistry(audio.DuplexScenario{
-		Render:  audio.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*renderQuantum}},
-		Capture: audio.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*captureQuantum}},
+	registry, err := devicegw.NewSimulatedDuplexRegistry(devicegw.DuplexScenario{
+		Render:  devicegw.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*renderQuantum}},
+		Capture: devicegw.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*captureQuantum}},
 	})
 	if err != nil {
 		_ = listener.Close()
 		fatal(err)
 	}
-	server, err := audio.NewDeviceServer(registry)
+	server, err := devicegw.NewDeviceServer(registry)
 	if err != nil {
 		_ = listener.Close()
 		fatal(err)
@@ -73,7 +75,7 @@ func main() {
 	}
 }
 
-func runRealtimeClock(registry *audio.SimulatedDuplexRegistry, period time.Duration) {
+func runRealtimeClock(registry *devicegw.SimulatedDuplexRegistry, period time.Duration) {
 	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	for range ticker.C {

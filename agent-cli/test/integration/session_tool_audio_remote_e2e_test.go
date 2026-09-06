@@ -1,5 +1,7 @@
 package integration
 
+import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 import (
 	"bytes"
 	"context"
@@ -18,10 +20,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const (
@@ -233,6 +235,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		}
 	}
 	want := remoteToolAudioExpected(t, responses)
+	if testCase.deviceWAV {
+		want = trimRemoteToolAudioEdgeSilence(remoteToolAudioExpectedPCM(t, responses))
+	}
 	calls := remoteToolAudioCalls(testCase, toolResultBytes)
 	prompt := strings.Repeat("p", promptBytes)
 	provider := newRemoteToolAudioProvider(t, responses, testCase.toolResponses, calls, deltaDelay, prompt, inputFrames*audio.FrameSize*3/2)
@@ -266,6 +271,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		"--audio-device-server", endpoint,
 		"--audio-out-device=",
 		"--max-duration", "30s",
+	}
+	if inputFrames > 0 {
+		arguments = append(arguments, "--audio-in-device=")
 	}
 	if !testCase.naturalClose {
 		arguments = append(arguments, "--wait-for-close")
@@ -338,21 +346,21 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	case <-ctx.Done():
 		t.Fatalf("timed out stopping remote playback clock: %v", ctx.Err())
 	}
-	var snapshot audio.DeviceServerSnapshot
+	var snapshot devicegw.DeviceServerSnapshot
 	if testCase.naturalClose || testCase.providerClose {
 		var snapshotErr error
-		snapshot, snapshotErr = audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+		snapshot, snapshotErr = devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 		if snapshotErr != nil {
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		snapshot = waitForRemoteToolAudio(t, ctx, endpoint, want, callbackInterval)
+		snapshot = waitForRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval)
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
 		// This fixture deliberately makes the continuation available while the
-		// first response still has ample queued audio, so any interior silence is
-		// a scheduler-created cut. Longer multi-tool stress fixtures may contain
+		// first response still has ample queued audio. Preserve the exact interior
+		// zeros produced by filter startup; any additional silence is a cut. Longer multi-tool stress fixtures may contain
 		// legitimate provider/tool latency after their queue naturally empties.
 		got = trimRemoteToolAudioEdgeSilence(snapshot.RenderedSamples)
 	}
@@ -398,7 +406,11 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		if rate != audio.SampleRate {
 			t.Fatalf("secondary device WAV sample rate = %d, want negotiated device rate %d", rate, audio.SampleRate)
 		}
-		if err := verifyRemoteToolAudio(nonzeroRemoteToolAudio(samples), want); err != nil {
+		wavSamples := nonzeroRemoteToolAudio(samples)
+		if testCase.deviceWAV {
+			wavSamples = trimRemoteToolAudioEdgeSilence(samples)
+		}
+		if err := verifyRemoteToolAudio(wavSamples, want); err != nil {
 			t.Fatalf("secondary device WAV differs from remote device edge: %v", err)
 		}
 	}
@@ -453,7 +465,7 @@ func primeRemoteToolAudioInput(t *testing.T, ctx context.Context, endpoint strin
 		t.Fatalf("provider did not become ready for input-history prelude: %v", ctx.Err())
 	}
 	samples := remoteToolAudioPCM(frames*audio.FrameSize, 400)
-	if err := audio.InjectRemoteDeviceServerCapture(ctx, endpoint, samples); err != nil {
+	if err := devicegw.InjectRemoteDeviceServerCapture(ctx, endpoint, samples); err != nil {
 		t.Fatalf("inject prior input history: %v", err)
 	}
 	for advanced := 0; advanced < frames; {
@@ -461,11 +473,13 @@ func primeRemoteToolAudioInput(t *testing.T, ctx context.Context, endpoint strin
 		if remaining := frames - advanced; remaining < batch {
 			batch = remaining
 		}
-		if err := audio.AdvanceRemoteDeviceServer(ctx, endpoint, batch); err != nil {
+		if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, batch); err != nil {
 			t.Fatalf("advance prior input callback: %v", err)
 		}
 		advanced += batch
-		wantSeen := advanced * audio.FrameSize * 3 / 2
+		// The final fractional phase needs the next capture sample.
+		// Do not wait for an EOF tail while this capture stream is live.
+		wantSeen := advanced*audio.FrameSize*3/2 - 1
 		deadline := time.NewTimer(time.Second)
 		for provider.Snapshot().inputSamplesSeen < wantSeen {
 			select {
@@ -478,6 +492,11 @@ func primeRemoteToolAudioInput(t *testing.T, ctx context.Context, endpoint strin
 			}
 		}
 		deadline.Stop()
+	}
+	// Release the final fractional resampling phase with a silence callback.
+	// The stream remains open; no artificial EOF/turn boundary is introduced.
+	if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
+		t.Fatalf("advance capture lookahead: %v", err)
 	}
 }
 
@@ -496,7 +515,7 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 			result <- nil
 			return
 		case <-ticker.C:
-			if err := audio.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
+			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
 				if ctx.Err() != nil {
 					result <- nil
 					return
@@ -508,7 +527,7 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 	}
 }
 
-func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration) audio.DeviceServerSnapshot {
+func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration) devicegw.DeviceServerSnapshot {
 	t.Helper()
 	// The provider having written all WebSocket events does not mean the agent's
 	// media pump has consumed them yet. Keep the external callback clock alive
@@ -528,7 +547,7 @@ func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 	callbacksSinceSnapshot := callbacksPerSnapshot
 	for {
 		if callbacksSinceSnapshot >= callbacksPerSnapshot {
-			snapshot, err := audio.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+			snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 			if err != nil {
 				t.Fatalf("read remote device evidence: %v", err)
 			}
@@ -543,7 +562,7 @@ func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 			// The background callback driver is stopped before this loop. Advance
 			// and snapshot sequentially so a large evidence response cannot race
 			// another HTTP request against the deterministic device server.
-			if err := audio.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
+			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
 				t.Fatalf("advance remote playback while awaiting final marker: %v", err)
 			}
 			callbacksSinceSnapshot++
@@ -967,18 +986,27 @@ func remoteToolAudioPCM(samples int, seed int16) []int16 {
 
 func remoteToolAudioExpected(t *testing.T, responses [][]int16) []int16 {
 	t.Helper()
+	return nonzeroRemoteToolAudio(remoteToolAudioExpectedPCM(t, responses))
+}
+
+func remoteToolAudioExpectedPCM(t *testing.T, responses [][]int16) []int16 {
+	t.Helper()
 	var expected []int16
 	for _, response := range responses {
 		if len(response) == 0 {
 			continue
 		}
-		converted, err := wavio.Resample(response, wavio.Rate24kHz, audio.SampleRate)
+		converter, err := wavio.NewPCM16Resampler(wavio.Rate24kHz, audio.SampleRate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		converted, err := converter.Process(response, true)
 		if err != nil {
 			t.Fatalf("resample reference audio: %v", err)
 		}
 		expected = append(expected, converted...)
 	}
-	return nonzeroRemoteToolAudio(expected)
+	return expected
 }
 
 func nonzeroRemoteToolAudio(samples []int16) []int16 {
@@ -993,7 +1021,7 @@ func nonzeroRemoteToolAudio(samples []int16) []int16 {
 
 func verifyRemoteToolAudio(got, want []int16) error {
 	if len(got) != len(want) {
-		return fmt.Errorf("remote device rendered %d/%d nonzero samples (lost %d, %.1f%% retained)", len(got), len(want), len(want)-len(got), 100*float64(len(got))/float64(len(want)))
+		return fmt.Errorf("remote device rendered %d/%d compared samples (lost %d, %.1f%% retained)", len(got), len(want), len(want)-len(got), 100*float64(len(got))/float64(len(want)))
 	}
 	if !reflect.DeepEqual(got, want) {
 		for index := range want {
