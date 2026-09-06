@@ -398,7 +398,7 @@ func (f *startupAnnouncementFixture) handle(writer http.ResponseWriter, request 
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	f.recordConnection()
 	conversation := startupAnnouncementConversation{}
 	for {
