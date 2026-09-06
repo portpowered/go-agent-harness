@@ -1,5 +1,22 @@
 # Factory restart evidence — 2026-09-06
 
+## Simplified fresh board
+
+At the user's request, commit `29bd09fb` restored the original nine-station
+delivery flow with two independent probe stations. The separate project leader,
+project-cycle machinery and 15-minute reconcile cron are absent. All agent-worker
+timeouts are four hours; routine meta planning runs every four hours, with
+completion/failure/probe-result wake-ups between scheduled runs.
+
+Fresh session `ef2e7f83-eb49-42be-a391-2d8383e38034` was started with the committed
+meta-planner-handoff.md (SHA-256
+`da5c00b45102f33a2ead05b6ef11c898d0c29691f9115ae5d921bda347d99a22`). The prior
+board was archived, not replayed. Admission and the original bootstrap integration
+pin were retained. The dashboard connected to the new session and an Astra medium
+meta-planner process was observed. All 68 factory tests plus four command-contract
+tests passed, as did a native fresh-board/admission test followed by normal resume.
+This is orchestration verification; no new customer-runtime acceptance is claimed.
+
 ## Dashboard rebuild and resume
 
 The dashboard omission was corrected with `make build-all`, recorded in commit

@@ -55,3 +55,14 @@ Every packet carries exact project and contractRevision. Ideas include title,
 requestedOutcome, sourcePlanRef, ownedPaths, verification and remainingGateIDs.
 Validation packets follow probe-contract.md. The immutable manifest remains the
 source of acceptance; this meta-planner owns deciding when to run and assess probes.
+
+Stabilization mode: manually admit at most ONE ready Work per invocation, using a
+single-work request envelope. Do not prepopulate a batch or backlog. Observe its
+actual execution and independent review/probe outcome before admitting the next.
+Increase independent work only incrementally after the single-work path is proven.
+Executors retain actionable repairs through CONTINUE; do not impose a narrow
+stop-and-escalate rule merely because required tests reveal additional defects.
+For the stranded C06 checkpoint 9a8b440, check canonical ownership, then resume the
+existing failed task through a public move to init with these clarified rules,
+unless evidence establishes a real ambiguity or external blocker. Preserve its
+commits and record that its earlier narrow stop instructions are superseded.

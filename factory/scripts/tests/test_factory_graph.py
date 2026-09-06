@@ -81,6 +81,8 @@ if role == "meta":
         with events_path.open("a", encoding="utf-8") as stream:
             stream.write("idle\n")
         emit({"summary": "no dispatch required"})
+elif role == "processor" and counts[role] == 1:
+    emit({"decision": "CONTINUE", "feedback": "checkpoint committed; required repair remains"})
 else:
     emit({"decision": "ACCEPTED", "feedback": role + " smoke passed"})
 '''
@@ -229,7 +231,7 @@ class FactoryGraphTest(unittest.TestCase):
             counts = json.loads((root / "counts.json").read_text(encoding="utf-8"))
             self.assertEqual(
                 counts,
-                {"meta": 3, "planner": 1, "processor": 1, "reviewer": 1, "validator": 1},
+                {"meta": 3, "planner": 1, "processor": 2, "reviewer": 1, "validator": 1},
                 result.stdout + "\n" + result.stderr,
             )
             self.assertEqual(
