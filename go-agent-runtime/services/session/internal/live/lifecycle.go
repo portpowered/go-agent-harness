@@ -277,6 +277,7 @@ type finishState struct {
 	graceful        bool
 	startErr        error
 	continuationErr error
+	toolResultErr   error
 	parentDone      bool
 	parentCause     error
 }
@@ -304,6 +305,7 @@ func (h *handle) captureFinishState() finishState {
 	h.toolMu.Lock()
 	state.continuationErr = h.continuationErr
 	h.toolMu.Unlock()
+	state.toolResultErr = h.unresolvedToolResultsError()
 	if state.continuationErr != nil && contextOnlyOrNil(state.requestedErr) {
 		state.requested, state.requestedErr, state.graceful = true, state.continuationErr, false
 	}
@@ -318,7 +320,7 @@ func (h *handle) captureFinishState() finishState {
 }
 
 func (s finishState) userCancellation() bool {
-	if s.graceful || !errors.Is(s.parentCause, session.ErrLiveUserCancellation) || s.continuationErr != nil {
+	if s.graceful || !errors.Is(s.parentCause, session.ErrLiveUserCancellation) || s.continuationErr != nil || s.toolResultErr != nil {
 		return false
 	}
 	return contextOnlyOrNil(s.requestedErr) && contextOnlyOrNil(s.providerErr) &&
@@ -331,10 +333,16 @@ func contextOnlyOrNil(err error) bool {
 
 func (s finishState) terminalError() error {
 	if s.requested && !s.graceful {
+		if s.toolResultErr != nil && contextOnlyOrNil(s.requestedErr) {
+			return errors.Join(s.requestedErr, s.toolResultErr)
+		}
 		return s.requestedErr
 	}
 	if s.providerErr != nil && !isContextTermination(s.providerErr) {
 		return fmt.Errorf("session error: %w", s.providerErr)
+	}
+	if s.toolResultErr != nil {
+		return s.toolResultErr
 	}
 	if s.graceful {
 		return nil

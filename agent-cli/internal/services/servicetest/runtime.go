@@ -82,7 +82,7 @@ var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBarge
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
-var ErrSessionUnresolvedToolResults = impl.ErrSessionUnresolvedToolResults
+var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -145,6 +145,6 @@ type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
-type SessionUnresolvedToolResultsError = impl.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
 var WriteBrowserConversationReport = impl.WriteBrowserConversationReport

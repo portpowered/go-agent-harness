@@ -70,6 +70,10 @@ var (
 	// ErrLiveToolContinuationIncomplete identifies an ordinary tool result that
 	// reached the provider but did not receive a completed model continuation.
 	ErrLiveToolContinuationIncomplete = errors.New("session ended before the tool continuation")
+	// ErrLiveUnresolvedToolResults identifies provider-requested tool calls whose
+	// local results never crossed the provider-facing send boundary before the
+	// session stopped.
+	ErrLiveUnresolvedToolResults = errors.New("session ended with unresolved tool results")
 	// ErrLiveScheduledAudioIncomplete identifies a finite scheduled-audio
 	// invocation that ended before every admitted source received a terminal
 	// response disposition. The runtime keeps this cause separate from a
@@ -83,6 +87,53 @@ var (
 // with provider, media, or artifact cleanup failures while retaining a stable
 // errors.Is classification.
 const ErrLiveAudioResponseIncomplete = errLiveAudioResponseIncomplete
+
+// LiveUnresolvedToolResultsError carries the provider call IDs whose local
+// results were still outstanding at the terminal boundary. CallIDs is always
+// deduplicated and lexically ordered so hosts can render deterministic
+// diagnostics and retain a stable errors.Is classification.
+type LiveUnresolvedToolResultsError struct {
+	CallIDs []string
+}
+
+// NewLiveUnresolvedToolResultsError constructs a deterministic unresolved
+// result error from provider call IDs observed by the live runtime.
+func NewLiveUnresolvedToolResultsError(ids []string) *LiveUnresolvedToolResultsError {
+	ordered := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ordered = append(ordered, id)
+	}
+	sort.Strings(ordered)
+	return &LiveUnresolvedToolResultsError{CallIDs: ordered}
+}
+
+func (e *LiveUnresolvedToolResultsError) Error() string {
+	if e == nil || len(e.CallIDs) == 0 {
+		return ErrLiveUnresolvedToolResults.Error()
+	}
+	return fmt.Sprintf("tool results were not delivered for %d unresolved call(s): %s", len(e.CallIDs), strings.Join(e.CallIDs, ", "))
+}
+
+func (e *LiveUnresolvedToolResultsError) Unwrap() error {
+	return ErrLiveUnresolvedToolResults
+}
+
+// UnresolvedCallIDs returns an owned, lexically ordered ID snapshot.
+func (e *LiveUnresolvedToolResultsError) UnresolvedCallIDs() []string {
+	if e == nil {
+		return nil
+	}
+	return append([]string(nil), e.CallIDs...)
+}
 
 // LiveImageContinuationError carries the read_image call IDs whose result was
 // accepted but whose post-tool model response did not complete with observable

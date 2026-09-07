@@ -333,6 +333,24 @@ func (h *handle) observeToolResult(callID, name string, requestsContinuation boo
 	h.toolMu.Unlock()
 }
 
+func (h *handle) unresolvedToolResultsError() error {
+	if h == nil {
+		return nil
+	}
+	h.toolMu.Lock()
+	ids := make([]string, 0, len(h.toolContinuations))
+	for callID, state := range h.toolContinuations {
+		if state != nil && !state.resultAccepted && strings.TrimSpace(callID) != "" {
+			ids = append(ids, callID)
+		}
+	}
+	h.toolMu.Unlock()
+	if len(ids) == 0 {
+		return nil
+	}
+	return session.NewLiveUnresolvedToolResultsError(ids)
+}
+
 func (h *handle) observeContinuationRequested() {
 	if h == nil {
 		return
