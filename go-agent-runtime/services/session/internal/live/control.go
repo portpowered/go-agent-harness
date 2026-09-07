@@ -306,6 +306,14 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		if !state.resultAccepted || !state.continuationRequested {
 			continue
 		}
+		// A cancelled provider response can publish its assistant MESSAGE.END
+		// before the model runner publishes the local RoleTool MESSAGE.END. It
+		// is an intermediate boundary, not a failed continuation; wait until
+		// the accepted tool result itself is complete before classifying the
+		// next assistant boundary.
+		if !state.toolResponseComplete {
+			continue
+		}
 		state.status, state.code, state.detail = status, code, detail
 		if continuationFailed(value, state.outputObserved) {
 			target := &tools

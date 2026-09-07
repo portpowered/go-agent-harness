@@ -525,6 +525,36 @@ func TestLateCaptureCompletionRespectsOutstandingResponseWork(t *testing.T) {
 	}
 }
 
+func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
+	unfinished := &handle{
+		request:             session.LiveRequest{FinishAfterResponse: true},
+		captureSourceActive: true,
+	}
+	if !errors.Is(unfinished.finiteAudioResponseError(), session.ErrLiveAudioResponseIncomplete) {
+		t.Fatal("unfinished finite audio did not retain ErrLiveAudioResponseIncomplete")
+	}
+
+	for _, test := range []struct {
+		name   string
+		change func(*handle)
+	}{
+		{name: "not finite", change: func(h *handle) { h.request.FinishAfterResponse = false }},
+		{name: "graceful", change: func(h *handle) { h.gracefulStop = true }},
+		{name: "scheduled has richer error", change: func(h *handle) { h.scheduledAudioCount = 1 }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := &handle{
+				request:             session.LiveRequest{FinishAfterResponse: true},
+				captureSourceActive: true,
+			}
+			test.change(h)
+			if err := h.finiteAudioResponseError(); err != nil {
+				t.Fatalf("finite audio error = %v, want nil", err)
+			}
+		})
+	}
+}
+
 func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	err := errors.Join(errors.New("device write"), session.ErrLiveClosed)
 	if !isExpectedMediaPumpError(err) {

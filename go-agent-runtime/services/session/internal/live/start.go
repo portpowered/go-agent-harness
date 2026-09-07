@@ -103,6 +103,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
 	h.mu.Unlock()
 	toolExecutor = restrictToolExecutor(toolExecutor, toolDefinitions, explicitCapability)
+	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
@@ -119,6 +120,24 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		}))
 	}
 	return agentloop.New(options...)
+}
+
+// activeCaptureToolExecutor keeps a fast tool result behind the next active
+// scheduled audio turn. The wait lives in the tool worker rather than the
+// model runner's ordered ingress, so the capture worker can still admit its
+// cancel/audio/commit boundary while the tool is pending.
+type activeCaptureToolExecutor struct {
+	inner messages.ToolExecutor
+	wait  func(context.Context) error
+}
+
+func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	if e.wait != nil {
+		if err := e.wait(ctx); err != nil {
+			return messages.ToolCallResponse{}, err
+		}
+	}
+	return e.inner.Execute(ctx, call)
 }
 
 // restrictToolExecutor keeps provider issued calls inside the capability

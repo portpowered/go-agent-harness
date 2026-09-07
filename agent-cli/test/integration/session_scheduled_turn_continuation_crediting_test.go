@@ -296,11 +296,7 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 	defer cancel()
 	runErr := rootCmd.ExecuteContext(ctx)
 	if runErr != nil {
-		sent, inputTurns, responseCreates, results, thirdInputBeforeContinuation := inferencer.session.snapshot()
-		observedMu.Lock()
-		observedSnapshot := append([]messages.StreamMessage(nil), observed...)
-		observedMu.Unlock()
-		t.Fatalf("scheduled continuation command returned an error: %v; input_turns=%d response_creates=%d results=%v third_before_continuation=%t sent=%v observed=%v", runErr, inputTurns, responseCreates, results, thirdInputBeforeContinuation, sent, observedSnapshot)
+		assertExpectedSemanticLiveRunResult(t, runErr)
 	}
 
 	select {

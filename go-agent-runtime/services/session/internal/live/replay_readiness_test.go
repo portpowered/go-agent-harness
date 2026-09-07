@@ -212,6 +212,59 @@ func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
+	const callID = "call-finite-continuation"
+	h := &handle{
+		request:           session.LiveRequest{FinishAfterResponse: true},
+		captureComplete:   true,
+		responseStarted:   true,
+		replayResponses:   0,
+		pendingToolCalls:  1,
+		toolContinuations: make(map[string]*liveToolContinuation),
+	}
+	callEnd := messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallEnd,
+		Role:       messages.RoleAssistant,
+		ToolCallId: callID,
+		Value:      messages.NewToolCallEndValue(callID, "lookup", `{}`),
+	}
+	h.observeProviderToolCall(callEnd)
+	h.observeFiniteResponse(callEnd)
+	h.observeToolResult(callID, "lookup", true)
+	toolMessage := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	if continuationErr, complete := h.observeToolLifecycle(toolMessage); continuationErr != nil || complete {
+		t.Fatalf("tool result lifecycle = error:%v complete:%t, want pending continuation", continuationErr, complete)
+	}
+	h.observeFiniteResponse(toolMessage)
+	h.markContinuationOutput()
+
+	messageEnd := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-continuation",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	continuationErr, complete := h.observeToolLifecycle(messageEnd)
+	if continuationErr != nil || !complete {
+		t.Fatalf("tool continuation lifecycle = error:%v complete:%t, want successful completion", continuationErr, complete)
+	}
+	if !h.observeFiniteResponse(messageEnd, complete) {
+		t.Fatal("successful tool continuation was not observed at the finite response boundary")
+	}
+
+	h.mu.Lock()
+	pending := h.pendingToolCalls
+	graceful := h.gracefulStop
+	h.mu.Unlock()
+	if pending != 0 || !graceful || h.replayResponses != 1 {
+		t.Fatalf("successful continuation finite state = pending:%d graceful:%t responses:%d, want pending:0 graceful:true responses:1", pending, graceful, h.replayResponses)
+	}
+}
+
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
 	result := make(chan error, 1)

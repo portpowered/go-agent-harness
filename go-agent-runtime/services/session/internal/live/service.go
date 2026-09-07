@@ -142,14 +142,21 @@ type handle struct {
 	// sources are admitted. These counters are deliberately kept on the handle
 	// so the terminal event and Wait result carry the same outcome, even when a
 	// provider closes before the capture worker returns its own error.
-	scheduledAudioCount       int
-	dispatchedAudioCount      int
+	scheduledAudioCount  int
+	dispatchedAudioCount int
+	// captureTurnWake lets an active scheduled tool worker wait until the next
+	// finite input has crossed the ordered provider ingress. This preserves the
+	// same boundary as the response-driven scheduler without blocking ordinary
+	// response deltas that the capture worker needs in order to advance.
+	captureTurnWake           chan struct{}
+	activeScheduledAudio      bool
 	scheduledResponseBase     int
 	observedResponseTerminals int
 	observedResponseIDs       map[string]struct{}
 	pendingToolCalls          int
 	terminalValue             *messages.SessionCloseValue
 	providerCloseObserved     bool
+	localCloseObserved        bool
 
 	runWG       sync.WaitGroup
 	finishOnce  sync.Once
@@ -308,6 +315,7 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		retryRequests:            make(chan retryRequest, 1),
 		replayResponseWake:       make(chan struct{}),
 		responseStartWake:        make(chan struct{}),
+		captureTurnWake:          make(chan struct{}),
 		replayReady:              make(chan struct{}),
 		openingReady:             make(chan struct{}),
 		providerDoneSignal:       make(chan struct{}),

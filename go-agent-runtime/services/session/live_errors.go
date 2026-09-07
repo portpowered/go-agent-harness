@@ -60,6 +60,11 @@ var (
 	// provider, cancellation, or recording error so hosts can join all of the
 	// evidence while still classifying the schedule failure.
 	ErrLiveScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
+	// ErrLiveAudioResponseIncomplete identifies a finite audio-input
+	// invocation that ended before a terminal assistant response. Hosts may
+	// join this cause with provider, media, or artifact cleanup failures while
+	// retaining a stable errors.Is classification.
+	ErrLiveAudioResponseIncomplete = errors.New("audio session ended before the final assistant response")
 )
 
 // LiveImageContinuationError carries the read_image call IDs whose result was

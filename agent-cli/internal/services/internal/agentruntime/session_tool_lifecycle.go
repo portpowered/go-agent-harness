@@ -37,6 +37,7 @@ var (
 	// Continuation sentinels are aliases of the reusable runtime contract. The
 	// CLI keeps these names for compatibility with its host diagnostics while
 	// the production error is now authored by the embeddable session service.
+	ErrSessionAudioResponseIncomplete     = sessioncontract.ErrLiveAudioResponseIncomplete
 	ErrSessionImageContinuationIncomplete = sessioncontract.ErrLiveImageContinuationIncomplete
 	ErrSessionToolContinuationIncomplete  = sessioncontract.ErrLiveToolContinuationIncomplete
 )

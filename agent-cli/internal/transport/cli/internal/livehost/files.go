@@ -84,10 +84,11 @@ func openAudioOutput(request serviceSession.Request, out io.Writer, outputRate i
 	if outputRate <= 0 {
 		outputRate = audio.SampleRate
 	}
-	if request.AudioOutputDevicePresent || request.InteractiveDevices {
-		return newNegotiatedFileSink(request.AudioOutputPath, out, outputRate)
-	}
-	return audio.NewFileSinkAtSampleRate(request.AudioOutputPath, out, outputRate)
+	// Keep one host-owned sink lifecycle for finite output. It preserves the
+	// negotiated device rate when a physical tap is present and treats a
+	// response with no samples as an absent artifact instead of surfacing the
+	// lower-level empty-WAV close error during unrelated session cleanup.
+	return newNegotiatedFileSink(request.AudioOutputPath, out, outputRate)
 }
 
 func openAudioInput(input serviceSession.AudioInput) (audio.AudioSource, int, error) {

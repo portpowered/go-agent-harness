@@ -179,6 +179,9 @@ func decodeOpenAIRealtimeAudioDelta(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: %w", err)
 	}
 	if err := codec.ValidatePCM16(decoded, codec.MaxPCM16Bytes); err != nil {
+		if errors.Is(err, codec.ErrPCM16OddLength) {
+			return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: PCM16 audio delta has odd byte length %d: %w", len(decoded), err)
+		}
 		return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: %w", err)
 	}
 	return decoded, nil

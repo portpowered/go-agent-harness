@@ -324,7 +324,15 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuat
 		h.mu.Unlock()
 		return false
 	}
-	h.observeFiniteResponseMessage(msg, len(toolContinuationComplete) > 0 && toolContinuationComplete[0])
+	continuationComplete := len(toolContinuationComplete) > 0 && toolContinuationComplete[0]
+	if continuationComplete {
+		// finishToolContinuations removes the accepted provider continuation
+		// entries. Reconcile the finite-response gate with that ledger here so a
+		// successful follow-up can admit the next scheduled turn and eventually
+		// finish the invocation.
+		h.pendingToolCalls = 0
+	}
+	h.observeFiniteResponseMessage(msg)
 	shouldFinish := h.shouldFinishFiniteResponse(msg)
 	h.mu.Unlock()
 	if shouldFinish {
@@ -333,7 +341,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuat
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
 }
 
-func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage, toolContinuationComplete bool) {
+func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeMessageStart {
 		if msg.Role != messages.RoleTool {
 			h.responseStarted = true
@@ -351,7 +359,11 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage, toolCo
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
 		h.responseActive = false
 		h.responsePending = false
-		if h.pendingToolCalls > 0 || toolContinuationComplete || finiteResponseWasInterrupted(msg) {
+		// A tool-call response is intermediate while its pending count remains
+		// non-zero. Once the accepted continuation is complete, that same
+		// MESSAGE.END is the terminal assistant response for the scheduled turn
+		// and must advance replayResponses so the next turn can be admitted.
+		if h.pendingToolCalls > 0 || finiteResponseWasInterrupted(msg) {
 			return
 		}
 		h.replayResponses++

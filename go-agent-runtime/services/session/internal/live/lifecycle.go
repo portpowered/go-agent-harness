@@ -75,7 +75,12 @@ func (h *handle) finish(err error) {
 				err = errors.Join(err, fmt.Errorf("flush live capture: %w", flushErr))
 			}
 		}
-		err = errors.Join(h.finishMedia(err), h.recorderError(), h.scheduledAudioError())
+		err = h.finishMedia(err)
+		h.emitSynthesizedSessionClose()
+		h.mu.Lock()
+		terminalValue = cloneLiveTerminalValue(h.terminalValue)
+		h.mu.Unlock()
+		err = errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
 		h.mu.Lock()
 		h.terminalErr = err
 		h.mu.Unlock()
@@ -87,6 +92,37 @@ func (h *handle) finish(err error) {
 		h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal), SessionID: h.request.SessionID, Error: err, Liveness: liveness, Terminal: terminalValue, Critical: true}, true)
 		close(h.done)
 	})
+}
+
+// emitSynthesizedSessionClose closes a locally-owned scheduled-audio session
+// after the final assistant response has satisfied the runtime gate.
+// Provider-backed sessions normally deliver their own SESSION.CLOSE; a
+// graceful local stop cancels the model runner before its transport Done branch
+// can synthesize one, so keep the public stream and recorder lifecycle complete
+// at this boundary. Replay and ordinary live sessions retain their own terminal
+// contracts.
+func (h *handle) emitSynthesizedSessionClose() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if !h.gracefulStop || h.cancelRequested || h.providerCloseObserved || h.localCloseObserved ||
+		h.scheduledAudioCount == 0 || h.request.ReplayPlan != nil || h.request.Replay.InputCapturePath != "" {
+		h.mu.Unlock()
+		return
+	}
+	value := messages.NewSessionCloseValueWithTerminal(
+		h.request.SessionID,
+		"client_close",
+		string(messages.TerminalReasonLoopSynthesizedCompletion),
+		messages.TerminalReasonLoopSynthesizedCompletion,
+		messages.TerminalProvenanceLoop,
+		messages.TerminalOutputComplete,
+	)
+	h.localCloseObserved = true
+	h.terminalValue = cloneLiveTerminalValue(value)
+	h.mu.Unlock()
+	h.publishMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: value})
 }
 
 func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
@@ -312,7 +348,12 @@ func (h *handle) noteCaptureDispatched() {
 	if h.dispatchedAudioCount < h.scheduledAudioCount {
 		h.dispatchedAudioCount++
 	}
+	wake := h.captureTurnWake
+	h.captureTurnWake = make(chan struct{})
 	h.mu.Unlock()
+	if wake != nil {
+		close(wake)
+	}
 }
 
 // ensureCaptureTurnAdmissible checks the provider boundary before opening a
@@ -350,6 +391,23 @@ func (h *handle) scheduledAudioError() error {
 	terminal := cloneLiveTerminalValue(h.terminalValue)
 	h.mu.Unlock()
 	return newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal)
+}
+
+// finiteAudioResponseError preserves the finite audio-input contract when a
+// duration or provider failure stops the live owner before a terminal
+// assistant response. Scheduled feeds have their richer counter-bearing
+// error above; ordinary finite audio uses the shared response sentinel.
+func (h *handle) finiteAudioResponseError() error {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	incomplete := h.captureSourceActive && h.request.FinishAfterResponse && !h.gracefulStop && h.scheduledAudioCount == 0
+	h.mu.Unlock()
+	if incomplete {
+		return session.ErrLiveAudioResponseIncomplete
+	}
+	return nil
 }
 
 func newScheduledAudioIncompleteError(scheduled, dispatched, completed int, terminal *messages.SessionCloseValue) error {
