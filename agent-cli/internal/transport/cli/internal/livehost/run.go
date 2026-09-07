@@ -170,29 +170,11 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 	if request.RecordDirectory == "" {
 		return openSemanticRecorder(request.RecordPath, deps.RecordingService)
 	}
-	if deps.RecordingService == nil {
-		return nil, errors.New("live recording service is unavailable")
+	if err := validateLiveRecorderDependencies(deps); err != nil {
+		return nil, err
 	}
-	if deps.CredentialValues == nil {
-		return nil, errors.New("live credential resolver is unavailable")
-	}
-	replayInputPath := ""
-	if liveRequest != nil {
-		replayInputPath = strings.TrimSpace(liveRequest.Replay.InputCapturePath)
-	}
-	providerCapturePath := request.RecordPath
-	if providerCapturePath == "" && replayInputPath != "" {
-		// A replay-backed directory has a verified provider capture already. Use
-		// that source as the immutable provider artifact instead of asking an
-		// injected replay session to manufacture a second raw capture.
-		providerCapturePath = replayInputPath
-	}
-	credentialRequest := request
-	credentialRequest.ReplayPath = liveRequest.Replay.InputCapturePath
-	credentialRequest.Provider = liveRequest.Provider
-	credentialRequest.Model = liveRequest.Model
-	credentialRequest.BaseURL = liveRequest.BaseURL
-	credentials, err := deps.CredentialValues(credentialRequest)
+	replayInputPath := liveReplayInputPath(liveRequest)
+	credentials, err := deps.CredentialValues(liveCredentialRequest(request, liveRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -203,20 +185,61 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		Provider:                      liveRequest.Provider,
 		Model:                         liveRequest.Model,
 		Credentials:                   credentials,
-		ProviderCapturePath:           providerCapturePath,
-		DisableProviderCaptureSidecar: request.RecordPath == "" && replayInputPath != "",
+		ProviderCapturePath:           liveProviderCapturePath(request.RecordPath, replayInputPath),
+		DisableProviderCaptureSidecar: replayInputPath != "" && request.RecordPath == "",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
-	if request.RecordPath == "" && replayInputPath == "" {
-		if providerCapture, ok := recorder.(runtimeRecording.ProviderCapture); ok {
-			if path := strings.TrimSpace(providerCapture.ProviderCapturePath()); path != "" {
-				configureCapturePath(liveRequest, path)
-			}
-		}
-	}
+	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
 	return recorder, nil
+}
+
+func validateLiveRecorderDependencies(deps Dependencies) error {
+	if deps.RecordingService == nil {
+		return errors.New("live recording service is unavailable")
+	}
+	if deps.CredentialValues == nil {
+		return errors.New("live credential resolver is unavailable")
+	}
+	return nil
+}
+
+func liveReplayInputPath(liveRequest *runtimeSession.LiveRequest) string {
+	if liveRequest == nil {
+		return ""
+	}
+	return strings.TrimSpace(liveRequest.Replay.InputCapturePath)
+}
+
+func liveProviderCapturePath(recordPath, replayInputPath string) string {
+	if recordPath != "" {
+		return recordPath
+	}
+	return replayInputPath
+}
+
+func liveCredentialRequest(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest) serviceSession.Request {
+	credentialRequest := request
+	credentialRequest.ReplayPath = liveRequest.Replay.InputCapturePath
+	credentialRequest.Provider = liveRequest.Provider
+	credentialRequest.Model = liveRequest.Model
+	credentialRequest.BaseURL = liveRequest.BaseURL
+	return credentialRequest
+}
+
+func configureLiveCapturePath(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest) {
+	if request.RecordPath != "" || replayInputPath != "" {
+		return
+	}
+	providerCapture, ok := recorder.(runtimeRecording.ProviderCapture)
+	if !ok {
+		return
+	}
+	path := strings.TrimSpace(providerCapture.ProviderCapturePath())
+	if path != "" {
+		configureCapturePath(liveRequest, path)
+	}
 }
 
 func openSemanticRecorder(recordPath string, service runtimeRecording.Service) (runtimeSession.LiveRecorder, error) {

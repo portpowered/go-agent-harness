@@ -32,7 +32,6 @@ func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink
 		}
 	}
 }
-
 func eventFromMessage(sessionID string, msg messages.StreamMessage) session.LiveEvent {
 	observed := msg
 	event := session.LiveEvent{
@@ -44,7 +43,6 @@ func eventFromMessage(sessionID string, msg messages.StreamMessage) session.Live
 	applyMessageSessionID(&event, sessionID, msg)
 	return event
 }
-
 func applyMessagePayload(event *session.LiveEvent, msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeTextDelta {
 		applyTextDelta(event, msg)
@@ -78,7 +76,6 @@ func applyMessagePayload(event *session.LiveEvent, msg messages.StreamMessage) {
 		applyError(event, msg)
 	}
 }
-
 func applyTextDelta(event *session.LiveEvent, msg messages.StreamMessage) {
 	event.Kind = string(session.LiveEventText)
 	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
@@ -93,7 +90,6 @@ func reasoningDeltaText(msg messages.StreamMessage) string {
 	}
 	return value.Content
 }
-
 func applyTranscriptDelta(event *session.LiveEvent, msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.TranscriptDeltaValue)
 	if !ok || value == nil {
@@ -102,7 +98,6 @@ func applyTranscriptDelta(event *session.LiveEvent, msg messages.StreamMessage) 
 	event.Text = value.Text
 	event.ItemID = value.ItemID
 }
-
 func applyTranscriptEnd(event *session.LiveEvent, msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.TranscriptEndValue)
 	if !ok || value == nil {
@@ -111,7 +106,6 @@ func applyTranscriptEnd(event *session.LiveEvent, msg messages.StreamMessage) {
 	event.Text = value.FullText
 	event.ItemID = value.ItemID
 }
-
 func toolCallStartID(msg messages.StreamMessage) string {
 	value, ok := msg.Value.(*messages.ToolCallStartValue)
 	if !ok || value == nil {
@@ -119,7 +113,6 @@ func toolCallStartID(msg messages.StreamMessage) string {
 	}
 	return value.ToolCallID
 }
-
 func toolCallEndID(msg messages.StreamMessage) string {
 	value, ok := msg.Value.(*messages.ToolCallEndValue)
 	if !ok || value == nil {
@@ -127,7 +120,6 @@ func toolCallEndID(msg messages.StreamMessage) string {
 	}
 	return value.ToolCallID
 }
-
 func applySessionClose(event *session.LiveEvent, msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.SessionCloseValue)
 	if !ok || value == nil {
@@ -137,7 +129,6 @@ func applySessionClose(event *session.LiveEvent, msg messages.StreamMessage) {
 	copy := *value
 	event.Terminal = &copy
 }
-
 func applyError(event *session.LiveEvent, msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.ErrorValue)
 	if !ok || value == nil {
@@ -149,7 +140,6 @@ func applyError(event *session.LiveEvent, msg messages.StreamMessage) {
 	}
 	event.Critical = value.IsTerminal()
 }
-
 func applyMessageSessionID(event *session.LiveEvent, sessionID string, msg messages.StreamMessage) {
 	if value, ok := msg.Value.(*messages.SessionOpenValue); ok && value != nil {
 		event.SessionID = value.SessionID
@@ -159,11 +149,6 @@ func applyMessageSessionID(event *session.LiveEvent, sessionID string, msg messa
 	}
 }
 
-// observeOutput records only material output that a host could present. Tool
-// call envelopes are intentionally excluded: an in-flight tool has not
-// produced a result yet and must still classify as no output when the user
-// cancels. RoleTool deltas are included because an accepted tool result is
-// part of the visible partial transcript.
 func (h *handle) observeOutput(msg messages.StreamMessage) {
 	if h == nil || !liveOutputMessage(msg) {
 		return
@@ -180,6 +165,17 @@ func liveOutputMessage(msg messages.StreamMessage) bool {
 	switch value := msg.Value.(type) {
 	case *messages.TextDeltaValue:
 		return value != nil && strings.TrimSpace(value.Content) != ""
+	case *messages.TranscriptDeltaValue:
+		return value != nil && strings.TrimSpace(value.Text) != ""
+	case *messages.TranscriptEndValue:
+		return value != nil && strings.TrimSpace(value.FullText) != ""
+	default:
+		return liveOutputBytes(value)
+	}
+}
+
+func liveOutputBytes(value any) bool {
+	switch value := value.(type) {
 	case *messages.AudioDeltaValue:
 		return value != nil && len(value.Content) > 0
 	case *messages.ImageDeltaValue:
@@ -190,15 +186,10 @@ func liveOutputMessage(msg messages.StreamMessage) bool {
 		return value != nil && len(value.Content) > 0
 	case *messages.EmbeddingDeltaValue:
 		return value != nil && len(value.Content) > 0
-	case *messages.TranscriptDeltaValue:
-		return value != nil && strings.TrimSpace(value.Text) != ""
-	case *messages.TranscriptEndValue:
-		return value != nil && strings.TrimSpace(value.FullText) != ""
 	default:
 		return false
 	}
 }
-
 func terminalValueForMessage(msg messages.StreamMessage) *messages.SessionCloseValue {
 	if msg.Type == messages.StreamTypeSessionClose {
 		candidate, ok := msg.Value.(*messages.SessionCloseValue)
@@ -231,12 +222,6 @@ func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.
 	}
 }
 
-// liveToolContinuation records the provider-side lifecycle of one tool result.
-// The model runner acknowledges a result and requests its continuation through
-// callbacks on orderedSession, while provider output is observed on the delta
-// consumer. Keeping the two halves together at the live boundary prevents a
-// transport close or failed response from being mistaken for a clean session
-// completion.
 type liveToolContinuation struct {
 	callID                string
 	name                  string
@@ -327,11 +312,6 @@ func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 	return strings.TrimSpace(callID), strings.TrimSpace(name)
 }
 
-// observeToolResult is called only after orderedSession has received a
-// successful provider admission for a tool result. requestsContinuation is
-// true for complete-message sends whose provider API combines result delivery
-// and response creation; stream-only result sends receive the separate
-// observeContinuationRequested callback below.
 func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
 	callID = strings.TrimSpace(callID)
 	if h == nil || callID == "" {
@@ -353,10 +333,6 @@ func (h *handle) observeToolResult(callID, name string, requestsContinuation boo
 	h.toolMu.Unlock()
 }
 
-// observeContinuationRequested marks the accepted result batch that a
-// RESPONSE.CREATE is asking the provider to continue. A response request with
-// no accepted results is an ordinary user/audio turn and leaves this ledger
-// unchanged.
 func (h *handle) observeContinuationRequested() {
 	if h == nil {
 		return

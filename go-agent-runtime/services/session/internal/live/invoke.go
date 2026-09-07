@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -331,16 +330,21 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	if i.stopPumps != nil {
 		i.stopPumps()
 	}
+	// A capture worker may be blocked in a caller-provided stream read after a
+	// provider-owned terminal boundary. Close the admitted device handle before
+	// joining media workers so process-owned sources can interrupt that read;
+	// graceful playback has already drained above, and cancellation paths do not
+	// drain by design.
+	var deviceErr error
+	if i.device != nil {
+		deviceErr = i.device.Close()
+	}
 	var pumpErr error
 	for count := 0; count < i.count; count++ {
 		candidate := <-i.pumps
 		if !isExpectedMediaPumpError(candidate) {
 			pumpErr = errors.Join(pumpErr, candidate)
 		}
-	}
-	var deviceErr error
-	if i.device != nil {
-		deviceErr = i.device.Close()
 	}
 	handleErr := i.handle.Close()
 	result := errors.Join(waitErr, sinkErr, pumpErr, playbackErr, deviceErr, handleErr)
@@ -360,41 +364,28 @@ func (i *liveInvocation) closeAfterStartError(startErr error) error {
 	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
 }
 
-func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr error) error {
-	if recorder == nil {
-		return nil
+// waitForResponseBoundary includes partial assistant terminals produced by
+// barge-in cancellation.
+func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
 	}
 	if ctx == nil {
-		return errors.New("live recorder finalization context is required")
+		return errors.New("response boundary context is required")
 	}
-	// Evidence finalization is a lifecycle join. The recorder receives the
-	// invocation result but must still publish a partial bundle when the parent
-	// context was canceled, so retain the parent's values while removing only
-	// its cancellation signal.
-	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
-}
-
-func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration) error {
-	if playback == nil {
-		return nil
+	for {
+		h.mu.Lock()
+		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
+		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
+		h.mu.Unlock()
+		if ready {
+			return nil
+		}
+		select {
+		case <-terminalWake:
+		case <-responseWake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	if parent == nil {
-		return errors.New("live playback drain context is required")
-	}
-	drainer, ok := playback.(interface{ WaitForPump(context.Context) error })
-	if !ok {
-		return nil
-	}
-	if timeout == 0 {
-		timeout = defaultPlaybackDrainTimeout
-	}
-	if timeout < 0 {
-		return errors.New("live playback drain timeout must not be negative")
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	if err := drainer.WaitForPump(ctx); err != nil {
-		return fmt.Errorf("drain live playback: %w", err)
-	}
-	return nil
 }

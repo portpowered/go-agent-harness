@@ -380,27 +380,16 @@ func (h *handle) Start(ctx context.Context) error {
 	return h.start(runCtx)
 }
 
-// waitForResponseBoundary includes partial assistant terminals produced by barge-in cancellation.
-func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
+func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
+	if h == nil || scheduled <= 0 {
+		return
 	}
-	if ctx == nil {
-		return errors.New("response boundary context is required")
+	h.mu.Lock()
+	h.scheduledAudioCount = scheduled
+	if responseBase > 0 {
+		h.scheduledResponseBase = responseBase
 	}
-	for {
-		h.mu.Lock()
-		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
-		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
-		h.mu.Unlock()
-		if ready {
-			return nil
-		}
-		select {
-		case <-terminalWake:
-		case <-responseWake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+	h.mu.Unlock()
 }
+
+// waitForResponseBoundary includes partial assistant terminals produced by barge-in cancellation.

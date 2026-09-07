@@ -257,6 +257,22 @@ func (h *handle) Close() error {
 	return mediaErr
 }
 
+func (h *handle) noteCaptureDispatched() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if h.dispatchedAudioCount < h.scheduledAudioCount {
+		h.dispatchedAudioCount++
+	}
+	wake := h.captureTurnWake
+	h.captureTurnWake = make(chan struct{})
+	h.mu.Unlock()
+	if wake != nil {
+		close(wake)
+	}
+}
+
 // finishToolContinuations closes the bookkeeping loop for an accepted tool
 // result. A provider MESSAGE.END without observable continuation output is a
 // failed continuation even when the transport itself closed cleanly.

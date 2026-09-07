@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -16,12 +17,6 @@ func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	for {
 		msg, err := loop.Deltas().ReadContext(ctx)
 		if err != nil {
-			// AgentLoop.Run establishes a publication barrier before it
-			// returns, but its context is cancelled as part of that return.
-			// Drain the already published kernel deltas before terminal
-			// delivery so a fast provider cannot lose its final text/audio
-			// boundary merely because the consumer was one scheduling step
-			// behind.
 			for {
 				pending, ok := loop.Deltas().Read()
 				if !ok {
@@ -34,10 +29,6 @@ func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	}
 }
 
-// consumeCapabilityEvents drains the participant-owned browser/tool watcher
-// on its own bounded worker. A stalled room or CLI observer cannot block the
-// broker watcher, provider reader, or media admission path; publish records a
-// bounded overflow when the public event consumer falls behind.
 func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.AgentLoop, events <-chan session.LiveCapabilityEvent) {
 	defer h.runWG.Done()
 	for {
@@ -82,6 +73,37 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	return responseComplete
 }
 
+func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
+	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool ||
+		(msg.Role != "" && msg.Role != messages.RoleAssistant) {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.scheduledAudioCount <= 0 || h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
+		return
+	}
+	if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" {
+		if h.observedResponseIDs == nil {
+			h.observedResponseIDs = make(map[string]struct{})
+		}
+		if _, seen := h.observedResponseIDs[responseID]; seen {
+			return
+		}
+		h.observedResponseIDs[responseID] = struct{}{}
+	}
+	h.observedResponseTerminals++
+	wake := h.responseTerminalWake
+	if wake == nil {
+		wake = make(chan struct{})
+	}
+	h.responseTerminalWake = make(chan struct{})
+	if h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
+		h.observedResponseIDs = nil
+	}
+	close(wake)
+}
+
 func (h *handle) signalResponseWake() {
 	if h == nil {
 		return
@@ -107,15 +129,6 @@ func (h *handle) publishMessage(msg messages.StreamMessage) {
 	h.publish(event, false)
 }
 
-func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
-	// SESSION.CLOSE is the provider's terminal application boundary. Publish
-	// it before initiating cleanup; transport Done remains the join signal,
-	// not a prerequisite for asking an otherwise-open connection to close.
-	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
-		h.stopGracefully()
-	}
-}
-
 func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLoop) {
 	prompt, parts, responseMode, ok := h.claimOpeningMessage()
 	if !ok {
@@ -132,9 +145,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 			h.failOpeningMessage(err)
 			return
 		}
-		// A rich message that requested a response is itself the finite turn
-		// boundary. A queued rich message remains open for the following audio
-		// commit, which owns the response boundary instead.
 		if requestResponse && h.request.FinishAfterResponse && !h.captureSourceIsActive() {
 			h.markCaptureComplete()
 		}
@@ -145,9 +155,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 		return
 	}
 	if h.request.FinishAfterResponse && !h.captureSourceIsActive() {
-		// A plain opening prompt is a finite turn boundary only when this
-		// invocation has no separately admitted capture source. Persistent and
-		// scheduled audio must reach their own EOF/boundary policy first.
 		h.markCaptureComplete()
 	}
 }
@@ -191,11 +198,6 @@ func (h *handle) failOpeningMessage(err error) {
 	h.Cancel(err)
 }
 
-// observeTerminalValue retains the most specific provider-authored terminal
-// value seen during the invocation. The final lifecycle event is emitted
-// after all workers join, so keeping this typed value here lets hosts observe
-// provider-close metadata even when graceful replay cleanup cancels the loop
-// before a second transport path can synthesize it.
 func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	if h == nil {
 		return
@@ -206,9 +208,6 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	}
 	h.mu.Lock()
 	if msg.Type == messages.StreamTypeSessionClose {
-		// A provider SESSION.CLOSE is an irreversible admission boundary. Keep
-		// its concrete reason/classification even when a queued MESSAGE.END is
-		// observed afterward and would otherwise synthesize a blank summary.
 		if !h.providerCloseObserved || h.terminalValue == nil {
 			h.terminalValue = value
 		}
@@ -232,12 +231,6 @@ func (h *handle) markCaptureComplete() {
 	}
 }
 
-// waitForResponseStart waits for the provider's first response lifecycle
-// event. A client-owned MESSAGE.END can be accepted into an asynchronous
-// response-intent queue before the provider has written response.created; a
-// finite barge turn must wait for that authoritative boundary before sending
-// RESPONSE.CANCEL, otherwise its input can win the race and trigger an
-// implicit cancellation after the new audio has already crossed the wire.
 func (h *handle) waitForResponseStart(ctx context.Context) error {
 	if h == nil {
 		return context.Canceled

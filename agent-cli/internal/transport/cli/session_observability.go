@@ -112,18 +112,42 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 }
 
 func (c *SessionCommand) legacyReplayOwnsPassiveInvocation(request serviceSession.Request) bool {
-	return c != nil && c.sessionService != nil &&
-		strings.TrimSpace(request.RecordPath) == "" &&
-		strings.TrimSpace(request.RecordDirectory) == "" &&
-		strings.TrimSpace(request.AudioOutputPath) == "" &&
-		strings.TrimSpace(request.RecordSessionCapturePath) == "" &&
-		!request.PromptProvided && !request.TextSeed.Present &&
-		!request.BareLive && !request.BrowserToolsEnabled && !request.ComputerUse &&
-		!request.AudioInput.Present && !request.AudioInput.DevicePresent &&
-		len(request.AudioTurns) == 0 && len(request.ImagePaths) == 0 &&
-		request.AudioOutputDevice == "" && request.AudioInputDevice == "" &&
-		!request.AudioOutputDevicePresent && !request.AudioInputDevicePresent &&
-		!request.WaitForClose && !request.TraceAudio
+	if c == nil {
+		return false
+	}
+	if c.sessionService == nil {
+		return false
+	}
+	return passiveReplayRequest(request)
+}
+
+func passiveReplayRequest(request serviceSession.Request) bool {
+	for _, disqualifies := range []bool{
+		strings.TrimSpace(request.RecordPath) != "",
+		strings.TrimSpace(request.RecordDirectory) != "",
+		strings.TrimSpace(request.AudioOutputPath) != "",
+		strings.TrimSpace(request.RecordSessionCapturePath) != "",
+		request.PromptProvided,
+		request.TextSeed.Present,
+		request.BareLive,
+		request.BrowserToolsEnabled,
+		request.ComputerUse,
+		request.AudioInput.Present,
+		request.AudioInput.DevicePresent,
+		len(request.AudioTurns) > 0,
+		len(request.ImagePaths) > 0,
+		request.AudioOutputDevice != "",
+		request.AudioInputDevice != "",
+		request.AudioOutputDevicePresent,
+		request.AudioInputDevicePresent,
+		request.WaitForClose,
+		request.TraceAudio,
+	} {
+		if disqualifies {
+			return false
+		}
+	}
+	return true
 }
 
 // runRuntimeLiveSession is the CLI host adapter for a complete continuous

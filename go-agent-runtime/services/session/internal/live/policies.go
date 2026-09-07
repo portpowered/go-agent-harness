@@ -33,18 +33,15 @@ type retryRequest struct {
 func (h *handle) firstTurnPolicyEnabled() bool {
 	return h != nil && (h.request.RequireFirstTurn || h.request.FirstTurnTimeout > 0)
 }
-
 func (h *handle) firstTurnTimeout() time.Duration {
 	if h == nil || h.request.FirstTurnTimeout <= 0 {
 		return defaultFirstTurnTimeout
 	}
 	return h.request.FirstTurnTimeout
 }
-
 func (h *handle) rateLimitRetryEnabled() bool {
 	return h != nil && h.request.RateLimitRetry.Enabled
 }
-
 func (h *handle) observeFirstTurn(ctx context.Context, msg messages.StreamMessage) {
 	if h == nil || !h.firstTurnPolicyEnabled() {
 		return
@@ -103,7 +100,6 @@ func (h *handle) watchFirstTurn(ctx context.Context) {
 	case <-ctx.Done():
 	}
 }
-
 func isFirstTurnResponseBoundary(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeMessageStart ||
 		msg.Type == messages.StreamTypeMessageEnd ||
@@ -115,7 +111,6 @@ func isFirstTurnResponseBoundary(msg messages.StreamMessage) bool {
 		msg.Type == messages.StreamTypeTranscriptStart ||
 		msg.Type == messages.StreamTypeError
 }
-
 func (h *handle) observeRateLimit(loop *agentloop.AgentLoop, msg messages.StreamMessage) {
 	if h == nil || loop == nil || !h.rateLimitRetryEnabled() || msg.Type != messages.StreamTypeMessageEnd {
 		return
@@ -155,7 +150,6 @@ func (h *handle) claimRateLimitRetry() bool {
 	h.retriesUsed++
 	return true
 }
-
 func (h *handle) parentContext() context.Context {
 	if h == nil {
 		return context.Background()
@@ -168,7 +162,6 @@ func (h *handle) parentContext() context.Context {
 	}
 	return ctx
 }
-
 func (h *handle) runRateLimitRetry(ctx context.Context, defaultLoop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	for {
@@ -342,6 +335,30 @@ func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) 
 
 func (h *handle) openingAdmissionRequired() bool {
 	return h != nil && len(h.request.OpeningContentParts) > 0
+}
+
+func newScheduledAudioIncompleteError(scheduled, dispatched, completed int, terminal *messages.SessionCloseValue) error {
+	if scheduled <= 0 {
+		return nil
+	}
+	if completed < 0 {
+		completed = 0
+	}
+	if completed > scheduled {
+		completed = scheduled
+	}
+	if dispatched > scheduled {
+		dispatched = scheduled
+	}
+	if completed >= scheduled && dispatched >= scheduled {
+		return nil
+	}
+	incomplete := &session.LiveScheduledAudioIncompleteError{Completed: completed, Dispatched: dispatched, Scheduled: scheduled}
+	if terminal != nil {
+		incomplete.ProviderStatus = terminal.Classification
+		incomplete.ProviderDetails = terminal.Reason
+	}
+	return incomplete
 }
 
 func (h *handle) markOpeningAdmitted(err error) {
