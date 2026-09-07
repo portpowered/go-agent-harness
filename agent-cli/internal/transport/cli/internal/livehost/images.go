@@ -2,12 +2,12 @@ package livehost
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -16,77 +16,107 @@ import (
 
 const liveImageToolPathDescription = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
 
+const (
+	liveImageStagingDirectoryMode os.FileMode = 0o700
+	liveImageStagingFileMode      os.FileMode = 0o600
+)
+
 // stageLiveOpeningImages gives read_image a session-owned copy of each
 // opening image and rewrites the participant capability snapshot before the
 // live runner admits it. The live runtime receives image bytes, not host paths;
 // only the tool definition and the short-lived staged files carry the path
 // contract needed by a later provider tool call.
-func stageLiveOpeningImages(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest) (func(), error) {
+func stageLiveOpeningImages(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest) (func() error, error) {
 	if liveRequest == nil || len(request.ImagePaths) == 0 || liveRequest.Capabilities == nil ||
 		!hasLiveTool(liveRequest.Capabilities.Definitions, runtimeTools.ReadImageToolID) {
-		return func() {}, nil
+		return noImageCleanup, nil
 	}
 
-	parts := make([]messages.ImagePart, 0, len(liveRequest.OpeningContentParts))
-	for _, content := range liveRequest.OpeningContentParts {
-		part, ok := content.(messages.ImagePart)
-		if !ok {
-			return func() {}, fmt.Errorf("stage live session images: opening content part %T is not an image", content)
-		}
-		parts = append(parts, part)
+	parts, err := liveOpeningImageParts(liveRequest.OpeningContentParts)
+	if err != nil {
+		return noImageCleanup, err
 	}
 	if len(request.ImagePaths) != len(parts) {
-		return func() {}, fmt.Errorf("stage live session images: source path count %d does not match image part count %d", len(request.ImagePaths), len(parts))
+		return noImageCleanup, fmt.Errorf("stage live session images: source path count %d does not match image part count %d", len(request.ImagePaths), len(parts))
 	}
 
 	configDir, err := liveImageStagingConfigDir(request.ConfigDir)
 	if err != nil {
-		return func() {}, fmt.Errorf("stage live session images: %w", err)
+		return noImageCleanup, fmt.Errorf("stage live session images: %w", err)
 	}
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		return func() {}, fmt.Errorf("stage live session images in %q: create config directory: %w", configDir, err)
-	}
-	stageDir, err := os.MkdirTemp(configDir, ".session-images-*")
+	stagedPaths, cleanup, err := stageLiveImageFiles(configDir, request.ImagePaths, parts)
 	if err != nil {
-		return func() {}, fmt.Errorf("stage live session images in %q: create staging directory: %w", configDir, err)
-	}
-	cleanup := func() { _ = os.RemoveAll(stageDir) }
-
-	stagedPaths := make([]string, len(parts))
-	for index, part := range parts {
-		path := filepath.Join(stageDir, fmt.Sprintf("image-%03d%s", index, liveImageStageExtension(request.ImagePaths[index], part.MediaType)))
-		if err := os.WriteFile(path, part.Bytes, 0o600); err != nil {
-			cleanup()
-			return func() {}, fmt.Errorf("stage live session image %q: %w", request.ImagePaths[index], err)
-		}
-		stagedPaths[index] = filepath.Clean(path)
+		return noImageCleanup, err
 	}
 
 	capabilities := *liveRequest.Capabilities
+	configureStagedLiveCapabilities(&capabilities, stagedPaths)
+	liveRequest.Capabilities = &capabilities
+	return cleanup, nil
+}
+
+func noImageCleanup() error { return nil }
+
+func liveOpeningImageParts(contentParts []messages.ContentPart) ([]messages.ImagePart, error) {
+	parts := make([]messages.ImagePart, 0, len(contentParts))
+	for _, content := range contentParts {
+		part, ok := content.(messages.ImagePart)
+		if !ok {
+			return nil, fmt.Errorf("stage live session images: opening content part %T is not an image", content)
+		}
+		parts = append(parts, part)
+	}
+	return parts, nil
+}
+
+func stageLiveImageFiles(configDir string, sourcePaths []string, parts []messages.ImagePart) ([]string, func() error, error) {
+	if err := os.MkdirAll(configDir, liveImageStagingDirectoryMode); err != nil {
+		return nil, noImageCleanup, fmt.Errorf("stage live session images in %q: create config directory: %w", configDir, err)
+	}
+	stageDir, err := os.MkdirTemp(configDir, ".session-images-*")
+	if err != nil {
+		return nil, noImageCleanup, fmt.Errorf("stage live session images in %q: create staging directory: %w", configDir, err)
+	}
+	cleanup := func() error { return os.RemoveAll(stageDir) }
+
+	stagedPaths := make([]string, len(parts))
+	for index, part := range parts {
+		path := filepath.Join(stageDir, fmt.Sprintf("image-%03d%s", index, liveImageStageExtension(sourcePaths[index], part.MediaType)))
+		if err := os.WriteFile(path, part.Bytes, liveImageStagingFileMode); err != nil {
+			cleanupErr := cleanup()
+			return nil, noImageCleanup, errors.Join(fmt.Errorf("stage live session image %q: %w", sourcePaths[index], err), cleanupErr)
+		}
+		stagedPaths[index] = filepath.Clean(path)
+	}
+	return stagedPaths, cleanup, nil
+}
+
+func configureStagedLiveCapabilities(capabilities *runtimeSession.LiveCapabilities, stagedPaths []string) {
+	if capabilities == nil {
+		return
+	}
 	capabilities.Definitions = advertiseLiveImagePaths(capabilities.Definitions, stagedPaths)
 	if capabilities.Handle != nil {
 		capabilities.Handle = &stagedLiveCapabilityHandle{inner: capabilities.Handle, paths: append([]string(nil), stagedPaths...)}
-	} else if refresh := capabilities.RefreshDefinitions; refresh != nil {
-		capabilities.RefreshDefinitions = func(ctx context.Context) ([]messages.ToolDefinition, error) {
-			definitions, err := refresh(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return advertiseLiveImagePaths(definitions, stagedPaths), nil
-		}
+		return
 	}
-	liveRequest.Capabilities = &capabilities
-	return cleanup, nil
+	refresh := capabilities.RefreshDefinitions
+	if refresh == nil {
+		return
+	}
+	capabilities.RefreshDefinitions = func(ctx context.Context) ([]messages.ToolDefinition, error) {
+		definitions, err := refresh(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return advertiseLiveImagePaths(definitions, stagedPaths), nil
+	}
 }
 
 func liveImageStagingConfigDir(configDir string) (string, error) {
 	configDir = strings.TrimSpace(configDir)
 	if configDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w", err)
-		}
-		configDir = filepath.Join(homeDir, config.ConfigDirName)
+		return "", errors.New("config directory is required")
 	}
 	abs, err := filepath.Abs(configDir)
 	if err != nil {

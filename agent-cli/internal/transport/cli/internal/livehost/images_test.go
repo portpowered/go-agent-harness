@@ -45,7 +45,11 @@ func TestStageLiveOpeningImagesRewritesAndCleansCapabilityPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stageLiveOpeningImages: %v", err)
 	}
-	defer cleanup()
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Errorf("cleanup staged images: %v", err)
+		}
+	})
 
 	path := stagedReadImagePath(t, liveRequest.Capabilities.Definitions)
 	if !filepath.IsAbs(path) || !strings.HasPrefix(path, filepath.Clean(root)+string(os.PathSeparator)) {
@@ -68,7 +72,9 @@ func TestStageLiveOpeningImagesRewritesAndCleansCapabilityPaths(t *testing.T) {
 		t.Fatalf("refreshed staged path = %q, want %q", refreshedPath, path)
 	}
 
-	cleanup()
+	if err := cleanup(); err != nil {
+		t.Fatalf("cleanup staged images: %v", err)
+	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("staged image after cleanup: err=%v, want not-exist", err)
 	}
