@@ -68,6 +68,11 @@ type LiveEvidenceOptions struct {
 	// ProviderCapturePath is an optional explicit raw-capture destination, such
 	// as a separately requested --record file. Empty uses the private spool.
 	ProviderCapturePath string
+	// DisableProviderCaptureSidecar prevents a replayed provider capture from
+	// claiming the semantic sibling already owned by the source invocation.
+	// The raw ProviderCapturePath remains available for immutable bundle
+	// evidence, but no new terminal sidecar is written beside it.
+	DisableProviderCaptureSidecar bool
 }
 
 // ProviderCapture is the optional composition port used to direct the provider

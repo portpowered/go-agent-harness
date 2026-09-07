@@ -37,7 +37,7 @@ type durationSidecarMessage struct {
 }
 
 func (r *directoryRecorder) writeDurationSidecarTerminal(timestamp time.Time, value *messages.SessionCloseValue) error {
-	if r == nil || value == nil || r.sidecarWritten {
+	if r == nil || value == nil || r.sidecarWritten || r.options.DisableProviderCaptureSidecar {
 		return nil
 	}
 	path := durationSidecarPath(r.options.ProviderCapturePath)

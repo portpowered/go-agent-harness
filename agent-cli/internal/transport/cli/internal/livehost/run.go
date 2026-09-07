@@ -197,13 +197,14 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		return nil, err
 	}
 	recorder, err := deps.RecordingService.OpenLiveEvidence(runtimeRecording.LiveEvidenceOptions{
-		Destination:         request.RecordDirectory,
-		SessionID:           liveRequest.SessionID,
-		ParticipantID:       liveRequest.ParticipantID,
-		Provider:            liveRequest.Provider,
-		Model:               liveRequest.Model,
-		Credentials:         credentials,
-		ProviderCapturePath: providerCapturePath,
+		Destination:                   request.RecordDirectory,
+		SessionID:                     liveRequest.SessionID,
+		ParticipantID:                 liveRequest.ParticipantID,
+		Provider:                      liveRequest.Provider,
+		Model:                         liveRequest.Model,
+		Credentials:                   credentials,
+		ProviderCapturePath:           providerCapturePath,
+		DisableProviderCaptureSidecar: request.RecordPath == "" && replayInputPath != "",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open live recording: %w", err)

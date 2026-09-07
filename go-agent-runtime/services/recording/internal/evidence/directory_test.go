@@ -237,6 +237,57 @@ func TestDirectoryRecorderWritesOneDurationSidecarTerminal(t *testing.T) {
 	}
 }
 
+func TestDirectoryRecorderReplayProviderSourceDoesNotClaimExistingSidecar(t *testing.T) {
+	root := t.TempDir()
+	rawPath := filepath.Join(root, "source.session.json")
+	if err := os.WriteFile(rawPath, []byte(`{"provider":"replayed"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	sidecarPath := strings.TrimSuffix(rawPath, filepath.Ext(rawPath)) + ".jsonl"
+	originalSidecar := []byte("source-owned-sidecar\n")
+	if err := os.WriteFile(sidecarPath, originalSidecar, evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination:                   filepath.Join(root, "recording"),
+		ProviderCapturePath:           rawPath,
+		DisableProviderCaptureSidecar: true,
+		ClockBase:                     evidenceTime(),
+		WallClockStart:                evidenceTime(),
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		"fixture", "replay_complete", "replay_complete", messages.TerminalReasonReplayComplete,
+		messages.TerminalProvenanceReplay, messages.TerminalOutputComplete,
+	)
+	if err := r.RecordEvent(t.Context(), session.LiveEvent{Kind: string(session.LiveEventTerminal), Timestamp: evidenceTime(), Terminal: terminal}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(sidecarPath); err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(got, originalSidecar) {
+		t.Fatalf("source sidecar changed: got %q, want %q", got, originalSidecar)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.RecordingStatus != nil {
+		t.Fatalf("replay provider source was marked partial: %+v", manifest.RecordingStatus)
+	}
+	providerArtifacts := 0
+	for _, artifact := range manifest.Artifacts {
+		if artifact.Path == "provider.json" {
+			providerArtifacts++
+		}
+	}
+	if providerArtifacts != 1 {
+		t.Fatalf("replay provider artifacts = %d in %+v, want provider.json", providerArtifacts, manifest.Artifacts)
+	}
+}
+
 func decodeDurationSidecarTerminal(t *testing.T, line []byte) (messages.SessionCloseValue, bool) {
 	t.Helper()
 	record, err := transcript.Decode(line)
