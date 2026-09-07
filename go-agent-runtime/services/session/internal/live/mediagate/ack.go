@@ -8,6 +8,28 @@ import (
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
+type inboundFrame struct {
+	frame    sharedaudio.PCMFrame
+	observed chan struct{}
+}
+
+func (p *inboundPort) awaitObserved(ctx context.Context, admitted inboundFrame) (sharedaudio.PCMFrame, error) {
+	// Preserve an observed frame when teardown closes the port concurrently.
+	select {
+	case <-admitted.observed:
+		return admitted.frame, nil
+	default:
+	}
+	select {
+	case <-admitted.observed:
+		return admitted.frame, nil
+	case <-p.done:
+		return sharedaudio.PCMFrame{}, p.operationError()
+	case <-ctx.Done():
+		return sharedaudio.PCMFrame{}, ctx.Err()
+	}
+}
+
 // registerAck creates a private provider-dispatch acknowledgement for one
 // explicit live control. AgentLoop's public enqueue methods acknowledge only
 // admission into their runner queue; the live boundary needs to wait until the

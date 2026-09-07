@@ -9,7 +9,7 @@ import (
 
 type inboundPort struct {
 	mu                 sync.Mutex
-	frames             chan sharedaudio.PCMFrame
+	frames             chan inboundFrame
 	done               chan struct{}
 	closeOnce          sync.Once
 	err                error
@@ -47,7 +47,7 @@ func (p *inboundPort) getPlaybackController() sharedaudio.PlaybackController {
 }
 
 func newInboundPort(capacity int) *inboundPort {
-	return &inboundPort{frames: make(chan sharedaudio.PCMFrame, capacity), done: make(chan struct{}), space: make(chan struct{})}
+	return &inboundPort{frames: make(chan inboundFrame, capacity), done: make(chan struct{}), space: make(chan struct{})}
 }
 
 func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
@@ -57,15 +57,15 @@ func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 	// Prefer already buffered media at teardown so a caller can drain a
 	// provider's final frame before observing the terminal operation error.
 	select {
-	case frame := <-p.frames:
+	case admitted := <-p.frames:
 		p.notifySpace()
-		return frame, nil
+		return p.awaitObserved(ctx, admitted)
 	default:
 	}
 	select {
-	case frame := <-p.frames:
+	case admitted := <-p.frames:
 		p.notifySpace()
-		return frame, nil
+		return p.awaitObserved(ctx, admitted)
 	case <-p.done:
 		return sharedaudio.PCMFrame{}, p.operationError()
 	case <-ctx.Done():
@@ -73,7 +73,7 @@ func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 	}
 }
 
-func (p *inboundPort) push(ctx context.Context, frame sharedaudio.PCMFrame) error {
+func (p *inboundPort) push(ctx context.Context, frame sharedaudio.PCMFrame, observe func()) error {
 	if p == nil {
 		return ErrMediaUnavailable
 	}
@@ -84,14 +84,26 @@ func (p *inboundPort) push(ctx context.Context, frame sharedaudio.PCMFrame) erro
 		p.fail(ErrMediaQueueFull)
 		return ErrMediaQueueFull
 	}
+	select {
+	case <-p.done:
+		return p.operationError()
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	frame.Samples = append([]int16(nil), frame.Samples...)
+	admitted := inboundFrame{frame: frame, observed: make(chan struct{})}
 	for {
 		select {
 		case <-p.done:
 			return p.operationError()
 		case <-ctx.Done():
 			return ctx.Err()
-		case p.frames <- frame:
+		case p.frames <- admitted:
+			if observe != nil {
+				observe()
+			}
+			close(admitted.observed)
 			return nil
 		default:
 			if err := p.waitForSpace(ctx); err != nil {

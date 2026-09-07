@@ -97,6 +97,92 @@ func TestCloseCancelsBridgeAfterInvocationContextCancellation(t *testing.T) {
 	}
 }
 
+func TestInboundFrameIsObservedBeforeReaderCanPublishIt(t *testing.T) {
+	port := newInboundPort(1)
+	observationStarted := make(chan struct{})
+	releaseObservation := make(chan struct{})
+	pushErr := make(chan error, 1)
+	go func() {
+		pushErr <- port.push(t.Context(), sharedaudio.PCMFrame{Samples: []int16{7}}, func() {
+			close(observationStarted)
+			<-releaseObservation
+		})
+	}()
+	select {
+	case <-observationStarted:
+	case <-time.After(time.Second):
+		t.Fatal("frame observation did not start")
+	}
+
+	type readResult struct {
+		frame sharedaudio.PCMFrame
+		err   error
+	}
+	read := make(chan readResult, 1)
+	go func() {
+		frame, err := port.ReadFrame(t.Context())
+		read <- readResult{frame: frame, err: err}
+	}()
+	select {
+	case result := <-read:
+		t.Fatalf("ReadFrame returned before observation completed: %+v", result)
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(releaseObservation)
+	if err := <-pushErr; err != nil {
+		t.Fatalf("push frame: %v", err)
+	}
+	result := <-read
+	if result.err != nil || !reflect.DeepEqual(result.frame.Samples, []int16{7}) {
+		t.Fatalf("ReadFrame = %+v, want observed frame", result)
+	}
+
+	port.close()
+	called := false
+	if err := port.push(t.Context(), sharedaudio.PCMFrame{Samples: []int16{9}}, func() { called = true }); !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
+		t.Fatalf("push after close = %v, want session media closed", err)
+	}
+	if called {
+		t.Fatal("rejected frame was observed")
+	}
+
+	cancelPort := newInboundPort(1)
+	blocked := make(chan struct{})
+	release := make(chan struct{})
+	pushDone := make(chan error, 1)
+	go func() {
+		pushDone <- cancelPort.push(t.Context(), sharedaudio.PCMFrame{Samples: []int16{11}}, func() {
+			close(blocked)
+			<-release
+		})
+	}()
+	<-blocked
+	readCtx, cancelRead := context.WithCancel(t.Context())
+	cancelRead()
+	if frame, err := cancelPort.ReadFrame(readCtx); !errors.Is(err, context.Canceled) || len(frame.Samples) != 0 {
+		t.Fatalf("canceled ReadFrame = (%+v, %v), want no unobserved frame and context cancellation", frame, err)
+	}
+	close(release)
+	if err := <-pushDone; err != nil {
+		t.Fatalf("finish observed frame push: %v", err)
+	}
+	cancelPort.close()
+}
+
+func TestInboundPortDrainsObservedFrameAfterClose(t *testing.T) {
+	port := newInboundPort(1)
+	want := sharedaudio.PCMFrame{Samples: []int16{13}}
+	if err := port.push(t.Context(), want, func() {}); err != nil {
+		t.Fatalf("push observed frame: %v", err)
+	}
+	port.close()
+
+	got, err := port.ReadFrame(t.Context())
+	if err != nil || !reflect.DeepEqual(got.Samples, want.Samples) {
+		t.Fatalf("ReadFrame after close = (%+v, %v), want buffered observed frame", got, err)
+	}
+}
+
 type closeErrorOutbound struct{ err error }
 
 func (*closeErrorOutbound) WriteFrame(context.Context, sharedaudio.PCMFrame) error { return nil }

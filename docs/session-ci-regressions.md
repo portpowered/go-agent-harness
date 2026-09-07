@@ -69,11 +69,26 @@ ordering problems:
 On macOS, the cumulative cohort passed three complete iterations in normal and
 coverage modes and three complete race iterations. Each mode included 60 high-rate
 audio trials. The exact-marker unit checks passed 100 repetitions; the direct and
-suite Family B checks passed 30 repetitions each. Earlier diagnostic runs removed
-the 30-second Family B hang but still saw fast normalized-transcript timestamp
-ordering failures in 3/50 and 4/100 suite repetitions even though provider-local
-events were ordered. Keep that recorder-ordering observation visible when triaging
-future hosted failures; the matcher does not weaken the logical-clock assertions.
+suite Family B checks passed 30 repetitions each. Hosted run 34151678218 later
+passed the high-rate suite but reproduced one Family B recording-order failure in
+the coverage job. Exact local coverage repetitions reproduced four failures in 200
+runs: stdout had already delivered the original PCM marker, while the normalized
+MESSAGE.START/audio observation was recorded after RESPONSE.CANCEL and the
+correction input.
+
+The media bridge now finishes bounded recorder admission before it makes each
+frame readable to the device. A device reader waiting for recorder admission
+remains cancellable, and a final frame whose observation completed still drains
+after concurrent port closure. This establishes the device/recording order without
+sorting timestamps; device delivery waits for that bounded recorder admission.
+It does not yet identify an untagged bridged frame with its provider response. The
+Family B fixture omits provider item IDs; adding them exposed a second real gap:
+server-VAD interruption can discard the queued response-end marker after a frame
+has reached the downstream finite processor, so the next tagged response can fail
+with `ErrStreamIdentityChanged`. The ambiguous parser and tagged-fixture
+experiments were removed. Family B response correlation and interruption reset
+propagation remain explicit follow-up work; the exact marker does not weaken the
+logical-clock assertions.
 
 The Family B fixture was decomposed from one 801-line file into files of 275, 120,
 211, and 231 lines. Total fixture code grew slightly because each focused file has
