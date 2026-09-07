@@ -115,6 +115,7 @@ tools:
 							Content:    currentResult[msg.ToolCallId],
 						})
 						delete(currentResult, msg.ToolCallId)
+						sessionInferencer.observeResult(msg.ToolCallId)
 					}
 				}
 			})
@@ -284,16 +285,24 @@ func (i *sessionConfigToolInferencer) close() {
 	}
 }
 
+func (i *sessionConfigToolInferencer) observeResult(callID string) {
+	if i.sess != nil {
+		i.sess.observeResult(callID)
+	}
+}
+
 type sessionConfigToolSession struct {
-	inferencer    *sessionConfigToolInferencer
-	recv          *messages.TypedBuffer[messages.StreamMessage]
-	done          chan struct{}
-	once          sync.Once
-	mu            sync.Mutex
-	nextCall      int
-	acceptedCalls int
-	observedCalls []sessionConfigToolCall
-	advertised    map[string]bool
+	inferencer        *sessionConfigToolInferencer
+	recv              *messages.TypedBuffer[messages.StreamMessage]
+	done              chan struct{}
+	once              sync.Once
+	mu                sync.Mutex
+	nextCall          int
+	acceptedCalls     int
+	observedCalls     []sessionConfigToolCall
+	observedResultIDs map[string]struct{}
+	continuationSent  bool
+	advertised        map[string]bool
 }
 
 func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -327,7 +336,10 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		s.mu.Unlock()
 		if closeAfterAcceptance {
 			s.emitContinuation()
-			s.inferencer.close()
+			s.mu.Lock()
+			s.continuationSent = true
+			s.mu.Unlock()
+			s.closeWhenObserved()
 		}
 		return true
 	}
@@ -365,6 +377,25 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		}
 	}
 	return true
+}
+
+func (s *sessionConfigToolSession) observeResult(callID string) {
+	s.mu.Lock()
+	if s.observedResultIDs == nil {
+		s.observedResultIDs = make(map[string]struct{}, len(s.inferencer.calls))
+	}
+	s.observedResultIDs[callID] = struct{}{}
+	s.mu.Unlock()
+	s.closeWhenObserved()
+}
+
+func (s *sessionConfigToolSession) closeWhenObserved() {
+	s.mu.Lock()
+	ready := s.continuationSent && len(s.observedResultIDs) == len(s.inferencer.calls)
+	s.mu.Unlock()
+	if ready {
+		s.inferencer.close()
+	}
 }
 
 func (s *sessionConfigToolSession) emitContinuation() {
