@@ -1,6 +1,8 @@
 package plan
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -61,5 +63,29 @@ func TestReplayAudioSampleRates(t *testing.T) {
 	}
 	if input != 24000 || output != 16000 {
 		t.Fatalf("replayAudioSampleRates() = %d/%d, want 24000/16000", input, output)
+	}
+}
+
+func TestReplaySessionAudioSampleRatesSupportsLegacyFormats(t *testing.T) {
+	input, output, err := replaySessionAudioSampleRates(map[string]json.RawMessage{
+		"input_audio_format":  json.RawMessage(`{"rate":16000}`),
+		"output_audio_format": json.RawMessage(`"pcm16"`),
+	})
+	if err != nil {
+		t.Fatalf("legacy sample rates: %v", err)
+	}
+	if input != 16000 || output != 0 {
+		t.Fatalf("legacy sample rates = %d/%d, want 16000/0", input, output)
+	}
+	if input, output, err := replaySessionAudioSampleRates(map[string]json.RawMessage{
+		"input_audio_format":  json.RawMessage("null"),
+		"output_audio_format": json.RawMessage("null"),
+	}); err != nil || input != 0 || output != 0 {
+		t.Fatalf("empty legacy sample rates = %d/%d, %v", input, output, err)
+	}
+	if _, _, err := replaySessionAudioSampleRates(map[string]json.RawMessage{
+		"input_audio_format": json.RawMessage(`{"rate":`),
+	}); err == nil || !strings.Contains(err.Error(), "decode input audio format") {
+		t.Fatalf("malformed legacy sample rate error = %v", err)
 	}
 }
