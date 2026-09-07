@@ -35,7 +35,8 @@ identified recurring scenarios by name, retaining the meaningful negative contro
 
 ## Stabilization findings
 
-The five source runs exposed two lifecycle races and one fixture ordering bug:
+The five source runs exposed a continuation-admission race and two fixture
+ordering problems:
 
 - Tool results and provider responses cross separate queues. The live adapter now
   records a tool-result or continuation admission before calling a provider that
@@ -65,7 +66,7 @@ events were ordered. Keep that recorder-ordering observation visible when triagi
 future hosted failures; the matcher does not weaken the logical-clock assertions.
 
 The Family B fixture was decomposed from one 801-line file into files of 275, 120,
-211, and 226 lines. Total fixture code grew slightly because each focused file has
+211, and 231 lines. Total fixture code grew slightly because each focused file has
 its own package/import structure and the marker received dedicated tests. The
 largest file fell by 526 lines (65.7%). Live event translation is isolated in the
 `eventcodec` package, continuation lifecycle code is grouped in `continuation.go`,
