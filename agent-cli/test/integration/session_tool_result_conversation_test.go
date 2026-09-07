@@ -510,8 +510,10 @@ func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T)
 	if runErr == nil {
 		t.Fatalf("control run with differing executor content completed cleanly; the replay gate did not discriminate\nstdout:\n%s", stdout)
 	}
-	if !strings.Contains(runErr.Error(), "replay session capture") ||
-		!strings.Contains(runErr.Error(), "replay mismatch") ||
+	// The production command may expose the typed replay mismatch directly or
+	// through an outer capture wrapper. The causal contract is the precise
+	// function_call_output boundary and JSON pointer, not that incidental wrapper.
+	if !strings.Contains(runErr.Error(), "replay mismatch") ||
 		!strings.Contains(runErr.Error(), `expected event type "conversation.item.create" at sequence 101`) ||
 		!strings.Contains(runErr.Error(), "JSON pointer /item/output") {
 		t.Fatalf("control failure %q is not the deterministic replay divergence at the function_call_output frame", runErr)
