@@ -194,3 +194,49 @@ func (s *duplexProgressState) outputIsClosed() bool {
 	defer s.mu.Unlock()
 	return s.outputClosed
 }
+
+// WaitForOutputSequence waits until the exact sequence has crossed stdout.
+// Segment gates are sequential; only one sequence waiter may be active at a time.
+// Duplex input segments install at most one sequence gate at a time; callers
+// must likewise avoid concurrent sequence waits on the same progress value.
+func (p *DuplexProgress) WaitForOutputSequence(ctx context.Context, sequence []byte) error {
+	if len(sequence) == 0 {
+		return nil
+	}
+	if len(sequence) > duplexProgressOutputWindow {
+		return fmt.Errorf("%w: output sequence exceeds %d-byte progress window", ErrDuplexConfigInvalid, duplexProgressOutputWindow)
+	}
+	if p == nil || p.state == nil {
+		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
+	}
+	return p.state.waitForOutputSequence(ctx, sequence)
+}
+
+func validateDuplexSegment(segment DuplexAudioSegment) error {
+	if len(segment.PCM16)%2 != 0 {
+		return fmt.Errorf("%w: segment %q has odd PCM16 length %d", ErrDuplexInputInvalid, segment.ID, len(segment.PCM16))
+	}
+	if segment.DelayBefore < 0 || segment.SilenceFor < 0 || segment.WaitForOutputBytes < 0 || segment.WaitForOutputReads < 0 {
+		return fmt.Errorf("%w: segment %q has a negative delay, silence, or output gate", ErrDuplexConfigInvalid, segment.ID)
+	}
+	if len(segment.WaitForOutputSequence) > duplexProgressOutputWindow {
+		return fmt.Errorf("%w: segment %q output sequence exceeds %d-byte progress window", ErrDuplexConfigInvalid, segment.ID, duplexProgressOutputWindow)
+	}
+	if len(segment.PCM16) == 0 && segment.SilenceFor <= 0 {
+		return fmt.Errorf("%w: segment %q has no PCM16 or silence duration", ErrDuplexInputInvalid, segment.ID)
+	}
+	return nil
+}
+
+func (p *DuplexProgress) waitForSegmentOutput(ctx context.Context, segment DuplexAudioSegment) error {
+	if err := p.WaitForOutputBytes(ctx, segment.WaitForOutputBytes); err != nil {
+		return duplexPipeError("wait for output bytes", err)
+	}
+	if err := p.WaitForOutputSequence(ctx, segment.WaitForOutputSequence); err != nil {
+		return duplexPipeError("wait for output sequence", err)
+	}
+	if err := p.WaitForOutputReads(ctx, segment.WaitForOutputReads); err != nil {
+		return duplexPipeError("wait for output reads", err)
+	}
+	return nil
+}
