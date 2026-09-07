@@ -73,6 +73,14 @@ func (tools *toolActions) consume(record gatewaytesting.CapturedSessionEvent) (b
 		tools.continuing = false
 		return true, nil
 	}
+	if len(tools.pending) > 0 && record.Type == "response.create" {
+		// A response.create before every pending tool result has been
+		// accepted cannot be reproduced by the live runtime. Keep the
+		// capture available for caller-driven replay so the strict wire
+		// replayer can report the actual outbound mismatch instead of
+		// turning it into an audio-plan boundary error.
+		return false, fmt.Errorf("%w: response.create at sequence %d precedes pending tool results", errSelfDrivingPlanUnavailable, record.Sequence)
+	}
 	if record.Type != replayCreateItem {
 		return false, nil
 	}
@@ -95,7 +103,11 @@ func (tools *toolActions) consume(record gatewaytesting.CapturedSessionEvent) (b
 	}
 	if event.Item.Type == "function_call_output" {
 		if !tools.pending[event.Item.CallID] {
-			return false, fmt.Errorf("orphan tool output at sequence %d", record.Sequence)
+			// The raw replay transport owns exact outbound validation. A
+			// malformed, duplicate, or mismatched result must therefore
+			// remain a caller-driven capture rather than being rejected while
+			// deriving the optional self-driving plan.
+			return false, fmt.Errorf("%w: orphan tool output at sequence %d", errSelfDrivingPlanUnavailable, record.Sequence)
 		}
 		delete(tools.pending, event.Item.CallID)
 		tools.continuing = true
