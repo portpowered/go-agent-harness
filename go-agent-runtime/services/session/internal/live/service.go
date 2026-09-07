@@ -244,7 +244,15 @@ func (h *handle) mediaFailure(err error) {
 	if h.pumpErr == nil {
 		h.pumpErr = err
 	}
+	providerInbound := errors.Is(err, mediagate.ErrProviderInboundMedia)
 	h.mu.Unlock()
+	if providerInbound {
+		// Provider media is decoded in parallel with the ordered normalized
+		// stream. A malformed audio delta must be reported, but cancelling the
+		// loop here would discard transcript deltas that the provider has already
+		// queued after that same frame.
+		return
+	}
 	h.Cancel(err)
 }
 

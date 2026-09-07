@@ -3,6 +3,7 @@ package mediagate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -38,6 +39,11 @@ var (
 	// bounded session endpoint can retain while the provider is unavailable or
 	// temporarily behind.
 	ErrMediaQueueFull = errors.New("live media queue is full")
+	// ErrProviderInboundMedia marks a failure reported by the provider-owned
+	// inbound endpoint. The ordered provider stream can still contain
+	// transcript and terminal messages after a malformed audio frame, so the
+	// live handle records this cause without cancelling that stream immediately.
+	ErrProviderInboundMedia = errors.New("provider inbound media failed")
 )
 
 func mediaContextRequired() error {
@@ -257,7 +263,7 @@ func (g *Gate) bridgeInbound(ctx context.Context, source sharedaudio.InboundMedi
 		frame, err := source.ReadFrame(ctx)
 		if err != nil {
 			g.inbound.fail(err)
-			g.report(err)
+			g.report(fmt.Errorf("%w: %w", ErrProviderInboundMedia, err))
 			return
 		}
 		if err := g.inbound.push(ctx, frame, func() { g.observeFrame(FrameInbound, frame) }); err != nil {

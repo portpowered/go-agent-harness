@@ -132,9 +132,9 @@ func (p *fanoutPlayback) readAndFanOut(ctx context.Context, inbound audio.Inboun
 			if cleanPlaybackError(err) {
 				return io.EOF
 			}
-			failures.record(err)
+			failures.record(fmt.Errorf("%w: %w", devices.ErrPlaybackInput, err))
 			cancel()
-			return err
+			return fmt.Errorf("%w: %w", devices.ErrPlaybackInput, err)
 		}
 		if err := p.sendFrame(ctx, frame); err != nil {
 			failures.record(err)

@@ -23,6 +23,11 @@ var (
 	ErrUnavailable = errors.New("device service unavailable")
 	// ErrInvalidRequest identifies a malformed or unsupported media request.
 	ErrInvalidRequest = errors.New("invalid device media request")
+	// ErrPlaybackInput identifies a provider-owned inbound-media failure. A
+	// live session must retain the normalized provider stream long enough to
+	// drain already-admitted lifecycle messages before it tears down for this
+	// class of playback error.
+	ErrPlaybackInput = errors.New("provider playback input failed")
 )
 
 // Request is the normalized device admission input for one invocation. IDs

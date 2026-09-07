@@ -82,7 +82,7 @@ func (p *filePlayback) Pump(ctx context.Context, inbound sharedaudio.InboundMedi
 			if errors.Is(err, io.EOF) || errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
 				return p.flush(ctx)
 			}
-			return fmt.Errorf("read finite audio output: %w", err)
+			return fmt.Errorf("read finite audio output: %w: %w", devices.ErrPlaybackInput, err)
 		}
 		if err := p.consumeFrame(ctx, frame); err != nil {
 			return err

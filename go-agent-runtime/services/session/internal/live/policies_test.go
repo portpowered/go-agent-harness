@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -573,6 +575,53 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	}
 	if isExpectedMediaPumpError(errors.New("device write failed")) {
 		t.Fatal("unrelated device failure was classified as an expected stop")
+	}
+}
+
+func TestProviderPlaybackInputFailureDrainsBeforeSessionCancellation(t *testing.T) {
+	err := fmt.Errorf("read finite audio output: %w: malformed PCM", devices.ErrPlaybackInput)
+	if shouldCancelMediaPumpFor("playback", err, context.Background()) {
+		t.Fatal("provider playback input failure cancelled the session before normalized output could drain")
+	}
+	if !shouldCancelMediaPumpFor("capture", err, context.Background()) {
+		t.Fatal("capture failure with the playback-input marker was treated as drainable")
+	}
+	if shouldCancelMediaPumpFor("playback", errors.New("device write failed"), context.Background()) == false {
+		t.Fatal("local playback sink failure was treated as drainable")
+	}
+}
+
+func TestProviderInboundMediaFailureDoesNotCancelOrderedStream(t *testing.T) {
+	cancelled := make(chan struct{})
+	h := &handle{
+		cancel: func(error) { close(cancelled) },
+	}
+	h.mediaFailure(fmt.Errorf("%w: malformed PCM", mediagate.ErrProviderInboundMedia))
+	h.mu.Lock()
+	pumpErr := h.pumpErr
+	cancelRequested := h.cancelRequested
+	h.mu.Unlock()
+	if pumpErr == nil {
+		t.Fatal("provider inbound media failure was not retained")
+	}
+	if err := (finishState{graceful: true, pumpErr: pumpErr}).terminalError(); !errors.Is(err, mediagate.ErrProviderInboundMedia) {
+		t.Fatalf("graceful finish discarded provider inbound media failure: %v", err)
+	}
+	if cancelRequested {
+		t.Fatal("provider inbound media failure requested cancellation before ordered stream drain")
+	}
+	select {
+	case <-cancelled:
+		t.Fatal("provider inbound media failure invoked the cancellation callback")
+	default:
+	}
+
+	h.mediaFailure(errors.New("local media bridge failed"))
+	h.mu.Lock()
+	cancelRequested = h.cancelRequested
+	h.mu.Unlock()
+	if !cancelRequested {
+		t.Fatal("local media bridge failure did not request cancellation")
 	}
 }
 

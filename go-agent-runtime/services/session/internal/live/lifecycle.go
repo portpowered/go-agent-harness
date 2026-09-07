@@ -342,6 +342,9 @@ func (s finishState) terminalError() error {
 		return s.toolResultErr
 	}
 	if s.graceful {
+		if s.pumpErr != nil && !isContextTermination(s.pumpErr) {
+			return s.pumpErr
+		}
 		return nil
 	}
 	if s.parentDone {

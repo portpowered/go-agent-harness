@@ -251,7 +251,7 @@ func (i *liveInvocation) runPump(name string, run func(context.Context) error) {
 	if name == "capture" {
 		pumpErr = i.completeCapturePump(pumpErr)
 	}
-	if shouldCancelMediaPump(pumpErr, i.pumpCtx) {
+	if shouldCancelMediaPumpFor(name, pumpErr, i.pumpCtx) {
 		i.handle.Cancel(fmt.Errorf("%s media pump: %w", name, pumpErr))
 	}
 	i.pumps <- pumpErr
@@ -283,6 +283,13 @@ func shouldCancelMediaPump(pumpErr error, ctx context.Context) bool {
 		return false
 	}
 	return ctx == nil || ctx.Err() == nil
+}
+
+func shouldCancelMediaPumpFor(name string, pumpErr error, ctx context.Context) bool {
+	if name == "playback" && errors.Is(pumpErr, devices.ErrPlaybackInput) {
+		return false
+	}
+	return shouldCancelMediaPump(pumpErr, ctx)
 }
 
 func isExpectedMediaPumpError(err error) bool {
