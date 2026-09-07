@@ -213,7 +213,7 @@ func TestCustomerSimulationPatienceRunnerUsesObservableProgressAndBounds(t *test
 	state := newDuplexProgressState()
 	state.setStartedAt(clock.Now())
 	progress := &DuplexProgress{state: state}
-	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 4, Total: 4, At: time.Millisecond})
+	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 4, Total: 4, At: time.Millisecond}, nil)
 	state.noteOutputClosed()
 	outputIndex := 0
 	repromptOutputIndex := -1
@@ -268,7 +268,7 @@ func TestCustomerSimulationPatienceRunnerUsesObservableProgressAndBounds(t *test
 	state = newDuplexProgressState()
 	state.setStartedAt(clock.Now())
 	progress = &DuplexProgress{state: state}
-	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 4, Total: 4, At: time.Millisecond})
+	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 4, Total: 4, At: time.Millisecond}, nil)
 	state.noteOutputClosed()
 	outputIndex = 0
 	if err := waitForCustomerSimulationPatienceCompletion(context.Background(), controller, progress, &outputIndex, -1); err != nil {
@@ -388,7 +388,7 @@ func TestDuplexProgressExposesOutputAndExpectedCloseBoundaries(t *testing.T) {
 	progress := &DuplexProgress{state: state}
 	state.noteInputSegment()
 	state.noteInput([]byte{1, 2})
-	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 2, Total: 2, At: time.Millisecond, Timestamp: base.Add(time.Millisecond)})
+	state.noteOutput(DuplexOutputEvent{Read: 1, Bytes: 2, Total: 2, At: time.Millisecond, Timestamp: base.Add(time.Millisecond)}, nil)
 	if snapshot := progress.Snapshot(); snapshot.InputBytes != 2 || snapshot.InputFrames != 1 || snapshot.InputSegments != 1 || snapshot.OutputBytes != 2 || snapshot.OutputReads != 1 {
 		t.Fatalf("progress snapshot = %+v, want input/output counters", snapshot)
 	}
