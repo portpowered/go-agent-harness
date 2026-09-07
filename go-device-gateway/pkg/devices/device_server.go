@@ -484,6 +484,11 @@ func writeDeviceServerError(w http.ResponseWriter, status int, err error) {
 		payload.Direction = formatErr.Direction
 		payload.Requested = formatErr.Requested
 		payload.Available = append([]audio.DeviceFormat(nil), formatErr.Available...)
+	} else if errors.Is(err, audio.ErrClosed) {
+		// Preserve the lifecycle identity across the HTTP boundary. A textual
+		// reconstruction would make normal device teardown look like a fault to
+		// the RTC pump owner because errors.Is could no longer recognize it.
+		payload.Kind = "closed"
 	}
 	_ = json.NewEncoder(w).Encode(payload)
 }
@@ -606,7 +611,7 @@ func (r *RemoteDeviceRegistry) do(req *http.Request, response any) error {
 				Available: payload.Available, Err: errors.New(payload.Error),
 			}
 		}
-		return fmt.Errorf("audio-device server %s: %s", req.URL.Host, payload.Error)
+		return fmt.Errorf("audio-device server %s: %w", req.URL.Host, remoteDeviceError(payload))
 	}
 	if response == nil {
 		_, _ = io.Copy(io.Discard, result.Body)
@@ -750,12 +755,17 @@ func contextOrBackground(ctx context.Context) context.Context {
 }
 
 func decodeRemoteDeviceError(response *http.Response) error {
-	var payload struct {
-		Error string `json:"error"`
-	}
+	var payload remoteErrorResponse
 	_ = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload)
 	if payload.Error == "" {
 		payload.Error = response.Status
+	}
+	return remoteDeviceError(payload)
+}
+
+func remoteDeviceError(payload remoteErrorResponse) error {
+	if payload.Kind == "closed" {
+		return audio.ErrClosed
 	}
 	return errors.New(payload.Error)
 }

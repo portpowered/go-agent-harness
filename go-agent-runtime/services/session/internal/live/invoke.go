@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 // RunLive owns the complete invocation boundary for hosts that have local
@@ -291,7 +292,9 @@ func shouldCancelMediaPump(pumpErr error, ctx context.Context) bool {
 
 func isExpectedMediaPumpError(err error) bool {
 	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) ||
-		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed)
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed) ||
+		errors.Is(err, devicert.ErrRTCDeviceSourceClosed) || errors.Is(err, devicert.ErrRTCDeviceSinkClosed) ||
+		errors.Is(err, sharedaudio.ErrClosed) || errors.Is(err, sharedaudio.ErrSessionMediaClosed)
 }
 
 func (i *liveInvocation) wait() error {

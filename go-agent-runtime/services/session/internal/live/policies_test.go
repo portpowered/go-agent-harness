@@ -10,7 +10,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
@@ -565,5 +567,28 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	}
 	if isExpectedMediaPumpError(errors.New("device write failed")) {
 		t.Fatal("unrelated device failure was classified as an expected stop")
+	}
+}
+
+func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "source closed", err: devicert.ErrRTCDeviceSourceClosed},
+		{name: "sink closed", err: devicert.ErrRTCDeviceSinkClosed},
+		{name: "audio adapter closed", err: &sharedaudio.ClosedError{Operation: "read", Path: "simulated-duplex:input"}},
+		{name: "session media closed", err: sharedaudio.ErrSessionMediaClosed},
+		{name: "wrapped source closed", err: &devicert.RTCDeviceSourceError{DeviceID: "simulated-duplex:input", Operation: "read", Err: &sharedaudio.ClosedError{Operation: "read", Path: "simulated-duplex:input"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !isExpectedMediaPumpError(test.err) {
+				t.Fatalf("error = %v, want expected teardown stop", test.err)
+			}
+			if shouldCancelMediaPump(test.err, context.Background()) {
+				t.Fatalf("error = %v requested a second cancellation", test.err)
+			}
+		})
 	}
 }
