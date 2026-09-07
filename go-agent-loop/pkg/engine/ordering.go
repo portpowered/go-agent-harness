@@ -289,8 +289,17 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 		return nil
 	}
 
-	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr && ev.IsTerminal() {
-		return &StreamDeltaError{Value: ev}
+	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr {
+		if ev.IsTerminal() {
+			return &StreamDeltaError{Value: ev}
+		}
+		// A failed tool invocation is a complete one-shot/turn-taking outcome:
+		// forward its typed diagnostic, then close the loop cleanly. Duplex
+		// sessions remain open so their provider-specific lifecycle can decide
+		// how to recover or close the session.
+		if ts.Mode != state.DuplexSession {
+			ts.Inputs.TerminateLoop = true
+		}
 	}
 
 	assigned := o.assignStreamOrdering(ts, delta, messages.Tool)

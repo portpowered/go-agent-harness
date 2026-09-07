@@ -219,6 +219,31 @@ func TestConsumeToolDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
 	}
 }
 
+func TestConsumeToolDeltaNonTerminalFailureForwardsAndTerminatesTurn(t *testing.T) {
+	runner := participants.NewToolRunner(nil, 4)
+	o := NewGlobalOrdering(nil, runner, nil, nil)
+	ts := &state.LoopState{Mode: state.ModeAskOnce}
+	ev := messages.NewNonTerminalErrorValue(`tool "missing" failed: not found`, "tool_execution")
+
+	if err := o.consumeToolDelta(ts, messages.StreamMessage{Type: messages.StreamTypeError, Value: ev}); err != nil {
+		t.Fatalf("consumeToolDelta returned error for expected tool failure: %v", err)
+	}
+	if len(ts.Inputs.ToolInputDelta) != 1 || ts.Inputs.ToolInputDelta[0].Value != ev {
+		t.Fatalf("tool failure diagnostic was not forwarded: %#v", ts.Inputs.ToolInputDelta)
+	}
+	if !ts.Inputs.TerminateLoop {
+		t.Fatal("one-shot tool failure did not request orderly loop termination")
+	}
+
+	ts = &state.LoopState{Mode: state.DuplexSession}
+	if err := o.consumeToolDelta(ts, messages.StreamMessage{Type: messages.StreamTypeError, Value: ev}); err != nil {
+		t.Fatalf("duplex consumeToolDelta returned error for expected tool failure: %v", err)
+	}
+	if ts.Inputs.TerminateLoop {
+		t.Fatal("duplex tool failure must not force session termination")
+	}
+}
+
 func TestGlobalOrdering_PreservesToolBatchAcrossInterleavedModelDeltas(t *testing.T) {
 	o := NewGlobalOrdering(nil, participants.NewToolRunner(nil, 16), nil, nil)
 	ts := &state.LoopState{History: state.History{ConversationDeltaBuffer: []messages.StreamMessage{}}}

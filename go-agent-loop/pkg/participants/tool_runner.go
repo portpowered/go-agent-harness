@@ -106,12 +106,15 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 	execCancel()
 
 	if err != nil {
-		// Signal the error through the delta stream so the ordering layer can
-		// return it via the normal error path (consumeToolDelta).
+		// Signal the expected tool failure through the delta stream. Tool
+		// execution failures are user-visible diagnostics for one-shot and
+		// turn-taking loops; the ordering layer emits LOOP.END after forwarding
+		// this nonterminal ERROR instead of converting the diagnostic into a
+		// provider/engine failure.
 		errStreamID := mustStreamID("tool-error")
 		r.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:               messages.StreamTypeError,
-			Value:              messages.NewErrorValue(err.Error()),
+			Value:              messages.NewNonTerminalErrorValue(err.Error(), "tool_execution"),
 			ActorID:            messages.Tool,
 			ActorStreamID:      errStreamID,
 			ActorProvidedIndex: 0,
