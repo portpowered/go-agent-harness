@@ -53,7 +53,8 @@ zero-percent floor were removed. Small synthetic profiles continue to test floor
 missing-registration and malformed-input failures.
 
 52 zero floors in the affected services are replaced by measured, conservative
-nonzero floors. Existing positive floors are not reduced. Public room admission
+nonzero floors. Pre-stabilization positive floors are not reduced. The new mouse-service floor
+is 85%, below both measured Linux (89.30%) and macOS (98.72%) coverage. Public room admission
 coverage exercises strict document decoding, conflicting paths, provider
 normalization and credential-reference isolation through the service Wire entry
 point. Room manifest decoding still has only about 36% coverage; this is an
@@ -77,3 +78,24 @@ was cleared and affected checks were rerun. That attempt is not counted as a tes
 pass. Hermetic tests do not claim physical microphone/speaker or live Realtime
 model validation. The meta-planner must still inspect the broader migration and
 run acceptance probes after each completed vertical.
+
+## Hosted follow-up at 3ff17b64
+
+Run 34170296779 passed hermetic, race, unit, Windows, macOS and WebMCP jobs.
+It exposed missing response IDs in two scripted providers, asynchronous final
+error publication, a shutdown/write race, three moved-string lint errors and the
+platform-dependent mouse coverage floor. The complete failed-job log was retained
+before another push; no failing job was waived.
+
+The recording fixtures now emit their known response IDs on audio and transcript
+events. Mixed identified/legacy PCM uses the actual artifact offset, with a
+regression asserting exact bytes and per-turn offsets. The runtime samples the
+provider terminal error directly after joining the loop, rather than depending on
+a notification goroutine. A disabled-tool replay negative failed twice in 500
+repetitions before that change and passed 500 after it. Public embedding tests
+check both the returned error and terminal evidence. Media failure reporting
+precedes visibility to playback, and finalization samples the cause after drain.
+
+The session-log offset/count remains a convenience summary for contiguous response
+PCM. Per-frame audio.frame records retain exact admission order, byte offsets and
+provider identity and are the authoritative evidence for unusual interleaving.

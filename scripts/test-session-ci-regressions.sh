@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce the cumulative session failures from CI runs 34121252743 through 34137090509.
+# Reproduce historical session failures, including CI run 34170296779.
 set -euo pipefail
 mode=${1:-normal}
 case "$mode" in normal|coverage|race|all) ;; *) echo "Usage: $0 [normal|coverage|race|all]" >&2; exit 2 ;; esac
@@ -19,6 +19,7 @@ scenarios=(
   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl
   TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle
   TestSessionConfigToolFilterThroughRealCLI
+  TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess
   TestAgentBinaryTest46HighRateToolAudioRegression
   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM
   TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries

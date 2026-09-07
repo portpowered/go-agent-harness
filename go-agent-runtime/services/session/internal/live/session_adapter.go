@@ -221,9 +221,7 @@ func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessa
 		rollback()
 	}
 	if outcome.OK() && s.onDispatch != nil {
-		// The callback is owned by the session handle and only observes a copy
-		// of the provider admission metadata. In particular, ActorProvidedID
-		// has already been stripped for marked controls above.
+		// Notify the owner only after removing the private admission marker.
 		s.onDispatch(msg)
 	}
 	return outcome
