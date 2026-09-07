@@ -56,40 +56,6 @@ func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (
 	return &recordingWebSocketConn{inner: conn, recorder: d}, nil
 }
 
-// Capture returns a copy of the current capture envelope.
-func (d *RecordingWebSocketDialer) Capture() SessionCapture {
-	d.captureMu.RLock()
-	defer d.captureMu.RUnlock()
-	return d.captureSnapshot()
-}
-
-func (d *RecordingWebSocketDialer) captureSnapshot() SessionCapture {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	events := make([]CapturedSessionEvent, 0, len(d.events))
-	for _, event := range d.events {
-		// An outbound reservation is made before the wrapped connection is
-		// called so a synchronous provider acknowledgement cannot be recorded
-		// ahead of the client event that caused it. Failed writes are marked and
-		// omitted here, keeping captures representative of accepted traffic.
-		if event.PayloadType == "" {
-			continue
-		}
-		events = append(events, cloneCapturedEvent(event))
-	}
-
-	capture := d.capture
-	capture.Records = events
-	// Keep the in-memory capture and the flushed representation equally
-	// verifiable. FlushToFile still recomputes this value immediately before
-	// publication through json.MarshalIndent.
-	if sealed, err := SealSessionCapture(capture); err == nil {
-		capture = sealed
-	}
-	return capture
-}
-
 // ReplayWebSocketDialer replays raw WebSocket messages from a capture.
 type ReplayWebSocketDialer struct {
 	capture        SessionCapture

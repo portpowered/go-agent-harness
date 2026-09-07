@@ -93,7 +93,7 @@ func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedau
 	// Hardware capture is a continuous, clocked source. Backpressure it when
 	// the WebSocket writer is briefly behind instead of treating a transient
 	// full control queue as terminal audio loss.
-	outcome := s.sendQueue.WriteWaitContextOrDone(ctx, s.done, models.NewAudioBufferAppendEvent(encoded))
+	outcome := s.enqueueWireEventWait(ctx, models.NewAudioBufferAppendEvent(encoded))
 	if outcome.OK() {
 		return nil
 	}
@@ -117,7 +117,7 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		if interruption, ok := media.InterruptInbound(); ok {
 			truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
-			outcome := s.sendQueue.WriteWaitContextOrDone(ctx, s.done, truncate)
+			outcome := s.enqueueWireEventWait(ctx, truncate)
 			if !outcome.OK() {
 				if outcome.Err != nil {
 					err = outcome.Err
@@ -215,8 +215,24 @@ func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models
 }
 
 func (s *realtimeSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
-	if s.writeBackpressure {
-		return s.sendQueue.WriteWaitContextOrDone(ctx, s.done, event)
+	return s.enqueueWireEventWithMode(ctx, event, s.writeBackpressure)
+
+}
+
+func (s *realtimeSession) enqueueWireEventWait(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
+	return s.enqueueWireEventWithMode(ctx, event, true)
+}
+
+func (s *realtimeSession) enqueueWireEventWithMode(ctx context.Context, event models.SessionEvent, backpressure bool) messages.BufferWriteOutcome {
+	s.outbound.Begin()
+	var outcome messages.BufferWriteOutcome
+	if backpressure {
+		outcome = s.sendQueue.WriteWaitContextOrDone(ctx, s.done, event)
+	} else {
+		outcome = s.sendQueue.WriteContext(ctx, event)
 	}
-	return s.sendQueue.WriteContext(ctx, event)
+	if !outcome.OK() {
+		s.outbound.Complete()
+	}
+	return outcome
 }

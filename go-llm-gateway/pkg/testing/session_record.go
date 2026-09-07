@@ -12,6 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // SessionRecorder wraps a messages.Session and records all sent and received
@@ -36,9 +37,48 @@ type SessionRecorder struct {
 	inbound *recordingBuffer
 }
 
+type recordingWebSocketConn struct {
+	inner    transport.Conn
+	recorder *RecordingWebSocketDialer
+}
+
+var _ transport.Conn = (*recordingWebSocketConn)(nil)
+
+func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
+	c.recorder.captureMu.RLock()
+	defer c.recorder.captureMu.RUnlock()
+
+	messageType, payload, err := c.inner.ReadMessage()
+	if err == nil {
+		sequence := c.recorder.recordMessage(DirectionServerToClient, payload)
+		c.recorder.commitMessage(sequence)
+	}
+	return messageType, payload, err
+}
+
+func (c *recordingWebSocketConn) WriteMessage(messageType int, payload []byte) error {
+	c.recorder.captureMu.RLock()
+	defer c.recorder.captureMu.RUnlock()
+
+	// Reserve the outbound event before invoking the wrapped connection. A
+	// hermetic provider may synchronously enqueue a response while processing
+	// this write; recording after the call lets that response appear before
+	// its causal client event in the capture.
+	sequence := c.recorder.recordMessage(DirectionClientToServer, payload)
+	if err := c.inner.WriteMessage(messageType, payload); err != nil {
+		c.recorder.discardMessage(sequence)
+		return err
+	}
+	c.recorder.commitMessage(sequence)
+	return nil
+}
+
+func (c *recordingWebSocketConn) Close() error { return c.inner.Close() }
+
 var _ messages.Session = (*SessionRecorder)(nil)
 var _ messages.SessionResponseRequester = (*SessionRecorder)(nil)
 var _ messages.SessionResponseCapability = (*SessionRecorder)(nil)
+var _ messages.SessionOutboundFlusher = (*SessionRecorder)(nil)
 
 // SessionRecorderOption configures metadata on a SessionRecorder capture.
 type SessionRecorderOption func(*SessionRecorder)
@@ -150,6 +190,20 @@ func (r *SessionRecorder) RequestResponse(ctx context.Context) messages.SessionS
 
 func (r *SessionRecorder) SupportsResponseRequests() bool {
 	return messages.SupportsSessionResponseRequests(r.inner)
+}
+
+// FlushOutbound forwards the optional transport-settlement capability through
+// the recorder so a live capture boundary still waits for provider wire
+// writes before the session is finalized.
+func (r *SessionRecorder) FlushOutbound(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	flusher, ok := r.inner.(messages.SessionOutboundFlusher)
+	if !ok {
+		return nil
+	}
+	return flusher.FlushOutbound(ctx)
 }
 
 // Receive returns a TypedBuffer whose reads are intercepted so that every

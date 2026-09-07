@@ -173,8 +173,12 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		MaxDuration:           request.MaxDuration,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout,
 		Capabilities:          inputs.capabilities,
-		FinishAfterResponse:   hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != "",
-		ExpectedResponses:     expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+		// --wait-for-close is an explicit persistent-session policy. It must
+		// override the ordinary finite audio/output policy so a completed
+		// response cannot cancel the provider stream before later stdin audio
+		// reaches the same session.
+		FinishAfterResponse: !request.WaitForClose && (hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result

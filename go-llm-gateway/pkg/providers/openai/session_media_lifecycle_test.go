@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -108,4 +109,139 @@ func verifyControlBackpressureStop(t *testing.T, closeSession bool) {
 	case <-time.After(time.Second):
 		t.Fatal("control admission stuck after cancellation/close")
 	}
+}
+
+func TestFlushOutboundWaitsForWebSocketWrite(t *testing.T) {
+	conn := newBlockingOutboundConn()
+	session := newRealtimeSession(conn, nopLogger())
+	writerDone := make(chan struct{})
+	go func() {
+		session.writeLoop(context.Background())
+		close(writerDone)
+	}()
+	t.Cleanup(func() {
+		_ = session.Close()
+		select {
+		case <-writerDone:
+		case <-time.After(time.Second):
+			t.Error("write loop did not stop")
+		}
+	})
+
+	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+		t.Fatalf("enqueue outbound event: %+v", outcome)
+	}
+	select {
+	case <-conn.writeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("write loop did not reach the transport")
+	}
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	flushed := make(chan error, 1)
+	go func() { flushed <- session.FlushOutbound(flushCtx) }()
+	select {
+	case err := <-flushed:
+		t.Fatalf("FlushOutbound returned while transport write was blocked: %v", err)
+	case <-flushCtx.Done():
+		t.Fatal("FlushOutbound did not wait for transport settlement before its context expired")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(conn.release)
+	select {
+	case err := <-flushed:
+		if err != nil {
+			t.Fatalf("FlushOutbound after transport settlement: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("FlushOutbound remained blocked after transport settlement")
+	}
+}
+
+func TestRealtimeSession_FlushOutboundWaitsForDeferredAudioCommit(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, nopLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	session.observeResponseCreated(models.SessionEvent{
+		Type: models.SessionEventResponseCreated,
+		Data: []byte(`{"response":{"id":"resp-active"}}`),
+	})
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}); !outcome.OK() {
+		t.Fatalf("deferred audio end admission: %#v", outcome)
+	}
+
+	flushed := make(chan error, 1)
+	go func() { flushed <- session.FlushOutbound(ctx) }()
+	select {
+	case err := <-flushed:
+		t.Fatalf("FlushOutbound returned before the deferred commit was admitted: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	session.observeResponseDone(models.SessionEvent{
+		Type: models.SessionEventResponseDone,
+		Data: []byte(`{"response":{"id":"resp-active","status":"completed"}}`),
+	})
+	select {
+	case err := <-flushed:
+		if err != nil {
+			t.Fatalf("FlushOutbound after deferred commit: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("FlushOutbound did not settle deferred commit: %v", ctx.Err())
+	}
+
+	frames := parseWireFrames(t, conn.getClientMessages())
+	if len(frames) != 2 || frames[0].Type != "input_audio_buffer.commit" || frames[1].Type != "response.create" {
+		t.Fatalf("deferred audio wire frames = %#v, want commit then response.create", frames)
+	}
+}
+
+type blockingOutboundConn struct {
+	writeStarted chan struct{}
+	release      chan struct{}
+	closed       chan struct{}
+	closeOnce    sync.Once
+}
+
+func newBlockingOutboundConn() *blockingOutboundConn {
+	return &blockingOutboundConn{
+		writeStarted: make(chan struct{}),
+		release:      make(chan struct{}),
+		closed:       make(chan struct{}),
+	}
+}
+
+func (c *blockingOutboundConn) ReadMessage() (int, []byte, error) {
+	<-c.closed
+	return 0, nil, errors.New("connection closed")
+}
+
+func (c *blockingOutboundConn) WriteMessage(int, []byte) error {
+	c.closeOnce.Do(func() { close(c.writeStarted) })
+	select {
+	case <-c.release:
+		return nil
+	case <-c.closed:
+		return errors.New("connection closed")
+	}
+}
+
+func (c *blockingOutboundConn) Close() error {
+	c.closeOnce.Do(func() { close(c.writeStarted) })
+	select {
+	case <-c.closed:
+	default:
+		close(c.closed)
+	}
+	return nil
 }

@@ -218,12 +218,18 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	h.mu.Unlock()
 	h.terminalOnce.Do(func() { close(h.terminalObserved) })
 }
+
 func (h *handle) markCaptureComplete() {
 	if h == nil {
 		return
 	}
 	h.mu.Lock()
-	h.captureComplete = true
+	if !h.captureComplete {
+		h.captureComplete = true
+		if h.captureSourceActive && h.scheduledAudioCount == 0 && h.request.FinishAfterResponse {
+			h.captureResponseTarget = h.replayResponses + 1
+		}
+	}
 	shouldFinish := h.canFinishFiniteResponse()
 	h.mu.Unlock()
 	if shouldFinish {
@@ -254,10 +260,7 @@ func (h *handle) waitForResponseStart(ctx context.Context) error {
 	}
 }
 
-// responseIsActive reports whether the provider currently owns a non-terminal
-// assistant response. It is intentionally a snapshot: the caller must send a
-// cancellation through the ordered control path so a response boundary cannot
-// race a following finite audio turn.
+// responseIsActive snapshots provider ownership; cancellation uses ordered control.
 func (h *handle) responseIsActive() bool {
 	if h == nil {
 		return false
@@ -267,11 +270,8 @@ func (h *handle) responseIsActive() bool {
 	return (h.responseActive || h.responsePending) && !h.cancelRequested && !h.closed
 }
 
-// observeSessionLifecycle admits the scheduler-backed configuration watchdog
-// at the provider's SESSION.OPEN boundary. The timer is created before the
-// OPEN observation is published, which gives deterministic hosts a stable
-// point at which advancing their clock starts the bounded wait. An UPDATE
-// received before OPEN is retained and suppresses the timer entirely.
+// observeSessionLifecycle admits the scheduler-backed watchdog at SESSION.OPEN.
+// Pre-OPEN UPDATE state suppresses the timer.
 func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeSessionUpdated {
 		h.policyMu.Lock()
@@ -375,11 +375,12 @@ func (h *handle) canFinishFiniteResponse() bool {
 	}
 	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
 	responseCount, responseTarget := h.replayResponses, h.replayResponseTarget()
+	if h.captureResponseTarget > 0 {
+		responseTarget = h.captureResponseTarget
+	}
 	if h.scheduledAudioCount > 0 {
-		// Scheduled barge-in treats an owned partial terminal as the boundary
-		// that resolves its input. Keep replayResponses reserved for successful
-		// response completion, while the finite schedule uses every observed
-		// terminal after the optional opening response.
+		// Scheduled barge-in resolves input at its owned partial terminal; count
+		// every scheduled terminal after the optional opening response.
 		responseCount = h.observedResponseTerminals
 		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
 	}

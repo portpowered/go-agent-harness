@@ -9868,7 +9868,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
       "file": "pkg/providers/openai/session.go",
       "symbol": "*realtimeSession.dispatchPendingResponseIntents",
-      "value": 47,
+      "value": 36,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -17338,7 +17338,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
       "file": "pkg/providers/openai/session.go",
       "symbol": "*realtimeSession.dispatchPendingResponseIntents",
-      "value": 23,
+      "value": 19,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -20017,7 +20017,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
       "file": "pkg/providers/openai/session.go",
-      "value": 790,
+      "value": 757,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -20080,7 +20080,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing",
       "file": "pkg/testing/session_websocket_dialer.go",
-      "value": 548,
+      "value": 525,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -26564,7 +26564,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
       "file": "pkg/providers/openai/session.go",
       "symbol": "*realtimeSession.dispatchPendingResponseIntents",
-      "value": 55,
+      "value": 51,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

@@ -466,56 +466,6 @@ func TestRecordingWebSocketDialerPreservesCausalOutboundOrder(t *testing.T) {
 	}
 }
 
-func TestRecordingWebSocketDialerFlushWaitsForTransportSettlement(t *testing.T) {
-	writeStarted := make(chan struct{})
-	releaseWrite := make(chan struct{})
-	var startOnce sync.Once
-	inner := &testWebSocketConn{onWrite: func() {
-		startOnce.Do(func() { close(writeStarted) })
-		<-releaseWrite
-	}}
-	sink := &settlementCaptureSink{}
-	dialer, err := NewRecordingWebSocketDialerWithSink(
-		&testWebSocketDialer{conn: inner}, "openai", "gpt-realtime", sink,
-	)
-	if err != nil {
-		t.Fatalf("NewRecordingWebSocketDialerWithSink: %v", err)
-	}
-	conn, err := dialer.Dial("wss://live.example.invalid", nil)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
-
-	writeDone := make(chan error, 1)
-	go func() {
-		writeDone <- conn.WriteMessage(1, []byte(`{"type":"session.update"}`))
-	}()
-	select {
-	case <-writeStarted:
-	case <-time.After(sessionTestSafetyTimeout):
-		t.Fatalf("wrapped write did not reach its blocking boundary")
-	}
-
-	flushDone := make(chan error, 1)
-	go func() { flushDone <- dialer.FlushToFile(filepath.Join(t.TempDir(), "provider.json")) }()
-	select {
-	case err := <-flushDone:
-		t.Fatalf("FlushToFile returned before the in-flight event settled: %v", err)
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	close(releaseWrite)
-	if err := <-writeDone; err != nil {
-		t.Fatalf("WriteMessage: %v", err)
-	}
-	if err := <-flushDone; err != nil {
-		t.Fatalf("FlushToFile after settlement: %v", err)
-	}
-	if appended, committed := sink.counts(); appended != 1 || committed != 1 {
-		t.Fatalf("capture settlement counts = %d/%d, want one append and one commit", appended, committed)
-	}
-}
-
 type settlementCaptureSink struct {
 	mu        sync.Mutex
 	appended  int

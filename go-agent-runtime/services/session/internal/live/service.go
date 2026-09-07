@@ -133,12 +133,13 @@ type handle struct {
 	// this separate from responseActive lets a following finite turn reserve
 	// cancellation without treating every queued response as an already
 	// streaming response after the boundary has settled.
-	responsePending      bool
-	responseObserved     uint64
-	responseStartWake    chan struct{}
-	replayResponses      int
-	replayResponseWake   chan struct{}
-	responseTerminalWake chan struct{}
+	responsePending       bool
+	responseObserved      uint64
+	responseStartWake     chan struct{}
+	replayResponses       int
+	captureResponseTarget int
+	replayResponseWake    chan struct{}
+	responseTerminalWake  chan struct{}
 	// scheduledAudioCount is configured by the invocation owner when finite
 	// sources are admitted. These counters are deliberately kept on the handle
 	// so the terminal event and Wait result carry the same outcome, even when a

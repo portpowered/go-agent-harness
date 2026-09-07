@@ -24,6 +24,7 @@ var (
 	_ messages.SessionResponseRequester  = (*grokSession)(nil)
 	_ messages.SessionResponseCapability = (*grokSession)(nil)
 	_ messages.SessionDropCounters       = (*grokSession)(nil)
+	_ messages.SessionOutboundFlusher    = (*grokSession)(nil)
 )
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage session.
@@ -38,6 +39,7 @@ type grokSession struct {
 	// session's input path). Overflow drops are counted by the buffer itself
 	// and logged through the default drop observer attached in newGrokSession.
 	sendQueue *messages.TypedBuffer[models.SessionEvent]
+	outbound  providers.OutboundWireDrain
 
 	// recvBuf is the inbound typed buffer of translated StreamMessages.
 	// Populated by readLoop() after translating from wire events; it is the
@@ -139,7 +141,7 @@ func (s *grokSession) sendEvents(ctx context.Context, events []models.SessionEve
 			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 		default:
 		}
-		outcome := s.sendQueue.WriteContext(ctx, event)
+		outcome := s.enqueueWireEvent(ctx, event)
 		switch outcome.Status {
 		case messages.BufferWriteSucceeded:
 		case messages.BufferWriteBufferFull:
@@ -157,6 +159,15 @@ func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome 
 		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+}
+
+func (s *grokSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
+	s.outbound.Begin()
+	outcome := s.sendQueue.WriteContext(ctx, event)
+	if !outcome.OK() {
+		s.outbound.Complete()
+	}
+	return outcome
 }
 
 // Receive returns the inbound typed buffer of StreamMessages translated from
@@ -300,6 +311,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
+				s.outbound.Complete()
 				if s.isStopping(ctx) {
 					s.closeWithLog()
 					return
@@ -309,8 +321,18 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 				_ = s.Close()
 				return
 			}
+			s.outbound.Complete()
 		}
 	}
+}
+
+// FlushOutbound waits until events already admitted to the provider queue have
+// completed their websocket writes before a finite audio session is stopped.
+func (s *grokSession) FlushOutbound(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	return s.outbound.Flush(ctx, s.done, s.TerminalError)
 }
 
 // writeEvent serializes a SessionEvent to JSON and writes it to the WebSocket.

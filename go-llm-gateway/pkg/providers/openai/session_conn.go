@@ -220,13 +220,83 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
 				s.setTerminalError(err)
+				s.outbound.Complete()
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()
 				return
 			}
 			s.markResponseRequestSent(event)
+			s.outbound.Complete()
 		}
 	}
+}
+
+// FlushOutbound waits until events already admitted to the provider queue have
+// completed their websocket writes. Queue admission alone is insufficient for
+// a finite audio boundary: the runtime may close the session immediately after
+// the commit control is acknowledged.
+func (s *realtimeSession) FlushOutbound(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	for {
+		if err := s.outbound.Flush(ctx, s.done, s.TerminalError); err != nil {
+			return err
+		}
+		settlements := s.pendingAudioIntentSettlements()
+		if len(settlements) == 0 {
+			return nil
+		}
+		if err := s.waitForAudioIntentSettlements(ctx, settlements); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *realtimeSession) waitForAudioIntentSettlements(ctx context.Context, settlements []<-chan messages.SessionSendOutcome) error {
+	for _, settled := range settlements {
+		select {
+		case outcome := <-settled:
+			if err := deferredAudioIntentError(outcome); err != nil {
+				return err
+			}
+		case <-s.done:
+			if err := s.TerminalError(); err != nil {
+				return err
+			}
+			return fmt.Errorf("provider session closed before deferred audio intent settled")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func deferredAudioIntentError(outcome messages.SessionSendOutcome) error {
+	if outcome.OK() {
+		return nil
+	}
+	if outcome.Err != nil {
+		return fmt.Errorf("deferred audio intent failed with status %q: %w", outcome.Status, outcome.Err)
+	}
+	return fmt.Errorf("deferred audio intent failed with status %q", outcome.Status)
+}
+
+func (s *realtimeSession) pendingAudioIntentSettlements() []<-chan messages.SessionSendOutcome {
+	s.responseWireMu.Lock()
+	defer s.responseWireMu.Unlock()
+	s.responseMu.Lock()
+	defer s.responseMu.Unlock()
+	settlements := make([]<-chan messages.SessionSendOutcome, 0, len(s.pendingResponseIntents)+1)
+	for _, intent := range s.pendingResponseIntents {
+		if intent.settled != nil {
+			settlements = append(settlements, intent.settled)
+		}
+	}
+	if s.activeResponseIntent != nil && s.activeResponseIntent.settled != nil {
+		settlements = append(settlements, s.activeResponseIntent.settled)
+	}
+	return settlements
 }
 
 func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
@@ -243,4 +313,76 @@ func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
 		return err
 	}
 	return s.conn.WriteMessage(1, data)
+}
+
+func realtimeEventNeedsResponseAdmission(event models.SessionEvent) bool {
+	if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
+		return true
+	}
+	if event.Type != conversationItemCreateEvent {
+		return false
+	}
+	var payload struct {
+		Item struct {
+			Type string `json:"type"`
+		} `json:"item"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
+}
+
+func realtimeResponseCreateIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseCreate || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
+}
+
+func responseIntentHasFunctionCallOutput(intent responseIntent) bool {
+	for _, event := range intent.events {
+		if responseEventIsFunctionCallOutput(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func responseEventIsFunctionCallOutput(event models.SessionEvent) bool {
+	if event.Type != conversationItemCreateEvent {
+		return false
+	}
+	var payload struct {
+		Item struct {
+			Type string `json:"type"`
+		} `json:"item"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
+}
+
+func realtimeResponseCreatedIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseCreated || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
+}
+
+func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseDone || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
 }

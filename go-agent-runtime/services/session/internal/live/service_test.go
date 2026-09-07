@@ -498,3 +498,26 @@ func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
 		t.Fatal("overflow evidence was lost")
 	}
 }
+
+func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
+	h := &handle{
+		request:             session.LiveRequest{FinishAfterResponse: true},
+		captureSourceActive: true,
+		responseStarted:     true,
+		replayResponses:     1,
+	}
+
+	h.markCaptureComplete()
+	if h.gracefulStop {
+		t.Fatal("continuous EOF reused the response completed before capture ended")
+	}
+	if got, want := h.captureResponseTarget, 2; got != want {
+		t.Fatalf("capture response target = %d, want %d", got, want)
+	}
+
+	h.replayResponses++
+	h.markCaptureComplete()
+	if !h.gracefulStop {
+		t.Fatal("post-EOF response did not complete the finite capture")
+	}
+}

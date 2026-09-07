@@ -10,9 +10,7 @@ import (
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-// capturingInferencer exposes provider media to the handle only after the
-// agent loop has established its session. A factory can return any
-// messages.Session implementation; media is an optional capability.
+// capturingInferencer attaches optional provider media after session setup.
 type capturingInferencer struct {
 	inner             messages.SessionInferencer
 	media             *mediagate.Gate
@@ -50,22 +48,13 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	if !mediaAttached {
 		i.media.Fail(mediagate.ErrMediaUnavailable)
 	}
-	// AgentLoop owns the participant goroutine, while a persistent provider
-	// owns the transport lifetime. When the latter closes, notify the live
-	// owner only after the model runner has had a chance to publish its
-	// synthesized SessionClose boundary. The provider Done contract is the
-	// cleanup join point, so keep watching it even when the runner context is
-	// canceled; otherwise a replay mismatch can be lost to teardown's
-	// context.Canceled.
+	// Notify the live owner after the provider cleanup boundary, even if the
+	// runner context is already canceled.
 	if done := s.Done(); done != nil && i.onProviderDone != nil {
 		go func() {
 			<-done
 			var terminalErr error
-			// The loop intentionally treats Session.Done as a lifecycle
-			// boundary and may return nil after draining its receive buffer.
-			// Provider implementations expose the actionable transport or
-			// replay mismatch through this optional method; preserve it before
-			// teardown turns the runner context into context.Canceled.
+			// Preserve the provider's actionable error before teardown cancellation.
 			if provider, ok := s.(interface{ TerminalError() error }); ok {
 				terminalErr = provider.TerminalError()
 			}
@@ -82,9 +71,7 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	}, nil
 }
 
-// FlushCapture forwards the optional provider capture finalization seam. The
-// handle calls it after the loop has joined its session, so recording owners
-// can finalize their evidence only after the provider artifact is durable.
+// FlushCapture forwards provider capture finalization after session join.
 func (i *capturingInferencer) FlushCapture() error {
 	if i == nil {
 		return nil
@@ -98,12 +85,7 @@ func (i *capturingInferencer) FlushCapture() error {
 	return flush()
 }
 
-// orderedSession serializes every provider ingress operation with the public
-// media bridge. Explicit controls register an admission barrier before they
-// enter AgentLoop. Automatic provider sends may pass a control that has not
-// reached the runner yet, which avoids a same-runner wait cycle; once the
-// control is dispatched, later media and provider traffic wait for its wire
-// acknowledgement.
+// orderedSession serializes provider ingress with the public media bridge.
 type orderedSession struct {
 	inner             messages.Session
 	media             *mediagate.Gate
@@ -132,9 +114,7 @@ func (s *orderedSession) SendWithOutcome(ctx context.Context, msg messages.Strea
 		return s.sendMarkedControl(ctx, msg, ackID, canceled)
 	}
 	if mediagate.IsControlID(ackID) {
-		// Teardown may remove a pending marker before the agent-loop runner
-		// observes its event. Never reinterpret that private control as an
-		// ordinary provider message or leak it downstream.
+		// Teardown may remove a pending marker before the runner observes it.
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
 	return s.sendAutomatic(ctx, msg)
@@ -159,6 +139,13 @@ func (s *orderedSession) sendMarkedControl(ctx context.Context, msg messages.Str
 	// it to an external provider implementation.
 	msg.ActorProvidedID = ""
 	outcome := s.sendInner(ctx, msg)
+	if outcome.OK() && msg.Type == messages.StreamTypeMessageEnd {
+		if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
+			if err := flusher.FlushOutbound(ctx); err != nil {
+				outcome = sessionSendOutcomeForError(ctx, err)
+			}
+		}
+	}
 	release()
 	s.media.Acknowledge(ackID, outcome.OK())
 	return outcome
@@ -391,4 +378,17 @@ func (s *orderedSession) InitialSessionConfigSent() bool {
 	}
 	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
 	return ok && marker.InitialSessionConfigSent()
+}
+
+func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
+	if err == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 }
