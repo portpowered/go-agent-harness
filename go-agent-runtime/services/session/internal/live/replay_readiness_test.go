@@ -212,6 +212,29 @@ func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestInterruptedFiniteResponseDoesNotFinishAfterPriorResponse(t *testing.T) {
+	h := &handle{
+		request:           session.LiveRequest{FinishAfterResponse: true},
+		captureComplete:   true,
+		responseStarted:   true,
+		replayResponses:   1,
+		responseStartWake: make(chan struct{}),
+	}
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-current"})
+	partial := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-current",
+		Value:      &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputPartial},
+	}
+	if !h.observeFiniteResponse(partial) {
+		t.Fatal("interrupted response was not recognized as a terminal boundary")
+	}
+	if h.gracefulStop || h.replayResponses != 1 {
+		t.Fatalf("interrupted response after prior completion stopped/count = %t/%d, want false/1", h.gracefulStop, h.replayResponses)
+	}
+}
+
 func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 	h := &handle{
 		responseTerminalWake: make(chan struct{}),

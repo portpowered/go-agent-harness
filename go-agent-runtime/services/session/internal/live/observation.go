@@ -368,7 +368,7 @@ func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
 }
 
 func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && h.canFinishFiniteResponse()
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
 }
 
 func (h *handle) canFinishFiniteResponse() bool {
