@@ -159,6 +159,46 @@ func applyMessageSessionID(event *session.LiveEvent, sessionID string, msg messa
 	}
 }
 
+// observeOutput records only material output that a host could present. Tool
+// call envelopes are intentionally excluded: an in-flight tool has not
+// produced a result yet and must still classify as no output when the user
+// cancels. RoleTool deltas are included because an accepted tool result is
+// part of the visible partial transcript.
+func (h *handle) observeOutput(msg messages.StreamMessage) {
+	if h == nil || !liveOutputMessage(msg) {
+		return
+	}
+	h.mu.Lock()
+	h.outputObserved = true
+	h.mu.Unlock()
+}
+
+func liveOutputMessage(msg messages.StreamMessage) bool {
+	if msg.Role == messages.RoleUser {
+		return false
+	}
+	switch value := msg.Value.(type) {
+	case *messages.TextDeltaValue:
+		return value != nil && strings.TrimSpace(value.Content) != ""
+	case *messages.AudioDeltaValue:
+		return value != nil && len(value.Content) > 0
+	case *messages.ImageDeltaValue:
+		return value != nil && len(value.Content) > 0
+	case *messages.VideoDeltaValue:
+		return value != nil && len(value.Content) > 0
+	case *messages.FileDeltaValue:
+		return value != nil && len(value.Content) > 0
+	case *messages.EmbeddingDeltaValue:
+		return value != nil && len(value.Content) > 0
+	case *messages.TranscriptDeltaValue:
+		return value != nil && strings.TrimSpace(value.Text) != ""
+	case *messages.TranscriptEndValue:
+		return value != nil && strings.TrimSpace(value.FullText) != ""
+	default:
+		return false
+	}
+}
+
 func terminalValueForMessage(msg messages.StreamMessage) *messages.SessionCloseValue {
 	if msg.Type == messages.StreamTypeSessionClose {
 		candidate, ok := msg.Value.(*messages.SessionCloseValue)

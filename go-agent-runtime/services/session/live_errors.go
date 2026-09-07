@@ -20,6 +20,11 @@ var (
 	// ErrLiveClosed is returned when a caller attempts to start a handle after
 	// it has been closed.
 	ErrLiveClosed = errors.New("live session is closed")
+	// ErrLiveUserCancellation identifies a host-owned operator cancellation.
+	// Hosts may use it as the cause of a context.WithCancelCause context when a
+	// user signal should produce a clean user-cancelled terminal rather than a
+	// generic runtime failure. Ordinary context cancellation remains distinct.
+	ErrLiveUserCancellation = errors.New("live session cancelled by user")
 	// ErrLiveDurationExceeded identifies a live session that reached its
 	// explicit MaxDuration policy. The policy is enforced by the injected
 	// scheduler, so deterministic hosts can advance it without wall time.

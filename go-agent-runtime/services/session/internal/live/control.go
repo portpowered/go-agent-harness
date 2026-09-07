@@ -185,7 +185,8 @@ func (h *handle) stopGracefully() {
 		return
 	}
 	h.mu.Lock()
-	if h.closed || h.gracefulStop || h.cancelRequested {
+	if h.closed || h.gracefulStop || h.cancelRequested ||
+		(h.parentCtx != nil && h.parentCtx.Err() != nil && errors.Is(context.Cause(h.parentCtx), session.ErrLiveUserCancellation)) {
 		h.mu.Unlock()
 		return
 	}

@@ -59,6 +59,7 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 }
 
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
+	h.observeOutput(msg)
 	h.observeTerminalValue(msg)
 	h.observeResponseTerminal(msg)
 	h.observeProviderLiveness(ctx, msg)

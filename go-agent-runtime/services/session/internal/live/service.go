@@ -158,6 +158,14 @@ type handle struct {
 	terminalValue             *messages.SessionCloseValue
 	providerCloseObserved     bool
 	localCloseObserved        bool
+	// userCancelled is set only when the host supplied the explicit user
+	// cancellation cause and no independent provider/loop failure won the
+	// terminal race. It keeps cancellation classification separate from the
+	// generic context cancellation path.
+	userCancelled bool
+	// outputObserved is the invocation-wide visible output ledger used to
+	// classify an operator cancellation as partial versus no output.
+	outputObserved bool
 
 	runWG       sync.WaitGroup
 	finishOnce  sync.Once

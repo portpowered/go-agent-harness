@@ -20,6 +20,7 @@ func (h *handle) finishWhenStopped() {
 	requestedErr := h.cancelCause
 	graceful := h.gracefulStop
 	parent := h.parentCtx
+	startErr := h.startErr
 	h.mu.Unlock()
 	h.toolMu.Lock()
 	continuationErr := h.continuationErr
@@ -30,8 +31,25 @@ func (h *handle) finishWhenStopped() {
 		graceful = false
 	}
 
+	parentCause := error(nil)
+	if parent != nil && parent.Err() != nil {
+		parentCause = context.Cause(parent)
+		if parentCause == nil {
+			parentCause = parent.Err()
+		}
+	}
+	userCancellation := !graceful && errors.Is(parentCause, session.ErrLiveUserCancellation) &&
+		(requestedErr == nil || isContextTermination(requestedErr)) &&
+		(providerErr == nil || isContextTermination(providerErr)) &&
+		(pumpErr == nil || isContextTermination(pumpErr)) &&
+		(runErr == nil || isContextTermination(runErr)) &&
+		(startErr == nil || isContextTermination(startErr)) && continuationErr == nil
+
 	var terminal error
-	if requested && !graceful {
+	if userCancellation {
+		h.markUserCancellation()
+		terminal = nil
+	} else if requested && !graceful {
 		terminal = requestedErr
 	} else if providerErr != nil && !isContextTermination(providerErr) {
 		// A provider transport can publish its final close boundary before its
@@ -42,7 +60,7 @@ func (h *handle) finishWhenStopped() {
 	} else if graceful {
 		terminal = nil
 	} else if parent != nil && parent.Err() != nil {
-		terminal = context.Cause(parent)
+		terminal = parentCause
 		if terminal == nil {
 			terminal = parent.Err()
 		}
@@ -61,6 +79,7 @@ func (h *handle) finish(err error) {
 		if err == nil {
 			err = h.startErr
 		}
+		userCancelled := h.userCancelled
 		closeCapabilities, flushCapture := h.capabilityClose, h.captureFlush
 		h.capabilityClose, h.captureFlush = nil, nil
 		h.mu.Unlock()
@@ -74,12 +93,17 @@ func (h *handle) finish(err error) {
 				err = errors.Join(err, fmt.Errorf("flush live capture: %w", flushErr))
 			}
 		}
-		err = h.finishMedia(err)
+		err = h.finishMedia(err, userCancelled)
 		h.emitSynthesizedSessionClose()
 		h.mu.Lock()
 		terminalValue := cloneLiveTerminalValue(h.terminalValue)
+		outputObserved := h.outputObserved
 		h.mu.Unlock()
-		err = errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
+		if userCancelled {
+			err = errors.Join(err, h.recorderError())
+		} else {
+			err = errors.Join(err, h.recorderError(), h.scheduledAudioError(), h.finiteAudioResponseError())
+		}
 		h.mu.Lock()
 		h.terminalErr = err
 		h.mu.Unlock()
@@ -87,10 +111,37 @@ func (h *handle) finish(err error) {
 		if liveness == nil {
 			liveness = livenessFailureFromError(err)
 		}
+		if userCancelled && err == nil {
+			terminalValue = userCancellationTerminalValue(h.request.SessionID, outputObserved)
+		}
 		terminalValue = finalizeLiveTerminalValue(h.request, err, terminalValue, liveness)
 		h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal), SessionID: h.request.SessionID, Error: err, Liveness: liveness, Terminal: terminalValue, Critical: true}, true)
 		close(h.done)
 	})
+}
+
+func (h *handle) markUserCancellation() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.userCancelled = true
+	h.mu.Unlock()
+}
+
+func userCancellationTerminalValue(sessionID string, outputObserved bool) *messages.SessionCloseValue {
+	outputState := messages.TerminalOutputNone
+	if outputObserved {
+		outputState = messages.TerminalOutputPartial
+	}
+	return messages.NewSessionCloseValueWithTerminal(
+		sessionID,
+		"user_cancelled",
+		"user_cancelled",
+		messages.TerminalReasonCancellation,
+		messages.TerminalProvenanceCLI,
+		outputState,
+	)
 }
 
 func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
@@ -223,8 +274,8 @@ func (h *handle) reserveCriticalEventLocked() {
 	}
 }
 
-func (h *handle) finishMedia(err error) error {
-	if err == nil {
+func (h *handle) finishMedia(err error, userCancelled bool) error {
+	if err == nil && !userCancelled {
 		// Normal completion drains the provider queue into the bounded host
 		// port before closure. Failed or canceled sessions abort immediately.
 		drainCtx, cancel := context.WithTimeout(h.evidenceContext(), defaultPlaybackDrainTimeout)
