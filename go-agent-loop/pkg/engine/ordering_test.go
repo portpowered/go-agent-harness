@@ -218,3 +218,55 @@ func TestConsumeToolDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
 		t.Fatalf("consumeToolDelta error = %v, want typed StreamDeltaError carrying the original value", err)
 	}
 }
+
+func TestGlobalOrdering_PreservesToolBatchAcrossInterleavedModelDeltas(t *testing.T) {
+	o := NewGlobalOrdering(nil, participants.NewToolRunner(nil, 16), nil, nil)
+	ts := &state.LoopState{History: state.History{ConversationDeltaBuffer: []messages.StreamMessage{}}}
+	commit := func() {
+		o.UpdateWorldHistory(ts)
+		o.FlushInputs(ts)
+	}
+	consumeModel := func(delta messages.StreamMessage) {
+		t.Helper()
+		if err := o.consumeModelDelta(ts, delta); err != nil {
+			t.Fatalf("consume model delta %s: %v", delta.Type, err)
+		}
+		commit()
+	}
+	consumeTool := func(delta messages.StreamMessage) {
+		t.Helper()
+		if err := o.consumeToolDelta(ts, delta); err != nil {
+			t.Fatalf("consume tool delta %s: %v", delta.Type, err)
+		}
+		commit()
+	}
+	consumeToolWithoutCommit := func(delta messages.StreamMessage) {
+		t.Helper()
+		if err := o.consumeToolDelta(ts, delta); err != nil {
+			t.Fatalf("consume tool delta %s: %v", delta.Type, err)
+		}
+	}
+
+	consumeTool(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
+	consumeTool(messages.StreamMessage{Type: messages.StreamTypeTextStart, ToolCallId: "call-1", Value: messages.NewTextStartValue()})
+	for _, delta := range fullModelTextDeltas("ack") {
+		consumeModel(delta)
+	}
+	consumeTool(messages.StreamMessage{Type: messages.StreamTypeTextDelta, ToolCallId: "call-1", Value: messages.NewTextDeltaValue("result")})
+	consumeTool(messages.StreamMessage{Type: messages.StreamTypeTextEnd, ToolCallId: "call-1", Value: messages.NewTextEndValue()})
+	consumeToolWithoutCommit(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+
+	if len(ts.Inputs.ToolOutputMessage) != 1 {
+		t.Fatalf("tool outputs = %#v, want one reconstructed result", ts.Inputs.ToolOutputMessage)
+	}
+	result := ts.Inputs.ToolOutputMessage[0]
+	if result.ToolCallID != "call-1" || result.TextContent() != "result" {
+		t.Fatalf("tool result = {call_id:%q text:%q}, want {call_id:call-1 text:result}", result.ToolCallID, result.TextContent())
+	}
+	if ts.History.CurrentToolDeltaCount != 4 {
+		t.Fatalf("current tool delta count = %d, want 4", ts.History.CurrentToolDeltaCount)
+	}
+	if ts.History.ToolDeltaStartIndex != 5 || len(ts.History.ConversationDeltaBuffer) != 9 {
+		t.Fatalf("tool history placement = {start:%d len:%d}, want {start:5 len:9}", ts.History.ToolDeltaStartIndex, len(ts.History.ConversationDeltaBuffer))
+	}
+}

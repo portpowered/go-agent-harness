@@ -37,6 +37,7 @@ type GlobalOrdering struct {
 	userRunner        *participants.UserRunner
 	interactionRunner *participants.InteractionRunner
 	logger            logging.Logger
+	toolBatchActive   bool
 }
 
 // NewGlobalOrdering returns an ordering that consumes from the given runners. toolRunner
@@ -301,12 +302,14 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 		// UpdateWorldHistory hasn't run yet so len(buf) is the insertion point.
 		ts.History.ToolDeltaStartIndex = len(ts.History.ConversationDeltaBuffer)
 		ts.History.CurrentToolDeltaCount = 0
+		o.toolBatchActive = true
 	case *messages.MessageEndValue:
 		deltas := o.toolDeltasForCurrentBatch(ts)
 		msgs := ReconstructToolMessagesFromDeltas(deltas)
 		for _, msg := range msgs {
 			ts.Inputs.ToolOutputMessage = append(ts.Inputs.ToolOutputMessage, o.assignMessageOrdering(ts, msg, messages.Tool))
 		}
+		o.toolBatchActive = false
 	}
 
 	return nil
@@ -344,6 +347,9 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ModelOutputMessage...)
 
 	// Model deltas: written at ModelDeltaStartIndex+CurrentModelDeltaCount.
+	// If a tool stream is already in the shared buffer, insert the model delta
+	// before it instead of overwriting it. The model window remains contiguous
+	// for reconstruction while the tool batch retains every delta it needs.
 	// Truncation (removing stale entries past the current response boundary) is only
 	// applied when model deltas are actually written this tick — otherwise it would
 	// incorrectly cut off tool/user deltas that were appended in earlier ticks.
@@ -356,8 +362,11 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 			continue
 		}
 		idx := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount + writtenModelDeltaCount
-		if idx < len(ts.History.ConversationDeltaBuffer) {
+		if idx < len(ts.History.ConversationDeltaBuffer) && isModelHistoryDelta(ts.History.ConversationDeltaBuffer[idx]) {
 			ts.History.ConversationDeltaBuffer[idx] = msg
+		} else if idx < len(ts.History.ConversationDeltaBuffer) {
+			ts.History.ConversationDeltaBuffer = insertHistoryDelta(ts.History.ConversationDeltaBuffer, idx, msg)
+			o.shiftToolDeltaStart(ts, idx)
 		} else {
 			ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
 		}
@@ -365,10 +374,7 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 	}
 	if writtenModelDeltaCount > 0 {
 		ts.History.CurrentModelDeltaCount += writtenModelDeltaCount
-		newLen := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount
-		if newLen < len(ts.History.ConversationDeltaBuffer) {
-			ts.History.ConversationDeltaBuffer = ts.History.ConversationDeltaBuffer[:newLen]
-		}
+		o.dropStaleModelDeltas(ts)
 	}
 
 	// Tool and user deltas are appended after model delta logic so they are never
@@ -377,6 +383,49 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 	ts.History.CurrentToolDeltaCount += len(ts.Inputs.ToolInputDelta)
 
 	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
+}
+
+func isModelHistoryDelta(delta messages.StreamMessage) bool {
+	return delta.ActorID == messages.Model || (delta.ActorID == "" && delta.Role == messages.RoleAssistant)
+}
+
+func insertHistoryDelta(history []messages.StreamMessage, index int, delta messages.StreamMessage) []messages.StreamMessage {
+	history = append(history, messages.StreamMessage{})
+	copy(history[index+1:], history[index:])
+	history[index] = delta
+	return history
+}
+
+func (o *GlobalOrdering) shiftToolDeltaStart(ts *state.LoopState, insertedAt int) {
+	if (o.toolBatchActive || ts.History.CurrentToolDeltaCount > 0) && insertedAt <= ts.History.ToolDeltaStartIndex {
+		ts.History.ToolDeltaStartIndex++
+	}
+}
+
+func (o *GlobalOrdering) dropStaleModelDeltas(ts *state.LoopState) {
+	start := ts.History.ModelDeltaStartIndex
+	end := start + ts.History.CurrentModelDeltaCount
+	if end >= len(ts.History.ConversationDeltaBuffer) {
+		return
+	}
+	toolStart := ts.History.ToolDeltaStartIndex
+	write := end
+	removedBeforeTool := 0
+	for read := end; read < len(ts.History.ConversationDeltaBuffer); read++ {
+		delta := ts.History.ConversationDeltaBuffer[read]
+		if isModelHistoryDelta(delta) {
+			if read < toolStart {
+				removedBeforeTool++
+			}
+			continue
+		}
+		ts.History.ConversationDeltaBuffer[write] = delta
+		write++
+	}
+	ts.History.ConversationDeltaBuffer = ts.History.ConversationDeltaBuffer[:write]
+	if removedBeforeTool > 0 {
+		ts.History.ToolDeltaStartIndex -= removedBeforeTool
+	}
 }
 
 // FlushInputs clears all input slices and resets TerminateLoop for the next tick.
