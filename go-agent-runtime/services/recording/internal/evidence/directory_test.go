@@ -439,6 +439,7 @@ func TestDirectoryRecorderTurnOffsetsAndToolResultsRemainCorrelated(t *testing.T
 	send(session.LiveRecordClient, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
 	send(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("call-summary", "resume", `{"video":"fixture"}`)})
 	send(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	send(session.LiveRecordClient, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("call-summary", "resume", "tool result")})
 	send(session.LiveRecordClient, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-summary", Value: messages.NewTextDeltaValue("tool result")})
 	audio(session.LiveRecordAgent, []int16{3, 4})
 	recordEvidenceText(t, r, "answer")

@@ -78,7 +78,7 @@ func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool
 	if msg.Type == messages.StreamTypeMessageEnd {
 		c.endMessage(outbound)
 	}
-	if msg.Type == messages.StreamTypeToolCallEnd {
+	if !outbound && msg.Type == messages.StreamTypeToolCallEnd {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 			c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: sequence, Type: "tool_call", ToolCallID: value.ToolCallID, ToolName: value.Name, Arguments: value.Arguments})
 		}

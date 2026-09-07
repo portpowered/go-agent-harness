@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // These tests deliberately drive the built agent binary. The local server is
@@ -637,6 +638,7 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 		"client.transcript.jsonl": false,
 		"agent.transcript.jsonl":  false,
 		"session-log.jsonl":       false,
+		"provider.json":           false,
 	}
 	for _, artifact := range manifest.Artifacts {
 		if _, ok := wantArtifacts[artifact.Path]; !ok {
@@ -664,6 +666,29 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "client.transcript.jsonl"))
 	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "agent.transcript.jsonl"))
 	assertSIGINTSessionLog(t, filepath.Join(recordDir, "session-log.jsonl"), wantToolResult, wantToolCall)
+	providerCapture, err := gwtesting.LoadSessionCapture(filepath.Join(recordDir, "provider.json"))
+	if err != nil {
+		t.Fatalf("load SIGINT provider capture: %v", err)
+	}
+	if len(providerCapture.Records) == 0 {
+		t.Fatal("SIGINT provider capture is empty")
+	}
+	if providerCapture.Provider.Name != "openai" || providerCapture.Provider.Model != "gpt-realtime" {
+		t.Fatalf("SIGINT provider capture metadata = %+v, want openai/gpt-realtime", providerCapture.Provider)
+	}
+	seenSessionCreated := false
+	seenSessionUpdated := false
+	for _, record := range providerCapture.Records {
+		switch record.Type {
+		case "session.created":
+			seenSessionCreated = true
+		case "session.updated":
+			seenSessionUpdated = true
+		}
+	}
+	if !seenSessionCreated || !seenSessionUpdated {
+		t.Fatalf("SIGINT provider capture lifecycle = created:%t updated:%t, want both events", seenSessionCreated, seenSessionUpdated)
+	}
 	var anyJSON map[string]any
 	if err := json.Unmarshal(manifestBytes, &anyJSON); err != nil {
 		t.Fatalf("decode final SIGINT manifest JSON: %v", err)
@@ -724,18 +749,23 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 	toolCalls := 0
 	toolResults := 0
 	failedResults := 0
+	toolEventSummary := make([]string, 0)
 	for scanner.Scan() {
 		var entry struct {
+			TurnIndex  int `json:"turn_index"`
 			ToolEvents []struct {
-				Type    string `json:"type"`
-				Status  string `json:"status"`
-				Content string `json:"content"`
+				Type       string `json:"type"`
+				Status     string `json:"status"`
+				Content    string `json:"content"`
+				ToolCallID string `json:"tool_call_id"`
+				ToolName   string `json:"tool_name"`
 			} `json:"tool_events"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			t.Fatalf("decode session log line %d: %v", lineCount+1, err)
 		}
 		for _, event := range entry.ToolEvents {
+			toolEventSummary = append(toolEventSummary, fmt.Sprintf("turn=%d %s id=%q name=%q status=%q", entry.TurnIndex, event.Type, event.ToolCallID, event.ToolName, event.Status))
 			switch event.Type {
 			case "tool_call":
 				toolCalls++
@@ -758,12 +788,12 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 		t.Fatal("session log is empty")
 	}
 	if wantToolResult && (toolCalls != 1 || toolResults != 1 || failedResults != 0) {
-		t.Fatalf("completed tool session log calls=%d results=%d failed=%d, want one successful result", toolCalls, toolResults, failedResults)
+		t.Fatalf("completed tool session log calls=%d results=%d failed=%d, want one successful result; events=%v", toolCalls, toolResults, failedResults, toolEventSummary)
 	}
 	if wantToolCall && !wantToolResult && (toolCalls != 1 || toolResults != 0 || failedResults != 0) {
-		t.Fatalf("in-flight tool session log calls=%d results=%d failed=%d, want one unresolved user-canceled call", toolCalls, toolResults, failedResults)
+		t.Fatalf("in-flight tool session log calls=%d results=%d failed=%d, want one unresolved user-canceled call; events=%v", toolCalls, toolResults, failedResults, toolEventSummary)
 	}
 	if !wantToolCall && (toolCalls != 0 || toolResults != 0) {
-		t.Fatalf("no-tool session log unexpectedly contains tool events: calls=%d results=%d", toolCalls, toolResults)
+		t.Fatalf("no-tool session log unexpectedly contains tool events: calls=%d results=%d; events=%v", toolCalls, toolResults, toolEventSummary)
 	}
 }
