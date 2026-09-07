@@ -285,10 +285,16 @@ func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 		h.observedResponseIDs[responseID] = struct{}{}
 	}
 	h.observedResponseTerminals++
+	wake := h.responseTerminalWake
+	if wake == nil {
+		wake = make(chan struct{})
+	}
+	h.responseTerminalWake = make(chan struct{})
 	if h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
 		h.observedResponseIDs = nil
 	}
 	h.mu.Unlock()
+	close(wake)
 }
 
 func (h *handle) configureScheduledAudio(scheduled, responseBase int) {

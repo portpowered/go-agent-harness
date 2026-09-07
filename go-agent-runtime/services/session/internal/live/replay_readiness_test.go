@@ -212,6 +212,62 @@ func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
+	h := &handle{
+		responseTerminalWake: make(chan struct{}),
+		scheduledAudioCount:  3,
+	}
+	h.configureScheduledAudio(3, 0)
+
+	result := make(chan error, 1)
+	go func() { result <- h.waitForResponseBoundary(context.Background(), 2) }()
+
+	h.observeResponseTerminal(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-cancelled",
+		Value: &messages.MessageEndValue{
+			TerminalReason: messages.TerminalReasonPartialOutput,
+		},
+	})
+	select {
+	case err := <-result:
+		t.Fatalf("boundary wait released after one cancelled response: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+
+	h.observeResponseTerminal(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-completed",
+	})
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("boundary wait returned error after second terminal: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("boundary wait did not release after cancelled and completed response terminals")
+	}
+}
+
+func TestScheduledBargeCompletionCountsCancelledTerminal(t *testing.T) {
+	h := &handle{
+		request: session.LiveRequest{
+			FinishAfterResponse: true,
+			ExpectedResponses:   3,
+		},
+		captureComplete:           true,
+		responseStarted:           true,
+		scheduledAudioCount:       3,
+		observedResponseTerminals: 3,
+		replayResponses:           2,
+	}
+	if !h.canFinishFiniteResponse() {
+		t.Fatal("scheduled finite gate ignored the cancelled response terminal")
+	}
+}
+
 func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	const callID = "call-finite-continuation"
 	h := &handle{

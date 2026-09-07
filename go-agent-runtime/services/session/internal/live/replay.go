@@ -147,6 +147,18 @@ func (i *liveInvocation) waitForNextCaptureTurn(ctx context.Context, index int, 
 	if index+1 >= total || !shouldWaitForCaptureResponse(index, admission) {
 		return nil
 	}
+	if admission == session.AudioTurnAdmissionBarge {
+		waiter, ok := i.handle.(interface {
+			waitForResponseBoundary(context.Context, int) error
+		})
+		if !ok {
+			return nil
+		}
+		if err := waiter.waitForResponseBoundary(ctx, responseTarget); err != nil {
+			return fmt.Errorf("wait for finite capture turn %d response boundary: %w", index+1, err)
+		}
+		return nil
+	}
 	waiter, ok := i.handle.(interface {
 		waitForResponse(context.Context, int) error
 	})
@@ -387,6 +399,44 @@ func (h *handle) waitForResponse(ctx context.Context, target int) error {
 		h.mu.Unlock()
 		select {
 		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// waitForResponseBoundary waits for any assistant response terminal, including
+// an owned partial terminal produced by barge-in cancellation. Barge capture
+// uses this boundary rather than waitForResponse because a cancelled response
+// is complete provider lifecycle work even though it is not a successful replay
+// response.
+func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
+	}
+	if ctx == nil {
+		return errors.New("response boundary context is required")
+	}
+	for {
+		h.mu.Lock()
+		if h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending {
+			h.mu.Unlock()
+			return nil
+		}
+		terminalWake := h.responseTerminalWake
+		if terminalWake == nil {
+			terminalWake = make(chan struct{})
+			h.responseTerminalWake = terminalWake
+		}
+		responseWake := h.replayResponseWake
+		if responseWake == nil {
+			responseWake = make(chan struct{})
+			h.replayResponseWake = responseWake
+		}
+		h.mu.Unlock()
+		select {
+		case <-terminalWake:
+		case <-responseWake:
 		case <-ctx.Done():
 			return ctx.Err()
 		}

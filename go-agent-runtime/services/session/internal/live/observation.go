@@ -75,7 +75,7 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if allowOpening && msg.Type == messages.StreamTypeSessionOpen {
 		h.sendOpeningMessage(ctx, loop)
 	}
-	if responseComplete {
+	if responseComplete || (msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool) {
 		h.signalResponseWake()
 	}
 	return responseComplete
@@ -377,7 +377,16 @@ func (h *handle) canFinishFiniteResponse() bool {
 		return false
 	}
 	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
-	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && h.replayResponses >= h.replayResponseTarget() && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
+	responseCount, responseTarget := h.replayResponses, h.replayResponseTarget()
+	if h.scheduledAudioCount > 0 {
+		// Scheduled barge-in treats an owned partial terminal as the boundary
+		// that resolves its input. Keep replayResponses reserved for successful
+		// response completion, while the finite schedule uses every observed
+		// terminal after the optional opening response.
+		responseCount = h.observedResponseTerminals
+		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
+	}
+	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
 }
 
 func (h *handle) replayResponseTarget() int {
