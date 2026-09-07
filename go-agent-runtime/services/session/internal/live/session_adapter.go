@@ -24,6 +24,7 @@ type capturingInferencer struct {
 	onMediaAttached   func(bool)
 	captureMu         sync.Mutex
 	captureFlush      func() error
+	connectedSession  messages.Session
 }
 
 func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -37,6 +38,9 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 		i.captureFlush = flusher.FlushCapture
 		i.captureMu.Unlock()
 	}
+	i.captureMu.Lock()
+	i.connectedSession = s
+	i.captureMu.Unlock()
 	mediaAttached := false
 	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
 		endpoints := captureMediaEndpoints(s, providerMedia, i.continuous)
@@ -54,12 +58,7 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	if done := s.Done(); done != nil && i.onProviderDone != nil {
 		go func() {
 			<-done
-			var terminalErr error
-			// Preserve the provider's actionable error before teardown cancellation.
-			if provider, ok := s.(interface{ TerminalError() error }); ok {
-				terminalErr = provider.TerminalError()
-			}
-			i.onProviderDone(terminalErr)
+			i.onProviderDone(i.TerminalError())
 		}()
 	}
 	return &orderedSession{
@@ -387,4 +386,16 @@ func (s *orderedSession) InitialSessionConfigSent() bool {
 	}
 	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
 	return ok && marker.InitialSessionConfigSent()
+}
+
+// TerminalError reads the joined provider state directly. Final classification
+// must not depend on when the asynchronous Done notification gets scheduled.
+func (i *capturingInferencer) TerminalError() error {
+	i.captureMu.Lock()
+	connected := i.connectedSession
+	i.captureMu.Unlock()
+	if provider, ok := connected.(interface{ TerminalError() error }); ok {
+		return provider.TerminalError()
+	}
+	return nil
 }

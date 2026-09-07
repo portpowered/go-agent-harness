@@ -109,23 +109,24 @@ type handle struct {
 	done              chan struct{}
 	startDone         chan struct{}
 
-	mu              sync.Mutex
-	started         bool
-	closed          bool
-	startErr        error
-	terminalErr     error
-	runErr          error
-	providerErr     error
-	pumpErr         error
-	cancel          context.CancelCauseFunc
-	parentCtx       context.Context
-	cancelRequested bool
-	cancelCause     error
-	gracefulStop    bool
-	loop            *agentloop.AgentLoop
-	captureComplete bool
-	responseStarted bool
-	responseActive  bool
+	mu                    sync.Mutex
+	started               bool
+	closed                bool
+	startErr              error
+	terminalErr           error
+	runErr                error
+	providerErr           error
+	providerTerminalError func() error
+	pumpErr               error
+	cancel                context.CancelCauseFunc
+	parentCtx             context.Context
+	cancelRequested       bool
+	cancelCause           error
+	gracefulStop          bool
+	loop                  *agentloop.AgentLoop
+	captureComplete       bool
+	responseStarted       bool
+	responseActive        bool
 	// responsePending records a client-owned response boundary that has been
 	// admitted to the provider session but has not produced its first inbound
 	// lifecycle event yet. Realtime adapters commonly queue the

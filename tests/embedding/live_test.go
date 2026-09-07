@@ -134,3 +134,44 @@ func TestExternalLiveMediaRetainsPlaybackControl(t *testing.T) {
 		t.Fatalf("interruption=%+v ok=%v; want audible item at device-consumed17ms", interrupted, ok)
 	}
 }
+
+// A provider may expose its failure only at transport closure, without an ERROR
+// message. Both the public return and terminal evidence must retain that cause.
+func TestExternalLiveProviderFailureSurvivesTransportClosure(t *testing.T) {
+	failure := errors.New("provider rejected tool result")
+	provider := &failedEmbeddedProvider{embeddedLiveProvider: newEmbeddedLiveProvider(), failure: failure}
+	host := sessionwire.NewLiveService(sessionwire.LiveDependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) { return provider, nil }})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	handle, err := host.OpenLive(ctx, session.LiveRequest{SessionID: "provider-failure"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeForTest(t, handle)
+	if err := handle.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	closeForTest(t, provider)
+	if err := handle.Wait(); !errors.Is(err, failure) {
+		t.Fatalf("Wait = %v, want provider failure", err)
+	}
+	var terminalError error
+	for event := range handle.Events() {
+		if event.Kind == string(session.LiveEventTerminal) {
+			terminalError = event.Error
+		}
+	}
+	if !errors.Is(terminalError, failure) {
+		t.Fatalf("terminal evidence = %v, want provider failure", terminalError)
+	}
+}
+
+type failedEmbeddedProvider struct {
+	*embeddedLiveProvider
+	failure error
+}
+
+func (p *failedEmbeddedProvider) ConnectSession(context.Context) (messages.Session, error) {
+	return p, nil
+}
+func (p *failedEmbeddedProvider) TerminalError() error { return p.failure }

@@ -262,8 +262,8 @@ func (g *Gate) bridgeInbound(ctx context.Context, source sharedaudio.InboundMedi
 	for {
 		frame, err := source.ReadFrame(ctx)
 		if err != nil {
-			g.inbound.fail(err)
 			g.report(fmt.Errorf("%w: %w", ErrProviderInboundMedia, err))
+			g.inbound.fail(err)
 			return
 		}
 		if err := g.inbound.push(ctx, frame, func() { g.observeFrame(FrameInbound, frame) }); err != nil {

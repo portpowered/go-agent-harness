@@ -36,6 +36,9 @@ func (h *handle) finishOnceBody(err error) {
 		}
 	}
 	err = h.finishMedia(err, userCancelled)
+	h.mu.Lock()
+	err = errors.Join(err, h.pumpErr)
+	h.mu.Unlock()
 	h.emitSynthesizedSessionClose()
 	h.mu.Lock()
 	terminalValue := cloneLiveTerminalValue(h.terminalValue)
@@ -107,23 +110,13 @@ func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *me
 		value.TerminalReason != messages.TerminalReasonReplayComplete {
 		return value
 	}
+	reason := messages.TerminalReasonTerminalFailure
 	if isContextTermination(err) {
-		return messages.NewSessionCloseValueWithTerminal(
-			request.SessionID,
-			"",
-			string(messages.TerminalReasonCancellation),
-			messages.TerminalReasonCancellation,
-			messages.TerminalProvenanceSession,
-			messages.TerminalOutputNone,
-		)
+		reason = messages.TerminalReasonCancellation
 	}
 	return messages.NewSessionCloseValueWithTerminal(
-		request.SessionID,
-		"",
-		string(messages.TerminalReasonTerminalFailure),
-		messages.TerminalReasonTerminalFailure,
-		messages.TerminalProvenanceSession,
-		messages.TerminalOutputNone,
+		request.SessionID, "", string(reason), reason,
+		messages.TerminalProvenanceSession, messages.TerminalOutputNone,
 	)
 }
 
@@ -302,6 +295,9 @@ func (h *handle) captureFinishState() finishState {
 	}
 	parent := h.parentCtx
 	h.mu.Unlock()
+	if h.providerTerminalError != nil {
+		state.providerErr = errors.Join(state.providerErr, h.providerTerminalError())
+	}
 	h.toolMu.Lock()
 	state.continuationErr = h.continuationErr
 	h.toolMu.Unlock()

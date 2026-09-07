@@ -349,3 +349,38 @@ func TestSealInboundWaitsForCloseStartedFirst(t *testing.T) {
 		t.Fatalf("SealInbound() = %v, want %v", err, want)
 	}
 }
+
+func TestProviderFailureIsReportedBeforePlaybackCanObserveIt(t *testing.T) {
+	failure := errors.New("malformed provider PCM")
+	provider := sharedaudio.NewSessionMediaAtRate(nil, 16000)
+	provider.FailInbound(failure)
+	reporting, release := make(chan error, 1), make(chan struct{})
+	gate := New(func(err error) { reporting <- err; <-release })
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	defer func() {
+		unblock()
+		if err := gate.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	gate.Attach(t.Context(), provider.Endpoints())
+	select {
+	case err := <-reporting:
+		if !errors.Is(err, failure) || !errors.Is(err, ErrProviderInboundMedia) {
+			t.Fatalf("reported error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("provider failure was not reported")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := gate.Endpoints().Inbound.ReadFrame(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("playback saw failure before owner recorded it: %v", err)
+	}
+	unblock()
+	if _, err := gate.Endpoints().Inbound.ReadFrame(t.Context()); !errors.Is(err, failure) {
+		t.Fatalf("playback lost provider cause: %v", err)
+	}
+}

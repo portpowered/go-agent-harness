@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"strings"
-	"time"
 )
 
 // evidenceConversation is intentionally small and transport-neutral. The
@@ -13,8 +12,6 @@ import (
 // index preserves the useful turn summary used by CLI and room tooling.
 type evidenceConversation struct {
 	responseAudio       map[string]evidenceResponseAudio
-	inputBytes          uint64
-	outputBytes         uint64
 	closed              []evidenceTurn
 	turn                evidenceTurn
 	toolNames           map[string]string
@@ -187,28 +184,26 @@ func (c *evidenceConversation) endMessage(outbound bool) {
 	c.toolResultEventByID = nil
 }
 
-func (c *evidenceConversation) observeAudio(input bool, index, bytes int, _ time.Time) {
+func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64, segment string) {
 	if c == nil {
 		return
 	}
 	if input {
 		if c.turn.inputAudio == 0 {
-			c.turn.inputOffset = c.inputBytes
+			c.turn.inputOffset = offset
 		}
-		c.inputBytes += uint64(bytes)
 		c.turn.inputAudio += uint64(bytes)
 		if len(c.turn.inputSegments) == 0 {
-			c.turn.inputSegments = []string{fmt.Sprintf("audio/in-%03d.pcm", index)}
+			c.turn.inputSegments = []string{segment}
 		}
 		return
 	}
 	if c.turn.outputAudio == 0 {
-		c.turn.outputOffset = c.outputBytes
+		c.turn.outputOffset = offset
 	}
-	c.outputBytes += uint64(bytes)
 	c.turn.outputAudio += uint64(bytes)
 	if len(c.turn.outputSegments) == 0 {
-		c.turn.outputSegments = []string{fmt.Sprintf("audio/out-%03d.pcm", index)}
+		c.turn.outputSegments = []string{segment}
 	}
 }
 

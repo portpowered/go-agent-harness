@@ -99,9 +99,9 @@ func (s *cliLiveRecordDirServer) serve() {
 				// still-undispatched scheduled input.
 				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
 			}
-			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
-			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
-			s.sendEvent(`{"type":"response.output_audio.done"}`)
+			s.sendEvent(`{"type":"response.output_audio_transcript.done","response_id":"` + responseID + `","transcript":"` + transcriptText + `"}`)
+			s.sendEvent(`{"type":"response.output_audio.delta","response_id":"` + responseID + `","delta":"` + audio + `","format":"pcm16"}`)
+			s.sendEvent(`{"type":"response.output_audio.done","response_id":"` + responseID + `"}`)
 			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
 			if closeAfterTurn {
 				if s.closeAfterResponse {
@@ -297,9 +297,9 @@ func (s *cliLiveScheduledBoundaryServer) serve() {
 				}
 				continue
 			}
-			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
-			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
-			s.sendEvent(`{"type":"response.output_audio.done"}`)
+			s.sendEvent(`{"type":"response.output_audio_transcript.done","response_id":"` + responseID + `","transcript":"` + transcriptText + `"}`)
+			s.sendEvent(`{"type":"response.output_audio.delta","response_id":"` + responseID + `","delta":"` + audio + `","format":"pcm16"}`)
+			s.sendEvent(`{"type":"response.output_audio.done","response_id":"` + responseID + `"}`)
 			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
 		case <-s.closed:
 			return

@@ -80,6 +80,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		onProviderDone:    h.providerDone,
 		onMediaAttached:   h.setProviderMediaAttached,
 	}
+	h.providerTerminalError = capturing.TerminalError
 	options := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(capturing),
@@ -89,9 +90,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		options = append(options, agentloop.WithClock(h.scheduler))
 	}
 	if toolExecutor == nil {
-		// Explicitly suppress definitions when a host has no tool edge. This
-		// keeps an empty embedded capability set empty and avoids the loop's
-		// default tool executor becoming observable in a live session.
+		// An absent host tool capability must not expose the loop's defaults.
 		options = append(options, agentloop.WithToolExecutionDisabled())
 		return agentloop.New(options...)
 	}

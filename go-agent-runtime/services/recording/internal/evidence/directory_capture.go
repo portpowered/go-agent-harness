@@ -92,7 +92,7 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
 		r.conversation.recordResponseAudio(item.frame.PlaybackResponse.ResponseID, uint64(len(data)), *offset-uint64(len(data)), segment)
 	} else {
-		r.conversation.observeAudio(item.direction == session.LiveRecordClient, 0, len(data), item.timestamp)
+		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), *offset-uint64(len(data)), segment)
 	}
 }
 

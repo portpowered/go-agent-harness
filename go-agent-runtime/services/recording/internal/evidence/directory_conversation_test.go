@@ -1,6 +1,7 @@
 package evidence
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -75,5 +76,26 @@ func assertResponseAudioIndex(t *testing.T, r *directoryRecorder) {
 		if !entry.Response.Complete || entry.Response.Text != fmt.Sprintf("reply-%d", index) || entry.Response.AudioBytes != 2 || entry.Response.AudioOffsetBytes != uint64(index*2) {
 			t.Fatalf("response %d lost its audio association: %+v", index, entry.Response)
 		}
+	}
+}
+
+func TestMixedIdentifiedAndLegacyPCMUsesArtifactOffsets(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	recordResponsePCM(t, r, 0)
+	recordResponseMessage(t, r, 0)
+	recordResponseMessage(t, r, 1)
+	frame := audio.PCMFrame{Samples: []int16{2}, Format: audio.PCM16DeviceFormat(24000)}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+		t.Fatal(err)
+	}
+	recordResponseMessage(t, r, 2)
+	recordResponseMessage(t, r, 3)
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	assertResponseAudioIndex(t, r)
+	if got := readEvidenceFile(t, r, "audio/out-000.pcm"); !bytes.Equal(got, []byte{1, 0, 2, 0}) {
+		t.Fatalf("recorded PCM = %v", got)
 	}
 }
