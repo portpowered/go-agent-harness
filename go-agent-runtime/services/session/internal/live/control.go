@@ -326,9 +326,11 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		// A cancelled provider response can publish its assistant MESSAGE.END
 		// before the model runner publishes the local RoleTool MESSAGE.END. It
 		// is an intermediate boundary, not a failed continuation; wait until
-		// the accepted tool result itself is complete before classifying the
-		// next assistant boundary.
-		if !state.toolResponseComplete {
+		// the accepted tool result itself is complete before classifying it.
+		// A provider-authored failure is different: it is already the terminal
+		// answer to the accepted continuation request and must win even when the
+		// local result observer is one scheduling step behind the wire.
+		if !state.toolResponseComplete && !providerContinuationFailed(value) {
 			continue
 		}
 		state.status, state.code, state.detail = status, code, detail
@@ -344,6 +346,14 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		delete(h.toolContinuations, callID)
 	}
 	return image, tools, completed
+}
+
+func providerContinuationFailed(value *messages.MessageEndValue) bool {
+	if value == nil {
+		return false
+	}
+	status := strings.ToLower(strings.TrimSpace(value.Status))
+	return status == "failed" || status == "error"
 }
 
 func newContinuationFailures() continuationFailures {

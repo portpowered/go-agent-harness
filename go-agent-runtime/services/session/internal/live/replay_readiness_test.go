@@ -345,6 +345,41 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 }
 
+func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T) {
+	for _, toolResultFirst := range []bool{false, true} {
+		name := "provider_failure_first"
+		if toolResultFirst {
+			name = "tool_result_first"
+		}
+		t.Run(name, func(t *testing.T) {
+			const callID = "call-failed-continuation"
+			h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
+			h.observeProviderToolCall(messages.StreamMessage{
+				Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant,
+				ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
+			})
+			h.observeToolResult(callID, "read_image", true)
+			toolEnd := messages.StreamMessage{
+				Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
+				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+			}
+			if toolResultFirst {
+				h.observeToolLifecycle(toolEnd)
+			}
+			failure := messages.StreamMessage{
+				Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
+				Value: &messages.MessageEndValue{
+					Type: "message_end", Status: "failed", ProviderErrorCode: "token_limit_exceeded",
+				},
+			}
+			err, complete := h.observeToolLifecycle(failure)
+			if !errors.Is(err, session.ErrLiveImageContinuationIncomplete) || complete {
+				t.Fatalf("failed continuation = error:%v complete:%t, want typed failure", err, complete)
+			}
+		})
+	}
+}
+
 func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.T) {
 	const firstCallID = "call-finite-first"
 	const nextCallID = "call-finite-next"
