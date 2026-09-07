@@ -377,7 +377,7 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		}
 		data, _ := json.Marshal(map[string]any{
 			"item": map[string]any{
-				"type":    "function_call_output",
+				"type":    realtimeFunctionCallOutputType,
 				"call_id": v.ToolCallID,
 				"output":  v.Arguments,
 			},

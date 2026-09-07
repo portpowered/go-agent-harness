@@ -15,6 +15,7 @@ type capturingInferencer struct {
 	inner             messages.SessionInferencer
 	media             *mediagate.Gate
 	continuous        bool
+	flushOutbound     bool
 	onDispatch        func(messages.StreamMessage)
 	onToolResult      func(string, string, bool)
 	onContinuation    func()
@@ -64,6 +65,7 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	return &orderedSession{
 		inner:             s,
 		media:             i.media,
+		flushOutbound:     i.flushOutbound,
 		onDispatch:        i.onDispatch,
 		onToolResult:      i.onToolResult,
 		onContinuation:    i.onContinuation,
@@ -89,6 +91,7 @@ func (i *capturingInferencer) FlushCapture() error {
 type orderedSession struct {
 	inner             messages.Session
 	media             *mediagate.Gate
+	flushOutbound     bool
 	onDispatch        func(messages.StreamMessage)
 	onToolResult      func(string, string, bool)
 	onContinuation    func()
@@ -139,7 +142,7 @@ func (s *orderedSession) sendMarkedControl(ctx context.Context, msg messages.Str
 	// it to an external provider implementation.
 	msg.ActorProvidedID = ""
 	outcome := s.sendInner(ctx, msg)
-	if outcome.OK() && msg.Type == messages.StreamTypeMessageEnd {
+	if outcome.OK() && s.flushOutbound && msg.Type == messages.StreamTypeMessageEnd {
 		if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
 			if err := flusher.FlushOutbound(ctx); err != nil {
 				outcome = sessionSendOutcomeForError(ctx, err)

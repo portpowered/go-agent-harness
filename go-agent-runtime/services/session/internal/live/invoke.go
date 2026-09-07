@@ -38,13 +38,12 @@ type liveInvocation struct {
 	handle               session.LiveHandle
 	device               devices.Handle
 	captureBoundaryOwned bool
-
-	endpoints sharedaudio.MediaEndpoints
-	ports     devices.MediaPorts
-	pumpCtx   context.Context
-	stopPumps context.CancelFunc
-	pumps     chan error
-	count     int
+	endpoints            sharedaudio.MediaEndpoints
+	ports                devices.MediaPorts
+	pumpCtx              context.Context
+	stopPumps            context.CancelFunc
+	pumps                chan error
+	count                int
 }
 
 func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunOptions) (*liveInvocation, error) {
@@ -86,7 +85,6 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	invocation.bindPlaybackController()
 	return invocation, nil
 }
-
 func openLiveHandle(s *Service, ctx context.Context, options session.LiveRunOptions) (session.LiveHandle, error) {
 	if ctx == nil {
 		err := errors.New("live invocation context is required")
@@ -101,7 +99,6 @@ func openLiveHandle(s *Service, ctx context.Context, options session.LiveRunOpti
 	}
 	return handle, nil
 }
-
 func installCaptureBoundary(options *session.LiveRunOptions, handle session.LiveHandle) bool {
 	if options == nil || handle == nil || options.DeviceRequest.FileInput == nil || len(options.CaptureCompleteControls) == 0 {
 		return false
@@ -125,11 +122,9 @@ func installCaptureBoundary(options *session.LiveRunOptions, handle session.Live
 	options.DeviceRequest.FileInput = &input
 	return true
 }
-
 func deviceRequestHasDirection(request devices.Request) bool {
 	return request.CaptureEnabled || request.PlaybackEnabled
 }
-
 func (i *liveInvocation) attachRecorder() {
 	if i == nil || i.options.Recorder == nil {
 		return
@@ -352,6 +347,17 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	handleErr := i.handle.Close()
 	result := errors.Join(waitErr, sinkErr, pumpErr, playbackErr, deviceErr, handleErr)
 	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
+}
+
+func requestedTerminalError(s finishState) error {
+	err := s.requestedErr
+	if s.toolResultErr != nil && contextOnlyOrNil(s.requestedErr) {
+		err = errors.Join(err, s.toolResultErr)
+	}
+	if s.providerErr != nil && !isContextTermination(s.providerErr) && !errors.Is(err, s.providerErr) {
+		err = errors.Join(err, fmt.Errorf("session error: %w", s.providerErr))
+	}
+	return err
 }
 
 func (i *liveInvocation) closeAfterStartError(startErr error) error {

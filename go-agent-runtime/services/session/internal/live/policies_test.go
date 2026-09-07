@@ -535,7 +535,6 @@ func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 	if !errors.Is(unfinished.finiteAudioResponseError(), session.ErrLiveAudioResponseIncomplete) {
 		t.Fatal("unfinished finite audio did not retain ErrLiveAudioResponseIncomplete")
 	}
-
 	for _, test := range []struct {
 		name   string
 		change func(*handle)
@@ -554,6 +553,13 @@ func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 				t.Fatalf("finite audio error = %v, want nil", err)
 			}
 		})
+	}
+	persistent := &handle{
+		request:             session.LiveRequest{ExpectedResponses: 1},
+		captureSourceActive: true,
+	}
+	if !errors.Is(persistent.finiteAudioResponseError(), session.ErrLiveAudioResponseIncomplete) {
+		t.Fatal("persistent finite audio did not retain ErrLiveAudioResponseIncomplete")
 	}
 }
 

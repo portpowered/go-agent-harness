@@ -130,6 +130,11 @@ func replayRates(plan *runtimeSession.LiveReplayPlan, request serviceSession.Req
 
 func expectedResponses(request serviceSession.Request, promptPresent bool, openingParts []messages.ContentPart, openingResponse runtimeSession.LiveOpeningMessageResponse) int {
 	if len(request.AudioTurns) == 0 {
+		if request.AudioInput.Present {
+			// A file/stdin source is one finite audio turn even when the
+			// persistent --wait-for-close policy keeps the provider open.
+			return 1
+		}
 		return 0
 	}
 	total := len(request.AudioTurns)

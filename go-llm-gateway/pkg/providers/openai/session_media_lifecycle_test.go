@@ -120,7 +120,9 @@ func TestFlushOutboundWaitsForWebSocketWrite(t *testing.T) {
 		close(writerDone)
 	}()
 	t.Cleanup(func() {
-		_ = session.Close()
+		if err := session.Close(); err != nil {
+			t.Errorf("close realtime session: %v", err)
+		}
 		select {
 		case <-writerDone:
 		case <-time.After(time.Second):
@@ -166,7 +168,11 @@ func TestRealtimeSession_FlushOutboundWaitsForDeferredAudioCommit(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close realtime session: %v", err)
+		}
+	}()
 
 	session.observeResponseCreated(models.SessionEvent{
 		Type: models.SessionEventResponseCreated,

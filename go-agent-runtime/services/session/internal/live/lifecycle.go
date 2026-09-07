@@ -333,10 +333,7 @@ func contextOnlyOrNil(err error) bool {
 
 func (s finishState) terminalError() error {
 	if s.requested && !s.graceful {
-		if s.toolResultErr != nil && contextOnlyOrNil(s.requestedErr) {
-			return errors.Join(s.requestedErr, s.toolResultErr)
-		}
-		return s.requestedErr
+		return requestedTerminalError(s)
 	}
 	if s.providerErr != nil && !isContextTermination(s.providerErr) {
 		return fmt.Errorf("session error: %w", s.providerErr)

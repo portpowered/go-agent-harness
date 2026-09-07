@@ -72,6 +72,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		inner:             inferencer,
 		media:             h.media,
 		continuous:        h.request.OutputAudioContinuous,
+		flushOutbound:     h.request.FinishAfterResponse,
 		onDispatch:        h.observeProviderDispatch,
 		onToolResult:      h.observeToolResult,
 		onContinuation:    h.observeContinuationRequested,
@@ -141,7 +142,6 @@ func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 		runtimeHandle.configureActiveScheduledAudio(active)
 	}
 }
-
 func (h *handle) configureActiveScheduledAudio(active bool) {
 	if h == nil {
 		return
@@ -150,7 +150,6 @@ func (h *handle) configureActiveScheduledAudio(active bool) {
 	h.activeScheduledAudio = active
 	h.mu.Unlock()
 }
-
 func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
 	if h == nil {
 		return nil
@@ -179,13 +178,14 @@ func (h *handle) finiteAudioResponseError() error {
 		return nil
 	}
 	h.mu.Lock()
-	incomplete := h.captureSourceActive && h.request.FinishAfterResponse && !h.gracefulStop && h.scheduledAudioCount == 0
+	incomplete := h.captureSourceActive && (h.request.FinishAfterResponse || h.request.ExpectedResponses > 0) && !h.gracefulStop && h.scheduledAudioCount == 0
 	h.mu.Unlock()
 	if incomplete {
 		return session.ErrLiveAudioResponseIncomplete
 	}
 	return nil
 }
+
 func (h *handle) emitSynthesizedSessionClose() {
 	if h == nil {
 		return

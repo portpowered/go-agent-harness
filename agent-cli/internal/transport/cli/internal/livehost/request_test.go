@@ -14,12 +14,13 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 		model:     "gpt-realtime",
 	}
 	for _, test := range []struct {
-		name         string
-		waitForClose bool
-		wantFinite   bool
+		name          string
+		waitForClose  bool
+		wantFinite    bool
+		wantResponses int
 	}{
-		{name: "finite audio", wantFinite: true},
-		{name: "provider owns close", waitForClose: true, wantFinite: false},
+		{name: "finite audio", wantFinite: true, wantResponses: 1},
+		{name: "provider owns close", waitForClose: true, wantFinite: false, wantResponses: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request := serviceSession.Request{
@@ -29,6 +30,9 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 			got := assembleLiveRequest(request, inputs)
 			if got.FinishAfterResponse != test.wantFinite {
 				t.Fatalf("FinishAfterResponse = %t, want %t", got.FinishAfterResponse, test.wantFinite)
+			}
+			if got.ExpectedResponses != test.wantResponses {
+				t.Fatalf("ExpectedResponses = %d, want %d", got.ExpectedResponses, test.wantResponses)
 			}
 		})
 	}

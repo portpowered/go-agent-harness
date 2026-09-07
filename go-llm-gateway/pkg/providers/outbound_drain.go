@@ -57,7 +57,7 @@ func (d *OutboundWireDrain) Flush(ctx context.Context, done <-chan struct{}, ter
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("outbound wire drain context is required")
 	}
 	d.mu.Lock()
 	if d.pending == 0 {

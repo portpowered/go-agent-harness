@@ -14,6 +14,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
+const (
+	realtimeFunctionCallOutputType = "function_call_output"
+	realtimeConversationNone       = "none"
+)
+
 // ConnectSession establishes an OpenAI Realtime WebSocket session through the
 // provider-agnostic session gateway contract.
 func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
@@ -327,7 +332,7 @@ func realtimeEventNeedsResponseAdmission(event models.SessionEvent) bool {
 			Type string `json:"type"`
 		} `json:"item"`
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == realtimeFunctionCallOutputType
 }
 
 func realtimeResponseCreateIsOutOfBand(event models.SessionEvent) bool {
@@ -339,7 +344,7 @@ func realtimeResponseCreateIsOutOfBand(event models.SessionEvent) bool {
 			Conversation string `json:"conversation"`
 		} `json:"response"`
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
 }
 
 func responseIntentHasFunctionCallOutput(intent responseIntent) bool {
@@ -360,7 +365,7 @@ func responseEventIsFunctionCallOutput(event models.SessionEvent) bool {
 			Type string `json:"type"`
 		} `json:"item"`
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == realtimeFunctionCallOutputType
 }
 
 func realtimeResponseCreatedIsOutOfBand(event models.SessionEvent) bool {
@@ -372,7 +377,7 @@ func realtimeResponseCreatedIsOutOfBand(event models.SessionEvent) bool {
 			Conversation string `json:"conversation"`
 		} `json:"response"`
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
 }
 
 func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
@@ -384,5 +389,5 @@ func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
 			Conversation string `json:"conversation"`
 		} `json:"response"`
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
 }
