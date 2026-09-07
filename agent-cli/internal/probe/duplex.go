@@ -201,6 +201,8 @@ func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) er
 }
 
 // WaitForOutputSequence waits until the exact sequence has crossed stdout.
+// Duplex input segments install at most one sequence gate at a time; callers
+// must likewise avoid concurrent sequence waits on the same progress value.
 func (p *DuplexProgress) WaitForOutputSequence(ctx context.Context, sequence []byte) error {
 	if len(sequence) == 0 {
 		return nil
