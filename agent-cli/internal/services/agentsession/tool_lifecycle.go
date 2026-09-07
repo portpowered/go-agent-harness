@@ -1,7 +1,6 @@
 package agentsession
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,7 +11,11 @@ import (
 // ErrSessionUnresolvedToolResults identifies a session that stopped before one
 // or more provider-requested tool results crossed the provider-facing send
 // boundary.
-var ErrSessionUnresolvedToolResults = errors.New("session ended with unresolved tool results")
+const ErrSessionUnresolvedToolResults = sessionUnresolvedToolResultsError("session ended with unresolved tool results")
+
+type sessionUnresolvedToolResultsError string
+
+func (e sessionUnresolvedToolResultsError) Error() string { return string(e) }
 
 // SessionUnresolvedToolResultsError carries the provider call IDs that were
 // still outstanding at a terminal session boundary. CallIDs is deduplicated

@@ -7,6 +7,8 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+const replayResponseCreate = "response.create"
+
 // Tool outputs and staged images are produced by the live runtime in response
 // to captured provider calls. The replay driver must not emit them a second
 // time. The raw replay transport still verifies their exact outbound payloads.
@@ -65,36 +67,52 @@ func (tools *toolActions) observeCall(record gatewaytesting.CapturedSessionEvent
 	return nil
 }
 
+type replayClientItem struct {
+	Type string `json:"type"`
+	Item struct {
+		Type    string                `json:"type"`
+		CallID  string                `json:"call_id"`
+		Role    string                `json:"role"`
+		Content []replayClientContent `json:"content"`
+	} `json:"item"`
+}
+
+type replayClientContent struct {
+	Type string `json:"type"`
+}
+
 func (tools *toolActions) consume(record gatewaytesting.CapturedSessionEvent) (bool, error) {
-	if tools.continuing && record.Type == "response.create" {
-		if err := replayPayloadType(record, "response.create"); err != nil {
+	switch record.Type {
+	case replayResponseCreate:
+		return tools.consumeResponseCreate(record)
+	case replayCreateItem:
+		return tools.consumeCreateItem(record)
+	default:
+		return false, nil
+	}
+}
+
+func (tools *toolActions) consumeResponseCreate(record gatewaytesting.CapturedSessionEvent) (bool, error) {
+	if tools.continuing {
+		if err := replayPayloadType(record, replayResponseCreate); err != nil {
 			return false, err
 		}
 		tools.continuing = false
 		return true, nil
 	}
-	if len(tools.pending) > 0 && record.Type == "response.create" {
+	if len(tools.pending) > 0 {
 		// A response.create before every pending tool result has been
 		// accepted cannot be reproduced by the live runtime. Keep the
 		// capture available for caller-driven replay so the strict wire
 		// replayer can report the actual outbound mismatch instead of
 		// turning it into an audio-plan boundary error.
-		return false, fmt.Errorf("%w: response.create at sequence %d precedes pending tool results", errSelfDrivingPlanUnavailable, record.Sequence)
+		return false, fmt.Errorf("%w: %s at sequence %d precedes pending tool results", errSelfDrivingPlanUnavailable, replayResponseCreate, record.Sequence)
 	}
-	if record.Type != replayCreateItem {
-		return false, nil
-	}
-	var event struct {
-		Type string `json:"type"`
-		Item struct {
-			Type    string `json:"type"`
-			CallID  string `json:"call_id"`
-			Role    string `json:"role"`
-			Content []struct {
-				Type string `json:"type"`
-			} `json:"content"`
-		} `json:"item"`
-	}
+	return false, nil
+}
+
+func (tools *toolActions) consumeCreateItem(record gatewaytesting.CapturedSessionEvent) (bool, error) {
+	var event replayClientItem
 	if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
 		return false, fmt.Errorf("decode client item at sequence %d: %w", record.Sequence, err)
 	}
@@ -102,24 +120,32 @@ func (tools *toolActions) consume(record gatewaytesting.CapturedSessionEvent) (b
 		return false, fmt.Errorf("client item payload type mismatch at sequence %d", record.Sequence)
 	}
 	if event.Item.Type == "function_call_output" {
-		if !tools.pending[event.Item.CallID] {
-			// The raw replay transport owns exact outbound validation. A
-			// malformed, duplicate, or mismatched result must therefore
-			// remain a caller-driven capture rather than being rejected while
-			// deriving the optional self-driving plan.
-			return false, fmt.Errorf("%w: orphan tool output at sequence %d", errSelfDrivingPlanUnavailable, record.Sequence)
-		}
-		delete(tools.pending, event.Item.CallID)
-		tools.continuing = true
-		return true, nil
+		return tools.consumeFunctionCallOutput(record, event.Item.CallID)
 	}
 	if !tools.continuing || event.Item.Type != "message" || event.Item.Role != "user" || len(event.Item.Content) == 0 {
 		return false, nil
 	}
-	for _, content := range event.Item.Content {
-		if content.Type != "input_image" {
-			return false, nil
+	return replayClientItemContainsOnlyImages(event.Item.Content), nil
+}
+
+func (tools *toolActions) consumeFunctionCallOutput(record gatewaytesting.CapturedSessionEvent, callID string) (bool, error) {
+	if !tools.pending[callID] {
+		// The raw replay transport owns exact outbound validation. A
+		// malformed, duplicate, or mismatched result must therefore
+		// remain a caller-driven capture rather than being rejected while
+		// deriving the optional self-driving plan.
+		return false, fmt.Errorf("%w: orphan tool output at sequence %d", errSelfDrivingPlanUnavailable, record.Sequence)
+	}
+	delete(tools.pending, callID)
+	tools.continuing = true
+	return true, nil
+}
+
+func replayClientItemContainsOnlyImages(content []replayClientContent) bool {
+	for _, item := range content {
+		if item.Type != "input_image" {
+			return false
 		}
 	}
-	return true, nil
+	return true
 }

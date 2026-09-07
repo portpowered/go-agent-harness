@@ -20,9 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-const deviceServerAPIPrefix = "/v1/audio-device"
-
 const (
+	deviceServerAPIPrefix = "/v1/audio-device"
 	deviceServerJSONLimit = 1 << 20
 	deviceServerPCMLimit  = 8 << 20
 )
@@ -53,9 +52,7 @@ type remoteErrorResponse struct {
 	Available []audio.DeviceFormat `json:"available,omitempty"`
 }
 
-// DeviceServerSnapshot is the process-boundary evidence exposed by the
-// deterministic device server. RenderedSamples are samples consumed by the
-// simulated callback clock, not merely written or queued by the client.
+// DeviceServerSnapshot is deterministic process-boundary device evidence.
 type DeviceServerSnapshot struct {
 	Playback        audio.PlaybackQueueStats `json:"playback"`
 	Capture         audio.CaptureQueueStats  `json:"capture"`
@@ -64,9 +61,7 @@ type DeviceServerSnapshot struct {
 	Trace           []DeviceTraceEvent       `json:"trace"`
 }
 
-// DeviceServer exposes a DeviceRegistry over a loopback HTTP connection. It
-// is deliberately transport-only: all queueing, callback clocks, formats and
-// statistics remain owned by the wrapped audio backend.
+// DeviceServer exposes a transport-only loopback HTTP DeviceRegistry.
 type DeviceServer struct {
 	registry DeviceRegistry
 
@@ -493,10 +488,7 @@ func writeDeviceServerError(w http.ResponseWriter, status int, err error) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// RemoteDeviceRegistry connects the production audio adapters to a
-// loopback-only DeviceServer. It intentionally implements the same optional
-// format capability as native registries, so all ordinary input/output flags
-// continue to work unchanged.
+// RemoteDeviceRegistry connects production audio adapters to a loopback server.
 type RemoteDeviceRegistry struct {
 	baseURL string
 	client  *http.Client
@@ -770,9 +762,7 @@ func remoteDeviceError(payload remoteErrorResponse) error {
 	return errors.New(payload.Error)
 }
 
-// AdvanceRemoteDeviceServer advances an explicitly-clocked server. It is a
-// harness operation, not part of DeviceRegistry, and therefore cannot affect
-// native device implementations.
+// AdvanceRemoteDeviceServer advances an explicitly-clocked harness server.
 func AdvanceRemoteDeviceServer(ctx context.Context, endpoint string, callbacks int) error {
 	registry, err := NewRemoteDeviceRegistry(endpoint)
 	if err != nil {

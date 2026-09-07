@@ -73,26 +73,37 @@ func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool
 		return
 	}
 	c.observeText(msg, outbound)
-	if !outbound && (msg.Type == messages.StreamTypeToolCallStart || msg.Type == messages.StreamTypeToolCallDelta || msg.Type == messages.StreamTypeToolCallEnd) {
-		c.turn.toolMessage = true
-	}
+	c.observeToolCall(msg, outbound)
 	if msg.Type == messages.StreamTypeMessageEnd {
 		c.endMessage(outbound)
 	}
-	if !outbound && msg.Type == messages.StreamTypeToolCallEnd {
-		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-			if c.toolNames == nil {
-				c.toolNames = make(map[string]string)
-			}
-			callID := strings.TrimSpace(value.ToolCallID)
-			if callID == "" {
-				callID = strings.TrimSpace(msg.ToolCallId)
-			}
-			c.toolNames[callID] = value.Name
-			c.nextToolSequence++
-			c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments})
-		}
+}
+
+func (c *evidenceConversation) observeToolCall(msg messages.StreamMessage, outbound bool) {
+	if outbound || (msg.Type != messages.StreamTypeToolCallStart && msg.Type != messages.StreamTypeToolCallDelta && msg.Type != messages.StreamTypeToolCallEnd) {
+		return
 	}
+	c.turn.toolMessage = true
+	if msg.Type == messages.StreamTypeToolCallEnd {
+		c.observeToolCallEnd(msg)
+	}
+}
+
+func (c *evidenceConversation) observeToolCallEnd(msg messages.StreamMessage) {
+	value, ok := msg.Value.(*messages.ToolCallEndValue)
+	if !ok || value == nil {
+		return
+	}
+	if c.toolNames == nil {
+		c.toolNames = make(map[string]string)
+	}
+	callID := strings.TrimSpace(value.ToolCallID)
+	if callID == "" {
+		callID = strings.TrimSpace(msg.ToolCallId)
+	}
+	c.toolNames[callID] = value.Name
+	c.nextToolSequence++
+	c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments})
 }
 
 func (c *evidenceConversation) observeToolResult(msg messages.StreamMessage, _ uint64) {

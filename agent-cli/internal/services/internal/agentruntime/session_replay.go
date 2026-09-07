@@ -26,15 +26,16 @@ const (
 )
 
 // replaySessionConfiguration is the provider-facing configuration captured in
-// the first outbound session.update. The raw payload is deliberately retained
-// instead of projected into the live workspace's SessionConfig: provider wire
-// versions may carry fields (for example GA audio or output_modalities) that
-// the shared config does not model yet.
+// the first outbound session.update. Raw payload is retained because provider
+// wire versions may carry fields (for example GA audio or output_modalities)
+// that the shared config does not model yet.
 type replaySessionConfiguration struct {
 	payload               []byte
 	model                 string
 	inputAudioSampleRate  int
 	outputAudioSampleRate int
+	initialToolNames      []string
+	initialToolsKnown     bool
 }
 
 // loadReplaySessionConfiguration validates and extracts the authoritative
@@ -52,7 +53,6 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 		if record.Direction != gwtesting.DirectionClientToServer || record.Type != sessionUpdateEventType {
 			continue
 		}
-
 		payload := replayCaptureRecordPayload(record)
 		if len(payload) == 0 {
 			return replaySessionConfiguration{}, fmt.Errorf(
@@ -77,6 +77,7 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 				path, sessionUpdateEventType, record.Sequence, envelope.Type,
 			)
 		}
+
 		if len(envelope.Session) == 0 || string(envelope.Session) == "null" {
 			return replaySessionConfiguration{}, fmt.Errorf(
 				"replay session capture %s: initial outbound %s at sequence %d is missing the session configuration",
@@ -97,7 +98,7 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 				path, sessionUpdateEventType, record.Sequence,
 			)
 		}
-
+		initialToolNames, initialToolsKnown, toolsErr := replaySessionToolNames(path, record.Sequence, session)
 		model := ""
 		if rawModel, ok := session["model"]; ok {
 			if err := json.Unmarshal(rawModel, &model); err != nil {
@@ -108,7 +109,6 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 			}
 			model = strings.TrimSpace(model)
 		}
-
 		inputRate, outputRate := replaySessionAudioSampleRates(session)
 		if inputRate > 0 && outputRate > 0 && inputRate != outputRate {
 			return replaySessionConfiguration{}, fmt.Errorf(
@@ -116,13 +116,14 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 				path, ErrSessionAudioSampleRateConflict, inputRate, outputRate,
 			)
 		}
-
 		return replaySessionConfiguration{
 			payload:               append([]byte(nil), payload...),
 			model:                 model,
 			inputAudioSampleRate:  inputRate,
 			outputAudioSampleRate: outputRate,
-		}, nil
+			initialToolNames:      initialToolNames,
+			initialToolsKnown:     initialToolsKnown,
+		}, toolsErr
 	}
 
 	return replaySessionConfiguration{}, fmt.Errorf(
@@ -131,9 +132,8 @@ func loadReplaySessionConfiguration(path string) (replaySessionConfiguration, er
 	)
 }
 
-// replaySessionAudioSampleRates extracts both provider-declared directions
-// from the current GA audio format objects or provider extensions carrying the
-// same objects under the legacy field names. Missing rates remain unspecified.
+// replaySessionAudioSampleRates extracts provider-declared directions from GA
+// audio format objects or legacy provider extensions. Missing rates remain unspecified.
 func replaySessionAudioSampleRates(session map[string]json.RawMessage) (int, int) {
 	var audio struct {
 		Input struct {

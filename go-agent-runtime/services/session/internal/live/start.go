@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
@@ -108,10 +109,9 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
 	}
-	// An injected session inferencer receives provider configuration through the
-	// same loop boundary as a native provider. Forward the admitted catalog so
-	// fixture providers and shipped sessions observe the exact surface that the
-	// runtime will execute.
+	// An injected session inferencer receives provider configuration through the same
+	// loop boundary as a native provider. Forward the admitted catalog so fixtures
+	// observe the exact surface that the runtime executes.
 	if h.request.ReplayPlan == nil && h.request.Replay.InputCapturePath == "" && (len(toolDefinitions) > 0 || h.request.Capabilities != nil) {
 		options = append(options, agentloop.WithSessionConfig(messages.SessionUpdateConfig{
 			Instructions: h.request.Instructions,
@@ -122,10 +122,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	return agentloop.New(options...)
 }
 
-// activeCaptureToolExecutor keeps a fast tool result behind the next active
-// scheduled audio turn. The wait lives in the tool worker rather than the
-// model runner's ordered ingress, so the capture worker can still admit its
-// cancel/audio/commit boundary while the tool is pending.
+// activeCaptureToolExecutor keeps tool results behind the next active audio turn.
 type activeCaptureToolExecutor struct {
 	inner messages.ToolExecutor
 	wait  func(context.Context) error
@@ -139,7 +136,6 @@ func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.To
 	}
 	return e.inner.Execute(ctx, call)
 }
-
 func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
 		runtimeHandle.configureActiveScheduledAudio(active)
@@ -190,7 +186,6 @@ func (h *handle) finiteAudioResponseError() error {
 	}
 	return nil
 }
-
 func (h *handle) emitSynthesizedSessionClose() {
 	if h == nil {
 		return
@@ -207,13 +202,7 @@ func (h *handle) emitSynthesizedSessionClose() {
 	h.publishMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: value})
 }
 
-// restrictToolExecutor keeps provider issued calls inside the capability
-// surface advertised for this invocation. A registry executor can still be
-// non-nil when one configured tool has been disabled, so relying on executor
-// presence alone would execute an unadvertised call through its generic
-// "not found" path. Returning a normal correlated tool result lets the
-// provider apply its own continuation/replay validation and prevents an
-// unavailable call from being mistaken for a clean assistant completion.
+// restrictToolExecutor keeps provider calls inside the invocation capability surface.
 func restrictToolExecutor(executor messages.ToolExecutor, definitions []messages.ToolDefinition, enforceEmpty bool) messages.ToolExecutor {
 	if replacement, ok := executor.(interface{ AllowUnadvertisedTools() bool }); ok && replacement.AllowUnadvertisedTools() {
 		return executor
@@ -271,8 +260,7 @@ func (h *handle) newDurationTimer() (platformclock.Timer, error) {
 }
 
 func (h *handle) prepareReplayCompletion() {
-	// An explicit capture source owns the invocation boundary; a replay opening
-	// prompt must not cancel a scheduled audio pump before its bytes are sent.
+	// An explicit capture source owns the boundary and must send its bytes first.
 	if h.captureSourceIsActive() {
 		return
 	}
@@ -283,11 +271,8 @@ func (h *handle) prepareReplayCompletion() {
 	if plan != nil && plan.OpeningPromptPresent && h.request.FinishAfterResponse {
 		h.markCaptureComplete()
 	}
-	// A raw provider replay may contain a response without a client opening
-	// prompt (for example a capture that starts with session.update and then
-	// records provider output). Such captures do not always include an explicit
-	// session.closed frame, so the response terminal boundary must be allowed
-	// to finish the invocation once the replayed response is complete.
+	// Raw replays without an opening prompt may lack session.closed; let the
+	// response terminal boundary finish the invocation when it completes.
 	if h.request.FinishAfterResponse && h.request.Replay.InputCapturePath != "" &&
 		(plan == nil || plan.StopAfterResponse) {
 		h.markCaptureComplete()
@@ -385,4 +370,31 @@ func (h *handle) launchWorkers(
 	go h.consumeDeltas(ctx, loop)
 	plan.launch(h, ctx, loop)
 	go h.finishWhenStopped() //nolint:contextcheck // lifecycle join owns the invocation evidence context.
+}
+
+func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
+	copy := value
+	return session.LiveEvent{
+		Kind:          "browser." + strings.TrimSpace(value.Type),
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		Timestamp:     value.Timestamp,
+		BrowserID:     value.BrowserID,
+		TargetID:      value.TargetID,
+		Generation:    value.Generation,
+		InvocationID:  value.InvocationID,
+		State:         value.State,
+		Reason:        value.Reason,
+		Capability:    &copy,
+		Critical:      capabilityEventCritical(value),
+	}
+}
+
+func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
+	typeName := strings.ToLower(strings.TrimSpace(value.Type))
+	state := strings.ToLower(strings.TrimSpace(value.State))
+	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
+		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
+		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
+		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

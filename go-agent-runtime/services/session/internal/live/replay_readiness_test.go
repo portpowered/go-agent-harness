@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
@@ -368,7 +369,9 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 		Role:  messages.RoleTool,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	}
-	h.observeToolLifecycle(toolResultEnd)
+	if continuationErr, complete := h.observeToolLifecycle(toolResultEnd); continuationErr != nil || complete {
+		t.Fatalf("tool result lifecycle = error:%v complete:%t, want pending continuation", continuationErr, complete)
+	}
 	h.observeFiniteResponse(toolResultEnd)
 	h.markContinuationOutput()
 
@@ -378,7 +381,9 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 		ToolCallId: nextCallID,
 		Value:      messages.NewToolCallEndValue(nextCallID, "list", `{}`),
 	}
-	h.observeToolLifecycle(nextCall)
+	if continuationErr, complete := h.observeToolLifecycle(nextCall); continuationErr != nil || complete {
+		t.Fatalf("next tool lifecycle = error:%v complete:%t, want pending continuation", continuationErr, complete)
+	}
 	h.observeFiniteResponse(nextCall)
 	continuationEnd := messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
@@ -418,3 +423,107 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 		t.Fatal("opening wait did not release after provider admission")
 	}
 }
+
+// An explicit control may register its media barrier before an automatic
+// provider send reaches the wrapper. The automatic send must be allowed to
+// finish so the model runner can dispatch the control; waiting on the control
+// barrier from the runner itself would deadlock both operations.
+func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
+	gate := mediagate.New(nil)
+	ackID, _, err := gate.RegisterAck()
+	if err != nil {
+		t.Fatalf("register control: %v", err)
+	}
+
+	automaticStarted := make(chan struct{})
+	releaseAutomatic := make(chan struct{})
+	controlSent := make(chan struct{})
+	provider := &orderingSession{
+		automaticStarted: automaticStarted,
+		releaseAutomatic: releaseAutomatic,
+		controlSent:      controlSent,
+	}
+	ordered := &orderedSession{inner: provider, media: gate}
+
+	automaticDone := make(chan messages.SessionSendOutcome, 1)
+	go func() {
+		automaticDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
+			Type:  messages.StreamTypeTextDelta,
+			Value: messages.NewTextDeltaValue("automatic"),
+		})
+	}()
+	select {
+	case <-automaticStarted:
+	case <-time.After(time.Second):
+		t.Fatal("automatic provider send did not start")
+	}
+
+	controlDone := make(chan messages.SessionSendOutcome, 1)
+	go func() {
+		controlDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
+			Type:            messages.StreamTypeMessageEnd,
+			ActorProvidedID: ackID,
+			Value:           messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+	}()
+	select {
+	case <-controlSent:
+		t.Fatal("control overtook the automatic send")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(releaseAutomatic)
+
+	select {
+	case outcome := <-automaticDone:
+		if !outcome.OK() {
+			t.Fatalf("automatic send outcome = %+v", outcome)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("automatic provider send did not finish")
+	}
+	select {
+	case outcome := <-controlDone:
+		if !outcome.OK() {
+			t.Fatalf("control send outcome = %+v", outcome)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("control provider send deadlocked behind automatic send")
+	}
+	select {
+	case <-controlSent:
+	case <-time.After(time.Second):
+		t.Fatal("control provider send did not run")
+	}
+}
+
+type orderingSession struct {
+	automaticStarted chan struct{}
+	releaseAutomatic chan struct{}
+	controlSent      chan struct{}
+}
+
+func (s *orderingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeMessageEnd {
+		close(s.controlSent)
+		return true
+	}
+	select {
+	case <-s.automaticStarted:
+	default:
+		close(s.automaticStarted)
+	}
+	select {
+	case <-s.releaseAutomatic:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (s *orderingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return messages.NewTypedBuffer[messages.StreamMessage](1)
+}
+
+func (s *orderingSession) Done() <-chan struct{} { return nil }
+
+func (s *orderingSession) Close() error { return nil }

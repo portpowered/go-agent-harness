@@ -70,10 +70,6 @@ var (
 	// ErrLiveToolContinuationIncomplete identifies an ordinary tool result that
 	// reached the provider but did not receive a completed model continuation.
 	ErrLiveToolContinuationIncomplete = errors.New("session ended before the tool continuation")
-	// ErrLiveUnresolvedToolResults identifies provider-requested tool calls whose
-	// local results never crossed the provider-facing send boundary before the
-	// session stopped.
-	ErrLiveUnresolvedToolResults = errors.New("session ended with unresolved tool results")
 	// ErrLiveScheduledAudioIncomplete identifies a finite scheduled-audio
 	// invocation that ended before every admitted source received a terminal
 	// response disposition. The runtime keeps this cause separate from a
@@ -81,6 +77,15 @@ var (
 	// evidence while still classifying the schedule failure.
 	ErrLiveScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 )
+
+// ErrLiveUnresolvedToolResults identifies provider-requested tool calls whose
+// local results never crossed the provider-facing send boundary before the
+// session stopped.
+const ErrLiveUnresolvedToolResults = liveUnresolvedToolResultsError("session ended with unresolved tool results")
+
+type liveUnresolvedToolResultsError string
+
+func (e liveUnresolvedToolResultsError) Error() string { return string(e) }
 
 // ErrLiveAudioResponseIncomplete identifies a finite audio-input invocation
 // that ended before a terminal assistant response. Hosts may join this cause
@@ -94,26 +99,6 @@ const ErrLiveAudioResponseIncomplete = errLiveAudioResponseIncomplete
 // diagnostics and retain a stable errors.Is classification.
 type LiveUnresolvedToolResultsError struct {
 	CallIDs []string
-}
-
-// NewLiveUnresolvedToolResultsError constructs a deterministic unresolved
-// result error from provider call IDs observed by the live runtime.
-func NewLiveUnresolvedToolResultsError(ids []string) *LiveUnresolvedToolResultsError {
-	ordered := make([]string, 0, len(ids))
-	seen := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			continue
-		}
-		seen[id] = struct{}{}
-		ordered = append(ordered, id)
-	}
-	sort.Strings(ordered)
-	return &LiveUnresolvedToolResultsError{CallIDs: ordered}
 }
 
 func (e *LiveUnresolvedToolResultsError) Error() string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -348,7 +349,11 @@ func (h *handle) unresolvedToolResultsError() error {
 	if len(ids) == 0 {
 		return nil
 	}
-	return session.NewLiveUnresolvedToolResultsError(ids)
+	for index, id := range ids {
+		ids[index] = strings.TrimSpace(id)
+	}
+	sort.Strings(ids)
+	return &session.LiveUnresolvedToolResultsError{CallIDs: ids}
 }
 
 func (h *handle) observeContinuationRequested() {
@@ -388,31 +393,4 @@ func (h *handle) markToolResponseComplete() {
 		}
 	}
 	h.toolMu.Unlock()
-}
-
-func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
-	copy := value
-	return session.LiveEvent{
-		Kind:          "browser." + strings.TrimSpace(value.Type),
-		SessionID:     sessionID,
-		ParticipantID: participantID,
-		Timestamp:     value.Timestamp,
-		BrowserID:     value.BrowserID,
-		TargetID:      value.TargetID,
-		Generation:    value.Generation,
-		InvocationID:  value.InvocationID,
-		State:         value.State,
-		Reason:        value.Reason,
-		Capability:    &copy,
-		Critical:      capabilityEventCritical(value),
-	}
-}
-
-func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
-	typeName := strings.ToLower(strings.TrimSpace(value.Type))
-	state := strings.ToLower(strings.TrimSpace(value.State))
-	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
-		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
-		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
-		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

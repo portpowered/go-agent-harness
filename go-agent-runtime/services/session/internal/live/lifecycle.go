@@ -359,22 +359,6 @@ func (s finishState) terminalError() error {
 	return nil
 }
 
-func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
-	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
-		h.stopGracefully()
-	}
-}
-
-func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr error) error {
-	if recorder == nil {
-		return nil
-	}
-	if ctx == nil {
-		return errors.New("live recorder finalization context is required")
-	}
-	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
-}
-
 func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration) error {
 	if playback == nil {
 		return nil
@@ -398,4 +382,19 @@ func drainPlayback(parent context.Context, playback devices.Playback, timeout ti
 		return fmt.Errorf("drain live playback: %w", err)
 	}
 	return nil
+}
+func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
+	if msg.Type == messages.StreamTypeSessionClose && !h.deferProviderClose() {
+		h.stopGracefully()
+	}
+}
+
+func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr error) error {
+	if recorder == nil {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("live recorder finalization context is required")
+	}
+	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
 }
