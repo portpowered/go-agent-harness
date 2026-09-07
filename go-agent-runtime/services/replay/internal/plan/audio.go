@@ -60,7 +60,19 @@ func (c *audioCursor) nextTurn() (session.LiveReplayAudioTurn, error) {
 
 func (c *audioCursor) consume(kind string) error {
 	if c.position >= len(c.actions) || c.actions[c.position].Type != kind {
-		return fmt.Errorf("missing %s", kind)
+		if c.position >= len(c.actions) {
+			if c.position > 0 {
+				previous := c.actions[c.position-1]
+				return fmt.Errorf("missing %s after %s at sequence %d", kind, previous.Type, previous.Sequence)
+			}
+			return fmt.Errorf("missing %s", kind)
+		}
+		actual := c.actions[c.position]
+		if c.position > 0 {
+			previous := c.actions[c.position-1]
+			return fmt.Errorf("missing %s after %s at sequence %d: found %s at sequence %d", kind, previous.Type, previous.Sequence, actual.Type, actual.Sequence)
+		}
+		return fmt.Errorf("missing %s before %s at sequence %d", kind, actual.Type, actual.Sequence)
 	}
 	if err := replayPayloadType(c.actions[c.position], kind); err != nil {
 		return err

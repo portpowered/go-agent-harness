@@ -210,6 +210,19 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	}
 }
 
+func TestUserCancellationWinsOverUnresolvedToolResultTeardown(t *testing.T) {
+	state := finishState{
+		requestedErr: context.Canceled,
+		parentCause:  session.ErrLiveUserCancellation,
+		toolResultErr: session.NewLiveUnresolvedToolResultsError([]string{
+			"call-in-flight",
+		}),
+	}
+	if !state.userCancellation() {
+		t.Fatal("explicit user cancellation was overridden by the expected unresolved-tool teardown diagnostic")
+	}
+}
+
 func TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents(t *testing.T) {
 	provider := newTestSession()
 	capability := &testLiveCapabilityHandle{

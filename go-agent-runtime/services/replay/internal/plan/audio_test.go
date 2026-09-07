@@ -57,3 +57,12 @@ func TestAudioCursorEnforcesRemainingSampleBudget(t *testing.T) {
 		t.Fatalf("sample budget error=%v", err)
 	}
 }
+
+func TestAudioPlanNamesUnexpectedNextEventInBoundaryDiagnostic(t *testing.T) {
+	records := append(audioTurnRecords()[:1], clientRecord("input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`), clientRecord("input_audio_buffer.append", `{"type":"input_audio_buffer.append","audio":"AQACAA=="}`))
+	if _, err := replayAudioPlan("fixture", records); err == nil ||
+		!strings.Contains(err.Error(), "input_audio_buffer.commit") ||
+		!strings.Contains(err.Error(), "input_audio_buffer.append") {
+		t.Fatalf("boundary diagnostic = %v, want both the prior commit and unexpected append", err)
+	}
+}

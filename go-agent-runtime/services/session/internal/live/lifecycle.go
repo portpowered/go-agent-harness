@@ -320,7 +320,7 @@ func (h *handle) captureFinishState() finishState {
 }
 
 func (s finishState) userCancellation() bool {
-	if s.graceful || !errors.Is(s.parentCause, session.ErrLiveUserCancellation) || s.continuationErr != nil || s.toolResultErr != nil {
+	if s.graceful || !errors.Is(s.parentCause, session.ErrLiveUserCancellation) || s.continuationErr != nil {
 		return false
 	}
 	return contextOnlyOrNil(s.requestedErr) && contextOnlyOrNil(s.providerErr) &&
