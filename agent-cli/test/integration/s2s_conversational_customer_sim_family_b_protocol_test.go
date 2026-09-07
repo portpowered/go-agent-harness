@@ -16,6 +16,7 @@ const (
 	familyBOriginalCallID      = "call-family-b-original"
 	familyBAuthorizationHeader = "Bearer hermetic-key"
 	familyBResponseCancelEvent = "response.cancel"
+ familyBSessionUpdateEvent = "session.update"
 )
 
 func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
@@ -67,7 +68,7 @@ type familyBClientEvent struct {
 
 func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, event familyBClientEvent) error {
 	switch event.Type {
-	case "session.update":
+	case familyBSessionUpdateEvent:
 		f.mu.Lock()
 		f.sessionUpdates++
 		f.mu.Unlock()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"reflect"
 	"strings"
 
@@ -360,4 +361,11 @@ func (h *handle) replayResponseTarget() int {
 		target = h.request.ExpectedResponses
 	}
 	return target
+}
+
+func shouldCancelMediaPumpFor(name string, pumpErr error, ctx context.Context) bool {
+	if name == "playback" && errors.Is(pumpErr, devices.ErrPlaybackInput) {
+		return false
+	}
+	return shouldCancelMediaPump(pumpErr, ctx)
 }

@@ -12,6 +12,7 @@ import (
 // detailed provider transcript remains in the two raw JSONL artifacts; this
 // index preserves the useful turn summary used by CLI and room tooling.
 type evidenceConversation struct {
+	responseAudio       map[string]evidenceResponseAudio
 	inputBytes          uint64
 	outputBytes         uint64
 	closed              []evidenceTurn
@@ -22,6 +23,7 @@ type evidenceConversation struct {
 }
 
 type evidenceTurn struct {
+	responseIDs    []string
 	inputText      evidenceText
 	responseText   evidenceText
 	inputAudio     uint64
@@ -71,6 +73,9 @@ func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool
 	if msg.Role == messages.RoleTool {
 		c.observeToolResult(msg, 0)
 		return
+	}
+	if !outbound && msg.Role != messages.RoleUser {
+		c.trackResponse(msg.ResponseID)
 	}
 	c.observeText(msg, outbound)
 	c.observeToolCall(msg, outbound)
@@ -208,7 +213,7 @@ func (c *evidenceConversation) observeAudio(input bool, index, bytes int, _ time
 }
 
 func (t evidenceTurn) observed() bool {
-	return t.inputText.Len() > 0 || t.responseText.Len() > 0 || t.inputAudio > 0 || t.outputAudio > 0 || len(t.toolEvents) > 0
+	return len(t.responseIDs) > 0 || t.inputText.Len() > 0 || t.responseText.Len() > 0 || t.inputAudio > 0 || t.outputAudio > 0 || len(t.toolEvents) > 0
 }
 
 func (c evidenceConversation) json() ([]byte, error) {
@@ -221,6 +226,7 @@ func (c evidenceConversation) json() ([]byte, error) {
 	}
 	var data []byte
 	for index, turn := range turns {
+		turn = c.withResponseAudio(turn)
 		entry := evidenceLogEntry{TurnIndex: index + 1, ToolEvents: append([]evidenceToolEvent(nil), turn.toolEvents...)}
 		entry.Input.Text = turn.inputText.String()
 		entry.Input.AudioBytes = turn.inputAudio

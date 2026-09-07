@@ -104,3 +104,43 @@ func (s *recordingSampleSink) snapshot() [][]int16 {
 
 var _ sharedaudio.InboundMedia = (*gatedPlaybackInput)(nil)
 var _ sharedaudio.SampleSink = (*recordingSampleSink)(nil)
+
+func TestInterruptedPlaybackResetsEvenWhenQueuedEndWasDiscarded(t *testing.T) {
+	media := sharedaudio.NewSessionMediaAtRateWithOptions(nil, 24000, sharedaudio.MediaSessionOptions{InboundContinuous: true})
+	defer media.Close()
+	sink := &recordingSampleSink{}
+	playback, err := newPlayback(devices.FileOutput{Sink: sink, SampleRate: 24000, Continuous: true}, 24000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	for index, id := range []string{"old-response", "replacement-response"} {
+		if index == 1 {
+			media.InterruptInbound()
+		}
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: id})
+		if err := media.PushInbound([]int16{int16(index + 1)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := media.FlushInbound(); err != nil {
+			t.Fatal(err)
+		}
+		frame, err := media.Endpoints().Inbound.ReadFrame(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := playback.consumeFrame(ctx, frame); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The old end marker was discarded by interruption. The replacement must
+	// still be playable and shutdown must retain the replacement's lineage.
+	if err := playback.flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := sink.snapshot()
+	if len(got) != 2 || len(got[0]) != 1 || got[0][0] != 1 || len(got[1]) != 1 || got[1][0] != 2 {
+		t.Fatalf("PCM = %v, want [1] then [2]", got)
+	}
+}

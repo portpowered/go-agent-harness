@@ -191,3 +191,47 @@ func NewFamilyBScenario() CustomerScenario {
 		Deadline:    30 * time.Second,
 	}
 }
+
+func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, facts customerSimulationRecordingFacts) CorrectionEvidence {
+	original := customerSimulationRecordedResponse(facts, 0)
+	replacement := customerSimulationRecordedResponse(facts, 1)
+	originalStart, originalEnd := customerSimulationResponseOutputBoundaries(original)
+	replacementStart, replacementEnd := customerSimulationResponseOutputBoundaries(replacement)
+	// All three boundaries come from the copied agent transcript's logical
+	// clock: response output audio, the first non-silent correction frame, and
+	// the actual provider-boundary RESPONSE.CANCEL. Do not substitute a parent
+	// process PCM read, a next response, or a terminal marker for any of them.
+	correctionAt := customerSimulationRecordedInputStart(facts, 1)
+	cancelAt := time.Duration(0)
+	if facts.cancelObserved {
+		cancelAt = facts.cancelAt
+	}
+
+	originalStatus := customerSimulationResponseStatus(original)
+	if originalStatus == "incomplete" && facts.cancelObserved && facts.cancelResponseID == original.ID {
+		originalStatus = "cancelled"
+	}
+	replacementStatus := customerSimulationResponseStatus(replacement)
+	originalResponseID := original.ID
+	if originalResponseID == "" && len(product) > 0 {
+		// Keep a visible placeholder for the malformed/missing-record case. The
+		// contract still rejects an empty ID, and the evaluator reports the
+		// action-specific failure instead of fabricating a passing interval.
+		originalResponseID = "unobserved-original-response"
+	}
+	return CorrectionEvidence{
+		OriginalActionID: FamilyBOriginalActionID, ReplacementActionID: FamilyBReplacementActionID,
+		OriginalTurnID: customerSimulationTurnID(scenario, 0), CorrectionTurnID: customerSimulationTurnID(scenario, 1), OriginalResponseID: originalResponseID,
+		OriginalResponseStartedAt: originalStart, CorrectionStartedAt: correctionAt, CancellationSentAt: cancelAt, OriginalResponseEndedAt: originalEnd,
+		ReplacementResponseStartedAt: replacementStart, ReplacementResponseEndedAt: replacementEnd,
+		CancellationEventRecorded: facts.cancelObserved, CancellationResponseID: facts.cancelResponseID,
+		OriginalResponseStatus: originalStatus, ReplacementResponseStatus: replacementStatus, Process: &process,
+	}
+}
+
+func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {
+	if index < 0 || index >= len(facts.inputSpeechStarts) {
+		return 0
+	}
+	return facts.inputSpeechStarts[index]
+}

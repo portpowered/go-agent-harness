@@ -89,7 +89,11 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		return
 	}
 	*offset += uint64(len(data))
-	r.conversation.observeAudio(item.direction == session.LiveRecordClient, 0, len(data), item.timestamp)
+	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
+		r.conversation.recordResponseAudio(item.frame.PlaybackResponse.ResponseID, uint64(len(data)), *offset-uint64(len(data)), segment)
+	} else {
+		r.conversation.observeAudio(item.direction == session.LiveRecordClient, 0, len(data), item.timestamp)
+	}
 }
 
 func (r *directoryRecorder) writeAudioBoundary(item directoryEvidenceItem, segment string, offset uint64) error {

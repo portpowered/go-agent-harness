@@ -133,7 +133,7 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 			break
 		}
 		response := realtimePlaybackResponse(event.Data)
-		if response.ItemID != "" {
+		if response.HasIdentity() {
 			media.StartInboundResponse(response)
 		}
 		data, decodeErr := decodeOpenAIRealtimeAudioDelta(event.Data)

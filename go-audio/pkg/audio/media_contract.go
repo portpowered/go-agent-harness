@@ -151,7 +151,7 @@ func (m *sessionInboundMedia) appendAvailableFrameLocked() {
 		return
 	}
 	samples := append([]int16(nil), m.pending...)
-	m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
+	m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response, Epoch: m.epoch})
 	m.pending = nil
 }
 
@@ -170,3 +170,6 @@ func (m *sessionInboundMedia) appendInboundFramesLocked() {
 		m.appendAvailableFrameLocked()
 	}
 }
+
+// HasIdentity reports whether a provider supplied a response or item identity.
+func (r PlaybackResponse) HasIdentity() bool { return r.ResponseID != "" || r.ItemID != "" }

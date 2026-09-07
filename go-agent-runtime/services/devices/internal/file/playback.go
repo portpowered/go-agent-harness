@@ -16,6 +16,7 @@ type filePlayback struct {
 	processor  *sharedaudio.Processor
 	continuous bool
 	ended      bool
+	lineage    sharedaudio.PCMFrame
 
 	closeOnce sync.Once
 	closeErr  error
@@ -139,6 +140,11 @@ func (p *filePlayback) WaitForPump(ctx context.Context) error {
 }
 
 func (p *filePlayback) consumeFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
+	// Provider interruption can discard an end marker already queued behind
+	// audible PCM. Its epoch explicitly resets filter history on the next frame.
+	if frame.Epoch != p.lineage.Epoch {
+		p.ended = true
+	}
 	if err := p.resetAfterResponse(); err != nil {
 		return err
 	}
@@ -154,6 +160,8 @@ func (p *filePlayback) consumeFrame(ctx context.Context, frame sharedaudio.PCMFr
 		return err
 	}
 	p.ended = frame.EndOfResponse
+	p.lineage = frame
+	p.lineage.Samples = nil
 	return nil
 }
 
@@ -172,7 +180,9 @@ func (p *filePlayback) flush(ctx context.Context) error {
 	if p == nil || p.ended {
 		return nil
 	}
-	frames, err := p.processor.Process(sharedaudio.PCMFrame{EndOfResponse: true})
+	frame := p.lineage
+	frame.EndOfResponse = true
+	frames, err := p.processor.Process(frame)
 	if err != nil {
 		return fmt.Errorf("flush finite audio output: %w", err)
 	}

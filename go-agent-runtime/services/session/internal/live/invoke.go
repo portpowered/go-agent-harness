@@ -285,13 +285,6 @@ func shouldCancelMediaPump(pumpErr error, ctx context.Context) bool {
 	return ctx == nil || ctx.Err() == nil
 }
 
-func shouldCancelMediaPumpFor(name string, pumpErr error, ctx context.Context) bool {
-	if name == "playback" && errors.Is(pumpErr, devices.ErrPlaybackInput) {
-		return false
-	}
-	return shouldCancelMediaPump(pumpErr, ctx)
-}
-
 func isExpectedMediaPumpError(err error) bool {
 	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, session.ErrLiveClosed) ||

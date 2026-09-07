@@ -234,9 +234,7 @@ func (h *handle) mediaFailure(err error) {
 		return
 	}
 	h.mu.Lock()
-	// Closing a live handle cancels the media bridge deliberately. The
-	// resulting context cancellation is a teardown signal, not a new terminal
-	// cause and must not erase the caller's explicit cancellation error.
+	// Intentional teardown must not replace the caller's cancellation cause.
 	if h.cancelRequested && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		h.mu.Unlock()
 		return
@@ -247,10 +245,7 @@ func (h *handle) mediaFailure(err error) {
 	providerInbound := errors.Is(err, mediagate.ErrProviderInboundMedia)
 	h.mu.Unlock()
 	if providerInbound {
-		// Provider media is decoded in parallel with the ordered normalized
-		// stream. A malformed audio delta must be reported, but cancelling the
-		// loop here would discard transcript deltas that the provider has already
-		// queued after that same frame.
+		// Retain the media error without discarding independently queued transcript.
 		return
 	}
 	h.Cancel(err)

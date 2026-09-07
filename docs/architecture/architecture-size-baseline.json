@@ -517,16 +517,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_suite_evidence.go",
-      "symbol": "customerSimulationResponseOutputInterval",
-      "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
-      "file": "internal/probe/customer_simulation_suite_evidence.go",
       "symbol": "customerSimulationTerminationEvidence",
       "value": 18,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -538,7 +528,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_suite_evidence.go",
       "symbol": "readCustomerSimulationStream",
-      "value": 27,
+      "value": 22,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -10917,18 +10907,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_suite_evidence.go",
-      "symbol": "customerSimulationResponseOutputInterval",
-      "value": 17,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
-      "file": "internal/probe/customer_simulation_suite_evidence.go",
       "symbol": "readCustomerSimulationStream",
-      "value": 17,
+      "value": 16,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -17936,7 +17916,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_suite_evidence.go",
-      "value": 832,
+      "value": 627,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -20155,7 +20135,7 @@
       "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
       "file": "coverage.go",
       "symbol": "",
-      "value": 697,
+      "value": 696,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
       "phase": "P0"
     },

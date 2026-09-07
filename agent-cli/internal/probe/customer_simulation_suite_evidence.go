@@ -46,6 +46,7 @@ type customerSimulationResponse struct {
 }
 
 type customerSimulationRecordedMessage struct {
+	media   *customerSimulationMediaBoundary
 	message messages.StreamMessage
 	at      time.Duration
 	wallAt  time.Time
@@ -53,18 +54,20 @@ type customerSimulationRecordedMessage struct {
 }
 
 type customerSimulationStreamParser struct {
-	facts             customerSimulationRecordingFacts
-	scenario          CustomerScenario
-	knownResponses    int
-	completedToolIDs  map[string]time.Duration
-	pending           map[string]*customerSimulationTool
-	current           *customerSimulationResponse
-	text              strings.Builder
-	activeResponseID  string
-	responseIndex     int
-	inputSpeechActive bool
-	lastWallAt        time.Time
-	lastAt            time.Duration
+	deliveredResponseID string
+	mediaByResponse     map[string]customerSimulationMediaInterval
+	facts               customerSimulationRecordingFacts
+	scenario            CustomerScenario
+	knownResponses      int
+	completedToolIDs    map[string]time.Duration
+	pending             map[string]*customerSimulationTool
+	current             *customerSimulationResponse
+	text                strings.Builder
+	activeResponseID    string
+	responseIndex       int
+	inputSpeechActive   bool
+	lastWallAt          time.Time
+	lastAt              time.Duration
 }
 
 type customerSimulationTool struct {
@@ -162,20 +165,13 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if parseErr == nil && !base.IsZero() && wallAt.After(base) {
 			at = wallAt.Sub(base)
 		}
-		message, messageErr := gatewaytesting.UnmarshalStreamMessage(record.Payload)
-		if messageErr != nil {
-			// SYSTEM.FULL_MESSAGE was added after the generic test helper's
-			// original switch. It is decoded below just for tool correlation;
-			// unknown auxiliary frames do not erase the rest of the recording.
-			if recordContainsStreamType(record.Payload, string(messages.StreamTypeSystemFullMessage)) {
-				if toolID, ok := fullMessageToolID(record.Payload); ok {
-					completedToolIDs[toolID] = at
-				}
-				continue
-			}
-			return facts, fmt.Errorf("decode product stream message: %v", messageErr)
+		parsed, keep, err := parseCustomerSimulationRecord(record, at, wallAt, completedToolIDs)
+		if err != nil {
+			return facts, err
 		}
-		records = append(records, customerSimulationRecordedMessage{message: message, at: at, wallAt: wallAt, dir: record.Direction})
+		if keep {
+			records = append(records, parsed)
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return facts, fmt.Errorf("read product transcript: %v", err)
@@ -195,6 +191,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		}
 	}
 	parser.finish()
+	parser.applyMediaBoundaries()
 	return parser.facts, nil
 }
 
@@ -202,6 +199,10 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 	p.lastAt = record.at
 	if !record.wallAt.IsZero() {
 		p.lastWallAt = record.wallAt
+	}
+	if record.media != nil {
+		p.consumeMediaBoundary(record)
+		return false
 	}
 	msg := record.message
 	isAssistant := customerSimulationMessageIsAssistant(record)
@@ -332,13 +333,16 @@ func (p *customerSimulationStreamParser) consumeResponseCancel(record customerSi
 		p.facts.cancelWallAt = record.wallAt
 		p.facts.cancelResponseID = strings.TrimSpace(record.message.ResponseID)
 		if p.facts.cancelResponseID == "" {
-			p.facts.cancelResponseID = p.activeResponseID
+			p.facts.cancelResponseID = p.deliveredResponseID
+			if p.facts.cancelResponseID == "" {
+				p.facts.cancelResponseID = p.activeResponseID
+			}
 		}
 		if p.facts.cancelResponseID == "" && p.current != nil {
 			p.facts.cancelResponseID = p.current.ID
 		}
 	}
-	if p.current != nil {
+	if p.current != nil && p.current.ID == p.facts.cancelResponseID {
 		p.current.Cancelled = true
 	}
 }
@@ -438,236 +442,6 @@ func maxDuration(left, right time.Duration) time.Duration {
 		return right
 	}
 	return left
-}
-
-func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, facts customerSimulationRecordingFacts) CorrectionEvidence {
-	original := customerSimulationRecordedResponse(facts, 0)
-	replacement := customerSimulationRecordedResponse(facts, 1)
-	originalStart, originalEnd := customerSimulationResponseOutputBoundaries(original)
-	replacementStart, replacementEnd := customerSimulationResponseOutputBoundaries(replacement)
-	// All three boundaries come from the copied agent transcript's logical
-	// clock: response output audio, the first non-silent correction frame, and
-	// the actual provider-boundary RESPONSE.CANCEL. Do not substitute a parent
-	// process PCM read, a next response, or a terminal marker for any of them.
-	correctionAt := customerSimulationRecordedInputStart(facts, 1)
-	cancelAt := time.Duration(0)
-	if facts.cancelObserved {
-		cancelAt = facts.cancelAt
-	}
-
-	originalStatus := customerSimulationResponseStatus(original)
-	if originalStatus == "incomplete" && facts.cancelObserved && facts.cancelResponseID == original.ID {
-		originalStatus = "cancelled"
-	}
-	replacementStatus := customerSimulationResponseStatus(replacement)
-	originalResponseID := original.ID
-	if originalResponseID == "" && len(product) > 0 {
-		// Keep a visible placeholder for the malformed/missing-record case. The
-		// contract still rejects an empty ID, and the evaluator reports the
-		// action-specific failure instead of fabricating a passing interval.
-		originalResponseID = "unobserved-original-response"
-	}
-	return CorrectionEvidence{
-		OriginalActionID: FamilyBOriginalActionID, ReplacementActionID: FamilyBReplacementActionID,
-		OriginalTurnID: customerSimulationTurnID(scenario, 0), CorrectionTurnID: customerSimulationTurnID(scenario, 1), OriginalResponseID: originalResponseID,
-		OriginalResponseStartedAt: originalStart, CorrectionStartedAt: correctionAt, CancellationSentAt: cancelAt, OriginalResponseEndedAt: originalEnd,
-		ReplacementResponseStartedAt: replacementStart, ReplacementResponseEndedAt: replacementEnd,
-		CancellationEventRecorded: facts.cancelObserved, CancellationResponseID: facts.cancelResponseID,
-		OriginalResponseStatus: originalStatus, ReplacementResponseStatus: replacementStatus, Process: &process,
-	}
-}
-
-func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {
-	if index < 0 || index >= len(facts.inputSpeechStarts) {
-		return 0
-	}
-	return facts.inputSpeechStarts[index]
-}
-
-// customerSimulationResponseOutputInterval maps a recorded response's audio
-// range onto the actual stdout reads from the shipped child. Session recording
-// timestamps are logical and intentionally comparable across runs; they are
-// not used as wall-clock evidence for a process-boundary interruption.
-func customerSimulationResponseOutputInterval(scenario CustomerScenario, facts customerSimulationRecordingFacts, response customerSimulationResponse, result DuplexRunResult) (time.Duration, time.Duration, bool) {
-	if strings.TrimSpace(response.ID) == "" || response.AudioBytes <= 0 {
-		return 0, 0, false
-	}
-	var target customerSimulationResponseAudioRange
-	found := false
-	for _, candidate := range customerSimulationResponseAudioRanges(scenario, facts.responses) {
-		if candidate.ResponseID == response.ID {
-			target = candidate
-			found = true
-			break
-		}
-	}
-	if !found {
-		return 0, 0, false
-	}
-
-	var previousTotal int64
-	var start, end time.Duration
-	observed := false
-	for _, output := range result.Output {
-		outputEnd := output.Total
-		if outputEnd <= previousTotal || outputEnd < int64(output.Bytes) {
-			outputEnd = previousTotal + int64(output.Bytes)
-		}
-		outputStart := outputEnd - int64(output.Bytes)
-		if outputStart < previousTotal {
-			outputStart = previousTotal
-		}
-		previousTotal = outputEnd
-
-		overlapStart := maxInt64(outputStart, target.Start)
-		overlapEnd := minInt64(outputEnd, target.End)
-		if overlapEnd <= overlapStart {
-			continue
-		}
-		at := output.At
-		if at < 0 {
-			at = 0
-		}
-		partEnd := at + customerSimulationPCM16Duration(int(overlapEnd-overlapStart))
-		if partEnd <= at {
-			partEnd = at + time.Nanosecond
-		}
-		if !observed || at < start {
-			start = at
-		}
-		if !observed || partEnd > end {
-			end = partEnd
-		}
-		observed = true
-	}
-	return start, end, observed
-}
-
-func customerSimulationRecordedResponse(facts customerSimulationRecordingFacts, index int) customerSimulationResponse {
-	responses := customerSimulationResponseCandidates(facts.responses)
-	if index < 0 || index >= len(responses) {
-		return customerSimulationResponse{}
-	}
-	return responses[index]
-}
-
-func customerSimulationResponseCandidates(responses []customerSimulationResponse) []customerSimulationResponse {
-	// A Realtime tool continuation may be a distinct assistant response and
-	// may carry a small audio marker of its own. Prefer response boundaries that
-	// contain spoken transcript for action-level correction evidence; fall back
-	// to audio-bearing boundaries when a provider records audio without a
-	// transcript, and only then use every recorded response.
-	withTranscript := make([]customerSimulationResponse, 0, len(responses))
-	for _, response := range responses {
-		if strings.TrimSpace(response.Text) != "" {
-			withTranscript = append(withTranscript, response)
-		}
-	}
-	if len(withTranscript) >= 2 {
-		return withTranscript
-	}
-	withAudio := make([]customerSimulationResponse, 0, len(responses))
-	for _, response := range responses {
-		if response.AudioBytes > 0 {
-			withAudio = append(withAudio, response)
-		}
-	}
-	if len(withAudio) >= 2 {
-		return withAudio
-	}
-	return responses
-}
-
-func customerSimulationResponseStatus(response customerSimulationResponse) string {
-	if response.Cancelled {
-		return "cancelled"
-	}
-	if response.Complete {
-		return "completed"
-	}
-	return "incomplete"
-}
-
-func customerSimulationResponseTime(response customerSimulationResponse, fallback time.Duration, result DuplexRunResult, start bool) time.Duration {
-	wallAt := response.WallStart
-	if !start {
-		wallAt = response.WallEnd
-	}
-	if converted, ok := customerSimulationRecordedTimeOK(wallAt, result); ok {
-		return converted
-	}
-	return fallback
-}
-
-func customerSimulationRecordedTime(wallAt time.Time, fallback time.Duration, result DuplexRunResult) time.Duration {
-	if converted, ok := customerSimulationRecordedTimeOK(wallAt, result); ok {
-		return converted
-	}
-	return fallback
-}
-
-func customerSimulationRecordedTimeOK(wallAt time.Time, result DuplexRunResult) (time.Duration, bool) {
-	if wallAt.IsZero() {
-		return 0, false
-	}
-	base, ok := customerSimulationDuplexWallOrigin(result)
-	if !ok {
-		return 0, false
-	}
-	converted := wallAt.Sub(base)
-	if converted < 0 {
-		return 0, false
-	}
-	return converted, true
-}
-
-func customerSimulationDuplexWallOrigin(result DuplexRunResult) (time.Time, bool) {
-	for _, input := range result.Input {
-		if !input.Timestamp.IsZero() {
-			return input.Timestamp.Add(-input.At), true
-		}
-	}
-	for _, output := range result.Output {
-		if !output.Timestamp.IsZero() {
-			return output.Timestamp.Add(-output.At), true
-		}
-	}
-	return time.Time{}, false
-}
-
-func customerSimulationInputStart(result DuplexRunResult, segmentID string, ordinal int) time.Duration {
-	if strings.TrimSpace(segmentID) != "" {
-		for _, input := range result.Input {
-			if input.SegmentID == segmentID {
-				return input.At
-			}
-		}
-	}
-	seenSegments := make(map[string]struct{})
-	segmentIndex := 0
-	for _, input := range result.Input {
-		if _, seen := seenSegments[input.SegmentID]; seen {
-			continue
-		}
-		seenSegments[input.SegmentID] = struct{}{}
-		if segmentIndex == ordinal {
-			return input.At
-		}
-		segmentIndex++
-	}
-	return 0
-}
-
-func customerSimulationResponseInterval(product []TranscriptEvent, index int) (time.Duration, time.Duration) {
-	if index < 0 || index >= len(product) {
-		return 0, 0
-	}
-	start := product[index].At
-	end := start + time.Millisecond
-	if index+1 < len(product) && product[index+1].At > end {
-		end = product[index+1].At
-	}
-	return start, end
 }
 
 func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts, result DuplexRunResult) MixedModalEvidence {
@@ -829,4 +603,25 @@ func toolObservationIDsNotComplete(tools []ToolObservation) []string {
 		}
 	}
 	return result
+}
+
+func parseCustomerSimulationRecord(record transcript.Record, at time.Duration, wallAt time.Time, completedToolIDs map[string]time.Duration) (customerSimulationRecordedMessage, bool, error) {
+	parsed := customerSimulationRecordedMessage{at: at, wallAt: wallAt, dir: record.Direction}
+	if record.Stream == transcript.StreamRuntimeAudio {
+		media, err := decodeCustomerSimulationMedia(record)
+		parsed.media = media
+		return parsed, media != nil, err
+	}
+	message, err := gatewaytesting.UnmarshalStreamMessage(record.Payload)
+	if err == nil {
+		parsed.message = message
+		return parsed, true, nil
+	}
+	if recordContainsStreamType(record.Payload, string(messages.StreamTypeSystemFullMessage)) {
+		if toolID, ok := fullMessageToolID(record.Payload); ok {
+			completedToolIDs[toolID] = at
+		}
+		return parsed, false, nil
+	}
+	return parsed, false, fmt.Errorf("decode product stream message: %w", err)
 }
