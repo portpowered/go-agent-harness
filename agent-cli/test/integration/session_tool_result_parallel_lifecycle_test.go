@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 const (
@@ -587,6 +588,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 			Provider:          "openai",
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
+			ModelCatalog:      providerswire.NewModelCatalog(),
 			SessionInferencer: inferencer,
 			ToolExecutor:      executor,
 			Diagnostics:       sink,
