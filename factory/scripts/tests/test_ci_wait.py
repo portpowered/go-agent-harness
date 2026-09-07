@@ -296,6 +296,10 @@ class CIWaitTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("checks failed", stderr)
         self.assertIn("FAILURE", stderr)
+        self.assertEqual(self.module.last_failure.kind, "checks-failed")
+        self.assertEqual(self.module.last_failure.head_ref_oid, HEAD)
+        self.assertEqual(self.module.last_failure.pr, 101)
+        self.assertEqual(self.module.last_failure.checks[0]["link"], CHECK_LINK)
         self.assertEqual(sleeps, [])
 
     def test_pending_check_times_out_without_becoming_false_green(self):
@@ -310,6 +314,9 @@ class CIWaitTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("timed out", stderr)
         self.assertNotIn("checks-terminal", stdout)
+        self.assertEqual(self.module.last_failure.kind, "infrastructure")
+        self.assertEqual(self.module.last_failure.head_ref_oid, HEAD)
+        self.assertEqual(self.module.last_failure.checks[0]["name"], "Verification")
         self.assertEqual(sleeps, [])
 
     def test_empty_checks_fail_even_when_grace_is_zero(self):
