@@ -33,69 +33,74 @@ func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *htt
 		if readErr != nil {
 			return
 		}
-		var event struct {
-			Type  string `json:"type"`
-			Audio string `json:"audio"`
-			Item  struct {
-				Type   string `json:"type"`
-				CallID string `json:"call_id"`
-				Output string `json:"output"`
-			} `json:"item"`
-		}
+		var event familyBClientEvent
 		if err := json.Unmarshal(payload, &event); err != nil {
 			f.failProtocol("decode client event: " + err.Error())
 			return
 		}
-		switch event.Type {
-		case "session.update":
-			f.mu.Lock()
-			f.sessionUpdates++
-			f.mu.Unlock()
-			if err := f.sendSessionReady(connection); err != nil {
-				return
-			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
-				return
-			}
-			if familyBSilent(audio) {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				continue
-			}
-			if err := f.handleCustomerUtterance(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "conversation.item.create":
-			if event.Item.Type != "function_call_output" {
-				continue
-			}
-			if err := f.handleToolResult(connection, event.Item.CallID, event.Item.Output); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "response.cancel":
-			f.mu.Lock()
-			f.cancelPending = true
-			f.cancellationSent = f.elapsedLocked()
-			f.cancellationEventRecorded = true
-			f.cancellationResponseID = f.activeResponse
-			f.mu.Unlock()
-		case "input_audio_buffer.commit", "response.create":
-			// The fixture models the two customer turns from the continuously
-			// open stream and accepts the client's explicit end-of-input controls.
-		default:
-			// Optional provider metadata is not relevant to this filesystem and
-			// interruption proof.
+		if err := f.handleClientEvent(connection, event); err != nil {
+			f.failProtocol(err.Error())
+			return
 		}
 	}
+}
+
+type familyBClientEvent struct {
+	Type  string `json:"type"`
+	Audio string `json:"audio"`
+	Item  struct {
+		Type   string `json:"type"`
+		CallID string `json:"call_id"`
+		Output string `json:"output"`
+	} `json:"item"`
+}
+
+func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, event familyBClientEvent) error {
+	switch event.Type {
+	case "session.update":
+		f.mu.Lock()
+		f.sessionUpdates++
+		f.mu.Unlock()
+		return f.sendSessionReady(connection)
+	case "input_audio_buffer.append":
+		return f.handleInputAudio(connection, event.Audio)
+	case "conversation.item.create":
+		if event.Item.Type == "function_call_output" {
+			return f.handleToolResult(connection, event.Item.CallID, event.Item.Output)
+		}
+	case "response.cancel":
+		f.recordCancellation()
+	case "input_audio_buffer.commit", "response.create":
+		// The fixture models the two customer turns from the continuously
+		// open stream and accepts the client's explicit end-of-input controls.
+	default:
+		// Optional provider metadata is not relevant to this filesystem and
+		// interruption proof.
+	}
+	return nil
+}
+
+func (f *familyBProviderFixture) handleInputAudio(connection *websocket.Conn, encoded string) error {
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("decode input audio: %w", err)
+	}
+	if !familyBSilent(audio) {
+		return f.handleCustomerUtterance(connection)
+	}
+	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
+		return err
+	}
+	return f.send(connection, map[string]string{"type": "input_audio_buffer.committed"})
+}
+
+func (f *familyBProviderFixture) recordCancellation() {
+	f.mu.Lock()
+	f.cancelPending = true
+	f.cancellationSent = f.elapsedLocked()
+	f.cancellationEventRecorded = true
+	f.cancellationResponseID = f.activeResponse
+	f.mu.Unlock()
 }
 
 func (f *familyBProviderFixture) handleCustomerUtterance(connection *websocket.Conn) error {

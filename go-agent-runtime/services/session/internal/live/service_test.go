@@ -521,3 +521,65 @@ func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 		t.Fatal("post-EOF response did not complete the finite capture")
 	}
 }
+
+func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T) {
+	cases := []failedContinuationOrder{
+		{name: "provider_failure_first", failureBeforeToolEnd: true},
+		{name: "tool_result_first"},
+		{name: "tool_output_first", outputBeforeAdmission: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) { assertFailedContinuationOrder(t, tc) })
+	}
+}
+
+type failedContinuationOrder struct {
+	name                  string
+	outputBeforeAdmission bool
+	failureBeforeToolEnd  bool
+}
+
+func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) {
+	t.Helper()
+	const callID = "call-failed-continuation"
+	h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
+	h.observeProviderToolCall(messages.StreamMessage{
+		Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant,
+		ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
+	})
+	toolOutput := messages.StreamMessage{
+		Type: messages.StreamTypeImageEnd, Role: messages.RoleTool, ToolCallId: callID,
+		Value: messages.NewImageEndValue(),
+	}
+	if order.outputBeforeAdmission {
+		h.observeToolLifecycle(toolOutput)
+	}
+	h.observeToolResult(callID, "read_image", true)
+	if !order.outputBeforeAdmission {
+		h.observeToolLifecycle(toolOutput)
+	}
+	toolEnd := messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	failure := messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
+		Value: &messages.MessageEndValue{
+			Type: "message_end", Status: "failed", ProviderErrorCode: "token_limit_exceeded",
+		},
+	}
+	var err error
+	var complete bool
+	if order.failureBeforeToolEnd {
+		if earlyErr, earlyComplete := h.observeToolLifecycle(failure); earlyErr != nil || earlyComplete {
+			t.Fatalf("early provider failure = error:%v complete:%t, want deferred classification", earlyErr, earlyComplete)
+		}
+		err, complete = h.observeToolLifecycle(toolEnd)
+	} else {
+		h.observeToolLifecycle(toolEnd)
+		err, complete = h.observeToolLifecycle(failure)
+	}
+	if !errors.Is(err, session.ErrLiveImageContinuationIncomplete) || complete {
+		t.Fatalf("failed continuation = error:%v complete:%t, want typed failure", err, complete)
+	}
+}

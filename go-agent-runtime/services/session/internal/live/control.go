@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -273,112 +272,8 @@ func (h *handle) noteCaptureDispatched() {
 	}
 }
 
-// finishToolContinuations closes the bookkeeping loop for an accepted tool
-// result. A provider MESSAGE.END without observable continuation output is a
-// failed continuation even when the transport itself closed cleanly.
-func (h *handle) finishToolContinuations(msg messages.StreamMessage) (error, bool) {
-	if h == nil {
-		return nil, false
-	}
-	status, code, detail := continuationStatus(msg)
-	h.toolMu.Lock()
-	image, tools, completed := h.collectContinuationFailures(status, code, detail, msg.Value)
-	failure := continuationFailure(image, tools)
-	if failure != nil && h.continuationErr == nil {
-		h.continuationErr = failure
-	}
-	stored := h.continuationErr
-	h.toolMu.Unlock()
-	return stored, completed
-}
-
-type continuationFailures struct {
-	ids      []string
-	statuses map[string]string
-	codes    map[string]string
-	details  map[string]string
-}
-
-func continuationStatus(msg messages.StreamMessage) (string, string, string) {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok || value == nil {
-		return "", "", ""
-	}
-	detail := strings.TrimSpace(value.StatusDetails)
-	if detail == "" {
-		detail = strings.TrimSpace(value.ProviderErrorMessage)
-	}
-	return strings.TrimSpace(value.Status), strings.TrimSpace(value.ProviderErrorCode), detail
-}
-
-func (h *handle) collectContinuationFailures(status, code, detail string, raw any) (continuationFailures, continuationFailures, bool) {
-	image := newContinuationFailures()
-	tools := newContinuationFailures()
-	completed := false
-	value, ok := raw.(*messages.MessageEndValue)
-	if !ok {
-		value = nil
-	}
-	for callID, state := range h.toolContinuations {
-		if !state.resultAccepted || !state.continuationRequested {
-			continue
-		}
-		// Provider and tool result events cross different participant queues. A
-		// failed continuation may therefore arrive before the local RoleTool
-		// MESSAGE.END even though its result was already accepted on the wire.
-		// Retain that terminal and classify it when the local result boundary
-		// catches up. Cancelled/incomplete terminals are not retained here: they
-		// can belong to the response that produced the tool call.
-		if !state.toolResponseComplete {
-			if providerContinuationFailed(value) {
-				state.pendingTerminal = true
-				state.status, state.code, state.detail = status, code, detail
-			}
-			continue
-		}
-		state.status, state.code, state.detail = status, code, detail
-		if continuationFailed(value, state.outputObserved) {
-			target := &tools
-			if strings.EqualFold(strings.TrimSpace(state.name), "read_image") {
-				target = &image
-			}
-			target.add(callID, status, code, detail)
-			continue
-		}
-		completed = true
-		delete(h.toolContinuations, callID)
-	}
-	return image, tools, completed
-}
-
-func (h *handle) finishDeferredToolContinuations() (error, bool) {
-	image := newContinuationFailures()
-	tools := newContinuationFailures()
-	completed := false
-	h.toolMu.Lock()
-	for callID, state := range h.toolContinuations {
-		if !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.pendingTerminal {
-			continue
-		}
-		state.pendingTerminal = false
-		if continuationFailed(&messages.MessageEndValue{Status: state.status}, state.outputObserved) {
-			target := &tools
-			if strings.EqualFold(strings.TrimSpace(state.name), "read_image") {
-				target = &image
-			}
-			target.add(callID, state.status, state.code, state.detail)
-			continue
-		}
-		completed = true
-		delete(h.toolContinuations, callID)
-	}
-	failure := continuationFailure(image, tools)
-	if failure != nil && h.continuationErr == nil {
-		h.continuationErr = failure
-	}
-	stored := h.continuationErr
-	h.toolMu.Unlock()
-	return stored, completed
+func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
+	_ = h.beginToolResultAdmission(callID, name, requestsContinuation)
 }
 
 func providerContinuationFailed(value *messages.MessageEndValue) bool {
@@ -389,51 +284,80 @@ func providerContinuationFailed(value *messages.MessageEndValue) bool {
 	return status == "failed" || status == "error"
 }
 
-func newContinuationFailures() continuationFailures {
-	return continuationFailures{
-		ids: make([]string, 0), statuses: make(map[string]string),
-		codes: make(map[string]string), details: make(map[string]string),
-	}
-}
-
-func (f *continuationFailures) add(callID, status, code, detail string) {
-	if f == nil {
+func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
+	if events == nil {
 		return
 	}
-	f.ids = append(f.ids, callID)
-	f.statuses[callID], f.codes[callID], f.details[callID] = status, code, detail
-}
-
-func continuationFailure(image, tools continuationFailures) error {
-	var failure error
-	if len(image.ids) > 0 {
-		sort.Strings(image.ids)
-		failure = &session.LiveImageContinuationError{
-			CallIDs: image.ids, ProviderStatuses: image.statuses,
-			ProviderCodes: image.codes, ProviderDetails: image.details,
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if sink == nil || *sinkErr != nil {
+				continue
+			}
+			if err := sink.Publish(ctx, event); err != nil {
+				*sinkErr = fmt.Errorf("publish live event: %w", err)
+				handle.Cancel(*sinkErr)
+			}
+		default:
+			return
 		}
 	}
-	if len(tools.ids) == 0 {
-		return failure
-	}
-	sort.Strings(tools.ids)
-	toolFailure := &session.LiveToolContinuationError{
-		CallIDs: tools.ids, ProviderStatuses: tools.statuses,
-		ProviderCodes: tools.codes, ProviderDetails: tools.details,
-	}
-	if failure == nil {
-		return toolFailure
-	}
-	return errors.Join(failure, toolFailure)
 }
 
-func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bool {
-	if !outputObserved {
-		return true
+func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
+	if err == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	}
-	if value == nil {
+	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
+}
+
+func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
+}
+
+func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleTool
+}
+
+func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
+}
+
+func (h *handle) canFinishFiniteResponse() bool {
+	if !h.request.FinishAfterResponse || h.responseActive || h.responsePending {
 		return false
 	}
-	status := strings.ToLower(strings.TrimSpace(value.Status))
-	return status == "failed" || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
+	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
+	responseCount, responseTarget := h.replayResponses, h.replayResponseTarget()
+	if h.captureResponseTarget > 0 {
+		responseTarget = h.captureResponseTarget
+	}
+	if h.scheduledAudioCount > 0 {
+		// Scheduled barge-in resolves input at its owned partial terminal; count
+		// every scheduled terminal after the optional opening response.
+		responseCount = h.observedResponseTerminals
+		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
+	}
+	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
+}
+
+func (h *handle) replayResponseTarget() int {
+	target := 1
+	if h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0 {
+		target = len(h.request.ReplayPlan.AudioTurns)
+	}
+	if h.request.ExpectedResponses > 0 {
+		target = h.request.ExpectedResponses
+	}
+	return target
 }

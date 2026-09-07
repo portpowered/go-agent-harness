@@ -388,16 +388,3 @@ func (s *orderedSession) InitialSessionConfigSent() bool {
 	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
 	return ok && marker.InitialSessionConfigSent()
 }
-
-func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
-	if err == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	}
-	if errors.Is(err, context.DeadlineExceeded) || (ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	if errors.Is(err, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled)) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-}

@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 )
 
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
@@ -124,7 +125,7 @@ func (h *handle) observeOpeningPolicies(ctx context.Context, loop *agentloop.Age
 }
 
 func (h *handle) publishMessage(msg messages.StreamMessage) {
-	event := eventFromMessage(h.request.SessionID, msg)
+	event := eventcodec.FromMessage(h.request.SessionID, msg)
 	h.recordMessage(session.LiveRecord{Direction: session.LiveRecordAgent, Timestamp: event.Timestamp, Message: msg})
 	h.publish(event, false)
 }
@@ -202,7 +203,7 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	if h == nil {
 		return
 	}
-	value := terminalValueForMessage(msg)
+	value := eventcodec.TerminalValue(msg)
 	if value == nil {
 		return
 	}
@@ -307,6 +308,15 @@ func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.Strea
 	}
 }
 
+func (h *handle) observeOutput(msg messages.StreamMessage) {
+	if h == nil || !eventcodec.OutputMessage(msg) {
+		return
+	}
+	h.mu.Lock()
+	h.outputObserved = true
+	h.mu.Unlock()
+}
+
 func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...bool) bool {
 	if h == nil || !h.request.FinishAfterResponse {
 		return false
@@ -362,46 +372,4 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		}
 		h.replayResponses++
 	}
-}
-
-func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
-	value, ok := msg.Value.(*messages.MessageEndValue)
-	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
-}
-
-func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleTool
-}
-
-func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
-}
-
-func (h *handle) canFinishFiniteResponse() bool {
-	if !h.request.FinishAfterResponse || h.responseActive || h.responsePending {
-		return false
-	}
-	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
-	responseCount, responseTarget := h.replayResponses, h.replayResponseTarget()
-	if h.captureResponseTarget > 0 {
-		responseTarget = h.captureResponseTarget
-	}
-	if h.scheduledAudioCount > 0 {
-		// Scheduled barge-in resolves input at its owned partial terminal; count
-		// every scheduled terminal after the optional opening response.
-		responseCount = h.observedResponseTerminals
-		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
-	}
-	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
-}
-
-func (h *handle) replayResponseTarget() int {
-	target := 1
-	if h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0 {
-		target = len(h.request.ReplayPlan.AudioTurns)
-	}
-	if h.request.ExpectedResponses > 0 {
-		target = h.request.ExpectedResponses
-	}
-	return target
 }

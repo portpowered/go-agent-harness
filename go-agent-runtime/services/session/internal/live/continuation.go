@@ -1,227 +1,13 @@
 package live
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
-
-func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
-	if events == nil {
-		return
-	}
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return
-			}
-			if sink == nil || *sinkErr != nil {
-				continue
-			}
-			if err := sink.Publish(ctx, event); err != nil {
-				*sinkErr = fmt.Errorf("publish live event: %w", err)
-				handle.Cancel(*sinkErr)
-			}
-		default:
-			return
-		}
-	}
-}
-func eventFromMessage(sessionID string, msg messages.StreamMessage) session.LiveEvent {
-	observed := msg
-	event := session.LiveEvent{
-		Kind: string(msg.Type), SessionID: sessionID,
-		Role: msg.Role, ResponseID: msg.ResponseID, ToolCallID: msg.ToolCallId,
-		Message: &observed,
-	}
-	applyMessagePayload(&event, msg)
-	applyMessageSessionID(&event, sessionID, msg)
-	return event
-}
-func applyMessagePayload(event *session.LiveEvent, msg messages.StreamMessage) {
-	if msg.Type == messages.StreamTypeTextDelta {
-		applyTextDelta(event, msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeReasoningDelta {
-		event.Text = reasoningDeltaText(msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeTranscriptDelta {
-		applyTranscriptDelta(event, msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeTranscriptEnd {
-		applyTranscriptEnd(event, msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeToolCallStart {
-		event.ToolCallID = toolCallStartID(msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeToolCallEnd {
-		event.ToolCallID = toolCallEndID(msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeSessionClose {
-		applySessionClose(event, msg)
-		return
-	}
-	if msg.Type == messages.StreamTypeError {
-		applyError(event, msg)
-	}
-}
-func applyTextDelta(event *session.LiveEvent, msg messages.StreamMessage) {
-	event.Kind = string(session.LiveEventText)
-	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
-		event.Text = value.Content
-	}
-}
-
-func reasoningDeltaText(msg messages.StreamMessage) string {
-	value, ok := msg.Value.(*messages.ReasoningDeltaValue)
-	if !ok || value == nil {
-		return ""
-	}
-	return value.Content
-}
-func applyTranscriptDelta(event *session.LiveEvent, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.TranscriptDeltaValue)
-	if !ok || value == nil {
-		return
-	}
-	event.Text = value.Text
-	event.ItemID = value.ItemID
-}
-func applyTranscriptEnd(event *session.LiveEvent, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.TranscriptEndValue)
-	if !ok || value == nil {
-		return
-	}
-	event.Text = value.FullText
-	event.ItemID = value.ItemID
-}
-func toolCallStartID(msg messages.StreamMessage) string {
-	value, ok := msg.Value.(*messages.ToolCallStartValue)
-	if !ok || value == nil {
-		return ""
-	}
-	return value.ToolCallID
-}
-func toolCallEndID(msg messages.StreamMessage) string {
-	value, ok := msg.Value.(*messages.ToolCallEndValue)
-	if !ok || value == nil {
-		return ""
-	}
-	return value.ToolCallID
-}
-func applySessionClose(event *session.LiveEvent, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.SessionCloseValue)
-	if !ok || value == nil {
-		return
-	}
-	event.Reason = value.Reason
-	copy := *value
-	event.Terminal = &copy
-}
-func applyError(event *session.LiveEvent, msg messages.StreamMessage) {
-	value, ok := msg.Value.(*messages.ErrorValue)
-	if !ok || value == nil {
-		return
-	}
-	event.Error = value.Err
-	if event.Error == nil && value.Message != "" {
-		event.Error = errors.New(value.Message)
-	}
-	event.Critical = value.IsTerminal()
-}
-func applyMessageSessionID(event *session.LiveEvent, sessionID string, msg messages.StreamMessage) {
-	if value, ok := msg.Value.(*messages.SessionOpenValue); ok && value != nil {
-		event.SessionID = value.SessionID
-	}
-	if event.SessionID == "" {
-		event.SessionID = sessionID
-	}
-}
-
-func (h *handle) observeOutput(msg messages.StreamMessage) {
-	if h == nil || !liveOutputMessage(msg) {
-		return
-	}
-	h.mu.Lock()
-	h.outputObserved = true
-	h.mu.Unlock()
-}
-
-func liveOutputMessage(msg messages.StreamMessage) bool {
-	if msg.Role == messages.RoleUser {
-		return false
-	}
-	switch value := msg.Value.(type) {
-	case *messages.TextDeltaValue:
-		return value != nil && strings.TrimSpace(value.Content) != ""
-	case *messages.TranscriptDeltaValue:
-		return value != nil && strings.TrimSpace(value.Text) != ""
-	case *messages.TranscriptEndValue:
-		return value != nil && strings.TrimSpace(value.FullText) != ""
-	default:
-		return liveOutputBytes(value)
-	}
-}
-
-func liveOutputBytes(value any) bool {
-	switch value := value.(type) {
-	case *messages.AudioDeltaValue:
-		return value != nil && len(value.Content) > 0
-	case *messages.ImageDeltaValue:
-		return value != nil && len(value.Content) > 0
-	case *messages.VideoDeltaValue:
-		return value != nil && len(value.Content) > 0
-	case *messages.FileDeltaValue:
-		return value != nil && len(value.Content) > 0
-	case *messages.EmbeddingDeltaValue:
-		return value != nil && len(value.Content) > 0
-	default:
-		return false
-	}
-}
-func terminalValueForMessage(msg messages.StreamMessage) *messages.SessionCloseValue {
-	if msg.Type == messages.StreamTypeSessionClose {
-		candidate, ok := msg.Value.(*messages.SessionCloseValue)
-		if !ok || candidate == nil {
-			return nil
-		}
-		copy := *candidate
-		return &copy
-	}
-	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
-		return nil
-	}
-	candidate, ok := msg.Value.(*messages.MessageEndValue)
-	if !ok || candidate == nil {
-		return nil
-	}
-	return sessionCloseValueFromMessageEnd(candidate)
-}
-
-func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.SessionCloseValue {
-	if value == nil {
-		return nil
-	}
-	return &messages.SessionCloseValue{
-		Type:               "session_close",
-		Classification:     "",
-		TerminalReason:     value.TerminalReason,
-		TerminalProvenance: value.TerminalProvenance,
-		OutputState:        value.OutputState,
-	}
-}
 
 type liveToolContinuation struct {
 	callID                string
@@ -332,10 +118,6 @@ func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 		}
 	}
 	return strings.TrimSpace(callID), strings.TrimSpace(name)
-}
-
-func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
-	_ = h.beginToolResultAdmission(callID, name, requestsContinuation)
 }
 
 // beginToolResultAdmission records the result before handing it to the provider.
@@ -457,4 +239,161 @@ func (h *handle) markToolResponseComplete() {
 		}
 	}
 	h.toolMu.Unlock()
+}
+
+// finishToolContinuations closes the bookkeeping loop for an accepted tool
+// result. A provider MESSAGE.END without observable continuation output is a
+// failed continuation even when the transport itself closed cleanly.
+func (h *handle) finishToolContinuations(msg messages.StreamMessage) (error, bool) {
+	if h == nil {
+		return nil, false
+	}
+	status, code, detail := continuationStatus(msg)
+	h.toolMu.Lock()
+	image, tools, completed := h.collectContinuationFailures(status, code, detail, msg.Value)
+	failure := continuationFailure(image, tools)
+	if failure != nil && h.continuationErr == nil {
+		h.continuationErr = failure
+	}
+	stored := h.continuationErr
+	h.toolMu.Unlock()
+	return stored, completed
+}
+
+type continuationFailures struct {
+	ids      []string
+	statuses map[string]string
+	codes    map[string]string
+	details  map[string]string
+}
+
+func continuationStatus(msg messages.StreamMessage) (string, string, string) {
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || value == nil {
+		return "", "", ""
+	}
+	detail := strings.TrimSpace(value.StatusDetails)
+	if detail == "" {
+		detail = strings.TrimSpace(value.ProviderErrorMessage)
+	}
+	return strings.TrimSpace(value.Status), strings.TrimSpace(value.ProviderErrorCode), detail
+}
+
+func (h *handle) collectContinuationFailures(status, code, detail string, raw any) (continuationFailures, continuationFailures, bool) {
+	image := newContinuationFailures()
+	tools := newContinuationFailures()
+	completed := false
+	value, ok := raw.(*messages.MessageEndValue)
+	if !ok {
+		value = nil
+	}
+	for callID, state := range h.toolContinuations {
+		if !state.resultAccepted || !state.continuationRequested {
+			continue
+		}
+		// Provider and tool result events cross different participant queues. A
+		// failed continuation may therefore arrive before the local RoleTool
+		// MESSAGE.END even though its result was already accepted on the wire.
+		// Retain that terminal and classify it when the local result boundary
+		// catches up. Cancelled/incomplete terminals are not retained here: they
+		// can belong to the response that produced the tool call.
+		if !state.toolResponseComplete {
+			if providerContinuationFailed(value) {
+				state.pendingTerminal = true
+				state.status, state.code, state.detail = status, code, detail
+			}
+			continue
+		}
+		state.status, state.code, state.detail = status, code, detail
+		if continuationFailed(value, state.outputObserved) {
+			target := &tools
+			if strings.EqualFold(strings.TrimSpace(state.name), "read_image") {
+				target = &image
+			}
+			target.add(callID, status, code, detail)
+			continue
+		}
+		completed = true
+		delete(h.toolContinuations, callID)
+	}
+	return image, tools, completed
+}
+
+func (h *handle) finishDeferredToolContinuations() (error, bool) {
+	image := newContinuationFailures()
+	tools := newContinuationFailures()
+	completed := false
+	h.toolMu.Lock()
+	for callID, state := range h.toolContinuations {
+		if !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.pendingTerminal {
+			continue
+		}
+		state.pendingTerminal = false
+		if continuationFailed(&messages.MessageEndValue{Status: state.status}, state.outputObserved) {
+			target := &tools
+			if strings.EqualFold(strings.TrimSpace(state.name), "read_image") {
+				target = &image
+			}
+			target.add(callID, state.status, state.code, state.detail)
+			continue
+		}
+		completed = true
+		delete(h.toolContinuations, callID)
+	}
+	failure := continuationFailure(image, tools)
+	if failure != nil && h.continuationErr == nil {
+		h.continuationErr = failure
+	}
+	stored := h.continuationErr
+	h.toolMu.Unlock()
+	return stored, completed
+}
+
+func newContinuationFailures() continuationFailures {
+	return continuationFailures{
+		ids: make([]string, 0), statuses: make(map[string]string),
+		codes: make(map[string]string), details: make(map[string]string),
+	}
+}
+
+func (f *continuationFailures) add(callID, status, code, detail string) {
+	if f == nil {
+		return
+	}
+	f.ids = append(f.ids, callID)
+	f.statuses[callID], f.codes[callID], f.details[callID] = status, code, detail
+}
+
+func continuationFailure(image, tools continuationFailures) error {
+	var failure error
+	if len(image.ids) > 0 {
+		sort.Strings(image.ids)
+		failure = &session.LiveImageContinuationError{
+			CallIDs: image.ids, ProviderStatuses: image.statuses,
+			ProviderCodes: image.codes, ProviderDetails: image.details,
+		}
+	}
+	if len(tools.ids) == 0 {
+		return failure
+	}
+	sort.Strings(tools.ids)
+	toolFailure := &session.LiveToolContinuationError{
+		CallIDs: tools.ids, ProviderStatuses: tools.statuses,
+		ProviderCodes: tools.codes, ProviderDetails: tools.details,
+	}
+	if failure == nil {
+		return toolFailure
+	}
+	return errors.Join(failure, toolFailure)
+}
+
+func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bool {
+	if !outputObserved {
+		return true
+	}
+	if value == nil {
+		return false
+	}
+	status := strings.ToLower(strings.TrimSpace(value.Status))
+	return status == "failed" || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
 }

@@ -99,26 +99,9 @@ tools:
 			if err != nil {
 				t.Fatalf("initialize composed CLI: %v", err)
 			}
-			agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
-				resultMu.Lock()
-				defer resultMu.Unlock()
-				switch value := msg.Value.(type) {
-				case *messages.TextDeltaValue:
-					if msg.Role == messages.RoleTool {
-						currentResult[msg.ToolCallId] += value.Content
-						resultText.WriteString(value.Content)
-					}
-				case *messages.TextEndValue:
-					if msg.Role == messages.RoleTool {
-						results = append(results, sessionConfigToolResult{
-							ToolCallID: msg.ToolCallId,
-							Content:    currentResult[msg.ToolCallId],
-						})
-						delete(currentResult, msg.ToolCallId)
-						sessionInferencer.observeResult(msg.ToolCallId)
-					}
-				}
-			})
+			agentCLI.SetSessionStreamObserver(sessionConfigToolResultObserver(
+				sessionInferencer, &resultMu, &resultText, &results, currentResult,
+			))
 
 			root := agentCLI.Generate()
 			root.SetOut(io.Discard)
@@ -184,6 +167,34 @@ tools:
 				}
 			}
 		})
+	}
+}
+
+func sessionConfigToolResultObserver(
+	inferencer *sessionConfigToolInferencer,
+	mu *sync.Mutex,
+	resultText *strings.Builder,
+	results *[]sessionConfigToolResult,
+	current map[string]string,
+) func(messages.StreamMessage) {
+	return func(msg messages.StreamMessage) {
+		if msg.Role != messages.RoleTool {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		switch value := msg.Value.(type) {
+		case *messages.TextDeltaValue:
+			current[msg.ToolCallId] += value.Content
+			resultText.WriteString(value.Content)
+		case *messages.TextEndValue:
+			*results = append(*results, sessionConfigToolResult{
+				ToolCallID: msg.ToolCallId,
+				Content:    current[msg.ToolCallId],
+			})
+			delete(current, msg.ToolCallId)
+			inferencer.observeResult(msg.ToolCallId)
+		}
 	}
 }
 

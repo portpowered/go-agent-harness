@@ -346,121 +346,6 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 }
 
-func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T) {
-	for _, order := range []string{"provider_failure_first", "tool_result_first", "tool_output_first"} {
-		t.Run(order, func(t *testing.T) {
-			const callID = "call-failed-continuation"
-			h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
-			h.observeProviderToolCall(messages.StreamMessage{
-				Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant,
-				ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
-			})
-			toolOutput := messages.StreamMessage{
-				Type: messages.StreamTypeImageEnd, Role: messages.RoleTool, ToolCallId: callID,
-				Value: messages.NewImageEndValue(),
-			}
-			if order == "tool_output_first" {
-				h.observeToolLifecycle(toolOutput)
-			}
-			h.observeToolResult(callID, "read_image", true)
-			toolEnd := messages.StreamMessage{
-				Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
-				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-			}
-			if order == "tool_output_first" {
-				h.observeToolLifecycle(toolEnd)
-			} else {
-				h.observeToolLifecycle(toolOutput)
-			}
-			failure := messages.StreamMessage{
-				Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
-				Value: &messages.MessageEndValue{
-					Type: "message_end", Status: "failed", ProviderErrorCode: "token_limit_exceeded",
-				},
-			}
-			var err error
-			var complete bool
-			if order == "tool_result_first" {
-				h.observeToolLifecycle(toolEnd)
-				err, complete = h.observeToolLifecycle(failure)
-			} else if order == "tool_output_first" {
-				err, complete = h.observeToolLifecycle(failure)
-			} else {
-				if earlyErr, earlyComplete := h.observeToolLifecycle(failure); earlyErr != nil || earlyComplete {
-					t.Fatalf("early provider failure = error:%v complete:%t, want deferred classification", earlyErr, earlyComplete)
-				}
-				err, complete = h.observeToolLifecycle(toolEnd)
-			}
-			if !errors.Is(err, session.ErrLiveImageContinuationIncomplete) || complete {
-				t.Fatalf("failed continuation = error:%v complete:%t, want typed failure", err, complete)
-			}
-		})
-	}
-}
-
-func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T) {
-	const callID = "call-original-response"
-	h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
-	h.observeProviderToolCall(messages.StreamMessage{
-		Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant,
-		ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
-	})
-	failure := messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
-		Value: &messages.MessageEndValue{Type: "message_end", Status: "failed"},
-	}
-	if err, complete := h.observeToolLifecycle(failure); err != nil || complete {
-		t.Fatalf("original tool response = error:%v complete:%t, want no continuation classification", err, complete)
-	}
-	h.observeToolResult(callID, "read_image", true)
-	toolEnd := messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-	}
-	if err, complete := h.observeToolLifecycle(toolEnd); err != nil || complete {
-		t.Fatalf("accepted result after original failure = error:%v complete:%t, want pending continuation", err, complete)
-	}
-}
-
-func TestRejectedContinuationAdmissionPreservesEarlierRequest(t *testing.T) {
-	h := &handle{toolContinuations: map[string]*liveToolContinuation{
-		"accepted": {callID: "accepted", resultAccepted: true, continuationRequested: true},
-		"pending":  {callID: "pending", resultAccepted: true},
-	}}
-
-	rollback := h.beginContinuationAdmission()
-	if !h.toolContinuations["accepted"].continuationRequested || !h.toolContinuations["pending"].continuationRequested {
-		t.Fatal("admission did not mark every accepted result")
-	}
-	rollback()
-	if !h.toolContinuations["accepted"].continuationRequested {
-		t.Fatal("rollback erased an earlier accepted continuation")
-	}
-	if h.toolContinuations["pending"].continuationRequested {
-		t.Fatal("rollback retained the rejected continuation")
-	}
-}
-
-func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
-	const callID = "call-existing"
-	h := &handle{toolContinuations: map[string]*liveToolContinuation{
-		callID: {callID: callID, name: "original", outputObserved: true},
-	}}
-
-	rollback := h.beginToolResultAdmission(callID, "read_image", true)
-	rollback()
-	state := h.toolContinuations[callID]
-	if state.resultAccepted || state.continuationRequested || state.name != "original" || !state.outputObserved {
-		t.Fatalf("rollback state = %+v, want original provider state", state)
-	}
-
-	rollbackNew := h.beginToolResultAdmission("call-rejected", "lookup", false)
-	rollbackNew()
-	if _, ok := h.toolContinuations["call-rejected"]; ok {
-		t.Fatal("rollback retained state created only for a rejected result")
-	}
-}
-
 func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.T) {
 	const firstCallID = "call-finite-first"
 	const nextCallID = "call-finite-next"
@@ -644,3 +529,66 @@ func (s *orderingSession) Receive() *messages.TypedBuffer[messages.StreamMessage
 func (s *orderingSession) Done() <-chan struct{} { return nil }
 
 func (s *orderingSession) Close() error { return nil }
+
+func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T) {
+	const callID = "call-original-response"
+	h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
+	h.observeProviderToolCall(messages.StreamMessage{
+		Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant,
+		ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
+	})
+	failure := messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "failed"},
+	}
+	if err, complete := h.observeToolLifecycle(failure); err != nil || complete {
+		t.Fatalf("original tool response = error:%v complete:%t, want no continuation classification", err, complete)
+	}
+	h.observeToolResult(callID, "read_image", true)
+	toolEnd := messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	if err, complete := h.observeToolLifecycle(toolEnd); err != nil || complete {
+		t.Fatalf("accepted result after original failure = error:%v complete:%t, want pending continuation", err, complete)
+	}
+}
+
+func TestRejectedContinuationAdmissionPreservesEarlierRequest(t *testing.T) {
+	h := &handle{toolContinuations: map[string]*liveToolContinuation{
+		"accepted": {callID: "accepted", resultAccepted: true, continuationRequested: true},
+		"pending":  {callID: "pending", resultAccepted: true},
+	}}
+
+	rollback := h.beginContinuationAdmission()
+	if !h.toolContinuations["accepted"].continuationRequested || !h.toolContinuations["pending"].continuationRequested {
+		t.Fatal("admission did not mark every accepted result")
+	}
+	rollback()
+	if !h.toolContinuations["accepted"].continuationRequested {
+		t.Fatal("rollback erased an earlier accepted continuation")
+	}
+	if h.toolContinuations["pending"].continuationRequested {
+		t.Fatal("rollback retained the rejected continuation")
+	}
+}
+
+func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
+	const callID = "call-existing"
+	h := &handle{toolContinuations: map[string]*liveToolContinuation{
+		callID: {callID: callID, name: "original", outputObserved: true},
+	}}
+
+	rollback := h.beginToolResultAdmission(callID, "read_image", true)
+	rollback()
+	state := h.toolContinuations[callID]
+	if state.resultAccepted || state.continuationRequested || state.name != "original" || !state.outputObserved {
+		t.Fatalf("rollback state = %+v, want original provider state", state)
+	}
+
+	rollbackNew := h.beginToolResultAdmission("call-rejected", "lookup", false)
+	rollbackNew()
+	if _, ok := h.toolContinuations["call-rejected"]; ok {
+		t.Fatal("rollback retained state created only for a rejected result")
+	}
+}
