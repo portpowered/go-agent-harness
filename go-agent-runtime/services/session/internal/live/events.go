@@ -228,8 +228,10 @@ type liveToolContinuation struct {
 	name                  string
 	resultAccepted        bool
 	continuationRequested bool
+	toolOutputObserved    bool
 	toolResponseComplete  bool
 	outputObserved        bool
+	pendingTerminal       bool
 	status                string
 	code                  string
 	detail                string
@@ -247,13 +249,17 @@ func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) 
 		return nil, false
 	}
 	if isContinuationOutputType(msg.Type) {
+		if msg.Role == messages.RoleTool {
+			h.observeToolResponseOutput(msg.ToolCallId)
+			return nil, false
+		}
 		h.markContinuationOutput()
 		return nil, false
 	}
 	if msg.Type == messages.StreamTypeMessageEnd {
 		if msg.Role == messages.RoleTool {
 			h.markToolResponseComplete()
-			return nil, false
+			return h.finishDeferredToolContinuations()
 		}
 		return h.finishToolContinuations(msg)
 	}
@@ -292,6 +298,21 @@ func (h *handle) observeProviderToolCall(msg messages.StreamMessage) {
 	h.toolMu.Unlock()
 }
 
+func (h *handle) observeToolResponseOutput(callID string) {
+	callID = strings.TrimSpace(callID)
+	if h == nil || callID == "" {
+		return
+	}
+	h.toolMu.Lock()
+	state := h.toolContinuations[callID]
+	if state == nil {
+		state = &liveToolContinuation{callID: callID}
+		h.toolContinuations[callID] = state
+	}
+	state.toolOutputObserved = true
+	h.toolMu.Unlock()
+}
+
 func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 	callID, name := msg.ToolCallId, ""
 	switch value := msg.Value.(type) {
@@ -314,24 +335,51 @@ func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 }
 
 func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
+	_ = h.beginToolResultAdmission(callID, name, requestsContinuation)
+}
+
+// beginToolResultAdmission records the result before handing it to the provider.
+// A provider may publish its response synchronously from Send, so observing only
+// after Send returns loses the causal link between that response and this result.
+// The returned closure restores only the fields changed by this admission when
+// the provider rejects the send.
+func (h *handle) beginToolResultAdmission(callID, name string, requestsContinuation bool) func() {
 	callID = strings.TrimSpace(callID)
 	if h == nil || callID == "" {
-		return
+		return func() {}
 	}
+	name = strings.TrimSpace(name)
 	h.toolMu.Lock()
 	state := h.toolContinuations[callID]
+	existed := state != nil
 	if state == nil {
 		state = &liveToolContinuation{callID: callID}
 		h.toolContinuations[callID] = state
 	}
+	previousAccepted := state.resultAccepted
+	previousName := state.name
+	previousRequested := state.continuationRequested
 	state.resultAccepted = true
-	if strings.TrimSpace(name) != "" {
-		state.name = strings.TrimSpace(name)
+	if name != "" {
+		state.name = name
 	}
 	if requestsContinuation {
 		state.continuationRequested = true
 	}
 	h.toolMu.Unlock()
+	return func() {
+		h.toolMu.Lock()
+		if current := h.toolContinuations[callID]; current == state {
+			current.resultAccepted = previousAccepted
+			current.name = previousName
+			current.continuationRequested = previousRequested
+			if !existed && !current.toolOutputObserved && !current.toolResponseComplete && !current.outputObserved &&
+				!current.pendingTerminal && current.status == "" && current.code == "" && current.detail == "" {
+				delete(h.toolContinuations, callID)
+			}
+		}
+		h.toolMu.Unlock()
+	}
 }
 
 func (h *handle) unresolvedToolResultsError() error {
@@ -357,16 +405,32 @@ func (h *handle) unresolvedToolResultsError() error {
 }
 
 func (h *handle) observeContinuationRequested() {
+	_ = h.beginContinuationAdmission()
+}
+
+// beginContinuationAdmission marks only results that have not already requested
+// a continuation. Its rollback therefore cannot erase an earlier accepted
+// continuation when a later RequestResponse call is rejected.
+func (h *handle) beginContinuationAdmission() func() {
 	if h == nil {
-		return
+		return func() {}
 	}
 	h.toolMu.Lock()
+	changed := make([]*liveToolContinuation, 0, len(h.toolContinuations))
 	for _, state := range h.toolContinuations {
-		if state.resultAccepted {
+		if state.resultAccepted && !state.continuationRequested {
 			state.continuationRequested = true
+			changed = append(changed, state)
 		}
 	}
 	h.toolMu.Unlock()
+	return func() {
+		h.toolMu.Lock()
+		for _, state := range changed {
+			state.continuationRequested = false
+		}
+		h.toolMu.Unlock()
+	}
 }
 
 func (h *handle) markContinuationOutput() {
@@ -388,7 +452,7 @@ func (h *handle) markToolResponseComplete() {
 	}
 	h.toolMu.Lock()
 	for _, state := range h.toolContinuations {
-		if state.resultAccepted && !state.toolResponseComplete {
+		if state.toolOutputObserved && !state.toolResponseComplete {
 			state.toolResponseComplete = true
 		}
 	}

@@ -314,8 +314,16 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 	h.mu.Lock()
 	if h.isToolResponseEnd(msg) {
 		h.pendingToolCalls = 0
+		deferredResponseComplete := len(complete) > 0 && complete[0]
+		if deferredResponseComplete {
+			h.replayResponses++
+		}
+		finish := deferredResponseComplete && h.canFinishFiniteResponse()
 		h.mu.Unlock()
-		return false
+		if finish {
+			h.stopGracefully()
+		}
+		return finish
 	}
 	// A completed continuation only retires the preceding tool result.  A
 	// single assistant boundary may immediately contain the next provider tool

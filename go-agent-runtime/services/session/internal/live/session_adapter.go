@@ -17,8 +17,8 @@ type capturingInferencer struct {
 	continuous        bool
 	flushOutbound     bool
 	onDispatch        func(messages.StreamMessage)
-	onToolResult      func(string, string, bool)
-	onContinuation    func()
+	onToolResult      func(string, string, bool) func()
+	onContinuation    func() func()
 	onOpeningAdmitted func()
 	onProviderDone    func(error)
 	onMediaAttached   func(bool)
@@ -93,8 +93,8 @@ type orderedSession struct {
 	media             *mediagate.Gate
 	flushOutbound     bool
 	onDispatch        func(messages.StreamMessage)
-	onToolResult      func(string, string, bool)
-	onContinuation    func()
+	onToolResult      func(string, string, bool) func()
+	onContinuation    func() func()
 	onOpeningAdmitted func()
 }
 
@@ -203,6 +203,7 @@ func (s *orderedSession) runAdmissionBool(ctx context.Context, operation func() 
 }
 
 func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	rollback := s.beginAdmission(msg, false)
 	var outcome messages.SessionSendOutcome
 	if sender, ok := s.inner.(messages.SessionSendOutcomeSender); ok {
 		outcome = sender.SendWithOutcome(ctx, msg)
@@ -217,40 +218,40 @@ func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessa
 	} else {
 		outcome = messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
+	if !outcome.OK() {
+		rollback()
+	}
 	if outcome.OK() && s.onDispatch != nil {
 		// The callback is owned by the session handle and only observes a copy
 		// of the provider admission metadata. In particular, ActorProvidedID
 		// has already been stripped for marked controls above.
 		s.onDispatch(msg)
 	}
-	if outcome.OK() {
-		s.observeAdmission(msg, false)
-	}
 	return outcome
 }
 
-func (s *orderedSession) observeAdmission(msg messages.StreamMessage, completeMessage bool) {
+func (s *orderedSession) beginAdmission(msg messages.StreamMessage, completeMessage bool) func() {
 	if s == nil {
-		return
+		return func() {}
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd {
 		if s.onToolResult == nil {
-			return
+			return func() {}
 		}
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if !ok || value == nil {
-			return
+			return func() {}
 		}
 		callID := value.ToolCallID
 		if callID == "" {
 			callID = msg.ToolCallId
 		}
-		s.onToolResult(callID, value.Name, completeMessage)
-		return
+		return s.onToolResult(callID, value.Name, completeMessage)
 	}
 	if msg.Type == messages.StreamTypeResponseCreate && s.onContinuation != nil {
-		s.onContinuation()
+		return s.onContinuation()
 	}
+	return func() {}
 }
 
 func (s *orderedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
@@ -283,12 +284,13 @@ func (s *orderedSession) RequestResponse(ctx context.Context) messages.SessionSe
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	return s.runAdmission(ctx, func() messages.SessionSendOutcome {
+		rollback := s.beginAdmission(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}, false)
 		outcome := requester.RequestResponse(ctx)
+		if !outcome.OK() {
+			rollback()
+		}
 		if outcome.OK() && s.onDispatch != nil {
 			s.onDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-		}
-		if outcome.OK() {
-			s.observeAdmission(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}, false)
 		}
 		return outcome
 	})
@@ -320,19 +322,21 @@ func (s *orderedSession) SendMessage(ctx context.Context, msg messages.Message) 
 	}
 	sender, ok := s.inner.(completeMessageSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
+		admission := messages.StreamMessage{
+			Type:       messages.StreamTypeToolCallEnd,
+			ToolCallId: msg.ToolCallID,
+			Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
+		}
+		rollback := s.beginAdmission(admission, true)
 		accepted := sender.SendMessage(ctx, msg)
+		if !accepted {
+			rollback()
+		}
 		if accepted && s.onOpeningAdmitted != nil {
 			s.onOpeningAdmitted()
 		}
 		if accepted && s.onDispatch != nil {
 			s.onDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
-		}
-		if accepted {
-			s.observeAdmission(messages.StreamMessage{
-				Type:       messages.StreamTypeToolCallEnd,
-				ToolCallId: msg.ToolCallID,
-				Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
-			}, true)
 		}
 		return accepted
 	})
@@ -344,16 +348,18 @@ func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg mes
 	}
 	sender, ok := s.inner.(completeMessageWithoutResponseSender)
 	return ok && s.runAdmissionBool(ctx, func() bool {
+		admission := messages.StreamMessage{
+			Type:       messages.StreamTypeToolCallEnd,
+			ToolCallId: msg.ToolCallID,
+			Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
+		}
+		rollback := s.beginAdmission(admission, false)
 		accepted := sender.SendMessageWithoutResponse(ctx, msg)
+		if !accepted {
+			rollback()
+		}
 		if accepted && s.onOpeningAdmitted != nil {
 			s.onOpeningAdmitted()
-		}
-		if accepted {
-			s.observeAdmission(messages.StreamMessage{
-				Type:       messages.StreamTypeToolCallEnd,
-				ToolCallId: msg.ToolCallID,
-				Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
-			}, false)
 		}
 		return accepted
 	})

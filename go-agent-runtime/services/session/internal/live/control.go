@@ -323,14 +323,17 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		if !state.resultAccepted || !state.continuationRequested {
 			continue
 		}
-		// A cancelled provider response can publish its assistant MESSAGE.END
-		// before the model runner publishes the local RoleTool MESSAGE.END. It
-		// is an intermediate boundary, not a failed continuation; wait until
-		// the accepted tool result itself is complete before classifying it.
-		// A provider-authored failure is different: it is already the terminal
-		// answer to the accepted continuation request and must win even when the
-		// local result observer is one scheduling step behind the wire.
-		if !state.toolResponseComplete && !providerContinuationFailed(value) {
+		// Provider and tool result events cross different participant queues. A
+		// failed continuation may therefore arrive before the local RoleTool
+		// MESSAGE.END even though its result was already accepted on the wire.
+		// Retain that terminal and classify it when the local result boundary
+		// catches up. Cancelled/incomplete terminals are not retained here: they
+		// can belong to the response that produced the tool call.
+		if !state.toolResponseComplete {
+			if providerContinuationFailed(value) {
+				state.pendingTerminal = true
+				state.status, state.code, state.detail = status, code, detail
+			}
 			continue
 		}
 		state.status, state.code, state.detail = status, code, detail
@@ -346,6 +349,36 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		delete(h.toolContinuations, callID)
 	}
 	return image, tools, completed
+}
+
+func (h *handle) finishDeferredToolContinuations() (error, bool) {
+	image := newContinuationFailures()
+	tools := newContinuationFailures()
+	completed := false
+	h.toolMu.Lock()
+	for callID, state := range h.toolContinuations {
+		if !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.pendingTerminal {
+			continue
+		}
+		state.pendingTerminal = false
+		if continuationFailed(&messages.MessageEndValue{Status: state.status}, state.outputObserved) {
+			target := &tools
+			if strings.EqualFold(strings.TrimSpace(state.name), "read_image") {
+				target = &image
+			}
+			target.add(callID, state.status, state.code, state.detail)
+			continue
+		}
+		completed = true
+		delete(h.toolContinuations, callID)
+	}
+	failure := continuationFailure(image, tools)
+	if failure != nil && h.continuationErr == nil {
+		h.continuationErr = failure
+	}
+	stored := h.continuationErr
+	h.toolMu.Unlock()
+	return stored, completed
 }
 
 func providerContinuationFailed(value *messages.MessageEndValue) bool {
