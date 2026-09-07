@@ -9,13 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -490,6 +490,24 @@ type toolBargeInRun struct {
 	err      error
 }
 
+type toolBargeInCaptureInferencer struct {
+	messages.SessionInferencer
+	recorder    *gwtesting.RecordingWebSocketDialer
+	capturePath string
+}
+
+func (i *toolBargeInCaptureInferencer) ConfigureProviderCapture(path string) error {
+	i.capturePath = path
+	return nil
+}
+
+func (i *toolBargeInCaptureInferencer) FlushCapture() error {
+	if i.capturePath == "" {
+		return errors.New("tool barge-in provider capture path was not configured")
+	}
+	return i.recorder.FlushToFile(i.capturePath)
+}
+
 type toolBargeInExecutor struct {
 	started     chan struct{}
 	release     chan struct{}
@@ -546,6 +564,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	executor := newToolBargeInExecutor()
 	t.Cleanup(server.shutdown)
 	recorder := gwtesting.NewRecordingWebSocketDialer(server, "openai", "gpt-realtime")
+	recordDir := filepath.Join(t.TempDir(), "recording")
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(recorder),
@@ -554,6 +573,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
+	sessionInferencer = &toolBargeInCaptureInferencer{SessionInferencer: sessionInferencer, recorder: recorder}
 	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
 		wire.NewToolServicePort(toolBargeInCapabilities(executor)),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),
@@ -572,7 +592,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	root.SetArgs([]string{
 		"--config-dir", filepath.Join(t.TempDir(), "config"),
 		"session",
-		"--record-dir", filepath.Join(t.TempDir(), "recording"),
+		"--record-dir", recordDir,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
@@ -606,6 +626,15 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 			runErr = closeErr
 		} else {
 			runErr = errors.Join(runErr, closeErr)
+		}
+	}
+	if runErr == nil {
+		providerCapture, readErr := os.ReadFile(filepath.Join(recordDir, "provider.json"))
+		if readErr != nil {
+			t.Fatalf("read finalized provider capture: %v", readErr)
+		}
+		if len(providerCapture) == 0 {
+			t.Fatal("finalized provider capture is empty")
 		}
 	}
 	return toolBargeInRun{

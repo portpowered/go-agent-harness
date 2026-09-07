@@ -63,6 +63,17 @@ func newLiveInferencerFactory(
 ) session.LiveInferencerFactory {
 	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
 		if sessionInferencer != nil {
+			// Deterministic host seams may own a raw provider recorder without
+			// using the provider service. Give such a seam the invocation-owned
+			// spool selected by the live recording service; semantic-only doubles
+			// deliberately do not opt in and retain incomplete-evidence behavior.
+			if configurator, ok := sessionInferencer.(interface {
+				ConfigureProviderCapture(string) error
+			}); ok {
+				if err := configurator.ConfigureProviderCapture(request.Replay.OutputCapturePath); err != nil {
+					return nil, fmt.Errorf("configure injected provider capture: %w", err)
+				}
+			}
 			return sessionInferencer, nil
 		}
 		if providerService == nil {
