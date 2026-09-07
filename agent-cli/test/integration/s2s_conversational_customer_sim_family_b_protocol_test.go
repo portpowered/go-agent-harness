@@ -12,10 +12,14 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 )
 
-const familyBOriginalCallID = "call-family-b-original"
+const (
+	familyBOriginalCallID      = "call-family-b-original"
+	familyBAuthorizationHeader = "Bearer hermetic-key"
+	familyBResponseCancelEvent = "response.cancel"
+)
 
 func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != familyBAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -74,7 +78,7 @@ func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, e
 		if event.Item.Type == "function_call_output" {
 			return f.handleToolResult(connection, event.Item.CallID, event.Item.Output)
 		}
-	case "response.cancel":
+	case familyBResponseCancelEvent:
 		f.recordCancellation()
 	case "input_audio_buffer.commit", "response.create":
 		// The fixture models the two customer turns from the continuously

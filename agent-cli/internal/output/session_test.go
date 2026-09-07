@@ -9,8 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestSessionPresentationWriteResultModes(t *testing.T) {
-	msgs := []messages.Message{
+func sessionPresentationMessages() []messages.Message {
+	return []messages.Message{
 		{
 			Role:    messages.RoleAssistant,
 			Refusal: "not available",
@@ -29,67 +29,67 @@ func TestSessionPresentationWriteResultModes(t *testing.T) {
 		},
 		{Role: messages.RoleTool, ToolCallID: "call-1"},
 	}
+}
 
-	t.Run("plain final", func(t *testing.T) {
-		var out, diagnostics bytes.Buffer
-		if err := (SessionPresentation{}).WriteResult(&out, &diagnostics, msgs, "answer"); err != nil {
-			t.Fatalf("WriteResult: %v", err)
-		}
-		if got, want := out.String(), "answer\n"; got != want {
-			t.Fatalf("output = %q, want %q", got, want)
-		}
-		if !strings.Contains(diagnostics.String(), "[REFUSAL]") {
-			t.Fatalf("diagnostics = %q, want refusal", diagnostics.String())
-		}
-	})
+func TestSessionPresentationWriteResultPlainFinal(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if err := (SessionPresentation{}).WriteResult(&out, &diagnostics, sessionPresentationMessages(), "answer"); err != nil {
+		t.Fatalf("WriteResult: %v", err)
+	}
+	if got, want := out.String(), "answer\n"; got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+	if !strings.Contains(diagnostics.String(), "[REFUSAL]") {
+		t.Fatalf("diagnostics = %q, want refusal", diagnostics.String())
+	}
+}
 
-	t.Run("plain streaming", func(t *testing.T) {
-		var out, diagnostics bytes.Buffer
-		if err := (SessionPresentation{Stream: true}).WriteResult(&out, &diagnostics, nil, "answer"); err != nil {
-			t.Fatalf("WriteResult: %v", err)
-		}
-		if got, want := out.String(), "answer"; got != want {
-			t.Fatalf("output = %q, want %q", got, want)
-		}
-	})
+func TestSessionPresentationWriteResultPlainStreaming(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if err := (SessionPresentation{Stream: true}).WriteResult(&out, &diagnostics, nil, "answer"); err != nil {
+		t.Fatalf("WriteResult: %v", err)
+	}
+	if got, want := out.String(), "answer"; got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
 
-	t.Run("json", func(t *testing.T) {
-		var out, diagnostics bytes.Buffer
-		if err := (SessionPresentation{JSON: true, Model: "test-model"}).WriteResult(&out, &diagnostics, msgs, "ignored"); err != nil {
-			t.Fatalf("WriteResult: %v", err)
+func TestSessionPresentationWriteResultJSON(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if err := (SessionPresentation{JSON: true, Model: "test-model"}).WriteResult(&out, &diagnostics, sessionPresentationMessages(), "ignored"); err != nil {
+		t.Fatalf("WriteResult: %v", err)
+	}
+	for _, want := range []string{`"role": "assistant"`, `"contentParts"`, `"mediaType": "image/png"`, `"usage_info"`, `"toolCalls"`, `"toolCallId": "call-1"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("JSON output = %q, missing %q", out.String(), want)
 		}
-		for _, want := range []string{`"role": "assistant"`, `"contentParts"`, `"mediaType": "image/png"`, `"usage_info"`, `"toolCalls"`, `"toolCallId": "call-1"`} {
-			if !strings.Contains(out.String(), want) {
-				t.Fatalf("JSON output = %q, missing %q", out.String(), want)
-			}
-		}
-		if !strings.Contains(diagnostics.String(), `"type":"refusal"`) {
-			t.Fatalf("diagnostics = %q, want JSON refusal", diagnostics.String())
-		}
-	})
+	}
+	if !strings.Contains(diagnostics.String(), `"type":"refusal"`) {
+		t.Fatalf("diagnostics = %q, want JSON refusal", diagnostics.String())
+	}
+}
 
-	t.Run("binary with content", func(t *testing.T) {
-		var out, diagnostics bytes.Buffer
-		binaryMessages := []messages.Message{{Role: messages.RoleAssistant, ContentParts: []messages.ContentPart{
-			messages.AudioPart{Bytes: []byte{1, 2, 3}, MediaType: "audio/pcm"},
-		}}}
-		if err := (SessionPresentation{Modality: "audio"}).WriteResult(&out, &diagnostics, binaryMessages, "ignored"); err != nil {
-			t.Fatalf("WriteResult: %v", err)
-		}
-		if !bytes.Equal(out.Bytes(), []byte{1, 2, 3}) || diagnostics.Len() != 0 {
-			t.Fatalf("binary output/diagnostics = %x/%q", out.Bytes(), diagnostics.String())
-		}
-	})
+func TestSessionPresentationWriteResultBinaryWithContent(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	binaryMessages := []messages.Message{{Role: messages.RoleAssistant, ContentParts: []messages.ContentPart{
+		messages.AudioPart{Bytes: []byte{1, 2, 3}, MediaType: "audio/pcm"},
+	}}}
+	if err := (SessionPresentation{Modality: "audio"}).WriteResult(&out, &diagnostics, binaryMessages, "ignored"); err != nil {
+		t.Fatalf("WriteResult: %v", err)
+	}
+	if !bytes.Equal(out.Bytes(), []byte{1, 2, 3}) || diagnostics.Len() != 0 {
+		t.Fatalf("binary output/diagnostics = %x/%q", out.Bytes(), diagnostics.String())
+	}
+}
 
-	t.Run("binary without content", func(t *testing.T) {
-		var out, diagnostics bytes.Buffer
-		if err := (SessionPresentation{Modality: "image"}).WriteResult(&out, &diagnostics, nil, "ignored"); err != nil {
-			t.Fatalf("WriteResult: %v", err)
-		}
-		if out.Len() != 0 || diagnostics.String() != "no image content in response\n" {
-			t.Fatalf("binary output/diagnostics = %x/%q", out.Bytes(), diagnostics.String())
-		}
-	})
+func TestSessionPresentationWriteResultBinaryWithoutContent(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if err := (SessionPresentation{Modality: "image"}).WriteResult(&out, &diagnostics, nil, "ignored"); err != nil {
+		t.Fatalf("WriteResult: %v", err)
+	}
+	if out.Len() != 0 || diagnostics.String() != "no image content in response\n" {
+		t.Fatalf("binary output/diagnostics = %x/%q", out.Bytes(), diagnostics.String())
+	}
 }
 
 func TestSessionPresentationWriteStreamModes(t *testing.T) {

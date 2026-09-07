@@ -58,6 +58,37 @@ func prepareV8SessionExecutor(commandCLI *cli.AgentCLI, input io.Reader, output 
 	return root.ExecuteContext
 }
 
+type v8MultiTurnStartGate struct {
+	gate  chan struct{}
+	ready chan struct{}
+	ctx   context.Context
+}
+
+func newV8MultiTurnStartGate() *v8MultiTurnStartGate {
+	return &v8MultiTurnStartGate{gate: make(chan struct{}), ready: make(chan struct{}, 2)}
+}
+
+func (g *v8MultiTurnStartGate) signalReadyAndWait() {
+	g.ready <- struct{}{}
+	<-g.gate
+}
+
+func (g *v8MultiTurnStartGate) startContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	<-g.ready
+	<-g.ready
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	g.ctx = ctx
+	return ctx, cancel
+}
+
+func (g *v8MultiTurnStartGate) context() context.Context {
+	return g.ctx
+}
+
+func (g *v8MultiTurnStartGate) release() {
+	close(g.gate)
+}
+
 func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun {
 	t.Helper()
 	base := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
@@ -255,22 +286,20 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	aExecute := prepareV8SessionExecutor(aCLI, &v8MultiTurnPCMReader{bridge: bToABridge}, v8MultiTurnPCMWriter{bridge: aToBBridge}, v8HarnessAInstruction, aReplay)
 	bExecute := prepareV8SessionExecutor(bCLI, &v8MultiTurnPCMReader{bridge: aToBBridge}, v8MultiTurnPCMWriter{bridge: bToABridge}, v8HarnessBInstruction, bReplay)
 
-	ctx, cancel := context.WithTimeout(context.Background(), v8RunTimeout)
-	defer cancel()
 	results := make(chan v8HarnessResult, 2)
-	startGate := make(chan struct{})
+	startGate := newV8MultiTurnStartGate()
 	var wg sync.WaitGroup
 	start := func(name, instruction, replayPath string, execute func(context.Context) error, observer *v8RuntimeObserver, stream *v8StreamRecorder) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-startGate
+			startGate.signalReadyAndWait()
 			started := time.Now()
 			results <- v8HarnessResult{
 				Name:        name,
 				Instruction: instruction,
 				ReplayPath:  replayPath,
-				Err:         execute(ctx),
+				Err:         execute(startGate.context()),
 				Elapsed:     time.Since(started),
 				Runtime:     observer.snapshot(),
 				Stream:      stream.snapshot(),
@@ -279,7 +308,9 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	}
 	start("A", v8HarnessAInstruction, aReplay, aExecute, aObserver, aStream)
 	start("B", v8HarnessBInstruction, bReplay, bExecute, bObserver, bStream)
-	close(startGate)
+	ctx, cancel := startGate.startContext(v8RunTimeout)
+	defer cancel()
+	startGate.release()
 
 	harnesses := make(map[string]v8HarnessResult, 2)
 	contextDone := ctx.Done()
