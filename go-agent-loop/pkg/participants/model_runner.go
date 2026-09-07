@@ -15,13 +15,9 @@ type ModelRunner struct {
 	sessionConfig     *messages.SessionUpdateConfig // sent as SESSION.UPDATE on the first SESSION.OPEN or SESSION.CREATED
 	Inbox             *messages.TypedBuffer[messages.InferenceRequest]
 	DeltaOutbox       *messages.TypedBuffer[messages.StreamMessage]
-	// UserAudioInbox receives raw PCM audio frames from the user in session mode.
-	// When contentful audio arrives while the model is streaming an audio
-	// response, the model runner sends RESPONSE.CANCEL (barge-in) before
-	// forwarding the audio. Zero-filled cadence frames are forwarded without
-	// cancelling the response. Direct writes to this legacy channel use the
-	// interrupting-by-default policy. An accepted PCM slice is retained by the
-	// runner; the caller must not modify it after admission.
+	// UserAudioInbox receives raw PCM. Contentful frames cancel an active
+	// response before forwarding; silence passes through. Direct writes use the
+	// interrupting-by-default policy, and admitted slices are retained by the runner.
 	UserAudioInbox chan []byte
 	// UserEventInbox receives pre-built outbound StreamMessages from the user
 	// side in session mode. Each message is forwarded to the provider session

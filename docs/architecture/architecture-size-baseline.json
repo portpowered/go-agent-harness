@@ -19434,7 +19434,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/s2s_live_barge_in_tool_call_runtime_test.go",
-      "value": 618,
+      "value": 601,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19614,7 +19614,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants",
       "file": "pkg/participants/model_runner.go",
-      "value": 629,
+      "value": 628,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -22684,7 +22684,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/s2s_live_barge_in_tool_call_runtime_test.go",
       "symbol": "*toolBargeInConn.WriteMessage",
-      "value": 128,
+      "value": 127,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

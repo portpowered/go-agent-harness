@@ -1,9 +1,7 @@
 package integration
-
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -17,7 +15,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -27,7 +24,6 @@ import (
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing.T) {
@@ -85,6 +81,11 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	}
 
 	snapshot := session.snapshot()
+	assertExactStagedImageOutcome(t, snapshot, configDir, imageBytes, recordingDir)
+}
+
+func assertExactStagedImageOutcome(t *testing.T, snapshot exactStagedImageSnapshot, configDir string, imageBytes []byte, recordingDir string) {
+	t.Helper()
 	if snapshot.failure != nil {
 		t.Fatalf("scripted provider validation: %v", snapshot.failure)
 	}
@@ -463,186 +464,3 @@ var _ interface {
 	SupportsCompleteMessages() bool
 	SupportsCompleteMessagesWithoutResponse() bool
 } = (*exactStagedImageSession)(nil)
-
-type exactStagedImageCapture struct {
-	recorder *gwtesting.RecordingWebSocketDialer
-	conn     transport.Conn
-	inner    *exactStagedImageCaptureConn
-	initErr  error
-}
-
-func newExactStagedImageCapture() *exactStagedImageCapture {
-	inner := &exactStagedImageCaptureConn{
-		inbound: make(chan []byte, 32),
-		closed:  make(chan struct{}),
-	}
-	recorder := gwtesting.NewRecordingWebSocketDialer(&exactStagedImageCaptureDialer{conn: inner}, "openai", "gpt-realtime-2.1-mini")
-	conn, err := recorder.Dial("ws://exact-staged-image.invalid", nil)
-	return &exactStagedImageCapture{recorder: recorder, conn: conn, inner: inner, initErr: err}
-}
-
-func (c *exactStagedImageCapture) client(payload []byte) error {
-	if c == nil {
-		return errors.New("exact staged image provider capture is unavailable")
-	}
-	if c.initErr != nil {
-		return c.initErr
-	}
-	return c.conn.WriteMessage(1, payload)
-}
-
-func (c *exactStagedImageCapture) clientJSON(value any) error {
-	payload, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return c.client(payload)
-}
-
-func (c *exactStagedImageCapture) server(payload string) error {
-	if c == nil {
-		return errors.New("exact staged image provider capture is unavailable")
-	}
-	if c.initErr != nil {
-		return c.initErr
-	}
-	c.inner.inbound <- []byte(payload)
-	_, _, err := c.conn.ReadMessage()
-	return err
-}
-
-func (c *exactStagedImageCapture) clientSessionUpdate(value *messages.SessionUpdateValue) error {
-	tools := make([]map[string]any, 0, len(value.Tools))
-	for _, definition := range value.Tools {
-		parameters := make([]map[string]any, 0, len(definition.Parameters))
-		required := make([]string, 0, len(definition.Parameters))
-		for _, parameter := range definition.Parameters {
-			parameters = append(parameters, map[string]any{
-				"name":        parameter.Name,
-				"type":        parameter.Type,
-				"description": parameter.Description,
-			})
-			if parameter.Required {
-				required = append(required, parameter.Name)
-			}
-		}
-		tools = append(tools, map[string]any{
-			"type":        "function",
-			"name":        definition.Name,
-			"description": definition.Description,
-			"parameters":  parameters,
-			"required":    required,
-		})
-	}
-	return c.clientJSON(map[string]any{
-		"type": "session.update",
-		"session": map[string]any{
-			"model": value.Model,
-			"tools": tools,
-		},
-	})
-}
-
-func (c *exactStagedImageCapture) clientInitialMessage(message messages.Message) error {
-	content := make([]map[string]any, 0, len(message.ContentParts))
-	for _, part := range message.ContentParts {
-		imagePart, ok := part.(messages.ImagePart)
-		if !ok {
-			continue
-		}
-		content = append(content, map[string]any{
-			"type":      "input_image",
-			"image_url": "data:" + imagePart.MediaType + ";base64," + base64.StdEncoding.EncodeToString(imagePart.Bytes),
-		})
-	}
-	return c.clientJSON(map[string]any{
-		"type": "conversation.item.create",
-		"item": map[string]any{"type": "message", "role": string(message.Role), "content": content},
-	})
-}
-
-func (c *exactStagedImageCapture) clientToolResult(message messages.Message) error {
-	if err := c.clientJSON(map[string]any{
-		"type": "conversation.item.create",
-		"item": map[string]any{
-			"type":    "function_call_output",
-			"call_id": message.ToolCallID,
-			"output":  message.TextContent(),
-		},
-	}); err != nil {
-		return err
-	}
-	for _, part := range message.ContentParts {
-		imagePart, ok := part.(messages.ImagePart)
-		if !ok {
-			continue
-		}
-		return c.clientJSON(map[string]any{
-			"type": "conversation.item.create",
-			"item": map[string]any{
-				"type": "message",
-				"role": "user",
-				"content": []map[string]any{{
-					"type":      "input_image",
-					"image_url": "data:" + imagePart.MediaType + ";base64," + base64.StdEncoding.EncodeToString(imagePart.Bytes),
-				}},
-			},
-		})
-	}
-	return nil
-}
-
-func (c *exactStagedImageCapture) flush(path string) error {
-	if c == nil {
-		return errors.New("exact staged image provider capture is unavailable")
-	}
-	if c.initErr != nil {
-		return c.initErr
-	}
-	capture := c.recorder.Capture()
-	capture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceProviderRecorded
-	sealed, err := gwtesting.SealSessionCapture(capture)
-	if err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(sealed, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-type exactStagedImageCaptureDialer struct{ conn *exactStagedImageCaptureConn }
-
-func (d *exactStagedImageCaptureDialer) Dial(string, map[string]string) (transport.Conn, error) {
-	return d.conn, nil
-}
-
-type exactStagedImageCaptureConn struct {
-	inbound chan []byte
-	closed  chan struct{}
-	once    sync.Once
-}
-
-func (c *exactStagedImageCaptureConn) ReadMessage() (int, []byte, error) {
-	select {
-	case payload := <-c.inbound:
-		return 1, payload, nil
-	case <-c.closed:
-		return 0, nil, errors.New("exact staged image capture connection closed")
-	}
-}
-
-func (c *exactStagedImageCaptureConn) WriteMessage(int, []byte) error {
-	select {
-	case <-c.closed:
-		return errors.New("exact staged image capture connection closed")
-	default:
-		return nil
-	}
-}
-
-func (c *exactStagedImageCaptureConn) Close() error {
-	c.once.Do(func() { close(c.closed) })
-	return nil
-}

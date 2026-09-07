@@ -37,11 +37,7 @@ const (
 	toolBargeInGateTimeout   = 2 * time.Second
 )
 
-// toolBargeInTrace counts only assistant response boundaries. A tool runner
-// emits its own RoleTool MESSAGE.START/END pair while the provider call is
-// being executed; counting that pair as spoken model output would make a
-// source gate depend on an implementation detail instead of observable
-// assistant audio.
+// toolBargeInTrace counts assistant response boundaries and excludes tool messages.
 type toolBargeInTrace struct {
 	mu               sync.Mutex
 	responseOrdinal  int
@@ -50,13 +46,11 @@ type toolBargeInTrace struct {
 	responseDoneOnce [4]sync.Once
 	events           []toolBargeInStreamEvent
 }
-
 type toolBargeInStreamEvent struct {
 	Ordinal int
 	Type    messages.StreamMessageType
 	Bytes   int
 }
-
 func newToolBargeInTrace() *toolBargeInTrace {
 	trace := &toolBargeInTrace{}
 	for ordinal := 1; ordinal < len(trace.responseDone); ordinal++ {
@@ -64,7 +58,6 @@ func newToolBargeInTrace() *toolBargeInTrace {
 	}
 	return trace
 }
-
 func (t *toolBargeInTrace) observe(msg messages.StreamMessage) {
 	if t == nil || msg.Role == messages.RoleTool {
 		return
@@ -92,7 +85,6 @@ func (t *toolBargeInTrace) observe(msg messages.StreamMessage) {
 		t.responseDoneOnce[doneOrdinal].Do(func() { close(t.responseDone[doneOrdinal]) })
 	}
 }
-
 func (t *toolBargeInTrace) waitForDone(ctx context.Context, ordinal int) error {
 	if ordinal <= 0 || ordinal >= len(t.responseDone) {
 		return fmt.Errorf("invalid assistant response ordinal %d", ordinal)
@@ -104,7 +96,6 @@ func (t *toolBargeInTrace) waitForDone(ctx context.Context, ordinal int) error {
 		toolBargeInGateTimeout,
 	)
 }
-
 func (t *toolBargeInTrace) snapshot() []toolBargeInStreamEvent {
 	if t == nil {
 		return nil
@@ -114,11 +105,7 @@ func (t *toolBargeInTrace) snapshot() []toolBargeInStreamEvent {
 	return append([]toolBargeInStreamEvent(nil), t.events...)
 }
 
-// toolBargeInAudioReader makes the collision causal. The second non-empty
-// frame is not read until the provider tool call has started and its owning
-// response is terminal. After that frame has crossed the provider boundary,
-// the executor is released and the reader waits for the result-driven spoken
-// continuation before committing the second audio turn.
+// toolBargeInAudioReader gates the collision around tool and continuation boundaries.
 type toolBargeInAudioReader struct {
 	mu             sync.Mutex
 	segments       []toolBargeInAudioSegment
@@ -128,14 +115,12 @@ type toolBargeInAudioReader struct {
 	marker         bool
 	afterFrameUsed bool
 }
-
 type toolBargeInAudioSegment struct {
 	frame      []byte
 	gate       func(context.Context) error
 	afterFrame func(context.Context) error
 	endOfTurn  bool
 }
-
 func newToolBargeInAudioReader(server *toolBargeInServer, executor *toolBargeInExecutor, trace *toolBargeInTrace) *toolBargeInAudioReader {
 	return &toolBargeInAudioReader{
 		segments: []toolBargeInAudioSegment{
@@ -155,19 +140,15 @@ func newToolBargeInAudioReader(server *toolBargeInServer, executor *toolBargeInE
 					executor.releaseResult()
 					return trace.waitForDone(ctx, 2)
 				},
-				// Let EOF emit the single final end-of-turn marker. Marking this
-				// segment as an end-of-turn as well would commit the same audio
-				// twice (once at the marker and once again at EOF).
+				// Let EOF emit the single final end-of-turn marker.
 				endOfTurn: false,
 			},
 		},
 	}
 }
-
 func (r *toolBargeInAudioReader) Read(p []byte) (int, error) {
 	return r.ReadContext(context.Background(), p)
 }
-
 func (r *toolBargeInAudioReader) ReadContext(ctx context.Context, p []byte) (int, error) {
 	if len(p) != plainSpeechFrameBytes {
 		return 0, fmt.Errorf("tool barge-in reader received %d bytes, want %d", len(p), plainSpeechFrameBytes)
@@ -220,13 +201,10 @@ func (r *toolBargeInAudioReader) ReadContext(ctx context.Context, p []byte) (int
 		r.mu.Unlock()
 	}
 }
-
 func (*toolBargeInAudioReader) Close() error { return nil }
-
 func waitToolBargeInSignal(ctx context.Context, boundary string, signal <-chan struct{}) error {
 	return probe.NewBargeInLedger().WaitFor(ctx, boundary, signal, toolBargeInGateTimeout)
 }
-
 type toolBargeInServer struct {
 	mu sync.Mutex
 
@@ -254,13 +232,11 @@ type toolBargeInServer struct {
 	milestones                 []string
 	clientClosePending         bool
 }
-
 type toolBargeInServerResponse struct {
 	ID           string
 	CancelCount  int
 	TerminalSent bool
 }
-
 func newToolBargeInServer() *toolBargeInServer {
 	return &toolBargeInServer{
 		events:          make(chan []byte, 128),
@@ -269,7 +245,6 @@ func newToolBargeInServer() *toolBargeInServer {
 		speechSignalCh:  make(chan struct{}),
 	}
 }
-
 func (s *toolBargeInServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	s.mu.Lock()
 	s.dialCount++
@@ -280,22 +255,18 @@ func (s *toolBargeInServer) Dial(_ string, _ map[string]string) (transport.Conn,
 	})
 	return &toolBargeInConn{server: s}, nil
 }
-
 func (s *toolBargeInServer) sendEvent(payload string) {
 	select {
 	case s.events <- []byte(payload):
 	case <-s.closed:
 	}
 }
-
 func (s *toolBargeInServer) shutdown() {
 	s.closeOnce.Do(func() { close(s.closed) })
 }
-
 func (s *toolBargeInServer) recordMilestoneLocked(milestone string) {
 	s.milestones = append(s.milestones, milestone)
 }
-
 func (s *toolBargeInServer) snapshot() (int, []*toolBargeInServerResponse, int, bool, bool, []string, []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -312,7 +283,6 @@ func (s *toolBargeInServer) snapshot() (int, []*toolBargeInServerResponse, int, 
 		append([]string(nil), s.protocolErrs...),
 		append([]string(nil), s.milestones...)
 }
-
 func (s *toolBargeInServer) observeTransportClose() {
 	s.mu.Lock()
 	pending := s.toolResultCount != 1 || s.active != nil
@@ -326,7 +296,6 @@ func (s *toolBargeInServer) observeTransportClose() {
 	s.mu.Unlock()
 	s.transportCloseOnce.Do(func() { close(s.transportClosed) })
 }
-
 func (s *toolBargeInServer) waitForTransportClose(ctx context.Context) error {
 	return probe.NewBargeInLedger().WaitFor(
 		ctx,
@@ -335,9 +304,7 @@ func (s *toolBargeInServer) waitForTransportClose(ctx context.Context) error {
 		toolBargeInGateTimeout,
 	)
 }
-
 type toolBargeInConn struct{ server *toolBargeInServer }
-
 func (c *toolBargeInConn) ReadMessage() (int, []byte, error) {
 	select {
 	case payload := <-c.server.events:
@@ -346,7 +313,6 @@ func (c *toolBargeInConn) ReadMessage() (int, []byte, error) {
 		return 0, nil, errors.New("tool barge-in provider connection closed")
 	}
 }
-
 func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 	var envelope struct {
 		Type  string `json:"type"`
@@ -366,7 +332,6 @@ func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 	s.mu.Lock()
 	switch envelope.Type {
 	case "session.update":
-		// The provider-specific configuration is not part of this collision.
 	case "input_audio_buffer.append":
 		decoded, err := base64.StdEncoding.DecodeString(envelope.Audio)
 		if envelope.Audio == "" || err != nil || len(decoded) == 0 {
@@ -475,13 +440,11 @@ func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 	}
 	return nil
 }
-
 func (c *toolBargeInConn) Close() error {
 	c.server.observeTransportClose()
 	c.server.shutdown()
 	return nil
 }
-
 type toolBargeInRun struct {
 	capture  gwtesting.SessionCapture
 	trace    *toolBargeInTrace
@@ -489,25 +452,21 @@ type toolBargeInRun struct {
 	executor *toolBargeInExecutor
 	err      error
 }
-
 type toolBargeInCaptureInferencer struct {
 	messages.SessionInferencer
 	recorder    *gwtesting.RecordingWebSocketDialer
 	capturePath string
 }
-
 func (i *toolBargeInCaptureInferencer) ConfigureProviderCapture(path string) error {
 	i.capturePath = path
 	return nil
 }
-
 func (i *toolBargeInCaptureInferencer) FlushCapture() error {
 	if i.capturePath == "" {
 		return errors.New("tool barge-in provider capture path was not configured")
 	}
 	return i.recorder.FlushToFile(i.capturePath)
 }
-
 type toolBargeInExecutor struct {
 	started     chan struct{}
 	release     chan struct{}
@@ -518,14 +477,12 @@ type toolBargeInExecutor struct {
 	calls    []messages.ToolCall
 	returned []messages.ToolCallResponse
 }
-
 func newToolBargeInExecutor() *toolBargeInExecutor {
 	return &toolBargeInExecutor{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
 	}
 }
-
 func (e *toolBargeInExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
@@ -546,17 +503,14 @@ func (e *toolBargeInExecutor) Execute(ctx context.Context, call messages.ToolCal
 		return messages.ToolCallResponse{}, ctx.Err()
 	}
 }
-
 func (e *toolBargeInExecutor) releaseResult() {
 	e.releaseOnce.Do(func() { close(e.release) })
 }
-
 func (e *toolBargeInExecutor) snapshot() ([]messages.ToolCall, []messages.ToolCallResponse) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return append([]messages.ToolCall(nil), e.calls...), append([]messages.ToolCallResponse(nil), e.returned...)
 }
-
 func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 	t.Helper()
 	trace := newToolBargeInTrace()

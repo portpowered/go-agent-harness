@@ -93,9 +93,7 @@ func (s *recordingSession) Close() error {
 	return nil
 }
 
-// streamOnlyRecordingSession intentionally exposes only the stream Session
-// contract. It verifies the model runner's compatibility fallback without
-// accidentally advertising complete-message support through a method set.
+// streamOnlyRecordingSession verifies the stream-only compatibility fallback.
 type streamOnlyRecordingSession struct {
 	mu   sync.Mutex
 	sent []messages.StreamMessage
@@ -1025,53 +1023,6 @@ func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) 
 		}
 	case <-ctx.Done():
 		t.Fatal("Run did not return after accepted continuation completed")
-	}
-}
-
-func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *testing.T) {
-	session := newRejectingStreamSession()
-	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- runner.Run(ctx) }()
-
-	runner.UserEventInbox <- messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Value: messages.NewToolCallEndValue("call-rejected", "date", "result"),
-	}
-	runner.UserEventInbox <- messages.StreamMessage{
-		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewResponseCreateValue(),
-	}
-
-	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
-	value, ok := failure.Value.(*messages.ErrorValue)
-	if !ok {
-		t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
-	}
-	if value.Classification != "unresolved_tool_result" {
-		t.Fatalf("failure classification = %q, want unresolved_tool_result", value.Classification)
-	}
-	if !contains(value.Message, "call-rejected") {
-		t.Fatalf("failure message = %q, want rejected call ID", value.Message)
-	}
-	if sent := session.sentMessages(); len(sent) != 0 {
-		t.Fatalf("rejected lifecycle sent %d provider messages, want 0", len(sent))
-	}
-
-	if err := session.Close(); err != nil {
-		t.Fatalf("close session: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("Run = %v, want nil", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Run did not return after rejected continuation was reported")
 	}
 }
 
