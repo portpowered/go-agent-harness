@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
+const continuationStatusFailed = "failed"
+
 type liveToolContinuation struct {
 	callID                string
 	name                  string
@@ -184,10 +186,6 @@ func (h *handle) unresolvedToolResultsError() error {
 	}
 	sort.Strings(ids)
 	return &session.LiveUnresolvedToolResultsError{CallIDs: ids}
-}
-
-func (h *handle) observeContinuationRequested() {
-	_ = h.beginContinuationAdmission()
 }
 
 // beginContinuationAdmission marks only results that have not already requested
@@ -395,5 +393,5 @@ func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bo
 		return false
 	}
 	status := strings.ToLower(strings.TrimSpace(value.Status))
-	return status == "failed" || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
+	return status == continuationStatusFailed || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
 }

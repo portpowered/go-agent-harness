@@ -103,9 +103,6 @@ func (s *duplexProgressState) noteOutput(event DuplexOutputEvent, data []byte) {
 }
 
 func (s *duplexProgressState) waitForOutputSequence(ctx context.Context, sequence []byte) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		s.mu.Lock()
 		if !bytes.Equal(s.outputSequence, sequence) {
@@ -197,8 +194,6 @@ func (s *duplexProgressState) outputIsClosed() bool {
 
 // WaitForOutputSequence waits until the exact sequence has crossed stdout.
 // Segment gates are sequential; only one sequence waiter may be active at a time.
-// Duplex input segments install at most one sequence gate at a time; callers
-// must likewise avoid concurrent sequence waits on the same progress value.
 func (p *DuplexProgress) WaitForOutputSequence(ctx context.Context, sequence []byte) error {
 	if len(sequence) == 0 {
 		return nil
@@ -208,6 +203,9 @@ func (p *DuplexProgress) WaitForOutputSequence(ctx context.Context, sequence []b
 	}
 	if p == nil || p.state == nil {
 		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
+	}
+	if ctx == nil {
+		return fmt.Errorf("%w: output sequence context is required", ErrDuplexConfigInvalid)
 	}
 	return p.state.waitForOutputSequence(ctx, sequence)
 }

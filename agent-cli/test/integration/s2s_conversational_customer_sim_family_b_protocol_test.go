@@ -12,6 +12,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 )
 
+const familyBOriginalCallID = "call-family-b-original"
+
 func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
@@ -23,7 +25,11 @@ func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *htt
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer func() {
+		if err := connection.Close(); err != nil {
+			f.failProtocol("close websocket: " + err.Error())
+		}
+	}()
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -121,7 +127,7 @@ func (f *familyBProviderFixture) handleCustomerUtterance(connection *websocket.C
 
 	if index == 0 {
 		call := familyBFunctionCall{
-			ID:       "call-family-b-original",
+			ID:       familyBOriginalCallID,
 			ActionID: probe.FamilyBOriginalActionID,
 			Name:     "write_file",
 			Args:     familyBToolArguments("draft/brief.md", probe.FamilyBOriginalReleaseNote),
@@ -192,7 +198,7 @@ func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, ca
 	var turnID string
 	var toolStarted time.Duration
 	switch callID {
-	case "call-family-b-original":
+	case familyBOriginalCallID:
 		expected = "File written: draft/brief.md"
 		actionID = probe.FamilyBOriginalActionID
 		turnID = "turn-1"
@@ -217,14 +223,14 @@ func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, ca
 		Duration: now - toolStarted, ResultSeen: true, Summary: output,
 	}
 	f.toolObservations = append(f.toolObservations, observation)
-	if callID == "call-family-b-original" {
+	if callID == familyBOriginalCallID {
 		f.originalResultSeen = true
 	} else {
 		f.replacementResultSeen = true
 	}
 	f.mu.Unlock()
 
-	if callID == "call-family-b-original" {
+	if callID == familyBOriginalCallID {
 		return f.sendOriginalOutput(connection)
 	}
 	return f.sendReplacementOutput(connection)

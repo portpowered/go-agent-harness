@@ -552,11 +552,11 @@ func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) 
 		Value: messages.NewImageEndValue(),
 	}
 	if order.outputBeforeAdmission {
-		h.observeToolLifecycle(toolOutput)
+		assertContinuationPending(t, h, toolOutput)
 	}
 	h.observeToolResult(callID, "read_image", true)
 	if !order.outputBeforeAdmission {
-		h.observeToolLifecycle(toolOutput)
+		assertContinuationPending(t, h, toolOutput)
 	}
 	toolEnd := messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
@@ -565,7 +565,7 @@ func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) 
 	failure := messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant,
 		Value: &messages.MessageEndValue{
-			Type: "message_end", Status: "failed", ProviderErrorCode: "token_limit_exceeded",
+			Type: "message_end", Status: continuationStatusFailed, ProviderErrorCode: "token_limit_exceeded",
 		},
 	}
 	var err error
@@ -576,10 +576,17 @@ func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) 
 		}
 		err, complete = h.observeToolLifecycle(toolEnd)
 	} else {
-		h.observeToolLifecycle(toolEnd)
+		assertContinuationPending(t, h, toolEnd)
 		err, complete = h.observeToolLifecycle(failure)
 	}
 	if !errors.Is(err, session.ErrLiveImageContinuationIncomplete) || complete {
 		t.Fatalf("failed continuation = error:%v complete:%t, want typed failure", err, complete)
+	}
+}
+
+func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessage) {
+	t.Helper()
+	if err, complete := h.observeToolLifecycle(msg); err != nil || complete {
+		t.Fatalf("continuation intermediate event = error:%v complete:%t, want pending", err, complete)
 	}
 }

@@ -247,13 +247,20 @@ func TestRecordReplayStateless(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay round trip: %v", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Errorf("close replay response: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read replay response: %v", err)
+	}
 	if len(body) == 0 {
 		t.Error("expected non-empty response body from replay")
 	}

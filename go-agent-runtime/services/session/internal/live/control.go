@@ -281,7 +281,7 @@ func providerContinuationFailed(value *messages.MessageEndValue) bool {
 		return false
 	}
 	status := strings.ToLower(strings.TrimSpace(value.Status))
-	return status == "failed" || status == "error"
+	return status == continuationStatusFailed || status == "error"
 }
 
 func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
