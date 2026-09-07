@@ -149,28 +149,6 @@ func TestSessionProgressObserver_IncompleteResponseReportsAcceptedContinuationID
 	}
 }
 
-func TestAudioResponseCompletionPreservesIncompleteWithOutputDiagnostic(t *testing.T) {
-	pcmErr := errors.New("PCM16 audio delta has odd byte length 1")
-	outputErr := errors.New("audio write response.wav: empty WAV samples")
-	called := false
-	err := audioResponseCompletionError(pcmErr, sessionLoopOptions{
-		RequireTerminalAssistantResponse: true,
-		AudioOutputError: func() error {
-			called = true
-			return outputErr
-		},
-	})
-	if !called {
-		t.Fatal("audio output completion callback was not awaited")
-	}
-	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
-		t.Fatalf("completion error = %v, want ErrSessionAudioResponseIncomplete", err)
-	}
-	if !strings.Contains(err.Error(), pcmErr.Error()) {
-		t.Fatalf("completion error = %v, want PCM diagnostic preserved", err)
-	}
-}
-
 func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	observer.setToolResultsEnabled(true)
@@ -548,5 +526,27 @@ func TestSessionProgressObserverFailedContinuationDiagnosticIsSingleAndActionabl
 	}
 	if fields[SessionDiagnosticFieldPendingContinuationDetails] != callID+"=reason=max_output_tokens" {
 		t.Fatalf("diagnostic details = %q, want %s", fields[SessionDiagnosticFieldPendingContinuationDetails], callID+"=reason=max_output_tokens")
+	}
+}
+
+func TestAudioResponseCompletionPreservesIncompleteWithOutputDiagnostic(t *testing.T) {
+	pcmErr := errors.New("PCM16 audio delta has odd byte length 1")
+	outputErr := errors.New("audio write response.wav: empty WAV samples")
+	called := false
+	err := audioResponseCompletionError(pcmErr, sessionLoopOptions{
+		RequireTerminalAssistantResponse: true,
+		AudioOutputError: func() error {
+			called = true
+			return outputErr
+		},
+	})
+	if !called {
+		t.Fatal("audio output completion callback was not awaited")
+	}
+	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
+		t.Fatalf("completion error = %v, want ErrSessionAudioResponseIncomplete", err)
+	}
+	if !strings.Contains(err.Error(), pcmErr.Error()) {
+		t.Fatalf("completion error = %v, want PCM diagnostic preserved", err)
 	}
 }

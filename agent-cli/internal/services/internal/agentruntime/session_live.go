@@ -421,11 +421,10 @@ func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) mess
 // older tool-continuation guard for callers that do not set RequireAssistantResponse.
 func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	if opts.AudioOutputError != nil {
-		// The audio-input runner joins this concrete output failure after the
-		// loop returns. Wait for the wrapper here, but do not return early: an
-		// empty artifact or PCM failure must not hide the incomplete-response
-		// classification produced by the session lifecycle.
-		opts.AudioOutputError()
+		// Await output before applying incomplete-response precedence.
+		if outputErr := opts.AudioOutputError(); outputErr != nil {
+			err = errors.Join(err, outputErr)
+		}
 	}
 	if opts.RequireTerminalAssistantResponse && (opts.observer == nil || !opts.observer.assistantResponseCompleted()) {
 		incomplete := ErrSessionAudioResponseIncomplete

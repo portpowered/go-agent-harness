@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+type liveAudioResponseIncompleteError string
+
+func (e liveAudioResponseIncompleteError) Error() string { return string(e) }
+
+const errLiveAudioResponseIncomplete = liveAudioResponseIncompleteError("audio session ended before the final assistant response")
+
 var (
 	// ErrLiveNotStarted is returned by Wait when a handle has not been started.
 	// Calling Wait before Start is a programming error and never waits forever.
@@ -60,12 +66,13 @@ var (
 	// provider, cancellation, or recording error so hosts can join all of the
 	// evidence while still classifying the schedule failure.
 	ErrLiveScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
-	// ErrLiveAudioResponseIncomplete identifies a finite audio-input
-	// invocation that ended before a terminal assistant response. Hosts may
-	// join this cause with provider, media, or artifact cleanup failures while
-	// retaining a stable errors.Is classification.
-	ErrLiveAudioResponseIncomplete = errors.New("audio session ended before the final assistant response")
 )
+
+// ErrLiveAudioResponseIncomplete identifies a finite audio-input invocation
+// that ended before a terminal assistant response. Hosts may join this cause
+// with provider, media, or artifact cleanup failures while retaining a stable
+// errors.Is classification.
+const ErrLiveAudioResponseIncomplete = errLiveAudioResponseIncomplete
 
 // LiveImageContinuationError carries the read_image call IDs whose result was
 // accepted but whose post-tool model response did not complete with observable

@@ -63,9 +63,7 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	if runtimeHandle, ok := handle.(interface{ configureScheduledAudio(int, int) }); ok {
 		runtimeHandle.configureScheduledAudio(len(options.CaptureTurns), captureResponseTarget(options.Request))
 	}
-	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
-		runtimeHandle.configureActiveScheduledAudio(options.AudioTurnAdmission == session.AudioTurnAdmissionBarge)
-	}
+	configureActiveScheduledAudio(handle, options.AudioTurnAdmission == session.AudioTurnAdmissionBarge)
 	if runtimeHandle, ok := handle.(interface{ configureCaptureSource(bool) }); ok {
 		runtimeHandle.configureCaptureSource(options.DeviceRequest.CaptureEnabled || len(options.CaptureTurns) > 0)
 	}

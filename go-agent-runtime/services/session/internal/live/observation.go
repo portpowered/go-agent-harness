@@ -314,7 +314,7 @@ func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.Strea
 	}
 }
 
-func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuationComplete ...bool) bool {
+func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...bool) bool {
 	if h == nil || !h.request.FinishAfterResponse {
 		return false
 	}
@@ -324,18 +324,13 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuat
 		h.mu.Unlock()
 		return false
 	}
-	continuationComplete := len(toolContinuationComplete) > 0 && toolContinuationComplete[0]
-	if continuationComplete {
-		// finishToolContinuations removes the accepted provider continuation
-		// entries. Reconcile the finite-response gate with that ledger here so a
-		// successful follow-up can admit the next scheduled turn and eventually
-		// finish the invocation.
+	if len(complete) > 0 && complete[0] {
 		h.pendingToolCalls = 0
 	}
 	h.observeFiniteResponseMessage(msg)
-	shouldFinish := h.shouldFinishFiniteResponse(msg)
+	finish := h.shouldFinishFiniteResponse(msg)
 	h.mu.Unlock()
-	if shouldFinish {
+	if finish {
 		h.stopGracefully()
 	}
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
@@ -344,8 +339,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, toolContinuat
 func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeMessageStart {
 		if msg.Role != messages.RoleTool {
-			h.responseStarted = true
-			h.responseActive = true
+			h.responseStarted, h.responseActive = true, true
 			h.responseObserved++
 			close(h.responseStartWake)
 			h.responseStartWake = make(chan struct{})
@@ -357,12 +351,7 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		return
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
-		h.responseActive = false
-		h.responsePending = false
-		// A tool-call response is intermediate while its pending count remains
-		// non-zero. Once the accepted continuation is complete, that same
-		// MESSAGE.END is the terminal assistant response for the scheduled turn
-		// and must advance replayResponses so the next turn can be admitted.
+		h.responseActive, h.responsePending = false, false
 		if h.pendingToolCalls > 0 || finiteResponseWasInterrupted(msg) {
 			return
 		}
@@ -380,10 +369,7 @@ func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
 }
 
 func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
-		return false
-	}
-	return h.canFinishFiniteResponse()
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && h.canFinishFiniteResponse()
 }
 
 func (h *handle) canFinishFiniteResponse() bool {
@@ -391,9 +377,7 @@ func (h *handle) canFinishFiniteResponse() bool {
 		return false
 	}
 	providerCloseExpected := h.request.ReplayPlan != nil && h.request.ReplayPlan.ProviderCloseExpected
-	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 &&
-		h.replayResponses >= h.replayResponseTarget() && !h.gracefulStop &&
-		!h.cancelRequested && !providerCloseExpected
+	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && h.replayResponses >= h.replayResponseTarget() && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
 }
 
 func (h *handle) replayResponseTarget() int {

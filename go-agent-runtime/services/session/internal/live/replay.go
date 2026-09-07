@@ -48,44 +48,6 @@ func (i *liveInvocation) runCaptureTurns(ctx context.Context) error {
 	return nil
 }
 
-func (h *handle) configureActiveScheduledAudio(active bool) {
-	if h == nil {
-		return
-	}
-	h.mu.Lock()
-	h.activeScheduledAudio = active
-	h.mu.Unlock()
-}
-
-// waitForActiveCaptureTurn preserves the response-driven ordering contract for
-// active multi-turn capture. Once a scheduled response starts, the following
-// finite source must reach the provider before queued tool-call deltas are
-// handed to the tool runner; otherwise a completed tool can enqueue its
-// continuation first and strand a provider that is waiting on the barge turn.
-func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
-	if h == nil {
-		return nil
-	}
-	if ctx == nil {
-		return errors.New("active capture turn context is required")
-	}
-	for {
-		h.mu.Lock()
-		active := h.activeScheduledAudio
-		waiting := active && h.scheduledAudioCount > 1 && h.dispatchedAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
-		wake := h.captureTurnWake
-		h.mu.Unlock()
-		if !waiting {
-			return nil
-		}
-		select {
-		case <-wake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
 func validateCaptureInvocation(i *liveInvocation) error {
 	if i == nil || i.options.Devices == nil || i.endpoints.Outbound == nil {
 		return errors.New("finite capture service is unavailable")

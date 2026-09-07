@@ -1247,16 +1247,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_audio_in.go",
-      "symbol": "runSessionWithAudioInputPlan",
-      "value": 16,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_audio_in.go",
       "symbol": "shouldStopAudioInputSessionLoop",
       "value": 18,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -7668,7 +7658,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle",
-      "value": 44,
+      "value": 42,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -7678,7 +7668,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose",
-      "value": 34,
+      "value": 32,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -16108,7 +16098,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle",
-      "value": 37,
+      "value": 36,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -16118,7 +16108,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose",
-      "value": 29,
+      "value": 28,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18139,7 +18129,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_audio_in.go",
-      "value": 1035,
+      "value": 1033,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18355,7 +18345,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_live.go",
-      "value": 1066,
+      "value": 1061,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19561,7 +19551,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
-      "value": 644,
+      "value": 637,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19570,7 +19560,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_parallel_lifecycle_test.go",
-      "value": 669,
+      "value": 667,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -22852,16 +22842,6 @@
       "rule": "function-lines",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
-      "file": "test/integration/session_scheduled_turn_continuation_crediting_test.go",
-      "symbol": "TestSessionCommand_CreditsConsecutiveScheduledToolContinuations",
-      "value": 121,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
       "symbol": "*remoteToolAudioProvider.handle",
       "value": 128,
@@ -22884,7 +22864,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose",
-      "value": 141,
+      "value": 139,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -26104,7 +26084,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_result_barge_in_test.go",
       "symbol": "TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose",
-      "value": 96,
+      "value": 95,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -29084,16 +29064,6 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_image.go",
       "symbol": "ErrSessionImageUnsupportedMIME",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_live.go",
-      "symbol": "ErrSessionAudioResponseIncomplete",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"

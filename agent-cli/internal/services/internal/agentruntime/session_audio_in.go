@@ -363,7 +363,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 		audioWrapped = wrapped
 		plan.loop.AudioOutputError = func() error {
 			audioWrapped.wait()
-			return audioWrapped.err()
+			return joinSessionAudioOutputError(nil, audioOutPath, audioWrapped.err())
 		}
 		if audioOutPath == "-" {
 			sessionOut = io.Discard
@@ -378,9 +378,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	runErr = plan.run(ctx, sessionOut)
 	if audioWrapped != nil {
 		audioWrapped.wait()
-		if outputErr := audioWrapped.err(); outputErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
-		}
+		runErr = joinSessionAudioOutputError(runErr, audioOutPath, audioWrapped.err())
 	}
 	return runErr
 }

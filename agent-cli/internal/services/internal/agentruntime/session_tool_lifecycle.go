@@ -33,14 +33,21 @@ var (
 	// ErrSessionUnresolvedToolResults is the stable sentinel for a session that
 	// terminated while one or more provider-requested tool results were still
 	// undelivered.
-	ErrSessionUnresolvedToolResults = errors.New("session ended with unresolved tool results")
-	// Continuation sentinels are aliases of the reusable runtime contract. The
-	// CLI keeps these names for compatibility with its host diagnostics while
-	// the production error is now authored by the embeddable session service.
-	ErrSessionAudioResponseIncomplete     = sessioncontract.ErrLiveAudioResponseIncomplete
+	ErrSessionUnresolvedToolResults       = errors.New("session ended with unresolved tool results")
 	ErrSessionImageContinuationIncomplete = sessioncontract.ErrLiveImageContinuationIncomplete
 	ErrSessionToolContinuationIncomplete  = sessioncontract.ErrLiveToolContinuationIncomplete
 )
+
+// ErrSessionAudioResponseIncomplete is the CLI compatibility name for the
+// reusable runtime's finite audio-response contract.
+const ErrSessionAudioResponseIncomplete = sessioncontract.ErrLiveAudioResponseIncomplete
+
+func joinSessionAudioOutputError(runErr error, path string, outputErr error) error {
+	if outputErr == nil || errors.Is(runErr, outputErr) {
+		return runErr
+	}
+	return errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+}
 
 // SessionUnresolvedToolResultsError carries the provider call IDs that were
 // still outstanding when a session reached a terminal path. CallIDs is always

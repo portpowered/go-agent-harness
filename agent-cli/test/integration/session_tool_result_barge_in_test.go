@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -379,22 +377,6 @@ func waitSessionToolBargeInSignal(t *testing.T, signal <-chan struct{}, name str
 	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatalf("timed out waiting for %s after %s", name, sessionLifecycleSafetyTimeout)
 	}
-}
-
-func assertExpectedSemanticLiveRunResult(t testing.TB, err error) {
-	t.Helper()
-	if err == nil {
-		return
-	}
-	// These injected provider doubles exercise the shipped live lifecycle but
-	// do not own a raw provider recorder. Audio evidence therefore publishes a
-	// partial bundle with the deliberate missing-provider artifact diagnostic;
-	// keep that recording contract visible while accepting it as the fixture's
-	// expected result.
-	if errors.Is(err, os.ErrNotExist) && strings.Contains(err.Error(), "finalize provider evidence") {
-		return
-	}
-	t.Fatalf("semantic live command returned an unrelated error: %v", err)
 }
 
 // TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose drives

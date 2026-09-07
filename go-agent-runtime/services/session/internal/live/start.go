@@ -140,6 +140,73 @@ func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.To
 	return e.inner.Execute(ctx, call)
 }
 
+func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
+	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
+		runtimeHandle.configureActiveScheduledAudio(active)
+	}
+}
+
+func (h *handle) configureActiveScheduledAudio(active bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.activeScheduledAudio = active
+	h.mu.Unlock()
+}
+
+func (h *handle) waitForActiveCaptureTurn(ctx context.Context) error {
+	if h == nil {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("active capture turn context is required")
+	}
+	for {
+		h.mu.Lock()
+		waiting := h.activeScheduledAudio && h.scheduledAudioCount > 1 && h.dispatchedAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
+		wake := h.captureTurnWake
+		h.mu.Unlock()
+		if !waiting {
+			return nil
+		}
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (h *handle) finiteAudioResponseError() error {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	incomplete := h.captureSourceActive && h.request.FinishAfterResponse && !h.gracefulStop && h.scheduledAudioCount == 0
+	h.mu.Unlock()
+	if incomplete {
+		return session.ErrLiveAudioResponseIncomplete
+	}
+	return nil
+}
+
+func (h *handle) emitSynthesizedSessionClose() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	if !h.gracefulStop || h.cancelRequested || h.providerCloseObserved || h.localCloseObserved || h.scheduledAudioCount == 0 || h.request.ReplayPlan != nil || h.request.Replay.InputCapturePath != "" {
+		h.mu.Unlock()
+		return
+	}
+	value := messages.NewSessionCloseValueWithTerminal(h.request.SessionID, "client_close", string(messages.TerminalReasonLoopSynthesizedCompletion), messages.TerminalReasonLoopSynthesizedCompletion, messages.TerminalProvenanceLoop, messages.TerminalOutputComplete)
+	h.localCloseObserved = true
+	h.terminalValue = cloneLiveTerminalValue(value)
+	h.mu.Unlock()
+	h.publishMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: value})
+}
+
 // restrictToolExecutor keeps provider issued calls inside the capability
 // surface advertised for this invocation. A registry executor can still be
 // non-nil when one configured tool has been disabled, so relying on executor
