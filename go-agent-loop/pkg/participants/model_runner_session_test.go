@@ -248,6 +248,55 @@ func TestSessionModelRunner_SendsSessionUpdateOnSessionCreated(t *testing.T) {
 	}
 }
 
+func TestSessionModelRunner_SendsInitialSessionUpdateOnSessionOpenOnce(t *testing.T) {
+	session := newRecordingSession()
+	config := &messages.SessionUpdateConfig{
+		Instructions: "be brief",
+		Tools:        []messages.ToolDefinition{{Name: "read_image"}},
+	}
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, config)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("sess-open", "gpt-realtime"),
+	}) {
+		t.Fatal("failed to enqueue SESSION.OPEN")
+	}
+	forwarded, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok || forwarded.Type != messages.StreamTypeSessionOpen {
+		t.Fatalf("forwarded session-open = %#v, ok=%t; want SESSION.OPEN", forwarded, ok)
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeSessionUpdate {
+		t.Fatalf("provider messages after SESSION.OPEN = %#v, want one SESSION.UPDATE", sent)
+	}
+	value, ok := sent[0].Value.(*messages.SessionUpdateValue)
+	if !ok || value == nil || len(value.Tools) != 1 || value.Tools[0].Name != "read_image" {
+		t.Fatalf("initial SESSION.UPDATE = %#v, want configured tool", sent[0].Value)
+	}
+
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("sess-open", "gpt-realtime"),
+	}) {
+		t.Fatal("failed to enqueue SESSION.CREATED")
+	}
+	forwarded, ok = runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok || forwarded.Type != messages.StreamTypeSessionCreated {
+		t.Fatalf("forwarded session-created = %#v, ok=%t; want SESSION.CREATED", forwarded, ok)
+	}
+	if sent := session.sentMessages(); len(sent) != 1 {
+		t.Fatalf("provider messages after SESSION.CREATED = %#v, want the initial update only", sent)
+	}
+}
+
 func TestSessionModelRunner_SessionCreatedUpdateFailureIsObservable(t *testing.T) {
 	session := &outcomeRecordingSession{
 		recordingSession: newRecordingSession(),

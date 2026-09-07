@@ -66,6 +66,11 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if err != nil {
 		return err
 	}
+	cleanupImages, err := stageLiveOpeningImages(request, &liveRequest)
+	if err != nil {
+		return err
+	}
+	defer cleanupImages()
 	if deps.WriteAnnouncements != nil {
 		announcementOut := deps.AnnouncementOutput
 		if announcementOut == nil {

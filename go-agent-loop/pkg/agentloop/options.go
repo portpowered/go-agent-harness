@@ -32,8 +32,9 @@ type AgentLoopConfig struct {
 	InferenceDefaults *messages.InferenceDefaults
 	TickRate          time.Duration
 	Clock             clock.TimerSource
-	// SessionConfig, when set, is sent as SESSION.UPDATE immediately after the
-	// inference provider emits SESSION.CREATED. Only used in DuplexSession mode.
+	// SessionConfig, when set, is sent once as SESSION.UPDATE immediately after
+	// the inference provider emits its first SESSION.OPEN or SESSION.CREATED.
+	// Only used in DuplexSession mode.
 	SessionConfig *messages.SessionUpdateConfig
 
 	// ToolAcknowledgement configures one short, one-shot progress response for a
@@ -239,10 +240,11 @@ func WithTickRate(d time.Duration) Option {
 	}
 }
 
-// WithSessionConfig sets the session configuration to send as SESSION.UPDATE
-// immediately after the inference provider emits SESSION.CREATED. Only active
-// in DuplexSession mode. Use this to configure the model, system prompt, and
-// input/output modalities for a realtime session (e.g. Grok realtime API).
+// WithSessionConfig sets the session configuration to send once as
+// SESSION.UPDATE immediately after the inference provider emits its first
+// SESSION.OPEN or SESSION.CREATED. Only active in DuplexSession mode. Use this
+// to configure the model, system prompt, and input/output modalities for a
+// realtime session (e.g. Grok realtime API).
 func WithSessionConfig(cfg messages.SessionUpdateConfig) Option {
 	return func(c *AgentLoopConfig) {
 		c.SessionConfig = &cfg

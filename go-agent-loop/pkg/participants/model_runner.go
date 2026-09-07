@@ -12,7 +12,7 @@ import (
 type ModelRunner struct {
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
-	sessionConfig     *messages.SessionUpdateConfig // sent as SESSION.UPDATE on SESSION.CREATED
+	sessionConfig     *messages.SessionUpdateConfig // sent as SESSION.UPDATE on the first SESSION.OPEN or SESSION.CREATED
 	Inbox             *messages.TypedBuffer[messages.InferenceRequest]
 	DeltaOutbox       *messages.TypedBuffer[messages.StreamMessage]
 	// UserAudioInbox receives raw PCM audio frames from the user in session mode.
@@ -99,6 +99,7 @@ type sessionRunState struct {
 	acknowledgementCancelled   bool
 	acknowledgementEnded       bool
 	deferredSessionEvents      []messages.StreamMessage
+	initialSessionConfigSent   bool
 }
 
 // sessionResponseState is retained as an alias for the identity-aware helper
@@ -142,8 +143,9 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // persistent session via the given SessionInferencer and forwards all
 // inbound session events (from session.Receive()) to DeltaOutbox.
 // The Inbox is allocated but not read in session mode.
-// When config is non-nil, a SESSION.UPDATE message is sent to an unmarked
-// session immediately after SESSION.CREATED is received from the provider.
+// When config is non-nil, a SESSION.UPDATE message is sent once to an unmarked
+// session immediately after its first SESSION.OPEN or SESSION.CREATED event
+// is received from the provider.
 // Provider sessions that already sent their initial configuration during
 // ConnectSession opt out through the optional InitialSessionConfigSent marker.
 // UserAudioInbox is a buffered channel for accepting raw PCM audio input;
@@ -257,9 +259,10 @@ func (r *ModelRunner) Run(ctx context.Context) error {
 // session.Receive() to DeltaOutbox. It runs until the context is cancelled or
 // the session terminates. This is the session-mode counterpart to runInference.
 //
-// When sessionConfig is set, a SESSION.UPDATE message is sent to an unmarked
-// session immediately after SESSION.CREATED is received (before forwarding it
-// to DeltaOutbox). Provider-owned initial configuration is not echoed.
+// When sessionConfig is set, a SESSION.UPDATE message is sent once to an
+// unmarked session immediately after its first SESSION.OPEN or SESSION.CREATED
+// event is received (before forwarding it to DeltaOutbox). Provider-owned
+// initial configuration is not echoed.
 //
 // When UserAudioInbox is set, this method also selects on it. If audio arrives
 // while the model has a non-terminal response (from MESSAGE.START through
@@ -476,7 +479,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	if isOutputDelta(msg) {
 		state.hasOutput = true
 	}
-	r.forwardInitialSessionConfig(ctx, session, msg)
+	r.forwardInitialSessionConfig(ctx, session, state, msg)
 	r.DeltaOutbox.Write(ctx, msg)
 	return messageEndOwned
 }

@@ -16,10 +16,15 @@ func providerSentInitialSessionConfig(session messages.Session) bool {
 	return ok && marker.InitialSessionConfigSent()
 }
 
-func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session messages.Session, msg messages.StreamMessage) {
-	if msg.Type != messages.StreamTypeSessionCreated || r.sessionConfig == nil || providerSentInitialSessionConfig(session) {
+func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session messages.Session, state *sessionRunState, msg messages.StreamMessage) {
+	if (msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeSessionCreated) ||
+		r.sessionConfig == nil || state == nil || state.initialSessionConfigSent || providerSentInitialSessionConfig(session) {
 		return
 	}
+	// Providers may emit both SESSION.OPEN and SESSION.CREATED for one
+	// connection. The first lifecycle event owns the initial configuration;
+	// do not echo it a second time when the other event arrives.
+	state.initialSessionConfigSent = true
 	r.forwardSessionEvent(ctx, session, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionUpdate,
 		Value: messages.NewSessionUpdateValue(r.sessionConfig),

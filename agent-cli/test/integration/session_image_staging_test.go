@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -40,10 +42,16 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	if err != nil {
 		t.Fatalf("resolve runtime tools: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		capability.Executor,
-		&mockInferencerError{err: errors.New("stateless inferencer must not be used")},
-		&exactStagedImageInferencer{session: session},
+	toolService := serviceTools.Factory(func(_ *config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{
+			Executor:    capability.Executor,
+			Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...),
+		}, nil
+	})
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewToolServicePort(toolService),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer must not be used")}),
+		wire.NewPortSwap(wire.PortSessionInferencer, &exactStagedImageInferencer{session: session}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
