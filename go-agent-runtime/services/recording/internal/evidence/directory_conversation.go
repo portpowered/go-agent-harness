@@ -12,10 +12,13 @@ import (
 // detailed provider transcript remains in the two raw JSONL artifacts; this
 // index preserves the useful turn summary used by CLI and room tooling.
 type evidenceConversation struct {
-	inputBytes  uint64
-	outputBytes uint64
-	closed      []evidenceTurn
-	turn        evidenceTurn
+	inputBytes          uint64
+	outputBytes         uint64
+	closed              []evidenceTurn
+	turn                evidenceTurn
+	toolNames           map[string]string
+	toolResultEventByID map[string]int
+	nextToolSequence    uint64
 }
 
 type evidenceTurn struct {
@@ -64,11 +67,9 @@ type evidenceLogEntry struct {
 
 // observe builds a convenience projection. The typed transcript retains every
 // admitted message, including types that have no conversation summary field.
-func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool, sequence uint64) {
+func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool, _ uint64) {
 	if msg.Role == messages.RoleTool {
-		if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
-			c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: sequence, Type: "tool_result", ToolCallID: msg.ToolCallId, Content: value.Content})
-		}
+		c.observeToolResult(msg, 0)
 		return
 	}
 	c.observeText(msg, outbound)
@@ -80,8 +81,51 @@ func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool
 	}
 	if !outbound && msg.Type == messages.StreamTypeToolCallEnd {
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-			c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: sequence, Type: "tool_call", ToolCallID: value.ToolCallID, ToolName: value.Name, Arguments: value.Arguments})
+			if c.toolNames == nil {
+				c.toolNames = make(map[string]string)
+			}
+			callID := strings.TrimSpace(value.ToolCallID)
+			if callID == "" {
+				callID = strings.TrimSpace(msg.ToolCallId)
+			}
+			c.toolNames[callID] = value.Name
+			c.nextToolSequence++
+			c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments})
 		}
+	}
+}
+
+func (c *evidenceConversation) observeToolResult(msg messages.StreamMessage, _ uint64) {
+	if c == nil {
+		return
+	}
+	if c.toolResultEventByID == nil {
+		c.toolResultEventByID = make(map[string]int)
+	}
+	callID := strings.TrimSpace(msg.ToolCallId)
+	if callID == "" {
+		return
+	}
+	index, exists := c.toolResultEventByID[callID]
+	if !exists {
+		c.nextToolSequence++
+		event := evidenceToolEvent{
+			Sequence: c.nextToolSequence, Type: "tool_result", ToolCallID: callID,
+			ToolName: c.toolNames[callID], Status: "completed",
+		}
+		c.turn.toolEvents = append(c.turn.toolEvents, event)
+		index = len(c.turn.toolEvents) - 1
+		c.toolResultEventByID[callID] = index
+	}
+	event := &c.turn.toolEvents[index]
+	if event.ToolName == "" {
+		event.ToolName = c.toolNames[callID]
+	}
+	if event.Status == "" {
+		event.Status = "completed"
+	}
+	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
+		event.Content += value.Content
 	}
 }
 
@@ -124,6 +168,7 @@ func (c *evidenceConversation) endMessage(outbound bool) {
 		c.closed = append(c.closed, c.turn)
 	}
 	c.turn = evidenceTurn{}
+	c.toolResultEventByID = nil
 }
 
 func (c *evidenceConversation) observeAudio(input bool, index, bytes int, _ time.Time) {
