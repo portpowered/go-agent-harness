@@ -177,7 +177,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// override the ordinary finite audio/output policy so a completed
 		// response cannot cancel the provider stream before later stdin audio
 		// reaches the same session.
-		FinishAfterResponse: !request.WaitForClose && (hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
+		FinishAfterResponse: !request.WaitForClose && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   expectedResponses(request, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
 	}
 	appendToolNames(&result, inputs.capabilities)

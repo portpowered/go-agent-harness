@@ -42,6 +42,22 @@ func newV8CLI(t *testing.T, logicalClock *clock.Deterministic, observer *v8Runti
 	return agentCLI
 }
 
+func prepareV8SessionExecutor(commandCLI *cli.AgentCLI, input io.Reader, output io.Writer, instruction, replayPath string) func(context.Context) error {
+	root := commandCLI.Generate()
+	root.SetIn(input)
+	root.SetOut(output)
+	root.SetErr(io.Discard)
+	root.SetArgs([]string{
+		"session",
+		"--replay", replayPath,
+		"--audio-in", "-",
+		"--audio-out", "-",
+		"--max-duration", v8CommandMaxDuration.String(),
+		instruction,
+	})
+	return root.ExecuteContext
+}
+
 func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun {
 	t.Helper()
 	base := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
@@ -236,43 +252,33 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	bCLI := newV8CLI(t, logicalClock, bObserver)
 	aCLI.SetSessionStreamObserver(aStream.Observe)
 	bCLI.SetSessionStreamObserver(bStream.Observe)
+	aExecute := prepareV8SessionExecutor(aCLI, &v8MultiTurnPCMReader{bridge: bToABridge}, v8MultiTurnPCMWriter{bridge: aToBBridge}, v8HarnessAInstruction, aReplay)
+	bExecute := prepareV8SessionExecutor(bCLI, &v8MultiTurnPCMReader{bridge: aToBBridge}, v8MultiTurnPCMWriter{bridge: bToABridge}, v8HarnessBInstruction, bReplay)
 
 	ctx, cancel := context.WithTimeout(context.Background(), v8RunTimeout)
 	defer cancel()
 	results := make(chan v8HarnessResult, 2)
 	startGate := make(chan struct{})
 	var wg sync.WaitGroup
-	start := func(name, instruction, replayPath string, input io.Reader, output io.Writer, commandCLI *cli.AgentCLI, observer *v8RuntimeObserver, stream *v8StreamRecorder) {
+	start := func(name, instruction, replayPath string, execute func(context.Context) error, observer *v8RuntimeObserver, stream *v8StreamRecorder) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-startGate
 			started := time.Now()
-			root := commandCLI.Generate()
-			root.SetIn(input)
-			root.SetOut(output)
-			root.SetErr(io.Discard)
-			root.SetArgs([]string{
-				"session",
-				"--replay", replayPath,
-				"--audio-in", "-",
-				"--audio-out", "-",
-				"--max-duration", v8CommandMaxDuration.String(),
-				instruction,
-			})
 			results <- v8HarnessResult{
 				Name:        name,
 				Instruction: instruction,
 				ReplayPath:  replayPath,
-				Err:         root.ExecuteContext(ctx),
+				Err:         execute(ctx),
 				Elapsed:     time.Since(started),
 				Runtime:     observer.snapshot(),
 				Stream:      stream.snapshot(),
 			}
 		}()
 	}
-	start("A", v8HarnessAInstruction, aReplay, &v8MultiTurnPCMReader{bridge: bToABridge}, v8MultiTurnPCMWriter{bridge: aToBBridge}, aCLI, aObserver, aStream)
-	start("B", v8HarnessBInstruction, bReplay, &v8MultiTurnPCMReader{bridge: aToBBridge}, v8MultiTurnPCMWriter{bridge: bToABridge}, bCLI, bObserver, bStream)
+	start("A", v8HarnessAInstruction, aReplay, aExecute, aObserver, aStream)
+	start("B", v8HarnessBInstruction, bReplay, bExecute, bObserver, bStream)
 	close(startGate)
 
 	harnesses := make(map[string]v8HarnessResult, 2)

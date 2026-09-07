@@ -16,18 +16,24 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 	for _, test := range []struct {
 		name          string
 		waitForClose  bool
+		audioInput    bool
+		promptPresent bool
 		wantFinite    bool
 		wantResponses int
 	}{
-		{name: "finite audio", wantFinite: true, wantResponses: 1},
-		{name: "provider owns close", waitForClose: true, wantFinite: false, wantResponses: 1},
+		{name: "finite audio", audioInput: true, wantFinite: true, wantResponses: 1},
+		{name: "finite prompt", promptPresent: true, wantFinite: true},
+		{name: "provider owns close", waitForClose: true, audioInput: true, wantFinite: false, wantResponses: 1},
+		{name: "provider owns prompted close", waitForClose: true, promptPresent: true, wantFinite: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request := serviceSession.Request{
 				WaitForClose: test.waitForClose,
-				AudioInput:   serviceSession.AudioInput{Present: true},
+				AudioInput:   serviceSession.AudioInput{Present: test.audioInput},
 			}
-			got := assembleLiveRequest(request, inputs)
+			caseInputs := inputs
+			caseInputs.promptPresent = test.promptPresent
+			got := assembleLiveRequest(request, caseInputs)
 			if got.FinishAfterResponse != test.wantFinite {
 				t.Fatalf("FinishAfterResponse = %t, want %t", got.FinishAfterResponse, test.wantFinite)
 			}
