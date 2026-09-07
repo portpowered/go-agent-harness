@@ -18,7 +18,7 @@ Each message or delta carries the following ordering fields (see `Message` and `
 | Behavior | Status |
 |----------|--------|
 | Global index assignment on consumption | **Implemented** — `GlobalOrdering.assignStreamOrdering` / `assignMessageOrdering` in `pkg/engine/ordering.go`. |
-| Deltas and full messages appended to history | **Implemented** — `UpdateWorldHistory` moves inputs into `ConversationBuffer` and `ConversationDeltaBuffer`. |
+| Deltas and full messages appended to history | **Implemented** — `UpdateWorldHistory` moves inputs into `ConversationBuffer` and `ConversationDeltaBuffer`, preserving an active tool batch when model and tool deltas interleave. |
 | Delta assembly (message.start → buffer, message.end → emit) | **implemented** — Deltas are appended; full messages come from a separate path (e.g. model outbox). No single component “pieces together” deltas into messages or validates completeness. |
 | Duplicate detection (ActorProvidedID + ActorID) | **Not implemented** — Every consumed item is appended; no discard on match. |
 | Retry backwards (same → discard, replace → terminate effects & restart from index) | **Not implemented** — No checks or restart-from-index logic. |
@@ -31,6 +31,8 @@ Each message or delta carries the following ordering fields (see `Message` and `
 ## Engine
 
 Global message ordering is maintained by **GlobalOrdering** in `pkg/engine/ordering.go` (not a separate “messageBufferReader”). It consumes one item per tick from participant outboxes (deltas preferred, then full messages), assigns a strictly increasing **GlobalIndex** to each, and appends to `LoopState.Inputs`. After execution, **UpdateWorldHistory** moves those inputs into **History** (ConversationBuffer and ConversationDeltaBuffer). **FlushInputs** clears the input slices for the next tick.
+
+The active model response is kept contiguous in `ConversationDeltaBuffer` for reconstruction. If a tool batch has already appended deltas at the model insertion point, model deltas are inserted before that batch and its tracked start index is shifted; stale model entries are removed without truncating tool or user deltas. This keeps `MESSAGE.START` through `MESSAGE.END` available to tool-result reconstruction during concurrent response output.
 
 ## Actors
 
