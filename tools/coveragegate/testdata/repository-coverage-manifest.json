@@ -145,10 +145,6 @@
       "minimum": 0.00
     },
     {
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/session",
-      "minimum": 31.60
-    },
-    {
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming",
       "minimum": 90.00
     },
@@ -337,6 +333,46 @@
       "minimum": 0.00
     },
     {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/service",
+      "minimum": 40.20
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence",
+      "minimum": 80.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service",
+      "minimum": 90.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan",
+      "minimum": 80.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input",
+      "minimum": 95.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations",
+      "minimum": 85.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence",
+      "minimum": 85.00
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+      "minimum": 77.30
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing",
+      "minimum": 77.30
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream",
+      "minimum": 77.30
+    },
+    {
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
       "minimum": 77.30
     },
@@ -347,6 +383,10 @@
     {
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
       "minimum": 80.20
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "minimum": 70.00
     },
     {
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/observability",
