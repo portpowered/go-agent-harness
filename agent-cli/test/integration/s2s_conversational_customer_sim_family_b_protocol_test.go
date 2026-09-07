@@ -16,7 +16,7 @@ const (
 	familyBOriginalCallID      = "call-family-b-original"
 	familyBAuthorizationHeader = "Bearer hermetic-key"
 	familyBResponseCancelEvent = "response.cancel"
- familyBSessionUpdateEvent = "session.update"
+	familyBSessionUpdateEvent  = "session.update"
 )
 
 func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {

@@ -308,13 +308,15 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 		echo "==> coverage $$module ($$timeout_scope: $$effective_timeout)"; \
 		if [ "$$module" = "agent-cli" ]; then \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" --report-budget --label "agent-cli coverage" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" --report-budget --label "agent-cli coverage" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		else \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=./... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 		fi; \
 	done; \
+	echo "==> embedded runtime coverage"; \
+	(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../../$(COVERAGE_DIR)/embedding.out"); \
 	echo "==> coverage gate"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out))
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out) $(abspath $(COVERAGE_DIR))/embedding.out)
 
 coverage-registration: ## Validate every workspace Go package is registered without running coverage.
 	@set -euo pipefail; \
@@ -324,16 +326,9 @@ coverage-registration: ## Validate every workspace Go package is registered with
 		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
 		$(foreach module,$(MODULES),--module-dir ../../$(module)))
 
-coverage-changed: ## Measure coverage floors only for packages owning changed Go files.
-	@set -euo pipefail; \
-	echo "==> coverage-changed (base: $(COVERAGE_BASE))"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
-		--changed \
-		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
-		--repo ../.. \
-		--base "$(COVERAGE_BASE)" \
-		--test-timeout "$(GO_TEST_TIMEOUT)" \
-		$(foreach module,$(MODULES),--module-dir ../../$(module)))
+# Service floors include callers in the CLI and embedding suite. Running only
+# changed packages drops that behavioral coverage and reports false regressions.
+coverage-changed: coverage ## Compatibility alias for the complete behavioral coverage gate.
 
 wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
 	@python3 -B scripts/check-wire.py --go "$(GO)" $(MODULES)

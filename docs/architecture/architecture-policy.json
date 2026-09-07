@@ -1090,6 +1090,18 @@
       "file": "pkg/audio/processor.go",
       "name": "ErrFrameAccumulatorClosed",
       "reason": "sentinel error identity distinguishes writes after finite media finalization"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices",
+      "file": "services/devices/contract.go",
+      "name": "ErrPlaybackInput",
+      "reason": "sentinel distinguishes provider input failure from device playback failure across the service boundary"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate",
+      "file": "services/session/internal/live/mediagate/gate.go",
+      "name": "ErrProviderInboundMedia",
+      "reason": "sentinel preserves provider failure identity while ordered response messages drain"
     }
   ],
   "limits": {

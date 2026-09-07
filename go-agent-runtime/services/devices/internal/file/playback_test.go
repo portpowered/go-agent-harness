@@ -107,7 +107,11 @@ var _ sharedaudio.SampleSink = (*recordingSampleSink)(nil)
 
 func TestInterruptedPlaybackResetsEvenWhenQueuedEndWasDiscarded(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRateWithOptions(nil, 24000, sharedaudio.MediaSessionOptions{InboundContinuous: true})
-	defer media.Close()
+	defer func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("close media: %v", err)
+		}
+	}()
 	sink := &recordingSampleSink{}
 	playback, err := newPlayback(devices.FileOutput{Sink: sink, SampleRate: 24000, Continuous: true}, 24000)
 	if err != nil {
