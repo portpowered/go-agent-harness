@@ -344,6 +344,61 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 }
 
+func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.T) {
+	const firstCallID = "call-finite-first"
+	const nextCallID = "call-finite-next"
+	h := &handle{
+		request:           session.LiveRequest{FinishAfterResponse: true},
+		captureComplete:   true,
+		responseStarted:   true,
+		toolContinuations: make(map[string]*liveToolContinuation),
+		responseStartWake: make(chan struct{}),
+	}
+	firstCall := messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallEnd,
+		Role:       messages.RoleAssistant,
+		ToolCallId: firstCallID,
+		Value:      messages.NewToolCallEndValue(firstCallID, "lookup", `{}`),
+	}
+	h.observeProviderToolCall(firstCall)
+	h.observeFiniteResponse(firstCall)
+	h.observeToolResult(firstCallID, "lookup", true)
+	toolResultEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	h.observeToolLifecycle(toolResultEnd)
+	h.observeFiniteResponse(toolResultEnd)
+	h.markContinuationOutput()
+
+	nextCall := messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallEnd,
+		Role:       messages.RoleAssistant,
+		ToolCallId: nextCallID,
+		Value:      messages.NewToolCallEndValue(nextCallID, "list", `{}`),
+	}
+	h.observeToolLifecycle(nextCall)
+	h.observeFiniteResponse(nextCall)
+	continuationEnd := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-with-next-tool",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	continuationErr, complete := h.observeToolLifecycle(continuationEnd)
+	if continuationErr != nil || !complete {
+		t.Fatalf("continuation boundary = error:%v complete:%t, want successful prior continuation", continuationErr, complete)
+	}
+	h.observeFiniteResponse(continuationEnd, complete)
+	if h.gracefulStop {
+		t.Fatal("finite response marked graceful stop with a pending next provider tool call")
+	}
+	if h.pendingToolCalls != 1 {
+		t.Fatalf("pending tool calls = %d, want 1 for the next provider call", h.pendingToolCalls)
+	}
+}
+
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
 	result := make(chan error, 1)

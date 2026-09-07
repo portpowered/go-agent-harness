@@ -317,9 +317,13 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 		h.mu.Unlock()
 		return false
 	}
-	if len(complete) > 0 && complete[0] {
-		h.pendingToolCalls = 0
-	}
+	// A completed continuation only retires the preceding tool result.  A
+	// single assistant boundary may immediately contain the next provider tool
+	// call, whose TOOLCALL.END already incremented pendingToolCalls before this
+	// MESSAGE.END arrived.  Resetting the aggregate here would let a finite
+	// invocation stop after the first continuation and strand that next call.
+	// The RoleTool MESSAGE.END path above retires the previous result; leave the
+	// current response's pending calls intact.
 	h.observeFiniteResponseMessage(msg)
 	finish := h.shouldFinishFiniteResponse(msg)
 	h.mu.Unlock()
