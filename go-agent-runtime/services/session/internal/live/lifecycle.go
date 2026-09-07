@@ -389,12 +389,3 @@ func newScheduledAudioIncompleteError(scheduled, dispatched, completed int, term
 	}
 	return incomplete
 }
-// deferProviderClose lets scheduled feeds drain response terminals queued before SESSION.CLOSE.
-func (h *handle) deferProviderClose() bool {
-	if h == nil {
-		return false
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
-}

@@ -386,3 +386,13 @@ func captureMediaEndpoints(session messages.Session, providerMedia sharedaudio.M
 	}
 	return providerMedia.RTCMedia()
 }
+
+// deferProviderClose lets scheduled feeds drain response terminals queued before SESSION.CLOSE.
+func (h *handle) deferProviderClose() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
+}

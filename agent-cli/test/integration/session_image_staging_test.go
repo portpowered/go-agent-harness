@@ -1,4 +1,5 @@
 package integration
+
 import (
 	"bytes"
 	"context"
@@ -6,15 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -24,6 +16,15 @@ import (
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"image"
+	"image/color"
+	"image/png"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 )
 
 func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing.T) {

@@ -51,6 +51,7 @@ type toolBargeInStreamEvent struct {
 	Type    messages.StreamMessageType
 	Bytes   int
 }
+
 func newToolBargeInTrace() *toolBargeInTrace {
 	trace := &toolBargeInTrace{}
 	for ordinal := 1; ordinal < len(trace.responseDone); ordinal++ {
@@ -121,6 +122,7 @@ type toolBargeInAudioSegment struct {
 	afterFrame func(context.Context) error
 	endOfTurn  bool
 }
+
 func newToolBargeInAudioReader(server *toolBargeInServer, executor *toolBargeInExecutor, trace *toolBargeInTrace) *toolBargeInAudioReader {
 	return &toolBargeInAudioReader{
 		segments: []toolBargeInAudioSegment{
@@ -205,6 +207,7 @@ func (*toolBargeInAudioReader) Close() error { return nil }
 func waitToolBargeInSignal(ctx context.Context, boundary string, signal <-chan struct{}) error {
 	return probe.NewBargeInLedger().WaitFor(ctx, boundary, signal, toolBargeInGateTimeout)
 }
+
 type toolBargeInServer struct {
 	mu sync.Mutex
 
@@ -237,6 +240,7 @@ type toolBargeInServerResponse struct {
 	CancelCount  int
 	TerminalSent bool
 }
+
 func newToolBargeInServer() *toolBargeInServer {
 	return &toolBargeInServer{
 		events:          make(chan []byte, 128),
@@ -304,7 +308,9 @@ func (s *toolBargeInServer) waitForTransportClose(ctx context.Context) error {
 		toolBargeInGateTimeout,
 	)
 }
+
 type toolBargeInConn struct{ server *toolBargeInServer }
+
 func (c *toolBargeInConn) ReadMessage() (int, []byte, error) {
 	select {
 	case payload := <-c.server.events:
@@ -445,6 +451,7 @@ func (c *toolBargeInConn) Close() error {
 	c.server.shutdown()
 	return nil
 }
+
 type toolBargeInRun struct {
 	capture  gwtesting.SessionCapture
 	trace    *toolBargeInTrace
@@ -457,6 +464,7 @@ type toolBargeInCaptureInferencer struct {
 	recorder    *gwtesting.RecordingWebSocketDialer
 	capturePath string
 }
+
 func (i *toolBargeInCaptureInferencer) ConfigureProviderCapture(path string) error {
 	i.capturePath = path
 	return nil
@@ -467,6 +475,7 @@ func (i *toolBargeInCaptureInferencer) FlushCapture() error {
 	}
 	return i.recorder.FlushToFile(i.capturePath)
 }
+
 type toolBargeInExecutor struct {
 	started     chan struct{}
 	release     chan struct{}
@@ -477,6 +486,7 @@ type toolBargeInExecutor struct {
 	calls    []messages.ToolCall
 	returned []messages.ToolCallResponse
 }
+
 func newToolBargeInExecutor() *toolBargeInExecutor {
 	return &toolBargeInExecutor{
 		started: make(chan struct{}),
