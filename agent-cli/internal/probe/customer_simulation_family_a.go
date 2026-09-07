@@ -238,14 +238,16 @@ func customerSimulationResponseCandidates(responses []customerSimulationResponse
 	return responses
 }
 
+const customerSimulationResponseIncomplete = "incomplete"
+
 func customerSimulationResponseStatus(response customerSimulationResponse) string {
 	if response.Cancelled {
-		return "cancelled"
+		return string(DispositionCancelled)
 	}
 	if response.Complete {
-		return "completed"
+		return string(DispositionCompleted)
 	}
-	return "incomplete"
+	return customerSimulationResponseIncomplete
 }
 
 func customerSimulationResponseTime(response customerSimulationResponse, fallback time.Duration, result DuplexRunResult, start bool) time.Duration {
