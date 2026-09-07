@@ -30,6 +30,16 @@ func (c *SessionCommand) SetFeedbackWarningWriter(writer io.Writer) {
 	c.feedbackWarningWriter = writer
 }
 
+// SetHoldToneConfig installs an explicit local gap-cue policy for embedded
+// command owners. Ordinary CLI construction leaves it nil and uses defaults.
+func (c *SessionCommand) SetHoldToneConfig(config serviceSession.HoldToneConfig) {
+	if c == nil {
+		return
+	}
+	copy := config
+	c.holdToneConfig = &copy
+}
+
 func decorateSessionCommandError(err error) error {
 	if err == nil || strings.Contains(err.Error(), "classification=") {
 		return err
@@ -132,7 +142,7 @@ func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, 
 		AudioInput: audioInput, AudioTurns: append([]string(nil), state.AudioTurns...), AudioInterrupts: append([]string(nil), state.AudioInterrupts...),
 		AudioInterruptTool: state.AudioInterruptTool, SystemPrompt: c.askFlags.SystemPrompt, ImagePaths: append([]string(nil), c.imagePaths...),
 		AudioInputDevice: string(state.AudioInputDevice), AudioOutputDevice: string(state.AudioOutputDevice), AudioInputDevicePresent: cmd.Flags().Changed("audio-in-device"), AudioOutputDevicePresent: cmd.Flags().Changed("audio-out-device"),
-		AudioDeviceServer: state.AudioDeviceServer, FeedbackWarningWriter: c.feedbackWarningWriter, ComputerUse: state.ComputerUse, ExperimentalTools: state.ExperimentalTools, NoTerminalTools: state.NoTerminalTools,
+		AudioDeviceServer: state.AudioDeviceServer, HoldToneConfig: c.holdToneConfig, FeedbackWarningWriter: c.feedbackWarningWriter, ComputerUse: state.ComputerUse, ExperimentalTools: state.ExperimentalTools, NoTerminalTools: state.NoTerminalTools,
 	}, nil
 }
 

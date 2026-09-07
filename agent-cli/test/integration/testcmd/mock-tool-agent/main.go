@@ -11,9 +11,13 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-const fixtureEnvironment = "YUI_E2E_TOOL_MOCK_FIXTURE"
+const (
+	fixtureEnvironment         = "YUI_E2E_TOOL_MOCK_FIXTURE"
+	disableHoldToneEnvironment = "YUI_E2E_DISABLE_HOLD_TONE"
+)
 
 type fixture struct {
 	Observations string             `json:"observations"`
@@ -44,6 +48,11 @@ func main() {
 	)
 	if err != nil {
 		fatal(err)
+	}
+	if os.Getenv(disableHoldToneEnvironment) == "1" {
+		config := audio.DefaultHoldToneConfig()
+		config.GapThreshold = time.Hour
+		agentCLI.SetSessionHoldToneConfig(config)
 	}
 	if err := agentCLI.Generate().Execute(); err != nil {
 		os.Exit(1)

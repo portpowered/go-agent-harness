@@ -356,6 +356,7 @@ func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.L
 		SampleRate:      sampleRate,
 		Channels:        audio.Channels,
 		PlaybackProfile: "voice",
+		HoldToneConfig:  request.HoldToneConfig,
 	}
 }
 

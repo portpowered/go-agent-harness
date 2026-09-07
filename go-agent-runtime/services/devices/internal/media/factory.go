@@ -104,6 +104,9 @@ func (f *Factory) openOutput(registry devicegw.DeviceRegistry, request devices.R
 	if err != nil {
 		return nil, fmt.Errorf("open output device %q: %w", request.OutputDevice, err)
 	}
+	if request.HoldToneConfig != nil {
+		output.SetHoldToneConfig(*request.HoldToneConfig)
+	}
 	return output, nil
 }
 

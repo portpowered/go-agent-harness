@@ -182,6 +182,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		ToolExecutionTimeout: request.ToolExecutionTimeout, Clock: d.deps.Clock,
 		RuntimeObserver: d.deps.RuntimeObserver, Diagnostics: request.Diagnostics, ToolDiagnostics: request.ToolDiagnostics,
 		Observability: d.deps.Observability, StreamObserver: request.StreamObserver,
+		RTCDeviceBinding: RTCDeviceBindingRequest{HoldToneConfig: request.HoldToneConfig, Observability: d.deps.Observability},
 		AudioInTurnBarge: request.AudioInTurnBarge, ClientOwnsAudioTurnBoundaries: request.ClientOwnsAudioTurnBoundaries,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout, WaitForClose: request.WaitForClose,
 		runtimeFactory: d.deps.PlanFactory,
@@ -197,7 +198,6 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 	options.RTCDeviceBinding.InputPresent = request.AudioInputDevicePresent
 	options.RTCDeviceBinding.OutputPresent = request.AudioOutputDevicePresent
 	options.RTCDeviceBinding.FeedbackWarningWriter = request.FeedbackWarningWriter
-	options.RTCDeviceBinding.Observability = d.deps.Observability
 	if request.InteractiveDevices {
 		if !options.RTCDeviceBinding.InputPresent && options.RTCDeviceBinding.InputDevice == "" && request.LoadedConfig != nil && request.LoadedConfig.Session != nil {
 			options.RTCDeviceBinding.InputDevice = devicegw.DeviceID(request.LoadedConfig.Session.InputDevice)

@@ -44,6 +44,9 @@ type Request struct {
 	SampleRate      int
 	Channels        int
 	PlaybackProfile string
+	// HoldToneConfig overrides the local output gap cue. Nil keeps the device
+	// runtime's production default.
+	HoldToneConfig *audio.HoldToneConfig
 	// FileInput and FileOutput carry caller-opened canonical audio ports for
 	// finite invocations. Validation errors leave these ports untouched. Once
 	// a worker admits a port, the service closes it if a later worker cannot be

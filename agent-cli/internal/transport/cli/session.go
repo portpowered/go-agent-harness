@@ -290,11 +290,11 @@ type SessionCommand struct {
 	liveCapabilities        SessionToolCapabilitiesFactory
 	liveCredentialReference LiveCredentialReference
 	feedbackWarningWriter   io.Writer
+	holdToneConfig          *serviceSession.HoldToneConfig
 	imagePaths              []string
 }
 
-// sessionVoiceFlagValue validates the public voice flag while Cobra parses
-// arguments. The service package remains the single owner of the accepted
+// sessionVoiceFlagValue validates the public voice flag. The service owns the
 // voice set and validation error identity.
 type sessionVoiceFlagValue struct {
 	target *string

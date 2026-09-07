@@ -55,6 +55,16 @@ ordering problems:
   and explicit cancellation/closed-output errors. Response identity, tool order,
   correction timing, filesystem checkpoints, and both audio markers remain
   independent assertions, so a coincidental PCM sequence cannot satisfy the test.
+- The high-rate remote-device oracle counted every nonzero rendered sample as
+  provider PCM. On slower hosted trials, the default 2.5-second local hold-tone
+  policy emitted cue samples during tool gaps, producing an apparent 105.9%
+  retention despite zero drops, overflows, or discards. Exact-delivery fixtures
+  now select an explicit one-hour cue threshold through the embedded session and
+  runtime-device request. The production nil policy still uses the default cue.
+  A forced three-second gap control proves that the default emits a bounded
+  bipolar cue between two unchanged provider responses, while the provider-only
+  fixture preserves strict full-slice equality. Duplication, loss, reorder, and
+  corruption negative controls remain strict.
 
 On macOS, the cumulative cohort passed three complete iterations in normal and
 coverage modes and three complete race iterations. Each mode included 60 high-rate
@@ -72,3 +82,8 @@ largest file fell by 526 lines (65.7%). Live event translation is isolated in th
 `eventcodec` package, continuation lifecycle code is grouped in `continuation.go`,
 and replay fixture/path checks share one coherent test file. `make size-check`
 passes with lower legacy baselines; no size or complexity threshold was raised.
+The remote tool-audio fixture moved its oracle and damage controls into a focused
+207-line file and deleted an 89-line ad-hoc test that always skipped. Its main
+scenario file fell from 1,154 to 1,048 lines; `runRemoteToolAudioScenario` fell
+from 58 to 56 cyclomatic complexity, 61 to 59 cognitive complexity, 132 to 128
+statements, and 195 to 186 lines.

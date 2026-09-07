@@ -938,7 +938,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/rtc_device_binding.go",
       "symbol": "PrepareRTCDeviceBindings",
-      "value": 29,
+      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -7598,7 +7598,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
       "symbol": "runRemoteToolAudioScenario",
-      "value": 61,
+      "value": 59,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -11238,7 +11238,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/rtc_device_binding.go",
       "symbol": "PrepareRTCDeviceBindings",
-      "value": 24,
+      "value": 20,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -16058,7 +16058,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
       "symbol": "runRemoteToolAudioScenario",
-      "value": 58,
+      "value": 56,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19494,7 +19494,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
-      "value": 1154,
+      "value": 1048,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -20535,7 +20535,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/rtc_device_binding.go",
       "symbol": "PrepareRTCDeviceBindings",
-      "value": 94,
+      "value": 90,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -22815,7 +22815,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
       "symbol": "runRemoteToolAudioScenario",
-      "value": 195,
+      "value": 186,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -24053,16 +24053,6 @@
       "rule": "function-statements",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/rtc_device_binding.go",
-      "symbol": "PrepareRTCDeviceBindings",
-      "value": 51,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/rtc_device_roundtrip_test.go",
       "symbol": "TestRTCDeviceBindingVirtualRegistryTrackRoundTrip",
       "value": 85,
@@ -24155,7 +24145,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/service.go",
       "symbol": "*Dispatcher.requestOptions",
-      "value": 71,
+      "value": 70,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -26035,7 +26025,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
       "file": "test/integration/session_tool_audio_remote_e2e_test.go",
       "symbol": "runRemoteToolAudioScenario",
-      "value": 132,
+      "value": 128,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
