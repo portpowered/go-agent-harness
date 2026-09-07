@@ -1,7 +1,5 @@
 package agentruntime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -16,8 +14,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) {
@@ -264,7 +264,7 @@ customerAudioRecorded:
 	if len(entries) != 11 {
 		t.Fatalf("finalized room output entries = %d, want 11: %v", len(entries), entries)
 	}
-	if _, statErr := os.Stat(filepath.Join(opts.OutputDir, RoomLatencyArtifactPath)); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(opts.OutputDir, runtimeRooms.RoomLatencyArtifactPath)); statErr != nil {
 		t.Fatalf("finalized room output missing latency artifact: %v", statErr)
 	}
 	for _, id := range []string{"customer", "agent"} {

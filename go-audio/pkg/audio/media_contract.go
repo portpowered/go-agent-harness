@@ -119,3 +119,54 @@ type MediaEndpoints struct {
 type MediaSession interface {
 	RTCMedia() MediaEndpoints
 }
+
+// MediaSessionOptions selects optional provider-media behavior for a live
+// session owner. InboundContinuous is intended for a raw streaming sink that
+// must observe each provider delta promptly; ordinary RTC playback keeps the
+// negotiated frame cadence and should leave it false.
+type MediaSessionOptions struct {
+	InboundContinuous bool
+}
+
+// ConfigurableMediaSession is an optional extension of MediaSession. Providers
+// that can choose their inbound framing implement it without forcing every
+// embedded session or test double to grow a provider-specific method.
+type ConfigurableMediaSession interface {
+	MediaSession
+	RTCMediaWithOptions(MediaSessionOptions) MediaEndpoints
+}
+
+// NewSessionMediaAtRateWithOptions creates provider-owned media with an
+// explicit inbound framing policy. Continuous inbound mode emits each
+// currently available provider delta as a frame while retaining the response
+// boundary as a separate empty marker when needed.
+func NewSessionMediaAtRateWithOptions(writer SessionMediaWriter, sampleRate int, options MediaSessionOptions) *SessionMedia {
+	media := NewSessionMediaAtRate(writer, sampleRate)
+	media.inbound.emitAvailable = options.InboundContinuous
+	return media
+}
+
+func (m *sessionInboundMedia) appendAvailableFrameLocked() {
+	if len(m.pending) == 0 {
+		return
+	}
+	samples := append([]int16(nil), m.pending...)
+	m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
+	m.pending = nil
+}
+
+func (m *sessionInboundMedia) inboundFramesNeeded(incoming int) int {
+	pending := len(m.pending) + incoming
+	frames := pending / m.frameSamples
+	if m.emitAvailable && pending%m.frameSamples != 0 {
+		frames++
+	}
+	return frames
+}
+
+func (m *sessionInboundMedia) appendInboundFramesLocked() {
+	m.appendCompleteFramesLocked()
+	if m.emitAvailable {
+		m.appendAvailableFrameLocked()
+	}
+}

@@ -542,9 +542,7 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 
 	select {
 	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("session command returned an error: %v", err)
-		}
+		assertExpectedSemanticLiveRunResult(t, err)
 	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatalf("session command did not finish after the final accepted result within %s", sessionLifecycleSafetyTimeout)
 	}

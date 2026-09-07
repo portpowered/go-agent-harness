@@ -15,23 +15,48 @@ import (
 
 var _ sharedaudio.MediaSession = (*realtimeSession)(nil)
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started.
+func (*realtimeSession) InitialSessionConfigSent() bool { return true }
+
 // RTCMedia exposes provider-owned PCM media endpoints for an OpenAI Realtime
 // session. Inbound audio remains available through Receive while also being
 // framed for the local RTC device sink.
 func (s *realtimeSession) RTCMedia() sharedaudio.MediaEndpoints {
+	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
+}
+
+func (s *realtimeSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	return s.rtcMedia(options)
+}
+
+func (s *realtimeSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
 	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
+	var previous *sharedaudio.SessionMedia
+	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
+		previous = s.media
+		s.media = nil
+	}
 	s.mediaClaimed = true
 	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
+		s.mediaContinuous = options.InboundContinuous
 	}
-	return s.media.Endpoints()
+	endpoints := s.media.Endpoints()
+	s.mediaMu.Unlock()
+	if previous != nil {
+		if err := previous.Close(); err != nil {
+			s.setTerminalError(fmt.Errorf("close replaced OpenAI RTC media: %w", err))
+		}
+	}
+	return endpoints
 }
 
 func (s *realtimeSession) prepareRTCMedia() {
 	s.mediaMu.Lock()
 	if s.media == nil {
 		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.mediaContinuous = false
 	}
 	s.mediaMu.Unlock()
 }
@@ -44,6 +69,7 @@ func (s *realtimeSession) releaseUnclaimedRTCMedia() {
 	}
 	media := s.media
 	s.media = nil
+	s.mediaContinuous = false
 	s.mediaMu.Unlock()
 	_ = media.Close()
 }
@@ -153,7 +179,44 @@ func decodeOpenAIRealtimeAudioDelta(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: %w", err)
 	}
 	if err := codec.ValidatePCM16(decoded, codec.MaxPCM16Bytes); err != nil {
+		if errors.Is(err, codec.ErrPCM16OddLength) {
+			return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: PCM16 audio delta has odd byte length %d: %w", len(decoded), err)
+		}
 		return nil, fmt.Errorf("decode OpenAI Realtime RTC audio delta: %w", err)
 	}
 	return decoded, nil
+}
+
+func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
+	for _, event := range events {
+		// A terminated session reports closed regardless of remaining
+		// outbound buffer capacity.
+		select {
+		case <-s.done:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+		default:
+		}
+		outcome := s.enqueueWireEvent(ctx, event)
+		switch outcome.Status {
+		case messages.BufferWriteSucceeded:
+		case messages.BufferWriteBufferFull:
+			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+		case messages.BufferWriteStopped:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed, Err: outcome.Err}
+		case messages.BufferWriteCancelled:
+			return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: outcome.Err}
+		case messages.BufferWriteTimedOut:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: outcome.Err}
+		default:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+		}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func (s *realtimeSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
+	if s.writeBackpressure {
+		return s.sendQueue.WriteWaitContextOrDone(ctx, s.done, event)
+	}
+	return s.sendQueue.WriteContext(ctx, event)
 }

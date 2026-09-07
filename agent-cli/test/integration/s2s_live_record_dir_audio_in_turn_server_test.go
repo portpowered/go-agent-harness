@@ -3,28 +3,32 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"strconv"
 	"sync"
+	"testing"
 	"time"
 )
 
 type cliLiveRecordDirServer struct {
-	mu             sync.Mutex
-	timeline       []string
-	outbound       []cliLiveOutbound
-	responses      chan int
-	events         chan []byte
-	closed         chan struct{}
-	closeOnce      sync.Once
-	dialOnce       sync.Once
-	dialCount      int
-	nextTurn       int
-	providerError  bool
-	readErr        error
-	closeAfterTurn int
+	mu                 sync.Mutex
+	timeline           []string
+	outbound           []cliLiveOutbound
+	responses          chan int
+	events             chan []byte
+	closed             chan struct{}
+	closeOnce          sync.Once
+	dialOnce           sync.Once
+	dialCount          int
+	nextTurn           int
+	providerError      bool
+	readErr            error
+	closeAfterTurn     int
+	closeAfterResponse bool
+	responseText       string
 }
 
 type cliLiveOutbound struct {
@@ -54,6 +58,13 @@ func newCLILiveRecordDirCloseAfterTurnServer(turn int) *cliLiveRecordDirServer {
 	return server
 }
 
+func newCLILiveRecordDirPromptServer(responseText string) *cliLiveRecordDirServer {
+	server := newCLILiveRecordDirCloseAfterTurnServer(1)
+	server.closeAfterResponse = true
+	server.responseText = responseText
+	return server
+}
+
 func (s *cliLiveRecordDirServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	s.mu.Lock()
 	s.dialCount++
@@ -74,34 +85,30 @@ func (s *cliLiveRecordDirServer) serve() {
 		select {
 		case turn := <-s.responses:
 			responseID := "resp_" + strconv.Itoa(turn)
-			transcriptText := "response turn " + strconv.Itoa(turn)
+			transcriptText := s.responseText
+			if transcriptText == "" {
+				transcriptText = "response turn " + strconv.Itoa(turn)
+			}
 			audio := base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 10), 0})
 			s.sendEvent(`{"type":"response.created","response":{"id":"` + responseID + `"}}`)
-			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
+			closeAfterTurn := s.closeAfterTurn > 0 && turn == s.closeAfterTurn
+			if closeAfterTurn && !s.closeAfterResponse {
 				// Put the provider terminal event ahead of this response's
 				// terminal boundary. The session runner must drain the queued
 				// response but must not mistake the close for completion of any
 				// still-undispatched scheduled input.
 				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
-				s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
-				s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
-				s.sendEvent(`{"type":"response.output_audio.done"}`)
-				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
-				return
 			}
 			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
 			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
 			s.sendEvent(`{"type":"response.output_audio.done"}`)
-			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
-				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
-				// Put the terminal provider event ahead of the final response
-				// boundary. The loop drains the queued response.done during
-				// shutdown, proving that turn 2 completed without allowing its
-				// terminal event to release the undispatched turn 3.
-				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+			if closeAfterTurn {
+				if s.closeAfterResponse {
+					s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
+				}
 				return
 			}
-			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
 		case <-s.closed:
 			return
 		}
@@ -539,4 +546,55 @@ func hasNonZeroPCM(audio []byte) bool {
 		}
 	}
 	return false
+}
+func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) []int {
+	t.Helper()
+	counts := make([]int, turns)
+	start := 0
+	for turn := range counts {
+		commit := indexOfTimeline(timeline, "out:input_audio_buffer.commit", turn)
+		response := indexOfTimeline(timeline, "out:response.create", turn)
+		done := indexOfTimeline(timeline, "in:response.done", turn)
+		if commit < 0 || response < 0 || done < 0 {
+			t.Fatalf("scheduled turn %d is missing its boundary from %v", turn+1, timeline)
+		}
+		first, count := scheduledAppendRange(timeline, start, commit)
+		if first < 0 || !(first < commit && commit < response && response < done) {
+			t.Fatalf("scheduled turn %d lifecycle order = %v, want append < commit < response.create < response.done", turn+1, timeline)
+		}
+		for _, event := range timeline[commit+1 : done+1] {
+			if event == "out:input_audio_buffer.append" {
+				t.Fatalf("scheduled turn %d admitted PCM after commit and before response.done: %v", turn+1, timeline)
+			}
+		}
+		counts[turn] = count
+		start = done + 1
+	}
+	return counts
+}
+func assertScheduledTurnPCM(t *testing.T, payloads [][]byte, want []int16, frameBudget int) {
+	t.Helper()
+	if frameBudget <= 0 {
+		t.Fatalf("scheduled provider frame budget = %d, want positive", frameBudget)
+	}
+	chunks := (len(want) + frameBudget - 1) / frameBudget
+	if len(payloads) != chunks {
+		t.Fatalf("scheduled turn has %d PCM chunks, want exactly %d", len(payloads), chunks)
+	}
+	sample := 0
+	for index, payload := range payloads {
+		if len(payload)%2 != 0 || len(payload)/2 > frameBudget {
+			t.Fatalf("scheduled PCM chunk %d has invalid size %d for budget %d", index, len(payload), frameBudget)
+		}
+		for offset := 0; offset < len(payload); offset += 2 {
+			got := int16(binary.LittleEndian.Uint16(payload[offset : offset+2]))
+			if sample >= len(want) || got != want[sample] {
+				t.Fatalf("scheduled PCM differs at sample %d in chunk %d", sample, index)
+			}
+			sample++
+		}
+	}
+	if sample != len(want) {
+		t.Fatalf("scheduled PCM has %d samples, want %d", sample, len(want))
+	}
 }

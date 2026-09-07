@@ -1,424 +1,28 @@
 {
-  "layout": {
-    "edges": [
-      {
-        "id": "workstation-on-failure:workstation:process->work-state:task:failed",
-        "waypoints": [
-          {
-            "x": 1012.9581,
-            "y": 1697.4542
-          },
-          {
-            "x": 1493.5426,
-            "y": 1703.4154
-          }
-        ]
-      },
-      {
-        "id": "worker-assignment:worker:planner->workstation:plan",
-        "waypoints": [
-          {
-            "x": 112.65571,
-            "y": 690.0842
-          },
-          {
-            "x": 356.5797,
-            "y": 657.4032
-          }
-        ]
-      },
-      {
-        "id": "workstation-output:workstation:setup-workspace->work-state:task:init",
-        "waypoints": [
-          {
-            "x": 1096.0092,
-            "y": 927.48413
-          },
-          {
-            "x": 387.62253,
-            "y": 1099.8002
-          }
-        ]
-      },
-      {
-        "id": "workstation-on-rejection:workstation:process->work-state:task:init",
-        "waypoints": [
-          {
-            "x": 881.63214,
-            "y": 1596.0082
-          },
-          {
-            "x": 493.8324,
-            "y": 1592.3182
-          }
-        ]
-      },
-      {
-        "id": "workstation-on-continue:workstation:process->work-state:task:init",
-        "waypoints": [
-          {
-            "x": 900.4263,
-            "y": 1687.9353
-          },
-          {
-            "x": 474.39767,
-            "y": 1642.4059
-          }
-        ]
-      },
-      {
-        "id": "workstation-on-failure:workstation:review->work-state:task:failed",
-        "waypoints": [
-          {
-            "x": 1512.497,
-            "y": 1163.5251
-          }
-        ]
-      },
-      {
-        "id": "worker-assignment:worker:ideafier->workstation:ideafy",
-        "waypoints": [
-          {
-            "x": -165.4157,
-            "y": 403.01138
-          }
-        ]
-      }
-    ],
-    "nodes": [
-      {
-        "id": "work-state:task:init",
-        "position": {
-          "x": 405.65985,
-          "y": 1215.4137
-        }
-      },
-      {
-        "id": "workstation:process",
-        "position": {
-          "x": 658.37067,
-          "y": 1364.6238
-        }
-      },
-      {
-        "id": "work-state:task:in-review",
-        "position": {
-          "x": 871.73926,
-          "y": 1238.3519
-        }
-      },
-      {
-        "id": "workstation:review",
-        "position": {
-          "x": 1057.9973,
-          "y": 996.76105
-        }
-      },
-      {
-        "id": "work-state:task:to-complete",
-        "position": {
-          "x": 1297.1531,
-          "y": 1001.3931
-        }
-      },
-      {
-        "id": "workstation:consume",
-        "position": {
-          "x": 1590.3287,
-          "y": 740.2323
-        }
-      },
-      {
-        "id": "work-state:idea:complete",
-        "position": {
-          "x": 1831.8229,
-          "y": 652.5907
-        }
-      },
-      {
-        "id": "work-state:task:complete",
-        "position": {
-          "x": 1837.1075,
-          "y": 873.6861
-        }
-      },
-      {
-        "id": "workstation:executor-loop-breaker",
-        "position": {
-          "x": 1317.772,
-          "y": 1268.3641
-        }
-      },
-      {
-        "id": "workstation:review-loop-breaker",
-        "position": {
-          "x": 1322.3112,
-          "y": 1485.6381
-        }
-      },
-      {
-        "id": "work-state:task:failed",
-        "position": {
-          "x": 1545.67,
-          "y": 1395.8154
-        }
-      },
-      {
-        "id": "worker:planner",
-        "position": {
-          "x": -327.3692,
-          "y": 536.3977
-        }
-      },
-      {
-        "id": "work-state:idea:init",
-        "position": {
-          "x": 207.18465,
-          "y": 537.6868
-        }
-      },
-      {
-        "id": "workstation:setup-workspace",
-        "position": {
-          "x": 890.29266,
-          "y": 666.99066
-        }
-      },
-      {
-        "id": "workstation:plan",
-        "position": {
-          "x": 443.23663,
-          "y": 500.62946
-        }
-      },
-      {
-        "id": "resource:executor-slot",
-        "position": {
-          "x": -52.0331,
-          "y": 822.9173
-        }
-      },
-      {
-        "id": "worker:processor",
-        "position": {
-          "x": 198.61653,
-          "y": 1350.9248
-        }
-      },
-      {
-        "id": "work-state:thoughts:init",
-        "position": {
-          "x": -145.77621,
-          "y": 236.81143
-        }
-      },
-      {
-        "id": "workstation:though-retrigger",
-        "position": {
-          "x": -400.54874,
-          "y": 209.49779
-        }
-      },
-      {
-        "id": "work-state:plan:failed",
-        "position": {
-          "x": 1148.0361,
-          "y": 755.14417
-        }
-      },
-      {
-        "id": "work-state:plan:complete",
-        "position": {
-          "x": 1131.654,
-          "y": 636.92615
-        }
-      },
-      {
-        "id": "work-state:idea:to-complete",
-        "position": {
-          "x": 1228.7927,
-          "y": 521.1127
-        }
-      },
-      {
-        "id": "work-state:idea:failed",
-        "position": {
-          "x": 689.6315,
-          "y": 827.3711
-        }
-      },
-      {
-        "id": "workstation:ideafy",
-        "position": {
-          "x": 179.52827,
-          "y": 227.3
-        }
-      },
-      {
-        "id": "work-state:thoughts:complete",
-        "position": {
-          "x": 411.98337,
-          "y": 224.1949
-        }
-      },
-      {
-        "id": "work-state:thoughts:failed",
-        "position": {
-          "x": 408.30487,
-          "y": 351.1999
-        }
-      },
-      {
-        "id": "work-type:thoughts",
-        "position": {
-          "x": 30.237309,
-          "y": 141.55646
-        }
-      },
-      {
-        "id": "work-type:cron-triggers",
-        "position": {
-          "x": -414.0603,
-          "y": 109.72197
-        }
-      },
-      {
-        "id": "work-type:idea",
-        "position": {
-          "x": 209.54546,
-          "y": 473.2427
-        }
-      },
-      {
-        "id": "work-type:plan",
-        "position": {
-          "x": 686.8879,
-          "y": 567.1333
-        }
-      },
-      {
-        "id": "work-type:task",
-        "position": {
-          "x": 411.49585,
-          "y": 1146.3815
-        }
-      },
-      {
-        "id": "doc:factory/docs/batch-inputs.md",
-        "position": {
-          "x": 224.6678,
-          "y": 118.099464
-        }
-      },
-      {
-        "id": "doc:factory/scripts/setup-workspace.py",
-        "position": {
-          "x": 887.17816,
-          "y": 573.83527
-        }
-      },
-      {
-        "id": "doc:factory/docs/overview.md",
-        "position": {
-          "x": 918.0403,
-          "y": 342.30057
-        }
-      },
-      {
-        "id": "resource:concurrent-planners",
-        "position": {
-          "x": -79.439995,
-          "y": 376.17307
-        }
-      },
-      {
-        "id": "work-type:review",
-        "position": {
-          "x": 1060.1134,
-          "y": 926.79584
-        }
-      },
-      {
-        "id": "work-state:review:init",
-        "position": {
-          "x": 712.10455,
-          "y": 1085.8364
-        }
-      },
-      {
-        "id": "work-state:plan:init",
-        "position": {
-          "x": 696.7295,
-          "y": 732.20715
-        }
-      },
-      {
-        "id": "work-state:review:complete",
-        "position": {
-          "x": 1285.809,
-          "y": 897.4673
-        }
-      },
-      {
-        "id": "work-state:review:fin",
-        "position": {
-          "x": 1343.6841,
-          "y": 1151.1926
-        }
-      }
-    ],
-    "schemaVersion": 1,
-    "viewport": {
-      "x": -286.87537,
-      "y": -542.9691,
-      "zoom": 1.0755962
-    }
-  },
-  "name": "factory",
+  "name": "go-agent-harness",
   "resources": [
     {
-      "capacity": 16,
       "id": "executor-slot",
-      "name": "executor-slot"
+      "name": "executor-slot",
+      "capacity": 2
     },
     {
-      "capacity": 16,
       "id": "concurrent-planners",
-      "name": "concurrent-planners"
+      "name": "concurrent-planners",
+      "capacity": 1
+    },
+    {
+      "id": "merge-slot",
+      "name": "merge-slot",
+      "capacity": 1
+    },
+    {
+      "id": "validation-slot",
+      "name": "validation-slot",
+      "capacity": 1
     }
   ],
-  "supportingFiles": {
-    "bundledFiles": [
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "id": "factory/docs/batch-inputs.md",
-        "targetPath": "factory/docs/batch-inputs.md",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "id": "factory/docs/overview.md",
-        "targetPath": "factory/docs/overview.md",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "id": "factory/scripts/setup-workspace.py",
-        "targetPath": "factory/scripts/setup-workspace.py",
-        "type": "SCRIPT"
-      }
-    ]
-  },
-  "version": {
-    "logical": "1780219232503513624",
-    "physical": "2026-06-17T05:43:19.294602Z"
-  },
+  "supportingFiles": {},
   "workTypes": [
     {
       "id": "thoughts",
@@ -520,11 +124,6 @@
       ]
     },
     {
-      "id": "cron-triggers",
-      "name": "cron-triggers",
-      "states": []
-    },
-    {
       "id": "review",
       "name": "review",
       "states": [
@@ -544,22 +143,69 @@
           "type": "FAILED"
         }
       ]
+    },
+    {
+      "id": "project",
+      "name": "project",
+      "states": [
+        {
+          "id": "init",
+          "name": "init",
+          "type": "INITIAL"
+        },
+        {
+          "id": "complete",
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        {
+          "id": "blocked",
+          "name": "blocked",
+          "type": "FAILED"
+        }
+      ]
+    },
+    {
+      "id": "validation",
+      "name": "validation",
+      "states": [
+        {
+          "id": "init",
+          "name": "init",
+          "type": "INITIAL"
+        },
+        {
+          "id": "ready",
+          "name": "ready",
+          "type": "PROCESSING"
+        },
+        {
+          "id": "complete",
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        {
+          "id": "failed",
+          "name": "failed",
+          "type": "FAILED"
+        }
+      ]
     }
   ],
   "workers": [
     {
-      "name": "processor",
-      "stopToken": "<COMPLETE>",
-      "type": "AGENT_WORKER",
-      "modelProvider": "CODEX",
-      "model": "gpt-5.6-luna",
       "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-5.6-luna",
       "reasoningEffort": "max",
-      "timeout": "1h"
+      "name": "processor",
+      "skipPermissions": true,
+      "type": "AGENT_WORKER",
+      "timeout": "4h"
     },
     {
       "args": [
-        "factory/scripts/setup-workspace.py",
+        "factory/scripts/prepare-workspace.py",
         "{{ (index .Inputs 0).Name }}"
       ],
       "command": "python3",
@@ -568,36 +214,58 @@
       "type": "SCRIPT_WORKER"
     },
     {
+      "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "medium",
       "id": "planner",
       "name": "planner",
-      "stopToken": "<COMPLETE>",
+      "skipPermissions": true,
       "type": "AGENT_WORKER",
-      "modelProvider": "CODEX",
-      "model": "gpt-5.6-sol",
-      "executorProvider": "SCRIPT_WRAP",
-      "reasoningEffort": "medium",
-      "timeout": "1h"
+      "timeout": "4h"
     },
     {
+      "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "medium",
       "id": "ideafier",
       "name": "ideafier",
-      "stopToken": "<COMPLETE>",
+      "skipPermissions": true,
       "type": "AGENT_WORKER",
-      "modelProvider": "CODEX",
-      "model": "gpt-5.6-sol",
-      "executorProvider": "SCRIPT_WRAP",
-      "reasoningEffort": "medium",
-      "timeout": "1h"
+      "timeout": "4h"
     },
     {
-      "name": "reviewer",
-      "stopToken": "<COMPLETE>",
-      "type": "AGENT_WORKER",
-      "modelProvider": "CODEX",
-      "model": "gpt-5.6-luna",
       "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-5.6-luna",
       "reasoningEffort": "max",
-      "timeout": "1h"
+      "name": "reviewer",
+      "skipPermissions": true,
+      "type": "AGENT_WORKER",
+      "timeout": "4h"
+    },
+    {
+      "id": "validation-setup",
+      "name": "validation-setup",
+      "type": "SCRIPT_WORKER",
+      "command": "python3",
+      "args": [
+        "factory/scripts/prepare-validation.py",
+        "{{ (index .Inputs 0).Name }}",
+        "{{ (index .Inputs 0).Payload }}"
+      ]
+    },
+    {
+      "id": "validator",
+      "name": "validator",
+      "type": "AGENT_WORKER",
+      "executorProvider": "SCRIPT_WRAP",
+      "modelProvider": "codex",
+      "model": "gpt-5.6-luna",
+      "reasoningEffort": "max",
+      "skipPermissions": true,
+      "timeout": "4h"
     }
   ],
   "workstations": [
@@ -644,12 +312,20 @@
         {
           "state": "failed",
           "workType": "idea"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
           "state": "failed",
           "workType": "idea"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
@@ -664,12 +340,23 @@
       ],
       "resources": [
         {
-          "capacity": 1,
-          "name": "executor-slot"
+          "name": "concurrent-planners",
+          "capacity": 1
         }
       ],
       "type": "AGENT_RUN",
-      "worker": "planner"
+      "worker": "planner",
+      "outcomeFormat": "decision-envelope",
+      "onContinue": [
+        {
+          "workType": "idea",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ]
     },
     {
       "id": "consume",
@@ -698,6 +385,10 @@
         {
           "state": "complete",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -716,6 +407,10 @@
         {
           "state": "failed",
           "workType": "plan"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
@@ -751,12 +446,20 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
-          "state": "init",
-          "workType": "task"
+          "workType": "task",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "outputs": [
@@ -777,7 +480,8 @@
       ],
       "type": "AGENT_RUN",
       "worker": "processor",
-      "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}"
+      "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}",
+      "outcomeFormat": "decision-envelope"
     },
     {
       "id": "review",
@@ -788,7 +492,13 @@
         },
         {
           "state": "init",
-          "workType": "review"
+          "workType": "review",
+          "guards": [
+            {
+              "type": "SAME_NAME",
+              "matchInput": "task"
+            }
+          ]
         }
       ],
       "name": "review",
@@ -800,12 +510,20 @@
         {
           "state": "fin",
           "workType": "review"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "onRejection": [
         {
           "state": "init",
           "workType": "task"
+        },
+        {
+          "workType": "review",
+          "state": "fin"
         }
       ],
       "outputs": [
@@ -822,11 +540,26 @@
         {
           "capacity": 1,
           "name": "executor-slot"
+        },
+        {
+          "name": "merge-slot",
+          "capacity": 1
         }
       ],
       "type": "AGENT_RUN",
       "worker": "reviewer",
-      "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}"
+      "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}",
+      "outcomeFormat": "decision-envelope",
+      "onContinue": [
+        {
+          "workType": "task",
+          "state": "in-review"
+        },
+        {
+          "workType": "review",
+          "state": "init"
+        }
+      ]
     },
     {
       "guards": [
@@ -848,6 +581,10 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -873,6 +610,10 @@
         {
           "state": "failed",
           "workType": "task"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
         }
       ],
       "type": "LOGICAL_MOVE",
@@ -881,7 +622,7 @@
     {
       "behavior": "CRON",
       "cron": {
-        "schedule": "0 * * * *"
+        "schedule": "0 */4 * * *"
       },
       "id": "though-retrigger",
       "inputs": [],
@@ -894,6 +635,101 @@
       ],
       "type": "LOGICAL_MOVE",
       "worker": ""
+    },
+    {
+      "id": "prepare-validation",
+      "name": "prepare-validation",
+      "type": "SCRIPT_RUN",
+      "worker": "validation-setup",
+      "inputs": [
+        {
+          "workType": "validation",
+          "state": "init"
+        }
+      ],
+      "outputs": [
+        {
+          "workType": "validation",
+          "state": "ready"
+        }
+      ],
+      "onFailure": [
+        {
+          "workType": "validation",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ],
+      "workPropagation": {
+        "mode": "PRESERVE_INPUT"
+      }
+    },
+    {
+      "id": "validate",
+      "name": "validate",
+      "type": "AGENT_RUN",
+      "worker": "validator",
+      "outcomeFormat": "decision-envelope",
+      "inputs": [
+        {
+          "workType": "validation",
+          "state": "ready"
+        }
+      ],
+      "outputs": [
+        {
+          "workType": "validation",
+          "state": "complete"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ],
+      "onFailure": [
+        {
+          "workType": "validation",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ],
+      "onRejection": [
+        {
+          "workType": "validation",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ],
+      "onContinue": [
+        {
+          "workType": "validation",
+          "state": "failed"
+        },
+        {
+          "workType": "thoughts",
+          "state": "init"
+        }
+      ],
+      "resources": [
+        {
+          "name": "executor-slot",
+          "capacity": 1
+        },
+        {
+          "name": "validation-slot",
+          "capacity": 1
+        }
+      ],
+      "workingDirectory": "docs/temp/probes/{{ (index .Inputs 0).Name }}"
     }
   ]
 }

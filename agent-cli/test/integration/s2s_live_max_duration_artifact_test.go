@@ -147,23 +147,77 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	}
 }
 
-func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T) {
-	const responseText = "prompt-only response"
-	sessionInferencer := &promptOnlyRecordingSessionInferencer{
-		events: []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-			{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
-			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(responseText)},
-			{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
-			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00})},
-			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("prompt-only-session", "complete")},
-		},
-	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T) {
+	fixture := newMaxDurationWebSocketFixture()
+	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
+	defer server.Close()
+
+	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: os.ErrNotExist},
-		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--record", recordPath,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--base-url", strings.Replace(server.URL, "http://", "ws://", 1) + "/v1/realtime",
+		"--max-duration", "100ms",
+		"respond while streaming",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
+	select {
+	case <-fixture.partialSent:
+	case <-time.After(3 * time.Second):
+		t.Fatal("hermetic provider did not send its mid-response output")
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("record-only max-duration CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("load raw provider capture: %v", err)
+	}
+	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_text.delta") {
+		t.Fatalf("raw capture omitted the observed response delta: %+v", capture.Records)
+	}
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == "response.done" || record.Type == "session.closed") {
+			t.Fatalf("raw capture fabricated provider terminal %q: %+v", record.Type, record)
+		}
+	}
+
+	sidecarPath := strings.TrimSuffix(recordPath, filepath.Ext(recordPath)) + ".jsonl"
+	terminal := readSessionDurationSidecarTerminal(t, sidecarPath)
+	if terminal.count != 1 {
+		t.Fatalf("record-only duration sidecar terminal count = %d, want exactly one", terminal.count)
+	}
+	assertMaxDurationTerminalFields(t, "record-only duration sidecar", terminal.fields)
+}
+
+func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T) {
+	const responseText = "prompt-only response"
+	server := newCLILiveRecordDirPromptServer(responseText)
+	t.Cleanup(server.shutdown)
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortTransportDialer, server),
+		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: os.ErrNotExist}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
@@ -193,7 +247,7 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 	}
 
 	wantFiles := []string{
-		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "manifest.json", "audio/out-000.pcm",
+		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "manifest.json", "audio/out-000.pcm", "provider.json",
 	}
 	for _, relative := range wantFiles {
 		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(relative)))
@@ -217,7 +271,7 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 		t.Fatalf("decode prompt-only manifest: %v", err)
 	}
 	wantArtifacts := []string{
-		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm",
+		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm", "provider.json",
 	}
 	if len(manifest.Artifacts) != len(wantArtifacts) {
 		t.Fatalf("prompt-only manifest artifact count = %d, want %d", len(manifest.Artifacts), len(wantArtifacts))
@@ -260,64 +314,6 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 	if !strings.Contains(string(logBytes), responseText) || !strings.Contains(string(logBytes), "prompt-only request") {
 		t.Fatalf("prompt-only session log = %q, want input and response text", logBytes)
 	}
-}
-
-type promptOnlyRecordingSessionInferencer struct {
-	events []messages.StreamMessage
-}
-
-func (i *promptOnlyRecordingSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	session := &promptOnlyRecordingSession{
-		events:  append([]messages.StreamMessage(nil), i.events...),
-		receive: messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:    make(chan struct{}),
-	}
-	if !session.receive.Write(ctx, messages.StreamMessage{
-		Type:  messages.StreamTypeSessionOpen,
-		Value: messages.NewSessionOpenValue("prompt-only-session", "openai"),
-	}) {
-		return nil, ctx.Err()
-	}
-	return session, nil
-}
-
-type promptOnlyRecordingSession struct {
-	events       []messages.StreamMessage
-	receive      *messages.TypedBuffer[messages.StreamMessage]
-	done         chan struct{}
-	once         sync.Once
-	responseOnce sync.Once
-}
-
-func (s *promptOnlyRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	if msg.Type != messages.StreamTypeTextDelta {
-		return true
-	}
-	value, ok := msg.Value.(*messages.TextDeltaValue)
-	if !ok || value == nil || value.Content == "" {
-		return true
-	}
-	writeOK := true
-	s.responseOnce.Do(func() {
-		for _, event := range s.events {
-			if !s.receive.Write(ctx, event) {
-				writeOK = false
-				return
-			}
-		}
-	})
-	return writeOK
-}
-
-func (s *promptOnlyRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.receive
-}
-
-func (s *promptOnlyRecordingSession) Done() <-chan struct{} { return s.done }
-
-func (s *promptOnlyRecordingSession) Close() error {
-	s.once.Do(func() { close(s.done) })
-	return nil
 }
 
 type maxDurationWebSocketFixture struct {

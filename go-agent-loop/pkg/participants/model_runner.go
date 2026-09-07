@@ -70,19 +70,6 @@ type ModelRunner struct {
 // result forwarding from waiting on a provider or an unbounded queue.
 var ErrSessionInputQueueFull = errors.New("session input queue is full")
 
-type sessionInputKind uint8
-
-const (
-	sessionInputAudio sessionInputKind = iota + 1
-	sessionInputEvent
-)
-
-type sessionInput struct {
-	kind  sessionInputKind
-	audio messages.SessionAudioInput
-	event messages.StreamMessage
-}
-
 type sessionToolContinuationState uint8
 
 const (
@@ -155,8 +142,10 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // persistent session via the given SessionInferencer and forwards all
 // inbound session events (from session.Receive()) to DeltaOutbox.
 // The Inbox is allocated but not read in session mode.
-// When config is non-nil, a SESSION.UPDATE message is sent to the session
-// immediately after SESSION.CREATED is received from the provider.
+// When config is non-nil, a SESSION.UPDATE message is sent to an unmarked
+// session immediately after SESSION.CREATED is received from the provider.
+// Provider sessions that already sent their initial configuration during
+// ConnectSession opt out through the optional InitialSessionConfigSent marker.
 // UserAudioInbox is a buffered channel for accepting raw PCM audio input;
 // contentful audio arriving while the model is streaming triggers barge-in
 // (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
@@ -172,25 +161,10 @@ func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, co
 	}
 }
 
-// EnqueueSessionAudioInput queues raw PCM for the session with the legacy
-// interrupting-by-default policy. An accepted PCM slice is retained by the
-// runner; the caller must not modify it after admission.
-func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
-	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
-}
-
-// EnqueueSessionAudioInputWithPolicy queues raw PCM with an explicit
-// interruption policy in the same ordered ingress used by session events.
-// An accepted PCM slice is retained and must not be modified by the caller.
-func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
-}
-
 func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
 	if r == nil || r.sessionInputInbox == nil {
 		return fmt.Errorf("%s: not in session mode", operation)
 	}
-
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
 	if ctx == nil {
@@ -199,14 +173,7 @@ func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	select {
-	case r.sessionInputInbox <- sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return ErrSessionInputQueueFull
-	}
+	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
 }
 
 // EnqueueSessionEvent queues a control-plane event in the same ordered ingress
@@ -290,8 +257,9 @@ func (r *ModelRunner) Run(ctx context.Context) error {
 // session.Receive() to DeltaOutbox. It runs until the context is cancelled or
 // the session terminates. This is the session-mode counterpart to runInference.
 //
-// When sessionConfig is set, a SESSION.UPDATE message is sent to the session
-// immediately after SESSION.CREATED is received (before forwarding it to DeltaOutbox).
+// When sessionConfig is set, a SESSION.UPDATE message is sent to an unmarked
+// session immediately after SESSION.CREATED is received (before forwarding it
+// to DeltaOutbox). Provider-owned initial configuration is not echoed.
 //
 // When UserAudioInbox is set, this method also selects on it. If audio arrives
 // while the model has a non-terminal response (from MESSAGE.START through
@@ -508,16 +476,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	if isOutputDelta(msg) {
 		state.hasOutput = true
 	}
-	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
-	// session parameters (model, instructions, modalities) if set. Use the
-	// same failure-preserving path as mid-session updates so a rejected
-	// provider update cannot silently leave the advertised surface stale.
-	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil {
-		r.forwardSessionEvent(ctx, session, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionUpdate,
-			Value: messages.NewSessionUpdateValue(r.sessionConfig),
-		})
-	}
+	r.forwardInitialSessionConfig(ctx, session, msg)
 	r.DeltaOutbox.Write(ctx, msg)
 	return messageEndOwned
 }

@@ -20,7 +20,7 @@ func TestResolveRealtimeSessionProviderPrecedenceAndNormalization(t *testing.T) 
 	}{
 		{
 			name:     "explicit CLI provider wins",
-			opts:     SessionRunOptions{Provider: "  GROK  "},
+			opts:     SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: "  GROK  "},
 			config:   &config.Config{Session: &config.SessionConfig{Provider: config.ProviderOpenAI}, Model: config.ModelConfig{Provider: config.ProviderOpenAI}},
 			provider: config.ProviderGrok,
 		},
@@ -46,7 +46,7 @@ func TestResolveRealtimeSessionProviderPrecedenceAndNormalization(t *testing.T) 
 		},
 		{
 			name:     "unsupported explicit provider remains observable",
-			opts:     SessionRunOptions{Provider: "  OpenRouter  "},
+			opts:     SessionRunOptions{ModelCatalog: testModelCatalog(), Provider: "  OpenRouter  "},
 			provider: config.ProviderOpenRouter,
 		},
 	}
@@ -72,7 +72,7 @@ func TestResolveBareSessionOptionsUsesBareOpenAIDefaults(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -109,7 +109,7 @@ func TestResolveBareSessionOptionsKeepsGrokServerVADDefault(t *testing.T) {
 			Model: "grok-voice", APIKey: "grok-key",
 		}},
 	}
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -130,7 +130,7 @@ func TestResolveBareSessionOptionsHonorsSemanticVADPolicy(t *testing.T) {
 		}},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -141,7 +141,7 @@ func TestResolveBareSessionOptionsHonorsSemanticVADPolicy(t *testing.T) {
 
 func TestResolveBareSessionOptionsRejectsIncompatibleVADFields(t *testing.T) {
 	base := func(vad *config.SessionVADConfig) SessionRunOptions {
-		return SessionRunOptions{LoadedConfig: &config.Config{
+		return SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: &config.Config{
 			ConfigPath: filepath.Join(t.TempDir(), config.ConfigFileName),
 			Model:      config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "key"}},
 			Session:    &config.SessionConfig{VAD: vad},
@@ -197,7 +197,7 @@ func TestResolveBareSessionOptionsHonorsPersistedSessionValues(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("ResolveBareSessionOptions(): %v", err)
 	}
@@ -231,7 +231,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 	}
 	t.Setenv("OPENAI_API_KEY", "fallback-key")
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig: loaded,
 		APIKey:       "cli-key",
 		Model:        "gpt-realtime-2.1-mini",
@@ -243,7 +243,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 		t.Fatalf("explicit precedence = key %q, model %q", resolved.APIKey, resolved.Model)
 	}
 
-	resolved, err = ResolveBareSessionOptions(SessionRunOptions{LoadedConfig: loaded})
+	resolved, err = ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), LoadedConfig: loaded})
 	if err != nil {
 		t.Fatalf("agent environment ResolveBareSessionOptions(): %v", err)
 	}
@@ -255,7 +255,7 @@ func TestResolveBareSessionOptionsExplicitAndAgentEnvironmentPrecedence(t *testi
 func TestResolveBareSessionOptionsMissingOpenAIKeyIsActionableAndRedacted(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	configPath := filepath.Join(t.TempDir(), config.ConfigFileName)
-	resolvedErr, err := ResolveBareSessionOptions(SessionRunOptions{
+	resolvedErr, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig: &config.Config{
 			ConfigPath: configPath,
 			Model: config.ModelConfig{
@@ -294,7 +294,7 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 		},
 	}
 
-	resolved, err := ResolveBareSessionOptions(SessionRunOptions{
+	resolved, err := ResolveBareSessionOptions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig: loaded,
 		RTCDeviceBinding: RTCDeviceBindingRequest{
 			InputDevice:   "cli:mic",
@@ -313,7 +313,7 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 
 func TestNewLiveSessionInferencerCarriesBareAudioPolicies(t *testing.T) {
 	createResponse := true
-	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
+	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Provider:  sessionProviderOpenAI,
 		Model:     openAIRealtimeModel,
 		APIKey:    "bare-test-key",

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 const (
@@ -15,8 +13,6 @@ const (
 	FilesystemRefusalType    = "filesystem_refusal"
 	FilesystemRefusalVersion = "filesystem.refusal.v1"
 	FilesystemRefusalStatus  = "refused"
-
-	filesystemProtectedPath = "[protected path]"
 )
 
 // FilesystemRefusalReason is the small, stable reason vocabulary exposed to
@@ -138,106 +134,4 @@ func FilesystemRefusalFromContent(content string) (FilesystemRefusal, bool) {
 		return FilesystemRefusal{}, false
 	}
 	return *wrapped.Refusal, true
-}
-
-func newFilesystemRefusal(operation, path, workdir string, reason FilesystemRefusalReason) FilesystemRefusal {
-	if strings.TrimSpace(path) == "" {
-		path = "[unavailable]"
-	}
-	if reason == FilesystemRefusalSensitiveRead {
-		path = filesystemProtectedPath
-	}
-	if strings.TrimSpace(workdir) == "" {
-		workdir = "[unavailable]"
-	}
-	return FilesystemRefusal{
-		Type:        FilesystemRefusalType,
-		Version:     FilesystemRefusalVersion,
-		OK:          false,
-		Status:      FilesystemRefusalStatus,
-		Operation:   operation,
-		Path:        path,
-		WorkDir:     workdir,
-		Reason:      reason,
-		Message:     filesystemRefusalMessage(reason, path),
-		Remediation: filesystemRefusalRemediation(reason),
-	}
-}
-
-func filesystemRefusalMessage(reason FilesystemRefusalReason, path string) string {
-	switch reason {
-	case FilesystemRefusalSensitiveRead:
-		return "filesystem access denied: protected read"
-	case FilesystemRefusalInvalidScope:
-		return "invalid filesystem scope"
-	default:
-		return fmt.Sprintf("path escapes workspace: %s", path)
-	}
-}
-
-func filesystemRefusalRemediation(reason FilesystemRefusalReason) string {
-	switch reason {
-	case FilesystemRefusalSensitiveRead:
-		return "Use a non-sensitive path inside the permitted roots; --allow-path cannot authorize protected reads."
-	case FilesystemRefusalInvalidScope:
-		return "Set --workdir and --allow-path to existing, accessible directories, then retry."
-	default:
-		return "Use a path inside the effective workdir or add --allow-path for a non-sensitive directory, then retry."
-	}
-}
-
-func filesystemRefusalFor(operation, path string, sysFS fileSystem, err error) (FilesystemRefusal, bool) {
-	if err == nil {
-		return FilesystemRefusal{}, false
-	}
-	if scoped, ok := sysFS.(*sandboxFs); ok && !scoped.enforceCanonical {
-		// Legacy restricted constructors retain their historical plain-text
-		// result contract. Policy-backed constructors opt into this stable
-		// envelope and are the only customer-facing production path.
-		return FilesystemRefusal{}, false
-	}
-
-	reason := FilesystemRefusalReason("")
-	var accessErr *filesystemAccessDeniedError
-	if errors.As(err, &accessErr) && accessErr != nil {
-		reason = accessErr.reason
-	}
-	switch {
-	case errors.Is(err, ErrProtectedFilesystemRead):
-		reason = FilesystemRefusalSensitiveRead
-	case errors.Is(err, ErrInvalidFilesystemRoot):
-		reason = FilesystemRefusalInvalidScope
-	case errors.Is(err, ErrFilesystemAccessDenied):
-		if reason == "" {
-			reason = FilesystemRefusalOutsidePermittedRoots
-		}
-	default:
-		return FilesystemRefusal{}, false
-	}
-
-	workdir := filesystemWorkDir(sysFS)
-	if accessErr != nil && strings.TrimSpace(accessErr.workdir) != "" {
-		workdir = accessErr.workdir
-	}
-	return newFilesystemRefusal(operation, path, workdir, reason), true
-}
-
-func filesystemWorkDir(sysFS fileSystem) string {
-	if scoped, ok := sysFS.(interface{ filesystemWorkDir() string }); ok {
-		return scoped.filesystemWorkDir()
-	}
-	return ""
-}
-
-// filesystemErrorAsToolMessage preserves ordinary tool errors as text but
-// upgrades policy denials to the stable refusal envelope.
-func filesystemErrorAsToolMessage(sysFS fileSystem, operation, path string, err error) ([]messages.Message, error) {
-	if refusal, ok := filesystemRefusalFor(operation, path, sysFS, err); ok {
-		encoded, marshalErr := MarshalFilesystemRefusal(refusal)
-		if marshalErr != nil {
-			return ErrorAsToolMessage(marshalErr)
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	return ErrorAsToolMessage(err)
 }

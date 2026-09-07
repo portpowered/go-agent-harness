@@ -63,12 +63,6 @@ func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
 	return ErrSessionScheduledAudioIncomplete
 }
 
-// ErrSessionAudioResponseIncomplete identifies an audio-input run that ended
-// before a final assistant response. A provider close or duration cutoff is
-// not a successful finite conversation when no terminal assistant output was
-// observed.
-var ErrSessionAudioResponseIncomplete = errors.New("audio session ended before the final assistant response")
-
 // ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
 // whose current session never acknowledged its initial configuration.
 var ErrSessionScheduledAudioConfigTimeout = errors.New("scheduled audio session timed out awaiting session.updated")
@@ -427,8 +421,9 @@ func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) mess
 // older tool-continuation guard for callers that do not set RequireAssistantResponse.
 func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	if opts.AudioOutputError != nil {
+		// Await output before applying incomplete-response precedence.
 		if outputErr := opts.AudioOutputError(); outputErr != nil {
-			return err
+			err = errors.Join(err, outputErr)
 		}
 	}
 	if opts.RequireTerminalAssistantResponse && (opts.observer == nil || !opts.observer.assistantResponseCompleted()) {

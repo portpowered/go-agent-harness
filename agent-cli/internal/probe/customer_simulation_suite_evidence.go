@@ -151,7 +151,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if decodeErr != nil {
 			return facts, fmt.Errorf("decode product transcript: %v", decodeErr)
 		}
-		if record.Peer != transcript.PeerAgent {
+		if !isCustomerSimulationAgentRecord(record) {
 			continue
 		}
 		wallAt, parseErr := time.Parse(time.RFC3339Nano, record.Timestamp)
@@ -204,11 +204,7 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 		p.lastWallAt = record.wallAt
 	}
 	msg := record.message
-	// The shipped recorder's agent transcript preserves provider output as
-	// DirectionOut and tool-result delivery as DirectionIn. Provider adapters
-	// do not consistently retain role/actor fields on every neutralized
-	// message, so direction is the primary response-side discriminator.
-	isAssistant := record.dir == transcript.DirectionOut || msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model
+	isAssistant := customerSimulationMessageIsAssistant(record)
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		p.consumeMessageStart(record, isAssistant)
@@ -479,13 +475,6 @@ func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []T
 		CancellationEventRecorded: facts.cancelObserved, CancellationResponseID: facts.cancelResponseID,
 		OriginalResponseStatus: originalStatus, ReplacementResponseStatus: replacementStatus, Process: &process,
 	}
-}
-
-func customerSimulationResponseOutputBoundaries(response customerSimulationResponse) (time.Duration, time.Duration) {
-	if !response.AudioObserved || response.AudioEnd <= response.AudioStart {
-		return 0, 0
-	}
-	return response.AudioStart, response.AudioEnd
 }
 
 func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {

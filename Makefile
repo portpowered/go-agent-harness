@@ -1,7 +1,9 @@
 SHELL := /bin/bash
 
 GO ?= go
-MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway
+MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway go-agent-runtime
+LINT_MODULES := $(MODULES) tests/embedding tools/architecturegate tools/analyzergate tools/coveragegate tools/rtc-race-gate tools/session-race-gate tools/timingate scripts/webmcp-o0 test/localai
+LINT_BASE ?= origin/main
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
@@ -15,6 +17,9 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
 ANALYZER_TOOL_DIR ?= .cache/go-tools
+ARCHITECTURE_POLICY := docs/architecture/architecture-policy.json
+ARCHITECTURE_BASELINE := docs/architecture/architecture-size-baseline.json
+ARCHITECTURE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 SESSIONS_RACE_TIMEOUT ?= 600s
@@ -30,13 +35,14 @@ AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
-FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target
+FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board
 RELEASE_VERSION ?= v0.0.2
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
+.PHONY: architecture-check size-check test-architecture-gate verify-architecture embed-check
 .PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
@@ -66,7 +72,7 @@ deps: ## Sync the workspace and download module dependencies for all modules.
 
 fmt: ## Validate Go formatting across all workspace modules without rewriting files.
 	@set -euo pipefail; \
-	for module in $(MODULES); do \
+	for module in $(LINT_MODULES); do \
 		echo "==> fmt $$module"; \
 		output="$$(cd "$$module" && find . -name '*.go' -not -path './vendor/*' -exec gofmt -l {} + | sort)"; \
 		if [ -n "$$output" ]; then \
@@ -79,23 +85,22 @@ fmt: ## Validate Go formatting across all workspace modules without rewriting fi
 
 fmt-fix: ## Rewrite Go files in workspace modules with gofmt.
 	@set -euo pipefail; \
-	for module in $(MODULES); do \
+	for module in $(LINT_MODULES); do \
 		echo "==> fmt-fix $$module"; \
 		(cd "$$module" && find . -name '*.go' -not -path './vendor/*' -exec gofmt -w {} +); \
 	done
 
 vet: ## Run go vet across all workspace modules.
 	@set -euo pipefail; \
-	for module in $(MODULES); do \
+	for module in $(LINT_MODULES); do \
 		echo "==> vet $$module"; \
-		(cd "$$module" && $(GO) vet ./...); \
-	done; \
-	echo "==> vet tools/analyzergate"; \
-	(cd tools/analyzergate && GOWORK=off $(GO) vet ./...)
+		(cd "$$module" && GOWORK=off $(GO) vet ./...); \
+	done
 
 lint: ## Run golangci-lint across all workspace modules.
 	@set -euo pipefail; \
 	if [ "$${SKIP_LINT:-0}" = "1" ]; then \
+		case "$${CI:-}" in true|1) echo "SKIP_LINT is not allowed in CI." >&2; exit 1 ;; esac; \
 		echo "==> lint skipped via SKIP_LINT=1"; \
 		exit 0; \
 	fi; \
@@ -112,14 +117,15 @@ lint: ## Run golangci-lint across all workspace modules.
 		exit 1; \
 	fi; \
 	echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"; \
-	for module in $(MODULES); do \
+	for module in $(LINT_MODULES); do \
 		echo "==> lint $$module"; \
-		(cd "$$module" && "$$analyzer" run ./...); \
+		GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --base "$(LINT_BASE)" --module "$$module" --repo "$(CURDIR)" -- ./...; \
 	done
 
 staticcheck: ## Run staticcheck across all workspace modules.
 	@set -euo pipefail; \
 	if [ "$${SKIP_STATICCHECK:-0}" = "1" ]; then \
+		case "$${CI:-}" in true|1) echo "SKIP_STATICCHECK is not allowed in CI." >&2; exit 1 ;; esac; \
 		echo "==> staticcheck skipped via SKIP_STATICCHECK=1"; \
 		exit 0; \
 	fi; \
@@ -136,9 +142,9 @@ staticcheck: ## Run staticcheck across all workspace modules.
 		exit 1; \
 	fi; \
 	echo "==> staticcheck using $$analyzer (pinned $(STATICCHECK_VERSION))"; \
-	for module in $(MODULES); do \
+	for module in $(LINT_MODULES); do \
 		echo "==> staticcheck $$module"; \
-		(cd "$$module" && "$$analyzer" ./...); \
+		(cd "$$module" && GOWORK=off "$$analyzer" ./...); \
 	done
 
 test: ## Run deterministic Go tests across all workspace modules.
@@ -161,10 +167,27 @@ test: ## Run deterministic Go tests across all workspace modules.
 
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
+	python3 -B -m unittest discover -s scripts -p test_check_wire.py; \
+	python3 -B -m unittest factory.scripts.tests.test_golangci_lint_working_tree; \
 	echo "==> test tools/analyzergate"; \
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
 	echo "==> test tools/session-race-gate"; \
-	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
+	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	$(MAKE) test-architecture-gate
+
+architecture-check: ## Enforce service ownership, public contracts, and dependency direction.
+	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture
+
+size-check: ## Enforce package, file, and function budgets against exact legacy debt.
+	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check size
+
+test-architecture-gate: ## Verify architecture enforcement against positive and negative fixtures.
+	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"
+
+verify-architecture: architecture-check size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
+
+embed-check: ## Exercise the public runtime API from an independent headless consumer module.
+	@cd tests/embedding && GOWORK=off CGO_ENABLED=0 $(GO) test -mod=readonly ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"
 
 test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, and RTC audio regressions.
 	@set -euo pipefail; \
@@ -262,14 +285,10 @@ build: ## Build the agent-cli binary and compile library packages.
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_CLI_OUTPUT) ./cmd/yui); \
 	echo "==> build deterministic audio-device server"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_AUDIO_DEVICE_SERVER_OUTPUT) ./cmd/audio-device-server); \
-	echo "==> build go-agent-loop packages"; \
-	(cd go-agent-loop && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
-	echo "==> build go-llm-gateway packages"; \
-	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
-	echo "==> build go-audio packages"; \
-	(cd go-audio && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
-	echo "==> build go-device-gateway packages"; \
-	(cd go-device-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	for module in $(filter-out agent-cli,$(MODULES)); do \
+		echo "==> build $$module packages"; \
+		(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	done; \
 	echo "==> build tools/analyzergate"; \
 	analyzer_build_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$analyzer_build_dir"' EXIT; \
@@ -295,7 +314,7 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 	done; \
 	echo "==> coverage gate"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out ../../coverage/go-audio.out ../../coverage/go-device-gateway.out)
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out))
 
 coverage-registration: ## Validate every workspace Go package is registered without running coverage.
 	@set -euo pipefail; \
@@ -303,11 +322,7 @@ coverage-registration: ## Validate every workspace Go package is registered with
 	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
 		--validate-registration \
 		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
-		--module-dir ../../agent-cli \
-		--module-dir ../../go-agent-loop \
-		--module-dir ../../go-llm-gateway \
-		--module-dir ../../go-audio \
-		--module-dir ../../go-device-gateway)
+		$(foreach module,$(MODULES),--module-dir ../../$(module)))
 
 coverage-changed: ## Measure coverage floors only for packages owning changed Go files.
 	@set -euo pipefail; \
@@ -318,26 +333,17 @@ coverage-changed: ## Measure coverage floors only for packages owning changed Go
 		--repo ../.. \
 		--base "$(COVERAGE_BASE)" \
 		--test-timeout "$(GO_TEST_TIMEOUT)" \
-		--module-dir ../../agent-cli \
-		--module-dir ../../go-agent-loop \
-		--module-dir ../../go-llm-gateway \
-		--module-dir ../../go-audio \
-		--module-dir ../../go-device-gateway)
+		$(foreach module,$(MODULES),--module-dir ../../$(module)))
 
 wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
-	@set -euo pipefail; \
-	wire_before="$$(mktemp)"; \
-	trap 'rm -f "$$wire_before"' EXIT; \
-	cp agent-cli/internal/wire/wire_gen.go "$$wire_before"; \
-	(cd agent-cli && GOWORK=off $(GO) generate ./internal/wire); \
-	diff -u "$$wire_before" agent-cli/internal/wire/wire_gen.go
+	@python3 -B scripts/check-wire.py --go "$(GO)" $(MODULES)
 
 prepush: ## Run the fail-fast, timed local pre-push gate.
 	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt wire-check vet lint staticcheck test-tools test-factory-scripts test-integration test-regressions build coverage"; \
+	steps="fmt verify-architecture vet lint staticcheck test-tools test-factory-scripts embed-check test-integration test-regressions build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
@@ -440,6 +446,7 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	run_budget_unit go-llm-gateway; \
 	run_budget_unit go-audio; \
 	run_budget_unit go-device-gateway; \
+	run_budget_unit go-agent-runtime; \
 	run_budget_test agent-cli ./test/integration; \
 	run_budget_test go-agent-loop ./test/functional; \
 	run_budget_test agent-cli ./test/integration -run '$(AGENT_CLI_REGRESSION_TESTS)'; \

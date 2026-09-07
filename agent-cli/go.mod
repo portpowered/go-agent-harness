@@ -23,6 +23,7 @@ require (
 	github.com/pion/rtp v1.10.5
 	github.com/pion/webrtc/v4 v4.2.18
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3
+	github.com/portpowered/go-agent-harness/go-agent-runtime v0.0.0
 	github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.5-0.20260904005433-1a695c9c6934
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -109,5 +110,7 @@ require github.com/portpowered/go-agent-harness/go-device-gateway v0.0.0
 replace github.com/portpowered/go-agent-harness/go-device-gateway => ../go-device-gateway
 
 replace github.com/portpowered/go-agent-harness/go-agent-loop => ../go-agent-loop
+
+replace github.com/portpowered/go-agent-harness/go-agent-runtime => ../go-agent-runtime
 
 replace github.com/portpowered/go-agent-harness/go-llm-gateway => ../go-llm-gateway

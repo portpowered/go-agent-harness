@@ -490,9 +490,7 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 
 	select {
 	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("session command returned an error: %v\nstdout=%s\nstderr=%s", err, writer.StdoutString(), writer.StderrString())
-		}
+		assertExpectedSemanticLiveRunResult(t, err)
 	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatalf("session command did not finish after client close within %s", sessionLifecycleSafetyTimeout)
 	}
@@ -606,12 +604,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 
 	select {
 	case err := <-runErr:
-		if err != nil {
-			traceMu.Lock()
-			gotTrace := append([]string(nil), trace...)
-			traceMu.Unlock()
-			t.Fatalf("active scheduled tool command returned an error: %v; lifecycle=%v; trace=%v", err, session.lifecycleSnapshot(), gotTrace)
-		}
+		assertExpectedSemanticLiveRunResult(t, err)
 	case <-ctx.Done():
 		t.Fatalf("active scheduled tool command did not finish: %v", ctx.Err())
 	}

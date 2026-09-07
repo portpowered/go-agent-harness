@@ -7,10 +7,12 @@ set -uo pipefail
 # diagnostics when invoked from the gate.
 readonly phases=(
 	"fmt"
+	"verify-architecture"
 	"vet"
 	"lint"
 	"staticcheck"
 	"build"
+	"embed-check"
 	"test"
 	"coverage-registration"
 	"coverage-changed"

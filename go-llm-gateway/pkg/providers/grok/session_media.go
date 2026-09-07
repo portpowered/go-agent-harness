@@ -14,24 +14,49 @@ import (
 
 var _ sharedaudio.MediaSession = (*grokSession)(nil)
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// provider-owned session.update before the read loop started.
+func (*grokSession) InitialSessionConfigSent() bool { return true }
+
 // RTCMedia exposes the provider-owned PCM media endpoints for the live Grok
 // realtime session. The endpoint writer feeds the same input-audio event path
 // used by StreamMessage audio, while inbound provider deltas are fanned out to
 // the media reader without removing them from the normal session stream.
 func (s *grokSession) RTCMedia() sharedaudio.MediaEndpoints {
+	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
+}
+
+func (s *grokSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	return s.rtcMedia(options)
+}
+
+func (s *grokSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
 	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
+	var previous *sharedaudio.SessionMedia
+	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
+		previous = s.media
+		s.media = nil
+	}
 	s.mediaClaimed = true
 	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
+		s.mediaContinuous = options.InboundContinuous
 	}
-	return s.media.Endpoints()
+	endpoints := s.media.Endpoints()
+	s.mediaMu.Unlock()
+	if previous != nil {
+		if err := previous.Close(); err != nil {
+			s.setTerminalError(fmt.Errorf("close replaced Grok RTC media: %w", err))
+		}
+	}
+	return endpoints
 }
 
 func (s *grokSession) prepareRTCMedia() {
 	s.mediaMu.Lock()
 	if s.media == nil {
 		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
+		s.mediaContinuous = false
 	}
 	s.mediaMu.Unlock()
 }
@@ -44,6 +69,7 @@ func (s *grokSession) releaseUnclaimedRTCMedia() {
 	}
 	media := s.media
 	s.media = nil
+	s.mediaContinuous = false
 	s.mediaMu.Unlock()
 	_ = media.Close()
 }

@@ -1,0 +1,68 @@
+--- a/pkg/services/recordings/internal/projections/world_state_dispatch.go
++++ b/pkg/services/recordings/internal/projections/world_state_dispatch.go
+@@ -442,6 +442,19 @@
+ 	payload workerexecution.DispatchResponseEventPayload,
+ 	completion interfaces.FactoryWorldDispatchCompletion,
+ ) {
++	// An explicit accepted output set is the resulting marking. Consumed inputs
++	// omitted from it remain historical Work, but must not be restored as live.
++	if payload.Outcome == workerexecution.OutcomeAccepted && payload.OutputWork != nil {
++		outputs := make(map[string]bool, len(completion.OutputWorkItems))
++		for _, item := range completion.OutputWorkItems {
++			outputs[item.ID] = true
++		}
++		for _, workID := range dispatch.WorkItemIDs {
++			if !outputs[workID] {
++				delete(r.stateValue.ActiveWorkItemsByID, workID)
++			}
++		}
++	}
+ 	r.stateValue.CompletedDispatches = append(r.stateValue.CompletedDispatches, completion)
+ 	if terminal := completion.TerminalWork; terminal != nil && terminal.Status == completedAutomationWorkStatus && terminal.WorkItem.ID != "" {
+ 		r.stateValue.TerminalWorkByID[terminal.WorkItem.ID] = *terminal
+--- /dev/null
++++ b/pkg/services/recordings/internal/projections/consumed_work_recovery_test.go
+@@ -0,0 +1,43 @@
++package projections
++
++import (
++	interfaces "github.com/portpowered/infinite-you/pkg/services/factory_definitions"
++	"github.com/portpowered/infinite-you/pkg/services/work"
++	workerexecution "github.com/portpowered/infinite-you/pkg/services/workers"
++	"testing"
++)
++
++func TestAcceptedCompletionRetiresConsumedInputButPreservesHistoryAndOutput(t *testing.T) {
++	for _, explicit := range []bool{true, false} {
++		r := newFactoryWorldReducer(2)
++		id := "retry-cycle"
++		cycle := work.FactoryWorkItem{ID: "cycle", WorkTypeID: "project-cycle", State: "init"}
++		project := work.FactoryWorkItem{ID: "project", WorkTypeID: "project", State: "init"}
++		for _, item := range []work.FactoryWorkItem{cycle, project} {
++			r.stateValue.WorkItemsByID[item.ID] = item
++			r.stateValue.ActiveWorkItemsByID[item.ID] = item
++		}
++		r.stateValue.ActiveDispatches[id] = interfaces.FactoryWorldDispatch{
++			DispatchID: id, WorkItemIDs: []string{cycle.ID, project.ID},
++			Inputs: []interfaces.WorkstationInput{{WorkItem: &cycle}, {WorkItem: &project}},
++		}
++		payload := workerexecution.DispatchResponseEventPayload{Outcome: workerexecution.OutcomeAccepted}
++		if explicit {
++			payload.OutputWork = &[]work.WorkRequestEventWork{{WorkID: project.ID, WorkTypeID: project.WorkTypeID}}
++		}
++		r.applyDispatchCompleted(interfaces.FactoryEvent{Context: interfaces.FactoryEventContext{DispatchID: &id, Tick: 2}}, payload)
++		_, active := r.stateValue.ActiveWorkItemsByID[cycle.ID]
++		if active == explicit {
++			t.Fatalf("explicit=%v: consumed cycle active=%v", explicit, active)
++		}
++		if r.stateValue.WorkItemsByID[cycle.ID].ID != cycle.ID {
++			t.Fatal("consumed history lost")
++		}
++		if r.stateValue.ActiveWorkItemsByID[project.ID].ID != project.ID {
++			t.Fatal("output project lost")
++		}
++		if len(r.stateValue.CompletedDispatches) != 1 || len(r.stateValue.CompletedDispatches[0].ConsumedInputs) != 2 {
++			t.Fatal("completion lineage lost")
++		}
++	}
++}

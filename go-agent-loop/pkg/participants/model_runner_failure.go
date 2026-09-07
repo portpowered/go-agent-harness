@@ -1,8 +1,30 @@
 package participants
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+type initialSessionConfigSentMarker interface {
+	InitialSessionConfigSent() bool
+}
+
+func providerSentInitialSessionConfig(session messages.Session) bool {
+	marker, ok := session.(initialSessionConfigSentMarker)
+	return ok && marker.InitialSessionConfigSent()
+}
+
+func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session messages.Session, msg messages.StreamMessage) {
+	if msg.Type != messages.StreamTypeSessionCreated || r.sessionConfig == nil || providerSentInitialSessionConfig(session) {
+		return
+	}
+	r.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdate,
+		Value: messages.NewSessionUpdateValue(r.sessionConfig),
+	})
+}
 
 // sessionAudioSendFailureClassification is the stable stream classification
 // for a provider-bound audio write that could not be admitted. The runner
@@ -36,4 +58,51 @@ func (r *ModelRunner) publishSessionAudioFailure(err error, hasOutput bool) {
 		LoopPassID: r.currentPassID,
 		Value:      value,
 	})
+}
+
+func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
+	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
+}
+
+func (r *ModelRunner) EnqueueSessionAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	return r.enqueueSessionAudioInput(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicy")
+}
+
+func (r *ModelRunner) EnqueueSessionAudioInputWithPolicyWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	return r.enqueueSessionAudioInputWaiting(ctx, pcm, policy, "EnqueueSessionAudioInputWithPolicyWaiting")
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
+	if r == nil || r.sessionInputInbox == nil {
+		return fmt.Errorf("%s: not in session mode", operation)
+	}
+	if ctx == nil {
+		return fmt.Errorf("%s: nil context", operation)
+	}
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, true)
+}
+
+func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, waitForCapacity bool) error {
+	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
+	if waitForCapacity {
+		select {
+		case r.sessionInputInbox <- input:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	select {
+	case r.sessionInputInbox <- input:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return ErrSessionInputQueueFull
+	}
 }
