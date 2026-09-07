@@ -96,6 +96,9 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 	if strings.TrimSpace(request.ReplayPath) == "" {
 		return true, nil, nil
 	}
+	if c.legacyReplayOwnsPassiveInvocation(request) {
+		return false, nil, nil
+	}
 	if c.liveReplayService == nil {
 		// Preserve the runtime route so the invocation reports the missing
 		// replay role instead of silently selecting the legacy session graph.
@@ -106,6 +109,21 @@ func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request servi
 		return false, nil, fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
 	}
 	return inspection.IsRealtime(), &inspection, nil
+}
+
+func (c *SessionCommand) legacyReplayOwnsPassiveInvocation(request serviceSession.Request) bool {
+	return c != nil && c.sessionService != nil &&
+		strings.TrimSpace(request.RecordPath) == "" &&
+		strings.TrimSpace(request.RecordDirectory) == "" &&
+		strings.TrimSpace(request.AudioOutputPath) == "" &&
+		strings.TrimSpace(request.RecordSessionCapturePath) == "" &&
+		!request.PromptProvided && !request.TextSeed.Present &&
+		!request.BareLive && !request.BrowserToolsEnabled && !request.ComputerUse &&
+		!request.AudioInput.Present && !request.AudioInput.DevicePresent &&
+		len(request.AudioTurns) == 0 && len(request.ImagePaths) == 0 &&
+		request.AudioOutputDevice == "" && request.AudioInputDevice == "" &&
+		!request.AudioOutputDevicePresent && !request.AudioInputDevicePresent &&
+		!request.WaitForClose && !request.TraceAudio
 }
 
 // runRuntimeLiveSession is the CLI host adapter for a complete continuous

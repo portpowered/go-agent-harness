@@ -130,6 +130,12 @@ C07 recovery checkpoint: replay provider-source sidecar ownership
 - The recording contract now exposes DisableProviderCaptureSidecar for an immutable replay source. The host sets it only when --record-dir reuses a replay input without creating a new raw capture; ordinary explicit captures retain their existing sidecar behavior. TestDirectoryRecorderReplayProviderSourceDoesNotClaimExistingSidecar proves the source sidecar is unchanged while the replay provider artifact remains available.
 - Focused evidence passed: the directory sidecar/recording correlation tests exited 0, TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI passed, and TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface passed. This repair is not yet committed; final accounting is the next bounded residual.
 
+C07 recovery checkpoint: passive replay final accounting
+
+- The final-accounting regression was a route regression after the live host migration: a no-input realtime replay was admitted to livehost, which has no legacy runtime-observer attachment, so an auth error returned without the required terminal observation.
+- Passive replay invocations with no prompt, media, image, device, recording, or interactive flags now remain on the existing session runtime when that service is available. Interactive/audio/replay-directory invocations continue through the live host.
+- The focused auth-error accounting test passed in normal and race mode. Representative passive text, Grok WebSocket, and OpenAI realtime replay tests also passed in the same race command. The route repair is not yet committed; accumulated live/tool residuals remain.
+
 C07 recovery checkpoint: SIGINT recording evidence and tool correlation
 
 - The preserved dirty candidate was first rerun with the exact bounded command `rtk proxy go run ./cmd/testtimeout --timeout 480s -- go test ./test/integration -count=1 -timeout 480s -v -run '^TestShippedSessionSIGINT(AfterToolResultAccepted|DuringToolExecution|WithoutTool)FinalizesCleanly$'` from `agent-cli`; all three shipped process tests passed and exited 0. The same command under `-race` passed in `11.972s`; the full `go-agent-runtime/services/recording/internal/evidence` package under `-race` passed in `1.886s`.
