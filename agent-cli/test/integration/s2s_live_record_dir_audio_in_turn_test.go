@@ -56,6 +56,7 @@ type cliLiveRecordingEntry struct {
 
 func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
 	server := newCLILiveRecordDirServer(false)
+	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),

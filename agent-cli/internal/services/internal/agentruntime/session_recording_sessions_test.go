@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -336,3 +337,62 @@ func threeRecordingDigits(index int) string {
 var _ messages.Session = (*sessionRecordingTestSession)(nil)
 var _ messages.SessionInferencer = (*countingSessionRecordingInferencer)(nil)
 var _ messages.SessionInferencer = (*persistentSessionRecordingInferencer)(nil)
+
+func TestSessionDirectoryRecordingCloseDrainsPendingProviderOutput(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "pending-output")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{ModelCatalog: testModelCatalog(), Model: "gpt-realtime"})
+	inner := newSessionRecordingTestSession()
+	ctx := context.Background()
+	wrapper := &sessionDirectoryRecordingSession{
+		inner:     inner,
+		recording: recording,
+		ctx:       ctx,
+		receive:   messages.NewTypedBuffer[messages.StreamMessage](8),
+		done:      make(chan struct{}),
+	}
+	close(wrapper.done)
+
+	if !wrapper.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleUser,
+		Value: messages.NewAudioDeltaValue([]byte{1, 0}),
+	}) || !wrapper.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
+		t.Fatal("recording wrapper rejected input turn")
+	}
+	if !inner.receive.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{2, 0}),
+	}) || !inner.receive.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
+		t.Fatal("test session rejected pending provider output")
+	}
+	if err := wrapper.Close(); err != nil {
+		t.Fatalf("close recording wrapper: %v", err)
+	}
+	if err := recording.Finalize(); err != nil {
+		t.Fatalf("finalize recording: %v", err)
+	}
+
+	output, err := os.ReadFile(filepath.Join(destination, "audio", "out-000.pcm"))
+	if err != nil {
+		t.Fatalf("read drained provider output: %v", err)
+	}
+	if !bytes.Equal(output, []byte{2, 0}) {
+		t.Fatalf("drained provider output = %x, want 0200", output)
+	}
+	sessionLog, err := os.ReadFile(filepath.Join(destination, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("read drained provider session log: %v", err)
+	}
+	var entry struct {
+		Response struct {
+			AudioBytes uint64 `json:"audio_bytes"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(sessionLog), &entry); err != nil {
+		t.Fatalf("decode drained provider session log: %v", err)
+	}
+	if entry.Response.AudioBytes != 2 {
+		t.Fatalf("drained provider session log audio bytes = %d, want 2", entry.Response.AudioBytes)
+	}
+}

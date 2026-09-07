@@ -850,6 +850,7 @@ func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {
 	case <-s.done:
+		s.drainSource(s.inner.Receive())
 	case <-time.After(time.Second):
 	}
 	return err
@@ -866,17 +867,10 @@ func (s *sessionDirectoryRecordingSession) relay() {
 				return
 			}
 		case <-s.inner.Done():
-			for {
-				msg, ok := source.Read()
-				if !ok {
-					return
-				}
-				s.recording.observe(msg, false)
-				if !s.forward(msg) {
-					return
-				}
-			}
+			s.drainSource(source)
+			return
 		case <-s.ctx.Done():
+			s.drainSource(source)
 			return
 		}
 	}
