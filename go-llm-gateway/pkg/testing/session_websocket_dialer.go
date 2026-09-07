@@ -25,6 +25,11 @@ type RecordingWebSocketDialer struct {
 	events   []CapturedSessionEvent
 	sequence int
 	mu       sync.Mutex
+	// captureMu keeps provider capture admission and settlement ahead of the
+	// finalizer. A session Done signal can race the transport goroutine that is
+	// committing the last event; flushing during that gap would close the sink
+	// with an unsettled reservation and lose provider.json.
+	captureMu sync.RWMutex
 }
 
 var _ transport.Dialer = (*RecordingWebSocketDialer)(nil)
@@ -53,6 +58,12 @@ func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (
 
 // Capture returns a copy of the current capture envelope.
 func (d *RecordingWebSocketDialer) Capture() SessionCapture {
+	d.captureMu.RLock()
+	defer d.captureMu.RUnlock()
+	return d.captureSnapshot()
+}
+
+func (d *RecordingWebSocketDialer) captureSnapshot() SessionCapture {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 

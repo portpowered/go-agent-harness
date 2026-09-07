@@ -238,10 +238,13 @@ func (d *StreamingRecordingWebSocketDialer) FlushToFile(path string) error {
 	return d.dialer.FlushToFile(path)
 }
 func (d *RecordingWebSocketDialer) FlushToFile(path string) error {
+	d.captureMu.Lock()
+	defer d.captureMu.Unlock()
+
 	d.mu.Lock()
 	sink, sinkErr := d.sink, d.sinkErr
-	capture := d.capture
 	d.mu.Unlock()
+	capture := d.captureSnapshot()
 	if sink != nil {
 		if sinkErr != nil {
 			return errors.Join(sinkErr, sink.Abort())
@@ -251,7 +254,7 @@ func (d *RecordingWebSocketDialer) FlushToFile(path string) error {
 		}
 		return nil
 	}
-	capture = d.Capture()
+	capture = d.captureSnapshot()
 	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode session captures: %w", err)
@@ -335,6 +338,9 @@ type recordingWebSocketConn struct {
 var _ transport.Conn = (*recordingWebSocketConn)(nil)
 
 func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
+	c.recorder.captureMu.RLock()
+	defer c.recorder.captureMu.RUnlock()
+
 	messageType, payload, err := c.inner.ReadMessage()
 	if err == nil {
 		sequence := c.recorder.recordMessage(DirectionServerToClient, payload)
@@ -344,6 +350,9 @@ func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
 }
 
 func (c *recordingWebSocketConn) WriteMessage(messageType int, payload []byte) error {
+	c.recorder.captureMu.RLock()
+	defer c.recorder.captureMu.RUnlock()
+
 	// Reserve the outbound event before invoking the wrapped connection. A
 	// hermetic provider may synchronously enqueue a response while processing
 	// this write; recording after the call lets that response appear before
