@@ -209,9 +209,8 @@ func (i *liveInvocation) captureOutbound() sharedaudio.OutboundMedia {
 	return &loopAudioOutbound{sender: sender, onAdmit: i.captureAdmitted}
 }
 
-// sendAudioInput keeps local capture on the model runner's ordered ingress.
-// Peer media in a room continues to use Gate directly so its explicit
-// non-interrupting policy remains owned by the room graph.
+// sendAudioInput keeps local capture on the model runner's ordered ingress;
+// peer media remains owned by the room graph.
 func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
 	if h == nil {
 		return errors.New("live audio input handle is unavailable")
@@ -308,12 +307,8 @@ func (h *handle) runReplay(ctx context.Context) {
 			h.cancelReplayOnError(ctx, "replay audio", err)
 			return
 		}
-		// A capture can contain multiple audio turns. Keep the next append
-		// behind the response terminal for this turn so the replay cursor and
-		// provider response admission observe the same causal ordering as the
-		// source session. Sending every turn as soon as its local input queue
-		// accepts it lets a second response.create race the first response and
-		// can cause the provider to close before publishing its deltas.
+		// Keep each replay append behind the preceding response terminal so
+		// provider admission preserves source-session causal ordering.
 		if turnIndex+1 < len(plan.AudioTurns) {
 			if err := h.waitReplayResponse(ctx, turnIndex+1); err != nil {
 				h.cancelReplayOnError(ctx, fmt.Sprintf("wait for replay response %d", turnIndex+1), err)
@@ -321,10 +316,7 @@ func (h *handle) runReplay(ctx context.Context) {
 			}
 		}
 	}
-	// Mark admission only after every captured turn has crossed the same
-	// bounded media/control ingress. Marking before the loop lets the first
-	// response's MESSAGE.END cancel replay while later recorded turns are
-	// still waiting to be admitted.
+	// Mark admission after every captured turn crosses bounded ingress.
 	h.markCaptureComplete()
 }
 
@@ -399,44 +391,6 @@ func (h *handle) waitForResponse(ctx context.Context, target int) error {
 		h.mu.Unlock()
 		select {
 		case <-wake:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-// waitForResponseBoundary waits for any assistant response terminal, including
-// an owned partial terminal produced by barge-in cancellation. Barge capture
-// uses this boundary rather than waitForResponse because a cancelled response
-// is complete provider lifecycle work even though it is not a successful replay
-// response.
-func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
-	if h == nil {
-		return context.Canceled
-	}
-	if ctx == nil {
-		return errors.New("response boundary context is required")
-	}
-	for {
-		h.mu.Lock()
-		if h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending {
-			h.mu.Unlock()
-			return nil
-		}
-		terminalWake := h.responseTerminalWake
-		if terminalWake == nil {
-			terminalWake = make(chan struct{})
-			h.responseTerminalWake = terminalWake
-		}
-		responseWake := h.replayResponseWake
-		if responseWake == nil {
-			responseWake = make(chan struct{})
-			h.replayResponseWake = responseWake
-		}
-		h.mu.Unlock()
-		select {
-		case <-terminalWake:
-		case <-responseWake:
 		case <-ctx.Done():
 			return ctx.Err()
 		}

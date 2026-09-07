@@ -371,3 +371,28 @@ func (h *handle) Start(ctx context.Context) error {
 
 	return h.start(runCtx)
 }
+
+// waitForResponseBoundary includes partial assistant terminals produced by barge-in cancellation.
+func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
+	}
+	if ctx == nil {
+		return errors.New("response boundary context is required")
+	}
+	for {
+		h.mu.Lock()
+		ready := h.observedResponseTerminals >= target && !h.responseActive && !h.responsePending
+		terminalWake, responseWake := h.responseTerminalWake, h.replayResponseWake
+		h.mu.Unlock()
+		if ready {
+			return nil
+		}
+		select {
+		case <-terminalWake:
+		case <-responseWake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}

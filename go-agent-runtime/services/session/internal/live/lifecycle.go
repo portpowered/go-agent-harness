@@ -389,11 +389,7 @@ func newScheduledAudioIncompleteError(scheduled, dispatched, completed int, term
 	}
 	return incomplete
 }
-
-// deferProviderClose lets a finite scheduled feed drain provider response
-// terminals that were already queued before SESSION.CLOSE. Ordinary live
-// sessions retain the eager close behavior; the provider Done boundary still
-// ends the loop when an undispatched scheduled source remains.
+// deferProviderClose lets scheduled feeds drain response terminals queued before SESSION.CLOSE.
 func (h *handle) deferProviderClose() bool {
 	if h == nil {
 		return false

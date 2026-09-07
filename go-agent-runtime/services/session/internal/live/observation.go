@@ -218,7 +218,6 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	h.mu.Unlock()
 	h.terminalOnce.Do(func() { close(h.terminalObserved) })
 }
-
 func (h *handle) markCaptureComplete() {
 	if h == nil {
 		return
