@@ -1020,13 +1020,19 @@ def check_ready_manifest(manifest: dict[str, Any], *, require_warm: bool = False
         )
     if manifest.get("mode") != "hermetic":
         raise ProfileError("warm requires a hermetic inventory manifest")
-    names = [module.get("name") for module in manifest["modules"]]
+    modules = manifest.get("modules")
+    if not isinstance(modules, list) or not all(isinstance(module, dict) for module in modules):
+        raise ProfileError("manifest module inventory is malformed")
+    names = [module.get("name") for module in modules]
     expected = [name for name, _ in MODULES]
     if names != expected:
         raise ProfileError(
             "manifest module inventory is not the admitted six-module hermetic lane"
         )
-    if require_warm and manifest.get("warm", {}).get("status") != "PASS":
+    warm = manifest.get("warm")
+    if require_warm and (
+        not isinstance(warm, dict) or warm.get("status") != "PASS"
+    ):
         raise ProfileError(
             "manifest warm status is not PASS; complete the explicit warm phase "
             "before running hermetic tests"
@@ -2769,11 +2775,6 @@ def validate_capture(
             "run_groups": [],
             "metadata_errors": [],
         }
-    warm_value = manifest.get("warm")
-    if isinstance(warm_value, dict) and "commands" in warm_value:
-        errors.append(
-            "manifest warm contains duplicate command records; use the canonical commands array"
-        )
     commands_by_id: dict[str, dict[str, Any]] = {}
     command_indexes: dict[str, int] = {}
     phase_records: dict[str, list[dict[str, Any]]] = {
@@ -2803,6 +2804,29 @@ def validate_capture(
     metadata_records = phase_records["metadata"]
     inventory_records = phase_records["inventory"]
     warm_records = phase_records["warm"]
+    warm = manifest.get("warm")
+    if not isinstance(warm, dict):
+        errors.append("manifest warm summary must be an object")
+    else:
+        if "commands" in warm:
+            errors.append(
+                "manifest warm contains duplicate command records; use the canonical commands array"
+            )
+        if warm.get("status") not in {"NOT_RUN", "PASS", "FAILED"}:
+            errors.append("manifest warm status is not recognized")
+        warm_command_ids = warm.get("command_ids")
+        if not isinstance(warm_command_ids, list) or not all(
+            isinstance(item, str) and item for item in warm_command_ids
+        ):
+            errors.append("manifest warm command_ids must be a list of strings")
+        if not isinstance(warm.get("test_binaries"), list):
+            errors.append("manifest warm test_binaries must be a list")
+        if mode == "synthetic" and (
+            warm.get("status") != "NOT_RUN"
+            or warm_command_ids != []
+            or warm.get("test_binaries") != []
+        ):
+            errors.append("synthetic captures must not contain warm-up summary records")
     run_records = [
         command
         for phase in ("full", "cohort")
@@ -2810,6 +2834,9 @@ def validate_capture(
     ]
 
     if mode == "synthetic":
+        for field in ("metadata_command_ids", "inventory_command_ids"):
+            if manifest.get(field) != []:
+                errors.append(f"synthetic captures must keep {field} empty")
         if inventory_records or warm_records:
             errors.append("synthetic captures must not contain inventory or warm commands")
         if metadata_records and not manifest.get("source_repo"):
@@ -2879,10 +2906,7 @@ def validate_capture(
             errors.append(
                 f"manifest must contain one inventory command per module; found {len(inventory_records)}"
             )
-        warm = manifest.get("warm")
-        if not isinstance(warm, dict):
-            errors.append("manifest warm summary must be an object")
-        else:
+        if isinstance(warm, dict):
             if warm.get("status") != "PASS":
                 errors.append("manifest warm status must be PASS before analysis")
             warm_ids = warm.get("command_ids")
@@ -3070,6 +3094,31 @@ def validate_capture(
                                 label=f"run record {record.get('record_id')!r} source validation",
                             )
                         )
+
+    if mode != "synthetic" or manifest.get("source_repo"):
+        referenced_metadata_values = [
+            item
+            for record in run_records
+            for item in (
+                record.get("source_validation", {}).get("metadata_record_ids", [])
+                if isinstance(record.get("source_validation"), dict)
+                else []
+            )
+            if isinstance(item, str)
+        ]
+        referenced_metadata_ids = set(referenced_metadata_values)
+        run_metadata_ids = {
+            record.get("record_id")
+            for record in metadata_records
+            if record.get("scope") == "run"
+        }
+        if (
+            run_metadata_ids != referenced_metadata_ids
+            or len(referenced_metadata_values) != len(run_metadata_ids)
+        ):
+            errors.append(
+                "run-scoped source metadata must be referenced exactly once by run records"
+            )
 
     run_groups = derive_run_groups(run_records)
     for group in run_groups:

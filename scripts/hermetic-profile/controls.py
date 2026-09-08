@@ -1166,6 +1166,12 @@ def exercise_canonical_phase_validation(output: Path) -> dict[str, Any]:
             lambda value: first_run(value).update({"phase": "warm"}),
         ),
         (
+            "malformed-warm-summary",
+            lambda value: value.update(
+                {"warm": {"status": "PASS", "command_ids": [], "test_binaries": []}}
+            ),
+        ),
+        (
             "no-warm-hermetic-capture",
             lambda value: (
                 value.update({"mode": "hermetic"}),
