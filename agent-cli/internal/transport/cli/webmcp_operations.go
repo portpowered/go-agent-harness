@@ -201,7 +201,7 @@ func NewWebMCPOperationsCommand(globalFlags *flags.GlobalFlags, factories ...Web
 	return &WebMCPOperationsCommand{globalFlags: globalFlags, factory: factory}
 }
 
-// AddCommands attaches exactly the nine non-doctor direct WebMCP commands.
+// AddCommands attaches the direct WebMCP commands.
 func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 	if c == nil || parent == nil {
 		return
@@ -214,11 +214,11 @@ func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 		c.contextCommand(),
 		c.toolsCommand(),
 		c.invokeCommand(),
+		c.xPrepareVideoCommand(),
 		c.cancelCommand(),
 		c.watchCommand(),
 	}
-	// Direct operations render their own stable result envelope or human
-	// diagnostic. Cobra must not render the returned classified error again,
+	// Direct operations render their own output. Cobra must not render errors again,
 	// otherwise human output is duplicated and JSON mode is contaminated with
 	// a second, non-JSON stderr line.
 	for _, command := range commands {

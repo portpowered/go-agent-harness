@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -420,6 +421,24 @@ const managedLaunchWebMCPFixture = `<!doctype html>
 func findQualifiedStockChromeForIntegration(t *testing.T) (string, string) {
 	t.Helper()
 	for _, candidate := range DefaultStockChromePaths(runtime.GOOS, runtime.GOARCH) {
+		// Windows does not expose POSIX execute bits, and chrome.exe --version
+		// opens the browser instead of writing stdout. Read its version resource
+		// for opt-in stock-browser proofs without touching the user's profile.
+		if runtime.GOOS == "windows" {
+			info, err := os.Stat(candidate)
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			output, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "(Get-Item -LiteralPath '"+strings.ReplaceAll(candidate, "'", "''")+"').VersionInfo.ProductVersion").Output()
+			cancel()
+			version := strings.TrimSpace(string(output))
+			major, parseErr := ParseChromeMajorVersion(version)
+			if err == nil && parseErr == nil && major >= MinimumManagedChromeMajor {
+				return candidate, version
+			}
+			continue
+		}
 		if err := checkChromeExecutable(candidate); err != nil {
 			continue
 		}

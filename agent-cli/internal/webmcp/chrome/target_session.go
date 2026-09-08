@@ -23,11 +23,12 @@ import (
 )
 
 type targetSession struct {
-	handle        *handle
-	targetContext context.Context
-	cancelTarget  context.CancelFunc
-	runAction     func(context.Context, ...chromedp.Action) error
-
+	focusMu          sync.Mutex
+	focusUsers       int
+	handle           *handle
+	targetContext    context.Context
+	cancelTarget     context.CancelFunc
+	runAction        func(context.Context, ...chromedp.Action) error
 	mu               sync.Mutex
 	protocolTarget   *chromedp.Target
 	protocolSession  cdpTarget.SessionID
@@ -37,27 +38,26 @@ type targetSession struct {
 	closed           bool
 	err              error
 	closeErr         error
-
-	protocolEvents  chan any
-	events          chan webmcp.BrowserEvent
-	eventBuffer     int
-	overflowSignal  chan struct{}
-	done            chan struct{}
-	stopRouter      chan struct{}
-	routerDone      chan struct{}
-	eventsMu        sync.Mutex
-	lifecycleClosed bool
-	overflowed      bool
-	finishMu        sync.Mutex
-	finished        bool
-	finishDone      chan struct{}
-	stopOnce        sync.Once
-	sequence        uint64
-	listenerReady   bool
-	wireSequence    uint64
-	castSinks       []webmcp.CastDevice
-	castUpdate      chan struct{}
-	castIssue       string
+	protocolEvents   chan any
+	events           chan webmcp.BrowserEvent
+	eventBuffer      int
+	overflowSignal   chan struct{}
+	done             chan struct{}
+	stopRouter       chan struct{}
+	routerDone       chan struct{}
+	eventsMu         sync.Mutex
+	lifecycleClosed  bool
+	overflowed       bool
+	finishMu         sync.Mutex
+	finished         bool
+	finishDone       chan struct{}
+	stopOnce         sync.Once
+	sequence         uint64
+	listenerReady    bool
+	wireSequence     uint64
+	castSinks        []webmcp.CastDevice
+	castUpdate       chan struct{}
+	castIssue        string
 }
 
 func newTargetSession(
