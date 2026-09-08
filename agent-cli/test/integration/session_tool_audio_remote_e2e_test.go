@@ -186,8 +186,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 }
 
 // TestAgentBinaryTest45HighRateToolAudioRegression makes the race acceptance
-// criterion explicit. Twenty fresh agent, provider, tool, and device processes
-// replay the full test45 topology; one missing sample fails its trial.
+// criterion explicit: twenty fresh processes replay the full test45 topology.
 func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	requireRemoteToolAudioStress(t)
 	testCase := remoteToolAudioCase{
@@ -197,15 +196,15 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	}
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
+			t.Parallel()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
 }
 
 // TestAgentBinaryTest46HighRateToolAudioRegression gives test46 the same
-// fresh-process acceptance as test45. Its different audio lengths preserve the
-// second captured schedule instead of treating one failing trace as a proxy
-// for both: all twenty agents must deliver every resampled device sample.
+// twenty-trial fresh-process acceptance as test45 with its distinct captured
+// lengths; every resampled device sample must be delivered.
 func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	requireRemoteToolAudioStress(t)
 	testCase := remoteToolAudioCase{
@@ -215,6 +214,7 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	}
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
+			t.Parallel()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
