@@ -618,7 +618,7 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             lambda value: value.update(
                 {"before": {"active_work": []}, "after": {"active_work": []}}
             ),
-            "quiet evidence before is missing observations: processes, load",
+            "quiet evidence before is missing observations: load, processes/process_activity",
         ),
         (
             "expired-quiet-evidence",

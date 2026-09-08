@@ -374,11 +374,9 @@ def quiet_evidence_contract_error(evidence: Any, *, mode: str) -> str | None:
         observation = evidence.get(phase)
         if not isinstance(observation, dict):
             return f"quiet evidence must include {phase} load/lease observations"
-        missing = [
-            key
-            for key in ("active_work", "processes", "load")
-            if key not in observation
-        ]
+        missing = [key for key in ("active_work", "load") if key not in observation]
+        if "processes" not in observation and "process_activity" not in observation:
+            missing.append("processes/process_activity")
         if missing:
             return (
                 f"quiet evidence {phase} is missing observations: "
@@ -386,8 +384,14 @@ def quiet_evidence_contract_error(evidence: Any, *, mode: str) -> str | None:
             )
         if not isinstance(observation["active_work"], list):
             return f"quiet evidence {phase}.active_work must be a list"
-        if not isinstance(observation["processes"], list):
-            return f"quiet evidence {phase}.processes must be a list"
+        process_key = (
+            "processes" if "processes" in observation else "process_activity"
+        )
+        process_observation = observation[process_key]
+        if process_observation is None or (
+            isinstance(process_observation, str) and not process_observation.strip()
+        ):
+            return f"quiet evidence {phase}.{process_key} must be an observation"
         if observation["load"] is None:
             return f"quiet evidence {phase}.load must be an observation"
     return None
