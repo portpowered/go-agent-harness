@@ -82,3 +82,36 @@ branch, open/update its PR against `main`, verify the submitted head, and return
 `ACCEPTED` to the script-owned CI gate without polling terminal CI. CI rejection
 must return to this same task for exact-log repair; independent review and merge
 remain later stages.
+
+## Executor continuation checkpoint
+
+- Re-fetched `origin/main` before verification; it remains
+  `00c147585f31808c7bdbbf6051cc9df423dbdf37`. Admission was reverified with the
+  command above, the isolated branch still matches `prd.json.branchName`, and
+  the baseline, startup integration, and fetched-main revisions remain
+  ancestors of `HEAD`.
+- PR #401 is OPEN at the exact remote candidate head
+  `0f8916374467098a3a3080960963f6c031854415`; its current review state has no
+  independent reviews or comments. No review finding is being treated as
+  resolved by executor testing.
+- Fresh focused causal evidence on the committed candidate:
+  `rtk proxy env GOWORK=off go test . -run
+  'TestBaselineHistory|TestBaselineBootstrap' -count=1 -timeout=3m -v`
+  exited 0 in 1.786s; the focused race command
+  `rtk proxy env GOWORK=off go test -race . -run
+  'Test(Baseline|SizeMetricsAndDeletionOnlyBaseline)' -count=1 -timeout=3m -v`
+  exited 0 in 3.008s. The full architecturegate package passed with
+  `rtk proxy env GOWORK=off go test ./... -count=1 -timeout=3m` in 2.347s.
+- `rtk make architecture-size-check` exited 0 and reported 181 packages, 1850
+  files, and 26899 functions. The accumulated `rtk make test-tools` target
+  exited 0, including Wire integrity, analyzer-gate, session-race-gate and the
+  architecturegate tests. `git diff --check` passed.
+- `git diff --exit-code origin/main --
+  docs/architecture/architecture-size-baseline.json
+  docs/architecture/architecture-policy.json` passed. The candidate change
+  scope remains the three architecturegate files and this owned ledger only.
+
+The exact next action is checkpoint this evidence, push the same admitted head,
+update PR #401 with the exact head/base and evidence, and return `ACCEPTED` to
+the script-owned CI gate. Executor evidence does not claim CI, independent
+review, merge, vertical probe, or project acceptance.
