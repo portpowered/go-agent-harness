@@ -1,0 +1,122 @@
+[
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "ci-pending",
+      "type": "PROCESSING"
+    },
+    "workId": "work-task-4",
+    "workTypeName": "task",
+    "_rejection_feedback": "PR #403 head e367da89 is not mergeable. Independent controls pass (48 cases; no Go/network/build) and timingate passes, but: (1) profile.py:581-583, 1226, 2364-2371 and 2614-2628 retain multiple command-record arrays while only run records are schema-validated; injecting malformed inventory/warm records into a valid manifest still produced exit 0, status=PASS, fresh_timing=PASS. Implement one canonical record boundary or validate every phase and add a public regression. (2) run_profile at 1126-1144 never requires hermetic warm.status=PASS or the required full-inventory-before-cohort schedule, and analyze ignores inventory_status/warm; a no-warm public capture analyzed as PASS. Enforce the required schedule and fail closed. (3) validate_metadata_outputs at 1448-1480 identifies Git commands by label substrings but never validates argv/cwd/env; replacing both captured Git command argv values with echo still produced hermetic-shaped PASS. Bind command identity to the expected Git/source/test invocation and add controls. (4) assessment.json candidate_head, current_branch_head_at_handoff, evidence_checkpoint, and tested_head remain 9b3f4ebc while the PR head is e367da89, repeating the stale-head evidence defect; regenerate exact-head evidence. Remote main is now c3bb663e, not an ancestor of the branch; rebase onto it, rerun focused controls/timingate and submit the changed head to script CI. Run 34280563225's nine green checks belong to e367da89 before the main advance; no merge performed. fresh_timing=BLOCKED is correctly retained and is not itself a rejection."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-12",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #403 head 784890b3 has successful current-head checks, and independent controls pass, but review found actionable defects: profile.py:1134-1177 tracks active tests globally, falsely reporting valid cross-package -p concurrency as subtest overlap; scope detection per package and add a public control. controls.py:407-418 omits --allow-heavy, so invalid shared-host evidence is never validated; add the flag and assert fail-closed rejection. controls.py:267-279 deletes the missing-raw fixture artifact, while lines 319-328 report raw_artifacts_retained=true; correct per-case/top-level evidence reporting. profile.py:119-123 and 1268-1297 allow absolute or traversal artifact paths; an independent redirected-record probe read files outside the manifest root and returned PASS. Enforce output-root containment. analyze also ignores missing per-record source identity, quiet-evidence provenance, and incomplete repetition counts; tampered repeated manifests with missing source, removed quiet evidence, or requested=3/completed=1 returned PASS. Validate these before fresh PASS. Finally, assessment.json, assessment.md, and evidence-ledger.md record candidate 76d8c27 while the PR/script evidence is 784890b3; update current-head provenance and hashes. Repair these in scope, add regression controls, rerun focused controls/timingate tests, update evidence, then push and resubmit the same PR to the script CI gate. No merge performed."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-13",
+    "workTypeName": "review",
+    "_rejection_feedback": "Independent controls pass (18 scenarios; no Go/network/build), timingate and AST checks pass. However profile.py:1492-1549 accepts hermetic quiet evidence after runner/before/after metadata is removed or valid_until_utc is expired, provided the manifest hash is updated; public analyze returned status=PASS and fresh_timing=PASS in both tampered cases. Enforce the full hermetic quiet-evidence contract and add controls for metadata removal and expiry. Also update assessment.json/evidence-ledger.md: they record e83c4683 as candidate HEAD, while current PR #403 HEAD is 5bdb5123. Current-head CI is not mergeable: CI (Windows audio portable) FAILED (other eight checks passed). Repair the validator and evidence, investigate/repair that required-check failure without waiver, rerun focused controls, then resubmit the same PR to script CI; no merge performed."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-19",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #403 head 87a92b3 has successful current-head checks, and fresh public controls passed 27 cases. Actionable defects remain: profile.py:1220-1227 rejects repeated package start/terminal records, diverging from tools/timingate and its repeated-package test; public analyze returned INVALID. profile.py:1138-1144 accepts Elapsed=1000000000000 and returned PASS, while timingate rejects durations beyond time.Duration; oversized integers also raise uncaught OverflowError and can leave stale analysis output. profile.py:1081-1084 copies manifest source_sha without revalidating current HEAD/dirty state, so post-inventory source changes can be falsely reported as matching. Fix these, add regression controls, rerun focused checks, refresh exact-head evidence, and resubmit to script CI. No merge performed."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-21",
+    "workTypeName": "review",
+    "_rejection_feedback": "Reviewed PR #403 at head 1fc5663d against origin/main 668f2d88. Independent controls passed (31 cases), but actionable defects remain: profile.py:1496-1506 accepts manifests with monotonic_start_ns, monotonic_end_ns, and wall_seconds removed; analyze returned exit 0/status PASS with lane_wall_seconds null. profile.py:332-377 accepts quiet evidence whose before/after contain only active_work and no process/load observations; a matching-SHA probe also returned PASS. profile.py:844-874 only checks cache paths are absolute, so warm/run can direct GOCACHE and GOMODCACHE outside the manifest root, violating owned-cache isolation. profile.py:1307-1312 records no-test markers but profile.py:1496-1506 ignores them; the existing no-test stream returned PASS after its inventory package was marked as having tests. Malformed runs are also not schema-validated: replacing a run record with a string caused an uncaught AttributeError traceback at profile.py:1827-1834. Repair the same PR in scope, add public controls for these boundaries, regenerate exact-head evidence, push a new checkpoint, and resubmit to script-owned CI and independent review. Do not merge this head."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-24",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #403 head 5d153a533fd881afb268860d98692bb00d560c9d has all required checks successful, but independent public probes found actionable defects. profile.py:1482-1485 trusts only source_validation.matches_manifest; mutating a valid captured manifest to use forged source identity still produced exit 0, status=PASS, fresh_timing=PASS. Cross-check captured head/repository/dirty-path provenance and add a public regression. Malformed run records remain unsafe: selected_packages=null exits without analysis, and monotonic_end_ns=10**400 raises an overflow before analysis; rerunning over an existing PASS leaves stale analysis.json with status=PASS. Validate record schema and timing bounds, emit/replace an INVALID artifact atomically, and add controls. Rerun focused controls, refresh exact-head evidence, and resubmit the same PR to script CI and independent review. No merge performed."
+  },
+  {
+    "name": "audio-runtime-c13-recorded-pcm-integrity",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-26",
+    "workTypeName": "review",
+    "_rejection_feedback": "Reviewed head 22bf02febbbd8f4ea92aeaa021d41c75f09e1978. Focused replay tests, race tests, and independent public untouched/mutated PCM probes passed. Found an integrity bypass at agent-cli/internal/services/internal/replay/recording_directory.go:19-24: os.Stat treats a dangling manifest.json symlink as absent, so session replay falls back to standalone trace replay and exits 0 with Replay verified. This violates the requirement that malformed/incomplete root manifests cannot fall back. Fix with Lstat and explicit symlink/non-regular rejection while preserving truly absent-manifest legacy trace compatibility; add a public regression for the dangling manifest, rerun focused normal/race and both public routes, push a new head, and return to script CI. No merge."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-27",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #403 is open at e982b3b9; one current-head read showed all required checks successful. Independent controls passed 42 cases, but actionable defects remain: profile.py:2141-2287 can report PASS when an unreferenced invalid run group exists; a requested_repetitions=0 group produced exit 0/status PASS. profile.py:1490-1557 does not verify retained metadata command artifacts, so coordinated forged manifest/record/source-validation SHAs produced PASS despite unchanged captured git output. profile.py:1662-1690 and 2287 omit timingate-compatible aggregate time.Duration overflow checks; two 9e9-second package terminals produced PASS with a 36e9-second total. parse_record_stream also accepts records with argv, cwd, env_overrides, timeout, byte counts and schema removed, still returning PASS. Finally, assessment.json and evidence-ledger/pr-body identify bc7609b5 as the tested/current head while the PR is e982b3b9. Repair these in scripts/hermetic-profile/, add public regressions, regenerate exact-head evidence and hashes, rerun focused controls plus timingate, then resubmit the same PR to script CI. No merge performed."
+  },
+  {
+    "name": "audio-runtime-c13-recorded-pcm-integrity",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-28",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #405 head 63e6b77b3f642bfd078d964a73eebfb235b1371c has all 9 required checks passing, but independent exact-binary probing found a public-path integrity bypass. In go-agent-runtime/services/replay/internal/plan/directory.go:92-96, loadRecordingManifest uses os.ReadFile and follows a root manifest symlink. A bundle with manifest.json symlinked to an external valid manifest caused `session --replay <bundle> --audio-out <file>` to exit 0 with replay_complete, while `session replay <bundle>` correctly rejected it via agent-cli/internal/services/internal/replay/recording_directory.go. This violates prd.json's shared root-boundary and unsafe-evidence requirements. Next action: reject root manifest symlinks/non-regular files in the runtime replay service before reading, preserve only truly absent-manifest legacy behavior, add a regression through the public --audio-out route, rerun focused normal/race/probe checks, push a new head, and return to the script CI gate. Do not merge the current head."
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-30",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #403 head e367da89 is not mergeable. Independent controls pass (48 cases; no Go/network/build) and timingate passes, but: (1) profile.py:581-583, 1226, 2364-2371 and 2614-2628 retain multiple command-record arrays while only run records are schema-validated; injecting malformed inventory/warm records into a valid manifest still produced exit 0, status=PASS, fresh_timing=PASS. Implement one canonical record boundary or validate every phase and add a public regression. (2) run_profile at 1126-1144 never requires hermetic warm.status=PASS or the required full-inventory-before-cohort schedule, and analyze ignores inventory_status/warm; a no-warm public capture analyzed as PASS. Enforce the required schedule and fail closed. (3) validate_metadata_outputs at 1448-1480 identifies Git commands by label substrings but never validates argv/cwd/env; replacing both captured Git command argv values with echo still produced hermetic-shaped PASS. Bind command identity to the expected Git/source/test invocation and add controls. (4) assessment.json candidate_head, current_branch_head_at_handoff, evidence_checkpoint, and tested_head remain 9b3f4ebc while the PR head is e367da89, repeating the stale-head evidence defect; regenerate exact-head evidence. Remote main is now c3bb663e, not an ancestor of the branch; rebase onto it, rerun focused controls/timingate and submit the changed head to script CI. Run 34280563225's nine green checks belong to e367da89 before the main advance; no merge performed. fresh_timing=BLOCKED is correctly retained and is not itself a rejection."
+  },
+  {
+    "name": "audio-runtime-c12-interruption-replay-progress",
+    "state": {
+      "name": "complete",
+      "type": "TERMINAL"
+    },
+    "workId": "work-task-11",
+    "workTypeName": "task",
+    "_rejection_feedback": "CI checks failed for PR #404 at head a04132b50193dc2615997ccd3618a889aebaf740: required checks failed on current head a04132b50193dc2615997ccd3618a889aebaf740: CI (hermetic)=FAILURE, CI (static)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34241013415/job/102110874831); CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34241013415/job/102110874637). Return this task to the executor with the listed failures."
+  },
+  {
+    "name": "audio-runtime-c13-recorded-pcm-integrity",
+    "state": {
+      "name": "complete",
+      "type": "TERMINAL"
+    },
+    "workId": "work-task-23",
+    "workTypeName": "task",
+    "_rejection_feedback": "CI checks failed for PR #405 at head d3edaea95c28644876582955f2e73945490eb9b5: required checks failed on current head d3edaea95c28644876582955f2e73945490eb9b5: CI (coverage)=FAILURE, CI (hermetic)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34278881224/job/102238552654); CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34278881224/job/102238552748). Return this task to the executor with the listed failures."
+  }
+]
