@@ -43,11 +43,13 @@ The admitted project is `audio-runtime`, contract `audio-runtime-v1`, session
 `~default`, server `http://127.0.0.1:7439`. The exact task is
 `audio-runtime-c14-replay-boundary-audit`; the live board has its task row
 `work-task-34` in `init`/`PROCESSING`, its plan row `work-plan-33` is complete,
-and the idea row is the same named Work. The C14 task and review rows have no
-`_rejection_feedback` in the refreshed canonical board. The complete extracted
-rejection inbox, including concluded task and review rows, is preserved in
-`canonical-rejection-feedback.json`; it contains 12 rows from prior C11/C12/C13
-work, with no C14 finding.
+and the idea row is the same named Work. At the initial C14 evidence capture,
+the task and review rows had no `_rejection_feedback`; that historical board
+snapshot and the complete extracted rejection inbox are preserved in
+`canonical-board.json` and `canonical-rejection-feedback.json`. The initial
+extraction contains 12 rows from prior C11/C12/C13 work, with no C14 finding at
+that snapshot. The later executor re-admission and review finding are recorded
+in the current reconciliation below.
 
 The admission command, run from the admitted FACTORY_ROOT, returned:
 
@@ -102,7 +104,7 @@ rtk git merge-base --is-ancestor c3bb663e118de9e73ea3eb211b381e8f86c4f480 HEAD: 
 
 The startup/bootstrap integration pin is
 `8bdafc7f947a3a2c9856220abdc539437035bd21`. The original refactor baseline
-is `3194edd97aed588f7df2f8c58a69ac21da4c9ad`. The inspected source and
+is `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. The inspected source and
 fetched main are both `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The C13
 accepted vertical is a read-only predecessor dependency; C11/task4 and its
 scripts/evidence are disjoint and untouched.
@@ -649,8 +651,17 @@ claim AUDIO or DEVICE completion.
 
 ## Canonical rejection reconciliation
 
-The refreshed inbox has no C14 rejection. The prior findings that materially
-touch this audit are accounted for as follows:
+The initial C14 snapshot had no rejection. On the executor re-admission, the
+current canonical board showed `work-task-34` in `init`/`PROCESSING` and
+`work-review-36` in `fin`/`FAILED`, both carrying the same actionable finding
+for PR #406 at head `96c11e8ecb440bdf03e0a958560eeb9525d9e50f`: `audit.md:105`
+recorded the non-existent baseline
+`3194edd97aed588f7df2f8c58a69ac21da4c9ad`, while the admitted manifest, PRD,
+and source plan specify
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. This repair changes only that
+evidence token; no runtime implementation or predecessor evidence is changed.
+The prior findings that materially touch this audit are accounted for as
+follows:
 
 - `work-review-26` reported that
   `agent-cli/internal/services/internal/replay/recording_directory.go:19-24`
@@ -677,6 +688,36 @@ touch this audit are accounted for as follows:
 
 No finding was hidden, waived, or self-reviewed. The two C13 undeclared-trace
 failures are listed as residuals, not converted to passes.
+
+## Review-36 provenance repair validation
+
+The current executor admission re-ran the exact board and
+`verify-work --type task --name audio-runtime-c14-replay-boundary-audit`
+commands. It retained the sole C14 owner and identified the same `work-task-34`
+and `work-review-36` finding described above. The repair is limited to the
+baseline token in this audit; no runtime, generated Wire, source-plan,
+manifest, predecessor, or unrelated worktree file changed.
+
+After the token correction, the focused and accumulated regressions were run
+without a product build, provider/device invocation, broad CI suite, or CI
+polling:
+
+- From `agent-cli`, `rtk go test ./internal/services/internal/replay ./internal/services/replay ./internal/transport/cli -count=1` exited `0` with `Go test: 719 passed in 3 packages`.
+- From `go-agent-runtime`, `rtk go test ./services/replay/... -count=1` exited `0` with `Go test: 43 passed in 3 packages`.
+- From `agent-cli`, `rtk go test ./test/integration -count=1 -run '^(TestSessionRecordedPCMIntegrity|TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact)$'` exited `0` with `Go test: 5 passed in 1 packages`.
+
+The provenance checks were also rerun on the corrected evidence tree. They
+reported admission `{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c14-replay-boundary-audit"}`;
+branch `codex/audio-runtime-c14-replay-boundary-audit`; PRD branch and current
+branch equal; PRD/manifest/source-plan baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`; startup pin
+`8bdafc7f947a3a2c9856220abdc539437035bd21`; source and fetched main
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; corrected baseline and source
+`git cat-file -e` checks PASS; baseline, startup, and source
+`git merge-base --is-ancestor` checks PASS; and `git diff --check` PASS. The
+changed-path check remained limited to the three pre-existing C14 evidence
+paths: `audit.md`, `canonical-board.json`, and
+`canonical-rejection-feedback.json`.
 
 ## Immutable acceptance criteria and later gates
 
@@ -709,7 +750,8 @@ or polling CI, as required by the C14 audit execution policy:
   `factory/docs/implementation-handoff.md`,
   `factory/docs/meta-planner-handoff.md`, the audio-runtime request,
   acceptance, source plan, `prd.json`, `progress.txt`, current meta-status, and
-  the full canonical rejection extraction before choosing this action.
+  the current canonical board plus the full prior canonical rejection
+  extraction before choosing this action.
 - Refreshed `origin/main` and verified the source commit, branch/worktree
   identity, startup/bootstrap ancestry, and planning-main ancestry above.
 - Inspected the complete bodies of the public replay/session/device contracts,
