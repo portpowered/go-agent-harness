@@ -218,3 +218,32 @@ No CI terminal result, independent review, merge, vertical acceptance, device
 consumption, acoustic output or project completion is claimed. Rollback is
 `git revert 4eec84a`. The candidate is ready for the script-owned CI gate after
 this evidence checkpoint is committed and pushed.
+
+## C13 CI rejection reconciliation: bounded non-reproduction
+
+The next submitted head was `d3edaea95c28644876582955f2e73945490eb9b5`. The
+completed GitHub Actions run was `34278881224`; its full failed-job logs were
+saved locally before this reconciliation. The canonical task rejection names
+the required `CI (coverage)` job `102238552654` and `CI (hermetic)` job
+`102238552748`.
+
+- Coverage failed at `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl` while its baseline harness A was still required to pass; it timed out after `2.00219555s` while awaiting the model response after end-of-turn. The failure was in `agent-cli/test/integration/session_duplex_overlap_test.go`, outside the C13 diff.
+- Hermetic failed at `TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress` after `3.00s`, reporting room lifecycle work that did not complete during the closed-target diagnostic. The failure was in `agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics_test.go`, outside the C13 diff.
+- Hermetic and the separate `CI (integration)` job `102238552687` also recorded `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit` failing its baseline harness A after `2.002091519s`/`2.002209091s`, respectively. The test and all of its runtime owners are outside C13's admitted paths.
+
+These failures were not reproduced on the exact candidate tree. The transcript
+and commit controls passed with `CGO_ENABLED=0`, `tags=nomicrophone`,
+`-count=3`; the closed-target room control passed with the same hermetic mode at
+`-count=5`. C13 replay packages passed normal and race at `-count=3`, the
+public `TestSessionRecordedPCMIntegrity` control passed normal and race at
+`-count=3`, planner `Interruption|Cancel` controls passed at `-count=5`, and
+the accumulated C12 continuation/recording controls passed normal and race at
+`-count=3`. No C13-owned source or test change is justified by these
+non-reproduced, out-of-lease failures; their CI evidence remains retained for
+the script gate rather than silently waived.
+
+This is a fresh evidence checkpoint, not a claim of green CI, independent
+review, merge, vertical acceptance, device/acoustic proof, or project
+completion. The next action is to push the new checkpoint on PR #405 and return
+`ACCEPTED` to the script-owned CI gate without polling it. Any exact same-task
+rejection remains with this executor.
