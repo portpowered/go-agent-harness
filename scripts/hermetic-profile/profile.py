@@ -55,6 +55,25 @@ MODULES = (
 PACKAGE_TERMINALS = {"pass", "fail", "skip"}
 TEST_TERMINALS = {"pass", "fail", "skip"}
 SAFE_LABEL = re.compile(r"[^A-Za-z0-9_.-]+")
+COMMAND_PHASES = {"metadata", "inventory", "warm", "full", "cohort"}
+RUN_PHASES = {"full", "cohort"}
+COMMAND_ROLES = {
+    "source-rev-parse",
+    "source-status",
+    "go-env",
+    "go-version",
+    "go-list",
+    "go-mod-download",
+    "go-test-binary-compile",
+    "go-test",
+    "synthetic-test",
+}
+LEGACY_COMMAND_COLLECTIONS = (
+    "metadata_commands",
+    "inventory_commands",
+    "runs",
+    "run_groups",
+)
 
 
 class ProfileError(Exception):
@@ -211,6 +230,7 @@ def command_record(
     stderr_path.write_bytes(stderr)
     record: dict[str, Any] = {
         "schema": "c11-command-record-v1",
+        "record_id": label,
         "label": label,
         "argv": [str(item) for item in argv],
         "cwd": str(cwd.resolve()),
@@ -242,6 +262,30 @@ def command_record(
         ),
     }
     return record, stdout, stderr
+
+
+def set_command_context(
+    record: dict[str, Any],
+    *,
+    phase: str,
+    module: str,
+    role: str,
+    trial: int | None,
+    selected_packages: Iterable[str] = (),
+) -> dict[str, Any]:
+    """Attach the one canonical command-record context before storing a record."""
+
+    record.update(
+        {
+            "record_id": record.get("record_id") or record.get("label"),
+            "phase": phase,
+            "module": module,
+            "role": role,
+            "trial": trial,
+            "selected_packages": list(selected_packages),
+        }
+    )
+    return record
 
 
 def require_positive(value: str) -> int:
@@ -578,11 +622,11 @@ def initial_manifest(
             else None
         ),
         "inventory_status": "STARTED",
-        "inventory_commands": [],
+        "metadata_command_ids": [],
+        "inventory_command_ids": [],
+        "commands": [],
         "modules": [],
-        "warm": {"status": "NOT_RUN", "commands": [], "test_binaries": []},
-        "runs": [],
-        "run_groups": [],
+        "warm": {"status": "NOT_RUN", "command_ids": [], "test_binaries": []},
         "measurement_status": "UNMEASURED",
     }
 
@@ -619,7 +663,14 @@ def source_paths_outside_output(
 
 
 def validate_source_state(
-    manifest: dict[str, Any], *, output_root: Path, output_dir: Path, label: str
+    manifest: dict[str, Any],
+    *,
+    output_root: Path,
+    output_dir: Path,
+    label: str,
+    command_sink: list[dict[str, Any]],
+    module: str,
+    trial: int,
 ) -> dict[str, Any] | None:
     source_repo_value = manifest.get("source_repo")
     if not source_repo_value and manifest.get("mode") == "synthetic":
@@ -648,6 +699,15 @@ def validate_source_state(
         label=f"{label}-source-rev-parse",
         stdout_suffix="stdout.txt",
     )
+    set_command_context(
+        head_record,
+        phase="metadata",
+        module=module,
+        role="source-rev-parse",
+        trial=trial,
+    )
+    head_record["scope"] = "run"
+    head_record["source_repo"] = str(repo)
     if head_record["status"] != "PASS":
         raise ProfileError("cannot identify current source SHA; see run evidence")
     current_sha = decode_output(head_stdout).strip()
@@ -663,6 +723,15 @@ def validate_source_state(
         label=f"{label}-source-status",
         stdout_suffix="stdout.txt",
     )
+    set_command_context(
+        status_record,
+        phase="metadata",
+        module=module,
+        role="source-status",
+        trial=trial,
+    )
+    status_record["scope"] = "run"
+    status_record["source_repo"] = str(repo)
     if status_record["status"] != "PASS":
         raise ProfileError("cannot inspect current source dirtiness; see run evidence")
     current_dirty_all = parse_git_status_paths(status_stdout)
@@ -675,6 +744,7 @@ def validate_source_state(
         output_root=output_root,
     )
     matches = current_sha == expected_sha and current_dirty == expected_dirty_outside_output
+    command_sink.extend((head_record, status_record))
     if not matches:
         raise ProfileError(
             "source changed since inventory: "
@@ -689,7 +759,7 @@ def validate_source_state(
         "expected_head": expected_sha,
         "expected_dirty_paths": expected_dirty_outside_output,
         "matches_manifest": True,
-        "metadata_commands": [head_record, status_record],
+        "metadata_record_ids": [head_record["record_id"], status_record["record_id"]],
     }
 
 
@@ -788,7 +858,27 @@ def inventory(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         source_plan=Path(args.source_plan).resolve() if args.source_plan else None,
     )
     manifest["quiet_evidence"] = quiet
-    manifest["metadata_commands"] = [git_head, dirty_record, go_env_record, version_record]
+    for record, role in (
+        (git_head, "source-rev-parse"),
+        (dirty_record, "source-status"),
+        (go_env_record, "go-env"),
+        (version_record, "go-version"),
+    ):
+        set_command_context(
+            record,
+            phase="metadata",
+            module="manifest",
+            role=role,
+            trial=1,
+        )
+        record["scope"] = "manifest"
+    manifest["commands"].extend(
+        (git_head, dirty_record, go_env_record, version_record)
+    )
+    manifest["metadata_command_ids"] = [
+        record["record_id"]
+        for record in (git_head, dirty_record, go_env_record, version_record)
+    ]
     save_manifest(manifest_path, manifest)
 
     env_overrides = {
@@ -810,8 +900,16 @@ def inventory(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             label=f"inventory-{name}",
             stdout_suffix="stdout.json",
         )
-        record["module"] = name
-        manifest["inventory_commands"].append(record)
+        set_command_context(
+            record,
+            phase="inventory",
+            module=name,
+            role="go-list",
+            trial=1,
+        )
+        record["scope"] = "manifest"
+        manifest["commands"].append(record)
+        manifest["inventory_command_ids"].append(record["record_id"])
         if record["status"] != "PASS":
             manifest["inventory_status"] = "FAILED"
             save_manifest(manifest_path, manifest)
@@ -914,7 +1012,7 @@ def manifest_go(manifest: dict[str, Any]) -> str:
     return go
 
 
-def check_ready_manifest(manifest: dict[str, Any]) -> None:
+def check_ready_manifest(manifest: dict[str, Any], *, require_warm: bool = False) -> None:
     if manifest.get("inventory_status") != "PASS":
         raise ProfileError(
             f"manifest inventory status is {manifest.get('inventory_status')!r}; "
@@ -928,6 +1026,11 @@ def check_ready_manifest(manifest: dict[str, Any]) -> None:
         raise ProfileError(
             "manifest module inventory is not the admitted six-module hermetic lane"
         )
+    if require_warm and manifest.get("warm", {}).get("status") != "PASS":
+        raise ProfileError(
+            "manifest warm status is not PASS; complete the explicit warm phase "
+            "before running hermetic tests"
+        )
 
 
 def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -939,7 +1042,16 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     warm_root = root / "warm"
     env_overrides = manifest_env(manifest, root=root)
     go = manifest_go(manifest)
+    commands_sink = manifest.setdefault("commands", [])
+    if not isinstance(commands_sink, list):
+        raise ProfileError("manifest commands must be a list")
+    if any(
+        isinstance(command, dict) and command.get("phase") == "warm"
+        for command in commands_sink
+    ):
+        raise ProfileError("manifest already contains warm records; run inventory again")
     commands: list[dict[str, Any]] = []
+    command_ids: list[str] = []
     binaries: list[dict[str, Any]] = []
     failures: list[str] = []
     started_at = utc_now()
@@ -960,9 +1072,18 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             label=f"warm-download-{module['name']}",
             stdout_suffix="stdout.txt",
         )
-        record["phase"] = "dependency-download"
-        record["module"] = module["name"]
+        set_command_context(
+            record,
+            phase="warm",
+            module=module["name"],
+            role="go-mod-download",
+            trial=1,
+        )
+        record["scope"] = "manifest"
+        record["package"] = None
         commands.append(record)
+        commands_sink.append(record)
+        command_ids.append(record["record_id"])
         if record["status"] != "PASS":
             failures.append(f"{module['name']}: dependency download")
             break
@@ -1015,14 +1136,22 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     label=f"warm-compile-{module['name']}-{package['import_path']}",
                     stdout_suffix="stdout.txt",
                 )
-                record["phase"] = "test-binary-compile"
-                record["module"] = module["name"]
+                set_command_context(
+                    record,
+                    phase="warm",
+                    module=module["name"],
+                    role="go-test-binary-compile",
+                    trial=1,
+                    selected_packages=[package["import_path"]],
+                )
+                record["scope"] = "manifest"
                 record["package"] = package["import_path"]
+                record["binary_path"] = relative_path(binary_path, root)
                 binary = {
                     "module": module["name"],
                     "package": package["import_path"],
                     "status": record["status"],
-                    "command_record": record,
+                    "command_id": record["record_id"],
                 }
                 if binary_path.is_file():
                     binary["path"] = relative_path(binary_path, root)
@@ -1030,6 +1159,8 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     binary["bytes"] = binary_path.stat().st_size
                 binaries.append(binary)
                 commands.append(record)
+                commands_sink.append(record)
+                command_ids.append(record["record_id"])
                 if record["status"] != "PASS":
                     failures.append(
                         f"{module['name']}:{package['import_path']}: test binary compile"
@@ -1043,7 +1174,7 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "started_at_utc": started_at,
         "ended_at_utc": utc_now(),
         "quiet_evidence": quiet,
-        "commands": commands,
+        "command_ids": command_ids,
         "test_binaries": binaries,
         "failures": failures,
     }
@@ -1055,12 +1186,12 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "dependency_download_seconds": sum(
             item["wall_seconds"]
             for item in commands
-            if item.get("phase") == "dependency-download"
+            if item.get("role") == "go-mod-download"
         ),
         "test_binary_compile_seconds": sum(
             item["wall_seconds"]
             for item in commands
-            if item.get("phase") == "test-binary-compile"
+            if item.get("role") == "go-test-binary-compile"
         ),
         "failure_count": len(failures),
     }, 0 if not failures else 1
@@ -1130,12 +1261,33 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if manifest.get("mode") == "synthetic":
         quiet = require_heavy(args, mode="synthetic", root=root)
     else:
-        check_ready_manifest(manifest)
+        check_ready_manifest(manifest, require_warm=True)
         quiet = require_heavy(args, mode="hermetic", root=root)
     if args.repeat > 3:
         raise ProfileError("repeat is capped at three invocations (one plus two repeats)")
     if args.cohort is None and args.repeat != 1:
         raise ProfileError("full inventory runs are single-shot; repeat only a bounded cohort")
+    existing_commands = manifest.get("commands")
+    if not isinstance(existing_commands, list):
+        raise ProfileError("manifest has no canonical commands list")
+    existing_run_records = [
+        command
+        for command in existing_commands
+        if isinstance(command, dict) and command.get("phase") in RUN_PHASES
+    ]
+    if manifest.get("mode") != "synthetic":
+        full_records = [
+            command for command in existing_run_records if command.get("phase") == "full"
+        ]
+        if args.cohort is None and full_records:
+            raise ProfileError(
+                "manifest already contains the full inventory trial; "
+                "do not retry unchanged full timing"
+            )
+        if args.cohort is not None and not full_records:
+            raise ProfileError(
+                "cohort timing requires the completed full inventory trial first"
+            )
     runs_root = root / "runs"
     env_overrides = manifest_env(manifest, root=root)
     synthetic = manifest.get("mode") == "synthetic"
@@ -1146,6 +1298,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     group_id = uuid.uuid4().hex[:12]
     group_root = runs_root / group_id
     records: list[dict[str, Any]] = []
+    commands_sink = existing_commands
     failures: list[str] = []
     repetitions_completed = 0
     for repeat_index in range(1, args.repeat + 1):
@@ -1200,6 +1353,9 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 output_root=root,
                 output_dir=group_root / f"r{repeat_index}" / safe_label(module["name"]),
                 label=f"run-{group_id[:6]}-r{repeat_index}-{safe_label(module['name'])}",
+                command_sink=commands_sink,
+                module=module["name"],
+                trial=repeat_index,
             )
             require_heavy(
                 args,
@@ -1216,6 +1372,15 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 label=f"run-{group_id[:6]}-r{repeat_index}-{safe_label(module['name'])}",
                 stdout_suffix="stdout.jsonl",
             )
+            set_command_context(
+                record,
+                phase="cohort" if cohort_mode else "full",
+                module=module["name"],
+                role="synthetic-test" if synthetic else "go-test",
+                trial=repeat_index,
+                selected_packages=[package["import_path"] for package in packages],
+            )
+            record["scope"] = "run"
             record.update(
                 {
                     "source_sha": (
@@ -1226,16 +1391,15 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     "source_validation": source_validation,
                     "run_group_id": group_id,
                     "repeat_index": repeat_index,
-                    "module": module["name"],
+                    "requested_repetitions": args.repeat,
                     "cohort": cohort_mode,
-                    "selected_packages": [
-                        package["import_path"] for package in packages
-                    ],
                     "expected_package_count": len(packages),
                     "test_result_cache_policy": "disabled-by--count=1",
+                    "quiet_evidence": quiet,
                 }
             )
             records.append(record)
+            commands_sink.append(record)
             if record["status"] != "PASS":
                 failures.append(f"{module['name']} repetition {repeat_index}")
                 repetition_failed = True
@@ -1243,30 +1407,11 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if repetition_failed:
             break
         repetitions_completed += 1
-    group = {
-        "schema": "c11-run-group-v1",
-        "run_group_id": group_id,
-        "source_sha": manifest.get("source_sha"),
-        "created_at_utc": utc_now(),
-        "cohort": cohort_mode,
-        "selected_packages": selected_packages,
-        "requested_repetitions": args.repeat,
-        "completed_repetitions": repetitions_completed,
-        "quiet_evidence": quiet,
-        "status": "FAILED" if failures else "CAPTURED",
-        "failures": failures,
-        "note": (
-            "The first failed repetition stops unchanged repeats; no retry-until-green."
-            if failures
-            else "Raw streams are analyzed separately; command success is not performance proof."
-        ),
-    }
-    manifest.setdefault("runs", []).extend(records)
-    manifest.setdefault("run_groups", []).append(group)
+    group_status = "FAILED" if failures else "CAPTURED"
     manifest["measurement_status"] = "RUN_CAPTURED"
     save_manifest(manifest_path, manifest)
     return {
-        "status": group["status"],
+        "status": group_status,
         "manifest": str(manifest_path),
         "run_group_id": group_id,
         "completed_repetitions": repetitions_completed,
@@ -1309,7 +1454,13 @@ def command_record_schema_errors(record: Any, *, label: str) -> list[str]:
     errors: list[str] = []
     required = (
         "schema",
+        "record_id",
         "label",
+        "phase",
+        "module",
+        "role",
+        "trial",
+        "selected_packages",
         "argv",
         "cwd",
         "env_overrides",
@@ -1338,8 +1489,30 @@ def command_record_schema_errors(record: Any, *, label: str) -> list[str]:
         errors.append(
             f"{label} schema is {record.get('schema')!r}, want {COMMAND_RECORD_SCHEMA!r}"
         )
+    if not isinstance(record.get("record_id"), str) or not record.get("record_id"):
+        errors.append(f"{label} record_id must be a non-empty string")
+    elif record.get("record_id") != record.get("label"):
+        errors.append(f"{label} record_id must match label")
     if not isinstance(record.get("label"), str) or not record.get("label"):
         errors.append(f"{label} label must be a non-empty string")
+    if record.get("phase") not in COMMAND_PHASES:
+        errors.append(f"{label} phase is not recognized")
+    if not isinstance(record.get("module"), str) or not record.get("module"):
+        errors.append(f"{label} module must be a non-empty string")
+    if record.get("role") not in COMMAND_ROLES:
+        errors.append(f"{label} role is not recognized")
+    trial = record.get("trial")
+    if trial is not None and (
+        isinstance(trial, bool) or not isinstance(trial, int) or trial < 1
+    ):
+        errors.append(f"{label} trial must be a positive integer or null")
+    selected_packages = record.get("selected_packages")
+    if not isinstance(selected_packages, list) or not all(
+        isinstance(item, str) and item for item in selected_packages
+    ):
+        errors.append(f"{label} selected_packages must be a list of strings")
+    elif len(set(selected_packages)) != len(selected_packages):
+        errors.append(f"{label} selected_packages contains duplicates")
     argv = record.get("argv")
     if not isinstance(argv, list) or not argv or not all(
         isinstance(item, str) for item in argv
@@ -1438,6 +1611,7 @@ def validate_metadata_outputs(
     value: Any,
     *,
     root: Path,
+    expected_repo: Any,
     expected_head: Any,
     expected_dirty: Any,
     label: str,
@@ -1445,17 +1619,20 @@ def validate_metadata_outputs(
     errors = validate_metadata_commands(value, root=root, label=label)
     if errors or not isinstance(value, list):
         return errors
+    if not isinstance(expected_repo, str) or not expected_repo:
+        return [f"{label} has no expected source repository"]
+    expected_repo = str(Path(expected_repo).resolve())
     head_commands = [
         command
         for command in value
         if isinstance(command, dict)
-        and "source-rev-parse" in str(command.get("label", ""))
+        and command.get("role") == "source-rev-parse"
     ]
     status_commands = [
         command
         for command in value
         if isinstance(command, dict)
-        and "source-status" in str(command.get("label", ""))
+        and command.get("role") == "source-status"
     ]
     if len(head_commands) != 1:
         errors.append(f"{label} must contain one source-rev-parse command")
@@ -1465,6 +1642,26 @@ def validate_metadata_outputs(
         return errors
     head_command = head_commands[0]
     status_command = status_commands[0]
+    expected_commands = {
+        "source-rev-parse": ["git", "-C", expected_repo, "rev-parse", "HEAD"],
+        "source-status": ["git", "-C", expected_repo, "status", "--porcelain"],
+    }
+    for role, command in (
+        ("source-rev-parse", head_command),
+        ("source-status", status_command),
+    ):
+        if command.get("argv") != expected_commands[role]:
+            errors.append(
+                f"{label} {role} command argv does not match the expected Git invocation"
+            )
+        if command.get("cwd") != expected_repo:
+            errors.append(f"{label} {role} command cwd does not match the source repository")
+        if command.get("env_overrides") != {}:
+            errors.append(
+                f"{label} {role} command env_overrides must be empty for Git provenance"
+            )
+    if errors:
+        return errors
     try:
         actual_head = decode_output(
             command_output(head_command, root=root, stream="stdout")
@@ -1506,10 +1703,328 @@ def command_timing_errors(record: dict[str, Any]) -> list[str]:
         and ends < starts
     ):
         errors.append("monotonic_end_ns must not precede monotonic_start_ns")
+    started_at = parse_utc(record.get("started_at_utc"))
+    ended_at = parse_utc(record.get("ended_at_utc"))
+    if started_at is not None and ended_at is not None and ended_at < started_at:
+        errors.append("ended_at_utc must not precede started_at_utc")
     try:
         parse_elapsed(record.get("wall_seconds"))
     except ValueError as exc:
         errors.append(f"wall_seconds is invalid: {exc}")
+    return errors
+
+
+def _module_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        module["name"]: module
+        for module in manifest.get("modules", [])
+        if isinstance(module, dict) and isinstance(module.get("name"), str)
+    }
+
+
+def _package_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        package["import_path"]: package
+        for module in manifest.get("modules", [])
+        if isinstance(module, dict)
+        for package in module.get("packages", [])
+        if isinstance(package, dict) and isinstance(package.get("import_path"), str)
+    }
+
+
+def expected_test_argv(
+    manifest: dict[str, Any], *, module: dict[str, Any], record: dict[str, Any]
+) -> list[str] | None:
+    """Build the exact test invocation represented by a canonical record."""
+
+    phase = record.get("phase")
+    selected = record.get("selected_packages")
+    if not isinstance(selected, list) or not all(isinstance(item, str) for item in selected):
+        return None
+    if phase == "full":
+        package_args = ["./..."]
+    elif phase == "cohort":
+        package_index = _package_index(manifest)
+        packages = [package_index.get(item) for item in selected]
+        if any(package is None for package in packages):
+            return None
+        module_packages = [
+            package
+            for package in packages
+            if isinstance(package, dict)
+        ]
+        package_args = [package["package_arg"] for package in module_packages]
+    else:
+        return None
+    timeout = (
+        manifest.get("flags", {}).get("agent_cli_timeout_seconds")
+        if module.get("name") == "agent-cli"
+        else manifest.get("flags", {}).get("general_timeout_seconds")
+    )
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+        return None
+    go = manifest.get("go", {}).get("executable")
+    if not isinstance(go, str) or not go:
+        return None
+    test_args = [
+        *package_args,
+        "-json",
+        "-count=1",
+        "-tags=nomicrophone",
+        "-p",
+        str(manifest.get("flags", {}).get("go_test_p")),
+        "-timeout",
+        f"{timeout}s",
+    ]
+    if module.get("name") == "agent-cli":
+        return [
+            go,
+            "run",
+            "./cmd/testtimeout",
+            "--timeout",
+            f"{timeout}s",
+            "--",
+            go,
+            "test",
+            *test_args,
+        ]
+    return [go, "test", *test_args]
+
+
+def command_identity_errors(
+    record: dict[str, Any], *, manifest: dict[str, Any], root: Path
+) -> list[str]:
+    """Validate the command's declared identity, not just a descriptive label."""
+
+    errors: list[str] = []
+    phase = record.get("phase")
+    role = record.get("role")
+    module_name = record.get("module")
+    modules = _module_index(manifest)
+    module = modules.get(module_name) if isinstance(module_name, str) else None
+    env: dict[str, str] | None = None
+    if (
+        phase == "metadata"
+        and role in {"source-rev-parse", "source-status"}
+        and manifest.get("source_repo")
+    ):
+        source_repo = record.get("source_repo") or manifest.get("source_repo")
+        if not isinstance(source_repo, str) or not source_repo:
+            return [f"{record.get('label')}: source Git command has no repository"]
+        source_repo = str(Path(source_repo).resolve())
+        expected = (
+            ["git", "-C", source_repo, "rev-parse", "HEAD"]
+            if role == "source-rev-parse"
+            else ["git", "-C", source_repo, "status", "--porcelain"]
+        )
+        if record.get("argv") != expected:
+            errors.append(f"{record.get('label')}: {role} argv is not the expected Git invocation")
+        if record.get("cwd") != source_repo:
+            errors.append(f"{record.get('label')}: {role} cwd does not match the source repository")
+        if record.get("env_overrides") != {}:
+            errors.append(f"{record.get('label')}: {role} env_overrides must be empty")
+        return errors
+    if manifest.get("mode") == "synthetic":
+        if phase in RUN_PHASES and isinstance(module, dict):
+            configured = module.get("command")
+            if isinstance(configured, list) and record.get("argv") != [str(item) for item in configured]:
+                errors.append(f"{record.get('label')}: synthetic argv does not match module command")
+        return errors
+
+    try:
+        env = manifest_env(manifest, root=root)
+    except (ProfileError, TypeError, ValueError) as exc:
+        return [f"manifest command environment is invalid: {exc}"]
+    repo_value = manifest.get("repo")
+    repo = str(Path(repo_value).resolve()) if isinstance(repo_value, str) and repo_value else None
+    argv = record.get("argv")
+    cwd = record.get("cwd")
+    if phase == "metadata":
+        if role in {"source-rev-parse", "source-status"}:
+            source_repo = record.get("source_repo") or repo
+            if not isinstance(source_repo, str) or not source_repo:
+                return [f"{record.get('label')}: source Git command has no repository"]
+            source_repo = str(Path(source_repo).resolve())
+            expected = (
+                ["git", "-C", source_repo, "rev-parse", "HEAD"]
+                if role == "source-rev-parse"
+                else ["git", "-C", source_repo, "status", "--porcelain"]
+            )
+            if argv != expected:
+                errors.append(f"{record.get('label')}: {role} argv is not the expected Git invocation")
+            if cwd != source_repo:
+                errors.append(f"{record.get('label')}: {role} cwd does not match the source repository")
+            if record.get("env_overrides") != {}:
+                errors.append(f"{record.get('label')}: {role} env_overrides must be empty")
+        elif role == "go-env":
+            expected = [
+                str(manifest.get("go", {}).get("executable")),
+                "env",
+                "-json",
+                "GOOS",
+                "GOARCH",
+                "GOVERSION",
+                "GOMODCACHE",
+                "GOCACHE",
+                "GOPATH",
+                "GOWORK",
+            ]
+            if argv != expected:
+                errors.append(f"{record.get('label')}: go env argv is not the expected invocation")
+            if cwd != repo:
+                errors.append(f"{record.get('label')}: go env cwd does not match the repository")
+            if record.get("env_overrides") != env:
+                errors.append(f"{record.get('label')}: go env environment overrides changed")
+        elif role == "go-version":
+            expected = [str(manifest.get("go", {}).get("executable")), "version"]
+            if argv != expected:
+                errors.append(f"{record.get('label')}: go version argv is not the expected invocation")
+            if cwd != repo:
+                errors.append(f"{record.get('label')}: go version cwd does not match the repository")
+            if record.get("env_overrides") != env:
+                errors.append(f"{record.get('label')}: go version environment overrides changed")
+        else:
+            errors.append(f"{record.get('label')}: unsupported metadata command role {role!r}")
+        return errors
+    if not isinstance(module, dict):
+        return [f"{record.get('label')}: command module {module_name!r} is not in the inventory"]
+    module_path = str(Path(str(module.get("path"))).resolve())
+    if cwd != module_path:
+        errors.append(f"{record.get('label')}: cwd does not match module inventory")
+    if record.get("env_overrides") != env:
+        errors.append(f"{record.get('label')}: environment overrides changed")
+    if phase == "inventory" and role == "go-list":
+        expected = [str(manifest.get("go", {}).get("executable")), "list", "-json", "-tags=nomicrophone", "./..."]
+        if argv != expected:
+            errors.append(f"{record.get('label')}: inventory argv is not the expected go list invocation")
+    elif phase == "warm" and role == "go-mod-download":
+        expected = [str(manifest.get("go", {}).get("executable")), "mod", "download"]
+        if argv != expected:
+            errors.append(f"{record.get('label')}: warm download argv is not the expected invocation")
+    elif phase == "warm" and role == "go-test-binary-compile":
+        package_index = _package_index(manifest)
+        package_name = record.get("package")
+        package = package_index.get(package_name) if isinstance(package_name, str) else None
+        binary_value = record.get("binary_path")
+        try:
+            binary_path = artifact_path(root, str(binary_value))
+        except ProfileError:
+            binary_path = None
+        if not isinstance(package, dict) or binary_path is None:
+            errors.append(f"{record.get('label')}: warm compile package or binary path is invalid")
+        else:
+            timeout = (
+                manifest["flags"]["agent_cli_timeout_seconds"]
+                if module_name == "agent-cli"
+                else manifest["flags"]["general_timeout_seconds"]
+            )
+            expected = [
+                str(manifest["go"]["executable"]),
+                "test",
+                "-tags=nomicrophone",
+                "-run",
+                "^$",
+                "-count=1",
+                "-p",
+                str(manifest["flags"]["go_test_p"]),
+                "-timeout",
+                f"{timeout}s",
+                "-c",
+                "-o",
+                str(binary_path),
+                package["package_arg"],
+            ]
+            if argv != expected:
+                errors.append(f"{record.get('label')}: warm compile argv is not the expected invocation")
+    elif phase in RUN_PHASES and role == "go-test":
+        expected = expected_test_argv(manifest, module=module, record=record)
+        if expected is None or argv != expected:
+            errors.append(f"{record.get('label')}: test argv is not the expected invocation")
+    else:
+        errors.append(f"{record.get('label')}: phase/role combination is not supported")
+    return errors
+
+
+def command_context_errors(
+    record: dict[str, Any], *, manifest: dict[str, Any]
+) -> list[str]:
+    """Validate phase ownership and context before records are aggregated."""
+
+    phase = record.get("phase")
+    role = record.get("role")
+    module = record.get("module")
+    scope = record.get("scope")
+    trial = record.get("trial")
+    selected = record.get("selected_packages")
+    errors: list[str] = []
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            errors.append(f"{record.get('label')}: {message}")
+
+    require(isinstance(selected, list), "selected_packages must be a list")
+    selected_values = selected if isinstance(selected, list) else []
+    trial_is_positive = (
+        isinstance(trial, int) and not isinstance(trial, bool) and trial > 0
+    )
+    source_roles = {"source-rev-parse", "source-status"}
+
+    if manifest.get("mode") == "synthetic":
+        if phase == "metadata" and manifest.get("source_repo"):
+            require(role in source_roles, "synthetic source metadata has an unsupported role")
+            require(module == "synthetic", "synthetic source metadata must use module synthetic")
+            require(scope == "run", "synthetic source metadata must use run scope")
+            require(trial_is_positive, "synthetic source metadata must have a positive trial")
+            require(not selected_values, "source metadata must not select packages")
+        elif phase in RUN_PHASES:
+            require(role == "synthetic-test", "synthetic run records must use synthetic-test")
+            require(module == "synthetic", "synthetic run records must use module synthetic")
+            require(scope == "run", "synthetic run records must use run scope")
+            require(trial_is_positive, "synthetic run records must have a positive trial")
+            require(bool(selected_values), "synthetic run records must select packages")
+        return errors
+
+    expected_modules = {name for name, _ in MODULES}
+    if phase == "metadata":
+        if role in source_roles:
+            require(scope in {"manifest", "run"}, "source metadata has an invalid scope")
+            if scope == "manifest":
+                require(module == "manifest", "manifest source metadata must use module manifest")
+                require(trial == 1, "manifest source metadata must use trial 1")
+            else:
+                require(module in expected_modules, "run source metadata has an unknown module")
+                require(trial_is_positive, "run source metadata must have a positive trial")
+            require(not selected_values, "source metadata must not select packages")
+        else:
+            require(role in {"go-env", "go-version"}, "manifest metadata has an unsupported role")
+            require(scope == "manifest", "manifest metadata must use manifest scope")
+            require(module == "manifest", "manifest metadata must use module manifest")
+            require(trial == 1, "manifest metadata must use trial 1")
+            require(not selected_values, "manifest metadata must not select packages")
+    elif phase == "inventory":
+        require(role == "go-list", "inventory records must use go-list")
+        require(module in expected_modules, "inventory record has an unknown module")
+        require(scope == "manifest", "inventory records must use manifest scope")
+        require(trial == 1, "inventory records must use trial 1")
+        require(not selected_values, "inventory records must not select packages")
+    elif phase == "warm":
+        require(role in {"go-mod-download", "go-test-binary-compile"}, "warm record has an unsupported role")
+        require(module in expected_modules, "warm record has an unknown module")
+        require(scope == "manifest", "warm records must use manifest scope")
+        require(trial == 1, "warm records must use trial 1")
+        if role == "go-mod-download":
+            require(not selected_values, "dependency download must not select packages")
+            require(record.get("package") is None, "dependency download must not name a package")
+        elif role == "go-test-binary-compile":
+            package = record.get("package")
+            require(isinstance(package, str) and package, "warm compile must name a package")
+            require(selected_values == [package], "warm compile must select its package")
+    elif phase in RUN_PHASES:
+        require(role == "go-test", "hermetic run records must use go-test")
+        require(module in expected_modules, "run record has an unknown module")
+        require(scope == "run", "run records must use run scope")
+        require(trial_is_positive, "run records must have a positive trial")
+        require(bool(selected_values), "run records must select packages")
     return errors
 
 
@@ -1653,6 +2168,7 @@ def parse_record_stream(
     manifest: dict[str, Any],
     expected_source_sha: Any,
     require_source_validation: bool,
+    commands_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     schema_error = record.get("_schema_error")
     if isinstance(schema_error, str) and schema_error:
@@ -1747,15 +2263,30 @@ def parse_record_stream(
                         source_validation_errors.append(
                             f"source validation {field} does not match manifest source_dirty_paths"
                         )
-                source_validation_errors.extend(
-                    validate_metadata_outputs(
-                        validation.get("metadata_commands"),
-                        root=root,
-                        expected_head=validation_head,
-                        expected_dirty=validation.get("dirty_paths"),
-                        label="source validation",
+                metadata_ids = validation.get("metadata_record_ids")
+                if not isinstance(metadata_ids, list) or not all(
+                    isinstance(item, str) for item in metadata_ids
+                ):
+                    source_validation_errors.append(
+                        "source validation metadata_record_ids must be a list of strings"
                     )
-                )
+                else:
+                    metadata_records = [commands_by_id.get(item) for item in metadata_ids]
+                    if any(record_value is None for record_value in metadata_records):
+                        source_validation_errors.append(
+                            "source validation references an unknown metadata record"
+                        )
+                    else:
+                        source_validation_errors.extend(
+                            validate_metadata_outputs(
+                                metadata_records,
+                                root=root,
+                                expected_repo=validation.get("repo"),
+                                expected_head=validation_head,
+                                expected_dirty=validation.get("dirty_paths"),
+                                label="source validation",
+                            )
+                        )
         if source_validation_errors:
             source_status = "UNVALIDATED"
 
@@ -1851,7 +2382,10 @@ def parse_record_stream(
         if record.get("timed_out")
         else "FAIL"
     )
-    expected = set(str(item) for item in record.get("selected_packages", []))
+    selected_value = record.get("selected_packages")
+    expected = set(
+        str(item) for item in selected_value
+    ) if isinstance(selected_value, list) else set()
     observed = set(parsed.get("terminal_packages", []))
     parsed["expected_packages"] = sorted(expected)
     parsed["missing_packages"] = sorted(expected - observed)
@@ -2066,7 +2600,7 @@ def validate_repetition_group(
         if duplicate_field in group:
             errors.append(
                 f"run group contains duplicate {duplicate_field}; "
-                "derive it from manifest runs"
+                "derive it from the canonical commands array"
             )
     package_to_module: dict[str, str] = {}
     for module in manifest.get("modules", []):
@@ -2144,49 +2678,414 @@ def validate_repetition_group(
     }
 
 
-def normalize_run_records(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ProfileError("manifest runs must be a list")
-    records: list[dict[str, Any]] = []
-    for index, record in enumerate(value):
-        if isinstance(record, dict):
-            normalized = dict(record)
-            errors: list[str] = []
-            if not isinstance(normalized.get("label"), str) or not normalized.get("label"):
-                errors.append("label must be a non-empty string")
-                normalized["label"] = f"<malformed-record-{index}>"
-            selected = normalized.get("selected_packages")
-            if not isinstance(selected, list):
-                errors.append("selected_packages must be a list")
-                normalized["selected_packages"] = []
-            elif not all(isinstance(item, str) for item in selected):
-                errors.append("selected_packages must contain only strings")
-                normalized["selected_packages"] = []
-            for field in ("run_group_id", "module"):
-                if not isinstance(normalized.get(field), str) or not normalized.get(field):
-                    errors.append(f"{field} must be a non-empty string")
-                    normalized[field] = None
-            repeat_index = normalized.get("repeat_index")
-            if isinstance(repeat_index, bool) or not isinstance(repeat_index, int):
-                errors.append("repeat_index must be an integer")
-                normalized["repeat_index"] = None
-            if errors:
-                normalized["_schema_error"] = (
-                    f"run record {index} " + "; ".join(errors)
-                )
-            records.append(normalized)
-            continue
-        records.append(
+def derive_run_groups(run_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Derive repetition summaries from the canonical command stream."""
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for record in run_records:
+        group_id = record.get("run_group_id")
+        if isinstance(group_id, str) and group_id:
+            grouped.setdefault(group_id, []).append(record)
+    groups: list[dict[str, Any]] = []
+    for group_id, records in grouped.items():
+        requested_values = {
+            record.get("requested_repetitions")
+            for record in records
+            if isinstance(record.get("requested_repetitions"), int)
+            and not isinstance(record.get("requested_repetitions"), bool)
+        }
+        cohort_values = {
+            record.get("cohort")
+            for record in records
+            if isinstance(record.get("cohort"), bool)
+        }
+        quiet_values = [record.get("quiet_evidence") for record in records]
+        first_quiet = quiet_values[0] if quiet_values else None
+        quiet_consistent = bool(quiet_values) and all(
+            value == first_quiet for value in quiet_values
+        )
+        repeat_values = {
+            record.get("repeat_index")
+            for record in records
+            if isinstance(record.get("repeat_index"), int)
+            and not isinstance(record.get("repeat_index"), bool)
+        }
+        groups.append(
             {
-                "label": f"<malformed-record-{index}>",
-                "_schema_error": (
-                    f"run record {index} is not a JSON object "
-                    f"(got {type(record).__name__})"
+                "schema": "c11-run-group-derived-v1",
+                "run_group_id": group_id,
+                "source_sha": records[0].get("source_sha"),
+                "created_at_utc": records[0].get("started_at_utc"),
+                "cohort": next(iter(cohort_values)) if len(cohort_values) == 1 else None,
+                "selected_packages": sorted(
+                    {
+                        package
+                        for record in records
+                        for package in record.get("selected_packages", [])
+                        if isinstance(package, str)
+                    }
                 ),
-                "selected_packages": [],
+                "requested_repetitions": (
+                    next(iter(requested_values)) if len(requested_values) == 1 else None
+                ),
+                "completed_repetitions": len(repeat_values),
+                "quiet_evidence": first_quiet,
+                "quiet_evidence_consistent": quiet_consistent,
+                "status": (
+                    "CAPTURED"
+                    if records and all(record.get("status") == "PASS" for record in records)
+                    else "FAILED"
+                ),
+                "failures": [
+                    f"{record.get('module')} repetition {record.get('repeat_index')}"
+                    for record in records
+                    if record.get("status") != "PASS"
+                ],
             }
         )
-    return records
+    groups.sort(key=lambda item: str(item.get("run_group_id")))
+    return groups
+
+
+def validate_capture(
+    manifest: dict[str, Any], *, root: Path
+) -> dict[str, Any]:
+    """Validate every manifest record before any group or display filtering."""
+
+    errors: list[str] = []
+    for legacy in LEGACY_COMMAND_COLLECTIONS:
+        if legacy in manifest:
+            errors.append(
+                f"manifest contains legacy duplicate command collection {legacy}; "
+                "use the canonical commands array"
+            )
+    commands_value = manifest.get("commands")
+    if not isinstance(commands_value, list):
+        return {
+            "errors": ["manifest commands must be a list"],
+            "commands": [],
+            "commands_by_id": {},
+            "run_records": [],
+            "run_groups": [],
+            "metadata_errors": [],
+        }
+    warm_value = manifest.get("warm")
+    if isinstance(warm_value, dict) and "commands" in warm_value:
+        errors.append(
+            "manifest warm contains duplicate command records; use the canonical commands array"
+        )
+    commands_by_id: dict[str, dict[str, Any]] = {}
+    command_indexes: dict[str, int] = {}
+    phase_records: dict[str, list[dict[str, Any]]] = {
+        phase: [] for phase in COMMAND_PHASES
+    }
+    for index, command in enumerate(commands_value):
+        label = f"command {index}"
+        errors.extend(command_record_schema_errors(command, label=label))
+        if not isinstance(command, dict):
+            continue
+        errors.extend(command_timing_errors(command))
+        errors.extend(command_record_artifact_errors(command, root=root, label=label))
+        errors.extend(command_context_errors(command, manifest=manifest))
+        errors.extend(command_identity_errors(command, manifest=manifest, root=root))
+        record_id = command.get("record_id")
+        if isinstance(record_id, str) and record_id:
+            if record_id in commands_by_id:
+                errors.append(f"command record_id {record_id!r} is duplicated")
+            else:
+                commands_by_id[record_id] = command
+                command_indexes[record_id] = index
+        phase = command.get("phase")
+        if phase in phase_records:
+            phase_records[phase].append(command)
+
+    mode = manifest.get("mode")
+    metadata_records = phase_records["metadata"]
+    inventory_records = phase_records["inventory"]
+    warm_records = phase_records["warm"]
+    run_records = [
+        command
+        for phase in ("full", "cohort")
+        for command in phase_records[phase]
+    ]
+
+    if mode == "synthetic":
+        if inventory_records or warm_records:
+            errors.append("synthetic captures must not contain inventory or warm commands")
+        if metadata_records and not manifest.get("source_repo"):
+            errors.append(
+                "synthetic captures without source_repo must not contain metadata commands"
+            )
+    else:
+        expected_modules = [name for name, _ in MODULES]
+        actual_modules = [
+            module.get("name")
+            for module in manifest.get("modules", [])
+            if isinstance(module, dict)
+        ]
+        if actual_modules != expected_modules:
+            errors.append("manifest module inventory is not the admitted six-module hermetic lane")
+        if manifest.get("inventory_status") != "PASS":
+            errors.append("manifest inventory_status must be PASS before analysis")
+        manifest_metadata_records = [
+            record for record in metadata_records if record.get("scope") == "manifest"
+        ]
+        metadata_ids = manifest.get("metadata_command_ids")
+        actual_metadata_ids = [
+            record.get("record_id") for record in manifest_metadata_records
+        ]
+        if metadata_ids != actual_metadata_ids:
+            errors.append("manifest metadata_command_ids do not match canonical metadata records")
+        expected_metadata_context = [
+            ("source-rev-parse", "manifest"),
+            ("source-status", "manifest"),
+            ("go-env", "manifest"),
+            ("go-version", "manifest"),
+        ]
+        actual_metadata_context = [
+            (record.get("role"), record.get("scope"))
+            for record in manifest_metadata_records
+        ]
+        if actual_metadata_context != expected_metadata_context:
+            errors.append(
+                "manifest metadata records must be source Git, go env, and go version in order"
+            )
+        inventory_ids = manifest.get("inventory_command_ids")
+        actual_inventory_ids = [record.get("record_id") for record in inventory_records]
+        if inventory_ids != actual_inventory_ids:
+            errors.append("manifest inventory_command_ids do not match canonical inventory records")
+        actual_inventory_context = [
+            (record.get("module"), record.get("role"), record.get("scope"))
+            for record in inventory_records
+        ]
+        expected_inventory_context = [
+            (module_name, "go-list", "manifest") for module_name in expected_modules
+        ]
+        if actual_inventory_context != expected_inventory_context:
+            errors.append(
+                "manifest inventory records must contain one ordered go-list command per module"
+            )
+        errors.extend(
+            validate_metadata_outputs(
+                manifest_metadata_records,
+                root=root,
+                expected_repo=manifest.get("repo"),
+                expected_head=manifest.get("source_sha"),
+                expected_dirty=manifest.get("source_dirty_paths"),
+                label="manifest",
+            )
+        )
+        if len(inventory_records) != len(expected_modules):
+            errors.append(
+                f"manifest must contain one inventory command per module; found {len(inventory_records)}"
+            )
+        warm = manifest.get("warm")
+        if not isinstance(warm, dict):
+            errors.append("manifest warm summary must be an object")
+        else:
+            if warm.get("status") != "PASS":
+                errors.append("manifest warm status must be PASS before analysis")
+            warm_ids = warm.get("command_ids")
+            actual_warm_ids = [record.get("record_id") for record in warm_records]
+            if warm_ids != actual_warm_ids:
+                errors.append("manifest warm command_ids do not match canonical warm records")
+            expected_warm_context = [
+                (module_name, "go-mod-download", None)
+                for module_name in expected_modules
+            ] + [
+                (module["name"], "go-test-binary-compile", package["import_path"])
+                for module in manifest.get("modules", [])
+                if isinstance(module, dict)
+                for package in module.get("packages", [])
+                if isinstance(package, dict) and package.get("has_tests")
+            ]
+            actual_warm_context = [
+                (record.get("module"), record.get("role"), record.get("package"))
+                for record in warm_records
+            ]
+            if actual_warm_context != expected_warm_context:
+                errors.append(
+                    "manifest warm records must contain ordered downloads and test-binary compiles"
+                )
+            binaries = warm.get("test_binaries", [])
+            if not isinstance(binaries, list):
+                errors.append("manifest warm test_binaries must be a list")
+                binaries = []
+            expected_binaries = [
+                (module["name"], package["import_path"], bool(package.get("has_tests")))
+                for module in manifest.get("modules", [])
+                if isinstance(module, dict)
+                for package in module.get("packages", [])
+                if isinstance(package, dict)
+            ]
+            actual_binaries = [
+                (binary.get("module"), binary.get("package"), binary.get("status") != "SKIPPED_NO_TEST_FILES")
+                for binary in binaries
+                if isinstance(binary, dict)
+            ]
+            if actual_binaries != expected_binaries:
+                errors.append("manifest warm test_binaries do not match the package inventory")
+            for binary in binaries:
+                if not isinstance(binary, dict):
+                    errors.append("manifest warm test_binaries contains a non-object")
+                    continue
+                package_index = _package_index(manifest)
+                package = package_index.get(binary.get("package"))
+                if not isinstance(package, dict):
+                    errors.append("manifest warm test binary names an unknown package")
+                    continue
+                if not package.get("has_tests"):
+                    if binary.get("status") != "SKIPPED_NO_TEST_FILES":
+                        errors.append("warm no-test package must be explicitly skipped")
+                    if "command_id" in binary:
+                        errors.append("warm no-test package must not reference a compile command")
+                    continue
+                if "command_record" in binary:
+                    errors.append("manifest warm test_binaries contains a duplicate command record")
+                command_id = binary.get("command_id")
+                command = commands_by_id.get(command_id)
+                if not isinstance(command, dict):
+                    errors.append("manifest warm test binary references an unknown command")
+                    continue
+                if command.get("role") != "go-test-binary-compile" or command.get("package") != binary.get("package"):
+                    errors.append("manifest warm test binary references the wrong compile command")
+                if binary.get("status") != command.get("status"):
+                    errors.append("manifest warm test binary status does not match its command")
+                if warm.get("status") == "PASS" and not all(
+                    field in binary for field in ("path", "sha256", "bytes")
+                ):
+                    errors.append("successful warm compile must retain its test binary artifact")
+
+        full_records = phase_records["full"]
+        cohort_records = phase_records["cohort"]
+        full_groups = derive_run_groups(full_records)
+        cohort_groups = derive_run_groups(cohort_records)
+        if len(full_groups) != 1:
+            errors.append("hermetic schedule requires exactly one full inventory group")
+        elif full_groups[0].get("requested_repetitions") != 1:
+            errors.append("full inventory group must request exactly one repetition")
+        if not cohort_groups:
+            errors.append("hermetic schedule requires a selected slow cohort after the full trial")
+        elif len(cohort_groups) != 1:
+            errors.append("hermetic schedule permits exactly one selected cohort group")
+        elif cohort_groups[0].get("requested_repetitions") != 2:
+            errors.append("selected cohort group must request two repetitions")
+        if full_records and cohort_records:
+            last_full_index = max(
+                command_indexes.get(record.get("record_id"), -1)
+                for record in full_records
+            )
+            first_cohort_index = min(
+                command_indexes.get(record.get("record_id"), 1 << 30)
+                for record in cohort_records
+            )
+            if first_cohort_index <= last_full_index:
+                errors.append("cohort commands must follow the full inventory commands")
+
+    for record in run_records:
+        phase = record.get("phase")
+        required = (
+            "source_sha",
+            "source_validation",
+            "run_group_id",
+            "repeat_index",
+            "requested_repetitions",
+            "cohort",
+            "expected_package_count",
+            "test_result_cache_policy",
+            "quiet_evidence",
+        )
+        for field in required:
+            if field not in record:
+                errors.append(f"run record {record.get('record_id')!r} is missing {field}")
+        if record.get("phase") == "full" and record.get("cohort") is not False:
+            errors.append(f"run record {record.get('record_id')!r} full phase must set cohort=false")
+        if record.get("phase") == "cohort" and record.get("cohort") is not True:
+            errors.append(f"run record {record.get('record_id')!r} cohort phase must set cohort=true")
+        expected_count = record.get("expected_package_count")
+        selected = record.get("selected_packages")
+        if (
+            isinstance(expected_count, int)
+            and not isinstance(expected_count, bool)
+            and isinstance(selected, list)
+            and expected_count != len(selected)
+        ):
+            errors.append(f"run record {record.get('record_id')!r} package count does not match selection")
+        requested = record.get("requested_repetitions")
+        if (
+            isinstance(requested, bool)
+            or not isinstance(requested, int)
+            or requested < 1
+            or requested > 3
+        ):
+            errors.append(f"run record {record.get('record_id')!r} has invalid requested_repetitions")
+        repeat_index = record.get("repeat_index")
+        if repeat_index != record.get("trial"):
+            errors.append(f"run record {record.get('record_id')!r} trial does not match repeat_index")
+        if mode != "synthetic":
+            validation = record.get("source_validation")
+            if not isinstance(validation, dict):
+                errors.append(f"run record {record.get('record_id')!r} has no source validation object")
+            else:
+                metadata_ids = validation.get("metadata_record_ids")
+                if not isinstance(metadata_ids, list) or len(metadata_ids) != 2:
+                    errors.append(
+                        f"run record {record.get('record_id')!r} source validation must reference two metadata records"
+                    )
+                else:
+                    metadata = [commands_by_id.get(item) for item in metadata_ids]
+                    if any(item is None for item in metadata):
+                        errors.append(f"run record {record.get('record_id')!r} references unknown source metadata")
+                    else:
+                        expected_roles = ["source-rev-parse", "source-status"]
+                        actual_roles = [item.get("role") for item in metadata]
+                        if actual_roles != expected_roles:
+                            errors.append(
+                                f"run record {record.get('record_id')!r} source metadata roles are not Git HEAD/status"
+                            )
+                        for item in metadata:
+                            if item.get("phase") != "metadata":
+                                errors.append(
+                                    f"run record {record.get('record_id')!r} source metadata is not a metadata-phase command"
+                                )
+                            if item.get("scope") != "run":
+                                errors.append(
+                                    f"run record {record.get('record_id')!r} source metadata is not run-scoped"
+                                )
+                            if item.get("module") != record.get("module"):
+                                errors.append(
+                                    f"run record {record.get('record_id')!r} source metadata module does not match the run"
+                                )
+                            if item.get("trial") != record.get("trial"):
+                                errors.append(
+                                    f"run record {record.get('record_id')!r} source metadata trial does not match the run"
+                                )
+                        errors.extend(
+                            validate_metadata_outputs(
+                                metadata,
+                                root=root,
+                                expected_repo=validation.get("repo"),
+                                expected_head=validation.get("head"),
+                                expected_dirty=validation.get("dirty_paths"),
+                                label=f"run record {record.get('record_id')!r} source validation",
+                            )
+                        )
+
+    run_groups = derive_run_groups(run_records)
+    for group in run_groups:
+        if not group.get("quiet_evidence_consistent"):
+            errors.append(
+                f"run group {group.get('run_group_id')!r} has inconsistent quiet evidence references"
+            )
+    return {
+        "errors": errors,
+        "commands": [command for command in commands_value if isinstance(command, dict)],
+        "commands_by_id": commands_by_id,
+        "command_indexes": command_indexes,
+        "run_records": run_records,
+        "run_groups": run_groups,
+        "metadata_errors": errors,
+    }
 
 
 def invalid_analysis(
@@ -2218,47 +3117,60 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
     root = manifest_root(manifest_path)
-    all_records = normalize_run_records(manifest.get("runs", []))
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    if (
+        manifest.get("fresh_timing_status") == "BLOCKED"
+        and "commands" not in manifest
+    ):
+        analysis = {
+            "schema": ANALYSIS_SCHEMA,
+            "status": "BLOCKED",
+            "fresh_timing": "BLOCKED",
+            "source_sha": manifest.get("source_sha"),
+            "reason": manifest.get("fresh_timing_reason"),
+            "ci_evidence": manifest.get("ci_evidence", []),
+            "inventory": {
+                "expected_packages": sum(
+                    len(module.get("packages", []))
+                    for module in manifest.get("modules", [])
+                    if isinstance(module, dict)
+                ),
+                "observed_packages": None,
+                "coverage": "UNKNOWN",
+            },
+            "lane": {
+                "lane_wall_seconds": None,
+                "sum_invocation_wall_seconds": None,
+                "definition": "No fresh run was authorized.",
+            },
+            "failure_references": manifest.get("failure_references", []),
+            "provenance": manifest.get("provenance", {}),
+        }
+        write_json_atomic(output / "analysis.json", analysis)
+        return {
+            "status": "BLOCKED",
+            "analysis": str(output / "analysis.json"),
+            "source_sha": manifest.get("source_sha"),
+        }, 0
+
+    capture = validate_capture(manifest, root=root)
+    capture_errors = list(capture.get("errors", []))
+    all_records = list(capture.get("run_records", []))
     selected_record_indices = [
         index
         for index, record in enumerate(all_records)
         if args.group is None or record.get("run_group_id") == args.group
     ]
     records_for_analysis = [all_records[index] for index in selected_record_indices]
-    output = Path(args.output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
     selection_error = None
     if not all_records:
-        if manifest.get("fresh_timing_status") == "BLOCKED":
-            analysis = {
-                "schema": ANALYSIS_SCHEMA,
-                "status": "BLOCKED",
-                "fresh_timing": "BLOCKED",
-                "source_sha": manifest.get("source_sha"),
-                "reason": manifest.get("fresh_timing_reason"),
-                "ci_evidence": manifest.get("ci_evidence", []),
-                "inventory": {
-                    "expected_packages": sum(
-                        len(module.get("packages", []))
-                        for module in manifest.get("modules", [])
-                    ),
-                    "observed_packages": None,
-                    "coverage": "UNKNOWN",
-                },
-                "lane": {
-                    "lane_wall_seconds": None,
-                    "sum_invocation_wall_seconds": None,
-                    "definition": "No fresh run was authorized.",
-                },
-                "failure_references": manifest.get("failure_references", []),
-                "provenance": manifest.get("provenance", {}),
-            }
-            write_json(output / "analysis.json", analysis)
-            return {
-                "status": "BLOCKED",
-                "analysis": str(output / "analysis.json"),
-                "source_sha": manifest.get("source_sha"),
-            }, 0
+        if capture_errors:
+            return invalid_analysis(
+                output,
+                manifest_path=manifest_path,
+                error=ProfileError("; ".join(capture_errors)),
+            )
         raise ProfileError("manifest contains no captured runs and is not marked BLOCKED")
     if not records_for_analysis:
         selection_error = f"no captured runs match --group {args.group!r}"
@@ -2273,6 +3185,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             manifest=manifest,
             expected_source_sha=manifest.get("source_sha"),
             require_source_validation=require_source_validation,
+            commands_by_id=capture["commands_by_id"],
         )
         for record in all_records
     ]
@@ -2361,68 +3274,30 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             )
         ),
     }
-    manifest_metadata_errors: list[str] = []
-    if manifest.get("mode") != "synthetic" or "metadata_commands" in manifest:
-        manifest_metadata_errors = validate_metadata_outputs(
-            manifest.get("metadata_commands"),
-            root=root,
-            expected_head=manifest.get("source_sha"),
-            expected_dirty=manifest.get("source_dirty_paths"),
-            label="manifest",
-        )
-
-    run_groups = manifest.get("run_groups")
-    run_groups_for_analysis = run_groups if isinstance(run_groups, list) else []
+    manifest_metadata_errors: list[str] = capture_errors
+    run_groups_for_analysis = capture.get("run_groups", [])
     group_validation: dict[str, dict[str, Any]] = {}
-    duplicate_group_ids: set[str] = set()
-    if isinstance(run_groups, list):
-        for index, group in enumerate(run_groups):
-            if not isinstance(group, dict):
-                group_validation[f"<group-{index}>"] = {
-                    "status": "INVALID",
-                    "valid": False,
-                    "errors": ["run group is not an object"],
-                    "quiet_evidence": {"status": "INVALID"},
-                }
-                continue
-            group_id = group.get("run_group_id")
-            key = group_id if isinstance(group_id, str) and group_id else f"<group-{index}>"
-            if key in group_validation:
-                duplicate_group_ids.add(key)
-                continue
-            group_records = [
-                record
-                for record in all_records
-                if record.get("run_group_id") == group_id
-            ]
-            repetition = validate_repetition_group(group, group_records, manifest)
-            quiet = validate_recorded_quiet_evidence(
-                group.get("quiet_evidence"),
-                root=root,
-                mode=str(manifest.get("mode", "hermetic")),
-            )
-            errors = list(repetition.get("errors", []))
-            if quiet.get("status") != "PASS":
-                errors.append(str(quiet.get("error", "quiet evidence is invalid")))
-            group_validation[key] = {
-                **repetition,
-                "quiet_evidence": quiet,
-                "valid": not errors,
-                "errors": errors,
-            }
-    else:
-        group_validation["<manifest>"] = {
-            "status": "INVALID",
-            "valid": False,
-            "errors": ["manifest has no run_groups list"],
-            "quiet_evidence": {"status": "INVALID"},
-        }
-    for duplicate in sorted(duplicate_group_ids):
-        group_validation[duplicate] = {
-            "status": "INVALID",
-            "valid": False,
-            "errors": [f"run_group_id {duplicate!r} is duplicated"],
-            "quiet_evidence": {"status": "INVALID"},
+    for group in run_groups_for_analysis:
+        group_id = group.get("run_group_id")
+        group_records = [
+            record
+            for record in all_records
+            if record.get("run_group_id") == group_id
+        ]
+        repetition = validate_repetition_group(group, group_records, manifest)
+        quiet = validate_recorded_quiet_evidence(
+            group.get("quiet_evidence"),
+            root=root,
+            mode=str(manifest.get("mode", "hermetic")),
+        )
+        errors = list(repetition.get("errors", []))
+        if quiet.get("status") != "PASS":
+            errors.append(str(quiet.get("error", "quiet evidence is invalid")))
+        group_validation[str(group_id)] = {
+            **repetition,
+            "quiet_evidence": quiet,
+            "valid": not errors,
+            "errors": errors,
         }
     for parsed in parsed_all_records:
         record_value = parsed.get("record")
@@ -2503,7 +3378,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if manifest_metadata_errors:
         stream_failures.append(
             {
-                "record": "manifest:metadata_commands",
+                "record": "manifest:commands",
                 "error": "; ".join(manifest_metadata_errors),
                 "process_status": None,
                 "source_status": None,
@@ -2557,6 +3432,16 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         parsed.get("raw_stderr_retained") is True for parsed in parsed_all_records
     )
     warm = manifest.get("warm", {})
+    warm_commands = [
+        command
+        for command in capture.get("commands", [])
+        if command.get("phase") == "warm"
+    ]
+    inventory_commands = [
+        command
+        for command in capture.get("commands", [])
+        if command.get("phase") == "inventory"
+    ]
     analysis = {
         "schema": ANALYSIS_SCHEMA,
         "status": "PASS" if fresh_timing == "PASS" else "INVALID",
@@ -2612,20 +3497,29 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             "subtest_overlap_count": len(subtest_records),
         },
         "setup_and_build": {
-            "inventory_cold_setup_seconds": sum(
-                record.get("wall_seconds", 0.0)
-                for record in manifest.get("inventory_commands", [])
+            "inventory_cold_setup_seconds": checked_duration_sum(
+                (
+                    record.get("wall_seconds", 0.0)
+                    for record in inventory_commands
+                ),
+                label="inventory setup duration total",
             ),
             "warm_status": warm.get("status", "NOT_RUN"),
-            "dependency_download_seconds": sum(
-                record.get("wall_seconds", 0.0)
-                for record in warm.get("commands", [])
-                if record.get("phase") == "dependency-download"
+            "dependency_download_seconds": checked_duration_sum(
+                (
+                    record.get("wall_seconds", 0.0)
+                    for record in warm_commands
+                    if record.get("role") == "go-mod-download"
+                ),
+                label="dependency download duration total",
             ),
-            "test_binary_compile_seconds": sum(
-                record.get("wall_seconds", 0.0)
-                for record in warm.get("commands", [])
-                if record.get("phase") == "test-binary-compile"
+            "test_binary_compile_seconds": checked_duration_sum(
+                (
+                    record.get("wall_seconds", 0.0)
+                    for record in warm_commands
+                    if record.get("role") == "go-test-binary-compile"
+                ),
+                label="test binary compile duration total",
             ),
             "test_build_attribution": (
                 "RESIDUAL_ESTIMATE: go test execution can include package/test "

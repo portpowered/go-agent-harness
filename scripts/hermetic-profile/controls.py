@@ -171,7 +171,9 @@ def synthetic_manifest(
         },
         "paths": {"manifest": str((root / "manifest.json").resolve())},
         "inventory_status": "PASS",
-        "inventory_commands": [],
+        "metadata_command_ids": [],
+        "inventory_command_ids": [],
+        "commands": [],
         "modules": [
             {
                 "name": "synthetic",
@@ -195,9 +197,7 @@ def synthetic_manifest(
                 ],
             }
         ],
-        "warm": {"status": "NOT_RUN", "commands": [], "test_binaries": []},
-        "runs": [],
-        "run_groups": [],
+        "warm": {"status": "NOT_RUN", "command_ids": [], "test_binaries": []},
         "measurement_status": "UNMEASURED",
     }
     if source_repo is not None:
@@ -228,6 +228,58 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ControlError(f"{path} is not an object")
     return value
+
+
+def run_command_indexes(manifest: dict[str, Any]) -> list[int]:
+    commands = manifest.get("commands", [])
+    if not isinstance(commands, list):
+        return []
+    return [
+        index
+        for index, command in enumerate(commands)
+        if isinstance(command, dict) and command.get("phase") in {"full", "cohort"}
+    ]
+
+
+def run_commands(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    commands = manifest.get("commands", [])
+    if not isinstance(commands, list):
+        return []
+    return [
+        command
+        for command in commands
+        if isinstance(command, dict) and command.get("phase") in {"full", "cohort"}
+    ]
+
+
+def first_run(manifest: dict[str, Any]) -> dict[str, Any]:
+    records = run_commands(manifest)
+    if not records:
+        raise ControlError("manifest contains no canonical run command")
+    return records[0]
+
+
+def group_run_commands(manifest: dict[str, Any], group_id: str) -> list[dict[str, Any]]:
+    return [
+        record for record in run_commands(manifest) if record.get("run_group_id") == group_id
+    ]
+
+
+def source_metadata(manifest: dict[str, Any], run: dict[str, Any]) -> list[dict[str, Any]]:
+    commands = manifest.get("commands", [])
+    by_id = {
+        command.get("record_id"): command
+        for command in commands
+        if isinstance(command, dict)
+    }
+    validation = run.get("source_validation")
+    if not isinstance(validation, dict):
+        return []
+    return [
+        by_id[item]
+        for item in validation.get("metadata_record_ids", [])
+        if item in by_id
+    ]
 
 
 def exercise_case(
@@ -273,7 +325,7 @@ def exercise_case(
     run_summary = parse_driver_json(run_record, f"{name} run")
     if remove_stdout_after_run:
         captured_manifest = read_json(manifest)
-        captured_records = captured_manifest.get("runs", [])
+        captured_records = run_commands(captured_manifest)
         if not captured_records:
             raise ControlError(f"{name}: run produced no command record to tamper")
         stdout_path = captured_records[0].get("stdout_path")
@@ -545,36 +597,39 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
     mutations: list[dict[str, Any]] = []
 
     def append_unreferenced_invalid_group(value: dict[str, Any]) -> None:
-        invalid_group = json.loads(json.dumps(value["run_groups"][0]))
-        invalid_group.update(
+        invalid_record = json.loads(json.dumps(first_run(value)))
+        invalid_record.update(
             {
+                "record_id": "unreferenced-invalid-record",
+                "label": "unreferenced-invalid-record",
                 "run_group_id": "unreferenced-invalid",
                 "requested_repetitions": 0,
                 "completed_repetitions": 0,
             }
         )
-        value["run_groups"].append(invalid_group)
+        value["commands"].append(invalid_record)
 
     for mutation_name, mutate, checks in (
         (
             "missing-record-source",
-            lambda value: value["runs"][0].pop("source_sha", None),
+            lambda value: first_run(value).pop("source_sha", None),
             {
                 "source.source_identity.all_match": False,
                 "source.source_identity.missing_records": [
-                    baseline["runs"][0]["label"]
+                    first_run(baseline)["label"]
                 ],
             },
         ),
         (
             "missing-quiet-evidence",
-            lambda value: value["run_groups"][0].pop("quiet_evidence", None),
+            lambda value: first_run(value).pop("quiet_evidence", None),
             {"repetitions.0.validation.valid": False},
         ),
         (
             "incomplete-repetition-count",
-            lambda value: value["run_groups"][0].update(
-                {"requested_repetitions": 3, "completed_repetitions": 1}
+            lambda value: (
+                first_run(value).update({"requested_repetitions": 3}),
+                value["commands"].pop(run_command_indexes(value)[-1]),
             ),
             {
                 "repetitions.0.validation.valid": False,
@@ -585,9 +640,9 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         (
             "missing-run-timing",
             lambda value: (
-                value["runs"][0].pop("monotonic_start_ns", None),
-                value["runs"][0].pop("monotonic_end_ns", None),
-                value["runs"][0].pop("wall_seconds", None),
+                first_run(value).pop("monotonic_start_ns", None),
+                first_run(value).pop("monotonic_end_ns", None),
+                first_run(value).pop("wall_seconds", None),
             ),
             {
                 "failure_references.0.timing_errors.0": (
@@ -600,25 +655,17 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         ),
         (
             "malformed-run-record",
-            lambda value: value["runs"].__setitem__(0, "not-a-run-record"),
-            {
-                "failure_references.0.error": (
-                    "run record 0 is not a JSON object (got str)"
-                ),
-            },
+            lambda value: value["commands"].__setitem__(run_command_indexes(value)[0], "not-a-run-record"),
+            {},
         ),
         (
             "null-selected-packages",
-            lambda value: value["runs"][0].update({"selected_packages": None}),
-            {
-                "failure_references.0.error": (
-                    "run record 0 selected_packages must be a list"
-                ),
-            },
+            lambda value: first_run(value).update({"selected_packages": None}),
+            {},
         ),
         (
             "oversized-monotonic-timestamp",
-            lambda value: value["runs"][0].update(
+            lambda value: first_run(value).update(
                 {"monotonic_end_ns": 10**400}
             ),
             {
@@ -642,7 +689,7 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         (
             "incomplete-command-record-schema",
             lambda value: [
-                value["runs"][0].pop(field, None)
+                first_run(value).pop(field, None)
                 for field in (
                     "schema",
                     "argv",
@@ -686,14 +733,14 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             manifest,
             "unreferenced-invalid-run-group-filtered",
             {
-                "failure_references.0.record": "run_group:unreferenced-invalid",
+                "failure_references.0.record": "unreferenced-invalid-record",
                 "repetitions.0.validation.valid": True,
             },
-            group=baseline["run_groups"][0]["run_group_id"],
+            group=first_run(baseline)["run_group_id"],
         )
     )
     stale_manifest = json.loads(json.dumps(baseline))
-    stale_manifest["runs"][0]["selected_packages"] = None
+    first_run(stale_manifest)["selected_packages"] = None
     write_json(manifest, stale_manifest)
     mutations.append(
         analyze_mutated_manifest(
@@ -737,7 +784,7 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         mutate(tampered_quiet)
         write_json(quiet, tampered_quiet)
         mutated = json.loads(json.dumps(baseline))
-        mutated["run_groups"][0]["quiet_evidence"]["sha256"] = sha256_file(quiet)
+        first_run(mutated)["quiet_evidence"]["sha256"] = sha256_file(quiet)
         write_json(manifest, mutated)
         mutations.append(
             analyze_mutated_manifest(
@@ -826,7 +873,7 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
         )
     baseline = read_json(manifest)
     mutations: list[dict[str, Any]] = []
-    original = baseline["runs"][0]
+    original = first_run(baseline)
     for stream_name, path_field, hash_field, retained_field, suffix in (
         ("stdout", "stdout_path", "stdout_sha256", "raw_stdout_retained", "jsonl"),
         ("stderr", "stderr_path", "stderr_sha256", "raw_stderr_retained", "log"),
@@ -841,8 +888,8 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
         ):
             mutation_name = f"{stream_name}-{redirect_kind}-redirect"
             mutated = json.loads(json.dumps(baseline))
-            mutated["runs"][0][path_field] = redirected_path
-            mutated["runs"][0][hash_field] = redirected_sha
+            first_run(mutated)[path_field] = redirected_path
+            first_run(mutated)[hash_field] = redirected_sha
             write_json(manifest, mutated)
             mutations.append(
                 analyze_mutated_manifest(
@@ -868,7 +915,7 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
     ):
         mutation_name = f"quiet-{redirect_kind}-redirect"
         mutated = json.loads(json.dumps(baseline))
-        quiet_record = mutated["run_groups"][0]["quiet_evidence"]
+        quiet_record = first_run(mutated)["quiet_evidence"]
         quiet_record["path"] = redirected_path
         quiet_record["sha256"] = redirected_quiet_sha
         write_json(manifest, mutated)
@@ -961,7 +1008,7 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
             f"source-identity: valid source capture failed\n{capture_record['stderr']}"
         )
     baseline = read_json(manifest)
-    captured_records = baseline.get("runs", [])
+    captured_records = run_commands(baseline)
     if not isinstance(captured_records, list) or not captured_records:
         raise ControlError("source-identity: capture produced no run record")
     captured = captured_records[0]
@@ -974,34 +1021,40 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
     for mutation_name, mutate in (
         (
             "forged-captured-head",
-            lambda value: value["runs"][0]["source_validation"].update(
+            lambda value: first_run(value)["source_validation"].update(
                 {"head": "f" * 40}
             ),
         ),
         (
             "forged-captured-repository",
-            lambda value: value["runs"][0]["source_validation"].update(
+            lambda value: first_run(value)["source_validation"].update(
                 {"repo": str(case_dir / "forged-source-repo")}
             ),
         ),
         (
             "forged-captured-dirty-paths",
-            lambda value: value["runs"][0]["source_validation"].update(
+            lambda value: first_run(value)["source_validation"].update(
                 {"dirty_paths": ["forged.txt"]}
             ),
         ),
         (
             "forged-metadata-artifact-sha",
-            lambda value: value["runs"][0]["source_validation"][
-                "metadata_commands"
-            ][0].update({"stdout_sha256": "0" * 64}),
+            lambda value: source_metadata(value, first_run(value))[0].update(
+                {"stdout_sha256": "0" * 64}
+            ),
+        ),
+        (
+            "forged-git-command-argv",
+            lambda value: source_metadata(value, first_run(value))[0].update(
+                {"argv": ["echo", "forged"]}
+            ),
         ),
         (
             "forged-source-output-identity",
             lambda value: (
                 value.update({"source_sha": "f" * 40}),
-                value["runs"][0].update({"source_sha": "f" * 40}),
-                value["runs"][0]["source_validation"].update(
+                first_run(value).update({"source_sha": "f" * 40}),
+                first_run(value)["source_validation"].update(
                     {"head": "f" * 40, "expected_head": "f" * 40}
                 ),
             ),
@@ -1057,6 +1110,81 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
         "mutations": mutations,
         "scenario_count": len(mutations),
         "source_sha": source_sha,
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_canonical_phase_validation(output: Path) -> dict[str, Any]:
+    """Keep phase records on the single public command boundary."""
+
+    case_dir = output / "canonical-phase-validation"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    capture = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="capture",
+    )
+    if capture["exit_status"] != 0:
+        raise ControlError(
+            f"canonical-phase-validation: capture failed\n{capture['stderr']}"
+        )
+    baseline = read_json(manifest)
+    mutations: list[dict[str, Any]] = []
+    for name, mutate in (
+        (
+            "malformed-inventory-record",
+            lambda value: value.update({"inventory_commands": ["not-a-command"]}),
+        ),
+        (
+            "malformed-warm-record",
+            lambda value: value["warm"].update({"commands": ["not-a-command"]}),
+        ),
+        (
+            "malformed-canonical-record",
+            lambda value: value["commands"].__setitem__(0, "not-a-command"),
+        ),
+        (
+            "canonical-inventory-record-rejected",
+            lambda value: first_run(value).update({"phase": "inventory"}),
+        ),
+        (
+            "canonical-warm-record-rejected",
+            lambda value: first_run(value).update({"phase": "warm"}),
+        ),
+        (
+            "no-warm-hermetic-capture",
+            lambda value: (
+                value.update({"mode": "hermetic"}),
+                value["warm"].update({"status": "NOT_RUN"}),
+            ),
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(case_dir, manifest, name, {})
+        )
+    write_json(manifest, baseline)
+    return {
+        "name": "canonical-phase-validation",
+        "capture": capture,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
         "raw_artifacts_retained": True,
     }
 
@@ -1324,6 +1452,13 @@ def main() -> int:
         source_identity_result = exercise_source_identity(output)
         results.append(source_identity_result)
         case_count += source_identity_result["scenario_count"] + 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        canonical_phase_result = exercise_canonical_phase_validation(output)
+        results.append(canonical_phase_result)
+        case_count += canonical_phase_result["scenario_count"] + 1
     except ControlError as exc:
         failures.append(str(exc))
 

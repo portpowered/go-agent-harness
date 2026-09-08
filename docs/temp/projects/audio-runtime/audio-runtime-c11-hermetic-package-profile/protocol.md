@@ -92,6 +92,15 @@ monotonic start/end values, wall interval, raw stdout/stderr paths, byte counts,
 and SHA-256 hashes. Go test JSON remains on stdout; diagnostics remain on
 stderr. Offline `analyze` only reads retained artifacts.
 
+The manifest has one canonical `commands` array for all metadata, inventory,
+warm-up, full-lane, and cohort command records. `metadata_command_ids`,
+`inventory_command_ids`, and `warm.command_ids` are references into that array;
+repetition groups are derived from its full/cohort records and are not a second
+record store. The analyzer validates every canonical record, including exact
+phase/role/module context and the expected Git, `go list`, warm, and test
+invocations, before applying `--group` display filtering. Legacy duplicate
+command arrays and nested warm/group command copies are rejected.
+
 ## Analysis rules
 
 The analyzer parses the same package-terminal event model used by timingate,
