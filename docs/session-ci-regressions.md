@@ -1,104 +1,76 @@
-# Reproducing recurring session CI failures
+# Fast session regression workflow
 
-From the repository root:
+Start with the failing test and its full diagnostic output. Fix its cause, run that
+test, then broaden verification only for the behavior the change can affect. A
+passing local run is not a substitute for the exact-head hosted CI gate.
+
+## Local feedback
+
+For one fixture or helper change, run the named test from its owning Go module.
+Keep its subtests and negative controls. Use normal mode first; add race mode for
+concurrency/lifecycle changes and coverage mode for instrumentation-sensitive
+recording or timing regressions. Record the source revision, OS, mode and count.
+
+For a change spanning session/provider/device boundaries, run the accumulated
+historical cohort from the repository root:
 
 ```sh
-scripts/test-session-ci-regressions.sh normal
-scripts/test-session-ci-regressions.sh coverage
-scripts/test-session-ci-regressions.sh race
-# Or run all three modes, preserving failures from every mode:
-scripts/test-session-ci-regressions.sh all
+COUNT=1 scripts/test-session-ci-regressions.sh normal
 ```
 
-The runner selects the cumulative top-level failing tests from GitHub Actions runs
-34121252743, 34128356822, 34132278337, 34134396539, and 34137090509. All their
-subtests run, including the high-rate audio stress trials. The CLI interrupt-order
-case lives in a separate package, so the runner checks both packages sequentially.
-It does not discard an earlier failure when a later package succeeds.
+For concurrency and instrumentation verification:
 
-Each mode repeats the cohort three times with the microphone stub. Normal and
-coverage use CGO disabled; race enables CGO for Go's race detector. Coverage enables
-instrumentation; it does not measure the repository's coverage threshold. Every
-package invocation retains the existing eight-minute timeout and shorter test
-or child-process deadlines. The tests use fixtures/loopback providers, not live
-Realtime sessions. Run with the repository's Go version (CI uses Go 1.26.7).
+```sh
+COUNT=1 scripts/test-session-ci-regressions.sh race
+COUNT=1 scripts/test-session-ci-regressions.sh coverage
+```
 
-Use `COUNT=1` for diagnosis or a larger count for repeated evidence. Each mode
-and package is printed before execution, and verbose Go output names failing
-scenarios. Save stdout/stderr with normal shell redirection when attaching evidence.
-Keep the exit status: a failure must never become success through a log pipeline.
+Use all modes for a stabilization release or a demonstrated cross-mode failure:
 
-The cohort is a compact reproduction target, not a substitute for full CI. Ubuntu
-CI and macOS can expose different scheduling; record OS, source revision, mode,
-count and outcome. A local pass does not establish hosted CI success. Add newly
-identified recurring scenarios by name, retaining the meaningful negative controls.
+```sh
+COUNT=1 scripts/test-session-ci-regressions.sh all
+```
 
-## Stabilization findings
+The default count is three when COUNT is omitted. Increase it for an identified
+intermittent failure, not mechanically after every edit. Once the relevant checks
+pass, commit/push and let the CI script own full-suite polling; do not occupy an
+executor by repeatedly rebuilding and running the entire CI matrix locally.
 
-The five source runs exposed a continuation-admission race and two fixture
-ordering problems:
+## What the cumulative runner covers
 
-- Tool results and provider responses cross separate queues. The live adapter now
-  records a tool-result or continuation admission before calling a provider that
-  may respond synchronously, then rolls back only that admission if the send is
-  rejected. A failed continuation received before the local tool `MESSAGE.END` is
-  held until that accepted result boundary arrives, preserving the typed image or
-  tool continuation failure.
-- The tool-filter fixture used to close its provider immediately after sending the
-  continuation. It now closes after the observer has received every expected tool
-  result, so the test measures filtering and result correlation deterministically.
-  This barrier does not prove that arbitrary output survives an abrupt provider
-  close; transport teardown durability remains a separate contract.
-- Family B gated correction input on a total stdout byte count that included a
-  separately suppressible tool-continuation audio marker. It now waits for the
-  exact original-response marker, across split reads, with bounded retained output
-  and explicit cancellation/closed-output errors. Response identity, tool order,
-  correction timing, filesystem checkpoints, and both audio markers remain
-  independent assertions, so a coincidental PCM sequence cannot satisfy the test.
-- The high-rate remote-device oracle counted every nonzero rendered sample as
-  provider PCM. On slower hosted trials, the default 2.5-second local hold-tone
-  policy emitted cue samples during tool gaps, producing an apparent 105.9%
-  retention despite zero drops, overflows, or discards. Exact-delivery fixtures
-  now select an explicit one-hour cue threshold through the embedded session and
-  runtime-device request. The production nil policy still uses the default cue.
-  A forced three-second gap control proves that the default emits a bounded
-  bipolar cue between two unchanged provider responses, while the provider-only
-  fixture preserves strict full-slice equality. Duplication, loss, reorder, and
-  corruption negative controls remain strict.
+The runner preserves 17 historical CLI integration scenarios and all their
+subtests, the separate CLI interruption-order test, simulated-device regressions,
+and composed OpenAI provider/agent-loop tests. It includes the failures retained
+through hosted run34174519177. Keep newly discovered regressions in this cohort;
+never replace the last failure name and discard earlier cases.
 
-On macOS, the cumulative cohort passed three complete iterations in normal and
-coverage modes and three complete race iterations. Each mode included 60 high-rate
-audio trials. The exact-marker unit checks passed 100 repetitions; the direct and
-suite Family B checks passed 30 repetitions each. Hosted run 34151678218 later
-passed the high-rate suite but reproduced one Family B recording-order failure in
-the coverage job. Exact local coverage repetitions reproduced four failures in 200
-runs: stdout had already delivered the original PCM marker, while the normalized
-MESSAGE.START/audio observation was recorded after RESPONSE.CANCEL and the
-correction input.
+Each mode reports the package and test names and retains failure status even if a
+later package succeeds. CLI tests use the microphone stub and loopback/scripted
+providers. Normal/coverage disable CGO; race enables it. Coverage mode instruments
+tests but does not enforce repository floors: make coverage owns that measurement,
+including external CLI/embedding callers and unioned source blocks.
 
-The media bridge now finishes bounded recorder admission before it makes each
-frame readable to the device. A device reader waiting for recorder admission
-remains cancellable, and a final frame whose observation completed still drains
-after concurrent port closure. This establishes the device/recording order without
-sorting timestamps; device delivery waits for that bounded recorder admission.
-It does not yet identify an untagged bridged frame with its provider response. The
-Family B fixture omits provider item IDs; adding them exposed a second real gap:
-server-VAD interruption can discard the queued response-end marker after a frame
-has reached the downstream finite processor, so the next tagged response can fail
-with `ErrStreamIdentityChanged`. The ambiguous parser and tagged-fixture
-experiments were removed. Family B response correlation and interruption reset
-propagation remain explicit follow-up work; the exact marker does not weaken the
-logical-clock assertions.
+Existing package/test/child deadlines remain bounds. Wait for actual protocol,
+queue, playback or lifecycle completion rather than increasing those bounds. A
+mock provider must observe a client request before acknowledging its response;
+use explicit response identities and exact expected wire sequences. Negative
+assertions need an observed completion boundary, not merely a quiet sleep.
 
-The Family B fixture was decomposed from one 801-line file into files of 275, 120,
-211, and 231 lines. Total fixture code grew slightly because each focused file has
-its own package/import structure and the marker received dedicated tests. The
-largest file fell by 526 lines (65.7%). Live event translation is isolated in the
-`eventcodec` package, continuation lifecycle code is grouped in `continuation.go`,
-and replay fixture/path checks share one coherent test file. `make size-check`
-passes with lower legacy baselines; no size or complexity threshold was raised.
-The remote tool-audio fixture moved its oracle and damage controls into a focused
-207-line file and deleted an 89-line ad-hoc test that always skipped. Its main
-scenario file fell from 1,154 to 1,048 lines; `runRemoteToolAudioScenario` fell
-from 58 to 56 cyclomatic complexity, 61 to 59 cognitive complexity, 132 to 128
-statements, and 195 to 186 lines.
+## Handoff and evidence
+
+Preserve the complete failed-job output before pushing another candidate. The
+executor retains ordinary repairs through CONTINUE. The CI script pins the
+submitted SHA and polls required checks; independent review checks that same SHA
+and uses a guarded merge. Meta then builds and probes the integrated runtime and
+inspects qualitative acceptance. Unit tests alone do not prove the shipped binary
+runs, and a baseline merge does not complete the audio-runtime project.
+
+Read [the stabilization record](architecture/session-ci-stabilization.md) for
+causes, fixes, repeated-test evidence and remaining limits. That record supersedes
+older findings that left response correlation and interrupted playback unresolved.
+Physical-device and live Realtime acceptance still require their separate evidence.
+
+When optimizing latency, compare the same tests, inputs and build mode before and
+after; distinguish compilation from warm test execution. Keep PCM/order/error
+assertions and meaningful stress trials. Prefer simpler semantic barriers or safe
+shared setup over shorter sleeps, hidden skips or new orchestration layers.
