@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -291,62 +290,6 @@ func replayProviderCloseExpected(records []gatewaytesting.CapturedSessionEvent) 
 		}
 	}
 	return false
-}
-
-func replayHasInterruptionReplacement(records []gatewaytesting.CapturedSessionEvent) bool {
-	cancellationObserved := false
-	cancelledResponseID := ""
-	for _, record := range records {
-		if record.Direction != gatewaytesting.DirectionServerToClient {
-			continue
-		}
-		switch record.Type {
-		case "response.done":
-			var event struct {
-				Response struct {
-					ID            string `json:"id"`
-					Status        string `json:"status"`
-					StatusDetails struct {
-						Type string `json:"type"`
-					} `json:"status_details"`
-				} `json:"response"`
-			}
-			if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
-				continue
-			}
-			if !replayResponseWasCancelled(event.Response.Status, event.Response.StatusDetails.Type) {
-				continue
-			}
-			cancellationObserved = true
-			cancelledResponseID = event.Response.ID
-		case "response.created":
-			if !cancellationObserved {
-				continue
-			}
-			var event struct {
-				Response struct {
-					ID string `json:"id"`
-				} `json:"response"`
-			}
-			if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
-				continue
-			}
-			// A missing ID cannot be correlated safely, so the later provider
-			// response is treated as the replacement boundary. When both IDs
-			// are present, require a distinct response to avoid mistaking a
-			// duplicate event for a replacement.
-			if event.Response.ID == "" || cancelledResponseID == "" || event.Response.ID != cancelledResponseID {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func replayResponseWasCancelled(status, detailType string) bool {
-	status = strings.ToLower(strings.TrimSpace(status))
-	detailType = strings.ToLower(strings.TrimSpace(detailType))
-	return status == "cancelled" || status == "canceled" || detailType == "cancelled" || detailType == "canceled"
 }
 
 func replayTextPlan(path string, actions []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, bool, error) {

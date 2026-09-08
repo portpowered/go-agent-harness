@@ -358,10 +358,11 @@ func (h *handle) canFinishFiniteResponse() bool {
 		responseTarget = h.captureResponseTarget
 	}
 	if h.scheduledAudioCount > 0 {
-		// Scheduled barge-in resolves input at its owned partial terminal; count
-		// every scheduled terminal after the optional opening response.
+		// Scheduled barge-in resolves input at its owned partial terminal. A
+		// completed tool continuation after that interruption owns one additional
+		// provider terminal before the scheduled final response can complete.
 		responseCount = h.observedResponseTerminals
-		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
+		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount + h.scheduledContinuationTerminals
 	}
 	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
 }
