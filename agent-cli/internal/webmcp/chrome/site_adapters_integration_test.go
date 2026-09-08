@@ -2,6 +2,8 @@ package chrome
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/chromedp/chromedp"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
@@ -103,7 +107,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
-	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4, "x": 4}[name]
+	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4, "x": 8}[name]
 	tools := waitForAdapterCatalog(t, ctx, session, "adapter catalog", expected)
 	return adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
 }
@@ -418,6 +422,94 @@ func testXAdapterJourney(t *testing.T) {
 	if !strings.Contains(string(cleared), `"cleared":true`) || !strings.Contains(string(cleared), `"published":false`) {
 		t.Fatalf("X clear result = %s", cleared)
 	}
+	// File selection can precede its preview while Post is still enabled.
+	pending := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"text only pending guard"}`)
+	if err := json.Unmarshal(pending, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("pending draft=%s error=%v", pending, err)
+	}
+	var pendingState bool
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`(() => {
+      window.deferMediaPreview = true;
+      window.addPendingFile = () => {
+        const input = document.querySelector('input[type="file"]');
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(['pending'], 'pending.mp4', {type:'video/mp4'}));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', {bubbles:true}));
+      };
+      window.addPendingFile();
+      return !document.querySelector('video') && !document.querySelector('[data-testid="tweetButtonInline"]').disabled;
+    })()`, &pendingState)); err != nil || !pendingState {
+		t.Fatalf("pending fixture state=%v error=%v", pendingState, err)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"text only pending guard","confirm":true}`, prepared.Data.Token), "media_changed")
+	var ignored any
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
+	// Inject media synchronously on caption entry, after preparation's initial
+	// media check and before its delayed verification.
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"media during preparation"}`, "existing_media")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	// The fixture accepts File objects but does not contact X. Exercise the
+	// production transfer, hashing, composer, and one-use confirmation code.
+	video := []byte("\x00\x00\x00\x18ftypisomfixture-video")
+	hash := fmt.Sprintf("%x", sha256.Sum256(video))
+	begin := fmt.Sprintf(`{"filename":"clip.mp4","size":%d,"sha256":%q,"account":"@fixture_user"}`, len(video), hash)
+	requireAdapterFailure(t, fixture, "x_begin_video_upload", strings.Replace(begin, "@fixture_user", "@wrong", 1), "account_mismatch")
+	started := invokeAdapterTool(t, fixture, "x_begin_video_upload", begin)
+	var transfer struct {
+		Data struct {
+			Token string `json:"upload_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(started, &transfer); err != nil || transfer.Data.Token == "" {
+		t.Fatalf("begin=%s error=%v", started, err)
+	}
+	token := transfer.Data.Token
+	requireAdapterFailure(t, fixture, "x_begin_video_upload", begin, "upload_in_progress")
+	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token), "incomplete_upload")
+	chunk := fmt.Sprintf(`{"upload_token":%q,"offset":0,"data_base64":%q}`, token, base64.StdEncoding.EncodeToString(video))
+	requireAdapterFailure(t, fixture, "x_append_video_chunk", strings.Replace(chunk, `"offset":0`, `"offset":1`, 1), "chunk_order")
+	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
+	requireAdapterFailure(t, fixture, "x_append_video_chunk", chunk, "chunk_order")
+	videoPrepared := invokeAdapterTool(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token))
+	if err := json.Unmarshal(videoPrepared, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("video prepare=%s error=%v", videoPrepared, err)
+	}
+	if !strings.Contains(string(videoPrepared), hash) {
+		t.Fatalf("missing verified hash: %s", videoPrepared)
+	}
+	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"unrelated"}`, "existing_media")
+	requireAdapterFailure(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token), "manual_clear_required")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	publishVideo := fmt.Sprintf(`{"draft_token":%q,"text":"video test","confirm":true}`, prepared.Data.Token)
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "account_mismatch")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "media_changed")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	invokeAdapterTool(t, fixture, "x_publish_post", publishVideo)
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "already_published")
+	started = invokeAdapterTool(t, fixture, "x_begin_video_upload", strings.Replace(begin, hash, strings.Repeat("0", 64), 1))
+	if err := json.Unmarshal(started, &transfer); err != nil {
+		t.Fatal(err)
+	}
+	chunk = strings.Replace(chunk, token, transfer.Data.Token, 1)
+	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
+	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"bad hash"}`, transfer.Data.Token), "hash_mismatch")
+	invokeAdapterTool(t, fixture, "x_cancel_video_upload", fmt.Sprintf(`{"upload_token":%q}`, transfer.Data.Token))
 	t.Logf("WEBMCP_X_ADAPTER_PASS chrome=%s one_use_publish=true", fixture.version)
 }
 
@@ -468,16 +560,26 @@ const xAdapterFixtureHTML = `<!doctype html>
 <nav><a data-testid="AppTabBar_Profile_Link" aria-label="Profile" href="/fixture_user">Profile</a><a data-testid="SideNav_NewTweet_Button" href="/compose/post">Post</a></nav>
 <main>
   <div data-testid="tweetTextarea_0" role="textbox" contenteditable="true"></div>
+  <input type="file" data-testid="fileInput" accept="video/mp4">
+  <div id="media"></div>
+  <div data-testid="countdown-circle"><div role="progressbar" aria-valuenow="20"></div></div>
   <button data-testid="tweetButtonInline">Post</button>
   <div id="published"></div>
 </main>
 <script>
+document.querySelector('input[type="file"]').addEventListener('change', event => {
+  if (event.target.files.length !== 1 || event.target.files[0].type !== 'video/mp4') throw Error('Expected one MP4 File');
+  if (window.deferMediaPreview) return;
+  document.querySelector('#media').innerHTML='<div data-testid="attachments"><video src="blob:fixture-video"></video></div>';
+});
 document.querySelector('[data-testid="tweetButtonInline"]').addEventListener("click", () => {
   const composer = document.querySelector('[data-testid="tweetTextarea_0"]');
   const post = document.createElement("article");
   post.textContent = composer.innerText || composer.textContent;
   document.querySelector("#published").appendChild(post);
   composer.textContent = "";
+  document.querySelector('#media').innerHTML = '';
+  document.querySelector('input[type="file"]').value = '';
   composer.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"deleteContentBackward"}));
 });
 </script></body></html>`

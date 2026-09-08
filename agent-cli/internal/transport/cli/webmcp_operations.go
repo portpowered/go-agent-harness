@@ -201,7 +201,7 @@ func NewWebMCPOperationsCommand(globalFlags *flags.GlobalFlags, factories ...Web
 	return &WebMCPOperationsCommand{globalFlags: globalFlags, factory: factory}
 }
 
-// AddCommands attaches exactly the nine non-doctor direct WebMCP commands.
+// AddCommands attaches the direct WebMCP commands.
 func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 	if c == nil || parent == nil {
 		return
@@ -214,6 +214,7 @@ func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 		c.contextCommand(),
 		c.toolsCommand(),
 		c.invokeCommand(),
+		c.xPrepareVideoCommand(),
 		c.cancelCommand(),
 		c.watchCommand(),
 	}

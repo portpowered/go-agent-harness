@@ -23,6 +23,8 @@ import (
 )
 
 type targetSession struct {
+	focusMu       sync.Mutex
+	focusUsers    int
 	handle        *handle
 	targetContext context.Context
 	cancelTarget  context.CancelFunc
