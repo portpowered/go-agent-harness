@@ -87,7 +87,7 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 	if bundlePath == "" {
 		return replay.Prepared{}, fmt.Errorf("%w: bundle path is empty", replay.ErrBundleIncomplete)
 	}
-	tracePath, err := resolveTraceDirectory(bundlePath)
+	tracePath, err := prepareTraceDirectory(ctx, bundlePath)
 	if err != nil {
 		return replay.Prepared{}, err
 	}

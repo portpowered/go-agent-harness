@@ -51,7 +51,8 @@ type Service interface {
 	LoadLivePlan(context.Context, string) (session.LiveReplayPlan, error)
 	// ResolveCapturePath admits either a raw provider capture or a finalized
 	// recording directory. Directory admission verifies the manifest, complete
-	// status, provider artifact path, and artifact digest before returning the
-	// raw capture path to the provider service.
+	// status, every declared artifact (including recorded PCM), and the
+	// provider artifact path before returning the raw capture path to the
+	// provider service.
 	ResolveCapturePath(context.Context, string) (string, error)
 }
