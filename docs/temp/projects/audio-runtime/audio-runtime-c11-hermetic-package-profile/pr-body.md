@@ -14,7 +14,7 @@ under-three-minute target is met.
 - Project/work: admitted `audio-runtime` / `audio-runtime-c11-hermetic-package-profile`.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
-- Current implementation checkpoint: `ca12c8afea00777a62ed9490ea6b968b7d94d256`.
+- Current implementation checkpoint: `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
 - Rebased `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -39,16 +39,22 @@ under-three-minute target is met.
 
 ## CI rejection disposition
 
-The latest current-head run `34227633235` was inspected in full. Eight checks
-passed, but job `102065559982` (`CI (Windows audio portable)`) failed during
-checkout with `Filename too long` before Go ran. The exact metadata and repair
-are in `ci-rejection-windows.json`; the old rejected head was `5bdb5123`, and
-the same PR is repaired at the checkpoint above. This candidate is not claimed
-CI-green.
+The latest current-head rejection is run `34231535549`, job `102078631796`
+(`CI (hermetic)`) at head `0f8529a3`. Eight required jobs passed, but the
+existing integration suite failed
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+because `session_tool_audio_remote_e2e_test.go:182` did not observe the final
+PCM marker before the scenario deadline. The exact metadata and failure lines
+are in `ci-rejection-hermetic.json`. This path is outside the C11 lease and is
+owned by active C12 runtime work, so this candidate is not being resubmitted
+unchanged and is not claimed CI-green. The earlier Windows checkout rejection
+and its portable-path repair remain in `ci-rejection-windows.json`.
 
 ## Handoff
 
-Push this same PR #403 and submit it to the script-owned CI gate. Do not poll
-CI or self-review. Any exact current-head rejection returns to this task;
-independent review, guarded merge, and post-integration vertical validation
-remain external. All nine immutable project gates remain open.
+Retain this same task while the C12 owner/meta-planner resolves or records a
+the named hermetic prerequisite. Then rebase if `main` advances, rerun the
+focused C11 controls, update PR #403, and submit it to the script-owned CI gate.
+Do not poll CI or self-review. Any C11-owned current-head rejection returns to
+this task; independent review, guarded merge, and post-integration vertical
+validation remain external. All nine immutable project gates remain open.

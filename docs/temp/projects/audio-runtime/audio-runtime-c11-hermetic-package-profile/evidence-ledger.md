@@ -25,8 +25,8 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Required delivery rebase completed onto `origin/main`; the current review-repair
-  implementation checkpoint is `HEAD=ca12c8afea00777a62ed9490ea6b968b7d94d256`.
+- Required delivery rebase completed onto `origin/main`; the current evidence
+  checkpoint is `HEAD=0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -38,8 +38,9 @@ Complete initial canonical responses are retained in `canonical-board.json` and
 `worker-sessions.json`; the immediate before/after snapshots are retained as
 `pre-measurement-*` and `post-measurement-*`. The prior canonical rejection is
 recorded in `ci-rejection.json`; the latest current-head Windows checkout
-rejection is recorded in `ci-rejection-windows.json`. Neither is claimed green
-or attributed to the profiler's Go lane.
+rejection is recorded in `ci-rejection-windows.json`; and the subsequent
+hermetic rejection is recorded in `ci-rejection-hermetic.json`. Neither is
+claimed green or attributed to the profiler's Go lane.
 
 ## Implementation and causal verification
 
@@ -73,13 +74,15 @@ or attributed to the profiler's Go lane.
   in `agent-cli/internal/services/internal/agentruntime` with a closed PCM16
   mixer result. After rebasing onto current main, the exact test passed once;
   no C11-owned repair was identified. The same PR remains the delivery target.
-- The latest current-head CI failure was read in full from job `102065559982`
-  in run `34227633235`. Windows checkout failed on the committed
-  `controls-review-repair` artifact paths with `Filename too long` before Go
-  ran. Commit `ca12c8a` shortens generated run names and replaces that
-  superseded tree with portable `ctrl` evidence; the longest new tracked
-  relative path is 184 characters. This is repaired failure evidence, not a
-  green-CI claim.
+- The latest current-head CI rejection was read in full from job `102078631796`
+  in run `34231535549` at head `0f8529a3`. The hermetic job reached Go and
+  failed the existing
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+  case in `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go`;
+  its final PCM marker was not observed before the scenario deadline. The
+  failing path is outside C11's lease and is owned by active C12 runtime work;
+  this is not a C11 repair or a green-CI claim. The earlier Windows checkout
+  failure remains recorded and was causally repaired by `ca12c8a`.
 - `git diff --check`: PASS.
 - No broad hermetic/coverage suite was launched on the shared host. The active
   C08 owner makes it non-quiet, and broad current-head checks belong to the
@@ -103,7 +106,8 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The next bounded step is push/update the same PR #403 with commit `ca12c8a`,
-the current source/control hashes, and the Windows checkout repair, then
-return `ACCEPTED` to script CI. Do not poll CI, self-review, claim CI green, or
-close any of the nine immutable project gates.
+The current source/control evidence is pinned to `0f8529a3`. The next bounded
+step is to retain this task while the active C12 owner resolves the named
+hermetic prerequisite; after that, rebase if required, rerun the focused C11
+controls, update PR #403, and return `ACCEPTED` to script CI. Do not poll CI,
+self-review, claim CI green, or close any of the nine immutable project gates.

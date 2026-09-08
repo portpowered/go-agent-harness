@@ -22,9 +22,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
-- Current implementation candidate head: `ca12c8afea00777a62ed9490ea6b968b7d94d256`.
-- Implementation checkpoint after the review repair:
-  `ca12c8afea00777a62ed9490ea6b968b7d94d256`.
+- Current implementation candidate head: `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
+- Implementation checkpoint after the review repair and evidence refresh:
+  `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -39,7 +39,8 @@ The complete canonical board and worker-session responses are retained in
 snapshots are `pre-measurement-*` and `post-measurement-*`. The current board
 rejection and its exact failed job metadata are captured in `ci-rejection.json`;
 the latest current-head Windows rejection is captured in
-`ci-rejection-windows.json`.
+`ci-rejection-windows.json`, and the latest hermetic rejection is captured in
+`ci-rejection-hermetic.json`.
 The rejected head was `5c6d24ac…`, before C08 merged into main; after the
 required rebase, the narrow rejected test passed once and no C11-owned path was
 implicated. This is a recheck and handoff record, not a claim that script CI is
@@ -88,13 +89,17 @@ Focused evidence:
   PASS after rebase.
 - `git diff --check`: PASS.
 
-The previous current-head CI run `34227633235` was inspected in full. Eight
-checks passed, but job `102065559982` (`CI (Windows audio portable)`) failed in
-checkout before Go ran: the committed control evidence contained paths up to
-255 characters and Git reported `Filename too long`. The causal repair is in
-`ca12c8a`: run-group/repetition/record names are bounded and the regenerated
-evidence is under `ctrl`; the longest new tracked relative path is 184
-characters. This is a portability repair, not a CI-green claim.
+The latest current-head CI rejection was inspected in full from run
+`34231535549`, job `102078631796` (`CI (hermetic)`) at head `0f8529a3`. Eight
+required jobs passed, but the existing `agent-cli/test/integration` suite
+failed `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`:
+`session_tool_audio_remote_e2e_test.go:182` reported that remote playback did
+not reach its final PCM marker before the scenario deadline. This path is
+outside C11's owned directories and belongs to the active C12 runtime/integration
+owner; no C11 implementation change can causally repair it. The candidate is
+not CI-green and must not be resubmitted unchanged while that prerequisite is
+open. The earlier Windows checkout failure remains recorded in
+`ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -158,9 +163,10 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The exact next action is push `ca12c8a` and update PR #403 with the current
-source/control hashes and Windows checkout repair. Return `ACCEPTED` to the script-owned
-CI gate after that submission; do not poll CI or claim that CI is green. Any
-exact current-head rejection returns to this same task for a scoped repair.
-Independent review and post-integration vertical validation remain external
-stages.
+The current C11 evidence is pinned to `0f8529a3`. The next action is for the
+C12 owner/meta-planner to resolve the named `provider_burst` failure (or record
+a causal external disposition), then rebase this same PR if `main` advances,
+rerun the focused C11 controls, update PR #403, and return `ACCEPTED` to the
+script-owned CI gate. Do not poll CI or claim it green; any C11-owned review
+finding remains with this task. Independent review and post-integration
+vertical validation remain external stages.

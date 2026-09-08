@@ -3,8 +3,8 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
-  "implementation_checkpoint": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
+  "candidate_head": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+  "implementation_checkpoint": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
   "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -26,15 +26,16 @@
     "next_gate": "SCRIPT_CI_NOT_POLLED"
   },
   "latest_ci_rejection": {
-    "path": "ci-rejection-windows.json",
-    "run_id": 34227633235,
-    "job_id": 102065559982,
-    "check": "CI (Windows audio portable)",
-    "head_sha": "5bdb5123641caf123f0c809528bb7224004f6627",
-    "failure_step": "Check out repository",
-    "failure": "Filename too long while checking out committed control evidence",
-    "repair_commit": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
-    "go_tests_started": false,
+    "path": "ci-rejection-hermetic.json",
+    "run_id": 34231535549,
+    "job_id": 102078631796,
+    "check": "CI (hermetic)",
+    "head_sha": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+    "failure_step": "Run hermetic test pipeline",
+    "failure": "agent-cli/test/integration TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst timed out waiting for the final PCM marker",
+    "owned_path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+    "owner": "audio-runtime-c12-interruption-replay-progress",
+    "go_tests_started": true,
     "ci_claim": "NOT_GREEN_NOT_POLLED"
   },
   "fresh_timing": {
@@ -77,7 +78,7 @@
     }
   },
   "review_repairs": {
-    "reviewed_head": "5bdb5123641caf123f0c809528bb7224004f6627",
+    "reviewed_head": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
     "repair_commit": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
@@ -124,6 +125,6 @@
     }
   ],
   "fresh_run_hashes": [],
-  "ci_status": "READY_FOR_SCRIPT_CI_RESUBMISSION",
+  "ci_status": "BLOCKED_BY_EXTERNAL_CI_REPAIR",
   "review_status": "NOT_SELF_REVIEWED"
 }

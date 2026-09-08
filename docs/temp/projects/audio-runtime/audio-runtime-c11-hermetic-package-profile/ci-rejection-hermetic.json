@@ -1,0 +1,44 @@
+{
+  "schema": "c11-ci-rejection-evidence-v3",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "work_id": "work-task-4",
+  "pr": 403,
+  "raw_run": {
+    "databaseId": 34231535549,
+    "headSha": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+    "status": "completed",
+    "conclusion": "failure",
+    "createdAt": "2026-09-08T13:22:14Z",
+    "updatedAt": "2026-09-08T13:31:29Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34231535549"
+  },
+  "failed_job": {
+    "databaseId": 102078631796,
+    "name": "CI (hermetic)",
+    "status": "completed",
+    "conclusion": "failure",
+    "startedAt": "2026-09-08T13:22:16Z",
+    "completedAt": "2026-09-08T13:27:55Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34231535549/job/102078631796",
+    "failed_step": "Run hermetic test pipeline"
+  },
+  "other_required_jobs": "CI (unit), CI (static), CI (WebMCP Chrome), CI (coverage), CI (macOS audio release), CI (Windows audio portable), CI (race), and CI (integration) passed.",
+  "raw_failure_lines": [
+    "--- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst (30.03s)",
+    "session_tool_audio_remote_e2e_test.go:182: remote playback did not reach final PCM marker before the scenario deadline",
+    "FAIL github.com/portpowered/go-agent-harness/agent-cli/test/integration 244.965s",
+    "agent-cli test command exited with status 1: command=go test ./... -tags=nomicrophone -timeout 480s",
+    "make: *** [Makefile:456: test-hermetic] Error 1"
+  ],
+  "scope": {
+    "failing_path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+    "c11_owned_paths": [
+      "scripts/hermetic-profile/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/"
+    ],
+    "active_owner": "audio-runtime-c12-interruption-replay-progress",
+    "disposition": "external prerequisite; no C11 implementation repair justified"
+  },
+  "ci_claim": "NOT_GREEN_NOT_POLLED"
+}
