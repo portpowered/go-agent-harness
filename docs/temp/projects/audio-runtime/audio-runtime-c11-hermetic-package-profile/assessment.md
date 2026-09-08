@@ -22,9 +22,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
-- Current implementation candidate head: `e83c4683396de37c8e558b35e99a08f6b539ebd7`.
+- Current implementation candidate head: `ca12c8afea00777a62ed9490ea6b968b7d94d256`.
 - Implementation checkpoint after the review repair:
-  `e83c4683396de37c8e558b35e99a08f6b539ebd7`.
+  `ca12c8afea00777a62ed9490ea6b968b7d94d256`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -37,7 +37,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 The complete canonical board and worker-session responses are retained in
 `canonical-board.json` and `worker-sessions.json`; the immediate measurement
 snapshots are `pre-measurement-*` and `post-measurement-*`. The current board
-rejection and its exact failed job metadata are captured in `ci-rejection.json`.
+rejection and its exact failed job metadata are captured in `ci-rejection.json`;
+the latest current-head Windows rejection is captured in
+`ci-rejection-windows.json`.
 The rejected head was `5c6d24ac…`, before C08 merged into main; after the
 required rebase, the narrow rejected test passed once and no C11-owned path was
 implicated. This is a recheck and handoff record, not a claim that script CI is
@@ -56,9 +58,9 @@ runner metadata, package timing, repeat variation, no-test/skip classification,
 subtest overlap, and timingate-compatible diagnostics. Heavy commands fail
 closed without explicit opt-in and valid isolated/dedicated evidence.
 
-Source file hashes at the review-repair checkpoint are:
-`profile.py` `ffb19849235315603db5a58136ca78a49ef9e064ca37adbb7546460d9988f7e2`,
-`controls.py` `7c79c772bf92cc88a9dc83170e5d1f0bd8adf1b50fe966d523309444f4bf5671`,
+Source file hashes at the current repair checkpoint are:
+`profile.py` `38bd11ff3750efa2a0654226fcf5edb46743b13d0f44d9525c28863ea5159ca4`,
+`controls.py` `112bb0e60b696c522a3a868a8192183e0c17275f88ee0ab7b9a481ce50cb6216`,
 and `fixtures/emit_jsonl.py`
 `8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
 
@@ -66,24 +68,33 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../controls-review-repair`:
-  PASS; 18 declared scenarios and 17 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl`:
+  PASS; 21 declared scenarios and 17 result groups, zero Go, network, or build
   invocations. The report hash is
-  `a070ed8ed89e36977fd9f002ea7f7babe50349cc5fbb4adaf02a0d90d9f09445`.
+  `1ee8327e7e340d0e9afc1d2c15249d4debec5e8e2ab25f8fe9378378fe909862`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal artifact redirects are rejected, and tampered
-  per-record source identity, quiet-evidence provenance, or requested versus
-  completed repetition counts remain `INVALID`.
+  per-record source identity, quiet-evidence provenance, requested versus
+  completed repetition counts, missing runner/load observations, and expired
+  quiet evidence remain `INVALID`.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
 - Rejected CI regression recheck:
   `go test ./agent-cli/internal/services/internal/agentruntime -count=1
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
+
+The previous current-head CI run `34227633235` was inspected in full. Eight
+checks passed, but job `102065559982` (`CI (Windows audio portable)`) failed in
+checkout before Go ran: the committed control evidence contained paths up to
+255 characters and Git reported `Filename too long`. The causal repair is in
+`ca12c8a`: run-group/repetition/record names are bounded and the regenerated
+evidence is under `ctrl`; the longest new tracked relative path is 184
+characters. This is a portability repair, not a CI-green claim.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -147,8 +158,8 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The exact next action is push the review-repair checkpoint and update PR #403
-with the current source/control hashes. Return `ACCEPTED` to the script-owned
+The exact next action is push `ca12c8a` and update PR #403 with the current
+source/control hashes and Windows checkout repair. Return `ACCEPTED` to the script-owned
 CI gate after that submission; do not poll CI or claim that CI is green. Any
 exact current-head rejection returns to this same task for a scoped repair.
 Independent review and post-integration vertical validation remain external
