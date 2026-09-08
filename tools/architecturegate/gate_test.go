@@ -498,7 +498,6 @@ func TestTargetInventoryActivatesPlatformOnlyPackages(t *testing.T) {
 		t.Fatalf("target inventory = %#v; platform-only package was not selected", modules)
 	}
 }
-
 func TestC10BaselinePublic(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "manifest.json", `{"baseline":"baseline.json","module_dirs":["mod"],"patterns":["./..."],"limits":{"function_lines":1},"version":1}`)
@@ -506,7 +505,10 @@ func TestC10BaselinePublic(t *testing.T) {
 	writeFixture(t, root, "mod/old.go", "package app\n\nfunc Run() {\n _ = 1\n _ = 2\n _ = 3\n _ = 4\n _ = 5\n}\n")
 	entry := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "old.go", Symbol: "Run", Value: 7, Rationale: "C10 public regression", Phase: "P0"}
 	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{entry}}
-	data, _ := baselineJSON(initial)
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeFixture(t, root, "baseline.json", string(data))
 	gitTestCommand(t, root, "init")
 	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
@@ -516,7 +518,10 @@ func TestC10BaselinePublic(t *testing.T) {
 	gitTestCommand(t, root, "branch", "mainline")
 	gitTestCommand(t, root, "checkout", "-b", "candidate")
 	initial.Renames = []BaselineRename{{From: baselineIssue(entry).Key(), To: baselineIssue(entry).Key() + "-renamed"}}
-	data, _ = baselineJSON(initial)
+	data, err = baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeFixture(t, root, "baseline.json", string(data))
 	gitTestCommand(t, root, "add", "baseline.json")
 	gitTestCommand(t, root, "commit", "-m", "add missing rename target")
@@ -528,7 +533,6 @@ func TestC10BaselinePublic(t *testing.T) {
 		t.Fatalf("issues=%#v; missing target was accepted", result.Issues)
 	}
 }
-
 func fixturePolicy() Policy {
 	return Policy{Version: policyVersion, ServiceRoots: []string{"services/*"}, CompositionRoots: []string{"wire"}, Limits: defaultLimits()}
 }

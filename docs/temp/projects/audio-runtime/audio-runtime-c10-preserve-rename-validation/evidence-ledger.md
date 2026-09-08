@@ -86,8 +86,23 @@ Project: admitted `audio-runtime`; factory session `~default`; server
   byte-identical with SHA-256 `a83cffb63edd8129b7573594ef12e275f66f4d54683db728347a1c45f581c6c5`
   and `d4e58a782f3daa11d7dedca420aaa78890a38305a1f7898a40fc3e08558494f3`.
 
-No CI was polled or claimed green. The exact next action is push this same
-admitted branch, open/update its single C10 PR against current `main`, verify
+## CI rejection repair
+
+- Script-owned CI run `34205694843` at candidate head
+  `8d3e4532801d62c12265c2ef1fbfe02bb49d7f92` passed formatting, Wire,
+  architecture-size, vet, and staticcheck. Its exact `CI (static)` log showed
+  golangci-lint `errcheck` failures for the two ignored `baselineJSON` errors
+  in `tools/architecturegate/gate_test.go:509` and `:519`.
+- The repair checks both serialization errors with `t.Fatal`. This initially
+  put `gate_test.go` at 602 lines; removing two nonsemantic blank lines kept
+  the test at the immutable 600-line limit. The focused test, full/race
+  architecture tests, pinned local `make lint` (golangci-lint v2.9.0, zero
+  issues), `make architecture-size-check`, public 68-run history replay, and
+  `git diff --check` all pass after the repair.
+
+No current hosted CI success is claimed; the script gate remains the owner of
+broad required-check polling. The exact next action is commit and push this
+same admitted branch, update its single C10 PR against current `main`, verify
 the submitted head, and return `ACCEPTED` to the script-owned CI gate. Any
 terminal rejection must return to this task for exact-log repair; independent
 review, guarded merge, and the post-integration vertical probe remain external
