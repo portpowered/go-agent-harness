@@ -447,8 +447,16 @@ def analyze_mutated_manifest(
     manifest: Path,
     mutation_name: str,
     expected_checks: dict[str, Any],
+    *,
+    seed_stale_analysis: bool = False,
 ) -> dict[str, Any]:
     analysis_dir = case_dir / "analysis" / mutation_name
+    if seed_stale_analysis:
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            analysis_dir / "analysis.json",
+            {"status": "PASS", "fresh_timing": "PASS", "stale": True},
+        )
     record = run_child(
         [
             sys.executable,
@@ -584,6 +592,26 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             },
         ),
         (
+            "null-selected-packages",
+            lambda value: value["runs"][0].update({"selected_packages": None}),
+            {
+                "failure_references.0.error": (
+                    "run record 0 selected_packages must be a list"
+                ),
+            },
+        ),
+        (
+            "oversized-monotonic-timestamp",
+            lambda value: value["runs"][0].update(
+                {"monotonic_end_ns": 10**400}
+            ),
+            {
+                "failure_references.0.error": (
+                    "monotonic_end_ns exceeds signed 64-bit range"
+                ),
+            },
+        ),
+        (
             "no-test-inventory-conflict",
             lambda value: value["modules"][0]["packages"][0].update(
                 {"has_tests": True}
@@ -602,6 +630,22 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         mutations.append(
             analyze_mutated_manifest(case_dir, manifest, mutation_name, checks)
         )
+    stale_manifest = json.loads(json.dumps(baseline))
+    stale_manifest["runs"][0]["selected_packages"] = None
+    write_json(manifest, stale_manifest)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "malformed-run-record-replaces-stale-analysis",
+            {
+                "status": "INVALID",
+                "fresh_timing": "INVALID",
+                "provenance.invalid_artifact_written_atomically": True,
+            },
+            seed_stale_analysis=True,
+        )
+    )
     for mutation_name, mutate, expected_error in (
         (
             "missing-quiet-runner",
@@ -835,8 +879,7 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
         source_repo=source_repo,
         source_sha=source_sha,
     )
-    tracked.write_text("changed after inventory\n", encoding="utf-8")
-    record = run_child(
+    capture_record = run_child(
         [
             sys.executable,
             str(PROFILE),
@@ -849,16 +892,92 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
         ],
         cwd=case_dir,
         output_dir=case_dir / "driver",
-        name="run",
+        name="capture",
     )
-    if record["exit_status"] != 2 or "source changed since inventory" not in record["stderr"]:
+    if capture_record["exit_status"] != 0:
+        raise ControlError(
+            f"source-identity: valid source capture failed\n{capture_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    captured_records = baseline.get("runs", [])
+    if not isinstance(captured_records, list) or not captured_records:
+        raise ControlError("source-identity: capture produced no run record")
+    captured = captured_records[0]
+    if not isinstance(captured, dict) or not isinstance(captured.get("label"), str):
+        raise ControlError("source-identity: capture produced an invalid run record")
+    if not isinstance(captured.get("source_validation"), dict):
+        raise ControlError("source-identity: capture omitted source validation")
+
+    mutations: list[dict[str, Any]] = []
+    for mutation_name, mutate in (
+        (
+            "forged-captured-head",
+            lambda value: value["runs"][0]["source_validation"].update(
+                {"head": "f" * 40}
+            ),
+        ),
+        (
+            "forged-captured-repository",
+            lambda value: value["runs"][0]["source_validation"].update(
+                {"repo": str(case_dir / "forged-source-repo")}
+            ),
+        ),
+        (
+            "forged-captured-dirty-paths",
+            lambda value: value["runs"][0]["source_validation"].update(
+                {"dirty_paths": ["forged.txt"]}
+            ),
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "source.source_identity.all_match": False,
+                    "source.source_identity.unvalidated_records": [
+                        captured["label"]
+                    ],
+                    "failure_references.0.source_status": "UNVALIDATED",
+                },
+            )
+        )
+
+    write_json(manifest, baseline)
+    tracked.write_text("changed after inventory\n", encoding="utf-8")
+    post_change_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="post-change-run",
+    )
+    if (
+        post_change_record["exit_status"] != 2
+        or "source changed since inventory" not in post_change_record["stderr"]
+    ):
         raise ControlError(
             "source-identity: post-inventory source change was not rejected\n"
-            + record["stderr"]
+            + post_change_record["stderr"]
         )
     return {
         "name": "source-identity",
-        "record": record,
+        "capture": capture_record,
+        "record": post_change_record,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
         "source_sha": source_sha,
         "raw_artifacts_retained": True,
     }
@@ -1095,7 +1214,7 @@ def main() -> int:
     try:
         source_identity_result = exercise_source_identity(output)
         results.append(source_identity_result)
-        case_count += 1
+        case_count += source_identity_result["scenario_count"] + 1
     except ControlError as exc:
         failures.append(str(exc))
 

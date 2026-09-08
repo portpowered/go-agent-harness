@@ -40,6 +40,7 @@ TARGET_SECONDS = 180.0
 GENERAL_TIMEOUT_SECONDS = 300
 AGENT_CLI_TIMEOUT_SECONDS = 480
 MAX_DURATION_NANOSECONDS = (1 << 63) - 1
+MAX_MONOTONIC_NANOSECONDS = (1 << 63) - 1
 DEFAULT_PARALLELISM = max(1, os.cpu_count() or 1)
 MODULES = (
     ("agent-cli", "agent-cli"),
@@ -1299,8 +1300,12 @@ def command_timing_errors(record: dict[str, Any]) -> list[str]:
     ends = record.get("monotonic_end_ns")
     if isinstance(starts, bool) or not isinstance(starts, int) or starts < 0:
         errors.append("monotonic_start_ns must be a non-negative integer")
+    elif starts > MAX_MONOTONIC_NANOSECONDS:
+        errors.append("monotonic_start_ns exceeds signed 64-bit range")
     if isinstance(ends, bool) or not isinstance(ends, int) or ends < 0:
         errors.append("monotonic_end_ns must be a non-negative integer")
+    elif ends > MAX_MONOTONIC_NANOSECONDS:
+        errors.append("monotonic_end_ns exceeds signed 64-bit range")
     if (
         isinstance(starts, int)
         and not isinstance(starts, bool)
@@ -1453,6 +1458,7 @@ def parse_record_stream(
     record: dict[str, Any],
     *,
     root: Path,
+    manifest: dict[str, Any],
     expected_source_sha: Any,
     require_source_validation: bool,
 ) -> dict[str, Any]:
@@ -1466,6 +1472,7 @@ def parse_record_stream(
             "raw_stderr_retained": False,
             "timing_status": "INVALID",
             "timing_errors": [schema_error],
+            "source_validation_errors": [],
             "stream_status": "INVALID",
             "error": schema_error,
             "execution_valid": False,
@@ -1479,9 +1486,76 @@ def parse_record_stream(
         source_status = "MISMATCH"
     else:
         source_status = "PASS"
+    source_validation_errors: list[str] = []
     if require_source_validation:
         validation = record.get("source_validation")
         if not isinstance(validation, dict) or validation.get("matches_manifest") is not True:
+            source_validation_errors.append(
+                "source validation is missing or does not match the manifest"
+            )
+        else:
+            expected_repo_value = manifest.get("source_repo") or manifest.get("repo")
+            expected_repo = (
+                str(Path(expected_repo_value).resolve())
+                if isinstance(expected_repo_value, str) and expected_repo_value
+                else None
+            )
+            if expected_repo is None:
+                source_validation_errors.append(
+                    "manifest has no source repository for validation"
+                )
+            elif validation.get("repo") != expected_repo:
+                source_validation_errors.append(
+                    "source validation repo does not match manifest source repository"
+                )
+
+            expected_manifest_sha = expected_source_sha
+            validation_head = validation.get("head")
+            if not isinstance(validation_head, str) or not re.fullmatch(
+                r"[0-9a-fA-F]{7,64}", validation_head
+            ):
+                source_validation_errors.append(
+                    "source validation head is not a valid commit SHA"
+                )
+            elif validation_head != record_source_sha:
+                source_validation_errors.append(
+                    "source validation head does not match recorded source_sha"
+                )
+            if validation.get("expected_head") != expected_manifest_sha:
+                source_validation_errors.append(
+                    "source validation expected_head does not match manifest source_sha"
+                )
+
+            expected_dirty_value = manifest.get("source_dirty_paths", [])
+            if not isinstance(expected_dirty_value, list) or not all(
+                isinstance(item, str) for item in expected_dirty_value
+            ):
+                source_validation_errors.append(
+                    "manifest source_dirty_paths must be a list of strings"
+                )
+            elif expected_repo is not None:
+                expected_dirty = source_paths_outside_output(
+                    expected_dirty_value,
+                    repo=Path(expected_repo),
+                    output_root=root,
+                )
+                for field in ("dirty_paths", "expected_dirty_paths"):
+                    value = validation.get(field)
+                    if not isinstance(value, list) or not all(
+                        isinstance(item, str) for item in value
+                    ):
+                        source_validation_errors.append(
+                            f"source validation {field} must be a list of strings"
+                        )
+                    elif value != sorted(set(value)):
+                        source_validation_errors.append(
+                            f"source validation {field} is not normalized"
+                        )
+                    elif value != expected_dirty:
+                        source_validation_errors.append(
+                            f"source validation {field} does not match manifest source_dirty_paths"
+                        )
+        if source_validation_errors:
             source_status = "UNVALIDATED"
 
     base = {
@@ -1492,6 +1566,7 @@ def parse_record_stream(
         "raw_stderr_retained": False,
         "timing_status": "INVALID",
         "timing_errors": command_timing_errors(record),
+        "source_validation_errors": source_validation_errors,
         "execution_valid": False,
     }
     base["timing_status"] = "PASS" if not base["timing_errors"] else "INVALID"
@@ -1621,12 +1696,14 @@ def lane_times(records: list[dict[str, Any]]) -> dict[str, Any]:
         for record in records
         if isinstance(record.get("monotonic_start_ns"), int)
         and not isinstance(record.get("monotonic_start_ns"), bool)
+        and 0 <= record["monotonic_start_ns"] <= MAX_MONOTONIC_NANOSECONDS
     ]
     ends = [
         int(record["monotonic_end_ns"])
         for record in records
         if isinstance(record.get("monotonic_end_ns"), int)
         and not isinstance(record.get("monotonic_end_ns"), bool)
+        and 0 <= record["monotonic_end_ns"] <= MAX_MONOTONIC_NANOSECONDS
     ]
     durations = []
     for record in records:
@@ -1855,7 +1932,31 @@ def normalize_run_records(value: Any) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for index, record in enumerate(value):
         if isinstance(record, dict):
-            records.append(record)
+            normalized = dict(record)
+            errors: list[str] = []
+            if not isinstance(normalized.get("label"), str) or not normalized.get("label"):
+                errors.append("label must be a non-empty string")
+                normalized["label"] = f"<malformed-record-{index}>"
+            selected = normalized.get("selected_packages")
+            if not isinstance(selected, list):
+                errors.append("selected_packages must be a list")
+                normalized["selected_packages"] = []
+            elif not all(isinstance(item, str) for item in selected):
+                errors.append("selected_packages must contain only strings")
+                normalized["selected_packages"] = []
+            for field in ("run_group_id", "module"):
+                if not isinstance(normalized.get(field), str) or not normalized.get(field):
+                    errors.append(f"{field} must be a non-empty string")
+                    normalized[field] = None
+            repeat_index = normalized.get("repeat_index")
+            if isinstance(repeat_index, bool) or not isinstance(repeat_index, int):
+                errors.append("repeat_index must be an integer")
+                normalized["repeat_index"] = None
+            if errors:
+                normalized["_schema_error"] = (
+                    f"run record {index} " + "; ".join(errors)
+                )
+            records.append(normalized)
             continue
         records.append(
             {
@@ -1868,6 +1969,31 @@ def normalize_run_records(value: Any) -> list[dict[str, Any]]:
             }
         )
     return records
+
+
+def invalid_analysis(
+    output: Path, *, manifest_path: Path, error: Exception
+) -> tuple[dict[str, Any], int]:
+    output.mkdir(parents=True, exist_ok=True)
+    artifact = output / "analysis.json"
+    analysis = {
+        "schema": ANALYSIS_SCHEMA,
+        "status": "INVALID",
+        "fresh_timing": "INVALID",
+        "manifest": str(manifest_path),
+        "reason": f"{type(error).__name__}: {error}",
+        "provenance": {
+            "analysis_input_valid": False,
+            "invalid_artifact_written_atomically": True,
+        },
+    }
+    write_json_atomic(artifact, analysis)
+    return {
+        "status": "INVALID",
+        "fresh_timing": "INVALID",
+        "analysis": str(artifact),
+        "error": str(error),
+    }, 1
 
 
 def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1923,6 +2049,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         parse_record_stream(
             record,
             root=root,
+            manifest=manifest,
             expected_source_sha=manifest.get("source_sha"),
             require_source_validation=require_source_validation,
         )
@@ -2095,12 +2222,16 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 or "; ".join(
                     parsed.get("timing_errors", [])
                     + parsed.get("no_test_classification_errors", [])
+                    + parsed.get("source_validation_errors", [])
                 )
                 or None
             ),
             "process_status": parsed.get("process_status"),
             "source_status": parsed.get("source_status"),
             "timing_errors": parsed.get("timing_errors", []),
+            "source_validation_errors": parsed.get(
+                "source_validation_errors", []
+            ),
             "no_test_classification_errors": parsed.get(
                 "no_test_classification_errors", []
             ),
@@ -2277,9 +2408,11 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             "source_identity_required_per_record": True,
             "run_group_repetition_counts_validated": True,
             "quiet_evidence_provenance_validated": True,
+            "analysis_artifact_written_atomically": True,
+            "invalid_artifact_written_atomically": fresh_timing != "PASS",
         },
     }
-    write_json(output / "analysis.json", analysis)
+    write_json_atomic(output / "analysis.json", analysis)
     return {
         "status": analysis["status"],
         "fresh_timing": fresh_timing,
@@ -2394,11 +2527,33 @@ def main(argv: list[str] | None = None) -> int:
         else:
             raise ProfileError(f"unsupported command {args.command!r}")
     except ProfileError as exc:
-        print(f"profile.py: error: {exc}", file=sys.stderr)
-        return 2
+        if args.command == "analyze":
+            summary, status = invalid_analysis(
+                Path(args.output).resolve(),
+                manifest_path=Path(args.manifest).resolve(),
+                error=exc,
+            )
+        else:
+            print(f"profile.py: error: {exc}", file=sys.stderr)
+            return 2
     except (OSError, OverflowError, ValueError, KeyError, TypeError) as exc:
-        print(f"profile.py: error: {exc}", file=sys.stderr)
-        return 2
+        if args.command == "analyze":
+            summary, status = invalid_analysis(
+                Path(args.output).resolve(),
+                manifest_path=Path(args.manifest).resolve(),
+                error=exc,
+            )
+        else:
+            print(f"profile.py: error: {exc}", file=sys.stderr)
+            return 2
+    except Exception as exc:
+        if args.command != "analyze":
+            raise
+        summary, status = invalid_analysis(
+            Path(args.output).resolve(),
+            manifest_path=Path(args.manifest).resolve(),
+            error=exc,
+        )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return status
 
