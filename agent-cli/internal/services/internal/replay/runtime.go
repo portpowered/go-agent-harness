@@ -52,7 +52,7 @@ func (openAIRuntimeFactory) New(prepared publicreplay.Prepared) (publicreplay.Ru
 	if err != nil {
 		return nil, fmt.Errorf("construct offline OpenAI gateway: %w", err)
 	}
-	inferencer := inference.NewSessionGatewayInferencer(sessionGateway, inference.WithSessionModel(model))
+	inferencer := replayMediaInferencer{inner: inference.NewSessionGatewayInferencer(sessionGateway, inference.WithSessionModel(model))}
 	loop, err := agentloop.New(
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(inferencer),

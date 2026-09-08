@@ -75,6 +75,27 @@ func TestPlannerPreservesTextAndSetupOrdering(t *testing.T) {
 	}
 }
 
+func TestPlannerSelfDrivesTextInterruptionTruncate(t *testing.T) {
+	path := writePlanCapture(t,
+		clientRecord(replayCreateItem, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"c07 interruption"}]}}`),
+		clientRecord(replayResponseCreate, `{"type":"response.create"}`),
+		serverRecord("response.created", `{"type":"response.created","response":{"id":"resp-c07-interrupted"}}`),
+		serverRecord("input_audio_buffer.speech_started", `{"type":"input_audio_buffer.speech_started"}`),
+		clientRecord(replayTruncateItem, `{"type":"conversation.item.truncate","item_id":"item-c07-interrupted","content_index":0,"audio_end_ms":123}`),
+	)
+
+	plan, err := New().LoadLivePlan(t.Context(), path)
+	if err != nil {
+		t.Fatalf("LoadLivePlan: %v", err)
+	}
+	if !plan.OpeningPromptPresent || plan.OpeningPrompt != "c07 interruption" {
+		t.Fatalf("interruption plan=%+v, want captured opening prompt", plan)
+	}
+	if !plan.StopAfterResponse || plan.ProviderCloseExpected {
+		t.Fatalf("interruption terminal plan=%+v, want response stop without provider close", plan)
+	}
+}
+
 func TestPlannerDoesNotWaitForLateSetupAcknowledgement(t *testing.T) {
 	path := writePlanCapture(t,
 		clientRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}`),

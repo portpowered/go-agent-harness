@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -27,7 +28,6 @@ type testSession struct {
 	mu      sync.Mutex
 	sent    []messages.StreamMessage
 }
-
 type failingLiveRecorder struct {
 	messageErr  error
 	finalized   chan struct{}
@@ -46,13 +46,10 @@ func (r *failingLiveRecorder) RecordMessage(ctx context.Context, _ session.LiveR
 	}
 	return r.messageErr
 }
-
 func (*failingLiveRecorder) RecordAudio(_ context.Context, _ session.LiveAudioRecord) error {
 	return nil
 }
-
 func (*failingLiveRecorder) RecordEvent(_ context.Context, _ session.LiveEvent) error { return nil }
-
 func (r *failingLiveRecorder) Finalize(context.Context, error) error {
 	if r.finalized != nil {
 		close(r.finalized)
@@ -74,7 +71,6 @@ func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
 	}
 	return nil
 }
-
 func (h *testLiveCapabilityHandle) RefreshDefinitions(context.Context) ([]messages.ToolDefinition, error) {
 	return nil, nil
 }
@@ -82,7 +78,6 @@ func (h *testLiveCapabilityHandle) RefreshDefinitions(context.Context) ([]messag
 func (h *testLiveCapabilityHandle) BrowserWatch(context.Context) <-chan session.LiveCapabilityEvent {
 	return h.events
 }
-
 func (h *testLiveCapabilityHandle) Close() error {
 	select {
 	case <-h.closed:
@@ -91,7 +86,6 @@ func (h *testLiveCapabilityHandle) Close() error {
 	}
 	return nil
 }
-
 func newTestSession() *testSession {
 	return &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{})}
 }
@@ -105,14 +99,12 @@ func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 	s.mu.Unlock()
 	return true
 }
-
 func (s *testSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
 func (s *testSession) Done() <-chan struct{}                                  { return s.done }
 func (s *testSession) Close() error {
 	s.close.Do(func() { close(s.done) })
 	return nil
 }
-
 func (s *testSession) hasText(text string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -123,7 +115,6 @@ func (s *testSession) hasText(text string) bool {
 	}
 	return false
 }
-
 func TestOpenLiveIsInertUntilStart(t *testing.T) {
 	s := newTestSession()
 	called := make(chan session.LiveRequest, 1)
@@ -583,10 +574,27 @@ func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) 
 		t.Fatalf("failed continuation = error:%v complete:%t, want typed failure", err, complete)
 	}
 }
-
 func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessage) {
 	t.Helper()
 	if err, complete := h.observeToolLifecycle(msg); err != nil || complete {
 		t.Fatalf("continuation intermediate event = error:%v complete:%t, want pending", err, complete)
+	}
+}
+func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
+	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
+	t.Cleanup(func() { _ = media.Close() })
+	i := &liveInvocation{options: session.LiveRunOptions{Request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{}}}, endpoints: media.Endpoints()}
+	i.bindPlaybackController()
+	response := sharedaudio.PlaybackResponse{ResponseID: "response", ItemID: "item"}
+	media.StartInboundResponse(response)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := media.Endpoints().Inbound.ReadFrame(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	interrupted, ok := media.InterruptInbound()
+	if !ok || interrupted.PlaybackResponse != response || interrupted.AudioEndMS != 0 {
+		t.Fatalf("replay interruption = %+v/%t, want response at zero cursor", interrupted, ok)
 	}
 }

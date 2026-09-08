@@ -8,10 +8,35 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+func (i *liveInvocation) bindPlaybackController() {
+	if i == nil || i.endpoints.Inbound == nil {
+		return
+	}
+	var controller sharedaudio.PlaybackController
+	if provider, ok := i.ports.Playback.(devices.PlaybackControllerProvider); ok {
+		controller = provider.PlaybackController()
+	}
+	if controller == nil && i.options.Request.ReplayPlan != nil {
+		controller = replayVirtualPlaybackController{}
+	}
+	if controlled, ok := i.endpoints.Inbound.(sharedaudio.PlaybackControlledInbound); ok && controller != nil {
+		controlled.SetPlaybackController(controller)
+	}
+}
+
+type replayVirtualPlaybackController struct{}
+
+func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
+func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackResponse) (int, bool) {
+	return 0, true
+}
 
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
@@ -367,7 +392,7 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
 		h.responseActive, h.responsePending = false, false
-		if h.pendingToolCalls > 0 || finiteResponseWasInterrupted(msg) {
+		if h.pendingToolCalls > 0 || h.finiteResponseWasInterrupted(msg) {
 			return
 		}
 		h.replayResponses++

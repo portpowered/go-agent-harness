@@ -21,6 +21,7 @@ const (
 	replayAppend          = "input_audio_buffer.append"
 	replaySessionUpdate   = "session.update"
 	replayCreateItem      = "conversation.item.create"
+	replayTruncateItem    = "conversation.item.truncate"
 )
 
 // errSelfDrivingPlanUnavailable distinguishes a valid realtime capture whose

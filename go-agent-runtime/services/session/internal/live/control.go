@@ -321,9 +321,22 @@ func sessionSendOutcomeForError(ctx context.Context, err error) messages.Session
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 }
 
-func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
+func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.MessageEndValue)
-	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
+	if !ok || value == nil {
+		return false
+	}
+	if value.TerminalReason == messages.TerminalReasonPartialOutput {
+		return true
+	}
+	// Realtime providers report a VAD barge-in as a cancelled response. An
+	// explicit replay plan owns the following replacement response, so this
+	// provider cancellation is an interruption boundary rather than the
+	// finite replay's successful terminal. Ordinary finite captures retain
+	// their existing cancellation semantics.
+	return h != nil && h.request.ReplayPlan != nil &&
+		value.TerminalReason == messages.TerminalReasonCancellation &&
+		value.TerminalProvenance == messages.TerminalProvenanceProvider
 }
 
 func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
@@ -331,7 +344,7 @@ func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
 }
 
 func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !h.finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
 }
 
 func (h *handle) canFinishFiniteResponse() bool {

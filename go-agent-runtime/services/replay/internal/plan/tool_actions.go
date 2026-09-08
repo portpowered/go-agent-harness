@@ -87,6 +87,16 @@ func (tools *toolActions) consume(record gatewaytesting.CapturedSessionEvent) (b
 		return tools.consumeResponseCreate(record)
 	case replayCreateItem:
 		return tools.consumeCreateItem(record)
+	case replayTruncateItem:
+		// Realtime interruption owns this wire action: the provider's VAD event
+		// causes the live media boundary to truncate the currently playing item.
+		// The strict replay transport still validates the complete payload when
+		// the runtime emits it; the self-driving plan must only avoid scheduling
+		// it as a second caller action.
+		if err := replayPayloadType(record, replayTruncateItem); err != nil {
+			return false, err
+		}
+		return true, nil
 	default:
 		return false, nil
 	}
