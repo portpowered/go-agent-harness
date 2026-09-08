@@ -130,6 +130,10 @@ def synthetic_manifest(
     case_dir: Path,
     scenario: str,
     packages: list[dict[str, Any]],
+    *,
+    source_repo: Path | None = None,
+    source_sha: str | None = None,
+    source_dirty_paths: list[str] | None = None,
 ) -> tuple[Path, Path]:
     root = case_dir / "run"
     root.mkdir(parents=True, exist_ok=True)
@@ -142,7 +146,8 @@ def synthetic_manifest(
         "mode": "synthetic",
         "created_at_utc": utc_now(),
         "repo": str(case_dir),
-        "source_sha": "synthetic-control-source",
+        "source_sha": source_sha or "synthetic-control-source",
+        "source_dirty_paths": source_dirty_paths or [],
         "runner": {
             "os": "synthetic",
             "architecture": "synthetic",
@@ -195,6 +200,8 @@ def synthetic_manifest(
         "run_groups": [],
         "measurement_status": "UNMEASURED",
     }
+    if source_repo is not None:
+        manifest["source_repo"] = str(source_repo.resolve())
     manifest_path = root / "manifest.json"
     write_json(manifest_path, manifest)
     return manifest_path, quiet
@@ -700,6 +707,80 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
     }
 
 
+def exercise_source_identity(output: Path) -> dict[str, Any]:
+    case_dir = output / "source-identity"
+    source_repo = case_dir / "source-repo"
+    source_repo.mkdir(parents=True, exist_ok=True)
+    tracked = source_repo / "tracked.txt"
+    tracked.write_text("inventory\n", encoding="utf-8")
+    for argv in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "controls@example.invalid"],
+        ["git", "config", "user.name", "Hermetic Profile Controls"],
+        ["git", "add", "tracked.txt"],
+        ["git", "commit", "-qm", "initial source"],
+    ):
+        try:
+            subprocess.run(
+                argv,
+                cwd=str(source_repo),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            raise ControlError(f"source-identity: cannot prepare git fixture: {exc}") from exc
+    try:
+        source_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(source_repo),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            check=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise ControlError(f"source-identity: cannot read fixture SHA: {exc}") from exc
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+        source_repo=source_repo,
+        source_sha=source_sha,
+    )
+    tracked.write_text("changed after inventory\n", encoding="utf-8")
+    record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if record["exit_status"] != 2 or "source changed since inventory" not in record["stderr"]:
+        raise ControlError(
+            "source-identity: post-inventory source change was not rejected\n"
+            + record["stderr"]
+        )
+    return {
+        "name": "source-identity",
+        "record": record,
+        "source_sha": source_sha,
+        "raw_artifacts_retained": True,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run bounded public-entry-point controls for the hermetic profiler."
@@ -838,6 +919,36 @@ def main() -> int:
                 "package_execution.subtest_overlap_records": [],
             },
         ),
+        (
+            "repeated-package-terminal",
+            "repeated-package",
+            [{"import_path": "example/repeated", "package_arg": ".", "has_tests": True}],
+            0,
+            0,
+            "PASS",
+            1,
+            {"package_execution.ranked_packages.0.observations": 2},
+        ),
+        (
+            "oversized-duration",
+            "oversized-duration",
+            [{"import_path": "example/oversized", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "oversized-integer",
+            "oversized-integer",
+            [{"import_path": "example/oversized", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
     ]
     for (
         name,
@@ -888,6 +999,13 @@ def main() -> int:
         artifact_result = exercise_artifact_containment(output)
         results.append(artifact_result)
         case_count += artifact_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        source_identity_result = exercise_source_identity(output)
+        results.append(source_identity_result)
+        case_count += 1
     except ControlError as exc:
         failures.append(str(exc))
 

@@ -39,6 +39,7 @@ QUIET_SCHEMA = "c11-quiet-evidence-v1"
 TARGET_SECONDS = 180.0
 GENERAL_TIMEOUT_SECONDS = 300
 AGENT_CLI_TIMEOUT_SECONDS = 480
+MAX_DURATION_NANOSECONDS = (1 << 63) - 1
 DEFAULT_PARALLELISM = max(1, os.cpu_count() or 1)
 MODULES = (
     ("agent-cli", "agent-cli"),
@@ -567,6 +568,108 @@ def manifest_root(manifest_path: Path) -> Path:
     return manifest_path.resolve().parent
 
 
+def parse_git_status_paths(stdout: bytes) -> list[str]:
+    paths = []
+    for line in decode_output(stdout).splitlines():
+        if not line.strip():
+            continue
+        path = line[3:] if len(line) >= 3 else line
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[-1]
+        paths.append(path)
+    return sorted(set(paths))
+
+
+def source_paths_outside_output(
+    paths: Iterable[str], *, repo: Path, output_root: Path
+) -> list[str]:
+    repo_root = repo.resolve()
+    output_path = output_root.resolve()
+    retained = []
+    for path_value in paths:
+        candidate = (repo_root / path_value).resolve()
+        try:
+            candidate.relative_to(output_path)
+        except ValueError:
+            retained.append(path_value)
+    return sorted(set(retained))
+
+
+def validate_source_state(
+    manifest: dict[str, Any], *, output_root: Path, output_dir: Path, label: str
+) -> dict[str, Any] | None:
+    source_repo_value = manifest.get("source_repo")
+    if not source_repo_value and manifest.get("mode") == "synthetic":
+        return None
+    repo_value = source_repo_value or manifest.get("repo")
+    if not isinstance(repo_value, str) or not repo_value:
+        raise ProfileError("manifest has no source repository")
+    repo = Path(repo_value).resolve()
+    if not repo.is_dir():
+        raise ProfileError(f"source repository directory not found: {repo}")
+    expected_sha = manifest.get("source_sha")
+    if not isinstance(expected_sha, str) or not expected_sha:
+        raise ProfileError("manifest has no source SHA")
+    expected_dirty = manifest.get("source_dirty_paths", [])
+    if not isinstance(expected_dirty, list):
+        raise ProfileError("manifest source_dirty_paths must be a list")
+
+    validation_dir = output_dir / "source-validation"
+    head_record, head_stdout, _ = command_record(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        cwd=repo,
+        env_overrides={},
+        timeout_seconds=30,
+        output_root=output_root,
+        output_dir=validation_dir,
+        label=f"{label}-source-rev-parse",
+        stdout_suffix="stdout.txt",
+    )
+    if head_record["status"] != "PASS":
+        raise ProfileError("cannot identify current source SHA; see run evidence")
+    current_sha = decode_output(head_stdout).strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", current_sha):
+        raise ProfileError(f"git returned invalid current source SHA: {current_sha!r}")
+    status_record, status_stdout, _ = command_record(
+        ["git", "-C", str(repo), "status", "--porcelain"],
+        cwd=repo,
+        env_overrides={},
+        timeout_seconds=30,
+        output_root=output_root,
+        output_dir=validation_dir,
+        label=f"{label}-source-status",
+        stdout_suffix="stdout.txt",
+    )
+    if status_record["status"] != "PASS":
+        raise ProfileError("cannot inspect current source dirtiness; see run evidence")
+    current_dirty_all = parse_git_status_paths(status_stdout)
+    current_dirty = source_paths_outside_output(
+        current_dirty_all, repo=repo, output_root=output_root
+    )
+    expected_dirty_outside_output = source_paths_outside_output(
+        [str(item) for item in expected_dirty],
+        repo=repo,
+        output_root=output_root,
+    )
+    matches = current_sha == expected_sha and current_dirty == expected_dirty_outside_output
+    if not matches:
+        raise ProfileError(
+            "source changed since inventory: "
+            f"expected HEAD {expected_sha!r}, current {current_sha!r}; "
+            f"expected dirty paths {expected_dirty_outside_output!r}, "
+            f"current {current_dirty!r}"
+        )
+    return {
+        "repo": str(repo),
+        "head": current_sha,
+        "dirty_paths": current_dirty,
+        "expected_head": expected_sha,
+        "expected_dirty_paths": expected_dirty_outside_output,
+        "matches_manifest": True,
+        "metadata_commands": [head_record, status_record],
+    }
+
+
 def save_manifest(manifest_path: Path, manifest: dict[str, Any]) -> None:
     manifest["updated_at_utc"] = utc_now()
     write_json_atomic(manifest_path, manifest)
@@ -618,11 +721,7 @@ def inventory(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     )
     if dirty_record["status"] != "PASS":
         raise ProfileError("cannot inspect source dirtiness; see inventory command evidence")
-    dirty_paths = [
-        line[3:] if len(line) >= 3 else line
-        for line in decode_output(dirty_stdout).splitlines()
-        if line.strip()
-    ]
+    dirty_paths = parse_git_status_paths(dirty_stdout)
     go_env_record, go_env_stdout, _ = command_record(
         [args.go, "env", "-json", "GOOS", "GOARCH", "GOVERSION", "GOMODCACHE", "GOCACHE", "GOPATH", "GOWORK"],
         cwd=repo,
@@ -1014,6 +1113,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     group_id = uuid.uuid4().hex[:12]
     group_root = runs_root / group_id
     records: list[dict[str, Any]] = []
+    source_validations: list[dict[str, Any]] = []
     failures: list[str] = []
     repetitions_completed = 0
     for repeat_index in range(1, args.repeat + 1):
@@ -1063,6 +1163,12 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     ]
                 else:
                     argv = [go, "test", *test_args]
+            source_validation = validate_source_state(
+                manifest,
+                output_root=root,
+                output_dir=group_root / f"r{repeat_index}" / safe_label(module["name"]),
+                label=f"run-{group_id[:6]}-r{repeat_index}-{safe_label(module['name'])}",
+            )
             require_heavy(
                 args,
                 mode="synthetic" if manifest.get("mode") == "synthetic" else "hermetic",
@@ -1080,7 +1186,12 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             )
             record.update(
                 {
-                    "source_sha": manifest.get("source_sha"),
+                    "source_sha": (
+                        source_validation["head"]
+                        if source_validation is not None
+                        else manifest.get("source_sha")
+                    ),
+                    "source_validation": source_validation,
                     "run_group_id": group_id,
                     "repeat_index": repeat_index,
                     "module": module["name"],
@@ -1093,6 +1204,8 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 }
             )
             records.append(record)
+            if source_validation is not None:
+                source_validations.append(source_validation)
             if record["status"] != "PASS":
                 failures.append(f"{module['name']} repetition {repeat_index}")
                 repetition_failed = True
@@ -1110,6 +1223,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "requested_repetitions": args.repeat,
         "completed_repetitions": repetitions_completed,
         "records": records,
+        "source_validations": source_validations,
         "quiet_evidence": quiet,
         "status": "FAILED" if failures else "CAPTURED",
         "failures": failures,
@@ -1138,9 +1252,14 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 def parse_elapsed(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Elapsed must be a finite JSON number")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError("Elapsed must be a finite JSON number") from exc
     if not math.isfinite(result) or result < 0:
         raise ValueError("Elapsed must be a finite non-negative JSON number")
+    if result * 1_000_000_000.0 > float(MAX_DURATION_NANOSECONDS):
+        raise ValueError("Elapsed duration is too large for time.Duration")
     return result
 
 
@@ -1221,9 +1340,7 @@ def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
             if state["pending"]:
                 malformed = f"line {line_number}: package {package!r} started twice before completion"
                 break
-            if state["completed"]:
-                malformed = f"line {line_number}: package {package!r} started after completion"
-                break
+            active_tests_by_package[package] = set()
             states[package] = {"pending": True, "completed": False}
             continue
         if package not in states:
@@ -1280,7 +1397,11 @@ def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
 
 
 def parse_record_stream(
-    record: dict[str, Any], *, root: Path, expected_source_sha: Any
+    record: dict[str, Any],
+    *,
+    root: Path,
+    expected_source_sha: Any,
+    require_source_validation: bool,
 ) -> dict[str, Any]:
     record_source_sha = record.get("source_sha")
     if not isinstance(record_source_sha, str) or not record_source_sha:
@@ -1291,6 +1412,10 @@ def parse_record_stream(
         source_status = "MISMATCH"
     else:
         source_status = "PASS"
+    if require_source_validation:
+        validation = record.get("source_validation")
+        if not isinstance(validation, dict) or validation.get("matches_manifest") is not True:
+            source_status = "UNVALIDATED"
 
     base = {
         "record_id": record.get("label"),
@@ -1696,11 +1821,15 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             }, 0
         raise ProfileError("manifest contains no captured runs and is not marked BLOCKED")
 
+    require_source_validation = (
+        manifest.get("mode") != "synthetic" or "source_repo" in manifest
+    )
     parsed_records = [
         parse_record_stream(
             record,
             root=root,
             expected_source_sha=manifest.get("source_sha"),
+            require_source_validation=require_source_validation,
         )
         for record in all_records
     ]
@@ -1738,16 +1867,24 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if isinstance(record.get("source_sha"), str)
         and record.get("source_sha") != manifest.get("source_sha")
     ]
+    unvalidated_source_records = [
+        parsed.get("record_id")
+        for parsed in parsed_records
+        if parsed.get("source_status") == "UNVALIDATED"
+    ]
     source_identity = {
         "manifest": manifest.get("source_sha"),
         "record_values": source_values,
         "missing_records": missing_source_records,
         "mismatched_records": mismatched_source_records,
+        "unvalidated_records": unvalidated_source_records,
+        "validation_required": require_source_validation,
         "all_match": (
             isinstance(manifest.get("source_sha"), str)
             and bool(all_records)
             and not missing_source_records
             and not mismatched_source_records
+            and not unvalidated_source_records
             and all(
                 value == manifest.get("source_sha") for value in source_values
             )
@@ -2122,7 +2259,7 @@ def main(argv: list[str] | None = None) -> int:
     except ProfileError as exc:
         print(f"profile.py: error: {exc}", file=sys.stderr)
         return 2
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, OverflowError, ValueError, KeyError, TypeError) as exc:
         print(f"profile.py: error: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(summary, indent=2, sort_keys=True))

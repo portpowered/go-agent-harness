@@ -9,7 +9,14 @@ import sys
 import time
 
 
-def event(action: str, package: str, *, test: str = "", elapsed: float | None = None, output: str | None = None) -> dict[str, object]:
+def event(
+    action: str,
+    package: str,
+    *,
+    test: str = "",
+    elapsed: float | int | None = None,
+    output: str | None = None,
+) -> dict[str, object]:
     value: dict[str, object] = {"Action": action, "Package": package}
     if test:
         value["Test"] = test
@@ -45,6 +52,9 @@ def main() -> int:
             "no-test",
             "overlap",
             "cross-package",
+            "repeated-package",
+            "oversized-duration",
+            "oversized-integer",
         ),
     )
     parser.add_argument("--delay", type=float, default=0.0)
@@ -144,6 +154,38 @@ def main() -> int:
                 event("pass", "example/package-a", test="TestPackageA", elapsed=0.01),
                 event("pass", "example/package-a", elapsed=0.02),
                 event("pass", "example/package-b", elapsed=0.02),
+            ],
+            delay=args.delay,
+        )
+        return 0
+
+    if args.scenario == "repeated-package":
+        write_events(
+            [
+                event("start", "example/repeated"),
+                event("pass", "example/repeated", elapsed=0.01),
+                event("start", "example/repeated"),
+                event("pass", "example/repeated", elapsed=0.02),
+            ],
+            delay=args.delay,
+        )
+        return 0
+
+    if args.scenario == "oversized-duration":
+        write_events(
+            [
+                event("start", "example/oversized"),
+                event("pass", "example/oversized", elapsed=1_000_000_000_000),
+            ],
+            delay=args.delay,
+        )
+        return 0
+
+    if args.scenario == "oversized-integer":
+        write_events(
+            [
+                event("start", "example/oversized"),
+                event("pass", "example/oversized", elapsed=10**400),
             ],
             delay=args.delay,
         )
