@@ -179,3 +179,42 @@ PR head and local HEAD are both `161f75dba70ba19c3f452fbe0c0d94ce7d70d02f`;
 `origin/main` remains `668f2d8816beaa078d058b3f0bcc59600b71a023`, with the
 startup and original baseline ancestors preserved. Admission recheck remains
 `admitted` for `audio-runtime-c13-recorded-pcm-integrity`.
+
+## C13 review repair: reject redirected root manifests
+
+The canonical review inbox retained two related root-boundary findings. Review
+26 rejected head `22bf02f` because the CLI `os.Stat` check treated a dangling
+`manifest.json` symlink as absent and fell back to standalone trace replay;
+commit `6b22eba5` repaired that path with `Lstat` and explicit symlink/non-regular
+rejection. Review 28 then rejected head `63e6b77` because the runtime replay
+service still used `os.ReadFile` directly: a valid external manifest symlink was
+accepted by `session --replay <bundle> --audio-out <sink>` and reported
+`replay_complete`.
+
+The current repair is committed as `4eec84a` (`fix(replay): reject symlinked
+root manifests in runtime`). `loadRecordingManifest` now uses `os.Lstat` and
+rejects symlink or non-regular root entries before JSON decoding. Truly absent
+manifests continue through the CLI's existing manifestless standalone-trace
+compatibility branch; a present malformed root entry cannot fall back to that
+scope. Runtime unit controls and the public `TestSessionRecordedPCMIntegrity`
+control cover dangling symlinks, valid external manifest symlinks, manifest
+directories, untouched bundles, and same-size PCM mutation on both public
+routes. The pre-repair new controls failed: runtime admission returned nil for
+both redirected and directory manifests, and the public `--audio-out` route
+emitted `replay_complete` for the redirected manifest.
+
+Post-repair causal evidence:
+
+- `go test ./go-agent-runtime/services/replay/... ./agent-cli/internal/services/internal/replay/... ./agent-cli/internal/services/replay/... -count=1 -timeout=60s`: passed.
+- The same replay package command under `-race`: passed.
+- `go test ./agent-cli/test/integration -run '^TestSessionRecordedPCMIntegrity$' -count=1 -timeout=60s`: passed; the same selector under `-race`: passed.
+- `go test ./go-agent-runtime/services/replay/internal/plan -run 'Interruption|Cancel' -count=3 -timeout=60s`: passed.
+- Accumulated C12 continuation/recording controls (`TestSessionToolResultConversationMissingContinuationIsBounded`, `TestSessionToolResultConversationCorruptAudioDeltaIsRejected`, `TestSessionToolResultConversationAudioAbsenceAndSignalControls`, `TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose`, `TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle`, `TestSessionCommand_CreditsConsecutiveScheduledToolContinuations`, and `TestSessionCommand_OverlappingToolResultsWaitIndependently`): passed.
+- `make fmt`, `make wire-check`, `make vet`, pinned `make lint` (0 issues), pinned `make staticcheck`, `make architecture-check size-check`, and `git diff --check`: passed. Wire output stayed unchanged; architecture/size reported `181` packages, `1859` files and `27046` functions.
+- Candidate source `4eec84a` built as `/tmp/audio-runtime-c13-candidate-root-manifest-repaired-yui`, SHA256 `2aeb33870f6921f27f694c5d91cc33d8ed754f9a0b92e267b06a1720764a6b2f`. Exact-binary `public_integrity_probe.py candidate` passed untouched `session replay` and `session --replay --audio-out` (exit `0`) and rejected unchanged-manifest one-byte `audio/out-000.pcm` mutations on both routes (exit `1`, expected/actual digest diagnostics); PCM remained `3840` bytes and the source manifest/provider hashes remained unchanged.
+- Direct exact-binary redirected-manifest controls also reject before replay: `session --replay --audio-out` and `session replay` both exit `1` with `recording manifest ... is a symlink`. The bounded driver is `/tmp/audio-runtime-c13-manifest-symlink.4Ch3sX`.
+
+No CI terminal result, independent review, merge, vertical acceptance, device
+consumption, acoustic output or project completion is claimed. Rollback is
+`git revert 4eec84a`. The candidate is ready for the script-owned CI gate after
+this evidence checkpoint is committed and pushed.
