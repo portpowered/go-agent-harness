@@ -3,11 +3,54 @@ package openai
 import (
 	"errors"
 	"fmt"
+	"net"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest"
 )
+
+type providerCloseRaceConn struct {
+	writeStarted, releaseProviderClose chan struct{}
+	closed                             chan struct{}
+	writeErr                           error
+	writeOnce, closeOnce               sync.Once
+	readCount                          int
+}
+
+func newProviderCloseRaceConn(writeErr error) *providerCloseRaceConn {
+	return &providerCloseRaceConn{
+		writeStarted:         make(chan struct{}),
+		releaseProviderClose: make(chan struct{}),
+		closed:               make(chan struct{}),
+		writeErr:             writeErr,
+	}
+}
+
+func (c *providerCloseRaceConn) ReadMessage() (int, []byte, error) {
+	c.readCount++
+	switch c.readCount {
+	case 1:
+		<-c.releaseProviderClose
+		return 1, []byte(`{"type":"session.closed","session":{"id":"session"},"reason":"fixture_complete"}`), nil
+	case 2:
+		return 1, []byte(`{"type":"response.done","response":{"id":"trailing-response","status":"completed"}}`), nil
+	default:
+		return 0, nil, fmt.Errorf("peer closed connection: %w", net.ErrClosed)
+	}
+}
+
+func (c *providerCloseRaceConn) WriteMessage(int, []byte) error {
+	c.writeOnce.Do(func() { close(c.writeStarted) })
+	<-c.closed
+	return c.writeErr
+}
+
+func (c *providerCloseRaceConn) Close() error {
+	c.closeOnce.Do(func() { close(c.closed) })
+	return nil
+}
 
 func TestOpenAIRealtimeSharedTransportS11Conformance(t *testing.T) {
 	dialErr := &openAITransportOperationError{operation: "dial"}

@@ -3,6 +3,7 @@ package mediagate
 import (
 	"context"
 	"errors"
+	"io"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -382,5 +383,18 @@ func TestProviderFailureIsReportedBeforePlaybackCanObserveIt(t *testing.T) {
 	unblock()
 	if _, err := gate.Endpoints().Inbound.ReadFrame(t.Context()); !errors.Is(err, failure) {
 		t.Fatalf("playback lost provider cause: %v", err)
+	}
+}
+
+func TestProviderEOFIsCleanMediaCompletion(t *testing.T) {
+	provider := sharedaudio.NewSessionMediaAtRate(nil, 16000)
+	provider.FailInbound(io.EOF)
+	gate := New(func(err error) { t.Errorf("clean media EOF was reported as failure: %v", err) })
+	gate.Attach(t.Context(), provider.Endpoints())
+	if _, err := gate.Endpoints().Inbound.ReadFrame(t.Context()); !errors.Is(err, io.EOF) {
+		t.Fatalf("media completion = %v", err)
+	}
+	if err := gate.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

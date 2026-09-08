@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 
@@ -248,7 +249,7 @@ func (g *Gate) Fail(err error) {
 }
 
 func (g *Gate) report(err error) {
-	if g == nil || err == nil || errors.Is(err, ErrMediaUnavailable) || errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
+	if g == nil || err == nil || errors.Is(err, ErrMediaUnavailable) || errors.Is(err, sharedaudio.ErrSessionMediaClosed) || errors.Is(err, io.EOF) {
 		return
 	}
 	if g.onError != nil {

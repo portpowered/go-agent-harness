@@ -123,21 +123,14 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 	for {
 		_, data, err := s.conn.ReadMessage()
 		if err != nil {
-			select {
-			case <-s.done:
-				return
-			default:
-			}
-			if ctx.Err() != nil {
+			if s.readStopped(ctx, err) {
 				_ = s.Close()
 				return
 			}
 			s.setTerminalError(err)
 			s.logger.Error("openai realtime: websocket read error", logging.Field{Key: "error", Value: err})
-			// Every unexpected provider-side read failure is a provider-visible
-			// terminal failure. Preserve the raw error in the stream so callers
-			// can distinguish an abrupt close (including an authentication close
-			// returned after the WebSocket handshake) from intentional shutdown.
+			// Preserve unexpected read failures so callers can distinguish abrupt
+			// provider closure from intentional shutdown.
 			s.recvBuf.WriteTerminal(messages.StreamMessage{
 				Type:  messages.StreamTypeError,
 				Value: providers.NewStreamTransportErrorValue(err),
@@ -166,17 +159,16 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			_ = s.Close()
 			return
 		}
+		if event.Type == models.SessionEventSessionClosed {
+			s.providerClosed.Store(true)
+		}
 		s.observeResponseLifecycle(event)
 		if err := s.publishRTCMedia(ctx, event); err != nil {
 			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
 		}
 		for _, msg := range realtimeInboundMessages(event) {
-			// Provider frames are lossless protocol input. In particular, a
-			// response may contain dozens of audio/transcript deltas followed by
-			// a function call. A non-blocking write here used to silently discard
-			// whichever normalized messages arrived after the 64-entry buffer
-			// filled. Apply backpressure to the websocket reader instead, while
-			// retaining both cancellation paths so shutdown cannot deadlock.
+			// Provider frames are lossless. Apply backpressure when their bounded
+			// normalized buffer fills, retaining both shutdown paths.
 			if outcome := s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg); !outcome.OK() {
 				if ctx.Err() != nil {
 					_ = s.Close()
@@ -184,6 +176,15 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 				return
 			}
 		}
+	}
+}
+
+func (s *realtimeSession) readStopped(ctx context.Context, err error) bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return ctx.Err() != nil || s.providerClosed.Load() && isProviderCloseTransportError(err)
 	}
 }
 
@@ -224,6 +225,10 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
+				if isProviderCloseTransportError(err) && (s.providerClosed.Load() || sessionDone(s.done)) {
+					s.outbound.Complete()
+					return
+				}
 				s.setTerminalError(err)
 				s.outbound.Complete()
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})

@@ -99,3 +99,12 @@ precedes visibility to playback, and finalization samples the cause after drain.
 The session-log offset/count remains a convenience summary for contiguous response
 PCM. Per-frame audio.frame records retain exact admission order, byte offsets and
 provider identity and are the authoritative evidence for unusual interleaving.
+
+Provider shutdown now distinguishes expected connection closure after explicit
+provider/caller close from real concurrent write failures. It preserves trailing
+normalized messages after session.closed. Four transport lifecycle regressions
+passed 20 race repetitions each; assertions join the writer before inspecting
+terminal errors. Normal media EOF and cancellation caused by final teardown do
+not manufacture a new failure. Sol independently reviewed the identity join,
+interrupt reset, coverage union and shutdown behavior; approval is conditional on
+exact-head hosted CI.

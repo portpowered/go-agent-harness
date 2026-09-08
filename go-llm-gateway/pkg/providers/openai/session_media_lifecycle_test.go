@@ -5,6 +5,8 @@ import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -162,6 +164,105 @@ func TestFlushOutboundWaitsForWebSocketWrite(t *testing.T) {
 	}
 }
 
+func TestProviderCloseDoesNotTurnInterruptedWriteIntoTerminalFailure(t *testing.T) {
+	conn := newProviderCloseRaceConn(fmt.Errorf("write tcp: %w", net.ErrClosed))
+	session := newRealtimeSession(conn, nopLogger())
+	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+		t.Fatalf("enqueue outbound event: %+v", outcome)
+	}
+	go session.readLoop(context.Background())
+	writerDone := runRealtimeWriteLoop(session)
+	select {
+	case <-conn.writeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("write loop did not reach the transport")
+	}
+	close(conn.releaseProviderClose)
+	select {
+	case <-session.Done():
+	case <-time.After(time.Second):
+		t.Fatal("provider session.close did not finish the session")
+	}
+	waitForRealtimeWriteLoop(t, writerDone)
+	if err := session.TerminalError(); err != nil {
+		t.Fatalf("clean provider close retained interrupted write error: %v", err)
+	}
+	msg, ok := session.Receive().ReadBlockingContext(t.Context())
+	if !ok || msg.Type != messages.StreamTypeSessionClose {
+		t.Fatalf("normalized terminal = %+v, want SESSION.CLOSE", msg)
+	}
+	msg, ok = session.Receive().ReadBlockingContext(t.Context())
+	if !ok || msg.Type != messages.StreamTypeMessageEnd || msg.ResponseID != "trailing-response" {
+		t.Fatalf("normalized trailing response = %+v, want response MESSAGE.END", msg)
+	}
+}
+
+func TestProviderCloseDoesNotHideRealConcurrentWriteFailure(t *testing.T) {
+	want := errors.New("provider write failed after close metadata")
+	conn := newProviderCloseRaceConn(want)
+	session := newRealtimeSession(conn, nopLogger())
+	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+		t.Fatalf("enqueue outbound event: %+v", outcome)
+	}
+	go session.readLoop(context.Background())
+	writerDone := runRealtimeWriteLoop(session)
+	<-conn.writeStarted
+	close(conn.releaseProviderClose)
+	waitForRealtimeWriteLoop(t, writerDone)
+	if !errors.Is(session.TerminalError(), want) {
+		t.Fatalf("terminal error = %v, want %v", session.TerminalError(), want)
+	}
+}
+
+func TestCallerCloseDoesNotRetainInterruptedWriteError(t *testing.T) {
+	conn := newProviderCloseRaceConn(net.ErrClosed)
+	session := newRealtimeSession(conn, nopLogger())
+	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+		t.Fatal(outcome)
+	}
+	writerDone := runRealtimeWriteLoop(session)
+	<-conn.writeStarted
+	if err := session.Close(); err != nil {
+		t.Fatalf("close realtime session: %v", err)
+	}
+	waitForRealtimeWriteLoop(t, writerDone)
+	if err := session.TerminalError(); err != nil {
+		t.Fatalf("caller close retained interrupted write error: %v", err)
+	}
+}
+
+func TestWriteFailureBeforeProviderCloseRemainsTerminal(t *testing.T) {
+	want := errors.New("provider write failed")
+	conn := &failedOutboundConn{err: want, closed: make(chan struct{})}
+	session := newRealtimeSession(conn, nopLogger())
+	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+		t.Fatalf("enqueue outbound event: %+v", outcome)
+	}
+	writerDone := runRealtimeWriteLoop(session)
+	waitForRealtimeWriteLoop(t, writerDone)
+	if !errors.Is(session.TerminalError(), want) {
+		t.Fatalf("terminal error = %v, want %v", session.TerminalError(), want)
+	}
+}
+
+func runRealtimeWriteLoop(session *realtimeSession) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		session.writeLoop(context.Background())
+		close(done)
+	}()
+	return done
+}
+
+func waitForRealtimeWriteLoop(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("realtime write loop did not settle")
+	}
+}
+
 func TestRealtimeSession_FlushOutboundWaitsForDeferredAudioCommit(t *testing.T) {
 	conn := newMockWebSocketConn()
 	session := newRealtimeSession(conn, nopLogger())
@@ -217,6 +318,22 @@ type blockingOutboundConn struct {
 	release      chan struct{}
 	closed       chan struct{}
 	closeOnce    sync.Once
+}
+
+type failedOutboundConn struct {
+	err       error
+	closed    chan struct{}
+	closeOnce sync.Once
+}
+
+func (c *failedOutboundConn) ReadMessage() (int, []byte, error) {
+	<-c.closed
+	return 0, nil, errors.New("connection closed")
+}
+func (c *failedOutboundConn) WriteMessage(int, []byte) error { return c.err }
+func (c *failedOutboundConn) Close() error {
+	c.closeOnce.Do(func() { close(c.closed) })
+	return nil
 }
 
 func newBlockingOutboundConn() *blockingOutboundConn {
