@@ -8,63 +8,6 @@ import (
 	"testing"
 )
 
-func TestScopedBaselineKeepsOnlySelectedModules(t *testing.T) {
-	first := &Module{Path: "example.com/first", Dir: "/repo/first"}
-	second := &Module{Path: "example.com/second", Dir: "/repo/second"}
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{
-		{Rule: "file-lines", Module: first.Path, Package: first.Path, File: "first.go", Value: 401, Rationale: "legacy", Phase: "P0"},
-		{Rule: "file-lines", Module: second.Path, Package: second.Path, File: "second.go", Value: 401, Rationale: "legacy", Phase: "P0"},
-	}}
-	filtered := baselineForModules(baseline, []*Module{first})
-	if len(filtered.Entries) != 1 || filtered.Entries[0].Module != first.Path {
-		t.Fatalf("filtered baseline = %#v", filtered.Entries)
-	}
-}
-
-func TestScopedBaselineKeepsStaleEntriesInsideSelectedPrefix(t *testing.T) {
-	module := &Module{
-		Path: "example.com/app",
-		Dir:  "/repo/app",
-		Packages: []*Package{
-			{ImportPath: "example.com/app/internal/acceptance"},
-		},
-	}
-	selected := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance", File: "current.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	removed := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance/removed", File: "old.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	unrelated := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/services", File: "service.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{selected, removed, unrelated}}
-	filtered := baselineForScope(baseline, []*Module{module}, []string{"./internal/acceptance/..."})
-	issues := compareBaseline([]Issue{{Rule: selected.Rule, Module: selected.Module, Package: selected.Package, File: selected.File, Value: selected.Value}}, filtered)
-	if !hasRule(issues, "baseline-stale") {
-		t.Fatalf("removed package inside selected prefix was discarded: %#v", filtered)
-	}
-	for _, issue := range issues {
-		if issue.Package == unrelated.Package {
-			t.Fatalf("unrelated package leaked into focused baseline report: %#v", issues)
-		}
-	}
-}
-
-func TestUnclassifiedPackagesCannotConsumeLocalServiceInternals(t *testing.T) {
-	module := &Module{Dir: "/repo", Path: "example.com/app"}
-	policy := fixturePolicy()
-	for _, test := range []struct {
-		name, imported, want string
-	}{
-		{name: "wire", imported: "example.com/app/services/a/wire", want: "wire-import"},
-		{name: "internal", imported: "example.com/app/services/a/internal/impl", want: "peer-private-import"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			file := sourceFixture(t, test.name+".go", "package other\nimport \""+test.imported+"\"\n", false)
-			pkg := &Package{ImportPath: module.Path + "/other", Dir: "/repo/other", Module: module, Files: []*SourceFile{file}}
-			issues := architectureIssues(pkg, module, classifyService(pkg, module, policy), policy)
-			if !hasRule(issues, test.want) {
-				t.Fatalf("issues = %#v; wanted %s", issues, test.want)
-			}
-		})
-	}
-}
-
 func TestExternalServicesPathIsNotTreatedAsLocalPeer(t *testing.T) {
 	module := &Module{Dir: "/repo", Path: "example.com/app"}
 	policy := fixturePolicy()
@@ -353,6 +296,111 @@ func TestBaselineHistoryRejectsAddedExemptionAndMissingRenameTarget(t *testing.T
 	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", invalidRename); !hasRule(issues, "baseline-history-rename") {
 		t.Fatalf("issues = %#v; missing rename target was accepted", issues)
 	}
+}
+
+func TestBaselineHistoryRejectsGrowthOfPersistedRename(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/services/a", File: "old.go", Symbol: "Run", Value: 81, Rationale: "extraction holder", Phase: "P0"}
+	target := old
+	target.File = "new.go"
+	rename := BaselineRename{From: baselineIssue(old).Key(), To: baselineIssue(target).Key()}
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{target}, Renames: []BaselineRename{rename}}
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "persist renamed baseline")
+
+	grown := target
+	grown.Value++
+	current := initial
+	current.Entries = []BaselineEntry{grown}
+	issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
+	if hasRule(issues, "baseline-history-rename") {
+		t.Fatalf("persisted rename was treated as invalid: %#v", issues)
+	}
+	if !hasRule(issues, "baseline-history-increase") {
+		t.Fatalf("issues = %#v; persisted renamed ceiling growth was accepted", issues)
+	}
+}
+
+func TestBaselineHistoryRejectsRetainedOrUnknownRenameSource(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81, Rationale: "legacy holder", Phase: "P0"}
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{old}}
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "baseline")
+
+	t.Run("retained source", func(t *testing.T) {
+		target := old
+		target.File = "new.go"
+		current := initial
+		current.Entries = []BaselineEntry{old, target}
+		current.Renames = []BaselineRename{{From: baselineIssue(old).Key(), To: baselineIssue(target).Key()}}
+		issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
+		if !hasRule(issues, "baseline-history-rename") {
+			t.Fatalf("issues = %#v; retained rename source was accepted", issues)
+		}
+	})
+
+	t.Run("unknown source", func(t *testing.T) {
+		unknown := old
+		unknown.File = "unknown.go"
+		current := initial
+		current.Renames = []BaselineRename{{From: baselineIssue(unknown).Key(), To: baselineIssue(old).Key()}}
+		issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
+		if !hasRule(issues, "baseline-history-rename") {
+			t.Fatalf("issues = %#v; unknown rename source was accepted", issues)
+		}
+	})
+}
+
+func TestBaselineHistoryRejectsUnsupportedHistoricalVersion(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	entry := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81, Rationale: "legacy holder", Phase: "P0"}
+	historical := Baseline{Version: 999, SourceCommit: "reviewed-source", Entries: []BaselineEntry{entry}}
+	data, err := baselineJSON(historical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "unsupported historical baseline")
+
+	current := historical
+	current.Version = baselineVersion
+	issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
+	for _, issue := range issues {
+		if issue.Rule == "baseline-history" && strings.Contains(issue.Message, "version 999") {
+			return
+		}
+	}
+	t.Fatalf("issues = %#v; unsupported historical version was accepted", issues)
 }
 
 func TestBaselineHistoryBootstrapsFromMergeBaseSource(t *testing.T) {

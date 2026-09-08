@@ -15,6 +15,63 @@ import (
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
+func TestScopedBaselineKeepsOnlySelectedModules(t *testing.T) {
+	first := &Module{Path: "example.com/first", Dir: "/repo/first"}
+	second := &Module{Path: "example.com/second", Dir: "/repo/second"}
+	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{
+		{Rule: "file-lines", Module: first.Path, Package: first.Path, File: "first.go", Value: 401, Rationale: "legacy", Phase: "P0"},
+		{Rule: "file-lines", Module: second.Path, Package: second.Path, File: "second.go", Value: 401, Rationale: "legacy", Phase: "P0"},
+	}}
+	filtered := baselineForModules(baseline, []*Module{first})
+	if len(filtered.Entries) != 1 || filtered.Entries[0].Module != first.Path {
+		t.Fatalf("filtered baseline = %#v", filtered.Entries)
+	}
+}
+
+func TestScopedBaselineKeepsStaleEntriesInsideSelectedPrefix(t *testing.T) {
+	module := &Module{
+		Path: "example.com/app",
+		Dir:  "/repo/app",
+		Packages: []*Package{
+			{ImportPath: "example.com/app/internal/acceptance"},
+		},
+	}
+	selected := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance", File: "current.go", Value: 401, Rationale: "legacy", Phase: "P0"}
+	removed := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance/removed", File: "old.go", Value: 401, Rationale: "legacy", Phase: "P0"}
+	unrelated := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/services", File: "service.go", Value: 401, Rationale: "legacy", Phase: "P0"}
+	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{selected, removed, unrelated}}
+	filtered := baselineForScope(baseline, []*Module{module}, []string{"./internal/acceptance/..."})
+	issues := compareBaseline([]Issue{{Rule: selected.Rule, Module: selected.Module, Package: selected.Package, File: selected.File, Value: selected.Value}}, filtered)
+	if !hasRule(issues, "baseline-stale") {
+		t.Fatalf("removed package inside selected prefix was discarded: %#v", filtered)
+	}
+	for _, issue := range issues {
+		if issue.Package == unrelated.Package {
+			t.Fatalf("unrelated package leaked into focused baseline report: %#v", issues)
+		}
+	}
+}
+
+func TestUnclassifiedPackagesCannotConsumeLocalServiceInternals(t *testing.T) {
+	module := &Module{Dir: "/repo", Path: "example.com/app"}
+	policy := fixturePolicy()
+	for _, test := range []struct {
+		name, imported, want string
+	}{
+		{name: "wire", imported: "example.com/app/services/a/wire", want: "wire-import"},
+		{name: "internal", imported: "example.com/app/services/a/internal/impl", want: "peer-private-import"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			file := sourceFixture(t, test.name+".go", "package other\nimport \""+test.imported+"\"\n", false)
+			pkg := &Package{ImportPath: module.Path + "/other", Dir: "/repo/other", Module: module, Files: []*SourceFile{file}}
+			issues := architectureIssues(pkg, module, classifyService(pkg, module, policy), policy)
+			if !hasRule(issues, test.want) {
+				t.Fatalf("issues = %#v; wanted %s", issues, test.want)
+			}
+		})
+	}
+}
+
 func TestServiceContractsAndWireStayTypeSafe(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.com/fixture\n\ngo 1.26.7\n")

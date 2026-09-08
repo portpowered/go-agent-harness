@@ -250,6 +250,9 @@ func decodeHistoricalBaseline(data []byte) (Baseline, error) {
 	if err := json.Unmarshal(data, &previous); err != nil {
 		return Baseline{}, fmt.Errorf("merge-base baseline is invalid: %w", err)
 	}
+	if previous.Version != baselineVersion {
+		return Baseline{}, fmt.Errorf("merge-base baseline has version %d; expected %d", previous.Version, baselineVersion)
+	}
 	if err := validateBaseline(previous); err != nil {
 		return Baseline{}, fmt.Errorf("merge-base baseline is invalid: %w", err)
 	}
@@ -265,7 +268,7 @@ func compareHistoricalEntries(relative string, previous, current Baseline) []Iss
 	}
 	result = append(result, historyCeilingIssues(oldEntries, current)...)
 	result = append(result, historyAddedIssues(oldEntries, current)...)
-	result = append(result, historyRenameIssues(relative, oldEntries, newEntries, current.Renames)...)
+	result = append(result, historyRenameIssues(relative, oldEntries, newEntries, previous.Renames, current.Renames)...)
 	return result
 }
 
@@ -280,11 +283,7 @@ func baselineEntries(entries []BaselineEntry) map[string]BaselineEntry {
 func historyCeilingIssues(oldEntries map[string]BaselineEntry, current Baseline) []Issue {
 	result := make([]Issue, 0)
 	for key, entry := range currentEntriesSorted(current.Entries) {
-		oldKey := key
-		if source, renamed := renameSourceFor(current.Renames, key); renamed {
-			oldKey = source
-		}
-		previousEntry, ok := oldEntries[oldKey]
+		previousEntry, ok := historicalEntryForCurrent(oldEntries, key, current.Renames)
 		if !ok {
 			continue
 		}
@@ -315,17 +314,44 @@ func historyAddedIssues(oldEntries map[string]BaselineEntry, current Baseline) [
 	return result
 }
 
-func historyRenameIssues(relative string, oldEntries, newEntries map[string]BaselineEntry, renames []BaselineRename) []Issue {
+func historyRenameIssues(relative string, oldEntries, newEntries map[string]BaselineEntry, previousRenames, currentRenames []BaselineRename) []Issue {
+	establishedRenames := make(map[BaselineRename]struct{}, len(previousRenames))
+	for _, rename := range previousRenames {
+		establishedRenames[rename] = struct{}{}
+	}
 	result := make([]Issue, 0)
-	for _, rename := range renames {
-		if _, oldExists := oldEntries[rename.From]; !oldExists {
+	for _, rename := range currentRenames {
+		if _, newTargetExists := newEntries[rename.To]; !newTargetExists {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename target %q is missing", rename.To)})
 			continue
 		}
-		if _, newExists := newEntries[rename.To]; !newExists {
-			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename target %q is missing", rename.To)})
+		if _, newSourceExists := newEntries[rename.From]; newSourceExists {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename source %q remains in the current baseline; a rename must migrate one exemption exactly once", rename.From)})
+			continue
+		}
+		if _, oldSourceExists := oldEntries[rename.From]; oldSourceExists {
+			if _, oldTargetExists := oldEntries[rename.To]; oldTargetExists {
+				result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename target %q already exists in the established baseline", rename.To)})
+			}
+			continue
+		}
+		if _, established := establishedRenames[rename]; !established {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename source %q is not an established baseline entry", rename.From)})
 		}
 	}
 	return result
+}
+
+func historicalEntryForCurrent(oldEntries map[string]BaselineEntry, key string, renames []BaselineRename) (BaselineEntry, bool) {
+	if entry, ok := oldEntries[key]; ok {
+		return entry, true
+	}
+	oldKey, renamed := renameSourceFor(renames, key)
+	if !renamed {
+		return BaselineEntry{}, false
+	}
+	entry, ok := oldEntries[oldKey]
+	return entry, ok
 }
 
 func currentEntriesSorted(entries []BaselineEntry) map[string]BaselineEntry {
