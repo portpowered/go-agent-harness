@@ -1,0 +1,6 @@
+{
+  "isolation": "shared-factory-host",
+  "reason": "C08 owns the shared host",
+  "schema": "c11-quiet-evidence-v1",
+  "valid": false
+}

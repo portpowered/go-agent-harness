@@ -22,9 +22,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
-- Current rebased candidate head: `76d8c27c6bb3928178542c454c3cd2a29846156b`.
-- Implementation checkpoint after the delivery rebase:
-  `e9c89682631c897ae103e11c629b5ca8a60ce5b6`.
+- Current implementation candidate head: `e83c4683396de37c8e558b35e99a08f6b539ebd7`.
+- Implementation checkpoint after the review repair:
+  `e83c4683396de37c8e558b35e99a08f6b539ebd7`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -56,23 +56,28 @@ runner metadata, package timing, repeat variation, no-test/skip classification,
 subtest overlap, and timingate-compatible diagnostics. Heavy commands fail
 closed without explicit opt-in and valid isolated/dedicated evidence.
 
-Source file hashes at the rebased checkpoint are:
-`profile.py` `0cb0ed7ea403c2da0ee072aa38f760abaf977616cb92ef1a23982fd9b4e365e2`,
-`controls.py` `3adacedcd97491bdc86c1289928828b78b7580ba49fee03e66214681fd780bcb`,
+Source file hashes at the review-repair checkpoint are:
+`profile.py` `ffb19849235315603db5a58136ca78a49ef9e064ca37adbb7546460d9988f7e2`,
+`controls.py` `7c79c772bf92cc88a9dc83170e5d1f0bd8adf1b50fe966d523309444f4bf5671`,
 and `fixtures/emit_jsonl.py`
-`0f1892f763e02dcb43bd5008729ededd14a45ef1c7580ac73271811a2938e8c8`.
+`8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
 
 Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../controls-rebased`:
-  PASS; 11 public cases and 14 assertions, raw evidence retained, zero Go,
-  network, or build invocations. The report is
-  `controls-rebased/controls.json`.
-- Post-rebase controls rerun: `controls-final/controls.json`, PASS; 11 cases,
-  14 assertions, zero Go/network/build invocations. Its hash is
-  `32d490fa88208d9e377e4b3a85afbf0d362401ccfdb9b631851bcc7aa69ca557`.
+- `python3 scripts/hermetic-profile/controls.py --output .../controls-review-repair`:
+  PASS; 18 declared scenarios and 17 result groups, zero Go, network, or build
+  invocations. The report hash is
+  `a070ed8ed89e36977fd9f002ea7f7babe50349cc5fbb4adaf02a0d90d9f09445`.
+  The report truthfully marks top-level raw evidence retention `false` because
+  the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
+  negative control; the per-case result also records `false`.
+- Review repair controls additionally prove that cross-package test activity is
+  not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
+  absolute and traversal artifact redirects are rejected, and tampered
+  per-record source identity, quiet-evidence provenance, or requested versus
+  completed repetition counts remain `INVALID`.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
 - Rejected CI regression recheck:
   `go test ./agent-cli/internal/services/internal/agentruntime -count=1
@@ -82,12 +87,12 @@ Focused evidence:
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
-package terminals, cached output, and missing raw artifacts do not become a
-fresh timing PASS. The repeated synthetic cohort also proves lane wall is not
-the sum of package durations. The broad six-module hermetic/coverage suites
-were not duplicated locally because the active C08 owner makes this host
-non-quiet and the handoff explicitly assigns the script CI gate those broad
-checks.
+package terminals, cached output, missing raw artifacts, redirected artifacts,
+missing provenance, and incomplete repeats do not become a fresh timing PASS.
+The repeated synthetic cohort also proves lane wall is not the sum of package
+durations. The broad six-module hermetic/coverage suites were not duplicated
+locally because the active C08 owner makes this host non-quiet and the handoff
+explicitly assigns the script CI gate those broad checks.
 
 ## Immutable hosted evidence
 
@@ -142,8 +147,9 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The exact next action is push this rebased branch and open/update one C11 PR.
-Return `ACCEPTED` to the script-owned CI gate after that submission; do not poll
-CI or claim that CI is green. Any exact current-head rejection returns to this
-same task for a scoped repair. Independent review and post-integration vertical
-validation remain external stages.
+The exact next action is push the review-repair checkpoint and update PR #403
+with the current source/control hashes. Return `ACCEPTED` to the script-owned
+CI gate after that submission; do not poll CI or claim that CI is green. Any
+exact current-head rejection returns to this same task for a scoped repair.
+Independent review and post-integration vertical validation remain external
+stages.

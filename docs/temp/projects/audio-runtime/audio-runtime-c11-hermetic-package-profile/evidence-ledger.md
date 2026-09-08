@@ -25,9 +25,8 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Required delivery rebase completed onto `origin/main`; current candidate
-  `HEAD=76d8c27c6bb3928178542c454c3cd2a29846156b`, implementation checkpoint
-  `e9c89682631c897ae103e11c629b5ca8a60ce5b6`.
+- Required delivery rebase completed onto `origin/main`; the review-repair
+  implementation checkpoint is `HEAD=e83c4683396de37c8e558b35e99a08f6b539ebd7`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -49,14 +48,23 @@ failure, not a profiler control failure.
 - `controls.py` invokes the public entry point with synthetic JSONL fixtures and
   covers pass/repeat, low-duration fail, nonzero apparent pass, truncated,
   malformed, empty, missing package, cached, no-test, overlapping subtests,
-  help/offline no-spawn, and invalid shared-host evidence.
+  cross-package concurrency, help/offline no-spawn, invalid shared-host
+  evidence, redirected artifact paths, missing per-record source identity,
+  missing quiet evidence, and incomplete repetition counts.
 - AST parsing of all shipped Python files: PASS.
 - `profile.py --help`: PASS.
-- `controls-rebased/controls.json`: PASS; 11 cases, 14 assertions, raw evidence
-  retained, zero Go/network/build invocations.
-- Post-rebase controls rerun: `controls-final/controls.json`, PASS; 11 cases,
-  14 assertions, zero Go/network/build invocations; hash
-  `32d490fa88208d9e377e4b3a85afbf0d362401ccfdb9b631851bcc7aa69ca557`.
+- `controls-review-repair/controls.json`: PASS; 18 declared scenarios and 17
+  result groups, zero Go/network/build invocations; hash
+  `a070ed8ed89e36977fd9f002ea7f7babe50349cc5fbb4adaf02a0d90d9f09445`.
+  Top-level `raw_evidence_retained=false` and the
+  `missing-raw-artifact` case reports `raw_artifacts_retained=false`, because
+  that fixture deletion is intentional negative-control evidence.
+- Review repair source hashes: `profile.py`
+  `ffb19849235315603db5a58136ca78a49ef9e064ca37adbb7546460d9988f7e2`,
+  `controls.py`
+  `7c79c772bf92cc88a9dc83170e5d1f0bd8adf1b50fe966d523309444f4bf5671`, and
+  `fixtures/emit_jsonl.py`
+  `8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
 - `GOWORK=off go test . -count=1` in `tools/timingate`: PASS.
 - The previous CI failure was read from job `102043028609` in run
   `34220749840`: `TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress` failed
@@ -81,10 +89,11 @@ Immutable hosted references and their hashes, provenance, historical package
 costs, limitations, and at-most-three future optimization proposals are in
 `assessment.md`; the compact machine-readable summary is `assessment.json`.
 No fresh C11 run hash or same-source three-trial cohort exists; none is
-fabricated.
+fabricated. The review repair was validated only through the bounded public
+synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The next bounded step is push/update the single C11 PR and return `ACCEPTED` to
-script CI. Do not poll CI, self-review, claim CI green, or close any of the nine
-immutable project gates.
+The next bounded step is push/update the same PR #403 with this repair and
+return `ACCEPTED` to script CI. Do not poll CI, self-review, claim CI green, or
+close any of the nine immutable project gates.

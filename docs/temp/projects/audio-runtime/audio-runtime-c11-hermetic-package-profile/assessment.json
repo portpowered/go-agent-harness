@@ -3,8 +3,8 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "76d8c27c6bb3928178542c454c3cd2a29846156b",
-  "implementation_checkpoint": "e9c89682631c897ae103e11c629b5ca8a60ce5b6",
+  "candidate_head": "e83c4683396de37c8e558b35e99a08f6b539ebd7",
+  "implementation_checkpoint": "e83c4683396de37c8e558b35e99a08f6b539ebd7",
   "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -49,15 +49,31 @@
     "count": 1
   },
   "controls": {
-    "path": "controls-rebased/controls.json",
-    "sha256": "0c5cdbd38830784d7510a0880ba4e92f5025ad936cc5fbd0e37d8898fcdbd0ca",
+    "path": "controls-review-repair/controls.json",
+    "sha256": "a070ed8ed89e36977fd9f002ea7f7babe50349cc5fbb4adaf02a0d90d9f09445",
     "status": "PASS",
-    "cases": 11,
-    "assertions": 14,
+    "cases": 18,
+    "result_groups": 17,
     "go_invocations": 0,
     "network_invocations": 0,
     "build_invocations": 0,
-    "raw_evidence_retained": true
+    "raw_evidence_retained": false,
+    "raw_evidence_retention": {
+      "all_case_artifacts_retained": false,
+      "deliberately_removed_cases": ["missing-raw-artifact"],
+      "negative_control": "missing-raw-artifact"
+    }
+  },
+  "review_repairs": {
+    "reviewed_head": "784890b37caadf7366ca1fe1c018c8918453bde9",
+    "status": "REPAIRED_AND_CAUSALLY_TESTED",
+    "items": [
+      "subtest overlap is scoped per package and cross-package concurrency is covered",
+      "invalid shared-host evidence is checked with --allow-heavy and rejected",
+      "missing raw-artifact retention is reported truthfully per case and at top level",
+      "stdout/stderr artifact paths are contained under the manifest output root",
+      "per-record source identity, quiet-evidence provenance, and repetition completeness are required"
+    ]
   },
   "focused_regressions": [
     {
@@ -75,9 +91,9 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "0cb0ed7ea403c2da0ee072aa38f760abaf977616cb92ef1a23982fd9b4e365e2",
-    "scripts/hermetic-profile/controls.py": "3adacedcd97491bdc86c1289928828b78b7580ba49fee03e66214681fd780bcb",
-    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0f1892f763e02dcb43bd5008729ededd14a45ef1c7580ac73271811a2938e8c8"
+    "scripts/hermetic-profile/profile.py": "ffb19849235315603db5a58136ca78a49ef9e064ca37adbb7546460d9988f7e2",
+    "scripts/hermetic-profile/controls.py": "7c79c772bf92cc88a9dc83170e5d1f0bd8adf1b50fe966d523309444f4bf5671",
+    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856"
   },
   "immutable_ci_logs": [
     {
@@ -94,6 +110,6 @@
     }
   ],
   "fresh_run_hashes": [],
-  "ci_status": "REJECTED_PREVIOUS_HEAD_RECHECKED_RESUBMISSION_PENDING",
+  "ci_status": "READY_FOR_SCRIPT_CI_RESUBMISSION",
   "review_status": "NOT_SELF_REVIEWED"
 }

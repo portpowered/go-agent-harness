@@ -1,0 +1,1125 @@
+{
+  "build_invocations": 0,
+  "case_count": 18,
+  "created_at_utc": "2026-09-08T12:38:38.179Z",
+  "failures": [],
+  "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/fixtures/emit_jsonl.py",
+  "go_invocations": 0,
+  "network_invocations": 0,
+  "passed_control_count": 17,
+  "profile": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+  "raw_evidence_retained": false,
+  "raw_evidence_retention": {
+    "all_case_artifacts_retained": false,
+    "deliberately_removed_cases": [
+      "missing-raw-artifact"
+    ],
+    "negative_control": "missing-raw-artifact"
+  },
+  "results": [
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/analysis/analysis.json\",\n  \"failure_count\": 0,\n  \"fresh_timing\": \"PASS\",\n  \"lane_wall_seconds\": 0.135301792,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"PASS\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/driver/analyze.stdout",
+        "stdout_sha256": "c1149d0dff6a92aae974c3f5a60e1ef382900eae702424d5d5222c3f110bc546",
+        "timed_out": false,
+        "wall_seconds": 0.059908833
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/analysis/analysis.json",
+        "failure_count": 0,
+        "fresh_timing": "PASS",
+        "lane_wall_seconds": 0.135301792,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "PASS"
+      },
+      "name": "valid-pass-repeat",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/quiet-evidence.json",
+          "--repeat",
+          "2",
+          "--cohort",
+          "synthetic:."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 2,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/run/manifest.json\",\n  \"record_count\": 2,\n  \"requested_repetitions\": 2,\n  \"run_group_id\": \"20260908T123835.088Z-2f007b9a21\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/driver/run.stdout",
+        "stdout_sha256": "8e9bbcf76a13ad100edfbdaed1582fa2d3c95b10fe5dae713e5dd426f229a8ab",
+        "timed_out": false,
+        "wall_seconds": 0.197526625
+      },
+      "run_summary": {
+        "completed_repetitions": 2,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/valid-pass-repeat/run/manifest.json",
+        "record_count": 2,
+        "requested_repetitions": 2,
+        "run_group_id": "20260908T123835.088Z-2f007b9a21",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "pass"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/analysis/analysis.json\",\n  \"failure_count\": 2,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.067437042,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/driver/analyze.stdout",
+        "stdout_sha256": "604a02fd3c0179181ce7e5f7d8277d424fc72130cda831898e2bcac0ab4d1dd3",
+        "timed_out": false,
+        "wall_seconds": 0.0602305
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/analysis/analysis.json",
+        "failure_count": 2,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.067437042,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "package-fail-low-duration",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 0,\n  \"failure_count\": 1,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123835.348Z-3d59861c21\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"FAILED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/driver/run.stdout",
+        "stdout_sha256": "dfc0277958bc1186245b47e965f48708dfc411a2d1443b425fec356fc0492ebe",
+        "timed_out": false,
+        "wall_seconds": 0.131212334
+      },
+      "run_summary": {
+        "completed_repetitions": 0,
+        "failure_count": 1,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/package-fail-low-duration/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123835.348Z-3d59861c21",
+        "source_sha": "synthetic-control-source",
+        "status": "FAILED"
+      },
+      "scenario": "fail"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/analysis/analysis.json\",\n  \"failure_count\": 2,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.062917666,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/driver/analyze.stdout",
+        "stdout_sha256": "d7915777c5b6acd97a2b910d23bbb4f741d48fda8367abc336e91ccce6f4fdc1",
+        "timed_out": false,
+        "wall_seconds": 0.060750208
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/analysis/analysis.json",
+        "failure_count": 2,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.062917666,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "nonzero-apparent-pass",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 0,\n  \"failure_count\": 1,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123835.541Z-7320626f57\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"FAILED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/driver/run.stdout",
+        "stdout_sha256": "5f427facad9c4d60ec56270c374159d4a5c87843c86b9368271ed0bfa0537820",
+        "timed_out": false,
+        "wall_seconds": 0.125285542
+      },
+      "run_summary": {
+        "completed_repetitions": 0,
+        "failure_count": 1,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/nonzero-apparent-pass/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123835.541Z-7320626f57",
+        "source_sha": "synthetic-control-source",
+        "status": "FAILED"
+      },
+      "scenario": "nonzero-pass"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.037201208,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/driver/analyze.stdout",
+        "stdout_sha256": "c4011491cb38a2cdbdfd1dec00472428eb9c5679e33b714c35ff265cc2403afe",
+        "timed_out": false,
+        "wall_seconds": 0.060026791
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.037201208,
+        "ranked_package_count": 0,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "truncated-terminal",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123835.728Z-eecefacf96\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/driver/run.stdout",
+        "stdout_sha256": "65b2911b2a5f18a95416413db42ceb602f2548c94c0bd4d26dea741cc3ebb9d2",
+        "timed_out": false,
+        "wall_seconds": 0.099217541
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/truncated-terminal/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123835.728Z-eecefacf96",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "truncated"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.036811417,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/driver/analyze.stdout",
+        "stdout_sha256": "d32ade6ded6f754a21ff931b5d8f45f5756e77ffaf03f061884322333a41aa64",
+        "timed_out": false,
+        "wall_seconds": 0.059491208
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.036811417,
+        "ranked_package_count": 0,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "malformed-stream",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123835.890Z-1ea890b779\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/driver/run.stdout",
+        "stdout_sha256": "b03a7a4cf008e47c2c9f80ce8a08ea13407b0fbce9df0d05cf07a064220c6811",
+        "timed_out": false,
+        "wall_seconds": 0.098637833
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/malformed-stream/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123835.890Z-1ea890b779",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "malformed"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.03744975,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/driver/analyze.stdout",
+        "stdout_sha256": "8302346e217bb584d10e923eccea828781b6880d2fae296a1aea84853b17abd1",
+        "timed_out": false,
+        "wall_seconds": 0.0609965
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.03744975,
+        "ranked_package_count": 0,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "empty-stream",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123836.051Z-5edef5a4bf\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/driver/run.stdout",
+        "stdout_sha256": "b43a6a6c89dfcde0c8e09f01c28418ab9a21534c2a64215a0b50770a4bd8a730",
+        "timed_out": false,
+        "wall_seconds": 0.101814792
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/empty-stream/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123836.051Z-5edef5a4bf",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "empty"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.054420542,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/driver/analyze.stdout",
+        "stdout_sha256": "0a56c746ab31822f2a87510ae66925d00a84a77182ab062050284d40656f4ac4",
+        "timed_out": false,
+        "wall_seconds": 0.06448975
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.054420542,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "missing-package",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123836.214Z-5afb0105d8\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/driver/run.stdout",
+        "stdout_sha256": "9ea9c5d3c9302fb9771194a2e5636c23794e7eef791b579b0e8ef7b09e6c9593",
+        "timed_out": false,
+        "wall_seconds": 0.116751291
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-package/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123836.214Z-5afb0105d8",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "missing"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.062405167,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/driver/analyze.stdout",
+        "stdout_sha256": "bf46afd3814cbc639aee410d0be41ecdb03a9f03bf837252c076f2d3116eb800",
+        "timed_out": false,
+        "wall_seconds": 0.061649916
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.062405167,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "cached-input",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123836.402Z-6f322937a0\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/driver/run.stdout",
+        "stdout_sha256": "2cf9a9ce653f98b6c9e43431e36407ec5d449f56b7999f524df9e6aa5852b789",
+        "timed_out": false,
+        "wall_seconds": 0.129682917
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cached-input/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123836.402Z-6f322937a0",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "cached"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/analysis/analysis.json\",\n  \"failure_count\": 0,\n  \"fresh_timing\": \"PASS\",\n  \"lane_wall_seconds\": 0.076319625,\n  \"ranked_package_count\": 2,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"PASS\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/driver/analyze.stdout",
+        "stdout_sha256": "fff42d3c5f9659b5af37a35f6586213a4842116f3fe9690bd77fb3bd758ec190",
+        "timed_out": false,
+        "wall_seconds": 0.062534666
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/analysis/analysis.json",
+        "failure_count": 0,
+        "fresh_timing": "PASS",
+        "lane_wall_seconds": 0.076319625,
+        "ranked_package_count": 2,
+        "source_sha": "synthetic-control-source",
+        "status": "PASS"
+      },
+      "name": "no-test-classification",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123836.590Z-f70b96a432\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/driver/run.stdout",
+        "stdout_sha256": "a89fe1c92a09b1cf63349ce6f5d5659be1da4fefec33fe881e69966984686dfb",
+        "timed_out": false,
+        "wall_seconds": 0.139099042
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/no-test-classification/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123836.590Z-f70b96a432",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "no-test"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/analysis/analysis.json\",\n  \"failure_count\": 0,\n  \"fresh_timing\": \"PASS\",\n  \"lane_wall_seconds\": 0.077615041,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"PASS\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/driver/analyze.stdout",
+        "stdout_sha256": "c5ff318f51410c9577b8ed1ad915e1c5d6a60b118f3c15d4ccdce03b96c10c0b",
+        "timed_out": false,
+        "wall_seconds": 0.061859916
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/analysis/analysis.json",
+        "failure_count": 0,
+        "fresh_timing": "PASS",
+        "lane_wall_seconds": 0.077615041,
+        "ranked_package_count": 1,
+        "source_sha": "synthetic-control-source",
+        "status": "PASS"
+      },
+      "name": "overlapping-subtests",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123836.795Z-99c1af145e\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/driver/run.stdout",
+        "stdout_sha256": "8d885242d748b59a2e16c0ceb7f4380de1b66c81814a7303ecb68416789a1f06",
+        "timed_out": false,
+        "wall_seconds": 0.142696541
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/overlapping-subtests/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123836.795Z-99c1af145e",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "overlap"
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/analysis/analysis.json\",\n  \"failure_count\": 0,\n  \"fresh_timing\": \"PASS\",\n  \"lane_wall_seconds\": 0.098685042,\n  \"ranked_package_count\": 2,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"PASS\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/driver/analyze.stdout",
+        "stdout_sha256": "223b5d877b086f765661436a3501a38fbfacf3ab7a2e4bbafd9b5ec71b84aca9",
+        "timed_out": false,
+        "wall_seconds": 0.060215875
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/analysis/analysis.json",
+        "failure_count": 0,
+        "fresh_timing": "PASS",
+        "lane_wall_seconds": 0.098685042,
+        "ranked_package_count": 2,
+        "source_sha": "synthetic-control-source",
+        "status": "PASS"
+      },
+      "name": "cross-package-concurrency",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123837.001Z-cce04ccd5c\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/driver/run.stdout",
+        "stdout_sha256": "cb485373aa8c257be489d0e9a3442cbb5ac0d45849ffeb2ca73dfede9a6bea6d",
+        "timed_out": false,
+        "wall_seconds": 0.162978875
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/cross-package-concurrency/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123837.001Z-cce04ccd5c",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "cross-package"
+    },
+    {
+      "name": "help-no-spawn",
+      "record": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "--help"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/help.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "usage: profile.py [-h] {inventory,warm,run,analyze} ...\n\nProfile the existing CGO-disabled nomicrophone hermetic lane. Heavy commands\nare opt-in and fail closed without dedicated-runner evidence.\n\npositional arguments:\n  {inventory,warm,run,analyze}\n    inventory           discover the six hermetic module package inventories\n    warm                download dependencies and compile test binaries\n                        without running tests\n    run                 capture one uncached inventory or at most five-package\n                        cohort\n    analyze             analyze retained raw JSON/stderr completely offline\n\noptions:\n  -h, --help            show this help message and exit\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/help.stdout",
+        "stdout_sha256": "6e6d3fbc8ab6c4f0bbb0c7f22062911468ba3a16b2f4857430fec307f1705e16",
+        "timed_out": false,
+        "wall_seconds": 0.058317042
+      }
+    },
+    {
+      "name": "offline-analyze-no-spawn",
+      "record": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/blocked-manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/blocked-analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/offline-analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/blocked-analysis/analysis.json\",\n  \"source_sha\": \"blocked-source\",\n  \"status\": \"BLOCKED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/offline/offline-analyze.stdout",
+        "stdout_sha256": "e937ccd744794e422d68e58aae3aedca1d5046a14370661e7ce54bca1b88f42e",
+        "timed_out": false,
+        "wall_seconds": 0.058888042
+      }
+    },
+    {
+      "name": "heavy-without-admission",
+      "record": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "inventory",
+          "--repo",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/fail-closed/inventory",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/fail-closed/invalid-quiet.json"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/fail-closed",
+        "exit_status": 2,
+        "stderr": "profile.py: error: quiet evidence is not valid: C08 owns the shared host\n",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/fail-closed/inventory.stderr",
+        "stderr_sha256": "d5f8498bc667ef7635a741e4fe11f7267a80419a81927eb5a5aa47885db84bea",
+        "stdout": "",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/fail-closed/inventory.stdout",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false,
+        "wall_seconds": 0.059126084
+      }
+    },
+    {
+      "mutations": [
+        {
+          "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-record-source/analysis.json",
+          "name": "missing-record-source",
+          "raw_artifacts_retained": true,
+          "record": {
+            "argv": [
+              "/opt/homebrew/opt/python@3.14/bin/python3.14",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+              "analyze",
+              "--manifest",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/run/manifest.json",
+              "--output",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-record-source"
+            ],
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering",
+            "exit_status": 1,
+            "stderr": "",
+            "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/missing-record-source/analyze.stderr",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-record-source/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.1385355,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+            "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/missing-record-source/analyze.stdout",
+            "stdout_sha256": "4ed93fcbe46da4720af040b9ed2c0711ab7dfd40f380ef1412d1daadaf156a5c",
+            "timed_out": false,
+            "wall_seconds": 0.062142333
+          }
+        },
+        {
+          "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-quiet-evidence/analysis.json",
+          "name": "missing-quiet-evidence",
+          "raw_artifacts_retained": true,
+          "record": {
+            "argv": [
+              "/opt/homebrew/opt/python@3.14/bin/python3.14",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+              "analyze",
+              "--manifest",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/run/manifest.json",
+              "--output",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-quiet-evidence"
+            ],
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering",
+            "exit_status": 1,
+            "stderr": "",
+            "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/missing-quiet-evidence/analyze.stderr",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/missing-quiet-evidence/analysis.json\",\n  \"failure_count\": 3,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.1385355,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+            "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/missing-quiet-evidence/analyze.stdout",
+            "stdout_sha256": "a75ebbd9abb538e4f8e1d10eef6dced0e06ef7f0bd30495ea5d0a29666a0a8c6",
+            "timed_out": false,
+            "wall_seconds": 0.060802459
+          }
+        },
+        {
+          "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/incomplete-repetition-count/analysis.json",
+          "name": "incomplete-repetition-count",
+          "raw_artifacts_retained": true,
+          "record": {
+            "argv": [
+              "/opt/homebrew/opt/python@3.14/bin/python3.14",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+              "analyze",
+              "--manifest",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/run/manifest.json",
+              "--output",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/incomplete-repetition-count"
+            ],
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering",
+            "exit_status": 1,
+            "stderr": "",
+            "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/incomplete-repetition-count/analyze.stderr",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/analysis/incomplete-repetition-count/analysis.json\",\n  \"failure_count\": 3,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.1385355,\n  \"ranked_package_count\": 1,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+            "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/incomplete-repetition-count/analyze.stdout",
+            "stdout_sha256": "d6cdb3ab6e38d879f7437d35ec0153135d235e04e325f5e2d57ad30f58385f6e",
+            "timed_out": false,
+            "wall_seconds": 0.06245275
+          }
+        }
+      ],
+      "name": "provenance-tampering",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/quiet-evidence.json",
+          "--repeat",
+          "2",
+          "--cohort",
+          "synthetic:."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 2,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/run/manifest.json\",\n  \"record_count\": 2,\n  \"requested_repetitions\": 2,\n  \"run_group_id\": \"20260908T123837.404Z-dc652b7d3c\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/provenance-tampering/driver/run.stdout",
+        "stdout_sha256": "a4ea274bbea52e49c4034a0901b92e83bca7dfa8bc25e2008117b29d08b8e3e5",
+        "timed_out": false,
+        "wall_seconds": 0.201672625
+      }
+    },
+    {
+      "mutations": [
+        {
+          "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/absolute-redirect/analysis.json",
+          "name": "absolute-redirect",
+          "raw_artifacts_retained": true,
+          "record": {
+            "argv": [
+              "/opt/homebrew/opt/python@3.14/bin/python3.14",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+              "analyze",
+              "--manifest",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/run/manifest.json",
+              "--output",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/absolute-redirect"
+            ],
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment",
+            "exit_status": 1,
+            "stderr": "",
+            "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/absolute-redirect/analyze.stderr",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/absolute-redirect/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.062942458,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+            "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/absolute-redirect/analyze.stdout",
+            "stdout_sha256": "87066f2c8b59a98412eeef3ae54f6bb4339870b8f0c6ea990c9946dc4743bad7",
+            "timed_out": false,
+            "wall_seconds": 0.059234917
+          }
+        },
+        {
+          "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/traversal-redirect/analysis.json",
+          "name": "traversal-redirect",
+          "raw_artifacts_retained": true,
+          "record": {
+            "argv": [
+              "/opt/homebrew/opt/python@3.14/bin/python3.14",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+              "analyze",
+              "--manifest",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/run/manifest.json",
+              "--output",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/traversal-redirect"
+            ],
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment",
+            "exit_status": 1,
+            "stderr": "",
+            "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/traversal-redirect/analyze.stderr",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/analysis/traversal-redirect/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.062942458,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+            "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/traversal-redirect/analyze.stdout",
+            "stdout_sha256": "3bb75be3101771d3fb532d44aa9d80661510e9fbcafc25b23dc162208a17840b",
+            "timed_out": false,
+            "wall_seconds": 0.059864958
+          }
+        }
+      ],
+      "name": "artifact-containment",
+      "raw_artifacts_retained": true,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/quiet-evidence.json"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123837.796Z-397034b4b1\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/driver/run.stdout",
+        "stdout_sha256": "7754db2bd41ef6bd4645c1f431f443def6a968f12b7c9e1aee30a9a6251b6bc9",
+        "timed_out": false,
+        "wall_seconds": 0.125307875
+      }
+    },
+    {
+      "analysis": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "analyze",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/run/manifest.json",
+          "--output",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/analysis"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact",
+        "exit_status": 1,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/driver/analyze.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"analysis\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/analysis/analysis.json\",\n  \"failure_count\": 1,\n  \"fresh_timing\": \"INVALID\",\n  \"lane_wall_seconds\": 0.065750792,\n  \"ranked_package_count\": 0,\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"INVALID\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/driver/analyze.stdout",
+        "stdout_sha256": "746009faa654b26643541b0f720bff9d761b32147719b4b3f122cdd1cef3946d",
+        "timed_out": false,
+        "wall_seconds": 0.059668208
+      },
+      "analysis_artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/analysis/analysis.json",
+      "analysis_summary": {
+        "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/analysis/analysis.json",
+        "failure_count": 1,
+        "fresh_timing": "INVALID",
+        "lane_wall_seconds": 0.065750792,
+        "ranked_package_count": 0,
+        "source_sha": "synthetic-control-source",
+        "status": "INVALID"
+      },
+      "name": "missing-raw-artifact",
+      "raw_artifacts_retained": false,
+      "run": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/profile.py",
+          "run",
+          "--manifest",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/run/manifest.json",
+          "--allow-heavy",
+          "--quiet-evidence",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/quiet-evidence.json",
+          "--repeat",
+          "1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact",
+        "exit_status": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/driver/run.stderr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\n  \"completed_repetitions\": 1,\n  \"failure_count\": 0,\n  \"manifest\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/run/manifest.json\",\n  \"record_count\": 1,\n  \"requested_repetitions\": 1,\n  \"run_group_id\": \"20260908T123838.043Z-3711d2c234\",\n  \"source_sha\": \"synthetic-control-source\",\n  \"status\": \"CAPTURED\"\n}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/driver/run.stdout",
+        "stdout_sha256": "6628fd6e98976050d08ce6f6001bc3a9e5d0e16c41ee744a12fc44e906db6989",
+        "timed_out": false,
+        "wall_seconds": 0.128140291
+      },
+      "run_summary": {
+        "completed_repetitions": 1,
+        "failure_count": 0,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/cases/missing-raw-artifact/run/manifest.json",
+        "record_count": 1,
+        "requested_repetitions": 1,
+        "run_group_id": "20260908T123838.043Z-3711d2c234",
+        "source_sha": "synthetic-control-source",
+        "status": "CAPTURED"
+      },
+      "scenario": "pass"
+    }
+  ],
+  "schema": "c11-hermetic-profile-controls-v1"
+}
