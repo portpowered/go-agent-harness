@@ -167,3 +167,15 @@ consumption, acoustic output or project acceptance is claimed. The next action
 is to push this repair on the same PR #405 and return `ACCEPTED` to the
 script-owned CI gate without polling it; any exact same-task CI rejection
 remains with this executor.
+
+## C13 final focused gate checkpoint
+
+After the repair and evidence checkpoint, current-source focused gates also
+pass: `make fmt`, pinned `make lint` (0 issues in all 15 modules), pinned
+`make staticcheck`, `make vet`, `make wire-check`, `make architecture-check
+size-check` (`181` packages, `1859` files, `27042` functions), and `git diff
+--check`. Wire generation is unchanged and the worktree is clean. The pushed
+PR head and local HEAD are both `161f75dba70ba19c3f452fbe0c0d94ce7d70d02f`;
+`origin/main` remains `668f2d8816beaa078d058b3f0bcc59600b71a023`, with the
+startup and original baseline ancestors preserved. Admission recheck remains
+`admitted` for `audio-runtime-c13-recorded-pcm-integrity`.
