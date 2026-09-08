@@ -1,0 +1,81 @@
+{
+  "schema": "c11-hermetic-profile-manifest-v1",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "mode": "hermetic",
+  "created_at_utc": "2026-09-08T11:16:12Z",
+  "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile",
+  "source_sha": "b01dbb573a15eb61d1cacfff11d37c2461167987",
+  "source_dirty_paths": [],
+  "runner": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M1 Max",
+    "go_version": "go version go1.26.7 darwin/arm64",
+    "logical_cpus": 10
+  },
+  "go": {
+    "executable": "go",
+    "version": "go version go1.26.7 darwin/arm64",
+    "env": {
+      "CGO_ENABLED": "0",
+      "GOMAXPROCS": "10",
+      "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/go.work"
+    }
+  },
+  "flags": {
+    "cgo_enabled": "0",
+    "tags": ["nomicrophone"],
+    "count": 1,
+    "gomaxprocs": 10,
+    "go_test_p": 10,
+    "general_timeout_seconds": 300,
+    "agent_cli_timeout_seconds": 480,
+    "agent_cli_wrapper": "./cmd/testtimeout"
+  },
+  "cache_paths": {
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/blocked-run/cache",
+    "gocache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/blocked-run/cache/gocache",
+    "gomodcache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/blocked-run/cache/gomodcache"
+  },
+  "inventory_status": "BLOCKED",
+  "inventory_commands": [],
+  "modules": [
+    {"name": "agent-cli", "relative": "agent-cli", "packages": []},
+    {"name": "go-agent-loop", "relative": "go-agent-loop", "packages": []},
+    {"name": "go-llm-gateway", "relative": "go-llm-gateway", "packages": []},
+    {"name": "go-audio", "relative": "go-audio", "packages": []},
+    {"name": "go-device-gateway", "relative": "go-device-gateway", "packages": []},
+    {"name": "go-agent-runtime", "relative": "go-agent-runtime", "packages": []}
+  ],
+  "warm": {"status": "NOT_RUN", "commands": [], "test_binaries": []},
+  "runs": [],
+  "run_groups": [],
+  "measurement_status": "BLOCKED",
+  "fresh_timing_status": "BLOCKED",
+  "fresh_timing_reason": "C08 owns the shared factory host at the before and after snapshots; no dedicated runner or exclusive lease is available. No heavy Go command was launched.",
+  "ci_evidence": [
+    {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/ci-34132278337-failed.log",
+      "sha256": "8715136ba2c199229e01771abd686e3ad869297803ba906dd72a2baa18516593",
+      "source_sha": "c849c9a1fe9ae399290bad389472d60e1d26b2eb",
+      "runner": "linux/amd64 Go 1.26.7; hosted cache paths recorded in assessment.md",
+      "limitations": "Historical PR398 coverage run; integration failure; not current C11 source and not raw uncached go test JSON."
+    },
+    {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/ci-34154917253-failed.log",
+      "sha256": "268ace28829689cdb4c100960be39714ccb3a51c97c3d5a0944e7c23e601e091",
+      "source_sha": null,
+      "runner": null,
+      "limitations": "Hosted hermetic log lacks complete checkout and runner identity; integration failure; not current C11 source and not raw uncached go test JSON."
+    }
+  ],
+  "failure_references": [],
+  "provenance": {
+    "quiet_evidence": "quiet-evidence-blocked.json",
+    "before_snapshot": "pre-measurement-*",
+    "after_snapshot": "post-measurement-*",
+    "raw_logs_retained": true,
+    "fresh_timing_is_not_inferred_from_elapsed": true
+  }
+}
