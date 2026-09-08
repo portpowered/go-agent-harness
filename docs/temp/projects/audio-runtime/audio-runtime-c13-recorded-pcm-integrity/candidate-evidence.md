@@ -80,3 +80,47 @@ script-owned CI gate;
 any exact same-task rejection remains with this executor.
 
 Rollback for the static repair is `git revert 90f4417`.
+
+## C13 current-head CI rejection reconciliation
+
+The next submitted head was `4766485ecebb270a99adefd434964d5cfe54c40c`.
+The raw run record and complete failed-job logs were saved from GitHub Actions
+run `34270641520` (completed `failure` at `2026-09-08T19:52:50Z`):
+
+- `CI (hermetic)`, job `102211060946`, failed only at
+  `go-audio/pkg/mixer.TestMixerPreservesShortResponseTailAndEpochs` under
+  `CGO_ENABLED=0`, `tags=nomicrophone`. The assertion observed a new epoch
+  frame containing source epoch data and expected the source epoch to be
+  excluded from the mix.
+- `CI (integration)`, job `102211061026`, failed only at
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst`.
+  The remote playback did not reach its final PCM marker before the existing
+  30-second scenario deadline.
+- The other seven required jobs in the same run passed. The failed test paths
+  are absent from the C13 diff against `origin/main`; C13 changes only replay
+  admission, replay service delegation, the owned integrity regression, and
+  its evidence. No in-scope C13 defect was reproduced by these failures.
+
+Bounded causal rechecks on the exact candidate tree passed:
+
+- `CGO_ENABLED=0 go test ./go-audio/pkg/mixer -tags=nomicrophone -run '^TestMixerPreservesShortResponseTailAndEpochs$' -count=3 -timeout=60s`
+  passed three times.
+- `go test ./agent-cli/test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst$' -count=1 -timeout=90s`
+  passed in `17.834s`; no C13-owned source or test change was made for this
+  external remote-device timing failure.
+- C13 normal and race replay packages, `TestSessionRecordedPCMIntegrity`
+  under race, and replay `Interruption|Cancel` controls all passed.
+- A fresh candidate build from `4766485e` retained SHA256
+  `6cde9a9e9ca4fae5e63b914258643c6cda8e6f8ba0809646249164c3424aaef0`.
+  The fresh private public probe run
+  `/private/tmp/audio-runtime-c13-ci-retry-driver/candidate-8020-1788897666`
+  passed untouched `session replay` and `session --replay` (exit `0`) and
+  rejected the same-size one-byte `audio/out-000.pcm` mutation on both routes
+  (exit `1`, naming the expected and actual artifact digests).
+
+This is a fresh evidence checkpoint resolving the returned checks as an
+out-of-scope hermetic mixer assertion and a non-reproduced remote-device timing
+failure, not an unchanged implementation resubmission. The candidate remains
+ready for the script-owned CI gate; no CI success, independent review, merge,
+vertical acceptance, device consumption, acoustic output, or project completion
+is claimed.
