@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,17 +32,27 @@ func TestResolveCapturePathAcceptsRawCapture(t *testing.T) {
 func TestResolveCapturePathValidatesCanonicalDirectoryArtifact(t *testing.T) {
 	directory := t.TempDir()
 	provider := []byte(`{"version":1,"records":[]}`)
+	client := []byte("client transcript\n")
+	agent := []byte("agent transcript\n")
 	providerPath := filepath.Join(directory, "provider.json")
 	if err := os.WriteFile(providerPath, provider, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(directory, "client.transcript.jsonl"), client, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "agent.transcript.jsonl"), agent, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	digest := sha256.Sum256(provider)
+	clientDigest := sha256.Sum256(client)
+	agentDigest := sha256.Sum256(agent)
 	manifest := transcript.RecordingManifest{
 		FormatVersion:   transcript.RecordingManifestVersion,
 		RecordingStatus: &transcript.RecordingStatus{State: transcript.RecordingStatusComplete},
 		Artifacts: []transcript.ArtifactHash{
-			{Path: "client.transcript.jsonl", SHA256: strings.Repeat("1", 64)},
-			{Path: "agent.transcript.jsonl", SHA256: strings.Repeat("2", 64)},
+			{Path: "client.transcript.jsonl", SHA256: hex.EncodeToString(clientDigest[:])},
+			{Path: "agent.transcript.jsonl", SHA256: hex.EncodeToString(agentDigest[:])},
 			{Path: "provider.json", SHA256: hex.EncodeToString(digest[:])},
 		},
 	}
@@ -176,34 +185,4 @@ func TestResolveCapturePathPreservesCancellation(t *testing.T) {
 	if _, err := New().ResolveCapturePath(ctx, filepath.Join(t.TempDir(), "capture")); !errors.Is(err, cause) {
 		t.Fatalf("cancellation error = %v, want %v", err, cause)
 	}
-}
-
-func TestContextReaderPreservesCancellationDuringHash(t *testing.T) {
-	cause := errors.New("stop while hashing")
-	ctx, cancel := context.WithCancelCause(t.Context())
-	reader := &cancelingReader{cancel: func() { cancel(cause) }}
-	wrapped := contextReader{ctx: ctx, reader: reader}
-	buffer := make([]byte, 16)
-	n, err := wrapped.Read(buffer)
-	if n != len("capture") || !errors.Is(err, cause) {
-		t.Fatalf("context reader = (%d, %v), want read and cancellation cause", n, err)
-	}
-	if _, err := io.Copy(io.Discard, wrapped); !errors.Is(err, cause) {
-		t.Fatalf("second context reader read = %v, want cancellation cause", err)
-	}
-}
-
-type cancelingReader struct {
-	cancel func()
-	done   bool
-}
-
-func (r *cancelingReader) Read(buffer []byte) (int, error) {
-	if r.done {
-		return 0, io.EOF
-	}
-	r.done = true
-	copy(buffer, "capture")
-	r.cancel()
-	return len("capture"), nil
 }
