@@ -1,0 +1,5 @@
+{"Action": "start", "Package": "example/no-test"}
+{"Action": "output", "Output": "? [no test files]\n", "Package": "example/no-test"}
+{"Action": "skip", "Elapsed": 0.0, "Package": "example/no-test"}
+{"Action": "start", "Package": "example/pass"}
+{"Action": "pass", "Elapsed": 0.02, "Package": "example/pass"}

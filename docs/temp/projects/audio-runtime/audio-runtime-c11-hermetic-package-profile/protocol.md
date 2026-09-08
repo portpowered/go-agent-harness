@@ -23,8 +23,9 @@ the existing wrapper and timeouts:
 
 Every measured command uses `CGO_ENABLED=0`, the `nomicrophone` build tag,
 explicit `GOMAXPROCS` and `go test -p`, `-count=1`, and the module's unchanged
-timeout. `GOCACHE` and `GOMODCACHE` are owned directories below the run output;
-the profiler never clears a shared cache.
+timeout. `GOCACHE` and `GOMODCACHE` are owned directories below the run
+output; cache paths outside the manifest output root are rejected, and the
+profiler never clears a shared cache.
 
 `test-budget` is a separate PR-tier inventory. Its 60-second `tools/timingate`
 budget is cumulative package terminal time, not lane wall time. C11 reports a
@@ -96,8 +97,10 @@ stderr. Offline `analyze` only reads retained artifacts.
 The analyzer parses the same package-terminal event model used by timingate,
 ranks package completion durations, retains failures, marks no-test/skip packages separately,
 flags cached output, detects overlapping active subtests, and rejects missing or
-unexpected package terminals. It rejects unvalidated hermetic source records
-and reports:
+unexpected package terminals. It rejects unvalidated hermetic source records,
+malformed run-record objects, missing or inconsistent command timing metadata,
+and no-test markers that contradict the inventory `has_tests` classification.
+It reports:
 
 - cold metadata/inventory and warm download/compile time separately;
 - package terminal time and ranking, with the existing 60-second PR-tier policy
@@ -115,7 +118,9 @@ is a whole-project acceptance claim.
 
 Before `inventory`, `warm`, or `run`, the operator must inspect the admitted
 factory board and worker-session lease list, host process activity, and load.
-The quiet evidence must identify the runner, include before/after observations,
+The quiet evidence must identify the runner and include, in both `before` and
+`after`, `active_work`, a `processes` or `process_activity` observation, and a
+`load` observation,
 and prove `isolated` or `dedicated` operation. `--allow-heavy` alone is not
 permission to consume the shared factory host. If C08 or any other heavy owner
 is active, no Go listing, dependency download, warm build, full suite, or timing

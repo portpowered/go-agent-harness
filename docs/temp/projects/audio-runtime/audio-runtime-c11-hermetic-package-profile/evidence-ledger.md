@@ -29,7 +29,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
   `HEAD=39d177009bfca1ada9b01d5a64a071fce9d69f44`; the running host checkout
   was not merged or reset. The accepted C12 main remains an ancestor of the
   current profiler repair checkpoint
-  `be9f11a5e6b9256df404fd236795098081237cbe`.
+  `0564fb562802e7cc2185883498936b3cfa9c87ba`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -56,20 +56,22 @@ claimed green or attributed to the profiler's Go lane.
   cross-package concurrency, help/offline no-spawn, invalid shared-host
   evidence, redirected artifact paths, missing per-record source identity,
   missing quiet evidence, incomplete repetition counts, missing quiet runner or
-  load observations, expired quiet evidence, and absolute/traversal redirects
-  for stdout, stderr, and quiet-evidence artifacts.
+  load observations, expired quiet evidence, required run timing, weak quiet
+  observations, manifest-root cache containment, no-test inventory conflicts,
+  malformed run records, and absolute/traversal redirects for stdout, stderr,
+  and quiet-evidence artifacts.
 - AST parsing of all shipped Python files: PASS.
 - `profile.py --help`: PASS.
-- `ctrl-be9f11a5/controls.json`: PASS; 31 declared cases and 21 result groups,
+- `ctrl-0564fb5/controls.json`: PASS; 36 declared cases and 22 result groups,
   zero Go/network/build invocations; hash
-  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`.
+  `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`.
   Top-level `raw_evidence_retained=false` and the
   `missing-raw-artifact` case reports `raw_artifacts_retained=false`, because
   that fixture deletion is intentional negative-control evidence.
 - Current repair source hashes: `profile.py`
-  `1e511a232e13930c62f8e14852609b6ae64ced74b5cb91995b82f5c08ae377c7`,
+  `dd3766b36eebf231b137c70d61d6b9ec9875e922eff7ba5a5e7732bb71cd339f`,
   `controls.py`
-  `64046d12ab6eb34d303806d5e8bd953cea06f6738c164034760ad8ad886ad2fd`, and
+  `64f500281f020cc8efa074eb1cfc0e8727c2710d2e30169afa687a468cce96f4`, and
   `fixtures/emit_jsonl.py`
   `d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
 - The new controls cover legal repeated package terminals, Go `time.Duration`
@@ -93,9 +95,9 @@ claimed green or attributed to the profiler's Go lane.
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
 - `git diff --check`: PASS.
-- Fresh merged-main recheck from `be9f11a5` passed: 31 public cases and 21
+- Fresh merged-main recheck from `0564fb56` passed: 36 public cases and 22
   result groups with zero Go/network/build invocations (tracked report SHA-256
-  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`),
+  `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. The active
@@ -120,13 +122,14 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The current source/control evidence is pinned to `be9f11a5`. The latest
-canonical task rejection named legal repeated package terminals, oversized
-`Elapsed` values/integers, and missing current source-state validation;
-`be9f11a5` repairs all three with causal public controls. Offline analysis
-now retains package ranking and lane-wall evidence while referencing the
-canonical 60-second `tools/timingate` policy instead of duplicating it. Quiet
-evidence and all raw command artifacts are constrained to the manifest output
-root before reading. The next bounded step is to push/update PR #403 with the
-exact final head and return `ACCEPTED` to script CI. Do not poll CI, self-review,
-claim CI green, or close any of the nine immutable project gates.
+The current source/control evidence is pinned to `0564fb56`. The latest
+canonical task rejection named missing lane timing, weak quiet observations,
+out-of-root cache paths, ignored no-test markers, and malformed run records;
+`0564fb56` repairs all five with causal public controls. Offline analysis now
+retains package ranking and lane-wall evidence while referencing the canonical
+60-second `tools/timingate` policy instead of duplicating it. Quiet evidence,
+all raw command artifacts, and both Go cache paths are constrained to the
+manifest output root before use. The next bounded step is to push/update PR
+#403 with the exact final head and return `ACCEPTED` to script CI. Do not poll
+CI, self-review, claim CI green, or close any of the nine immutable project
+gates.

@@ -24,9 +24,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Current implementation/control candidate checkpoint:
-  `be9f11a5e6b9256df404fd236795098081237cbe`.
+  `0564fb562802e7cc2185883498936b3cfa9c87ba`.
 - The source/control evidence in this report was generated from that exact
-  merged-main checkpoint.
+merged-main checkpoint; the later evidence commit only adds owned reports.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -38,7 +38,8 @@ not a waiver, and not a claim that the under-three-minute target is met.
 
 The complete canonical board and worker-session responses are retained in
 `canonical-board.json`, `canonical-board-current.json`,
-`canonical-board-be9f11a5.json`, `canonical-findings-be9f11a5.json`, and
+`canonical-board-0564fb5.json`, `canonical-board-be9f11a5.json`,
+`canonical-findings-be9f11a5.json`, and
 `worker-sessions.json`; the immediate measurement snapshots are
 `pre-measurement-*` and `post-measurement-*`. The current board rejection and
 its exact failed job metadata are captured in `ci-rejection.json`; the latest
@@ -48,9 +49,10 @@ The rejected head was `5c6d24ac…`, before C08 merged into main; after the
 required rebase, the narrow rejected test passed once and no C11-owned path was
 implicated. This is a recheck and handoff record, not a claim that script CI is
 green.
-The live worker IDs in the snapshot are C08
-`9ecd5b0c-de15-4254-9852-3a678840ea78` and C11
-`f0db221e-3881-44c5-a500-8101ac247010`.
+The exact current board response, including current task/review states and
+leases, is preserved in `canonical-board-0564fb5.json`; historical C08/C12
+worker IDs are not used as current ownership evidence. C11 does not claim
+runtime ownership outside `scripts/hermetic-profile/` and this evidence root.
 
 ## Implemented tooling and focused evidence
 
@@ -65,8 +67,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `1e511a232e13930c62f8e14852609b6ae64ced74b5cb91995b82f5c08ae377c7`,
-`controls.py` `64046d12ab6eb34d303806d5e8bd953cea06f6738c164034760ad8ad886ad2fd`,
+`profile.py` `dd3766b36eebf231b137c70d61d6b9ec9875e922eff7ba5a5e7732bb71cd339f`,
+`controls.py` `64f500281f020cc8efa074eb1cfc0e8727c2710d2e30169afa687a468cce96f4`,
 and `fixtures/emit_jsonl.py`
 `d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
 
@@ -74,10 +76,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-be9f11a5`:
-  PASS; 31 declared cases and 21 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-0564fb5`:
+  PASS; 36 declared cases and 22 result groups, zero Go, network, or build
   invocations. The report hash is
-  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`.
+  `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`.
@@ -94,9 +96,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh merged-main recheck from `be9f11a5` passed: 31 public cases/21
+- Fresh merged-main recheck from `0564fb56` passed: 36 public cases/22
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`),
+  SHA-256 `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -116,8 +118,10 @@ recorded in `ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
 package terminals, cached output, missing raw artifacts, redirected artifacts,
-missing provenance, incomplete repeats, and quiet-evidence paths outside the
-manifest root do not become a fresh timing PASS. The offline report retains
+missing provenance, incomplete repeats, weak quiet observations, missing lane
+timing, out-of-root caches, no-test inventory conflicts, malformed run records,
+and quiet-evidence paths outside the manifest root do not become a fresh timing
+PASS. The offline report retains
 package ranking and lane-wall evidence while leaving the canonical 60-second
 policy to `tools/timingate`; it does not duplicate that evaluator.
 The repeated synthetic cohort also proves lane wall is not the sum of package
@@ -178,15 +182,13 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `be9f11a5` and
-the tracked control report above. The latest canonical task rejection named
-three defects: legal repeated package terminals were rejected, `Elapsed` values
-outside Go `time.Duration` (including huge integers) were accepted or raised an
-uncaught overflow, and run records copied the inventory SHA without checking
-current HEAD/dirty state. Commit `be9f11a5` repairs those causes and the new
-public controls reproduce each positive/negative boundary. The next action is
-to push/update PR #403 with the exact final head and return `ACCEPTED` to the
-script-owned CI gate without polling it. Any C11-owned CI/review finding
-returns to this task; independent review and post-integration vertical
-validation remain external stages. No fresh timing or under-three-minute claim
-is made.
+The current C11 implementation/control evidence is pinned to `0564fb56` and
+the tracked `ctrl-0564fb5` report above. The latest canonical task rejection
+named five defects: missing lane timing fields, weak quiet observations,
+out-of-root cache paths, ignored no-test markers, and malformed run records.
+Commit `0564fb56` repairs those causes and the public controls reproduce each
+positive/negative boundary. The next action is to push/update PR #403 with the
+exact final head and return `ACCEPTED` to the script-owned CI gate without
+polling it. Any C11-owned CI/review finding returns to this task; independent
+review and post-integration vertical validation remain external stages. No
+fresh timing or under-three-minute claim is made.
