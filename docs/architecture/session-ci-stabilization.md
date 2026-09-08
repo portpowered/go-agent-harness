@@ -115,3 +115,15 @@ and all 16 historical integration scenarios with their stress subtests. Affected
 live-session and recording packages passed three more race repetitions. Full
 pinned lint passed; formatting, architecture/size and Wire checks passed. These
 local results supplement, rather than replace, exact-head hosted CI.
+
+Run34172481272 passed eight jobs, including full coverage and integration, but
+hermetic found one more scripted provider omitting response IDs in the shipped
+record-then-replay path. Its output events now carry their known response ID;
+a raw capture assertion rejects missing identity deterministically. An overlay
+restoring the old omission failed that assertion immediately. Shared fixture
+consumers passed 30 race and 30 coverage repetitions; final assertion cleanup
+passed another 10 race repetitions. Exact wire-sequence equality replaces
+redundant count/length loops, shrinking the file from 783 to 758 lines. The
+cumulative runner now includes this seventeenth historical integration scenario.
+All failed-job logs were collected before the corrected push. No runtime change
+or acceptance relaxation was needed for this last fixture repair.

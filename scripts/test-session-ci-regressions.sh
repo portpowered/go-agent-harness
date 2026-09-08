@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce historical session failures, including CI run 34170296779.
+# Reproduce historical session failures, including CI run 34172481272.
 set -euo pipefail
 mode=${1:-normal}
 case "$mode" in normal|coverage|race|all) ;; *) echo "Usage: $0 [normal|coverage|race|all]" >&2; exit 2 ;; esac
@@ -26,6 +26,7 @@ scenarios=(
   TestReadImageSpokenFailedContinuationIsActionable
   TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
   TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle
+  TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI
   TestSessionToolResultConversationCorruptAudioDeltaIsRejected
   TestShippedSessionProcessDuplexConversation
   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl
