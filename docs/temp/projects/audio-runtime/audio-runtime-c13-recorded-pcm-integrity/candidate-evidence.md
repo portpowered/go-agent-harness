@@ -71,11 +71,12 @@ streaming behavior. The repair is committed as
 - Post-repair focused replay packages and `TestSessionRecordedPCMIntegrity` passed normal and race; six accumulated C12 replay/continuation/recording regressions passed normal.
 - `make lint`, `make staticcheck`, `make vet`, `make fmt`, `make wire-check`, `make architecture-check`, `make size-check`, and `git diff --check` pass. Architecture/size remains `181 package(s), 1859 file(s), 27036 function(s) checked`.
 
-The repaired head has not been resubmitted or polled for terminal CI. The
+At this checkpoint the repaired head has not been resubmitted or polled for terminal CI. The
 unrelated hermetic room and coverage provider-burst failures visible later in
 the same still-running GitHub run are outside this task's owned paths and are
-not claimed fixed here. The next action is to commit this evidence update,
-push the same PR #405 head, and return `ACCEPTED` to the script-owned CI gate;
+not claimed fixed here. This evidence update is committed locally; the next
+action is to push the same PR #405 head and return `ACCEPTED` to the
+script-owned CI gate;
 any exact same-task rejection remains with this executor.
 
 Rollback for the static repair is `git revert 90f4417`.
