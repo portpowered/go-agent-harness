@@ -168,3 +168,21 @@ On the same local worktree, separate checks took 27.43s + 15.85s; combined took
 local measurement on a shared host, not a promised CI delta. The prior hosted run
 spent 28.37s + 13.33s on those separate steps. Architecturegate tests passed.
 Distinct integration, stress, coverage, race and platform jobs were retained.
+
+Both high-rate remote-audio cases retain twenty fresh-process trials and all
+sample, tool and protocol assertions. Independent trials now use Go's standard
+parallel-subtest limit, with unique provider/device ports and temporary files;
+the built executables are read-only. On the same restored production source,
+normal Test45+46 with YUI_AUDIO_STRESS=1, -count=1 and -parallel=2 took 37.85s
+wall time with the serial baseline (Go overlay), versus 25.92s in the candidate
+(about 31.5% less). Go-reported package durations were 36.408s and 23.380s.
+Candidate coverage and race modes passed all forty trials in 26.07s and 101.14s
+wall time. Those modes instrument the test host; the existing subprocess builds
+remain ordinary binaries. Linux-targeted pinned CLI lint, formatting and combined
+architecture/size enforcement passed. No timeout, trial count or limit changed.
+
+A proposed 150ms provider quiet-wait removal was reviewed and reverted: provider
+completion/model deltas do not prove asynchronous tool execution and wire writes
+have drained. The original negative assertion and prior continuation repair remain.
+Baseline 2df832df passed all nine hosted CI jobs in run34175779782 before this
+bounded latency follow-up; the final combined head still requires its own CI gate.
