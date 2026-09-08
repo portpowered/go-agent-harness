@@ -9288,7 +9288,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_simulated_test.go",
       "symbol": "TestSimulatedDuplexRegistryAndStreamContracts",
-      "value": 38,
+      "value": 31,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -17038,7 +17038,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_simulated_test.go",
       "symbol": "TestSimulatedDuplexRegistryAndStreamContracts",
-      "value": 38,
+      "value": 31,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -19824,7 +19824,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_simulated.go",
-      "value": 770,
+      "value": 767,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -23273,16 +23273,6 @@
       "rule": "function-lines",
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
-      "file": "pkg/devices/device_simulated_test.go",
-      "symbol": "TestSimulatedDuplexRegistryAndStreamContracts",
-      "value": 121,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_windows.go",
       "symbol": "*wasapiOpenedDevice.verifyDataPathForTest",
       "value": 116,
@@ -26385,7 +26375,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_simulated_test.go",
       "symbol": "TestSimulatedDuplexRegistryAndStreamContracts",
-      "value": 111,
+      "value": 86,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

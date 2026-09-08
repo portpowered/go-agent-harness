@@ -127,3 +127,21 @@ redundant count/length loops, shrinking the file from 783 to 758 lines. The
 cumulative runner now includes this seventeenth historical integration scenario.
 All failed-job logs were collected before the corrected push. No runtime change
 or acceptance relaxation was needed for this last fixture repair.
+
+Run34173056323 passed every runtime/test job; remaining duplicate status literals
+were replaced by equal-valued constants throughout the changed probe evidence.
+Linux-targeted lint and the full probe package under race detection passed.
+Run34173626771 then passed eight jobs, including static, but the race job exposed
+a simulated-device lost wake: queue readiness was checked before capturing the
+notification generation. Both drain and capacity waits now obtain those together
+under the registry mutex through one shared helper. Capture and physical/virtual
+backend waits already used the appropriate lock scope.
+
+The simulated-device test now separates registry contracts from playback waiting.
+It verifies state/notification transitions deterministically and retains concurrent
+public wait/Advance cases plus cancellation for both wait APIs. These are contract
+checks and stress coverage, not a claim of deterministic old-gap reproduction.
+The focused pair passed 1,000 race repetitions, all simulated tests passed 100 race
+repetitions, and the full device package passed 20 normal repetitions. No timeout
+or limit was raised; the old contract test has lower complexity/statement baselines.
+The cumulative runner includes simulated-device tests in all three modes.

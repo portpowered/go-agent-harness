@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce historical session failures, including CI run 34172481272.
+# Reproduce historical session failures, including CI run 34173626771.
 set -euo pipefail
 mode=${1:-normal}
 case "$mode" in normal|coverage|race|all) ;; *) echo "Usage: $0 [normal|coverage|race|all]" >&2; exit 2 ;; esac
@@ -52,5 +52,8 @@ for current in "${modes[@]}"; do
     # Stress is hermetic: loopback devices and a fake provider, no live API credentials.
     CGO_ENABLED=$cgo YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 480s --       go test "$package" -tags=nomicrophone -timeout 480s       "${flags[@]}" -run "$selected" -v || failed=1
   done
+  echo "==> session CI regressions: mode=$current package=go-device-gateway/pkg/devices count=$count"
+  (cd "$root/go-device-gateway" && CGO_ENABLED=$cgo go test ./pkg/devices \
+    -timeout 480s "${flags[@]}" -run '^TestSimulated' -v) || failed=1
 done
 exit "$failed"
