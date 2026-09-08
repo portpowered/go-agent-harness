@@ -63,6 +63,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl(t *testing.T)
 	baselineGoroutines := runtime.NumGoroutine()
 	frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
 	run := runV8MultiTurnDuplex(t, frames, frames)
+	requireV8MultiTurnBaseline(t, run, frames)
 	if err := mutateV8ViewPayload(&run, "B/agent", 2, frames[0]); err != nil {
 		t.Fatalf("mutate later-turn PCM control: %v", err)
 	}
@@ -84,6 +85,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl(t *testi
 	baselineGoroutines := runtime.NumGoroutine()
 	frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
 	run := runV8MultiTurnDuplex(t, frames, frames)
+	requireV8MultiTurnBaseline(t, run, frames)
 	if err := mutateV8TranscriptMarker(&run, "B", 2, "A transcript turn 2"); err != nil {
 		t.Fatalf("mutate later-turn transcript control: %v", err)
 	}
@@ -106,6 +108,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 		baselineGoroutines := runtime.NumGoroutine()
 		frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
 		run := runV8MultiTurnDuplex(t, frames, frames)
+		requireV8MultiTurnBaseline(t, run, frames)
 		if err := dropV8InputCommit(&run, "A", 2); err != nil {
 			t.Fatalf("drop later-turn input commit control: %v", err)
 		}
@@ -127,6 +130,7 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 		baselineGoroutines := runtime.NumGoroutine()
 		frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
 		run := runV8MultiTurnDuplex(t, frames, frames)
+		requireV8MultiTurnBaseline(t, run, frames)
 		if err := mutateV8InputCommitPayload(&run, "A", 2, frames[0]); err != nil {
 			t.Fatalf("mutate later-turn input commit control: %v", err)
 		}
@@ -143,6 +147,32 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 		assertV8GoroutinesSettled(t, baselineGoroutines, "cross-attributed later-turn input commit negative control")
 		t.Logf("v8 cross-attributed later-turn input commit negative control rejected as expected: %v", err)
 	})
+}
+
+func requireV8MultiTurnBaseline(t *testing.T, run v8DuplexRun, frames [][]byte) {
+	t.Helper()
+	err := verifyV8MultiTurnRun(run, frames, frames)
+	if err == nil {
+		return
+	}
+	states := make([]string, 0, 2)
+	for _, name := range []string{"A", "B"} {
+		result, ok := run.harnesses[name]
+		if !ok {
+			states = append(states, fmt.Sprintf("harness %s=<missing>", name))
+			continue
+		}
+		runtimeState := make([]string, 0, len(result.Runtime))
+		for _, observation := range result.Runtime {
+			runtimeState = append(runtimeState, fmt.Sprintf("%s@%d/t%d/c%d", observation.Kind, observation.Tick, observation.TurnsCompleted, observation.InputCommit))
+		}
+		states = append(states, fmt.Sprintf("harness %s err=%v elapsed=%s runtime=%v stream=%v terminal=%+v", name, result.Err, result.Elapsed, runtimeState, result.Stream, run.terminal[name]))
+	}
+	crossingState := make([]string, 0, len(run.crossings))
+	for _, crossing := range run.crossings {
+		crossingState = append(crossingState, fmt.Sprintf("%d:%s/%s@%d", crossing.Sequence, crossing.Direction, crossing.TurnKey, crossing.Tick))
+	}
+	t.Fatalf("multi-turn negative-control baseline failed before mutation: %v; %s; %s; crossings=%d/%v final_tick=%d", err, states[0], states[1], len(run.crossings), crossingState, run.finalTick)
 }
 
 // TestSessionCLI_StartupAnnouncementRouting is a shipped-process regression
