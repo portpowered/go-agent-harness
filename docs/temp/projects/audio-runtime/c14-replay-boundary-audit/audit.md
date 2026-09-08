@@ -701,9 +701,9 @@ Missing proof never sets `passes:true`.
 
 ## Verification performed and handoff state
 
-The following bounded checks were performed without a build, provider, device,
-profiling run, broad local CI duplication, or CI polling, as required by the
-C14 audit execution policy:
+The following bounded checks were performed without building the product
+executable, using a provider or device, profiling, duplicating broad local CI,
+or polling CI, as required by the C14 audit execution policy:
 
 - Read `factory/docs/operating-policy.md`,
   `factory/docs/implementation-handoff.md`,
@@ -724,11 +724,23 @@ C14 audit execution policy:
   repairs without re-running the optional executable. The PRD explicitly
   permits omitting the optional one-replay-per-route observation when
   historical/source evidence is sufficient and prohibits audit-executor builds.
-- No Go test, build, provider invocation, device invocation, or broad
-  regression suite was run by C14. There is no implementation diff whose
-  causal behavior could be newly validated; the exact C13 focused causal and
-  accumulated controls remain read-only historical evidence. The future
-  extraction test inventory above is intentionally marked proposed/unrun.
+- Focused causal and accumulated review-regression tests passed without
+  changing runtime source: from `agent-cli`,
+  `rtk go test ./internal/services/internal/replay ./internal/services/replay ./internal/transport/cli -count=1`
+  reported `Go test: 719 passed in 3 packages`; from `go-agent-runtime`,
+  `rtk go test ./services/replay/...` reported `Go test: 43 passed in 3
+  packages`; the selected replay/interruption/continuation controls in
+  `go-agent-runtime/services/session/internal/live` reported `Go test: 14
+  passed in 1 packages`; and the accumulated C13 controls
+  `TestSessionRecordedPCMIntegrity` plus
+  `TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact`
+  reported `Go test: 5 passed in 1 packages` from `agent-cli/test/integration`.
+- No product executable build, provider invocation, device invocation,
+  profiling run, broad regression suite, or runtime vertical replay was run by
+  C14. There is no implementation diff whose causal behavior could be newly
+  changed; the focused tests validate the pinned baseline and the exact C13
+  review controls. The future extraction test inventory above remains
+  proposed/unrun.
 
 Before delivery, the candidate-level checks are:
 
