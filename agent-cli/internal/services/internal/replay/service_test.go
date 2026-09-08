@@ -451,3 +451,16 @@ func wireEnvelope(t *testing.T, payload string) []byte {
 	}
 	return envelope
 }
+
+func TestServiceRejectsMissingTimeline(t *testing.T) {
+	directory := t.TempDir()
+	_, err := New(Dependencies{ClockFactory: func(time.Time) *clock.Deterministic {
+		return clock.NewDeterministic(time.Unix(0, 0).UTC(), 10)
+	}}).Prepare(context.Background(), publicreplay.Request{BundlePath: directory})
+	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
+		t.Fatalf("err=%v, want incomplete", err)
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("missing timeline.jsonl")) {
+		t.Fatalf("err=%v, want missing timeline diagnostic", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	cliOutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
@@ -13,7 +14,6 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -168,7 +168,18 @@ func liveRunner(service runtimeSession.LiveService) (runtimeSession.LiveRunner, 
 
 func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
 	if request.RecordDirectory == "" {
-		return openSemanticRecorder(request.RecordPath, deps.RecordingService)
+		recorder, err := openSemanticRecorder(request.RecordPath, deps.RecordingService)
+		if err != nil || !request.TraceAudio {
+			return recorder, err
+		}
+		traced, traceErr := newLiveTraceRecorder(recorder, ".", request.RecordPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
+		if traceErr != nil {
+			if recorder != nil {
+				traceErr = errors.Join(traceErr, recorder.Finalize(context.Background(), traceErr))
+			}
+			return nil, traceErr
+		}
+		return traced, nil
 	}
 	if err := validateLiveRecorderDependencies(deps); err != nil {
 		return nil, err
@@ -192,7 +203,40 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
 	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
-	return recorder, nil
+	return traceLiveRecorderIfRequested(request, replayInputPath, recorder, liveRequest, deps)
+}
+
+func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
+	if !request.TraceAudio {
+		return recorder, nil
+	}
+	providerPath := liveProviderCapturePath(request.RecordPath, replayInputPath)
+	if providerPath == "" {
+		providerPath = filepath.Join(request.RecordDirectory, "provider.json")
+	}
+	traced, err := newLiveTraceRecorder(recorder, request.RecordDirectory, providerPath, liveTraceProviderRate(liveRequest), liveTraceSource(deps.FileDeviceService.Scheduler))
+	if err != nil {
+		return nil, errors.Join(err, recorder.Finalize(context.Background(), err))
+	}
+	return traced, nil
+}
+
+func liveTraceProviderRate(liveRequest *runtimeSession.LiveRequest) int {
+	if liveRequest == nil {
+		return 0
+	}
+	if strings.TrimSpace(liveRequest.Replay.InputCapturePath) != "" {
+		// A replayed provider can expose a file sink at a different rate from
+		// the provider media boundary. The canonical realtime PCM rate is the
+		// only safe fallback when the capture did not declare its native rate.
+		if plan := liveRequest.ReplayPlan; plan == nil || plan.OutputAudioSampleRate <= 0 {
+			return cliLiveDefaultRate
+		}
+	}
+	if plan := liveRequest.ReplayPlan; plan != nil && plan.OutputAudioSampleRate <= 0 {
+		return cliLiveDefaultRate
+	}
+	return liveRequest.OutputAudioSampleRate
 }
 
 func validateLiveRecorderDependencies(deps Dependencies) error {
@@ -306,92 +350,4 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 			return nil
 		}),
 	}
-}
-
-func selectFileDevices(physical, finite runtimeDevices.Service, deviceRequest runtimeDevices.Request, filePorts *FilePorts) (runtimeDevices.Service, runtimeDevices.Request) {
-	if filePorts == nil {
-		return physical, deviceRequest
-	}
-	if filePorts.Input != nil {
-		// The public device handle exposes one capture port. A finite source
-		// therefore owns capture whenever it is present; an explicit physical
-		// output can still be admitted alongside it.
-		deviceRequest.CaptureEnabled = false
-	}
-	if deviceRequest.CaptureEnabled || deviceRequest.PlaybackEnabled {
-		return physical, deviceRequest
-	}
-	if filePorts.Input != nil || filePorts.Output != nil {
-		deviceRequest.CaptureEnabled = filePorts.Input != nil
-		deviceRequest.PlaybackEnabled = filePorts.Output != nil
-		return finite, deviceRequest
-	}
-	if len(filePorts.InputTurns) > 0 {
-		return finite, deviceRequest
-	}
-	return nil, deviceRequest
-}
-
-func outputWriter(request serviceSession.Request, out io.Writer) io.Writer {
-	if request.AudioOutputPath == "-" {
-		return io.Discard
-	}
-	return out
-}
-
-func devicesRequest(request serviceSession.Request, liveRequest runtimeSession.LiveRequest) runtimeDevices.Request {
-	sampleRate := liveRequest.InputAudioSampleRate
-	if sampleRate <= 0 {
-		sampleRate = liveRequest.OutputAudioSampleRate
-	}
-	if sampleRate <= 0 {
-		sampleRate = 24000
-	}
-	return runtimeDevices.Request{
-		InputDevice:     request.AudioInputDevice,
-		OutputDevice:    request.AudioOutputDevice,
-		RemoteEndpoint:  request.AudioDeviceServer,
-		CaptureEnabled:  request.InteractiveDevices || request.AudioInputDevicePresent,
-		PlaybackEnabled: request.InteractiveDevices || request.AudioOutputDevicePresent,
-		SampleRate:      sampleRate,
-		Channels:        audio.Channels,
-		PlaybackProfile: "voice",
-		HoldToneConfig:  request.HoldToneConfig,
-	}
-}
-
-func applyFileSchedulers(filePorts *FilePorts, scheduler clock.Scheduler) {
-	if filePorts == nil {
-		return
-	}
-	if filePorts.Input != nil {
-		filePorts.Input.Scheduler = scheduler
-	}
-	for index := range filePorts.InputTurns {
-		filePorts.InputTurns[index].Scheduler = scheduler
-	}
-}
-
-func audioTurnAdmission(request serviceSession.Request) runtimeSession.AudioTurnAdmission {
-	if request.AudioInTurnBarge {
-		return runtimeSession.AudioTurnAdmissionBarge
-	}
-	return runtimeSession.AudioTurnAdmissionCompletionGated
-}
-
-func captureTurns(filePorts *FilePorts) []runtimeDevices.FileInput {
-	if filePorts == nil {
-		return nil
-	}
-	return append([]runtimeDevices.FileInput(nil), filePorts.InputTurns...)
-}
-
-func captureCompleteControls(request serviceSession.Request, custom func(serviceSession.Request) []runtimeSession.LiveControl) []runtimeSession.LiveControl {
-	if custom != nil {
-		return custom(request)
-	}
-	if !request.AudioInput.Present && len(request.AudioTurns) == 0 {
-		return nil
-	}
-	return []runtimeSession.LiveControl{{Kind: runtimeSession.LiveControlAudioCommit}}
 }
