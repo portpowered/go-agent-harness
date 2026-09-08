@@ -15,14 +15,14 @@ import (
 // rules and source level architecture rules; type-aware checks still require
 // a baseline that already existed at the merge base.
 func compareBootstrapBaseline(ctx context.Context, gitBinary, repoRoot, relative, mergeBase string, current Baseline, policy Policy) []Issue {
-	if current.SourceCommit != "" && current.SourceCommit != mergeBase {
+	if current.SourceCommit != mergeBase {
 		return []Issue{{Rule: "baseline-history-source", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline source_commit %q does not identify merge base %s", current.SourceCommit, mergeBase)}}
 	}
 	old, err := measureBootstrapSource(ctx, gitBinary, repoRoot, mergeBase, policy)
 	if err != nil {
 		return []Issue{{Rule: "baseline-history", File: filepath.ToSlash(relative), Message: err.Error()}}
 	}
-	return compareBootstrapEntries(old.Issues, current)
+	return compareBootstrapEntries(relative, old.Issues, current)
 }
 
 const (
@@ -58,12 +58,13 @@ func measureBootstrapSource(ctx context.Context, gitBinary, repoRoot, mergeBase 
 	return old, nil
 }
 
-func compareBootstrapEntries(oldIssues []Issue, current Baseline) []Issue {
+func compareBootstrapEntries(relative string, oldIssues []Issue, current Baseline) []Issue {
 	oldByKey := make(map[string]Issue, len(oldIssues))
 	for _, issue := range oldIssues {
 		oldByKey[issue.Key()] = issue
 	}
-	result := make([]Issue, 0)
+	newEntries := baselineEntries(current.Entries)
+	result := bootstrapRenameIssues(relative, oldByKey, newEntries, current.Renames)
 	for _, entry := range currentEntriesSorted(current.Entries) {
 		key := baselineIssue(entry).Key()
 		oldKey := key
@@ -81,6 +82,28 @@ func compareBootstrapEntries(oldIssues []Issue, current Baseline) []Issue {
 		}
 		if !metricRule(entry.Rule) && entry.Message != oldIssue.Message {
 			result = append(result, Issue{Rule: "baseline-history-increase", Module: entry.Module, Package: entry.Package, File: entry.File, Symbol: entry.Symbol, Message: "baseline message differs from the merge-base issue"})
+		}
+	}
+	return result
+}
+
+func bootstrapRenameIssues(relative string, oldIssues map[string]Issue, newEntries map[string]BaselineEntry, renames []BaselineRename) []Issue {
+	result := make([]Issue, 0)
+	for _, rename := range renames {
+		if _, targetExists := newEntries[rename.To]; !targetExists {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename target %q is missing", rename.To)})
+			continue
+		}
+		if _, sourceRetained := newEntries[rename.From]; sourceRetained {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename source %q remains in the current baseline; a rename must migrate one exemption exactly once", rename.From)})
+			continue
+		}
+		if _, sourceExists := oldIssues[rename.From]; !sourceExists {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename source %q is not an issue at merge base", rename.From)})
+			continue
+		}
+		if _, targetExists := oldIssues[rename.To]; targetExists {
+			result = append(result, Issue{Rule: "baseline-history-rename", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline rename target %q already exists at merge base", rename.To)})
 		}
 	}
 	return result

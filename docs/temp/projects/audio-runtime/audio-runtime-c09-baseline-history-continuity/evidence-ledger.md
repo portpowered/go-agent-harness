@@ -1,0 +1,229 @@
+# audio-runtime-c09-baseline-history-continuity evidence ledger
+
+Task: `audio-runtime-c09-baseline-history-continuity`
+Project: admitted `audio-runtime`; factory session `~default`; resolved session
+`f24459ea-a7d9-4fd8-a1bb-91b0bd9629bd`; server `http://127.0.0.1:7439`.
+
+## Admission, branch, and preserved ancestry
+
+- Read `factory/docs/operating-policy.md`, `factory/docs/implementation-handoff.md`,
+  `factory/docs/meta-planner-handoff.md`, the immutable audio-runtime manifest,
+  request, acceptance, source plan, `progress.txt`, and prior C08 evidence.
+- Admission command:
+  `rtk proxy python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c09-baseline-history-continuity`
+- Admission result: `{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c09-baseline-history-continuity"}`.
+- `prd.json.branchName` and the isolated worktree branch are both
+  `codex/audio-runtime-c09-baseline-history-continuity`.
+- `git fetch origin main` completed at setup and again before handoff;
+  `origin/main` is `00c147585f31808c7bdbbf6051cc9df423dbdf37`.
+- Implementation checkpoint: `9b6b80a8f6425a4f79e94a2d1cbac905817e89d7`
+  (`fix: preserve established architecture baseline history`). The baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and fetched main revision are
+  all ancestors of that checkpoint.
+- C08 remains untouched and preserved: its isolated worktree is clean at
+  `e8bc361ae5fbbd419516f66e1f74e7c78af8a741`; PR400 remains OPEN at that head,
+  based on `00c147585f31808c7bdbbf6051cc9df423dbdf37`, with commits
+  `71986c13`, `8055c551`, and `e8bc361a` retained.
+
+## Preserved hosted failure and local reproduction
+
+The preserved C08 hosted failure is run `34186932187`, job `101937050020`,
+head `e8bc361ae5fbbd419516f66e1f74e7c78af8a741`, command
+`make architecture-size-check`. Its gate exit status was `1`, Make exit status
+was `2`, and its diagnostic was:
+
+```text
+baseline-history-source docs/architecture/architecture-size-baseline.json: baseline source_commit "ddebb8f44346cde4c7e989a1880b8ffac6179df0" does not identify merge base 00c147585f31808c7bdbbf6051cc9df423dbdf37
+```
+
+Before the repair, the exact bounded local command `rtk make
+architecture-size-check` exited `2` after `13.484s` with the same single inner
+gate issue and diagnostic. The baseline and policy files were not edited.
+
+## Repair and behavioral coverage
+
+`compareBaselineHistory` now reads the merge-base baseline before applying
+source provenance rules. An already-established baseline is compared against
+that historical manifest, so its original `source_commit` survives later main
+advancement. A baseline absent at merge base still takes the bootstrap path,
+which requires `source_commit` to equal the exact merge-base revision before
+measuring source history. Established history rejects any source replacement or
+removal, added exemptions, ceiling increases, changed messages, and missing
+rename targets; reductions and deletion-only history remain valid.
+
+The focused command
+`rtk proxy env GOWORK=off go test ./... -count=1 -timeout 120s -run
+'TestBaselineHistory|TestBaselineBootstrap' -v` passed all selected tests,
+including the new merged-baseline/mainline-advance fixture and provenance,
+addition, reduction/deletion, rename, and bootstrap negative controls.
+
+## Candidate checks
+
+- `rtk make test-architecture-gate`: passed.
+- `rtk make architecture-size-check`: passed; `181 package(s), 1850 file(s),
+  26899 function(s) checked`.
+- `rtk make fmt`, `rtk make build`, and `rtk make vet`: passed.
+- `rtk make test-tools`: passed, including factory script checks, analyzer-gate,
+  session-race-gate, architecture-gate, and Wire checks.
+- Pinned `rtk make lint`: passed with `0 issues` in every workspace module.
+- Pinned `rtk make staticcheck`: passed for every workspace module.
+- `rtk make wire-check`: regenerated all eight registered graphs successfully;
+  `git status` remained limited to the intended task files and no generated
+  diff remained.
+- `rtk git diff --check`: passed.
+- `docs/architecture/architecture-size-baseline.json` and
+  `docs/architecture/architecture-policy.json` are byte-identical to HEAD.
+  The implementation checkpoint changed only `tools/architecturegate/`;
+  this ledger is the only subsequent owned evidence path.
+
+No CI was polled or claimed green. The exact next action is push the admitted
+branch, open/update its PR against `main`, verify the submitted head, and return
+`ACCEPTED` to the script-owned CI gate without polling terminal CI. CI rejection
+must return to this same task for exact-log repair; independent review and merge
+remain later stages.
+
+## Executor continuation checkpoint
+
+- Re-fetched `origin/main` before verification; it remains
+  `00c147585f31808c7bdbbf6051cc9df423dbdf37`. Admission was reverified with the
+  command above, the isolated branch still matches `prd.json.branchName`, and
+  the baseline, startup integration, and fetched-main revisions remain
+  ancestors of `HEAD`.
+- Before this continuation checkpoint, PR #401 was OPEN at the exact remote
+  candidate head `0f8916374467098a3a3080960963f6c031854415`; its review state
+  had no independent reviews or comments. No review finding is being treated
+  as resolved by executor testing.
+- Fresh focused causal evidence on the committed candidate:
+  `rtk proxy env GOWORK=off go test . -run
+  'TestBaselineHistory|TestBaselineBootstrap' -count=1 -timeout=3m -v`
+  exited 0 in 1.786s; the focused race command
+  `rtk proxy env GOWORK=off go test -race . -run
+  'Test(Baseline|SizeMetricsAndDeletionOnlyBaseline)' -count=1 -timeout=3m -v`
+  exited 0 in 3.008s. The full architecturegate package passed with
+  `rtk proxy env GOWORK=off go test ./... -count=1 -timeout=3m` in 2.347s.
+- `rtk make architecture-size-check` exited 0 and reported 181 packages, 1850
+  files, and 26899 functions. The accumulated `rtk make test-tools` target
+  exited 0, including Wire integrity, analyzer-gate, session-race-gate and the
+  architecturegate tests. `git diff --check` passed.
+- `git diff --exit-code origin/main --
+  docs/architecture/architecture-size-baseline.json
+  docs/architecture/architecture-policy.json` passed. The candidate change
+  scope remains the three architecturegate files and this owned ledger only.
+
+This continuation evidence is checkpointed at
+`b624cec5728c8e15a5feb9875b7c6f0a71e7862f`; the exact next action is push this
+same admitted head, update PR #401 with the exact head/base and evidence, and
+return `ACCEPTED` to the script-owned CI gate. Executor evidence does not claim
+CI, independent review, merge, vertical probe, or project acceptance.
+
+## CI rejection investigation and same-task resubmission
+
+- The first submitted head `c3d3b1cd161707a02d0d2e217fd5c3992adbac77` had
+  completed success for static, unit, integration, race, hermetic, WebMCP
+  Chrome, macOS audio release and Windows audio portable. The exact completed
+  coverage failure was run `34192977589`, job `101954663748`, command
+  `make coverage`, with the agent-cli coverage invocation exiting 1 after
+  `248.147s` and Make exiting 2 after `5m39.513s`.
+- The only failing assertion in that log was
+  `TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle` at
+  `agent-cli/test/integration/session_tool_result_barge_in_test.go:603`, which
+  timed out waiting 10 seconds for the active scheduled final assistant
+  response completion. The other replay/session messages in the log are the
+  existing asserted negative-control diagnostics; no architecturegate test or
+  C09-owned path failed.
+- The exact test passed once without coverage, 5/5 with CI coverage flags
+  (`CGO_ENABLED=0`, `-tags=nomicrophone`, the CI `-coverpkg` set and a bounded
+  coverage profile), and 3/3 under `-race` with `nomicrophone`. It completed
+  with exit 0 in each bounded run. Accumulated `rtk make test-regressions`
+  passed agent-cli replay fixtures and all five gateway replay packages; `rtk
+  make test-architecture-gate` passed as well.
+- No deterministic defect was reproduced, so no unrelated agent-cli change,
+  timeout increase, assertion weakening or C09 scope expansion was made. The
+  next candidate checkpoint records this evidence only and returns the same
+  task to the script-owned CI gate for an exact-head rerun. A repeated
+  identical terminal failure must be inspected from its new log and repaired
+  on this task before handoff; no CI success is claimed here.
+
+## C09 review repair checkpoint
+
+- The canonical board was reread before repair. Review rows `work-review-9` and
+  `work-review-10` remain the authoritative inbox: persisted-rename ceiling
+  lookup must prefer the historical target, historical baseline version `999`
+  must be rejected, and a rename must remove its source exactly once while
+  rejecting retained or unknown sources. The task row's latest CI rejection
+  remains recorded separately above; no review finding was treated as resolved
+  by the earlier documentation-only checkpoints.
+- Repair commit `94aeda8bbaf1091bbd1d855c280f7622eee067bd` changes only
+  `tools/architecturegate/baseline.go` and existing architecturegate test
+  files. `decodeHistoricalBaseline` now rejects unsupported versions;
+  `historyCeilingIssues` checks the exact historical target before falling back
+  to a rename source; and history rename validation receives prior rename
+  metadata so established persisted mappings remain valid while retained,
+  colliding, missing, and unknown migrations fail closed.
+- Real Git-history regressions pass for persisted-rename growth, retained and
+  unknown rename sources, unsupported historical version `999`, the original
+  rename-growth case, source replacement/removal, added exemptions, missing
+  targets, bootstrap provenance, inherited-baseline continuity, and valid
+  deletion/reduction. The focused command
+  `rtk proxy sh -c 'cd tools/architecturegate && GOWORK=off go test . -run
+  "TestBaselineHistory|TestBaselineBootstrap" -count=1 -timeout=3m -v'`
+  exited `0` in `2.261s`; all listed tests passed.
+- Accumulated causal checks on the committed repair passed: full
+  `GOWORK=off go test ./... -count=1 -timeout=3m` in `2.322s`, focused
+  `-race` baseline regressions in `3.559s`, `rtk make test-architecture-gate`,
+  and `rtk make architecture-size-check` with `181 package(s), 1850 file(s),
+  26905 function(s) checked`. `git diff --check` passed, and the baseline JSON
+  and policy JSON remain byte-identical to `origin/main`.
+- The exact rejected CI logs were inspected at `/tmp/factory-c09-coverage.log`
+  and `/tmp/factory-c09-integration.log`. Coverage failed only at
+  `TestS2SV4DNeverReturningToolCallBoundedByExplicitTimeout` with unresolved
+  `call_v4d_timeout_001`; integration failed only at the fresh positive
+  baseline of `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
+  after the existing two-second deadline, with all six crossings recorded.
+  Focused candidate checks passed the former `5/5` with `-tags=nomicrophone`
+  and the latter `3/3`; no C09-owned defect was reproduced, and no unrelated
+  implementation, timeout, assertion, C08 path, or acceptance floor was
+  changed. This is diagnostic evidence, not a claim that hosted CI is green.
+- Final ancestry remains intact: `HEAD=94aeda8bbaf1091bbd1d855c280f7622eee067bd`,
+  `origin/main=00c147585f31808c7bdbbf6051cc9df423dbdf37`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are all ancestors; the isolated
+  branch still matches `prd.json.branchName` and the worktree is clean.
+- Exact next action: push this same admitted branch, update/open PR #401 with
+  head `94aeda8bbaf1091bbd1d855c280f7622eee067bd` and base
+  `00c147585f31808c7bdbbf6051cc9df423dbdf37`, verify the submitted head, and
+  return `ACCEPTED` to the script-owned CI gate without polling terminal CI.
+  A later CI rejection must return to this same task for exact-log repair.
+
+## Bootstrap rename repair checkpoint
+
+- The canonical board was reread after the review return. `work-review-1` and
+  the task row both identify the current PR #401 head `857842463fba814cfb307eba90caae7a7cf575af` as rejected despite all required checks
+  passing: `compareBootstrapEntries` did not validate bootstrap renames, so a
+  retained source plus target and a missing target both returned no issue.
+- The defect reproduced before repair in a real temporary Git repository with
+  the baseline absent at merge base. The focused
+  `TestBaselineBootstrapRejectsInvalidRenames` returned `[]Issue` for both the
+  retained-source and missing-target cases; the unknown-source case only
+  returned `baseline-history-add`, not `baseline-history-rename`.
+- `compareBootstrapEntries` now validates each migration against both the
+  merge-base issue inventory and current entries: the target must exist, the
+  source must not remain, the source must exist at merge base, and the target
+  must not already be a merge-base issue. Valid one-to-one bootstrap renames
+  remain accepted. The regression is kept in the existing test file so the
+  architecture package stays within its 15-file and 600-line limits.
+- Final causal evidence on the repaired tree passed: focused
+  `TestBaselineHistory|TestBaselineBootstrap`, full
+  `GOWORK=off go test ./... -count=1 -timeout=3m`, focused race
+  `Test(Baseline|SizeMetricsAndDeletionOnlyBaseline)`, and
+  `rtk make test-architecture-gate`. The default `rtk make
+  architecture-size-check` passed with `181` packages, `1850` files, and
+  `26907` functions. `git diff --check` passed and the architecture baseline
+  and policy JSON remain byte-identical to `origin/main`.
+- The new repair is uncommitted; the existing `94aeda8` checkpoint remains
+  intact and C08/PR400 remains untouched. Exact next action: commit this
+  bootstrap repair and evidence, recheck ancestry/status, push/update PR #401
+  at the same task head, verify the submitted head, and return `ACCEPTED` to
+  script-owned CI without polling terminal CI. No CI-green, review, merge,
+  vertical-probe, or project-wide completion claim is made.
