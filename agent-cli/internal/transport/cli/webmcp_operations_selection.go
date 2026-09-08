@@ -26,7 +26,7 @@ const xVideoPreparationTimeout = 5 * time.Minute
 
 // Read one bounded snapshot. The hash and every transmitted byte describe the
 // same snapshot even if the caller replaces the source file during transfer.
-func readXVideo(path string) ([]byte, string, error) {
+func readXVideo(path string) (data []byte, hash string, readErr error) {
 	if !strings.EqualFold(filepath.Ext(path), ".mp4") {
 		return nil, "", fmt.Errorf("video must be an MP4 file")
 	}
@@ -34,7 +34,11 @@ func readXVideo(path string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("open video: %w", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			readErr = errors.Join(readErr, fmt.Errorf("close video: %w", err))
+		}
+	}()
 	info, err := file.Stat()
 	if err != nil {
 		return nil, "", err
@@ -42,7 +46,7 @@ func readXVideo(path string) ([]byte, string, error) {
 	if !info.Mode().IsRegular() || info.Size() < 12 || info.Size() > xVideoMaxBytes {
 		return nil, "", fmt.Errorf("video must be a regular file between 12 bytes and 64 MiB")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, xVideoMaxBytes+1))
+	data, err = io.ReadAll(io.LimitReader(file, xVideoMaxBytes+1))
 	if err != nil {
 		return nil, "", err
 	}

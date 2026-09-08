@@ -273,7 +273,9 @@ func testXAdapterJourney(t *testing.T) {
 	source, _ := siteadapter.Source(siteadapter.XName)
 	handler := func(writer http.ResponseWriter, _ *http.Request) {
 		adapterFixtureHeaders(writer)
-		_, _ = fmt.Fprint(writer, xAdapterFixtureHTML)
+		if _, err := fmt.Fprint(writer, xAdapterFixtureHTML); err != nil {
+			t.Errorf("write X fixture: %v", err)
+		}
 	}
 	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
 
@@ -426,7 +428,9 @@ func TestXAdapterRealMP4Decode(t *testing.T) {
 	html = strings.Replace(html, "</video></div>';", "</video></div>'; const v=document.querySelector('video'); const button=document.querySelector('[data-testid=\"tweetButtonInline\"]');button.disabled=true;v.onloadedmetadata=()=>{button.disabled=false;};v.src=URL.createObjectURL(event.target.files[0]);v.load();", 1)
 	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, func(w http.ResponseWriter, _ *http.Request) {
 		adapterFixtureHeaders(w)
-		_, _ = fmt.Fprint(w, html)
+		if _, err := fmt.Fprint(w, html); err != nil {
+			t.Errorf("write X media fixture: %v", err)
+		}
 	})
 	release, err := fixture.target.AcquirePageFocus(fixture.ctx)
 	if err != nil {

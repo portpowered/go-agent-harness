@@ -1,5 +1,17 @@
 # Selfie video to X: implementation and acceptance log
 
+## Submission follow-up
+
+Main now includes the baseline-history correction through 7a3a5e8a. That revision
+was integrated without changing the baseline or weakening its rules. The remaining
+three errcheck findings are fixed by propagating file-close errors and reporting
+fixture response-write failures (blank assignments were insufficient under the
+repository's check-blank policy). Scoped architecture checks now pass including
+historical comparison against origin/main. See
+[submission-process improvements](submission-process-improvements.md) for the
+proposed code, upload-recovery and content-review changes. CI and merge results
+are recorded after validation; earlier blocker descriptions below are historical.
+
 ## Verified outcome (2026-09-08 UTC)
 
 Two user-authorized AI-disclosed selfie videos were published through the harness
