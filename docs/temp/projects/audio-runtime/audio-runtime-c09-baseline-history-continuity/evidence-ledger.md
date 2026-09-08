@@ -195,3 +195,35 @@ CI, independent review, merge, vertical probe, or project acceptance.
   `00c147585f31808c7bdbbf6051cc9df423dbdf37`, verify the submitted head, and
   return `ACCEPTED` to the script-owned CI gate without polling terminal CI.
   A later CI rejection must return to this same task for exact-log repair.
+
+## Bootstrap rename repair checkpoint
+
+- The canonical board was reread after the review return. `work-review-1` and
+  the task row both identify the current PR #401 head `857842463fba814cfb307eba90caae7a7cf575af` as rejected despite all required checks
+  passing: `compareBootstrapEntries` did not validate bootstrap renames, so a
+  retained source plus target and a missing target both returned no issue.
+- The defect reproduced before repair in a real temporary Git repository with
+  the baseline absent at merge base. The focused
+  `TestBaselineBootstrapRejectsInvalidRenames` returned `[]Issue` for both the
+  retained-source and missing-target cases; the unknown-source case only
+  returned `baseline-history-add`, not `baseline-history-rename`.
+- `compareBootstrapEntries` now validates each migration against both the
+  merge-base issue inventory and current entries: the target must exist, the
+  source must not remain, the source must exist at merge base, and the target
+  must not already be a merge-base issue. Valid one-to-one bootstrap renames
+  remain accepted. The regression is kept in the existing test file so the
+  architecture package stays within its 15-file and 600-line limits.
+- Final causal evidence on the repaired tree passed: focused
+  `TestBaselineHistory|TestBaselineBootstrap`, full
+  `GOWORK=off go test ./... -count=1 -timeout=3m`, focused race
+  `Test(Baseline|SizeMetricsAndDeletionOnlyBaseline)`, and
+  `rtk make test-architecture-gate`. The default `rtk make
+  architecture-size-check` passed with `181` packages, `1850` files, and
+  `26907` functions. `git diff --check` passed and the architecture baseline
+  and policy JSON remain byte-identical to `origin/main`.
+- The new repair is uncommitted; the existing `94aeda8` checkpoint remains
+  intact and C08/PR400 remains untouched. Exact next action: commit this
+  bootstrap repair and evidence, recheck ancestry/status, push/update PR #401
+  at the same task head, verify the submitted head, and return `ACCEPTED` to
+  script-owned CI without polling terminal CI. No CI-green, review, merge,
+  vertical-probe, or project-wide completion claim is made.

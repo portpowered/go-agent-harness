@@ -457,6 +457,27 @@ func Large() {
 	if !hasRule(issues, "baseline-history-add") {
 		t.Fatalf("bootstrap accepted an issue absent at merge base: %#v", issues)
 	}
+
+	oldEntry := entries[0]
+	targetEntry := oldEntry
+	targetEntry.File = "renamed.go"
+	rename := BaselineRename{From: baselineIssue(oldEntry).Key(), To: baselineIssue(targetEntry).Key()}
+	for name, current := range map[string]Baseline{
+		"retained source": {Version: baselineVersion, SourceCommit: sourceCommit, Entries: []BaselineEntry{oldEntry, targetEntry}, Renames: []BaselineRename{rename}},
+		"missing target":  {Version: baselineVersion, SourceCommit: sourceCommit, Entries: []BaselineEntry{oldEntry}, Renames: []BaselineRename{rename}},
+	} {
+		t.Run("invalid rename/"+name, func(t *testing.T) {
+			if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current, policy); !hasRule(issues, "baseline-history-rename") {
+				t.Fatalf("issues = %#v; invalid bootstrap rename was accepted", issues)
+			}
+		})
+	}
+	valid := baseline
+	valid.Entries = append([]BaselineEntry{targetEntry}, entries[1:]...)
+	valid.Renames = []BaselineRename{rename}
+	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", valid, policy); len(issues) != 0 {
+		t.Fatalf("valid bootstrap rename = %#v", issues)
+	}
 }
 
 func TestBaselineHistoryRejectsInvalidBootstrapProvenance(t *testing.T) {
