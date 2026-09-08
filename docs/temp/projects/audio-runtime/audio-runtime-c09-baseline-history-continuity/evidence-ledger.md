@@ -90,10 +90,10 @@ remain later stages.
   command above, the isolated branch still matches `prd.json.branchName`, and
   the baseline, startup integration, and fetched-main revisions remain
   ancestors of `HEAD`.
-- PR #401 is OPEN at the exact remote candidate head
-  `0f8916374467098a3a3080960963f6c031854415`; its current review state has no
-  independent reviews or comments. No review finding is being treated as
-  resolved by executor testing.
+- Before this continuation checkpoint, PR #401 was OPEN at the exact remote
+  candidate head `0f8916374467098a3a3080960963f6c031854415`; its review state
+  had no independent reviews or comments. No review finding is being treated
+  as resolved by executor testing.
 - Fresh focused causal evidence on the committed candidate:
   `rtk proxy env GOWORK=off go test . -run
   'TestBaselineHistory|TestBaselineBootstrap' -count=1 -timeout=3m -v`
@@ -111,7 +111,8 @@ remain later stages.
   docs/architecture/architecture-policy.json` passed. The candidate change
   scope remains the three architecturegate files and this owned ledger only.
 
-The exact next action is checkpoint this evidence, push the same admitted head,
-update PR #401 with the exact head/base and evidence, and return `ACCEPTED` to
-the script-owned CI gate. Executor evidence does not claim CI, independent
-review, merge, vertical probe, or project acceptance.
+This continuation evidence is checkpointed at
+`b624cec5728c8e15a5feb9875b7c6f0a71e7862f`; the exact next action is push this
+same admitted head, update PR #401 with the exact head/base and evidence, and
+return `ACCEPTED` to the script-owned CI gate. Executor evidence does not claim
+CI, independent review, merge, vertical probe, or project acceptance.
