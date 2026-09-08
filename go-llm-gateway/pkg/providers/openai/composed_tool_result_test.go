@@ -88,6 +88,14 @@ func waitForFrameCount(t *testing.T, conn *mockWebSocketConn, n int, deadline ti
 
 func finishComposedResponse(t *testing.T, conn *mockWebSocketConn, session messages.Session, responseID string, deadline time.Time) {
 	t.Helper()
+	done := responseDoneChannel(t, session)
+	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": responseID}})
+	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": responseID, "status": "completed"}})
+	waitForResponseDone(t, done, deadline, "provider did not finish the admitted response")
+}
+
+func responseDoneChannel(t *testing.T, session messages.Session) <-chan struct{} {
+	t.Helper()
 	realtime, ok := session.(*realtimeSession)
 	if !ok {
 		t.Fatalf("session type = %T, want *realtimeSession", session)
@@ -95,14 +103,34 @@ func finishComposedResponse(t *testing.T, conn *mockWebSocketConn, session messa
 	realtime.responseMu.Lock()
 	done := realtime.responseDone
 	realtime.responseMu.Unlock()
-	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": responseID}})
-	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": responseID, "status": "completed"}})
+	return done
+}
+
+func waitForResponseDone(t *testing.T, done <-chan struct{}, deadline time.Time, message string) {
+	t.Helper()
 	timer := time.NewTimer(time.Until(deadline))
 	defer timer.Stop()
 	select {
 	case <-done:
 	case <-timer.C:
-		t.Fatal("provider did not finish the admitted response")
+		t.Fatal(message)
+	}
+}
+
+func waitForDuplicateToolCall(t *testing.T, al *agentloop.AgentLoop, callID string, deadline time.Time) {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	matches := 0
+	for matches < 2 {
+		delta, err := al.Deltas().ReadContext(ctx)
+		if err != nil {
+			t.Fatalf("waiting for duplicate tool call %q after %d matches: %v", callID, matches, err)
+		}
+		value, ok := delta.Value.(*messages.ToolCallEndValue)
+		if ok && value.ToolCallID == callID {
+			matches++
+		}
 	}
 }
 
@@ -326,6 +354,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 
 	// Replay the same provider call after its terminal result. The admission
 	// guard must keep the wire at one correlated output and one continuation.
+	done := responseDoneChannel(t, session)
 	addServerEvent(conn, "response.created", nil)
 	addServerEvent(conn, "response.output_item.added", map[string]any{
 		"item": map[string]any{"type": "function_call", "id": "item_timeout_duplicate", "call_id": callID, "name": toolName, "arguments": ""},
@@ -334,7 +363,8 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		"call_id": callID, "name": toolName, "arguments": `{"city":"Paris"}`,
 	})
 	addServerEvent(conn, "response.done", nil)
-	waitForQuietClientWire(t, conn, len(frames), 150*time.Millisecond, "duplicate timeout provider event")
+	waitForResponseDone(t, done, deadline, "duplicate timeout provider event was not processed")
+	waitForDuplicateToolCall(t, al, callID, deadline)
 	frames = parseWireFrames(t, conn.getClientMessages())
 	if got := len(findFunctionCallOutput(frames)); got != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d function_call_output frames, want one", got)
@@ -347,33 +377,6 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 	}
 	if responseCreates != 1 {
 		t.Fatalf("duplicate timeout provider event produced %d response.create frames, want one", responseCreates)
-	}
-}
-
-func waitForQuietClientWire(t *testing.T, conn *mockWebSocketConn, want int, quiet time.Duration, phase string) {
-	t.Helper()
-	for {
-		select {
-		case <-conn.clientWriteCh:
-			if got := len(conn.getClientMessages()); got > want {
-				t.Fatalf("%s wrote an unexpected client frame: got %d, want %d", phase, got, want)
-			}
-		default:
-			goto drained
-		}
-	}
-
-drained:
-	timer := time.NewTimer(quiet)
-	defer timer.Stop()
-	select {
-	case <-conn.clientWriteCh:
-		got := len(conn.getClientMessages())
-		t.Fatalf("%s wrote an unexpected client frame: got %d, want %d", phase, got, want)
-	case <-timer.C:
-		if got := len(conn.getClientMessages()); got != want {
-			t.Fatalf("%s settled at %d client frames, want %d", phase, got, want)
-		}
 	}
 }
 
