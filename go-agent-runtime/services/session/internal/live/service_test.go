@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/stretchr/testify/require"
 )
 
 type testInferencer struct {
@@ -74,7 +75,6 @@ func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
 func (h *testLiveCapabilityHandle) RefreshDefinitions(context.Context) ([]messages.ToolDefinition, error) {
 	return nil, nil
 }
-
 func (h *testLiveCapabilityHandle) BrowserWatch(context.Context) <-chan session.LiveCapabilityEvent {
 	return h.events
 }
@@ -89,7 +89,6 @@ func (h *testLiveCapabilityHandle) Close() error {
 func newTestSession() *testSession {
 	return &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{})}
 }
-
 func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if err := ctx.Err(); err != nil {
 		return false
@@ -580,9 +579,10 @@ func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessa
 		t.Fatalf("continuation intermediate event = error:%v complete:%t, want pending", err, complete)
 	}
 }
+
 func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
-	t.Cleanup(func() { _ = media.Close() })
+	t.Cleanup(func() { require.NoError(t, media.Close()) })
 	i := &liveInvocation{options: session.LiveRunOptions{Request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{}}}, endpoints: media.Endpoints()}
 	i.bindPlaybackController()
 	response := sharedaudio.PlaybackResponse{ResponseID: "response", ItemID: "item"}

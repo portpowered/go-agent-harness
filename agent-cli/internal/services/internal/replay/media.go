@@ -16,11 +16,11 @@ func (i replayMediaInferencer) ConnectSession(ctx context.Context) (messages.Ses
 	if err != nil {
 		return nil, err
 	}
-	attachReplayMedia(sess)
+	attachReplayMedia(ctx, sess)
 	return sess, nil
 }
 
-func attachReplayMedia(sess messages.Session) {
+func attachReplayMedia(ctx context.Context, sess messages.Session) {
 	owner, ok := sess.(sharedaudio.MediaSession)
 	if !ok || owner.RTCMedia().Inbound == nil {
 		return
@@ -29,12 +29,12 @@ func attachReplayMedia(sess messages.Session) {
 	if controlled, ok := inbound.(sharedaudio.PlaybackControlledInbound); ok {
 		controlled.SetPlaybackController(replayPlaybackController{})
 	}
-	go drainReplayInbound(inbound)
+	go drainReplayInbound(ctx, inbound)
 }
 
-func drainReplayInbound(inbound sharedaudio.InboundMedia) {
+func drainReplayInbound(ctx context.Context, inbound sharedaudio.InboundMedia) {
 	for {
-		if _, err := inbound.ReadFrame(context.Background()); err != nil {
+		if _, err := inbound.ReadFrame(ctx); err != nil {
 			return
 		}
 	}

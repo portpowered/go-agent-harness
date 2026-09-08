@@ -10,9 +10,13 @@ import (
 
 func TestAttachReplayMediaPreservesProviderInterruptionBoundary(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
-	defer func() { _ = media.Close() }()
+	defer func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("close media: %v", err)
+		}
+	}()
 
-	attachReplayMedia(&replayMediaTestSession{media: media})
+	attachReplayMedia(context.Background(), &replayMediaTestSession{media: media})
 	response := sharedaudio.PlaybackResponse{ResponseID: "resp-interrupted", ItemID: "item-interrupted"}
 	media.StartInboundResponse(response)
 	if err := media.PushInbound(make([]int16, 720)); err != nil {
