@@ -116,3 +116,31 @@ This continuation evidence is checkpointed at
 same admitted head, update PR #401 with the exact head/base and evidence, and
 return `ACCEPTED` to the script-owned CI gate. Executor evidence does not claim
 CI, independent review, merge, vertical probe, or project acceptance.
+
+## CI rejection investigation and same-task resubmission
+
+- The first submitted head `c3d3b1cd161707a02d0d2e217fd5c3992adbac77` had
+  completed success for static, unit, integration, race, hermetic, WebMCP
+  Chrome, macOS audio release and Windows audio portable. The exact completed
+  coverage failure was run `34192977589`, job `101954663748`, command
+  `make coverage`, with the agent-cli coverage invocation exiting 1 after
+  `248.147s` and Make exiting 2 after `5m39.513s`.
+- The only failing assertion in that log was
+  `TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle` at
+  `agent-cli/test/integration/session_tool_result_barge_in_test.go:603`, which
+  timed out waiting 10 seconds for the active scheduled final assistant
+  response completion. The other replay/session messages in the log are the
+  existing asserted negative-control diagnostics; no architecturegate test or
+  C09-owned path failed.
+- The exact test passed once without coverage, 5/5 with CI coverage flags
+  (`CGO_ENABLED=0`, `-tags=nomicrophone`, the CI `-coverpkg` set and a bounded
+  coverage profile), and 3/3 under `-race` with `nomicrophone`. It completed
+  with exit 0 in each bounded run. Accumulated `rtk make test-regressions`
+  passed agent-cli replay fixtures and all five gateway replay packages; `rtk
+  make test-architecture-gate` passed as well.
+- No deterministic defect was reproduced, so no unrelated agent-cli change,
+  timeout increase, assertion weakening or C09 scope expansion was made. The
+  next candidate checkpoint records this evidence only and returns the same
+  task to the script-owned CI gate for an exact-head rerun. A repeated
+  identical terminal failure must be inspected from its new log and repaired
+  on this task before handoff; no CI success is claimed here.
