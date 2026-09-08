@@ -19,10 +19,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 1,
-    "lane_wall_seconds": 0.0793905,
-    "sum_invocation_wall_seconds": 0.0793905
+    "lane_wall_seconds": 0.08353225,
+    "sum_invocation_wall_seconds": 0.08353225
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0.03,
     "ranked_packages": [
       {
@@ -40,7 +46,7 @@
     ],
     "subtest_overlap_count": 1,
     "subtest_overlap_records": [
-      "run-a3db09-r1-synthetic"
+      "run-a9930a-r1-synthetic"
     ]
   },
   "provenance": {
@@ -60,10 +66,10 @@
       "cohort": false,
       "completed_repetitions": 1,
       "records": [
-        "run-a3db09-r1-synthetic"
+        "run-a9930a-r1-synthetic"
       ],
       "requested_repetitions": 1,
-      "run_group_id": "a3db09434bae",
+      "run_group_id": "a9930a7d8fad",
       "status": "CAPTURED",
       "validation": {
         "actual_records": 1,
@@ -72,12 +78,12 @@
         "expected_records": 1,
         "quiet_evidence": {
           "isolation": "synthetic-control",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/overlapping-subtests/quiet-evidence.json",
-          "sha256": "9d76a929e7910d1a1df74e467ae3fde3a9a0359ec9895d8455197d820c7f4ec4",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/overlapping-subtests/run/quiet-evidence.json",
+          "sha256": "8aabea32f260b71770b77d354ff31712949d60addcf4c9e074e675a5de372d53",
           "status": "PASS"
         },
         "requested_repetitions": 1,
-        "run_group_id": "a3db09434bae",
+        "run_group_id": "a9930a7d8fad",
         "status": "PASS",
         "valid": true
       }
@@ -123,26 +129,9 @@
   },
   "status": "PASS",
   "target_comparison": {
-    "lane_wall_seconds": 0.0793905,
+    "lane_wall_seconds": 0.08353225,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [],
-    "observations": 1,
-    "package_count": 1,
-    "package_time_total_seconds": 0.03,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [
-      {
-        "count": 1,
-        "elapsed_seconds": 0.03,
-        "package": "example/overlap"
-      }
-    ],
-    "status": "PASS",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

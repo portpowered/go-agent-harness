@@ -2,7 +2,7 @@
   "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/truncated-terminal/analysis/analysis.json",
   "failure_count": 1,
   "fresh_timing": "INVALID",
-  "lane_wall_seconds": 0.036503709,
+  "lane_wall_seconds": 0.037330709,
   "ranked_package_count": 0,
   "source_sha": "synthetic-control-source",
   "status": "INVALID"

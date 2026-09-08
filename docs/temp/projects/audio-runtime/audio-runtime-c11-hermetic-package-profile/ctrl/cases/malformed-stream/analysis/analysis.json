@@ -7,7 +7,7 @@
         "example/malformed"
       ],
       "process_status": "PASS",
-      "record": "run-6179b3-r1-synthetic",
+      "record": "run-9be39f-r1-synthetic",
       "run_group_errors": [],
       "source_status": "PASS",
       "unexpected_packages": []
@@ -32,10 +32,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 1,
-    "lane_wall_seconds": 0.036401083,
-    "sum_invocation_wall_seconds": 0.036401083
+    "lane_wall_seconds": 0.037034917,
+    "sum_invocation_wall_seconds": 0.037034917
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0,
     "ranked_packages": [],
     "subtest_overlap_count": 0,
@@ -58,10 +64,10 @@
       "cohort": false,
       "completed_repetitions": 1,
       "records": [
-        "run-6179b3-r1-synthetic"
+        "run-9be39f-r1-synthetic"
       ],
       "requested_repetitions": 1,
-      "run_group_id": "6179b32a4e4e",
+      "run_group_id": "9be39f151d52",
       "status": "CAPTURED",
       "validation": {
         "actual_records": 1,
@@ -70,12 +76,12 @@
         "expected_records": 1,
         "quiet_evidence": {
           "isolation": "synthetic-control",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/malformed-stream/quiet-evidence.json",
-          "sha256": "c11de644dca51f2212009109bc0fd5cf14bf19cf5f9356dc35a321859ae1bda6",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/malformed-stream/run/quiet-evidence.json",
+          "sha256": "99a2c87fd93fafb00766ad1cbf41ee752096703158294ea281be46d6fd69c749",
           "status": "PASS"
         },
         "requested_repetitions": 1,
-        "run_group_id": "6179b32a4e4e",
+        "run_group_id": "9be39f151d52",
         "status": "PASS",
         "valid": true
       }
@@ -121,22 +127,9 @@
   },
   "status": "INVALID",
   "target_comparison": {
-    "lane_wall_seconds": 0.036401083,
+    "lane_wall_seconds": 0.037034917,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [
-      "line 1: malformed JSON: Expecting value: line 1 column 1 (char 0)"
-    ],
-    "observations": 0,
-    "package_count": 0,
-    "package_time_total_seconds": 0,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [],
-    "status": "INVALID",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

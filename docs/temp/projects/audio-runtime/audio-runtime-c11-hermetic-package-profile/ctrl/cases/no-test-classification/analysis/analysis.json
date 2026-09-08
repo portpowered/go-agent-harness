@@ -23,10 +23,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 1,
-    "lane_wall_seconds": 0.071614291,
-    "sum_invocation_wall_seconds": 0.071614291
+    "lane_wall_seconds": 0.075542541,
+    "sum_invocation_wall_seconds": 0.075542541
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0.02,
     "ranked_packages": [
       {
@@ -74,10 +80,10 @@
       "cohort": false,
       "completed_repetitions": 1,
       "records": [
-        "run-26ad56-r1-synthetic"
+        "run-d784e3-r1-synthetic"
       ],
       "requested_repetitions": 1,
-      "run_group_id": "26ad565615b4",
+      "run_group_id": "d784e3b7dd1a",
       "status": "CAPTURED",
       "validation": {
         "actual_records": 1,
@@ -86,12 +92,12 @@
         "expected_records": 1,
         "quiet_evidence": {
           "isolation": "synthetic-control",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/no-test-classification/quiet-evidence.json",
-          "sha256": "b7a7732bd0dda13bb4be333bfae6aca0370e15f934d04a6e76fe6be7a3be82be",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/no-test-classification/run/quiet-evidence.json",
+          "sha256": "144c95c1e91b4f61c416f93f20d3868ae6ad3f7e6fbdd0fae92b89768e9dcf0e",
           "status": "PASS"
         },
         "requested_repetitions": 1,
-        "run_group_id": "26ad565615b4",
+        "run_group_id": "d784e3b7dd1a",
         "status": "PASS",
         "valid": true
       }
@@ -137,31 +143,9 @@
   },
   "status": "PASS",
   "target_comparison": {
-    "lane_wall_seconds": 0.071614291,
+    "lane_wall_seconds": 0.075542541,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [],
-    "observations": 2,
-    "package_count": 2,
-    "package_time_total_seconds": 0.02,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [
-      {
-        "count": 1,
-        "elapsed_seconds": 0.02,
-        "package": "example/pass"
-      },
-      {
-        "count": 1,
-        "elapsed_seconds": 0.0,
-        "package": "example/no-test"
-      }
-    ],
-    "status": "PASS",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

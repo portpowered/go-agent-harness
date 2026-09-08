@@ -4,7 +4,7 @@
     "gomodcache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/cache/gomodcache",
     "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/cache"
   },
-  "created_at_utc": "2026-09-08T13:14:59.859Z",
+  "created_at_utc": "2026-09-08T14:48:34.318Z",
   "flags": {
     "agent_cli_timeout_seconds": 5,
     "cgo_enabled": "0",
@@ -59,24 +59,24 @@
     {
       "cohort": false,
       "completed_repetitions": 0,
-      "created_at_utc": "2026-09-08T13:14:59.982Z",
+      "created_at_utc": "2026-09-08T14:48:34.440Z",
       "failures": [
         "synthetic repetition 1"
       ],
       "note": "The first failed repetition stops unchanged repeats; no retry-until-green.",
       "quiet_evidence": {
         "active_work": [],
-        "captured_at_utc": "2026-09-08T13:14:59.859Z",
+        "captured_at_utc": "2026-09-08T14:48:34.318Z",
         "isolation": "synthetic-control",
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/quiet-evidence.json",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/quiet-evidence.json",
         "runner": {
           "architecture": "synthetic",
           "cpu": "synthetic",
           "go_version": "not-used",
           "os": "synthetic"
         },
-        "sha256": "66c5f7c3773fafc57b31132bbb5b6ec7f9d33fc54c213c2513036c4a27dab73f",
-        "valid_until_utc": "2026-09-08T13:24:59.859Z"
+        "sha256": "690ae868c82160797cae06ffcb08f1fe729288c6a53446f9f67c33567c53133b",
+        "valid_until_utc": "2026-09-08T14:58:34.318Z"
       },
       "records": [
         {
@@ -90,7 +90,7 @@
           ],
           "cohort": false,
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass",
-          "ended_at_utc": "2026-09-08T13:14:59.981Z",
+          "ended_at_utc": "2026-09-08T14:48:34.440Z",
           "env_overrides": {
             "CGO_ENABLED": "0",
             "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/cache/gocache",
@@ -99,12 +99,12 @@
           },
           "exit_status": 7,
           "expected_package_count": 1,
-          "label": "run-34d5fc-r1-synthetic",
+          "label": "run-697090-r1-synthetic",
           "module": "synthetic",
-          "monotonic_end_ns": 2125099045596500,
-          "monotonic_start_ns": 2125098980101791,
+          "monotonic_end_ns": 2130713490920750,
+          "monotonic_start_ns": 2130713423987041,
           "repeat_index": 1,
-          "run_group_id": "34d5fcbce8cb",
+          "run_group_id": "697090767712",
           "schema": "c11-command-record-v1",
           "selected_packages": [
             "example/pass"
@@ -112,22 +112,22 @@
           "signal": null,
           "source_sha": "synthetic-control-source",
           "spawn_error": null,
-          "started_at_utc": "2026-09-08T13:14:59.915Z",
+          "started_at_utc": "2026-09-08T14:48:34.373Z",
           "status": "FAIL",
           "stderr_bytes": 0,
-          "stderr_path": "runs/34d5fcbce8cb/r1/synthetic/run-34d5fc-r1-synthetic.stderr.log",
+          "stderr_path": "runs/697090767712/r1/synthetic/run-697090-r1-synthetic.stderr.log",
           "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdout_bytes": 258,
-          "stdout_path": "runs/34d5fcbce8cb/r1/synthetic/run-34d5fc-r1-synthetic.stdout.jsonl",
+          "stdout_path": "runs/697090767712/r1/synthetic/run-697090-r1-synthetic.stdout.jsonl",
           "stdout_sha256": "2db1013568d2de3181dbca9dc30781bbdf28d2392d24c09b799b784de8fb8405",
           "test_result_cache_policy": "disabled-by--count=1",
           "timed_out": false,
           "timeout_seconds": 5,
-          "wall_seconds": 0.065494709
+          "wall_seconds": 0.066933709
         }
       ],
       "requested_repetitions": 1,
-      "run_group_id": "34d5fcbce8cb",
+      "run_group_id": "697090767712",
       "schema": "c11-run-group-v1",
       "selected_packages": [
         "example/pass"
@@ -154,7 +154,7 @@
       ],
       "cohort": false,
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass",
-      "ended_at_utc": "2026-09-08T13:14:59.981Z",
+      "ended_at_utc": "2026-09-08T14:48:34.440Z",
       "env_overrides": {
         "CGO_ENABLED": "0",
         "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/cache/gocache",
@@ -163,12 +163,12 @@
       },
       "exit_status": 7,
       "expected_package_count": 1,
-      "label": "run-34d5fc-r1-synthetic",
+      "label": "run-697090-r1-synthetic",
       "module": "synthetic",
-      "monotonic_end_ns": 2125099045596500,
-      "monotonic_start_ns": 2125098980101791,
+      "monotonic_end_ns": 2130713490920750,
+      "monotonic_start_ns": 2130713423987041,
       "repeat_index": 1,
-      "run_group_id": "34d5fcbce8cb",
+      "run_group_id": "697090767712",
       "schema": "c11-command-record-v1",
       "selected_packages": [
         "example/pass"
@@ -176,23 +176,23 @@
       "signal": null,
       "source_sha": "synthetic-control-source",
       "spawn_error": null,
-      "started_at_utc": "2026-09-08T13:14:59.915Z",
+      "started_at_utc": "2026-09-08T14:48:34.373Z",
       "status": "FAIL",
       "stderr_bytes": 0,
-      "stderr_path": "runs/34d5fcbce8cb/r1/synthetic/run-34d5fc-r1-synthetic.stderr.log",
+      "stderr_path": "runs/697090767712/r1/synthetic/run-697090-r1-synthetic.stderr.log",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_bytes": 258,
-      "stdout_path": "runs/34d5fcbce8cb/r1/synthetic/run-34d5fc-r1-synthetic.stdout.jsonl",
+      "stdout_path": "runs/697090767712/r1/synthetic/run-697090-r1-synthetic.stdout.jsonl",
       "stdout_sha256": "2db1013568d2de3181dbca9dc30781bbdf28d2392d24c09b799b784de8fb8405",
       "test_result_cache_policy": "disabled-by--count=1",
       "timed_out": false,
       "timeout_seconds": 5,
-      "wall_seconds": 0.065494709
+      "wall_seconds": 0.066933709
     }
   ],
   "schema": "c11-hermetic-profile-manifest-v1",
   "source_sha": "synthetic-control-source",
-  "updated_at_utc": "2026-09-08T13:14:59.982Z",
+  "updated_at_utc": "2026-09-08T14:48:34.440Z",
   "warm": {
     "commands": [],
     "status": "NOT_RUN",

@@ -5,7 +5,7 @@
       "error": null,
       "missing_packages": [],
       "process_status": "PASS",
-      "record": "run-347d0a-r1-synthetic",
+      "record": "run-bcd65f-r1-synthetic",
       "run_group_errors": [
         "quiet evidence is missing runner metadata"
       ],
@@ -17,7 +17,7 @@
       "error": null,
       "missing_packages": [],
       "process_status": "PASS",
-      "record": "run-347d0a-r2-synthetic",
+      "record": "run-bcd65f-r2-synthetic",
       "run_group_errors": [
         "quiet evidence is missing runner metadata"
       ],
@@ -29,7 +29,7 @@
       "error": "quiet evidence is missing runner metadata",
       "missing_packages": [],
       "process_status": null,
-      "record": "run_group:347d0aa0203c",
+      "record": "run_group:bcd65f367829",
       "run_group_errors": [
         "quiet evidence is missing runner metadata"
       ],
@@ -56,10 +56,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 2,
-    "lane_wall_seconds": 0.132996125,
-    "sum_invocation_wall_seconds": 0.13180029199999999
+    "lane_wall_seconds": 0.135573209,
+    "sum_invocation_wall_seconds": 0.134452917
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0.04,
     "ranked_packages": [
       {
@@ -96,11 +102,11 @@
       "cohort": true,
       "completed_repetitions": 2,
       "records": [
-        "run-347d0a-r1-synthetic",
-        "run-347d0a-r2-synthetic"
+        "run-bcd65f-r1-synthetic",
+        "run-bcd65f-r2-synthetic"
       ],
       "requested_repetitions": 2,
-      "run_group_id": "347d0aa0203c",
+      "run_group_id": "bcd65f367829",
       "status": "CAPTURED",
       "validation": {
         "actual_records": 2,
@@ -111,11 +117,11 @@
         "expected_records": 2,
         "quiet_evidence": {
           "error": "quiet evidence is missing runner metadata",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/provenance-tampering/quiet-evidence.json",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/provenance-tampering/run/quiet-evidence.json",
           "status": "INVALID"
         },
         "requested_repetitions": 2,
-        "run_group_id": "347d0aa0203c",
+        "run_group_id": "bcd65f367829",
         "status": "PASS",
         "valid": false
       }
@@ -161,26 +167,9 @@
   },
   "status": "INVALID",
   "target_comparison": {
-    "lane_wall_seconds": 0.132996125,
+    "lane_wall_seconds": 0.135573209,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [],
-    "observations": 2,
-    "package_count": 1,
-    "package_time_total_seconds": 0.04,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [
-      {
-        "count": 2,
-        "elapsed_seconds": 0.04,
-        "package": "example/pass"
-      }
-    ],
-    "status": "PASS",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

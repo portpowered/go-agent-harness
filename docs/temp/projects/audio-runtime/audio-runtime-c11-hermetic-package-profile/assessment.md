@@ -22,11 +22,10 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
-- Current implementation/control candidate checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
-- Current branch head at this handoff: `6ed49b6152b4f284dbaf0b5032a3191676ff8bc0`.
-- Implementation checkpoint after the review repair and evidence refresh:
-  `ebc583f80311d9e74041e038a207cc3168015d42` (the refresh is documentation-only;
-  profiler source is unchanged from the causally tested repair).
+- Current implementation/control candidate checkpoint:
+  `e483add8fe5715e4e7b6ae34f1ca30129b3cab43`.
+- The source/control evidence in this report was generated from that exact
+  checkpoint; the final submitted PR head is recorded in the PR update.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -58,12 +57,14 @@ The public surface is `scripts/hermetic-profile/profile.py` with
 JSONL fixture. It captures effective commands, source/run identity, raw streams,
 hashes, process status, monotonic intervals, package inventory, explicit caches,
 runner metadata, package timing, repeat variation, no-test/skip classification,
-subtest overlap, and timingate-compatible diagnostics. Heavy commands fail
-closed without explicit opt-in and valid isolated/dedicated evidence.
+subtest overlap, and assessment-specific wall/ranking evidence. The canonical
+`tools/timingate` package-budget evaluator is referenced rather than duplicated.
+Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
+evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `38bd11ff3750efa2a0654226fcf5edb46743b13d0f44d9525c28863ea5159ca4`,
-`controls.py` `112bb0e60b696c522a3a868a8192183e0c17275f88ee0ab7b9a481ce50cb6216`,
+`profile.py` `aa55705894173d82ecb6a4f0b5c2c9fb429c5fadb65315e3fbab2438bfb9bf2d`,
+`controls.py` `8a3e7a672ecc23ebce3b36381432adcd5e79598be21c9ba64afccbba5f5233a0`,
 and `fixtures/emit_jsonl.py`
 `8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
 
@@ -72,7 +73,7 @@ Focused evidence:
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
 - `python3 scripts/hermetic-profile/controls.py --output .../ctrl`:
-  PASS; 21 declared scenarios and 17 result groups, zero Go, network, or build
+  PASS; 27 declared scenarios and 17 result groups, zero Go, network, or build
   invocations. The report hash is
   `1ee8327e7e340d0e9afc1d2c15249d4debec5e8e2ab25f8fe9378378fe909862`.
   The report truthfully marks top-level raw evidence retention `false` because
@@ -80,7 +81,7 @@ Focused evidence:
   negative control; the per-case result also records `false`.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
-  absolute and traversal artifact redirects are rejected, and tampered
+  absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and tampered
   per-record source identity, quiet-evidence provenance, requested versus
   completed repetition counts, missing runner/load observations, and expired
   quiet evidence remain `INVALID`.
@@ -90,30 +91,33 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh handoff recheck from branch head `6ed49b6` also passed at
-  `2026-09-08T14:16:57.736Z`: 21 public
-  controls/17 result groups with zero Go/network/build invocations (temporary
-  report SHA-256 `628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6`),
+- Fresh repair recheck from `e483add8` passed: 27 public controls/17 result
+  groups with zero Go/network/build invocations (tracked report SHA-256
+  `236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
-The latest current-head CI rejection was inspected in full from run
+The latest prior current-head CI rejection was inspected in full from run
 `34231535549`, job `102078631796` (`CI (hermetic)`) at submitted head
 `0f8529a3`. Eight
 required jobs passed, but the existing `agent-cli/test/integration` suite
 failed `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`:
 `session_tool_audio_remote_e2e_test.go:182` reported that remote playback did
 not reach its final PCM marker before the scenario deadline. This path is
-outside C11's owned directories and belongs to the active C12 runtime/integration
-owner; no C11 implementation change can causally repair it. The candidate is
-not CI-green and must not be resubmitted unchanged while that prerequisite is
-open. The earlier Windows checkout failure remains recorded in
-`ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
+outside C11's owned directories and belongs to the C12 runtime/integration
+owner; no C11 implementation change can causally repair it. The new C11
+repair is not claimed CI-green and is ready for the script-owned gate; the
+historical failure must not be treated as fixed by this task. The earlier
+Windows checkout failure remains recorded in `ci-rejection-windows.json` and
+was causally repaired by `ca12c8a`.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
 package terminals, cached output, missing raw artifacts, redirected artifacts,
-missing provenance, and incomplete repeats do not become a fresh timing PASS.
+missing provenance, incomplete repeats, and quiet-evidence paths outside the
+manifest root do not become a fresh timing PASS. The offline report retains
+package ranking and lane-wall evidence while leaving the canonical 60-second
+policy to `tools/timingate`; it does not duplicate that evaluator.
 The repeated synthetic cohort also proves lane wall is not the sum of package
 durations. The broad six-module hermetic/coverage suites were not duplicated
 locally because the active C08 owner makes this host non-quiet and the handoff
@@ -172,12 +176,9 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `ebc583f8`; the
-current branch head at this handoff is `6ed49b6` and contains only the
-provenance refresh above. The next action is for the
-C12 owner/meta-planner to resolve the named `provider_burst` failure (or record
-a causal external disposition), then rebase this same PR if `main` advances,
-rerun the focused C11 controls, update PR #403, and return `ACCEPTED` to the
-script-owned CI gate. Do not poll CI or claim it green; any C11-owned review
-finding remains with this task. Independent review and post-integration
-vertical validation remain external stages.
+The current C11 implementation/control evidence is pinned to `e483add8` and
+the tracked control report above. The next action is to push/update PR #403
+with the exact final head and return `ACCEPTED` to the script-owned CI gate
+without polling it. Any C11-owned CI/review finding returns to this task;
+independent review and post-integration vertical validation remain external
+stages. No fresh timing or under-three-minute claim is made.

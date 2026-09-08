@@ -2,10 +2,10 @@
   "failure_references": [
     {
       "cached_markers": [],
-      "error": "raw stdout missing: [Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/missing-raw-artifact/run/runs/16e3e83286a9/r1/synthetic/run-16e3e8-r1-synthetic.stdout.jsonl'",
+      "error": "raw stdout missing: [Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/missing-raw-artifact/run/runs/a9cb3dc6e9ae/r1/synthetic/run-a9cb3d-r1-synthetic.stdout.jsonl'",
       "missing_packages": [],
       "process_status": null,
-      "record": "run-16e3e8-r1-synthetic",
+      "record": "run-a9cb3d-r1-synthetic",
       "run_group_errors": [],
       "source_status": "PASS",
       "unexpected_packages": []
@@ -30,10 +30,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 1,
-    "lane_wall_seconds": 0.067921833,
-    "sum_invocation_wall_seconds": 0.067921833
+    "lane_wall_seconds": 0.064237375,
+    "sum_invocation_wall_seconds": 0.064237375
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0,
     "ranked_packages": [],
     "subtest_overlap_count": 0,
@@ -56,10 +62,10 @@
       "cohort": false,
       "completed_repetitions": 1,
       "records": [
-        "run-16e3e8-r1-synthetic"
+        "run-a9cb3d-r1-synthetic"
       ],
       "requested_repetitions": 1,
-      "run_group_id": "16e3e83286a9",
+      "run_group_id": "a9cb3dc6e9ae",
       "status": "CAPTURED",
       "validation": {
         "actual_records": 1,
@@ -68,12 +74,12 @@
         "expected_records": 1,
         "quiet_evidence": {
           "isolation": "synthetic-control",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/missing-raw-artifact/quiet-evidence.json",
-          "sha256": "fa487bf55d4724ba70f8f8d46dcb0bd79c70d16d7dec17ed8b209460d89bd3aa",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/missing-raw-artifact/run/quiet-evidence.json",
+          "sha256": "ed6efa6741099e2b73c222b675b8934a5ee18504ffa571e914a144d90aedca55",
           "status": "PASS"
         },
         "requested_repetitions": 1,
-        "run_group_id": "16e3e83286a9",
+        "run_group_id": "a9cb3dc6e9ae",
         "status": "PASS",
         "valid": true
       }
@@ -119,22 +125,9 @@
   },
   "status": "INVALID",
   "target_comparison": {
-    "lane_wall_seconds": 0.067921833,
+    "lane_wall_seconds": 0.064237375,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [
-      "raw stdout missing: [Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/missing-raw-artifact/run/runs/16e3e83286a9/r1/synthetic/run-16e3e8-r1-synthetic.stdout.jsonl'"
-    ],
-    "observations": 0,
-    "package_count": 0,
-    "package_time_total_seconds": 0,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [],
-    "status": "INVALID",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

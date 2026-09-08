@@ -3,9 +3,9 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "ebc583f80311d9e74041e038a207cc3168015d42",
-  "current_branch_head_at_handoff": "6ed49b6152b4f284dbaf0b5032a3191676ff8bc0",
-  "implementation_checkpoint": "ebc583f80311d9e74041e038a207cc3168015d42",
+  "candidate_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
+  "current_branch_head_at_handoff": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
+  "implementation_checkpoint": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
   "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -64,9 +64,9 @@
   },
   "controls": {
     "path": "ctrl/controls.json",
-    "sha256": "1ee8327e7e340d0e9afc1d2c15249d4debec5e8e2ab25f8fe9378378fe909862",
+    "sha256": "236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083",
     "status": "PASS",
-    "cases": 21,
+    "cases": 27,
     "result_groups": 17,
     "go_invocations": 0,
     "network_invocations": 0,
@@ -80,25 +80,26 @@
   },
   "fresh_focused_recheck": {
     "checked_at_utc": "2026-09-08T14:16:57.736Z",
-    "tested_head": "6ed49b6152b4f284dbaf0b5032a3191676ff8bc0",
-    "controls_report_sha256": "628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6",
-    "controls": "PASS: 21 scenarios, 17 result groups, zero Go/network/build invocations",
+    "tested_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
+    "controls_report_sha256": "236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083",
+    "controls": "PASS: 27 scenarios, 17 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
     "timingate": "PASS: GOWORK=off go test . -count=1",
     "diff_check": "PASS"
   },
   "review_repairs": {
-    "reviewed_head": "ebc583f80311d9e74041e038a207cc3168015d42",
-    "repair_commit": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
+    "reviewed_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
+    "repair_commit": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",
       "invalid shared-host evidence is checked with --allow-heavy and rejected",
       "missing raw-artifact retention is reported truthfully per case and at top level",
-      "stdout/stderr artifact paths are contained under the manifest output root",
+      "stdout/stderr and quiet-evidence artifact paths are contained under the manifest output root",
       "per-record source identity, quiet-evidence provenance, and repetition completeness are required",
-      "quiet evidence requires runner/load metadata and a current validity window"
+      "quiet evidence requires runner/load metadata and a current validity window",
+      "offline analysis retains package ranking/wall evidence while referencing, not duplicating, tools/timingate"
     ]
   },
   "focused_regressions": [
@@ -117,8 +118,8 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "38bd11ff3750efa2a0654226fcf5edb46743b13d0f44d9525c28863ea5159ca4",
-    "scripts/hermetic-profile/controls.py": "112bb0e60b696c522a3a868a8192183e0c17275f88ee0ab7b9a481ce50cb6216",
+    "scripts/hermetic-profile/profile.py": "aa55705894173d82ecb6a4f0b5c2c9fb429c5fadb65315e3fbab2438bfb9bf2d",
+    "scripts/hermetic-profile/controls.py": "8a3e7a672ecc23ebce3b36381432adcd5e79598be21c9ba64afccbba5f5233a0",
     "scripts/hermetic-profile/fixtures/emit_jsonl.py": "8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856"
   },
   "immutable_ci_logs": [
@@ -136,6 +137,6 @@
     }
   ],
   "fresh_run_hashes": [],
-  "ci_status": "BLOCKED_BY_EXTERNAL_CI_REPAIR",
+  "ci_status": "READY_FOR_SCRIPT_CI_NOT_POLLED",
   "review_status": "NOT_SELF_REVIEWED"
 }

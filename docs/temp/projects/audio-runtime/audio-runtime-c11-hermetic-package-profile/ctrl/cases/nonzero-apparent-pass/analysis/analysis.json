@@ -5,7 +5,7 @@
       "error": null,
       "missing_packages": [],
       "process_status": "FAIL",
-      "record": "run-34d5fc-r1-synthetic",
+      "record": "run-697090-r1-synthetic",
       "run_group_errors": [
         "completed_repetitions does not equal requested_repetitions; incomplete repeats cannot produce fresh timing PASS",
         "run group status is 'FAILED'"
@@ -18,7 +18,7 @@
       "error": "completed_repetitions does not equal requested_repetitions; incomplete repeats cannot produce fresh timing PASS; run group status is 'FAILED'",
       "missing_packages": [],
       "process_status": null,
-      "record": "run_group:34d5fcbce8cb",
+      "record": "run_group:697090767712",
       "run_group_errors": [
         "completed_repetitions does not equal requested_repetitions; incomplete repeats cannot produce fresh timing PASS",
         "run group status is 'FAILED'"
@@ -46,10 +46,16 @@
   "lane": {
     "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
     "invocation_count": 1,
-    "lane_wall_seconds": 0.065494709,
-    "sum_invocation_wall_seconds": 0.065494709
+    "lane_wall_seconds": 0.066933709,
+    "sum_invocation_wall_seconds": 0.066933709
   },
   "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
     "package_time_total_seconds": 0.02,
     "ranked_packages": [
       {
@@ -85,10 +91,10 @@
       "cohort": false,
       "completed_repetitions": 0,
       "records": [
-        "run-34d5fc-r1-synthetic"
+        "run-697090-r1-synthetic"
       ],
       "requested_repetitions": 1,
-      "run_group_id": "34d5fcbce8cb",
+      "run_group_id": "697090767712",
       "status": "FAILED",
       "validation": {
         "actual_records": 1,
@@ -100,12 +106,12 @@
         "expected_records": 1,
         "quiet_evidence": {
           "isolation": "synthetic-control",
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/quiet-evidence.json",
-          "sha256": "66c5f7c3773fafc57b31132bbb5b6ec7f9d33fc54c213c2513036c4a27dab73f",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/nonzero-apparent-pass/run/quiet-evidence.json",
+          "sha256": "690ae868c82160797cae06ffcb08f1fe729288c6a53446f9f67c33567c53133b",
           "status": "PASS"
         },
         "requested_repetitions": 1,
-        "run_group_id": "34d5fcbce8cb",
+        "run_group_id": "697090767712",
         "status": "INVALID",
         "valid": false
       }
@@ -151,22 +157,9 @@
   },
   "status": "INVALID",
   "target_comparison": {
-    "lane_wall_seconds": 0.065494709,
+    "lane_wall_seconds": 0.066933709,
     "observed_under_target": true,
     "status": "OBSERVATION_ONLY_NOT_A_GATE",
     "target_seconds": 180.0
-  },
-  "timingate": {
-    "budget_seconds": 60.0,
-    "invalid_streams": [
-      "run-34d5fc-r1-synthetic"
-    ],
-    "observations": 0,
-    "package_count": 0,
-    "package_time_total_seconds": 0,
-    "policy": "existing tools/timingate semantics",
-    "slowest_packages": [],
-    "status": "INVALID",
-    "warning": "This is a diagnostic reproduction of the PR-tier 60s package-time policy, not a new mandatory gate and not lane wall time."
   }
 }

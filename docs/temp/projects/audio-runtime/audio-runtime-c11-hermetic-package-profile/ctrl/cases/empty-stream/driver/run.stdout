@@ -4,7 +4,7 @@
   "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/cases/empty-stream/run/manifest.json",
   "record_count": 1,
   "requested_repetitions": 1,
-  "run_group_id": "902696483e9e",
+  "run_group_id": "6a3b26a549fe",
   "source_sha": "synthetic-control-source",
   "status": "CAPTURED"
 }
