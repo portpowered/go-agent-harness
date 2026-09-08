@@ -25,8 +25,10 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Required delivery rebase completed onto `origin/main`; the current evidence
-  checkpoint is `HEAD=0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
+- Required delivery rebase completed onto `origin/main`; the current
+  implementation/control evidence checkpoint is
+  `HEAD=ebc583f80311d9e74041e038a207cc3168015d42`. The subsequent handoff
+  refresh is documentation-only.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -75,7 +77,7 @@ claimed green or attributed to the profiler's Go lane.
   mixer result. After rebasing onto current main, the exact test passed once;
   no C11-owned repair was identified. The same PR remains the delivery target.
 - The latest current-head CI rejection was read in full from job `102078631796`
-  in run `34231535549` at head `0f8529a3`. The hermetic job reached Go and
+  in run `34231535549` at submitted head `0f8529a3`. The hermetic job reached Go and
   failed the existing
   `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
   case in `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go`;
@@ -106,7 +108,7 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The current source/control evidence is pinned to `0f8529a3`. The next bounded
+The current source/control evidence is pinned to `ebc583f8`. The next bounded
 step is to retain this task while the active C12 owner resolves the named
 hermetic prerequisite; after that, rebase if required, rerun the focused C11
 controls, update PR #403, and return `ACCEPTED` to script CI. Do not poll CI,

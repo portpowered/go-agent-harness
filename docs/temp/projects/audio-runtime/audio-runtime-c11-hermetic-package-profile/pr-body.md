@@ -14,7 +14,7 @@ under-three-minute target is met.
 - Project/work: admitted `audio-runtime` / `audio-runtime-c11-hermetic-package-profile`.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
-- Current implementation checkpoint: `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
+- Current implementation/control checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
 - Rebased `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -40,7 +40,7 @@ under-three-minute target is met.
 ## CI rejection disposition
 
 The latest current-head rejection is run `34231535549`, job `102078631796`
-(`CI (hermetic)`) at head `0f8529a3`. Eight required jobs passed, but the
+(`CI (hermetic)`) at submitted head `0f8529a3`. Eight required jobs passed, but the
 existing integration suite failed
 `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
 because `session_tool_audio_remote_e2e_test.go:182` did not observe the final
@@ -52,8 +52,8 @@ and its portable-path repair remain in `ci-rejection-windows.json`.
 
 ## Handoff
 
-Retain this same task while the C12 owner/meta-planner resolves or records a
-the named hermetic prerequisite. Then rebase if `main` advances, rerun the
+Retain this same task while the C12 owner/meta-planner resolves or records the
+named hermetic prerequisite. Then rebase if `main` advances, rerun the
 focused C11 controls, update PR #403, and submit it to the script-owned CI gate.
 Do not poll CI or self-review. Any C11-owned current-head rejection returns to
 this task; independent review, guarded merge, and post-integration vertical

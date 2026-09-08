@@ -3,8 +3,8 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
-  "implementation_checkpoint": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+  "candidate_head": "ebc583f80311d9e74041e038a207cc3168015d42",
+  "implementation_checkpoint": "ebc583f80311d9e74041e038a207cc3168015d42",
   "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -78,7 +78,7 @@
     }
   },
   "review_repairs": {
-    "reviewed_head": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+    "reviewed_head": "ebc583f80311d9e74041e038a207cc3168015d42",
     "repair_commit": "ca12c8afea00777a62ed9490ea6b968b7d94d256",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [

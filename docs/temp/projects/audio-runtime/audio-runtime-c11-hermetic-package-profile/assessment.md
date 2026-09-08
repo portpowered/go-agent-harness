@@ -22,9 +22,10 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
-- Current implementation candidate head: `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
+- Current implementation/control candidate checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
 - Implementation checkpoint after the review repair and evidence refresh:
-  `0f8529a3c56f52e459d4d271c3a637c4fbab08ba`.
+  `ebc583f80311d9e74041e038a207cc3168015d42` (the refresh is documentation-only;
+  profiler source is unchanged from the causally tested repair).
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -90,7 +91,8 @@ Focused evidence:
 - `git diff --check`: PASS.
 
 The latest current-head CI rejection was inspected in full from run
-`34231535549`, job `102078631796` (`CI (hermetic)`) at head `0f8529a3`. Eight
+`34231535549`, job `102078631796` (`CI (hermetic)`) at submitted head
+`0f8529a3`. Eight
 required jobs passed, but the existing `agent-cli/test/integration` suite
 failed `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`:
 `session_tool_audio_remote_e2e_test.go:182` reported that remote playback did
@@ -163,7 +165,8 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 evidence is pinned to `0f8529a3`. The next action is for the
+The current C11 implementation/control evidence is pinned to `ebc583f8`.
+The next action is for the
 C12 owner/meta-planner to resolve the named `provider_burst` failure (or record
 a causal external disposition), then rebase this same PR if `main` advances,
 rerun the focused C11 controls, update PR #403, and return `ACCEPTED` to the
