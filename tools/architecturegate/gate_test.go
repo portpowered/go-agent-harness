@@ -499,6 +499,36 @@ func TestTargetInventoryActivatesPlatformOnlyPackages(t *testing.T) {
 	}
 }
 
+func TestC10BaselinePublic(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "manifest.json", `{"baseline":"baseline.json","module_dirs":["mod"],"patterns":["./..."],"limits":{"function_lines":1},"version":1}`)
+	writeFixture(t, root, "mod/go.mod", "module example.com/app\n\ngo 1.26.7\n")
+	writeFixture(t, root, "mod/old.go", "package app\n\nfunc Run() {\n _ = 1\n _ = 2\n _ = 3\n _ = 4\n _ = 5\n}\n")
+	entry := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "old.go", Symbol: "Run", Value: 7, Rationale: "C10 public regression", Phase: "P0"}
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{entry}}
+	data, _ := baselineJSON(initial)
+	writeFixture(t, root, "baseline.json", string(data))
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", ".")
+	gitTestCommand(t, root, "commit", "-m", "introduce reviewed baseline")
+	gitTestCommand(t, root, "branch", "mainline")
+	gitTestCommand(t, root, "checkout", "-b", "candidate")
+	initial.Renames = []BaselineRename{{From: baselineIssue(entry).Key(), To: baselineIssue(entry).Key() + "-renamed"}}
+	data, _ = baselineJSON(initial)
+	writeFixture(t, root, "baseline.json", string(data))
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "add missing rename target")
+	result := Result{}
+	if err := applyBaseline(&result, nil, runOptions{baselinePath: "baseline.json", baselineBase: "mainline", checkSet: map[string]bool{"architecture": true}}, Policy{}, root); err != nil {
+		t.Fatal(err)
+	}
+	if !hasRule(result.Issues, "baseline-history-rename") {
+		t.Fatalf("issues=%#v; missing target was accepted", result.Issues)
+	}
+}
+
 func fixturePolicy() Policy {
 	return Policy{Version: policyVersion, ServiceRoots: []string{"services/*"}, CompositionRoots: []string{"wire"}, Limits: defaultLimits()}
 }

@@ -138,17 +138,23 @@ func applyBaseline(result *Result, modules []*Module, options runOptions, manife
 	if err != nil {
 		return err
 	}
-	baseline = baselineForChecks(baseline, options.checkSet)
-	baseline = baselineForScope(baseline, modules, options.patterns(manifest))
-	result.Issues = compareBaseline(result.Issues, baseline)
-	if strings.TrimSpace(options.baselineBase) == "" {
-		return nil
+	// Scoped reporting intentionally filters entries so a focused invocation
+	// does not report unrelated debt. History validation is different: rename
+	// metadata is a global integrity contract, so validate the complete
+	// reviewed baseline before scoped filtering can discard an absent target or
+	// an entry outside the selected check/module/package.
+	var historyIssues []Issue
+	if strings.TrimSpace(options.baselineBase) != "" {
+		baselineAbs, err := resolveRepoPath(baselinePath, repoRoot)
+		if err != nil {
+			return err
+		}
+		historyIssues = compareBaselineHistory(context.Background(), options.gitBinary, repoRoot, baselineAbs, options.baselineBase, baseline, manifest)
 	}
-	baselineAbs, err := resolveRepoPath(baselinePath, repoRoot)
-	if err != nil {
-		return err
-	}
-	result.Issues = append(result.Issues, compareBaselineHistory(context.Background(), options.gitBinary, repoRoot, baselineAbs, options.baselineBase, baseline, manifest)...)
+	scopedBaseline := baselineForChecks(baseline, options.checkSet)
+	scopedBaseline = baselineForScope(scopedBaseline, modules, options.patterns(manifest))
+	result.Issues = compareBaseline(result.Issues, scopedBaseline)
+	result.Issues = append(result.Issues, historyIssues...)
 	return nil
 }
 
