@@ -23,12 +23,12 @@ not a waiver, and not a claim that the under-three-minute target is met.
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
-- Current delivery candidate checkpoint:
-  `bc7609b5fcad50f65eff89f0ce91f3f08edabeb3`.
-- The implementation repair is committed at
-  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`; the current delivery checkpoint
-  adds only owned evidence/provenance updates and preserves the same source
-  files and repair behavior.
+- Current delivery candidate implementation checkpoint:
+  `59f370b6239744a2bf6d7234097a10cbd9f364fe`.
+- The implementation repair and exact-head controls are pinned to
+  `59f370b6239744a2bf6d7234097a10cbd9f364fe`; the following evidence
+  checkpoint adds only owned evidence/provenance updates and preserves the
+  same source files and repair behavior.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -71,24 +71,27 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `ea156465ffe23697e185c7e721c7fcc445fb23b30d85613daf3a3ac031e0d3a6`,
-`controls.py` `49cf2365e4bb9902d9dd06e23db0e6ac1f9754039ebae7dff319c21b28b55e79`,
+`profile.py` `f841150636cce0c37f8e8f8c27171478ed421a783f667042a5e0a2f165e9194b`,
+`controls.py` `6d87e97c769e39ad128b48e642f6a62a467f9c9e35f2070a18d59f14a1c867ea`,
 and `fixtures/emit_jsonl.py`
-`d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
+`0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a`.
 
 Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-bc7609b`:
-  PASS; 42 declared cases and 22 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-59f370b`:
+  PASS; 47 declared cases and 23 result groups, zero Go, network, or build
   invocations. The report hash is
-  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
+  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
   identity control includes three forged-capture provenance mutations and the
-  post-inventory dirty-source rejection.
+  post-inventory dirty-source rejection. New public cases reject unreferenced
+  invalid groups, incomplete command-record schemas, forged retained
+  source-validation artifacts, forged source-output identity, and aggregate
+  package-duration overflow.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and
@@ -104,9 +107,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `bc7609b5` passed: 42 public cases/22
+- Fresh exact-head recheck from `59f370b6` passed: 47 public cases/23
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`),
+  SHA-256 `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -151,6 +154,15 @@ The repeated synthetic cohort also proves lane wall is not the sum of package
 durations. The broad six-module hermetic/coverage suites were not duplicated
 locally because no isolated/dedicated quiet runner was available and the handoff
 assigns those broad checks to the script CI gate.
+
+Review-27 closure is covered at the exact implementation checkpoint above:
+execution validity now requires every declared run group to validate, including
+unreferenced and zero-request groups; retained command records require the
+command-record-v1 schema, argv/cwd/environment/timeout, timing, status, output
+paths, hashes, and byte counts; retained source-validation command artifacts
+are checked against their actual captured Git output; and all package-duration
+sums are bounded by Go's `time.Duration` maximum. These are public synthetic
+regressions in the tracked 47-case report, not claims about hosted CI.
 
 ## Immutable hosted evidence
 
@@ -206,16 +218,17 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation repair remains pinned to `f2a5be3`; the current
-delivery/evidence head is `bc7609b5` and the tracked `ctrl-bc7609b` report is
-recorded above. The canonical review findings named
-forged captured source provenance, malformed selected-package records,
-oversized monotonic timestamps, and stale analysis output. Commit `f2a5be3`
-repairs those causes and the public controls reproduce each positive/negative
-boundary, while retaining the earlier repairs for lane timing, quiet
-observations, cache containment, no-test markers, repeated package terminals,
-and artifact provenance. The next action is to commit/push this exact evidence
-checkpoint, update PR #403, and return `ACCEPTED` to the script-owned CI gate
-without polling it. Any C11-owned CI/review finding returns to this task;
-independent review and post-integration vertical validation remain external
-stages. No fresh timing or under-three-minute claim is made.
+The current C11 implementation and exact-head controls remain pinned to
+`59f370b6239744a2bf6d7234097a10cbd9f364fe`; the tracked `ctrl-59f370b` report
+is recorded above. The canonical review findings through review 27 named
+unreferenced invalid groups, forged retained Git metadata, aggregate duration
+overflow, incomplete command records, and stale head/evidence references. This
+repair closes those causes and the public controls reproduce each
+positive/negative boundary, while retaining the earlier repairs for lane
+timing, quiet observations, cache containment, no-test markers, repeated
+package terminals, and artifact provenance. The next action is to
+commit/push this exact evidence checkpoint, update PR #403, and return
+`ACCEPTED` to the script-owned CI gate without polling it. Any C11-owned
+CI/review finding returns to this task; independent review and post-integration
+vertical validation remain external stages. No fresh timing or under-three-
+minute claim is made.

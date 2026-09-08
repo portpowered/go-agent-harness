@@ -1,0 +1,3 @@
+#!/bin/sh
+printf spawned > /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/offline/spawned.marker
+exit 99

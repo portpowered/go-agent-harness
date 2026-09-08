@@ -14,11 +14,11 @@ met.
 - Project/work: admitted `audio-runtime` / `audio-runtime-c11-hermetic-package-profile`.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
-- Current delivery/evidence checkpoint:
-  `bc7609b5fcad50f65eff89f0ce91f3f08edabeb3`.
-- The implementation repair is committed at
-  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`; the current checkpoint adds only
-  owned evidence/provenance updates.
+- Current delivery implementation checkpoint:
+  `59f370b6239744a2bf6d7234097a10cbd9f364fe`.
+- The implementation repair and exact-head controls are committed at
+  `59f370b6239744a2bf6d7234097a10cbd9f364fe`; the evidence checkpoint adds
+  only owned evidence/provenance updates.
 - Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -41,9 +41,12 @@ met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `ctrl-bc7609b/controls.json` reports 42 declared cases, 22 result groups, and
+  `ctrl-59f370b/controls.json` reports 47 declared cases, 23 result groups, and
   zero Go/network/build invocations; its SHA-256 is
-  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
+  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
+  The new regressions reject unreferenced invalid/zero-request groups,
+  incomplete command-record schemas and artifacts, forged retained
+  source-validation output/identity, and aggregate duration overflow.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -52,10 +55,10 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 42-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `bc7609b5` passed the same controls and focused
-  checks at `2026-09-08T19:51:48.998Z`; the tracked controls report SHA-256 is
-  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
+  `profile.py --help`, the 47-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `59f370b6` passed the same controls and focused
+  checks at `2026-09-08T20:48:35.484Z`; the tracked controls report SHA-256 is
+  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
 
 ## CI rejection disposition
 
@@ -83,11 +86,12 @@ owned directories. Bounded local rechecks of the tool-barge oracle and both
 multi-turn tests passed; this is not a claim that hosted CI is green or that
 C11 owns a runtime repair.
 
-The canonical review inbox through review attempt 24 named forged captured
-source provenance, malformed selected-package records, oversized monotonic
-timestamps, stale analysis output, and the preceding timing/quiet/cache/
-no-test/repeated-terminal/artifact controls. Commit `f2a5be3` repairs the
-remaining code causes, and the current public controls cover every finding.
+The canonical review inbox through review attempt 27 named unreferenced
+invalid groups, forged retained Git metadata, aggregate duration overflow,
+incomplete command records, stale head/evidence references, and the preceding
+timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
+`59f370b6` repairs the remaining code causes, and the current public controls
+cover every finding.
 
 ## Handoff
 

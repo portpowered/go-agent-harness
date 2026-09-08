@@ -95,11 +95,20 @@ hermetic rejection metadata and full log are retained in
   report false because that fixture deletion is intentional negative-control
   evidence. The source-identity control includes three forged-capture
   provenance mutations plus the post-inventory dirty-source rejection.
-- Exact current-delivery report `ctrl-bc7609b/controls.json`: PASS; 42
-  declared cases and 22 result groups, zero Go/network/build invocations; hash
+- Prior submitted-head report `ctrl-bc7609b/controls.json`: PASS; 42 declared
+  cases and 22 result groups, zero Go/network/build invocations; hash
   `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
-  It was generated at the current delivery head and preserves the intentional
+  It is retained as historical evidence for rejected head `bc7609b5`.
+- Exact repair-head report `ctrl-59f370b/controls.json`: PASS; 47 declared
+  cases and 23 result groups, zero Go/network/build invocations; hash
+  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
+  It was generated from implementation checkpoint
+  `59f370b6239744a2bf6d7234097a10cbd9f364fe` and preserves the intentional
   missing-raw-artifact negative-control truth.
+- The review-27 regressions in that report reject unreferenced invalid and
+  zero-request groups, incomplete command-record-v1 fields and artifacts,
+  forged retained source-validation output/identity, and package-duration sums
+  beyond Go `time.Duration`.
 - The exact-head controls cover legal repeated package terminals, Go
   `time.Duration` overflow and huge integer handling, forged captured
   head/repository/dirty-path provenance, malformed record schema, stale
@@ -134,9 +143,10 @@ hermetic rejection metadata and full log are retained in
   multi-turn tests passed. This does not claim hosted CI green or authorize a
   runtime edit in C11.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from delivery head `bc7609b5` passed: 42 public cases and 22
-  result groups with zero Go/network/build invocations (tracked report SHA-256
-  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`),
+- Fresh exact-head recheck from implementation head `59f370b6` passed: 47 public
+  cases and 23 result groups with zero Go/network/build invocations (tracked
+  report SHA-256
+  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. No
@@ -162,20 +172,20 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The implementation source/control checkpoint remains pinned to `f2a5be3`; the
-current delivery/evidence head is `bc7609b5` and the accepted
-`origin/main` ancestor remains `668f2d8816beaa078d058b3f0bcc59600b71a023`.
-The latest canonical task rejection named forged captured source provenance,
-malformed selected-package records, oversized monotonic timestamps, and stale
-analysis output. Commit `f2a5be3` repairs those causes with causal public
-controls while retaining the earlier review repairs for lane timing, quiet
-observations, cache containment, no-test markers, repeated package terminals,
-and artifact provenance. Offline analysis now retains package ranking and
-lane-wall evidence while referencing the canonical 60-second `tools/timingate`
-policy instead of duplicating it. Quiet evidence, all raw command artifacts,
-and both Go cache paths are constrained to the manifest output root before use.
-The current canonical board snapshot and current hermetic rejection log are
-retained above. The next bounded step is to commit/push this exact evidence
-checkpoint, update PR #403 with the final head and evidence, and return
-`ACCEPTED` to script CI. Do not poll CI, self-review, claim CI green, or close
-any of the nine immutable project gates.
+The implementation source/control checkpoint remains pinned to
+`59f370b6239744a2bf6d7234097a10cbd9f364fe`; the accepted `origin/main`
+ancestor remains `668f2d8816beaa078d058b3f0bcc59600b71a023`. The latest
+canonical task rejection named unreferenced invalid groups, forged retained
+Git metadata, aggregate duration overflow, incomplete command records, and
+stale head/evidence references. This repair closes those causes with causal
+public controls while retaining the earlier review repairs for lane timing,
+quiet observations, cache containment, no-test markers, repeated package
+terminals, and artifact provenance. Offline analysis now retains package
+ranking and lane-wall evidence while referencing the canonical 60-second
+`tools/timingate` policy instead of duplicating it. Quiet evidence, all raw
+command artifacts, and both Go cache paths are constrained to the manifest
+output root before use. The current canonical board snapshot and current
+hermetic rejection log are retained above. The next bounded step is to
+commit/push this exact evidence checkpoint, update PR #403 with the final head
+and evidence, and return `ACCEPTED` to script CI. Do not poll CI, self-review,
+claim CI green, or close any of the nine immutable project gates.
