@@ -70,8 +70,9 @@ are the offline machine-readable fallback.
 
 Immutable hosted references and their hashes, provenance, historical package
 costs, limitations, and at-most-three future optimization proposals are in
-`assessment.md`. No fresh C11 run hash or same-source three-trial cohort exists;
-none is fabricated.
+`assessment.md`; the compact machine-readable summary is `assessment.json`.
+No fresh C11 run hash or same-source three-trial cohort exists; none is
+fabricated.
 
 ## Handoff
 

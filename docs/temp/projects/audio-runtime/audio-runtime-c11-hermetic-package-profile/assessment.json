@@ -1,0 +1,82 @@
+{
+  "schema": "c11-hermetic-profile-assessment-v1",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "factory_session": "~default",
+  "candidate_head": "296e81e576a9645227402b5d211e0b324272d7d9",
+  "implementation_checkpoint": "03bbb0f4ce570381e145808993ef76aaf3ba8441",
+  "base_main": "b01dbb573a15eb61d1cacfff11d37c2461167987",
+  "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "fresh_timing": {
+    "status": "BLOCKED",
+    "reason": "C08 owns the shared factory host and no dedicated runner or exclusive lease is available",
+    "quiet_evidence": {
+      "path": "quiet-evidence-blocked.json",
+      "sha256": "d26582e4050135b1a1291b3c4ec318646274a4e1230e337bc0fc5b90a73133d0"
+    },
+    "analysis": {
+      "path": "blocked-analysis/analysis.json",
+      "sha256": "677d7e17ab6bba7b4a5f18e19ad6b854f884dd21e69f65d81d849ee77a815152"
+    }
+  },
+  "runner_observed_without_heavy_commands": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M1 Max",
+    "go_version": "go version go1.26.7 darwin/arm64",
+    "gomaxprocs": 10,
+    "go_test_p": 10,
+    "cgo_enabled": "0",
+    "tags": ["nomicrophone"],
+    "count": 1
+  },
+  "controls": {
+    "path": "controls-rebased/controls.json",
+    "sha256": "0c5cdbd38830784d7510a0880ba4e92f5025ad936cc5fbd0e37d8898fcdbd0ca",
+    "status": "PASS",
+    "cases": 11,
+    "assertions": 14,
+    "go_invocations": 0,
+    "network_invocations": 0,
+    "build_invocations": 0,
+    "raw_evidence_retained": true
+  },
+  "focused_regressions": [
+    {
+      "command": "GOWORK=off go test . -count=1",
+      "cwd": "tools/timingate",
+      "status": "PASS"
+    },
+    {
+      "command": "python3 -B AST parse of scripts/hermetic-profile/*.py",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  ],
+  "source_files": {
+    "scripts/hermetic-profile/profile.py": "0cb0ed7ea403c2da0ee072aa38f760abaf977616cb92ef1a23982fd9b4e365e2",
+    "scripts/hermetic-profile/controls.py": "3adacedcd97491bdc86c1289928828b78b7580ba49fee03e66214681fd780bcb",
+    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0f1892f763e02dcb43bd5008729ededd14a45ef1c7580ac73271811a2938e8c8"
+  },
+  "immutable_ci_logs": [
+    {
+      "path": "$FACTORY_ROOT/docs/temp/projects/audio-runtime/ci-34132278337-failed.log",
+      "sha256": "8715136ba2c199229e01771abd686e3ad869297803ba906dd72a2baa18516593",
+      "source_sha": "c849c9a1fe9ae399290bad389472d60e1d26b2eb",
+      "status": "historical-diagnostic-only"
+    },
+    {
+      "path": "$FACTORY_ROOT/docs/temp/projects/audio-runtime/ci-34154917253-failed.log",
+      "sha256": "268ace28829689cdb4c100960be39714ccb3a51c97c3d5a0944e7c23e601e091",
+      "source_sha": null,
+      "status": "historical-diagnostic-only"
+    }
+  ],
+  "fresh_run_hashes": [],
+  "ci_status": "NOT_POLLED",
+  "review_status": "NOT_SELF_REVIEWED"
+}
