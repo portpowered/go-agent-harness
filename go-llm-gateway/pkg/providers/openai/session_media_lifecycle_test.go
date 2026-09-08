@@ -308,7 +308,7 @@ func TestRealtimeSession_FlushOutboundWaitsForDeferredAudioCommit(t *testing.T) 
 	}
 
 	frames := parseWireFrames(t, conn.getClientMessages())
-	if len(frames) != 2 || frames[0].Type != "input_audio_buffer.commit" || frames[1].Type != "response.create" {
+	if len(frames) != 2 || frames[0].Type != string(models.SessionEventInputAudioBufferCommit) || frames[1].Type != string(models.SessionEventResponseCreate) {
 		t.Fatalf("deferred audio wire frames = %#v, want commit then response.create", frames)
 	}
 }
