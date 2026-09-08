@@ -370,10 +370,26 @@ def quiet_evidence_contract_error(evidence: Any, *, mode: str) -> str | None:
     ]
     if missing:
         return "quiet evidence is missing runner fields: " + ", ".join(missing)
-    if not isinstance(evidence.get("before"), dict) or not isinstance(
-        evidence.get("after"), dict
-    ):
-        return "quiet evidence must include before and after load/lease observations"
+    for phase in ("before", "after"):
+        observation = evidence.get(phase)
+        if not isinstance(observation, dict):
+            return f"quiet evidence must include {phase} load/lease observations"
+        missing = [
+            key
+            for key in ("active_work", "processes", "load")
+            if key not in observation
+        ]
+        if missing:
+            return (
+                f"quiet evidence {phase} is missing observations: "
+                + ", ".join(missing)
+            )
+        if not isinstance(observation["active_work"], list):
+            return f"quiet evidence {phase}.active_work must be a list"
+        if not isinstance(observation["processes"], list):
+            return f"quiet evidence {phase}.processes must be a list"
+        if observation["load"] is None:
+            return f"quiet evidence {phase}.load must be an observation"
     return None
 
 
@@ -841,7 +857,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
-def manifest_env(manifest: dict[str, Any]) -> dict[str, str]:
+def manifest_env(manifest: dict[str, Any], *, root: Path) -> dict[str, str]:
     flags = manifest.get("flags", {})
     cache = manifest.get("cache_paths", {})
     required = ("gomaxprocs", "go_test_p", "cgo_enabled")
@@ -864,13 +880,23 @@ def manifest_env(manifest: dict[str, Any]) -> dict[str, str]:
         "GOCACHE": cache.get("gocache"),
         "GOMODCACHE": cache.get("gomodcache"),
     }
-    if any(not isinstance(value, str) or not value or not Path(value).is_absolute() for value in cache_values.values()):
-        raise ProfileError("manifest must pin absolute isolated GOCACHE and GOMODCACHE paths")
+    resolved_cache_values: dict[str, str] = {}
+    for name, value in cache_values.items():
+        if not isinstance(value, str) or not value or not Path(value).is_absolute():
+            raise ProfileError(
+                "manifest must pin absolute isolated GOCACHE and GOMODCACHE paths"
+            )
+        try:
+            resolved_cache_values[name] = str(artifact_path(root, value))
+        except ProfileError as exc:
+            raise ProfileError(
+                f"manifest {name} must be contained within manifest output root {root}"
+            ) from exc
     return {
         "CGO_ENABLED": "0",
         "GOMAXPROCS": str(flags["gomaxprocs"]),
-        "GOCACHE": cache_values["GOCACHE"],
-        "GOMODCACHE": cache_values["GOMODCACHE"],
+        "GOCACHE": resolved_cache_values["GOCACHE"],
+        "GOMODCACHE": resolved_cache_values["GOMODCACHE"],
     }
 
 
@@ -904,7 +930,7 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = manifest_root(manifest_path)
     quiet = require_heavy(args, mode="hermetic", root=root)
     warm_root = root / "warm"
-    env_overrides = manifest_env(manifest)
+    env_overrides = manifest_env(manifest, root=root)
     go = manifest_go(manifest)
     commands: list[dict[str, Any]] = []
     binaries: list[dict[str, Any]] = []
@@ -1104,7 +1130,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if args.cohort is None and args.repeat != 1:
         raise ProfileError("full inventory runs are single-shot; repeat only a bounded cohort")
     runs_root = root / "runs"
-    env_overrides = manifest_env(manifest)
+    env_overrides = manifest_env(manifest, root=root)
     synthetic = manifest.get("mode") == "synthetic"
     go = None if synthetic else manifest_go(manifest)
     selected_by_module, cohort_mode, selected_packages = select_packages(
@@ -1263,6 +1289,29 @@ def parse_elapsed(value: Any) -> float:
     return result
 
 
+def command_timing_errors(record: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    starts = record.get("monotonic_start_ns")
+    ends = record.get("monotonic_end_ns")
+    if isinstance(starts, bool) or not isinstance(starts, int) or starts < 0:
+        errors.append("monotonic_start_ns must be a non-negative integer")
+    if isinstance(ends, bool) or not isinstance(ends, int) or ends < 0:
+        errors.append("monotonic_end_ns must be a non-negative integer")
+    if (
+        isinstance(starts, int)
+        and not isinstance(starts, bool)
+        and isinstance(ends, int)
+        and not isinstance(ends, bool)
+        and ends < starts
+    ):
+        errors.append("monotonic_end_ns must not precede monotonic_start_ns")
+    try:
+        parse_elapsed(record.get("wall_seconds"))
+    except ValueError as exc:
+        errors.append(f"wall_seconds is invalid: {exc}")
+    return errors
+
+
 def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
     lines = raw.splitlines()
     states: dict[str, dict[str, bool]] = {}
@@ -1403,6 +1452,20 @@ def parse_record_stream(
     expected_source_sha: Any,
     require_source_validation: bool,
 ) -> dict[str, Any]:
+    schema_error = record.get("_schema_error")
+    if isinstance(schema_error, str) and schema_error:
+        return {
+            "record_id": record.get("label"),
+            "record": record,
+            "source_status": "INVALID",
+            "raw_stdout_retained": False,
+            "raw_stderr_retained": False,
+            "timing_status": "INVALID",
+            "timing_errors": [schema_error],
+            "stream_status": "INVALID",
+            "error": schema_error,
+            "execution_valid": False,
+        }
     record_source_sha = record.get("source_sha")
     if not isinstance(record_source_sha, str) or not record_source_sha:
         source_status = "MISSING"
@@ -1423,8 +1486,11 @@ def parse_record_stream(
         "source_status": source_status,
         "raw_stdout_retained": False,
         "raw_stderr_retained": False,
+        "timing_status": "INVALID",
+        "timing_errors": command_timing_errors(record),
         "execution_valid": False,
     }
+    base["timing_status"] = "PASS" if not base["timing_errors"] else "INVALID"
     path_value = record.get("stdout_path")
     if not isinstance(path_value, str):
         base.update(
@@ -1497,6 +1563,7 @@ def parse_record_stream(
         parsed["stream_status"] == "PASS"
         and parsed["process_status"] == "PASS"
         and parsed["source_status"] == "PASS"
+        and parsed["timing_status"] == "PASS"
         and parsed["inventory_complete"]
         and not parsed["package_failures"]
         and not parsed["test_failures"]
@@ -1549,17 +1616,20 @@ def lane_times(records: list[dict[str, Any]]) -> dict[str, Any]:
         int(record["monotonic_start_ns"])
         for record in records
         if isinstance(record.get("monotonic_start_ns"), int)
+        and not isinstance(record.get("monotonic_start_ns"), bool)
     ]
     ends = [
         int(record["monotonic_end_ns"])
         for record in records
         if isinstance(record.get("monotonic_end_ns"), int)
+        and not isinstance(record.get("monotonic_end_ns"), bool)
     ]
-    durations = [
-        float(record["wall_seconds"])
-        for record in records
-        if isinstance(record.get("wall_seconds"), (int, float))
-    ]
+    durations = []
+    for record in records:
+        try:
+            durations.append(parse_elapsed(record.get("wall_seconds")))
+        except ValueError:
+            continue
     lane_wall = None
     if starts and ends:
         lane_wall = (max(ends) - min(starts)) / 1_000_000_000.0
@@ -1775,11 +1845,32 @@ def validate_repetition_group(
     }
 
 
+def normalize_run_records(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ProfileError("manifest runs must be a list")
+    records: list[dict[str, Any]] = []
+    for index, record in enumerate(value):
+        if isinstance(record, dict):
+            records.append(record)
+            continue
+        records.append(
+            {
+                "label": f"<malformed-record-{index}>",
+                "_schema_error": (
+                    f"run record {index} is not a JSON object "
+                    f"(got {type(record).__name__})"
+                ),
+                "selected_packages": [],
+            }
+        )
+    return records
+
+
 def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
     root = manifest_root(manifest_path)
-    all_records = list(manifest.get("runs", []))
+    all_records = normalize_run_records(manifest.get("runs", []))
     if args.group:
         all_records = [
             record
@@ -1833,6 +1924,31 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         )
         for record in all_records
     ]
+    inventory_test_flags: dict[str, bool] = {}
+    for module in manifest.get("modules", []):
+        if not isinstance(module, dict):
+            continue
+        for package in module.get("packages", []):
+            if not isinstance(package, dict):
+                continue
+            import_path = package.get("import_path")
+            has_tests = package.get("has_tests")
+            if isinstance(import_path, str) and isinstance(has_tests, bool):
+                inventory_test_flags[import_path] = has_tests
+    for parsed in parsed_records:
+        no_test_errors = [
+            (
+                f"no-test marker for {package!r} conflicts with inventory "
+                "has_tests=true"
+                if inventory_test_flags.get(package) is True
+                else f"no-test marker for {package!r} is absent from the package inventory"
+            )
+            for package in parsed.get("no_test_markers", [])
+            if inventory_test_flags.get(package) is not False
+        ]
+        parsed["no_test_classification_errors"] = no_test_errors
+        if no_test_errors:
+            parsed["execution_valid"] = False
     expected_by_record = {
         record.get("label"): set(record.get("selected_packages", []))
         for record in all_records
@@ -1969,9 +2085,21 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     stream_failures = [
         {
             "record": parsed.get("record_id"),
-            "error": parsed.get("error") or parsed.get("stderr_error"),
+            "error": (
+                parsed.get("error")
+                or parsed.get("stderr_error")
+                or "; ".join(
+                    parsed.get("timing_errors", [])
+                    + parsed.get("no_test_classification_errors", [])
+                )
+                or None
+            ),
             "process_status": parsed.get("process_status"),
             "source_status": parsed.get("source_status"),
+            "timing_errors": parsed.get("timing_errors", []),
+            "no_test_classification_errors": parsed.get(
+                "no_test_classification_errors", []
+            ),
             "missing_packages": parsed.get("missing_packages", []),
             "unexpected_packages": parsed.get("unexpected_packages", []),
             "cached_markers": parsed.get("cached_markers", []),
@@ -2111,7 +2239,12 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "requested_repetitions": group.get("requested_repetitions"),
                 "completed_repetitions": group.get("completed_repetitions"),
                 "status": group.get("status"),
-                "records": [record.get("label") for record in group.get("records", [])],
+                "records": [
+                    record.get("label") if isinstance(record, dict) else None
+                    for record in group.get("records", [])
+                ]
+                if isinstance(group.get("records", []), list)
+                else [],
                 "validation": group_validation.get(
                     group.get("run_group_id")
                     if isinstance(group, dict)

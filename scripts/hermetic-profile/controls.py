@@ -498,8 +498,11 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
     case_dir = output / "provenance-tampering"
     manifest, quiet = synthetic_manifest(
         case_dir,
-        "pass",
-        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+        "no-test",
+        [
+            {"import_path": "example/no-test", "package_arg": ".", "has_tests": False},
+            {"import_path": "example/pass", "package_arg": ".", "has_tests": True},
+        ],
     )
     run_record = run_child(
         [
@@ -514,7 +517,7 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             "--repeat",
             "2",
             "--cohort",
-            "synthetic:.",
+            "example/no-test,example/pass",
         ],
         cwd=case_dir,
         output_dir=case_dir / "driver",
@@ -555,6 +558,43 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
                 "repetitions.0.validation.completed_repetitions": 1,
             },
         ),
+        (
+            "missing-run-timing",
+            lambda value: (
+                value["runs"][0].pop("monotonic_start_ns", None),
+                value["runs"][0].pop("monotonic_end_ns", None),
+                value["runs"][0].pop("wall_seconds", None),
+            ),
+            {
+                "failure_references.0.timing_errors.0": (
+                    "monotonic_start_ns must be a non-negative integer"
+                ),
+                "failure_references.0.timing_errors.2": (
+                    "wall_seconds is invalid: Elapsed must be a finite JSON number"
+                ),
+            },
+        ),
+        (
+            "malformed-run-record",
+            lambda value: value["runs"].__setitem__(0, "not-a-run-record"),
+            {
+                "failure_references.0.error": (
+                    "run record 0 is not a JSON object (got str)"
+                ),
+            },
+        ),
+        (
+            "no-test-inventory-conflict",
+            lambda value: value["modules"][0]["packages"][0].update(
+                {"has_tests": True}
+            ),
+            {
+                "failure_references.0.no_test_classification_errors.0": (
+                    "no-test marker for 'example/no-test' conflicts with inventory "
+                    "has_tests=true"
+                ),
+            },
+        ),
     ):
         mutated = json.loads(json.dumps(baseline))
         mutate(mutated)
@@ -571,7 +611,14 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         (
             "missing-quiet-observations",
             lambda value: (value.pop("before", None), value.pop("after", None)),
-            "quiet evidence must include before and after load/lease observations",
+            "quiet evidence must include before load/lease observations",
+        ),
+        (
+            "weak-quiet-observations",
+            lambda value: value.update(
+                {"before": {"active_work": []}, "after": {"active_work": []}}
+            ),
+            "quiet evidence before is missing observations: processes, load",
         ),
         (
             "expired-quiet-evidence",
@@ -606,6 +653,42 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         "mutations": mutations,
         "raw_artifacts_retained": True,
     }
+
+
+def exercise_cache_containment(output: Path) -> dict[str, Any]:
+    case_dir = output / "cache-containment"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    baseline = read_json(manifest)
+    outside_root = (case_dir / "outside-cache").resolve()
+    baseline["cache_paths"]["gocache"] = str(outside_root / "gocache")
+    baseline["cache_paths"]["gomodcache"] = str(outside_root / "gomodcache")
+    write_json(manifest, baseline)
+    record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    expected = "manifest GOCACHE must be contained within manifest output root"
+    if record["exit_status"] != 2 or expected not in record["stderr"]:
+        raise ControlError(
+            "cache-containment: out-of-root cache was not rejected\n"
+            + record["stderr"]
+        )
+    return {"name": "cache-containment", "record": record, "raw_artifacts_retained": True}
 
 
 def exercise_artifact_containment(output: Path) -> dict[str, Any]:
@@ -999,6 +1082,13 @@ def main() -> int:
         artifact_result = exercise_artifact_containment(output)
         results.append(artifact_result)
         case_count += artifact_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        cache_result = exercise_cache_containment(output)
+        results.append(cache_result)
+        case_count += 1
     except ControlError as exc:
         failures.append(str(exc))
 
