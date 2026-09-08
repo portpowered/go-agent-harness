@@ -194,6 +194,17 @@ func (s *productionTargetSession) CastMedia(ctx context.Context, deviceName stri
 	return controller.CastMedia(ctx, deviceName)
 }
 
+func (s *productionTargetSession) AcquirePageFocus(ctx context.Context) (func(context.Context) error, error) {
+	if s == nil || s.raw == nil {
+		return nil, webmcp.ErrClosed
+	}
+	controller, ok := s.raw.(webmcp.PageFocusLeaser)
+	if !ok {
+		return nil, webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "selected page does not support bounded focus", nil)
+	}
+	return controller.AcquirePageFocus(ctx)
+}
+
 func (s *productionTargetSession) StopCasting(ctx context.Context, deviceName string) error {
 	if s == nil || s.raw == nil {
 		return webmcp.ErrClosed

@@ -81,6 +81,13 @@ type PageScreenshotter interface {
 	CapturePageScreenshot(context.Context) (PageScreenshot, error)
 }
 
+// PageFocusLeaser temporarily allows media loading in a background/occluded
+// page. Release is bound to the acquired target, never a later selection.
+// Callers must release with a live cleanup context, including on failure.
+type PageFocusLeaser interface {
+	AcquirePageFocus(context.Context) (func(context.Context) error, error)
+}
+
 // TargetCastController is an optional selected-target capability. Cast is a
 // page-scoped CDP domain, so tab mirroring must execute on the same attached
 // target session used by the broker selection.

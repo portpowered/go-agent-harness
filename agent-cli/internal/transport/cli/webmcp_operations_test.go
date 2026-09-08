@@ -32,7 +32,7 @@ func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
 		got = append(got, child.Name())
 	}
 	sort.Strings(got)
-	want := []string{"activate", "browsers", "cancel", "context", "doctor", "invoke", "select", "tabs", "tools", "watch"}
+	want := []string{"activate", "browsers", "cancel", "context", "doctor", "invoke", "select", "tabs", "tools", "watch", "x-prepare-video"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("WebMCP command names = %v, want %v", got, want)
 	}

@@ -15,9 +15,13 @@ confirmation, or second use fails closed. The token is consumed before the
 Post control is clicked so an uncertain site response cannot be retried into a
 duplicate post.
 
-Text posts are bounded to 280 characters. This adapter does not attach media,
+Text posts are bounded to 280 characters. The experimental video path stages
+one MP4 of at most 64 MiB (a harness limit, not X's account limit). It does not
 create threads, quote posts, reply, repost, follow accounts, or send direct
-messages.
+messages. See [selfiepostx acceptance status](../../selfiepostx/README.md):
+fixture tests and live publishing of two user-authorized AI-disclosed videos pass,
+including playback verification in fresh permalink tabs. Review limitations and
+the exact artifacts are recorded in that log.
 
 ## Tools
 
@@ -28,8 +32,8 @@ observed account handle when available, and whether a draft is prepared.
 
 ### `x_prepare_post`
 
-Accepts `{ "text": "..." }`. It opens the X composer if necessary, replaces
-the visible draft with the exact normalized text, verifies that X retained it,
+Accepts `{ "text": "..." }`. It opens the X composer if necessary, refuses
+unrelated existing text or media, writes the exact normalized text, verifies that X retained it,
 and returns `draft_generation`, `draft_token`, `text`, `character_count`, and
 `published: false`.
 
@@ -57,6 +61,56 @@ Accepts the latest `draft_token`, clears that exact visible draft, and returns
 `published: false`. It cannot clear an unrelated or subsequently edited draft.
 
 ## Direct CLI invocation
+
+### Experimental video preparation
+
+After selecting the intended X tab, use PowerShell:
+
+```powershell
+& $Yui --config-dir $ConfigDir webmcp x-prepare-video `
+  --file ./post.mp4 --text 'Reviewed caption. AI-generated video and voice.' `
+  --account '@yourhandle' --cdp-url http://127.0.0.1:9222 `
+  --auto-select persisted --allowed-origin https://x.com --json `
+  > prepare.json 2> transfer-receipt.json
+```
+
+Quote the `@handle` in PowerShell. The command reads a bounded local snapshot,
+checks an MP4 header, hashes it, and streams 32-KiB chunks through the selected
+broker. It does not upload through an undocumented X HTTP endpoint. The page
+reconstructs a File, verifies SHA-256, and sends it to the normal composer input.
+X still owns format validation and processing; an MP4 header alone is not a
+codec or safety validation. The default total command deadline is five minutes.
+The CLI holds a bounded, target-scoped Chrome focus override during preparation:
+otherwise occluded/background pages may defer media metadata loading indefinitely.
+Normal focus behavior is restored on completion or failure. Simply activating
+a tab is insufficient when Chrome still reports it as hidden. Low-level callers
+using the chunk tools directly must arrange a genuinely visible page or equivalent
+bounded focus management themselves.
+
+The underlying tools are `x_begin_video_upload` (filename, size, SHA-256,
+expected account), `x_append_video_chunk` (token, byte offset, base64),
+`x_prepare_video_post` (token, caption), and `x_cancel_video_upload` (token).
+Transfers expire after ten minutes. Repeating prepare while `video_processing`
+is true checks the same attachment; it does not upload again. Stale, reordered,
+oversized, wrong-hash, changed-account, and changed-draft inputs fail closed.
+
+Prefer a single-line caption: X can expand paragraph newlines, in which case the
+exact-text guard refuses preparation rather than publishing changed text. After a
+page-generation error, inspect state before retrying; an empty staged transfer may
+need cancellation by its exact token. Cancellation releases staged bytes, not text
+already entered in the composer. Never clear an unrelated draft or retry publishing
+merely because preparation/upload previously succeeded.
+
+The transfer receipt on stderr allows inspection/cancellation after an error.
+Cancellation frees transfer state but preserves already attached media. Video
+draft removal is manual; `x_clear_draft` returns `manual_clear_required` rather
+than claiming to remove a video. Do not automatically retry uncertain uploads
+or publishes. A publish token is returned only after a video preview and enabled
+Post control exist with no upload indicator. Publishing still requires the
+separate `x_publish_post` call below; its token binds the composer, text, account,
+and observed media. Reloading the page invalidates tokens.
+
+### Text preparation and explicit publication
 
 Build `yui`, start Chrome with a dedicated DevTools-enabled profile in which
 the intended X account is already signed in, and open `https://x.com/home`.
