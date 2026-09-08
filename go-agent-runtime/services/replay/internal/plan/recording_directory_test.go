@@ -83,6 +83,60 @@ func TestResolveRecordingDirectoryRejectsMissingTruncatedSymlinkAndNonRegularArt
 	}
 }
 
+func TestResolveRecordingDirectoryRejectsSymlinkedOrNonRegularManifest(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(string, []byte) error
+		diag  string
+	}{
+		{
+			name: "symlink",
+			setup: func(manifestPath string, data []byte) error {
+				external := filepath.Join(t.TempDir(), "manifest.json")
+				if err := os.WriteFile(external, data, 0o600); err != nil {
+					return err
+				}
+				return os.Symlink(external, manifestPath)
+			},
+			diag: "is a symlink",
+		},
+		{
+			name: "non-regular",
+			setup: func(manifestPath string, _ []byte) error {
+				return os.Mkdir(manifestPath, 0o700)
+			},
+			diag: "is not a regular file",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := writeManifestedBundle(t, []recordingTestArtifact{
+				{path: "client.transcript.jsonl", data: []byte("client\n")},
+				{path: "agent.transcript.jsonl", data: []byte("agent\n")},
+				{path: "provider.json", data: []byte(`{"records":[]}`)},
+			})
+			manifestPath := filepath.Join(root, "manifest.json")
+			manifestData, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(manifestPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := test.setup(manifestPath, manifestData); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = resolveRecordingDirectory(t.Context(), root)
+			if !errors.Is(err, publicreplay.ErrCaptureUnavailable) {
+				t.Fatalf("%s manifest error = %v, want ErrCaptureUnavailable", test.name, err)
+			}
+			if !strings.Contains(err.Error(), "manifest.json") || !strings.Contains(err.Error(), test.diag) {
+				t.Fatalf("%s manifest error = %q, want manifest path and %q", test.name, err, test.diag)
+			}
+		})
+	}
+}
+
 func mutateRecordingArtifact(t *testing.T, root, name string) error {
 	t.Helper()
 	path := filepath.Join(root, "audio/out-000.pcm")

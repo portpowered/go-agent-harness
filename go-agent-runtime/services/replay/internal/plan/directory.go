@@ -91,6 +91,16 @@ func validateRecordingDirectory(directory string) error {
 
 func loadRecordingManifest(ctx context.Context, directory string) (transcript.RecordingManifest, error) {
 	manifestPath := filepath.Join(directory, "manifest.json")
+	info, err := os.Lstat(manifestPath)
+	if err != nil {
+		return transcript.RecordingManifest{}, fmt.Errorf("%w: inspect recording manifest %s: %w", replay.ErrCaptureUnavailable, manifestPath, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return transcript.RecordingManifest{}, fmt.Errorf("%w: recording manifest %s is a symlink", replay.ErrCaptureUnavailable, manifestPath)
+	}
+	if !info.Mode().IsRegular() {
+		return transcript.RecordingManifest{}, fmt.Errorf("%w: recording manifest %s is not a regular file", replay.ErrCaptureUnavailable, manifestPath)
+	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return transcript.RecordingManifest{}, fmt.Errorf("%w: read recording manifest %s: %w", replay.ErrCaptureUnavailable, manifestPath, err)

@@ -56,6 +56,27 @@ func TestSessionRecordedPCMIntegrity(t *testing.T) {
 	stdout, stderr, err = runRecordedPCMIntegrityCLI(t, "--replay", danglingManifest, "--audio-out", filepath.Join(t.TempDir(), "dangling-output.pcm"), "--max-duration", "5s")
 	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
 
+	redirectedManifest := copyRecordedPCMIntegrityBundle(t, source, "redirected-manifest")
+	manifestPath = filepath.Join(redirectedManifest, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	externalManifest := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(externalManifest, manifestData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(manifestPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(externalManifest, manifestPath); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err = runRecordedPCMIntegrityCLI(t, "replay", redirectedManifest)
+	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
+	stdout, stderr, err = runRecordedPCMIntegrityCLI(t, "--replay", redirectedManifest, "--audio-out", filepath.Join(t.TempDir(), "redirected-output.pcm"), "--max-duration", "5s")
+	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
+
 	mutated := copyRecordedPCMIntegrityBundle(t, source, "mutated")
 	pcmPath := filepath.Join(mutated, "audio/out-000.pcm")
 	pcm, err := os.ReadFile(pcmPath)
