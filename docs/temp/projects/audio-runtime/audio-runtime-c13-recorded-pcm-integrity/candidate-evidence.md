@@ -124,3 +124,46 @@ failure, not an unchanged implementation resubmission. The candidate remains
 ready for the script-owned CI gate; no CI success, independent review, merge,
 vertical acceptance, device consumption, acoustic output, or project completion
 is claimed.
+
+## C13 review repair: reject dangling root manifests
+
+The canonical review rejection for head `22bf02febbbd8f4ea92aeaa021d41c75f09e1978`
+identified a public integrity bypass: `os.Stat` treated a dangling
+`manifest.json` symlink as absent, allowing `session replay` to use the
+standalone trace path and report `Replay verified`. The new public regression
+reproduced that exact false success before the repair:
+`go test ./agent-cli/test/integration -run '^TestSessionRecordedPCMIntegrity$'
+-count=1 -timeout=60s` failed with `dangling manifest unexpectedly succeeded`
+and the `Replay verified` marker.
+
+Repair commit `6b22eba5f1a3937205abd5a7e628f6bcf4072dc0` changes the CLI root
+manifest detector to `os.Lstat`, explicitly rejects symlink and non-regular
+manifest entries, and still treats a truly absent manifest as the documented
+legacy standalone-trace case. The focused unit controls cover both dangling
+symlink and directory manifests plus manifestless trace preparation. The public
+`TestSessionRecordedPCMIntegrity` control exercises both `session replay` and
+`session --replay`; both reject the dangling manifest without a verification or
+completion marker.
+
+- Focused normal replay packages and runtime `Interruption|Cancel` controls pass:
+  `go test ./agent-cli/internal/services/internal/replay -count=1 -timeout=60s`,
+  `go test ./go-agent-runtime/services/replay/... ./agent-cli/internal/services/replay/... -count=1 -timeout=60s`,
+  and `go test ./go-agent-runtime/services/replay/internal/plan -run 'Interruption|Cancel' -count=3 -timeout=60s`.
+- Focused race controls pass:
+  `go test -race ./go-agent-runtime/services/replay/... ./agent-cli/internal/services/internal/replay/... ./agent-cli/internal/services/replay/... -count=1 -timeout=60s`
+  and `go test -race ./agent-cli/test/integration -run '^TestSessionRecordedPCMIntegrity$' -count=1 -timeout=60s`.
+- Exact committed candidate source is `6b22eba`; rebuilt `yui` is
+  `/tmp/audio-runtime-c13-candidate-manifest-repaired-yui` with SHA256
+  `485a441055b9245fd295386c45bb1550df233adde8a3149d036c256540a36f1d`.
+- Fresh bounded exact-binary probe is
+  `/private/tmp/audio-runtime-c13-manifest-repair-driver/candidate-12547-1788899352`.
+  Untouched `session replay` and `session --replay` exited `0`; same-size
+  one-byte `audio/out-000.pcm` mutations exited `1` on both routes with
+  artifact-specific expected/actual digest diagnostics. PCM stayed `3840`
+  bytes; manifest and provider hashes were unchanged.
+
+No CI terminal result, independent review, merge, vertical acceptance, device
+consumption, acoustic output or project acceptance is claimed. The next action
+is to push this repair on the same PR #405 and return `ACCEPTED` to the
+script-owned CI gate without polling it; any exact same-task CI rejection
+remains with this executor.
