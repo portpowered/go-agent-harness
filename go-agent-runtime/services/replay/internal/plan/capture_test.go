@@ -82,6 +82,8 @@ func TestPlannerSelfDrivesTextInterruptionTruncate(t *testing.T) {
 		serverRecord("response.created", `{"type":"response.created","response":{"id":"resp-c07-interrupted"}}`),
 		serverRecord("input_audio_buffer.speech_started", `{"type":"input_audio_buffer.speech_started"}`),
 		clientRecord(replayTruncateItem, `{"type":"conversation.item.truncate","item_id":"item-c07-interrupted","content_index":0,"audio_end_ms":123}`),
+		serverRecord("response.done", `{"type":"response.done","response":{"id":"resp-c07-interrupted","status":"cancelled"}}`),
+		serverRecord("response.created", `{"type":"response.created","response":{"id":"resp-c07-replacement"}}`),
 	)
 
 	plan, err := New().LoadLivePlan(t.Context(), path)
@@ -93,6 +95,26 @@ func TestPlannerSelfDrivesTextInterruptionTruncate(t *testing.T) {
 	}
 	if !plan.StopAfterResponse || plan.ProviderCloseExpected {
 		t.Fatalf("interruption terminal plan=%+v, want response stop without provider close", plan)
+	}
+	if !plan.InterruptionReplacementExpected {
+		t.Fatalf("interruption plan=%+v, want a replacement response boundary", plan)
+	}
+}
+
+func TestPlannerDoesNotMarkCancelledOnlyReplayAsInterrupted(t *testing.T) {
+	path := writePlanCapture(t,
+		clientRecord(replayCreateItem, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"cancelled only"}]}}`),
+		clientRecord(replayResponseCreate, `{"type":"response.create"}`),
+		serverRecord("response.created", `{"type":"response.created","response":{"id":"resp-cancelled-only"}}`),
+		serverRecord("response.done", `{"type":"response.done","response":{"id":"resp-cancelled-only","status":"cancelled"}}`),
+	)
+
+	plan, err := New().LoadLivePlan(t.Context(), path)
+	if err != nil {
+		t.Fatalf("LoadLivePlan: %v", err)
+	}
+	if plan.InterruptionReplacementExpected {
+		t.Fatalf("cancelled-only plan=%+v, want no replacement boundary", plan)
 	}
 }
 

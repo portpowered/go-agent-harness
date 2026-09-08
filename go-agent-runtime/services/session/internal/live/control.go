@@ -335,6 +335,7 @@ func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	// finite replay's successful terminal. Ordinary finite captures retain
 	// their existing cancellation semantics.
 	return h != nil && h.request.ReplayPlan != nil &&
+		h.request.ReplayPlan.InterruptionReplacementExpected &&
 		value.TerminalReason == messages.TerminalReasonCancellation &&
 		value.TerminalProvenance == messages.TerminalProvenanceProvider
 }

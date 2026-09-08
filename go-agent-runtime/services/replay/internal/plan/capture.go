@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -91,11 +92,12 @@ func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEv
 	}
 	providerCloseExpected := replayProviderCloseExpected(records)
 	return session.LiveReplayPlan{
-		WaitForSessionUpdated: replayHasSessionUpdated(records),
-		StopAfterResponse:     !providerCloseExpected,
-		ProviderCloseExpected: providerCloseExpected,
-		InputAudioSampleRate:  inputRate,
-		OutputAudioSampleRate: outputRate,
+		WaitForSessionUpdated:           replayHasSessionUpdated(records),
+		StopAfterResponse:               !providerCloseExpected,
+		ProviderCloseExpected:           providerCloseExpected,
+		InterruptionReplacementExpected: replayHasInterruptionReplacement(records),
+		InputAudioSampleRate:            inputRate,
+		OutputAudioSampleRate:           outputRate,
 	}, nil
 }
 
@@ -123,23 +125,26 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	}
 	providerCloseExpected := replayProviderCloseExpected(capture.Records)
 	waitForSessionUpdated := replayHasSessionUpdated(capture.Records)
+	interruptionReplacementExpected := replayHasInterruptionReplacement(capture.Records)
 	inputRate, outputRate, err := replayAudioSampleRates(capture.Records)
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
 	}
 	if len(actions) == 0 {
 		return session.LiveReplayPlan{
-			WaitForSessionUpdated: waitForSessionUpdated,
-			StopAfterResponse:     !providerCloseExpected,
-			ProviderCloseExpected: providerCloseExpected,
-			InputAudioSampleRate:  inputRate,
-			OutputAudioSampleRate: outputRate,
+			WaitForSessionUpdated:           waitForSessionUpdated,
+			StopAfterResponse:               !providerCloseExpected,
+			ProviderCloseExpected:           providerCloseExpected,
+			InterruptionReplacementExpected: interruptionReplacementExpected,
+			InputAudioSampleRate:            inputRate,
+			OutputAudioSampleRate:           outputRate,
 		}, nil
 	}
 	if plan, ok, err := replayTextPlan(path, actions); ok || err != nil {
 		plan.WaitForSessionUpdated = waitForSessionUpdated
 		plan.StopAfterResponse = !providerCloseExpected
 		plan.ProviderCloseExpected = providerCloseExpected
+		plan.InterruptionReplacementExpected = interruptionReplacementExpected
 		plan.InputAudioSampleRate = inputRate
 		plan.OutputAudioSampleRate = outputRate
 		return plan, err
@@ -151,6 +156,7 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	plan.WaitForSessionUpdated = waitForSessionUpdated
 	plan.StopAfterResponse = !providerCloseExpected
 	plan.ProviderCloseExpected = providerCloseExpected
+	plan.InterruptionReplacementExpected = interruptionReplacementExpected
 	plan.InputAudioSampleRate = inputRate
 	plan.OutputAudioSampleRate = outputRate
 	return plan, err
@@ -285,6 +291,62 @@ func replayProviderCloseExpected(records []gatewaytesting.CapturedSessionEvent) 
 		}
 	}
 	return false
+}
+
+func replayHasInterruptionReplacement(records []gatewaytesting.CapturedSessionEvent) bool {
+	cancellationObserved := false
+	cancelledResponseID := ""
+	for _, record := range records {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "response.done":
+			var event struct {
+				Response struct {
+					ID            string `json:"id"`
+					Status        string `json:"status"`
+					StatusDetails struct {
+						Type string `json:"type"`
+					} `json:"status_details"`
+				} `json:"response"`
+			}
+			if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
+				continue
+			}
+			if !replayResponseWasCancelled(event.Response.Status, event.Response.StatusDetails.Type) {
+				continue
+			}
+			cancellationObserved = true
+			cancelledResponseID = event.Response.ID
+		case "response.created":
+			if !cancellationObserved {
+				continue
+			}
+			var event struct {
+				Response struct {
+					ID string `json:"id"`
+				} `json:"response"`
+			}
+			if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
+				continue
+			}
+			// A missing ID cannot be correlated safely, so the later provider
+			// response is treated as the replacement boundary. When both IDs
+			// are present, require a distinct response to avoid mistaking a
+			// duplicate event for a replacement.
+			if event.Response.ID == "" || cancelledResponseID == "" || event.Response.ID != cancelledResponseID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func replayResponseWasCancelled(status, detailType string) bool {
+	status = strings.ToLower(strings.TrimSpace(status))
+	detailType = strings.ToLower(strings.TrimSpace(detailType))
+	return status == "cancelled" || status == "canceled" || detailType == "cancelled" || detailType == "canceled"
 }
 
 func replayTextPlan(path string, actions []gatewaytesting.CapturedSessionEvent) (session.LiveReplayPlan, bool, error) {

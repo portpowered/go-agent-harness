@@ -89,3 +89,43 @@ func TestReplaySessionAudioSampleRatesSupportsLegacyFormats(t *testing.T) {
 		t.Fatalf("malformed legacy sample rate error = %v", err)
 	}
 }
+
+func TestReplayHasInterruptionReplacement(t *testing.T) {
+	tests := []struct {
+		name    string
+		records []gatewaytesting.CapturedSessionEvent
+		want    bool
+	}{
+		{
+			name: "distinct response follows cancellation",
+			records: []gatewaytesting.CapturedSessionEvent{
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.done", Payload: []byte(`{"response":{"id":"response-old","status":"cancelled"}}`)},
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.created", Payload: []byte(`{"response":{"id":"response-new"}}`)},
+			},
+			want: true,
+		},
+		{
+			name: "cancelled response has no replacement",
+			records: []gatewaytesting.CapturedSessionEvent{
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.created", Payload: []byte(`{"response":{"id":"response-old"}}`)},
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.done", Payload: []byte(`{"response":{"id":"response-old","status":"cancelled"}}`)},
+			},
+			want: false,
+		},
+		{
+			name: "same response is not a replacement",
+			records: []gatewaytesting.CapturedSessionEvent{
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.done", Payload: []byte(`{"response":{"id":"response-old","status":"canceled"}}`)},
+				{Direction: gatewaytesting.DirectionServerToClient, Type: "response.created", Payload: []byte(`{"response":{"id":"response-old"}}`)},
+			},
+			want: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := replayHasInterruptionReplacement(test.records); got != test.want {
+				t.Fatalf("replayHasInterruptionReplacement() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}

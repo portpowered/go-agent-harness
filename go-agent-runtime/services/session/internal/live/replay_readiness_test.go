@@ -205,7 +205,9 @@ func TestReplayCancelledProviderResponseDoesNotFinishBeforeReplacement(t *testin
 	h := &handle{
 		request: session.LiveRequest{
 			FinishAfterResponse: true,
-			ReplayPlan:          &session.LiveReplayPlan{},
+			ReplayPlan: &session.LiveReplayPlan{
+				InterruptionReplacementExpected: true,
+			},
 		},
 		captureComplete:   true,
 		responseStartWake: make(chan struct{}),
@@ -232,6 +234,34 @@ func TestReplayCancelledProviderResponseDoesNotFinishBeforeReplacement(t *testin
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-healthy", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	if !h.gracefulStop || h.replayResponses != 1 {
 		t.Fatalf("replacement stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
+	}
+}
+func TestReplayCancelledProviderResponseFinishesWithoutReplacement(t *testing.T) {
+	h := &handle{
+		request: session.LiveRequest{
+			FinishAfterResponse: true,
+			ReplayPlan:          &session.LiveReplayPlan{},
+		},
+		captureComplete:   true,
+		responseStartWake: make(chan struct{}),
+	}
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-cancelled-only"})
+	cancelled := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-cancelled-only",
+		Value: messages.NewMessageEndValueWithTerminal(
+			messages.TokenUsage{},
+			messages.TerminalReasonCancellation,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNone,
+		),
+	}
+	if !h.observeFiniteResponse(cancelled) {
+		t.Fatal("cancelled-only replay response did not complete the finite replay")
+	}
+	if !h.gracefulStop || h.replayResponses != 1 {
+		t.Fatalf("cancelled-only replay stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
 	}
 }
 func TestInterruptedFiniteResponseDoesNotFinishAfterPriorResponse(t *testing.T) {
