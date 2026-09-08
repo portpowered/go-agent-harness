@@ -1,0 +1,6 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-c11-repair/canonical-phase-validation/analysis/canonical-inventory-record-rejected/analysis.json",
+  "error": "synthetic captures must not contain inventory or warm commands",
+  "fresh_timing": "INVALID",
+  "status": "INVALID"
+}

@@ -15,9 +15,10 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `b8630dc0ceb249af76ec7b522f4f59030eea2d14`.
+  `ad73e05bd51d9e777be934c5ca4a82aec25b0068`.
 - The implementation and exact-head controls are committed against that
-  candidate; this checkpoint consolidates all phase command records into one
+  candidate; the evidence report is generated from that exact implementation
+  SHA and packaged separately. This checkpoint consolidates all phase command records into one
   `manifest.commands` array, validates the whole input before `--group`
   display filtering, binds Git/test command identity, enforces warm/full/cohort
   scheduling, and records the old-to-new mapping in `schema-control-mapping.md`.
@@ -43,14 +44,16 @@ met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `controls-canonical-v2/controls.json` reports 57 declared cases, 24 result groups,
+  `ctrl-c11-repair/controls.json` reports 63 declared cases, 26 result groups,
   and zero Go/network/build invocations; its SHA-256 is
-  `93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`.
+  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
   source-validation output/identity, aggregate duration overflow, malformed
   canonical phase records and warm summaries, and hermetic captures that skip
-  warm-up.
+  warm-up. Lifecycle regressions reject cohort repeat 3, failed full trials,
+  partial full-trial module coverage, and non-PASS inventory/warm commands
+  before any Go command can start.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -59,10 +62,10 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 57-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `b8630dc` passed the same controls and focused
-  checks at `2026-09-08T22:50:20.327Z`; the tracked controls report SHA-256 is
-  `93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`.
+  `profile.py --help`, the 63-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `ad73e05b` passed the same controls and focused
+  checks at `2026-09-08T23:34:44.557Z`; the tracked controls report SHA-256 is
+  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
 
 ## CI rejection disposition
 
@@ -90,11 +93,12 @@ in `ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`. This
 path is outside C11's owned directories; this is not a claim that hosted CI is
 green or that C11 owns a runtime repair.
 
-The canonical review inbox through review attempt 30 named unreferenced
-invalid groups, forged retained Git metadata, aggregate duration overflow,
-incomplete command records, stale head/evidence references, and the preceding
-timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`b8630dc` repairs the remaining code causes, and the current public controls
+The canonical review inbox through review attempt 35 named stale exact-head
+evidence, cohort repeat overrun, failed/partial full-trial admission, non-PASS
+inventory/warm phase commands, unreferenced invalid groups, forged retained Git
+metadata, aggregate duration overflow, incomplete command records, and the
+preceding timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
+`ad73e05b` repairs the remaining code causes, and the current public controls
 cover every finding.
 
 ## Handoff

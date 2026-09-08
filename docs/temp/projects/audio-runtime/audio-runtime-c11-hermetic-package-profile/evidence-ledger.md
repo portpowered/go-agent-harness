@@ -7,7 +7,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 ## Latest canonical continuation
 
 The current exact-head implementation checkpoint is
-`b8630dc0ceb249af76ec7b522f4f59030eea2d14`, rebased in this isolated worktree
+`ad73e05bd51d9e777be934c5ca4a82aec25b0068`, rebased in this isolated worktree
 onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
 integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
 ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
@@ -27,9 +27,11 @@ The exact board response is retained in
 `canonical-board-recheck-20260908.json` (SHA-256
 `2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
 current public control report is
-`controls-canonical-v2/controls.json` (SHA-256
-`93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`): PASS,
-57 cases, 24 result groups, zero Go/network/build invocations. Raw retention is
+`ctrl-c11-repair/controls.json` (SHA-256
+`771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`): PASS,
+63 cases, 26 result groups, zero Go/network/build invocations. It was generated
+from the exact implementation SHA above; evidence is packaged in a subsequent
+commit so the record does not make a self-referential future-commit claim. Raw retention is
 truthfully false only because the missing-raw-artifact negative control removes
 its own stdout fixture. `profile.py --help`, Python AST parsing,
 `GOWORK=off go test . -count=1` in `tools/timingate`, and `git diff --check`
@@ -52,17 +54,14 @@ claimed.
   `codex/audio-runtime-c11-hermetic-package-profile`; the worktree is
   `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile`.
 - `git fetch origin main` completed before implementation. The initial
-  checkpoint was `b01dbb573a15eb61d1cacfff11d37c2461167987`; before this
-  delivery, `origin/main` advanced to accepted C12 merge
-  `668f2d8816beaa078d058b3f0bcc59600b71a023`.
+  checkpoint was `b01dbb573a15eb61d1cacfff11d37c2461167987`; the current
+  fetched `origin/main` is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Accepted main was merged in this isolated worktree at
-  `HEAD=39d177009bfca1ada9b01d5a64a071fce9d69f44`; the running host checkout
-  was not merged or reset. The accepted C12 main remains an ancestor of the
-  current profiler repair checkpoint
-  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
+- The isolated worktree was rebased onto the fetched `origin/main`; the running
+  host checkout was not merged or reset. The current implementation checkpoint
+  `ad73e05bd51d9e777be934c5ca4a82aec25b0068` has that main as an ancestor.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, the C08
   predecessor worktree/PR400, the parent checkout, and factory configuration
@@ -146,13 +145,20 @@ The exact CI coverage rejection inspected before this repair is retained in
   It was generated from implementation checkpoint
   `59f370b6239744a2bf6d7234097a10cbd9f364fe` and preserves the intentional
   missing-raw-artifact negative-control truth.
-- Current repair-head report `ctrl-c11-final/controls.json`: PASS; 48 declared
+- Prior repair-head report `ctrl-c11-final/controls.json`: PASS; 48 declared
   cases and 23 result groups, zero Go/network/build invocations; hash
   `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
   It was generated from implementation checkpoint
   `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the new controls cover both
   unmatched group selection and invalid unselected groups while retaining the
   intentional missing-raw-artifact negative-control truth.
+- Current exact implementation report `ctrl-c11-repair/controls.json`: PASS; 63
+  declared cases and 26 result groups, zero Go/network/build invocations; hash
+  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
+  It was generated from implementation checkpoint
+  `ad73e05bd51d9e777be934c5ca4a82aec25b0068`; the lifecycle regressions reject
+  cohort repeat 3, failed full trials, partial full module coverage, and
+  non-PASS inventory/warm phase commands before Go work can start.
 - The review-27 regressions in that report reject unreferenced invalid and
   zero-request groups, incomplete command-record-v1 fields and artifacts,
   forged retained source-validation output/identity, and package-duration sums
@@ -190,10 +196,10 @@ The exact CI coverage rejection inspected before this repair is retained in
   C11's owned directories; no runtime edit is authorized, and this does not
   claim hosted CI green for the new checkpoint.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from implementation head `9b3f4ebc` passed: 48 public
-  cases and 23 result groups with zero Go/network/build invocations (tracked
+- Fresh exact-head recheck from implementation head `ad73e05b` passed: 63 public
+  cases and 26 result groups with zero Go/network/build invocations (tracked
   report SHA-256
-  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`),
+  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. No
@@ -220,12 +226,13 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`b8630dc0ceb249af76ec7b522f4f59030eea2d14`; the current `origin/main`
-ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest
-canonical task rejection named unreferenced invalid groups, forged retained
-Git metadata, aggregate duration overflow, incomplete command records, and
-stale head/evidence references. This repair closes those causes with causal
-public controls while retaining the earlier review repairs for lane timing,
+`ad73e05bd51d9e777be934c5ca4a82aec25b0068`; the current `origin/main`
+ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest review-35
+task rejection named stale exact-head evidence, cohort repeat overrun,
+failed/partial full-trial admission, non-PASS inventory/warm phase commands,
+unreferenced invalid groups, forged retained Git metadata, aggregate duration
+overflow, and incomplete command records. This repair closes those causes with
+causal public controls while retaining the earlier review repairs for lane timing,
 quiet observations, cache containment, no-test markers, repeated package
 terminals, and artifact provenance. Offline analysis now retains package
 ranking and lane-wall evidence while referencing the canonical 60-second
