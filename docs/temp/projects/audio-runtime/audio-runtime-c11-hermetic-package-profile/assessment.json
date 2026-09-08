@@ -3,9 +3,9 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "0564fb562802e7cc2185883498936b3cfa9c87ba",
-  "current_branch_head_at_handoff": "0564fb562802e7cc2185883498936b3cfa9c87ba",
-  "implementation_checkpoint": "0564fb562802e7cc2185883498936b3cfa9c87ba",
+  "candidate_head": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+  "current_branch_head_at_handoff": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+  "implementation_checkpoint": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
   "base_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -14,7 +14,7 @@
     "integrated_at_utc": "2026-09-08T17:03:47Z",
     "integration_method": "isolated-worktree merge of freshly fetched origin/main; running host checkout untouched",
     "integration_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
-    "repair_head": "0564fb562802e7cc2185883498936b3cfa9c87ba",
+    "repair_head": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
     "previous_submitted_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
     "previous_ci_run": 34220749840,
     "previous_ci_job": 102043028609,
@@ -42,6 +42,10 @@
     "go_tests_started": true,
     "ci_claim": "NOT_GREEN_NOT_POLLED"
   },
+  "canonical_board_snapshot": {
+    "path": "canonical-board-f2a5be3.json",
+    "sha256": "330d72d6d5d98f65f31f20d91a47d238fe0c94cfd081e0da14a6f10eb01d95c6"
+  },
   "fresh_timing": {
     "status": "BLOCKED",
     "reason": "No isolated or dedicated runner evidence is available; the shared factory runner is not an admissible quiet runner",
@@ -66,10 +70,10 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-0564fb5/controls.json",
-    "sha256": "ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3",
+    "path": "ctrl-f2a5be3/controls.json",
+    "sha256": "602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f",
     "status": "PASS",
-    "cases": 36,
+    "cases": 42,
     "result_groups": 22,
     "go_invocations": 0,
     "network_invocations": 0,
@@ -82,19 +86,19 @@
     }
   },
   "fresh_focused_recheck": {
-    "checked_at_utc": "2026-09-08T18:35:56Z",
-    "tested_head": "0564fb562802e7cc2185883498936b3cfa9c87ba",
-    "controls_report_sha256": "ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3",
-    "controls": "PASS: 36 cases, 22 result groups, zero Go/network/build invocations",
+    "checked_at_utc": "2026-09-08T19:26:45Z",
+    "tested_head": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+    "controls_report_sha256": "602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f",
+    "controls": "PASS: 42 cases, 22 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
     "timingate": "PASS: GOWORK=off go test . -count=1",
     "diff_check": "PASS"
   },
   "review_repairs": {
-    "reviewed_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-    "repair_commit": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-    "validated_after_main_integration": "0564fb562802e7cc2185883498936b3cfa9c87ba",
+    "reviewed_head": "5d153a533fd881afb268860d98692bb00d560c9d",
+    "repair_commit": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+    "validated_after_main_integration": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",
@@ -111,7 +115,9 @@
       "quiet before/after observations require active work, process, and load fields",
       "GOCACHE and GOMODCACHE must remain under the manifest output root",
       "no-test markers must agree with inventory has_tests classification",
-      "malformed run records produce bounded INVALID analysis instead of a traceback"
+      "malformed run records produce bounded INVALID analysis instead of a traceback",
+      "captured source-validation head, repository, and dirty paths are cross-checked",
+      "malformed analysis replaces stale PASS output with an atomic INVALID artifact"
     ]
   },
   "focused_regressions": [
@@ -130,8 +136,8 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "dd3766b36eebf231b137c70d61d6b9ec9875e922eff7ba5a5e7732bb71cd339f",
-    "scripts/hermetic-profile/controls.py": "64f500281f020cc8efa074eb1cfc0e8727c2710d2e30169afa687a468cce96f4",
+    "scripts/hermetic-profile/profile.py": "ea156465ffe23697e185c7e721c7fcc445fb23b30d85613daf3a3ac031e0d3a6",
+    "scripts/hermetic-profile/controls.py": "49cf2365e4bb9902d9dd06e23db0e6ac1f9754039ebae7dff319c21b28b55e79",
     "scripts/hermetic-profile/fixtures/emit_jsonl.py": "d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249"
   },
   "immutable_ci_logs": [

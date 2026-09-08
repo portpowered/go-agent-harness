@@ -134,10 +134,11 @@ cache, repeat, or wall fields remain unknown. This fallback is an honest
 assessment, not a timing pass and not a waiver.
 
 `controls.py` uses synthetic Python JSONL fixtures only, plus a temporary local
-Git repository for the source-dirtiness control. It verifies the public entry
-point for successful repetition, repeated package terminals, package/process
+Git repository for source identity controls. It verifies the public entry point
+for successful repetition, repeated package terminals, package/process
 failures, oversized durations/integers, truncated, malformed, empty, missing,
 cached, no-test, and overlapping-subtest streams, plus help/offline no-spawn,
-invalid shared-host evidence, and post-inventory source rejection. It does not
-invoke Go, download dependencies, build tests, open a live Realtime session, or
-claim physical/acoustic proof.
+invalid shared-host evidence, forged captured source provenance, stale-analysis
+replacement, and post-inventory source rejection. It does not invoke Go,
+download dependencies, build tests, open a live Realtime session, or claim
+physical/acoustic proof.

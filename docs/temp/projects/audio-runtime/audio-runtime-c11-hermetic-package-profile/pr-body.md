@@ -15,7 +15,7 @@ under-three-minute target is met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current implementation/control repair checkpoint:
-  `0564fb562802e7cc2185883498936b3cfa9c87ba`.
+  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
 - The delivery tip may include this evidence-only checkpoint; the repair source
   and evidence below are pinned to this exact implementation checkpoint.
 - Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
@@ -30,26 +30,31 @@ under-three-minute target is met.
   before/after `active_work`/process/load observations, captured summary
   provenance, manifest-root containment, command timing metadata, and
   inventory-consistent no-test markers before accepting fresh timing.
+  Captured head, repository, and dirty-path provenance is cross-checked against
+  the manifest; malformed records fail closed and atomically replace stale
+  analysis output with an `INVALID` artifact.
 - The public controls cover cross-package concurrency, fail-closed heavy
   admission, stdout/stderr/quiet-artifact containment, raw-artifact truth,
-  source identity, repetition completeness, missing quiet metadata, expired
-  quiet evidence, repeated package terminals, oversized durations/integers,
-  post-inventory source dirtiness, missing timing, weak quiet observations,
-  out-of-root caches, no-test conflicts, and malformed records. The regenerated
-  `ctrl-0564fb5/controls.json` reports 36 declared cases, 22 result groups, and
-  zero Go/network/build invocations.
+  source identity including forged captured validation, repetition completeness,
+  missing quiet metadata, expired quiet evidence, repeated package terminals,
+  oversized durations/integers, post-inventory source dirtiness, missing timing,
+  weak quiet observations, out-of-root caches, no-test conflicts, malformed
+  records, and stale-analysis replacement. The regenerated
+  `ctrl-f2a5be3/controls.json` reports 42 declared cases, 22 result groups, and
+  zero Go/network/build invocations; its SHA-256 is
+  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
 - Generated run group, repetition, and record names are bounded for Windows
   checkout portability. Superseded deep `controls-review-repair` artifacts
   were replaced by compact `ctrl` evidence; the longest new tracked relative
-  path is 184 characters.
+  path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 36-case control suite, and `git diff --check` pass.
-- Fresh merged-main recheck from `0564fb56` passed the same controls and focused
-  checks at `2026-09-08T18:35:56Z`; the tracked controls report SHA-256 is
-  `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`.
+  `profile.py --help`, the 42-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `f2a5be3` passed the same controls and focused
+  checks at `2026-09-08T19:26:45Z`; the tracked controls report SHA-256 is
+  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
 
 ## CI rejection disposition
 
@@ -66,11 +71,12 @@ The new C11 head is ready for script-owned CI; no result for that new head is
 claimed here. The earlier Windows checkout rejection and its portable-path
 repair remain in `ci-rejection-windows.json`.
 
-The current canonical task rejection was for PR #403 head `1fc5663d` and named
-five C11 defects: missing lane timing fields, weak quiet observations,
-out-of-root cache paths, ignored no-test markers, and malformed run records.
-Commit `0564fb56` repairs these causes, with each boundary covered by the new
-public controls.
+The current canonical task rejection was for PR #403 head `5d153a53` and named
+forged captured source provenance, malformed selected-package records,
+oversized monotonic timestamps, and stale analysis output. Commit `f2a5be3`
+repairs these causes, with each boundary covered by the new public controls;
+the earlier lane-timing, quiet-observation, cache, no-test, repeated-terminal,
+and artifact-provenance repairs remain covered as well.
 
 ## Handoff
 

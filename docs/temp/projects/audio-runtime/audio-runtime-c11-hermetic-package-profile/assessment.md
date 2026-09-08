@@ -24,9 +24,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Current implementation/control candidate checkpoint:
-  `0564fb562802e7cc2185883498936b3cfa9c87ba`.
+  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
 - The source/control evidence in this report was generated from that exact
-merged-main checkpoint; the later evidence commit only adds owned reports.
+  repair checkpoint; the later evidence checkpoint only adds owned reports.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -38,7 +38,8 @@ merged-main checkpoint; the later evidence commit only adds owned reports.
 
 The complete canonical board and worker-session responses are retained in
 `canonical-board.json`, `canonical-board-current.json`,
-`canonical-board-0564fb5.json`, `canonical-board-be9f11a5.json`,
+`canonical-board-0564fb5.json`, `canonical-board-f2a5be3.json`,
+`canonical-board-be9f11a5.json`,
 `canonical-findings-be9f11a5.json`, and
 `worker-sessions.json`; the immediate measurement snapshots are
 `pre-measurement-*` and `post-measurement-*`. The current board rejection and
@@ -50,7 +51,7 @@ required rebase, the narrow rejected test passed once and no C11-owned path was
 implicated. This is a recheck and handoff record, not a claim that script CI is
 green.
 The exact current board response, including current task/review states and
-leases, is preserved in `canonical-board-0564fb5.json`; historical C08/C12
+leases, is preserved in `canonical-board-f2a5be3.json`; historical C08/C12
 worker IDs are not used as current ownership evidence. C11 does not claim
 runtime ownership outside `scripts/hermetic-profile/` and this evidence root.
 
@@ -67,8 +68,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `dd3766b36eebf231b137c70d61d6b9ec9875e922eff7ba5a5e7732bb71cd339f`,
-`controls.py` `64f500281f020cc8efa074eb1cfc0e8727c2710d2e30169afa687a468cce96f4`,
+`profile.py` `ea156465ffe23697e185c7e721c7fcc445fb23b30d85613daf3a3ac031e0d3a6`,
+`controls.py` `49cf2365e4bb9902d9dd06e23db0e6ac1f9754039ebae7dff319c21b28b55e79`,
 and `fixtures/emit_jsonl.py`
 `d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
 
@@ -76,29 +77,33 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-0564fb5`:
-  PASS; 36 declared cases and 22 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-f2a5be3`:
+  PASS; 42 declared cases and 22 result groups, zero Go, network, or build
   invocations. The report hash is
-  `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`.
+  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
-  negative control; the per-case result also records `false`.
+  negative control; the per-case result also records `false`. The source
+  identity control includes three forged-capture provenance mutations and the
+  post-inventory dirty-source rejection.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
-  absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and tampered
-  per-record source identity, quiet-evidence provenance, requested versus
-  completed repetition counts, missing runner/load observations, expired quiet
-  evidence, repeated package terminals, oversized `Elapsed` values, oversized
-  integer handling, and post-inventory source dirtiness remain fail-closed.
+  absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and
+  tampered per-record source identity including captured head/repository/dirty
+  paths, quiet-evidence provenance, requested versus completed repetition
+  counts, missing runner/load observations, expired quiet evidence, repeated
+  package terminals, oversized `Elapsed` values, oversized integer handling,
+  stale-analysis replacement, and post-inventory source dirtiness remain
+  fail-closed.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
 - Rejected CI regression recheck:
   `go test ./agent-cli/internal/services/internal/agentruntime -count=1
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh merged-main recheck from `0564fb56` passed: 36 public cases/22
+- Fresh exact-head recheck from `f2a5be3` passed: 42 public cases/22
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `ce3417ad45b77357ef0cee93679a6499d2290a19a0b6aa02acd945855227fee3`),
+  SHA-256 `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -118,10 +123,11 @@ recorded in `ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
 package terminals, cached output, missing raw artifacts, redirected artifacts,
-missing provenance, incomplete repeats, weak quiet observations, missing lane
-timing, out-of-root caches, no-test inventory conflicts, malformed run records,
-and quiet-evidence paths outside the manifest root do not become a fresh timing
-PASS. The offline report retains
+missing provenance, forged captured source validation, incomplete repeats, weak
+quiet observations, missing lane timing, out-of-root caches, no-test inventory
+conflicts, malformed run records, stale-analysis replacement, and quiet-evidence
+paths outside the manifest root do not become a fresh timing PASS. The offline
+report retains
 package ranking and lane-wall evidence while leaving the canonical 60-second
 policy to `tools/timingate`; it does not duplicate that evaluator.
 The repeated synthetic cohort also proves lane wall is not the sum of package
@@ -182,12 +188,14 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `0564fb56` and
-the tracked `ctrl-0564fb5` report above. The latest canonical task rejection
-named five defects: missing lane timing fields, weak quiet observations,
-out-of-root cache paths, ignored no-test markers, and malformed run records.
-Commit `0564fb56` repairs those causes and the public controls reproduce each
-positive/negative boundary. The next action is to push/update PR #403 with the
+The current C11 implementation/control evidence is pinned to `f2a5be3` and the
+tracked `ctrl-f2a5be3` report above. The latest canonical task rejection named
+forged captured source provenance, malformed selected-package records,
+oversized monotonic timestamps, and stale analysis output. Commit `f2a5be3`
+repairs those causes and the public controls reproduce each positive/negative
+boundary, while retaining the earlier repairs for lane timing, quiet
+observations, cache containment, no-test markers, repeated package terminals,
+and artifact provenance. The next action is to push/update PR #403 with the
 exact final head and return `ACCEPTED` to the script-owned CI gate without
 polling it. Any C11-owned CI/review finding returns to this task; independent
 review and post-integration vertical validation remain external stages. No
