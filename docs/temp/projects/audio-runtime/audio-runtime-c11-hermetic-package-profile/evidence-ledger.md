@@ -29,7 +29,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
   `HEAD=39d177009bfca1ada9b01d5a64a071fce9d69f44`; the running host checkout
   was not merged or reset. The accepted C12 main remains an ancestor of the
   current profiler repair checkpoint
-  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
+  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, the C08
   predecessor worktree/PR400, the parent checkout, and factory configuration
@@ -47,15 +47,23 @@ canonical rejection is recorded in `ci-rejection.json`; the latest current-head
 Windows checkout rejection is recorded in `ci-rejection-windows.json`; and the
 subsequent hermetic rejection is recorded in `ci-rejection-hermetic.json`.
 Neither is claimed green or attributed to the profiler's Go lane.
-The current canonical board response is retained in
+The prior canonical board response is retained in
 `canonical-board-bc7609b.json` (SHA-256
 `d4471d07631548e19dd6d9e186742217c8a9b19ad713c6fc39eaf8afd51e213c`). It records
-the current task/review state and the latest rejected C11 head. The current
+the earlier task/review state and rejected C11 head. The prior
 hermetic rejection metadata and full log are retained in
 `ci-rejection-current.json` (SHA-256
 `7c04cd1014413642b1f4ef28298cfdbc73afa7d33176783e8c98803f765a42a5`) and
 `ci-rejection-current.log` (SHA-256
 `75599affc7fdada1598ea95c9f419d82c182167b61d3ec46aeb3dde028d63f42`).
+The final pre-repair board response used for this checkpoint is also retained
+in `canonical-board-c11-final.json` (SHA-256
+`64ad2f9c0b2d4a095e312274154554162d1522d06c693f57bb21179f3706e10c`).
+The exact CI coverage rejection inspected before this repair is retained in
+`ci-rejection-34277521278.json` (SHA-256
+`34a8a8e7f839811418bc8caf4f75a20772ca1e360450dedb3bbb5145bfa169ab`) and
+`ci-rejection-34277521278.log` (SHA-256
+`9d0a885aaa8fc40ccbd266fef9fbf1bf78ada462cd38821f9f1f3eb162116aa9`).
 
 ## Implementation and causal verification
 
@@ -99,12 +107,19 @@ hermetic rejection metadata and full log are retained in
   cases and 22 result groups, zero Go/network/build invocations; hash
   `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
   It is retained as historical evidence for rejected head `bc7609b5`.
-- Exact repair-head report `ctrl-59f370b/controls.json`: PASS; 47 declared
+- Historical repair-head report `ctrl-59f370b/controls.json`: PASS; 47 declared
   cases and 23 result groups, zero Go/network/build invocations; hash
   `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
   It was generated from implementation checkpoint
   `59f370b6239744a2bf6d7234097a10cbd9f364fe` and preserves the intentional
   missing-raw-artifact negative-control truth.
+- Current repair-head report `ctrl-c11-final/controls.json`: PASS; 48 declared
+  cases and 23 result groups, zero Go/network/build invocations; hash
+  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
+  It was generated from implementation checkpoint
+  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the new controls cover both
+  unmatched group selection and invalid unselected groups while retaining the
+  intentional missing-raw-artifact negative-control truth.
 - The review-27 regressions in that report reject unreferenced invalid and
   zero-request groups, incomplete command-record-v1 fields and artifacts,
   forged retained source-validation output/identity, and package-duration sums
@@ -132,21 +147,20 @@ hermetic rejection metadata and full log are retained in
   is now merged;
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
-- The latest current-delivery CI rejection was read in full from job
-  `102209193353` in run `34270089010` at submitted head `bc7609b5`. The hermetic
-  job failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` positive
-  harness and
-  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
-  positive baseline before its negative mutation. The exact metadata and
-  376-line log are retained above. Both paths are outside C11's owned
-  directories; bounded exact local rechecks of the tool-barge oracle and both
-  multi-turn tests passed. This does not claim hosted CI green or authorize a
-  runtime edit in C11.
+- The latest inspected current-delivery CI rejection was read in full from job
+  `102234088178` in run `34277521278` at submitted head
+  `43519903572c4047bbb0068d9ed73e7027a257d7`. The coverage job failed the
+  existing `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl`
+  because its positive harness-A baseline exceeded the two-second response
+  deadline with `context deadline exceeded`. Eight required jobs passed. The
+  exact metadata and 367-line log are retained above. This path is outside
+  C11's owned directories; no runtime edit is authorized, and this does not
+  claim hosted CI green for the new checkpoint.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from implementation head `59f370b6` passed: 47 public
+- Fresh exact-head recheck from implementation head `9b3f4ebc` passed: 48 public
   cases and 23 result groups with zero Go/network/build invocations (tracked
   report SHA-256
-  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`),
+  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. No
@@ -173,7 +187,7 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`59f370b6239744a2bf6d7234097a10cbd9f364fe`; the accepted `origin/main`
+`9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the accepted `origin/main`
 ancestor remains `668f2d8816beaa078d058b3f0bcc59600b71a023`. The latest
 canonical task rejection named unreferenced invalid groups, forged retained
 Git metadata, aggregate duration overflow, incomplete command records, and
@@ -184,8 +198,8 @@ terminals, and artifact provenance. Offline analysis now retains package
 ranking and lane-wall evidence while referencing the canonical 60-second
 `tools/timingate` policy instead of duplicating it. Quiet evidence, all raw
 command artifacts, and both Go cache paths are constrained to the manifest
-output root before use. The current canonical board snapshot and current
-hermetic rejection log are retained above. The next bounded step is to
-commit/push this exact evidence checkpoint, update PR #403 with the final head
-and evidence, and return `ACCEPTED` to script CI. Do not poll CI, self-review,
+output root before use. The current canonical board snapshot, exact rejected
+coverage log, schema/control mapping, and final control report are retained
+above. The next bounded step is to push this checkpoint, update PR #403 with
+the exact head and evidence, and return `ACCEPTED` to script CI. Do not poll CI, self-review,
 claim CI green, or close any of the nine immutable project gates.

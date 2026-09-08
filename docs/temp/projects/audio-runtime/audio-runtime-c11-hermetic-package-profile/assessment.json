@@ -3,9 +3,10 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
-  "current_branch_head_at_handoff": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
-  "implementation_checkpoint": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
+  "candidate_head": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+  "current_branch_head_at_handoff": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+  "implementation_checkpoint": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+  "evidence_checkpoint": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
   "base_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -14,11 +15,11 @@
     "integrated_at_utc": "2026-09-08T17:03:47Z",
     "integration_method": "isolated-worktree merge of freshly fetched origin/main; running host checkout untouched",
     "integration_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
-    "repair_head": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
-    "previous_submitted_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
-    "previous_ci_run": 34220749840,
-    "previous_ci_job": 102043028609,
-    "previous_ci_check": "CI (hermetic)",
+    "repair_head": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+    "previous_submitted_head": "43519903572c4047bbb0068d9ed73e7027a257d7",
+    "previous_ci_run": 34277521278,
+    "previous_ci_job": 102234088178,
+    "previous_ci_check": "CI (coverage)",
     "previous_ci_conclusion": "FAILURE",
     "recheck": {
       "test": "TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress",
@@ -30,34 +31,25 @@
     "next_gate": "SCRIPT_CI_NOT_POLLED"
   },
   "latest_ci_rejection": {
-    "path": "ci-rejection-current.json",
-    "log_path": "ci-rejection-current.log",
-    "run_id": 34270089010,
-    "job_id": 102209193353,
-    "check": "CI (hermetic)",
-    "head_sha": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
-    "failure_step": "Run hermetic test pipeline",
-    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnSchedule and TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit failed after the positive harness-A two-second response deadline",
+    "path": "ci-rejection-34277521278.json",
+    "log_path": "ci-rejection-34277521278.log",
+    "run_id": 34277521278,
+    "job_id": 102234088178,
+    "check": "CI (coverage)",
+    "head_sha": "43519903572c4047bbb0068d9ed73e7027a257d7",
+    "failure_step": "agent-cli coverage test command",
+    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl failed because its positive harness-A baseline exceeded the two-second response deadline with context deadline exceeded",
     "owned_path": "agent-cli/test/integration/session_duplex_overlap_test.go",
-    "owner": "out-of-scope merged runtime test; no C11 implementation path is authorized",
+    "owner": "out-of-scope runtime integration test; no C11 implementation path is authorized",
     "go_tests_started": true,
-    "ci_claim": "NOT_GREEN; full log preserved; current exact tests rechecked locally",
-    "metadata_sha256": "7c04cd1014413642b1f4ef28298cfdbc73afa7d33176783e8c98803f765a42a5",
-    "log_sha256": "75599affc7fdada1598ea95c9f419d82c182167b61d3ec46aeb3dde028d63f42",
-    "local_rechecks": [
-      {
-        "command": "go run ./cmd/testtimeout --timeout 60s -- go test ./test/integration -tags=nomicrophone -count=1 -timeout 60s -run '^TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations$'",
-        "status": "PASS"
-      },
-      {
-        "command": "go run ./cmd/testtimeout --timeout 60s -- go test ./test/integration -tags=nomicrophone -count=1 -timeout 60s -run '^TestSessionCLI_DuplexPCMMultiTurn(Schedule|RejectsLaterTurnCommitControls)$'",
-        "status": "PASS"
-      }
-    ]
+    "ci_claim": "NOT_GREEN; full log preserved; candidate changed after this rejection",
+    "metadata_sha256": "34a8a8e7f839811418bc8caf4f75a20772ca1e360450dedb3bbb5145bfa169ab",
+    "log_sha256": "9d0a885aaa8fc40ccbd266fef9fbf1bf78ada462cd38821f9f1f3eb162116aa9",
+    "local_rechecks": []
   },
   "canonical_board_snapshot": {
-    "path": "canonical-board-bc7609b.json",
-    "sha256": "d4471d07631548e19dd6d9e186742217c8a9b19ad713c6fc39eaf8afd51e213c"
+    "path": "canonical-board-c11-final.json",
+    "sha256": "64ad2f9c0b2d4a095e312274154554162d1522d06c693f57bb21179f3706e10c"
   },
   "fresh_timing": {
     "status": "BLOCKED",
@@ -83,10 +75,10 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-59f370b/controls.json",
-    "sha256": "af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c",
+    "path": "ctrl-c11-final/controls.json",
+    "sha256": "626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95",
     "status": "PASS",
-    "cases": 47,
+    "cases": 48,
     "result_groups": 23,
     "go_invocations": 0,
     "network_invocations": 0,
@@ -98,11 +90,12 @@
       "negative_control": "missing-raw-artifact"
     }
   },
+  "schema_control_mapping": "schema-control-mapping.md",
   "fresh_focused_recheck": {
-      "checked_at_utc": "2026-09-08T20:48:35.484Z",
-      "tested_head": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
-      "controls_report_sha256": "af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c",
-      "controls": "PASS: 47 cases, 23 result groups, zero Go/network/build invocations",
+      "checked_at_utc": "2026-09-08T21:13:08.118Z",
+      "tested_head": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+      "controls_report_sha256": "626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95",
+      "controls": "PASS: 48 cases, 23 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
     "timingate": "PASS: GOWORK=off go test . -count=1",
@@ -110,8 +103,8 @@
   },
   "review_repairs": {
     "reviewed_head": "5d153a533fd881afb268860d98692bb00d560c9d",
-    "repair_commit": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
-    "validated_after_main_integration": "59f370b6239744a2bf6d7234097a10cbd9f364fe",
+    "repair_commit": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
+    "validated_after_main_integration": "9b3f4ebc315fe8eb26af75148fd16629f2d5c58b",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",
@@ -134,7 +127,9 @@
       "unreferenced invalid and zero-request run groups cannot be omitted from execution validity",
       "command-record v1 schema, retained stdout/stderr bytes, hashes, and paths are validated",
       "retained source-validation command artifacts are checked against actual Git output",
-      "aggregate package durations reject sums beyond Go time.Duration before ranking"
+      "aggregate package durations reject sums beyond Go time.Duration before ranking",
+      "new captures keep manifest.runs as the only command-record authority and reject duplicated group records/source validations",
+      "whole-input group and record validation completes before --group display filtering, including unmatched filters"
     ]
   },
   "focused_regressions": [
@@ -153,8 +148,8 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "f841150636cce0c37f8e8f8c27171478ed421a783f667042a5e0a2f165e9194b",
-    "scripts/hermetic-profile/controls.py": "6d87e97c769e39ad128b48e642f6a62a467f9c9e35f2070a18d59f14a1c867ea",
+    "scripts/hermetic-profile/profile.py": "aa03244a9169c9334fad66380e2867e562663117e07e1eece7aafa07134ef230",
+    "scripts/hermetic-profile/controls.py": "58bc31eb710c22ca3344ba07afc3c2e41ba6a0ed1107eb7a4d6d7c70f00090da",
     "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a"
   },
   "immutable_ci_logs": [

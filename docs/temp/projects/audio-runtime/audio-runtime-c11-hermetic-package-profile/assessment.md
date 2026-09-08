@@ -24,11 +24,12 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Current delivery candidate implementation checkpoint:
-  `59f370b6239744a2bf6d7234097a10cbd9f364fe`.
-- The implementation repair and exact-head controls are pinned to
-  `59f370b6239744a2bf6d7234097a10cbd9f364fe`; the following evidence
-  checkpoint adds only owned evidence/provenance updates and preserves the
-  same source files and repair behavior.
+  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
+- The implementation and exact-head control evidence are committed together
+  at `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`. This checkpoint consolidates
+  command records into `manifest.runs`, adds the whole-input validation
+  boundary before `--group` display filtering, and records the old-to-new
+  mapping in `schema-control-mapping.md`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -49,12 +50,16 @@ its exact failed job metadata are captured in `ci-rejection.json`; the latest
 current-head Windows rejection is captured in `ci-rejection-windows.json`, the
 prior pre-C12 hermetic rejection is captured in `ci-rejection-hermetic.json`,
 and the latest current-head hermetic metadata/full log are captured in
-`ci-rejection-current.json` and `ci-rejection-current.log`. The latest
-rejected head was `bc7609b5`; the hosted hermetic job reported the existing
-multi-turn duplex schedule and missing-commit positive-baseline failures.
+`ci-rejection-current.json` and `ci-rejection-current.log`. The exact latest
+rejection inspected for the predecessor candidate is captured in
+`ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`: coverage
+failed at head `43519903572c4047bbb0068d9ed73e7027a257d7` on the existing
+multi-turn duplex positive baseline. The new candidate is not claimed
+CI-green.
 This is a recheck and handoff record, not a claim that script CI is green.
 The exact current board response, including current task/review states and
-leases, is preserved in `canonical-board-bc7609b.json`; historical C08/C12
+leases, is preserved in `canonical-board-c11-final.json` as well as the
+historical snapshots; historical C08/C12
 worker IDs are not used as current ownership evidence. C11 does not claim
 runtime ownership outside `scripts/hermetic-profile/` and this evidence root.
 
@@ -71,8 +76,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `f841150636cce0c37f8e8f8c27171478ed421a783f667042a5e0a2f165e9194b`,
-`controls.py` `6d87e97c769e39ad128b48e642f6a62a467f9c9e35f2070a18d59f14a1c867ea`,
+`profile.py` `aa03244a9169c9334fad66380e2867e562663117e07e1eece7aafa07134ef230`,
+`controls.py` `58bc31eb710c22ca3344ba07afc3c2e41ba6a0ed1107eb7a4d6d7c70f00090da`,
 and `fixtures/emit_jsonl.py`
 `0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a`.
 
@@ -80,10 +85,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-59f370b`:
-  PASS; 47 declared cases and 23 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-c11-final`:
+  PASS; 48 declared cases and 23 result groups, zero Go, network, or build
   invocations. The report hash is
-  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
+  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -107,9 +112,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `59f370b6` passed: 47 public cases/23
+- Fresh exact-head recheck from `9b3f4ebc` passed: 48 public cases/23
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`),
+  SHA-256 `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -126,19 +131,18 @@ as proof of a new C11 result. The new C11 repair is not claimed CI-green and is
 ready for the script-owned gate. The earlier Windows checkout failure remains
 recorded in `ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
 
-The latest current-head rejection is run `34270089010`, job `102209193353`,
-at submitted head `bc7609b5`. The full 376-line hosted log and job metadata are
-retained in `ci-rejection-current.log` and `ci-rejection-current.json`. The
-hermetic job failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule`
-positive harness and the
-`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
-case before its negative mutation. The log also contains expected negative
-control diagnostics; they are not additional failures. Both named test paths
-are outside C11's two owned directories. Bounded exact local rechecks on this
-branch passed the tool-barge oracle control and both multi-turn tests; this does
-not convert the hosted failure to green or establish a runtime repair. The new
-evidence checkpoint is submitted again to script-owned CI without a waiver or
-C11 runtime edit.
+The latest inspected current-head rejection is run `34277521278`, job
+`102234088178` (`CI (coverage)`) at submitted head
+`43519903572c4047bbb0068d9ed73e7027a257d7`. Eight required jobs passed; the
+coverage job failed the existing
+`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl` because its
+positive harness-A baseline exceeded the two-second response deadline with
+`context deadline exceeded`. The full 367-line hosted log and exact metadata
+are retained in `ci-rejection-34277521278.log` and
+`ci-rejection-34277521278.json`. This test path is outside C11's two owned
+directories, so no runtime repair is authorized here. The new C11 checkpoint
+changes the script-owned surface and is being submitted to script CI without a
+waiver; this is not a claim that hosted CI is green.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -162,7 +166,7 @@ command-record-v1 schema, argv/cwd/environment/timeout, timing, status, output
 paths, hashes, and byte counts; retained source-validation command artifacts
 are checked against their actual captured Git output; and all package-duration
 sums are bounded by Go's `time.Duration` maximum. These are public synthetic
-regressions in the tracked 47-case report, not claims about hosted CI.
+regressions in the tracked 48-case report, not claims about hosted CI.
 
 ## Immutable hosted evidence
 
@@ -219,12 +223,13 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls remain pinned to
-`59f370b6239744a2bf6d7234097a10cbd9f364fe`; the tracked `ctrl-59f370b` report
-is recorded above. The canonical review findings through review 27 named
+`9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the tracked `ctrl-c11-final`
+report is recorded above. The canonical review findings through review 27 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, and stale head/evidence references. This
 repair closes those causes and the public controls reproduce each
-positive/negative boundary, while retaining the earlier repairs for lane
+positive/negative boundary, including unmatched and unselected-group filters,
+while retaining the earlier repairs for lane
 timing, quiet observations, cache containment, no-test markers, repeated
 package terminals, and artifact provenance. The next action is to
 commit/push this exact evidence checkpoint, update PR #403, and return

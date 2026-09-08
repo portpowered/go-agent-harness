@@ -15,10 +15,12 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `59f370b6239744a2bf6d7234097a10cbd9f364fe`.
-- The implementation repair and exact-head controls are committed at
-  `59f370b6239744a2bf6d7234097a10cbd9f364fe`; the evidence checkpoint adds
-  only owned evidence/provenance updates.
+  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
+- The implementation and exact-head controls are committed at
+  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; this checkpoint consolidates
+  command records into `manifest.runs`, validates the whole input before
+  `--group` display filtering, and records the old-to-new mapping in
+  `schema-control-mapping.md`.
 - Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -41,9 +43,9 @@ met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `ctrl-59f370b/controls.json` reports 47 declared cases, 23 result groups, and
-  zero Go/network/build invocations; its SHA-256 is
-  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
+  `ctrl-c11-final/controls.json` reports 48 declared cases, 23 result groups,
+  and zero Go/network/build invocations; its SHA-256 is
+  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
   source-validation output/identity, and aggregate duration overflow.
@@ -55,10 +57,10 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 47-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `59f370b6` passed the same controls and focused
-  checks at `2026-09-08T20:48:35.484Z`; the tracked controls report SHA-256 is
-  `af631fa173222da2ae78ec67047ee9c1fa06a95e73da28260211e3283912853c`.
+  `profile.py --help`, the 48-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `9b3f4ebc` passed the same controls and focused
+  checks at `2026-09-08T21:13:08.118Z`; the tracked controls report SHA-256 is
+  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
 
 ## CI rejection disposition
 
@@ -75,22 +77,22 @@ The new C11 head is ready for script-owned CI; no result for that new head is
 claimed here. The earlier Windows checkout rejection and its portable-path
 repair remain in `ci-rejection-windows.json`.
 
-The latest current-head rejection is run `34270089010`, job `102209193353`,
-at submitted head `bc7609b5`. Its full log and job metadata are retained in
-`ci-rejection-current.log` and `ci-rejection-current.json`. The hermetic job
-failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` positive
-harness and the
-`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
-positive baseline before its negative mutation. Both paths are outside C11's
-owned directories. Bounded local rechecks of the tool-barge oracle and both
-multi-turn tests passed; this is not a claim that hosted CI is green or that
-C11 owns a runtime repair.
+The latest inspected current-head rejection is run `34277521278`, job
+`102234088178` (`CI (coverage)`) at submitted head
+`43519903572c4047bbb0068d9ed73e7027a257d7`. Eight required jobs passed; the
+coverage job failed the existing
+`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl` because its
+positive harness-A baseline exceeded the two-second response deadline with
+`context deadline exceeded`. The exact metadata and 367-line log are retained
+in `ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`. This
+path is outside C11's owned directories; this is not a claim that hosted CI is
+green or that C11 owns a runtime repair.
 
 The canonical review inbox through review attempt 27 named unreferenced
 invalid groups, forged retained Git metadata, aggregate duration overflow,
 incomplete command records, stale head/evidence references, and the preceding
 timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`59f370b6` repairs the remaining code causes, and the current public controls
+`9b3f4ebc` repairs the remaining code causes, and the current public controls
 cover every finding.
 
 ## Handoff
