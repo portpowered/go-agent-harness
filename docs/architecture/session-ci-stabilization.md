@@ -145,3 +145,15 @@ The focused pair passed 1,000 race repetitions, all simulated tests passed 100 r
 repetitions, and the full device package passed 20 normal repetitions. No timeout
 or limit was raised; the old contract test has lower complexity/statement baselines.
 The cumulative runner includes simulated-device tests in all three modes.
+
+Run34174519177 passed eight jobs, including the repaired device race and full
+coverage. A later committed-replay stage exposed a composed OpenAI fixture
+acknowledging a continuation before its request reached the wire. The fixture
+now waits for the exact four-frame prefix, sends stable response identities,
+awaits the existing provider completion broadcast, and expects exactly six final
+frames. The changing snapshot-plus-two target and obsolete early-exit helper
+were removed. Exact tool output, call identity, one continuation and user item
+shape remain asserted. No production change or timeout increase was needed.
+The fixed case passed 1,000 race repeats; all composed cases passed 30 repeats
+in each mode. Local and Linux-targeted gateway lint passed. The cumulative
+runner now retains composed provider tests alongside CLI/device regressions.

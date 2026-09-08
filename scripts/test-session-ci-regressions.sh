@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce historical session failures, including CI run 34173626771.
+# Reproduce historical session failures, including CI run 34174519177.
 set -euo pipefail
 mode=${1:-normal}
 case "$mode" in normal|coverage|race|all) ;; *) echo "Usage: $0 [normal|coverage|race|all]" >&2; exit 2 ;; esac
@@ -55,5 +55,8 @@ for current in "${modes[@]}"; do
   echo "==> session CI regressions: mode=$current package=go-device-gateway/pkg/devices count=$count"
   (cd "$root/go-device-gateway" && CGO_ENABLED=$cgo go test ./pkg/devices \
     -timeout 480s "${flags[@]}" -run '^TestSimulated' -v) || failed=1
+  echo "==> session CI regressions: mode=$current package=go-llm-gateway/pkg/providers/openai count=$count"
+  (cd "$root/go-llm-gateway" && CGO_ENABLED=$cgo go test ./pkg/providers/openai \
+    -timeout 300s "${flags[@]}" -run '^TestComposed' -v) || failed=1
 done
 exit "$failed"
