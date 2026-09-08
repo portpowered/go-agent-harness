@@ -43,6 +43,19 @@ func TestSessionRecordedPCMIntegrity(t *testing.T) {
 		}
 	}
 
+	danglingManifest := copyRecordedPCMIntegrityBundle(t, source, "dangling-manifest")
+	manifestPath := filepath.Join(danglingManifest, "manifest.json")
+	if err := os.Remove(manifestPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(danglingManifest, "missing-manifest.json"), manifestPath); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err = runRecordedPCMIntegrityCLI(t, "replay", danglingManifest)
+	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
+	stdout, stderr, err = runRecordedPCMIntegrityCLI(t, "--replay", danglingManifest, "--audio-out", filepath.Join(t.TempDir(), "dangling-output.pcm"), "--max-duration", "5s")
+	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
+
 	mutated := copyRecordedPCMIntegrityBundle(t, source, "mutated")
 	pcmPath := filepath.Join(mutated, "audio/out-000.pcm")
 	pcm, err := os.ReadFile(pcmPath)
@@ -90,6 +103,22 @@ func assertRecordedPCMIntegrityFailure(t *testing.T, err error, stdout, stderr s
 	}
 	if strings.Contains(message, "Replay verified") || strings.Contains(message, "[session replay complete]") {
 		t.Fatalf("mutated recording emitted success evidence: %q", message)
+	}
+}
+
+func assertRecordedPCMIntegrityRootManifestFailure(t *testing.T, err error, stdout, stderr string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("dangling manifest unexpectedly succeeded: stdout=%q stderr=%q", stdout, stderr)
+	}
+	message := err.Error() + "\n" + stdout + "\n" + stderr
+	for _, expected := range []string{"manifest.json", "recording manifest"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("dangling manifest error = %q, want %q", message, expected)
+		}
+	}
+	if strings.Contains(message, "Replay verified") || strings.Contains(message, "[session replay complete]") {
+		t.Fatalf("dangling manifest emitted success evidence: %q", message)
 	}
 }
 

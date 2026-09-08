@@ -18,11 +18,18 @@ import (
 // selects timeline.jsonl or opens any replay evidence.
 func validateRecordingBundle(ctx context.Context, bundlePath string) error {
 	manifestPath := filepath.Join(bundlePath, "manifest.json")
-	if _, err := os.Stat(manifestPath); err != nil {
+	info, err := os.Lstat(manifestPath)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("%w: inspect recording manifest %s: %w", publicreplay.ErrBundleIncomplete, manifestPath, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: recording manifest %s is a symlink", publicreplay.ErrBundleIncomplete, manifestPath)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: recording manifest %s is not a regular file", publicreplay.ErrBundleIncomplete, manifestPath)
 	}
 	if _, err := runtimeReplayWire.NewService().ResolveCapturePath(ctx, bundlePath); err != nil {
 		if cause := context.Cause(ctx); cause != nil {

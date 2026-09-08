@@ -44,6 +44,57 @@ func TestServicePrepareRejectsTamperedRootDeclaredPCMBeforeTraceReplay(t *testin
 	}
 }
 
+func TestValidateRecordingBundleRejectsSymlinkedOrNonRegularManifest(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(string) error
+		diag  string
+	}{
+		{
+			name: "dangling symlink",
+			setup: func(manifestPath string) error {
+				return os.Symlink(filepath.Join(filepath.Dir(manifestPath), "missing-manifest.json"), manifestPath)
+			},
+			diag: "is a symlink",
+		},
+		{
+			name:  "directory",
+			setup: func(manifestPath string) error { return os.Mkdir(manifestPath, 0o700) },
+			diag:  "is not a regular file",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := writeManifestedReplayRoot(t)
+			manifestPath := filepath.Join(root, "manifest.json")
+			if err := os.Remove(manifestPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := test.setup(manifestPath); err != nil {
+				t.Fatal(err)
+			}
+
+			err := validateRecordingBundle(context.Background(), root)
+			if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
+				t.Fatalf("manifest error = %v, want ErrBundleIncomplete", err)
+			}
+			if !strings.Contains(err.Error(), "manifest.json") || !strings.Contains(err.Error(), test.diag) {
+				t.Fatalf("manifest error = %q, want manifest path and %q", err, test.diag)
+			}
+		})
+	}
+}
+
+func TestPrepareTraceDirectoryPreservesManifestlessTraceReplay(t *testing.T) {
+	root := writeBundle(t, true)
+	tracePath, err := prepareTraceDirectory(context.Background(), root)
+	if err != nil {
+		t.Fatalf("manifestless trace rejected: %v", err)
+	}
+	if tracePath != root {
+		t.Fatalf("trace path = %q, want %q", tracePath, root)
+	}
+}
+
 func writeManifestedReplayRoot(t *testing.T) string {
 	t.Helper()
 	traceDirectory := writeBundle(t, true)
