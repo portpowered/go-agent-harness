@@ -763,11 +763,12 @@ docs/temp/projects/audio-runtime/c14-replay-boundary-audit/canonical-rejection-f
 
 Delivery record:
 
-- Candidate commit: `8c3d34f4cc317c506e28d15b1fa8f8f05930790b`.
+- Initial evidence commit: `8c3d34f4cc317c506e28d15b1fa8f8f05930790b`;
+  focused-validation handoff commit: `d6ebbcaa010b34c286cc0b0a9b492df4333bf074`.
 - Pushed branch: `codex/audio-runtime-c14-replay-boundary-audit`.
 - Pull request: [#406](https://github.com/portpowered/go-agent-harness/pull/406),
-  base `main`, head `8c3d34f4cc317c506e28d15b1fa8f8f05930790b`, state OPEN at
-  handoff.
+  base `main`, state OPEN. The PR metadata records the current exact head;
+  no merge SHA exists at this executor handoff.
 - CI was not polled and no CI result is claimed. The next factory action is
   the script-owned current-head CI gate, followed by independent review if the
   gate succeeds.
