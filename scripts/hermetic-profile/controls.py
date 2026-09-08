@@ -133,7 +133,7 @@ def synthetic_manifest(
 ) -> tuple[Path, Path]:
     root = case_dir / "run"
     root.mkdir(parents=True, exist_ok=True)
-    quiet = case_dir / "quiet-evidence.json"
+    quiet = root / "quiet-evidence.json"
     quiet_evidence(quiet)
     manifest = {
         "schema": SCHEMA,
@@ -396,7 +396,8 @@ def exercise_help_and_offline(output: Path) -> list[dict[str, Any]]:
 def exercise_fail_closed(output: Path) -> dict[str, Any]:
     case_dir = output / "fail-closed"
     case_dir.mkdir(parents=True, exist_ok=True)
-    invalid_quiet = case_dir / "invalid-quiet.json"
+    inventory_dir = case_dir / "inventory"
+    invalid_quiet = inventory_dir / "invalid-quiet.json"
     write_json(
         invalid_quiet,
         {
@@ -414,7 +415,7 @@ def exercise_fail_closed(output: Path) -> dict[str, Any]:
             "--repo",
             str(Path(__file__).resolve().parents[2]),
             "--output",
-            str(case_dir / "inventory"),
+            str(inventory_dir),
             "--allow-heavy",
             "--quiet-evidence",
             str(invalid_quiet),
@@ -628,19 +629,52 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
             f"{run_record['stderr']}"
         )
     baseline = read_json(manifest)
-    original = baseline["runs"][0]
-    original_path = manifest.parent / original["stdout_path"]
-    redirected = case_dir / "redirected.stdout.jsonl"
-    redirected.write_bytes(original_path.read_bytes())
-    redirected_sha = sha256_file(redirected)
     mutations: list[dict[str, Any]] = []
-    for mutation_name, redirected_path in (
-        ("absolute-redirect", str(redirected.resolve())),
-        ("traversal-redirect", "../redirected.stdout.jsonl"),
+    original = baseline["runs"][0]
+    for stream_name, path_field, hash_field, retained_field, suffix in (
+        ("stdout", "stdout_path", "stdout_sha256", "raw_stdout_retained", "jsonl"),
+        ("stderr", "stderr_path", "stderr_sha256", "raw_stderr_retained", "log"),
     ):
+        original_path = manifest.parent / original[path_field]
+        redirected = case_dir / f"redirected.{stream_name}.{suffix}"
+        redirected.write_bytes(original_path.read_bytes())
+        redirected_sha = sha256_file(redirected)
+        for redirect_kind, redirected_path in (
+            ("absolute", str(redirected.resolve())),
+            ("traversal", f"../redirected.{stream_name}.{suffix}"),
+        ):
+            mutation_name = f"{stream_name}-{redirect_kind}-redirect"
+            mutated = json.loads(json.dumps(baseline))
+            mutated["runs"][0][path_field] = redirected_path
+            mutated["runs"][0][hash_field] = redirected_sha
+            write_json(manifest, mutated)
+            mutations.append(
+                analyze_mutated_manifest(
+                    case_dir,
+                    manifest,
+                    mutation_name,
+                    {
+                        "failure_references.0.error": (
+                            f"artifact path {redirected_path!r} resolves outside output root "
+                            f"{manifest.parent.resolve()}"
+                        ),
+                        f"provenance.{retained_field}": False,
+                    },
+                )
+            )
+
+    redirected_quiet = case_dir / "redirected.quiet.json"
+    redirected_quiet.write_bytes(quiet.read_bytes())
+    redirected_quiet_sha = sha256_file(redirected_quiet)
+    for redirect_kind, redirected_path in (
+        ("absolute", str(redirected_quiet.resolve())),
+        ("traversal", "../redirected.quiet.json"),
+    ):
+        mutation_name = f"quiet-{redirect_kind}-redirect"
         mutated = json.loads(json.dumps(baseline))
-        mutated["runs"][0]["stdout_path"] = redirected_path
-        mutated["runs"][0]["stdout_sha256"] = redirected_sha
+        quiet_record = mutated["run_groups"][0]["quiet_evidence"]
+        quiet_record["path"] = redirected_path
+        quiet_record["sha256"] = redirected_quiet_sha
         write_json(manifest, mutated)
         mutations.append(
             analyze_mutated_manifest(
@@ -648,11 +682,12 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
                 manifest,
                 mutation_name,
                 {
-                    "failure_references.0.error": (
+                    "repetitions.0.validation.valid": False,
+                    "repetitions.0.validation.quiet_evidence.status": "INVALID",
+                    "repetitions.0.validation.quiet_evidence.error": (
                         f"artifact path {redirected_path!r} resolves outside output root "
                         f"{manifest.parent.resolve()}"
                     ),
-                    "provenance.raw_stdout_retained": False,
                 },
             )
         )
@@ -660,6 +695,7 @@ def exercise_artifact_containment(output: Path) -> dict[str, Any]:
         "name": "artifact-containment",
         "run": run_record,
         "mutations": mutations,
+        "scenario_count": len(mutations),
         "raw_artifacts_retained": True,
     }
 
@@ -674,6 +710,7 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     failures: list[str] = []
+    case_count = 0
     cases = [
         (
             "valid-pass-repeat",
@@ -812,6 +849,7 @@ def main() -> int:
         repeat,
         expected_checks,
     ) in cases:
+        case_count += 1
         try:
             results.append(
                 exercise_case(
@@ -829,45 +867,52 @@ def main() -> int:
         except ControlError as exc:
             failures.append(str(exc))
     try:
-        results.extend(exercise_help_and_offline(output))
+        help_results = exercise_help_and_offline(output)
+        results.extend(help_results)
+        case_count += len(help_results)
     except ControlError as exc:
         failures.append(str(exc))
     try:
-        results.append(exercise_fail_closed(output))
+        fail_closed_result = exercise_fail_closed(output)
+        results.append(fail_closed_result)
+        case_count += 1
     except ControlError as exc:
         failures.append(str(exc))
     try:
-        results.append(exercise_provenance_tampering(output))
+        provenance_result = exercise_provenance_tampering(output)
+        results.append(provenance_result)
+        case_count += len(provenance_result["mutations"])
     except ControlError as exc:
         failures.append(str(exc))
     try:
-        results.append(exercise_artifact_containment(output))
+        artifact_result = exercise_artifact_containment(output)
+        results.append(artifact_result)
+        case_count += artifact_result["scenario_count"]
     except ControlError as exc:
         failures.append(str(exc))
 
     try:
-        results.append(
-            exercise_case(
-                output,
-                name="missing-raw-artifact",
-                scenario="pass",
-                packages=[
-                    {"import_path": "example/missing-raw", "package_arg": ".", "has_tests": True}
-                ],
-                run_status=0,
-                analysis_status=1,
-                expect_analysis="INVALID",
-                expected_checks={
-                    "provenance.raw_stdout_retained": False,
-                    "provenance.raw_artifacts_retained": False,
-                },
-                remove_stdout_after_run=True,
-            )
+        missing_raw_result = exercise_case(
+            output,
+            name="missing-raw-artifact",
+            scenario="pass",
+            packages=[
+                {"import_path": "example/missing-raw", "package_arg": ".", "has_tests": True}
+            ],
+            run_status=0,
+            analysis_status=1,
+            expect_analysis="INVALID",
+            expected_checks={
+                "provenance.raw_stdout_retained": False,
+                "provenance.raw_artifacts_retained": False,
+            },
+            remove_stdout_after_run=True,
         )
+        results.append(missing_raw_result)
+        case_count += 1
     except ControlError as exc:
         failures.append(str(exc))
 
-    case_count = len(cases) + 1 + 1 + 3 + 2 + 3
     report = {
         "schema": "c11-hermetic-profile-controls-v1",
         "created_at_utc": utc_now(),

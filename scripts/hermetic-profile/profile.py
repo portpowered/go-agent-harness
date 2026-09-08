@@ -36,7 +36,6 @@ from typing import Any, Iterable
 SCHEMA = "c11-hermetic-profile-manifest-v1"
 ANALYSIS_SCHEMA = "c11-hermetic-profile-analysis-v1"
 QUIET_SCHEMA = "c11-quiet-evidence-v1"
-PR_TIER_BUDGET_SECONDS = 60.0
 TARGET_SECONDS = 180.0
 GENERAL_TIMEOUT_SECONDS = 300
 AGENT_CLI_TIMEOUT_SECONDS = 480
@@ -377,16 +376,19 @@ def quiet_evidence_contract_error(evidence: Any, *, mode: str) -> str | None:
     return None
 
 
-def validate_quiet_evidence(path: Path, *, mode: str) -> dict[str, Any]:
-    evidence = load_json(path)
+def validate_quiet_evidence(
+    path: Path, *, root: Path, mode: str
+) -> dict[str, Any]:
+    resolved_path = artifact_path(root, str(path))
+    evidence = load_json(resolved_path)
     error = quiet_evidence_contract_error(evidence, mode=mode)
     if error:
         raise ProfileError(error)
     isolation = evidence["isolation"]
     expires = evidence["valid_until_utc"]
     return {
-        "path": str(path.resolve()),
-        "sha256": sha256_file(path),
+        "path": str(resolved_path),
+        "sha256": sha256_file(resolved_path),
         "isolation": isolation,
         "captured_at_utc": evidence.get("captured_at_utc"),
         "valid_until_utc": expires,
@@ -397,7 +399,9 @@ def validate_quiet_evidence(path: Path, *, mode: str) -> dict[str, Any]:
     }
 
 
-def require_heavy(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
+def require_heavy(
+    args: argparse.Namespace, *, mode: str, root: Path
+) -> dict[str, Any]:
     if not args.allow_heavy:
         raise ProfileError(
             f"{args.command} is opt-in; pass --allow-heavy only on the documented "
@@ -407,7 +411,9 @@ def require_heavy(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         raise ProfileError(
             f"{args.command} requires --quiet-evidence; elapsed time does not prove quiet"
         )
-    return validate_quiet_evidence(Path(args.quiet_evidence), mode=mode)
+    return validate_quiet_evidence(
+        Path(args.quiet_evidence), root=root, mode=mode
+    )
 
 
 def package_arg(module_root: Path, package_dir: Path) -> str:
@@ -571,8 +577,8 @@ def inventory(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     output = Path(args.output).resolve()
     if not repo.is_dir():
         raise ProfileError(f"repository directory not found: {repo}")
-    quiet = require_heavy(args, mode="hermetic")
     output.mkdir(parents=True, exist_ok=True)
+    quiet = require_heavy(args, mode="hermetic", root=output)
     gomaxprocs = args.gomaxprocs or DEFAULT_PARALLELISM
     parallelism = args.parallelism or gomaxprocs
     cache_root = output / "cache"
@@ -671,7 +677,7 @@ def inventory(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     }
     for name, relative in MODULES:
         module = {"name": name, "path": str((repo / relative).resolve()), "relative": relative}
-        require_heavy(args, mode="hermetic")
+        require_heavy(args, mode="hermetic", root=output)
         record, stdout, _ = command_record(
             [args.go, "list", "-json", "-tags=nomicrophone", "./..."],
             cwd=Path(module["path"]),
@@ -796,8 +802,8 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
     check_ready_manifest(manifest)
-    quiet = require_heavy(args, mode="hermetic")
     root = manifest_root(manifest_path)
+    quiet = require_heavy(args, mode="hermetic", root=root)
     warm_root = root / "warm"
     env_overrides = manifest_env(manifest)
     go = manifest_go(manifest)
@@ -806,7 +812,7 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     failures: list[str] = []
     started_at = utc_now()
     for module in manifest["modules"]:
-        require_heavy(args, mode="hermetic")
+        require_heavy(args, mode="hermetic", root=root)
         timeout = (
             manifest["flags"]["agent_cli_timeout_seconds"]
             if module["name"] == "agent-cli"
@@ -846,7 +852,7 @@ def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                         }
                     )
                     continue
-                require_heavy(args, mode="hermetic")
+                require_heavy(args, mode="hermetic", root=root)
                 binary_name = (
                     f"{safe_label(module['name'])}-"
                     f"{hashlib.sha256(package['import_path'].encode()).hexdigest()[:16]}.test"
@@ -988,16 +994,16 @@ def select_packages(
 def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
+    root = manifest_root(manifest_path)
     if manifest.get("mode") == "synthetic":
-        quiet = require_heavy(args, mode="synthetic")
+        quiet = require_heavy(args, mode="synthetic", root=root)
     else:
         check_ready_manifest(manifest)
-        quiet = require_heavy(args, mode="hermetic")
+        quiet = require_heavy(args, mode="hermetic", root=root)
     if args.repeat > 3:
         raise ProfileError("repeat is capped at three invocations (one plus two repeats)")
     if args.cohort is None and args.repeat != 1:
         raise ProfileError("full inventory runs are single-shot; repeat only a bounded cohort")
-    root = manifest_root(manifest_path)
     runs_root = root / "runs"
     env_overrides = manifest_env(manifest)
     synthetic = manifest.get("mode") == "synthetic"
@@ -1060,6 +1066,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             require_heavy(
                 args,
                 mode="synthetic" if manifest.get("mode") == "synthetic" else "hermetic",
+                root=root,
             )
             record, _, _ = command_record(
                 argv,
@@ -1412,65 +1419,6 @@ def package_rank(parsed_records: Iterable[dict[str, Any]]) -> list[dict[str, Any
     return ranked
 
 
-def timingate_report(parsed_records: list[dict[str, Any]]) -> dict[str, Any]:
-    usable_records = [
-        parsed
-        for parsed in parsed_records
-        if parsed.get("stream_status") == "PASS"
-        and parsed.get("process_status") == "PASS"
-        and parsed.get("inventory_complete")
-    ]
-    observations = [
-        observation
-        for parsed in usable_records
-        for observation in parsed.get("observations", [])
-    ]
-    invalid_streams = [
-        parsed.get("error")
-        or parsed.get("stderr_error")
-        or parsed.get("record_id")
-        for parsed in parsed_records
-        if (
-            parsed.get("stream_status") != "PASS"
-            or parsed.get("process_status") != "PASS"
-            or not parsed.get("inventory_complete")
-        )
-    ]
-    total = sum(item["elapsed_seconds"] for item in observations)
-    by_package: dict[str, dict[str, Any]] = {}
-    for item in observations:
-        package = item["package"]
-        aggregate = by_package.setdefault(
-            package, {"package": package, "elapsed_seconds": 0.0, "count": 0}
-        )
-        aggregate["elapsed_seconds"] += item["elapsed_seconds"]
-        aggregate["count"] += 1
-    packages = sorted(
-        by_package.values(),
-        key=lambda item: (-item["elapsed_seconds"], item["package"]),
-    )
-    if invalid_streams or not observations:
-        status = "INVALID"
-    elif total > PR_TIER_BUDGET_SECONDS:
-        status = "OVER_BUDGET"
-    else:
-        status = "PASS"
-    return {
-        "status": status,
-        "policy": "existing tools/timingate semantics",
-        "budget_seconds": PR_TIER_BUDGET_SECONDS,
-        "observations": len(observations),
-        "package_count": len(packages),
-        "package_time_total_seconds": total,
-        "slowest_packages": packages,
-        "invalid_streams": invalid_streams,
-        "warning": (
-            "This is a diagnostic reproduction of the PR-tier 60s package-time "
-            "policy, not a new mandatory gate and not lane wall time."
-        ),
-    }
-
-
 def lane_times(records: list[dict[str, Any]]) -> dict[str, Any]:
     starts = [
         int(record["monotonic_start_ns"])
@@ -1512,17 +1460,20 @@ def validate_recorded_quiet_evidence(
         return {"status": "INVALID", "error": "quiet evidence has no path"}
     if not isinstance(expected_sha, str) or not expected_sha:
         return {"status": "INVALID", "error": "quiet evidence has no SHA-256"}
-    path = Path(path_value)
-    if not path.is_absolute():
-        path = root / path
-    path = path.resolve()
     try:
+        path = artifact_path(root, path_value)
         evidence = load_json(path)
         actual_sha = sha256_file(path)
-    except (OSError, ProfileError) as exc:
+    except ProfileError as exc:
         return {
             "status": "INVALID",
-            "path": str(path),
+            "path": path_value,
+            "error": str(exc),
+        }
+    except OSError as exc:
+        return {
+            "status": "INVALID",
+            "path": path_value,
             "error": f"quiet evidence cannot be read: {exc}",
         }
     if actual_sha != expected_sha:
@@ -1881,7 +1832,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     stream_failures = [
         {
             "record": parsed.get("record_id"),
-            "error": parsed.get("error"),
+            "error": parsed.get("error") or parsed.get("stderr_error"),
             "process_status": parsed.get("process_status"),
             "source_status": parsed.get("source_status"),
             "missing_packages": parsed.get("missing_packages", []),
@@ -1933,7 +1884,6 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         ),
         "status": "OBSERVATION_ONLY_NOT_A_GATE",
     }
-    timing = timingate_report(parsed_records)
     fresh_timing = "PASS" if execution_valid and source_identity["all_match"] else "INVALID"
     raw_stdout_retained = bool(parsed_records) and all(
         parsed.get("raw_stdout_retained") is True for parsed in parsed_records
@@ -1980,6 +1930,16 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 for parsed in parsed_records
                 for observation in parsed.get("observations", [])
             ),
+            "package_budget_policy": {
+                "tool": "tools/timingate",
+                "budget_seconds": 60,
+                "status": "REFERENCE_ONLY",
+                "note": (
+                    "The canonical PR-tier package-budget evaluator remains in "
+                    "tools/timingate; offline analysis does not duplicate or "
+                    "execute that policy."
+                ),
+            },
             "subtest_overlap_records": subtest_records,
             "subtest_overlap_count": len(subtest_records),
         },
@@ -2031,7 +1991,6 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if isinstance(group, dict)
             and (args.group is None or group.get("run_group_id") == args.group)
         ],
-        "timingate": timing,
         "failure_references": stream_failures,
         "provenance": {
             "raw_stdout_retained": raw_stdout_retained,

@@ -62,6 +62,12 @@ python3 scripts/hermetic-profile/profile.py analyze \
   --output "$C11_EVIDENCE/analysis"
 ```
 
+The quiet-evidence file is an input artifact and must live below the output
+root: below the inventory output for `inventory`, and beside the manifest for
+`warm` and `run`. Absolute paths and traversal that resolve outside that root
+are rejected before the file is read. This keeps captured quiet-runner
+provenance within the manifest's artifact boundary.
+
 `inventory` records the source SHA and dirtiness, runner OS/architecture/CPU,
 Go version and effective `go env`, the six `go list -json` package inventories,
 flags, cache paths, and command artifacts. `warm` separately records dependency
@@ -80,13 +86,15 @@ stderr. Offline `analyze` only reads retained artifacts.
 
 ## Analysis rules
 
-The analyzer parses the existing timingate package-terminal model, ranks package
-completion durations, retains failures, marks no-test/skip packages separately,
+The analyzer parses the same package-terminal event model used by timingate,
+ranks package completion durations, retains failures, marks no-test/skip packages separately,
 flags cached output, detects overlapping active subtests, and rejects missing or
 unexpected package terminals. It reports:
 
 - cold metadata/inventory and warm download/compile time separately;
-- package terminal time and the existing 60-second timingate diagnostic;
+- package terminal time and ranking, with the existing 60-second PR-tier policy
+  referenced from `tools/timingate` rather than reimplemented by offline
+  analysis;
 - lane wall as `max(monotonic_end) - min(monotonic_start)` across invocations;
 - the sum of invocation wall intervals only as a diagnostic, never as lane wall;
 - all first-pass/repeat records, variation, raw references, and failure reasons.
