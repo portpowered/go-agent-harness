@@ -46,3 +46,36 @@ acoustic output, or the separate `--audio-out` sink as a recorded artifact.
 The manifest remains self-unhashed by the existing transcript contract.
 
 Rollback: `git revert 6a7e3199705671541b80b895820ffdca7be7689a`.
+
+## C13 static-gate repair checkpoint
+
+The first submitted head `05f2551ca878377134f75e243ea5131a82d6e16f` was
+returned by the Factory after PR #405 run `34269150751`. The completed static
+job `102206009938` passed formatting, Wire, architecture/size, vet and
+staticcheck, then failed pinned golangci-lint `2.9.0` on two errorlint findings
+in the new adapter: both wrapped causes used `%v` instead of `%w` at
+`recording_directory.go:25` and `:31`. After those were corrected, the full
+local pinned lint exposed one additional same-candidate `mnd` finding in
+`directory.go:277` (`32*1024`); the buffer size was named without changing
+streaming behavior. The repair is committed as
+`90f4417dbfff4efaf640be67ba8076b0ba8a0538` (short `90f4417`).
+
+- Current source: `90f4417d`; branch remains `codex/audio-runtime-c13-recorded-pcm-integrity` and `prd.json.branchName` matches.
+- `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`; startup and original baseline ancestry remain satisfied.
+- Rebuilt candidate: `/tmp/audio-runtime-c13-candidate-lint-repaired-yui`.
+- Candidate SHA256: `6cde9a9e9ca4fae5e63b914258643c6cda8e6f8ba0809646249164c3424aaef0`.
+- Public probe: `public_integrity_probe.py candidate --binary /tmp/audio-runtime-c13-candidate-lint-repaired-yui --evidence /tmp/audio-runtime-c13-repaired-driver`.
+- Probe run: `/private/tmp/audio-runtime-c13-repaired-driver/candidate-3599-1788896496`.
+- Untouched `session replay` and `session --replay --audio-out` exited `0`.
+- Same-size one-byte PCM mutations exited `1` on both routes in `0.040s` and `0.022s`, each naming `audio/out-000.pcm` and the expected/actual digest mismatch.
+- Post-repair focused replay packages and `TestSessionRecordedPCMIntegrity` passed normal and race; six accumulated C12 replay/continuation/recording regressions passed normal.
+- `make lint`, `make staticcheck`, `make vet`, `make fmt`, `make wire-check`, `make architecture-check`, `make size-check`, and `git diff --check` pass. Architecture/size remains `181 package(s), 1859 file(s), 27036 function(s) checked`.
+
+The repaired head has not been resubmitted or polled for terminal CI. The
+unrelated hermetic room and coverage provider-burst failures visible later in
+the same still-running GitHub run are outside this task's owned paths and are
+not claimed fixed here. The next action is to commit this evidence update,
+push the same PR #405 head, and return `ACCEPTED` to the script-owned CI gate;
+any exact same-task rejection remains with this executor.
+
+Rollback for the static repair is `git revert 90f4417`.
