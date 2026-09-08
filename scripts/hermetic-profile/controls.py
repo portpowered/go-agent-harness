@@ -539,6 +539,19 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
     baseline = read_json(manifest)
     quiet_baseline = read_json(quiet)
     mutations: list[dict[str, Any]] = []
+
+    def append_unreferenced_invalid_group(value: dict[str, Any]) -> None:
+        invalid_group = json.loads(json.dumps(value["run_groups"][0]))
+        invalid_group.update(
+            {
+                "run_group_id": "unreferenced-invalid",
+                "requested_repetitions": 0,
+                "completed_repetitions": 0,
+                "records": [],
+            }
+        )
+        value["run_groups"].append(invalid_group)
+
     for mutation_name, mutate, checks in (
         (
             "missing-record-source",
@@ -619,9 +632,30 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             {
                 "failure_references.0.no_test_classification_errors.0": (
                     "no-test marker for 'example/no-test' conflicts with inventory "
-                    "has_tests=true"
+                "has_tests=true"
                 ),
             },
+        ),
+        (
+            "unreferenced-invalid-run-group",
+            append_unreferenced_invalid_group,
+            {"repetitions.1.validation.valid": False},
+        ),
+        (
+            "incomplete-command-record-schema",
+            lambda value: [
+                value["runs"][0].pop(field, None)
+                for field in (
+                    "schema",
+                    "argv",
+                    "cwd",
+                    "env_overrides",
+                    "timeout_seconds",
+                    "stdout_bytes",
+                    "stderr_bytes",
+                )
+            ],
+            {},
         ),
     ):
         mutated = json.loads(json.dumps(baseline))
@@ -928,6 +962,22 @@ def exercise_source_identity(output: Path) -> dict[str, Any]:
                 {"dirty_paths": ["forged.txt"]}
             ),
         ),
+        (
+            "forged-metadata-artifact-sha",
+            lambda value: value["runs"][0]["source_validation"][
+                "metadata_commands"
+            ][0].update({"stdout_sha256": "0" * 64}),
+        ),
+        (
+            "forged-source-output-identity",
+            lambda value: (
+                value.update({"source_sha": "f" * 40}),
+                value["runs"][0].update({"source_sha": "f" * 40}),
+                value["runs"][0]["source_validation"].update(
+                    {"head": "f" * 40, "expected_head": "f" * 40}
+                ),
+            ),
+        ),
     ):
         mutated = json.loads(json.dumps(baseline))
         mutate(mutated)
@@ -1130,6 +1180,37 @@ def main() -> int:
             "PASS",
             1,
             {"package_execution.ranked_packages.0.observations": 2},
+        ),
+        (
+            "aggregate-duration-overflow",
+            "aggregate-overflow",
+            [
+                {
+                    "import_path": "example/overflow-a",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-b",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-c",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-d",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+            ],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
         ),
         (
             "oversized-duration",

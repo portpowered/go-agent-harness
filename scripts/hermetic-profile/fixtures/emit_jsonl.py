@@ -53,6 +53,7 @@ def main() -> int:
             "overlap",
             "cross-package",
             "repeated-package",
+            "aggregate-overflow",
             "oversized-duration",
             "oversized-integer",
         ),
@@ -166,6 +167,22 @@ def main() -> int:
                 event("pass", "example/repeated", elapsed=0.01),
                 event("start", "example/repeated"),
                 event("pass", "example/repeated", elapsed=0.02),
+            ],
+            delay=args.delay,
+        )
+        return 0
+
+    if args.scenario == "aggregate-overflow":
+        write_events(
+            [
+                event("start", "example/overflow-a"),
+                event("pass", "example/overflow-a", elapsed=9_000_000_000),
+                event("start", "example/overflow-b"),
+                event("pass", "example/overflow-b", elapsed=9_000_000_000),
+                event("start", "example/overflow-c"),
+                event("pass", "example/overflow-c", elapsed=9_000_000_000),
+                event("start", "example/overflow-d"),
+                event("pass", "example/overflow-d", elapsed=9_000_000_000),
             ],
             delay=args.delay,
         )

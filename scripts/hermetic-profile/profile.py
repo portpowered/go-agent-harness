@@ -36,10 +36,12 @@ from typing import Any, Iterable
 SCHEMA = "c11-hermetic-profile-manifest-v1"
 ANALYSIS_SCHEMA = "c11-hermetic-profile-analysis-v1"
 QUIET_SCHEMA = "c11-quiet-evidence-v1"
+COMMAND_RECORD_SCHEMA = "c11-command-record-v1"
 TARGET_SECONDS = 180.0
 GENERAL_TIMEOUT_SECONDS = 300
 AGENT_CLI_TIMEOUT_SECONDS = 480
 MAX_DURATION_NANOSECONDS = (1 << 63) - 1
+MAX_DURATION_SECONDS = MAX_DURATION_NANOSECONDS / 1_000_000_000.0
 MAX_MONOTONIC_NANOSECONDS = (1 << 63) - 1
 DEFAULT_PARALLELISM = max(1, os.cpu_count() or 1)
 MODULES = (
@@ -1294,6 +1296,201 @@ def parse_elapsed(value: Any) -> float:
     return result
 
 
+def checked_duration_sum(values: Iterable[float], *, label: str) -> float:
+    try:
+        total = math.fsum(values)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(f"{label} is not a finite time.Duration") from exc
+    if not math.isfinite(total) or total < 0:
+        raise ValueError(f"{label} is not a finite non-negative time.Duration")
+    if total > MAX_DURATION_SECONDS:
+        raise ValueError(f"{label} exceeds time.Duration")
+    return total
+
+
+def command_record_schema_errors(record: Any, *, label: str) -> list[str]:
+    if not isinstance(record, dict):
+        return [f"{label} is not a JSON object"]
+    errors: list[str] = []
+    required = (
+        "schema",
+        "label",
+        "argv",
+        "cwd",
+        "env_overrides",
+        "timeout_seconds",
+        "started_at_utc",
+        "ended_at_utc",
+        "monotonic_start_ns",
+        "monotonic_end_ns",
+        "wall_seconds",
+        "timed_out",
+        "exit_status",
+        "signal",
+        "spawn_error",
+        "stdout_path",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stderr_path",
+        "stderr_sha256",
+        "stderr_bytes",
+        "status",
+    )
+    for field in required:
+        if field not in record:
+            errors.append(f"{label} is missing required field {field}")
+    if record.get("schema") != COMMAND_RECORD_SCHEMA:
+        errors.append(
+            f"{label} schema is {record.get('schema')!r}, want {COMMAND_RECORD_SCHEMA!r}"
+        )
+    if not isinstance(record.get("label"), str) or not record.get("label"):
+        errors.append(f"{label} label must be a non-empty string")
+    argv = record.get("argv")
+    if not isinstance(argv, list) or not argv or not all(
+        isinstance(item, str) for item in argv
+    ):
+        errors.append(f"{label} argv must be a non-empty list of strings")
+    if not isinstance(record.get("cwd"), str) or not record.get("cwd"):
+        errors.append(f"{label} cwd must be a non-empty string")
+    env_overrides = record.get("env_overrides")
+    if not isinstance(env_overrides, dict) or not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in env_overrides.items()
+    ):
+        errors.append(f"{label} env_overrides must be a string map")
+    try:
+        timeout = record.get("timeout_seconds")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise ValueError("must be a finite JSON number")
+        if parse_elapsed(timeout) <= 0:
+            raise ValueError("must be positive")
+    except ValueError as exc:
+        errors.append(f"{label} timeout_seconds is invalid: {exc}")
+    for field in ("started_at_utc", "ended_at_utc"):
+        if parse_utc(record.get(field)) is None:
+            errors.append(f"{label} {field} must be an ISO timestamp")
+    if not isinstance(record.get("timed_out"), bool):
+        errors.append(f"{label} timed_out must be a boolean")
+    for field in ("exit_status", "signal"):
+        value = record.get(field)
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int)
+        ):
+            errors.append(f"{label} {field} must be an integer or null")
+    if record.get("spawn_error") is not None and not isinstance(
+        record.get("spawn_error"), str
+    ):
+        errors.append(f"{label} spawn_error must be a string or null")
+    for field in ("stdout_path", "stderr_path"):
+        if not isinstance(record.get(field), str) or not record.get(field):
+            errors.append(f"{label} {field} must be a non-empty string")
+    for field in ("stdout_sha256", "stderr_sha256"):
+        value = record.get(field)
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+            errors.append(f"{label} {field} must be a SHA-256 digest")
+    for field in ("stdout_bytes", "stderr_bytes"):
+        value = record.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            errors.append(f"{label} {field} must be a non-negative integer")
+    if record.get("status") not in {"PASS", "FAIL", "TIMEOUT", "SPAWN_ERROR"}:
+        errors.append(f"{label} status is not a recognized command status")
+    return errors
+
+
+def command_record_artifact_errors(
+    record: dict[str, Any], *, root: Path, label: str
+) -> list[str]:
+    errors: list[str] = []
+    for stream in ("stdout", "stderr"):
+        path_field = f"{stream}_path"
+        hash_field = f"{stream}_sha256"
+        bytes_field = f"{stream}_bytes"
+        path_value = record.get(path_field)
+        if not isinstance(path_value, str):
+            continue
+        try:
+            path = artifact_path(root, path_value)
+            raw = path.read_bytes()
+        except (OSError, ProfileError) as exc:
+            errors.append(f"{label} {stream} artifact is unreadable: {exc}")
+            continue
+        if sha256_bytes(raw) != record.get(hash_field):
+            errors.append(f"{label} {stream}_sha256 does not match captured artifact")
+        if len(raw) != record.get(bytes_field):
+            errors.append(f"{label} {stream}_bytes does not match captured artifact")
+    return errors
+
+
+def validate_metadata_commands(
+    value: Any, *, root: Path, label: str
+) -> list[str]:
+    if not isinstance(value, list) or not value:
+        return [f"{label} metadata_commands must be a non-empty list"]
+    errors: list[str] = []
+    for index, command in enumerate(value):
+        command_label = f"{label} metadata command {index}"
+        errors.extend(command_record_schema_errors(command, label=command_label))
+        if not isinstance(command, dict):
+            continue
+        errors.extend(command_timing_errors(command))
+        errors.extend(command_record_artifact_errors(command, root=root, label=command_label))
+        if command.get("status") != "PASS" or command.get("exit_status") != 0:
+            errors.append(f"{command_label} did not complete successfully")
+    return errors
+
+
+def validate_metadata_outputs(
+    value: Any,
+    *,
+    root: Path,
+    expected_head: Any,
+    expected_dirty: Any,
+    label: str,
+) -> list[str]:
+    errors = validate_metadata_commands(value, root=root, label=label)
+    if errors or not isinstance(value, list):
+        return errors
+    head_commands = [
+        command
+        for command in value
+        if isinstance(command, dict)
+        and "source-rev-parse" in str(command.get("label", ""))
+    ]
+    status_commands = [
+        command
+        for command in value
+        if isinstance(command, dict)
+        and "source-status" in str(command.get("label", ""))
+    ]
+    if len(head_commands) != 1:
+        errors.append(f"{label} must contain one source-rev-parse command")
+    if len(status_commands) != 1:
+        errors.append(f"{label} must contain one source-status command")
+    if errors:
+        return errors
+    head_command = head_commands[0]
+    status_command = status_commands[0]
+    try:
+        actual_head = decode_output(
+            command_output(head_command, root=root, stream="stdout")
+        ).strip()
+        actual_dirty = parse_git_status_paths(
+            command_output(status_command, root=root, stream="stdout")
+        )
+    except (OSError, ProfileError) as exc:
+        return [f"{label} output cannot be read: {exc}"]
+    if actual_head != expected_head:
+        errors.append(f"{label} source-rev-parse output does not match captured head")
+    if actual_dirty != expected_dirty:
+        errors.append(f"{label} source-status output does not match captured dirty paths")
+    return errors
+
+
+def command_output(record: dict[str, Any], *, root: Path, stream: str) -> bytes:
+    path = artifact_path(root, str(record[f"{stream}_path"]))
+    return path.read_bytes()
+
+
 def command_timing_errors(record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     starts = record.get("monotonic_start_ns")
@@ -1555,6 +1752,15 @@ def parse_record_stream(
                         source_validation_errors.append(
                             f"source validation {field} does not match manifest source_dirty_paths"
                         )
+                source_validation_errors.extend(
+                    validate_metadata_outputs(
+                        validation.get("metadata_commands"),
+                        root=root,
+                        expected_head=validation_head,
+                        expected_dirty=validation.get("dirty_paths"),
+                        label="source validation",
+                    )
+                )
         if source_validation_errors:
             source_status = "UNVALIDATED"
 
@@ -1566,10 +1772,25 @@ def parse_record_stream(
         "raw_stderr_retained": False,
         "timing_status": "INVALID",
         "timing_errors": command_timing_errors(record),
+        "record_schema_errors": command_record_schema_errors(
+            record, label=f"run record {record.get('label')!r}"
+        ),
+        "artifact_errors": [],
         "source_validation_errors": source_validation_errors,
         "execution_valid": False,
     }
+    base["artifact_errors"] = command_record_artifact_errors(
+        record, root=root, label=f"run record {record.get('label')!r}"
+    )
     base["timing_status"] = "PASS" if not base["timing_errors"] else "INVALID"
+    if base["record_schema_errors"]:
+        base.update(
+            {
+                "stream_status": "INVALID",
+                "error": "; ".join(base["record_schema_errors"]),
+            }
+        )
+        return base
     path_value = record.get("stdout_path")
     if not isinstance(path_value, str):
         base.update(
@@ -1597,6 +1818,7 @@ def parse_record_stream(
     parsed["raw_stdout_path"] = str(path)
     parsed["raw_stdout_sha256"] = sha256_bytes(raw)
     parsed["raw_stdout_retained"] = True
+    parsed["stdout_bytes_matches"] = len(raw) == record.get("stdout_bytes")
     parsed["stdout_hash_matches"] = (
         isinstance(record.get("stdout_sha256"), str)
         and record.get("stdout_sha256") == parsed["raw_stdout_sha256"]
@@ -1613,6 +1835,9 @@ def parse_record_stream(
             try:
                 stderr_hash = sha256_file(stderr_path)
                 parsed["raw_stderr_retained"] = True
+                parsed["stderr_bytes_matches"] = (
+                    len(stderr_path.read_bytes()) == record.get("stderr_bytes")
+                )
                 stderr_hash_matches = (
                     isinstance(record.get("stderr_sha256"), str)
                     and record.get("stderr_sha256") == stderr_hash
@@ -1622,6 +1847,7 @@ def parse_record_stream(
     else:
         stderr_error = "command record has no stderr_path"
     parsed["stderr_hash_matches"] = stderr_hash_matches
+    parsed.setdefault("stderr_bytes_matches", False)
     parsed["stderr_error"] = stderr_error
     parsed["process_status"] = (
         "PASS"
@@ -1643,12 +1869,16 @@ def parse_record_stream(
         and parsed["process_status"] == "PASS"
         and parsed["source_status"] == "PASS"
         and parsed["timing_status"] == "PASS"
+        and not parsed["record_schema_errors"]
+        and not parsed["artifact_errors"]
         and parsed["inventory_complete"]
         and not parsed["package_failures"]
         and not parsed["test_failures"]
         and not parsed["cached_markers"]
         and parsed["stdout_hash_matches"]
+        and parsed["stdout_bytes_matches"]
         and parsed["stderr_hash_matches"]
+        and parsed["stderr_bytes_matches"]
         and record.get("test_result_cache_policy") == "disabled-by--count=1"
     )
     if not parsed["inventory_complete"]:
@@ -1672,6 +1902,9 @@ def package_rank(parsed_records: Iterable[dict[str, Any]]) -> list[dict[str, Any
             failures.setdefault(package.split(":", 1)[0], set()).add("test-fail")
     ranked = []
     for package, durations in values.items():
+        duration_total = checked_duration_sum(
+            durations, label=f"package {package!r} duration total"
+        )
         ranked.append(
             {
                 "package": package,
@@ -1680,7 +1913,7 @@ def package_rank(parsed_records: Iterable[dict[str, Any]]) -> list[dict[str, Any
                 "min_seconds": min(durations),
                 "max_seconds": max(durations),
                 "spread_seconds": max(durations) - min(durations),
-                "mean_seconds": sum(durations) / len(durations),
+                "mean_seconds": duration_total / len(durations),
                 "failure_kinds": sorted(failures.get(package, set())),
             }
         )
@@ -1716,7 +1949,9 @@ def lane_times(records: list[dict[str, Any]]) -> dict[str, Any]:
         lane_wall = (max(ends) - min(starts)) / 1_000_000_000.0
     return {
         "lane_wall_seconds": lane_wall,
-        "sum_invocation_wall_seconds": sum(durations),
+        "sum_invocation_wall_seconds": checked_duration_sum(
+            durations, label="invocation duration total"
+        ),
         "invocation_count": len(records),
         "definition": (
             "max(monotonic_end)-min(monotonic_start); the sum is retained only "
@@ -2137,6 +2372,15 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             )
         ),
     }
+    manifest_metadata_errors: list[str] = []
+    if manifest.get("mode") != "synthetic" or "metadata_commands" in manifest:
+        manifest_metadata_errors = validate_metadata_outputs(
+            manifest.get("metadata_commands"),
+            root=root,
+            expected_head=manifest.get("source_sha"),
+            expected_dirty=manifest.get("source_dirty_paths"),
+            label="manifest",
+        )
 
     run_groups = manifest.get("run_groups")
     run_groups_for_analysis = run_groups if isinstance(run_groups, list) else []
@@ -2212,7 +2456,16 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         parsed["run_group_validation"] = validation
         if not isinstance(validation, dict) or validation.get("valid") is not True:
             parsed["execution_valid"] = False
-    execution_valid = all(parsed.get("execution_valid") for parsed in parsed_records)
+    execution_valid = (
+        bool(parsed_records)
+        and not manifest_metadata_errors
+        and bool(group_validation)
+        and all(
+            validation.get("valid") is True
+            for validation in group_validation.values()
+        )
+        and all(parsed.get("execution_valid") for parsed in parsed_records)
+    )
     stream_failures = [
         {
             "record": parsed.get("record_id"),
@@ -2221,6 +2474,8 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 or parsed.get("stderr_error")
                 or "; ".join(
                     parsed.get("timing_errors", [])
+                    + parsed.get("record_schema_errors", [])
+                    + parsed.get("artifact_errors", [])
                     + parsed.get("no_test_classification_errors", [])
                     + parsed.get("source_validation_errors", [])
                 )
@@ -2229,6 +2484,8 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             "process_status": parsed.get("process_status"),
             "source_status": parsed.get("source_status"),
             "timing_errors": parsed.get("timing_errors", []),
+            "record_schema_errors": parsed.get("record_schema_errors", []),
+            "artifact_errors": parsed.get("artifact_errors", []),
             "source_validation_errors": parsed.get(
                 "source_validation_errors", []
             ),
@@ -2261,6 +2518,19 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     "run_group_errors": validation.get("errors", []),
                 }
             )
+    if manifest_metadata_errors:
+        stream_failures.append(
+            {
+                "record": "manifest:metadata_commands",
+                "error": "; ".join(manifest_metadata_errors),
+                "process_status": None,
+                "source_status": None,
+                "missing_packages": [],
+                "unexpected_packages": [],
+                "cached_markers": [],
+                "run_group_errors": manifest_metadata_errors,
+            }
+        )
     no_test_packages = sorted(
         {
             package["import_path"]
@@ -2325,10 +2595,13 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "target_comparison": target_comparison,
         "package_execution": {
             "ranked_packages": package_rank(parsed_records),
-            "package_time_total_seconds": sum(
-                observation["elapsed_seconds"]
-                for parsed in parsed_records
-                for observation in parsed.get("observations", [])
+            "package_time_total_seconds": checked_duration_sum(
+                (
+                    observation["elapsed_seconds"]
+                    for parsed in parsed_records
+                    for observation in parsed.get("observations", [])
+                ),
+                label="package execution duration total",
             ),
             "package_budget_policy": {
                 "tool": "tools/timingate",
