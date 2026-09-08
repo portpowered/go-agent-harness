@@ -22,13 +22,13 @@ func validateRecordingBundle(ctx context.Context, bundlePath string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("%w: inspect recording manifest %s: %v", publicreplay.ErrBundleIncomplete, manifestPath, err)
+		return fmt.Errorf("%w: inspect recording manifest %s: %w", publicreplay.ErrBundleIncomplete, manifestPath, err)
 	}
 	if _, err := runtimeReplayWire.NewService().ResolveCapturePath(ctx, bundlePath); err != nil {
 		if cause := context.Cause(ctx); cause != nil {
 			return cause
 		}
-		return fmt.Errorf("%w: validate recording bundle: %v", publicreplay.ErrBundleIncomplete, err)
+		return fmt.Errorf("%w: validate recording bundle: %w", publicreplay.ErrBundleIncomplete, err)
 	}
 	return nil
 }

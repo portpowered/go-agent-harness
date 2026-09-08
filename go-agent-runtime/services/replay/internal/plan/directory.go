@@ -17,6 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
+const recordingDigestBufferSize = 32 * 1024
+
 // ResolveCapturePath accepts a raw provider capture or a finalized runtime
 // recording directory. It deliberately returns the provider artifact only;
 // semantic/audio evidence remains owned by the recording service and is not
@@ -274,7 +276,7 @@ func fileDigest(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	digest := sha256.New()
-	_, copyErr := io.CopyBuffer(digest, contextReader{ctx: ctx, reader: file}, make([]byte, 32*1024))
+	_, copyErr := io.CopyBuffer(digest, contextReader{ctx: ctx, reader: file}, make([]byte, recordingDigestBufferSize))
 	closeErr := file.Close()
 	if err := errors.Join(copyErr, closeErr); err != nil {
 		return "", err
