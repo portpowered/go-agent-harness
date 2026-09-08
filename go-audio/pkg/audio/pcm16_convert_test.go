@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
@@ -119,5 +120,40 @@ func TestPCM16RMSEnergyExactAmplitudeAndEmptyInput(t *testing.T) {
 	}
 	if got := PCM16RMSEnergy([]int16{-32768, 32767}); got <= 0 {
 		t.Fatalf("PCM16RMSEnergy(full-scale pair) = %v, want positive", got)
+	}
+}
+
+func TestPCM16DurationUsesInterleavedFrameShape(t *testing.T) {
+	got, err := PCM16Duration(1600, 8000, 1)
+	if err != nil {
+		t.Fatalf("PCM16Duration() error = %v", err)
+	}
+	if got != 100*time.Millisecond {
+		t.Fatalf("PCM16Duration() = %s, want 100ms", got)
+	}
+
+	got, err = PCM16Duration(3200, 8000, 2)
+	if err != nil {
+		t.Fatalf("stereo PCM16Duration() error = %v", err)
+	}
+	if got != 100*time.Millisecond {
+		t.Fatalf("stereo PCM16Duration() = %s, want 100ms", got)
+	}
+}
+
+func TestPCM16DurationRejectsMalformedOrUnrepresentableInput(t *testing.T) {
+	for _, input := range [][3]int{
+		{1, 8000, 1},
+		{1600, 0, 1},
+		{1600, 8000, 0},
+		{-2, 8000, 1},
+	} {
+		if _, err := PCM16Duration(input[0], input[1], input[2]); !errors.Is(err, ErrInvalidPCM16Duration) {
+			t.Fatalf("PCM16Duration(%v) error = %v", input, err)
+		}
+	}
+	maxInt := int(^uint(0) >> 1)
+	if _, err := PCM16Duration(maxInt, 1, 1); !errors.Is(err, ErrInvalidPCM16Duration) {
+		t.Fatalf("overflow PCM16Duration() error = %v", err)
 	}
 }

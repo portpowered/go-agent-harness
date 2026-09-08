@@ -169,3 +169,20 @@ func TestRemoteDeviceRegistryRejectsInvalidServerResponses(t *testing.T) {
 		t.Fatalf("empty capture injection error = %v", err)
 	}
 }
+
+func TestRemoteDeviceErrorPreservesClosedIdentity(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeDeviceServerError(w, http.StatusConflict, &audio.ClosedError{Operation: "read", Path: "simulated-duplex:input"})
+	}))
+	defer httpServer.Close()
+
+	remote, err := NewRemoteDeviceRegistry(strings.TrimPrefix(httpServer.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := &remoteOpenedDevice{registry: remote, id: "closed", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
+	err = opened.ReadFrame(context.Background(), make([]int16, audio.FrameSize))
+	if !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("remote closed read error = %v, want audio.ErrClosed", err)
+	}
+}

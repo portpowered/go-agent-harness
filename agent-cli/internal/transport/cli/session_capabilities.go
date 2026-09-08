@@ -12,6 +12,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 // SessionBrowserBrokerFactory is retained as the transport injection seam;
@@ -60,24 +61,18 @@ func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.T
 }
 
 func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe) SessionToolCapabilitiesFactory {
-	return func(cfg *config.Config) (SessionToolCapabilities, error) {
-		browserFactory := func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
-			var broker webmcp.Broker
-			var err error
-			if brokerFactory != nil {
-				broker, err = brokerFactory(browser)
-			} else {
-				broker, err = newSessionBrowserBrokerWithConfigDir(browser, configDir)
-			}
-			return serviceBrowserCapability(broker), err
+	browserFactory := func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
+		var broker webmcp.Broker
+		var err error
+		if brokerFactory != nil {
+			broker, err = brokerFactory(browser)
+		} else {
+			broker, err = newSessionBrowserBrokerWithConfigDir(browser, configDir)
 		}
-		resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe)
-		capabilities, err := resolver.Resolve(cfg)
-		if err != nil {
-			return SessionToolCapabilities{}, err
-		}
-		return fromServiceToolCapabilities(capabilities), nil
+		return serviceBrowserCapability(broker), err
 	}
+	resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeToolsWire.NewService())
+	return NewSessionToolCapabilitiesFactoryFromService(resolver)
 }
 
 func serviceBrowserCapability(broker webmcp.Broker) serviceTools.BrowserCapability {
@@ -159,29 +154,6 @@ func (factory SessionToolCapabilitiesFactory) Resolve(cfg *config.Config) (servi
 			return serviceTools.CapabilityStatus{State: serviceTools.CapabilityState(status.State), Err: status.Err, BrowserCapabilityState: status.BrowserCapabilityState}
 		},
 	}, nil
-}
-
-// NewSessionBrowserBroker creates the production browser broker used by
-// browser-enabled sessions. The runtime is request-scoped so session cleanup
-// can retire both broker state and discovery resources through one idempotent
-// close hook.
-func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
-	return newSessionBrowserBrokerWithConfigDir(browser, "")
-}
-
-// NewSessionBrowserBrokerWithConfigDir constructs one request-scoped browser
-// runtime with the config directory used for persisted selection state.
-func NewSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
-	return newSessionBrowserBrokerWithConfigDir(browser, configDir)
-}
-
-func newSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
-	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionConfigDir(configDir),
-		WithWebMCPProductionSelectionStoreFactory(func() any {
-			return NewFileWebMCPSelectionStore(configDir)
-		}),
-	))
 }
 
 func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, factory WebMCPDoctorFactory) (webmcp.Broker, error) {

@@ -162,7 +162,7 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{
+			err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 				ConfigDir:         workspaceDir,
 				Prompt:            userTurnMarker,
@@ -204,7 +204,7 @@ func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -233,7 +233,7 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,
@@ -261,7 +261,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -460,7 +460,7 @@ func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		SessionInferencer: inferencer,
@@ -481,7 +481,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      recordPath,
 		Provider:        config.ProviderOpenAI,
 		Model:           "gpt-realtime",
@@ -584,7 +584,7 @@ model:
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok-session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-3-mini",
@@ -610,7 +610,7 @@ func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSessionWithInstructions(ctx, &out, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
 		ConfigDir:         workspaceDir,
 		Prompt:            userTurnMarker,

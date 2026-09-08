@@ -1,6 +1,7 @@
 package audio_test
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -96,3 +97,177 @@ func TestProcessorRejectsCrossStreamHistoryWithoutReset(t *testing.T) {
 		}
 	}
 }
+
+func TestFrameAccumulatorSplitsAtBudgetAndPreservesLineage(t *testing.T) {
+	target := &recordingFrameTarget{}
+	accumulator, err := audio.NewFrameAccumulator(target, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	format := audio.PCM16DeviceFormat(24000)
+	response := audio.PlaybackResponse{ResponseID: "response-1", ItemID: "item-1", ContentIndex: 2}
+	first := audio.PCMFrame{
+		Samples: []int16{1, 2, 3}, Format: format, StreamID: "capture", Epoch: 4,
+		Sequence: 7, StartSample: 11, PlaybackResponse: response,
+	}
+	if err := accumulator.WriteFrame(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	first.Samples[0] = 99
+	if err := accumulator.WriteFrame(context.Background(), audio.PCMFrame{
+		Samples: []int16{4, 5, 6, 7}, Format: format, StreamID: "capture", Epoch: 4,
+		Sequence: 8, StartSample: 14, PlaybackResponse: response,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 1 || !reflect.DeepEqual(target.frames[0].Samples, []int16{1, 2, 3, 4, 5}) {
+		t.Fatalf("full frames=%+v, want one five-sample frame", target.frames)
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 2 {
+		t.Fatalf("emitted frames=%d, want two", len(target.frames))
+	}
+	for index, frame := range target.frames {
+		if len(frame.Samples) > 5 || frame.Format != format || frame.StreamID != "capture" || frame.Epoch != 4 || frame.PlaybackResponse != response {
+			t.Fatalf("frame %d lineage=%+v", index, frame)
+		}
+		if frame.Sequence != uint64(7+index) || frame.StartSample != uint64(11+index*5) {
+			t.Fatalf("frame %d cursor sequence=%d start=%d", index, frame.Sequence, frame.StartSample)
+		}
+		if frame.EndOfResponse != (index == len(target.frames)-1) {
+			t.Fatalf("frame %d end=%t", index, frame.EndOfResponse)
+		}
+	}
+}
+
+func TestFrameAccumulatorRejectsOversizeAndMetadataDiscontinuity(t *testing.T) {
+	target := &recordingFrameTarget{}
+	accumulator, err := audio.NewFrameAccumulator(target, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := audio.PCMFrame{Samples: []int16{1}, Format: audio.PCM16DeviceFormat(24000), StreamID: "capture", Epoch: 2}
+	if err := accumulator.WriteFrame(context.Background(), base); err != nil {
+		t.Fatal(err)
+	}
+	if err := accumulator.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1, 2, 3, 4}, Format: base.Format, StreamID: base.StreamID, Epoch: base.Epoch}); !errors.Is(err, audio.ErrFrameAccumulatorFrameTooLarge) {
+		t.Fatalf("oversize error=%v, want ErrFrameAccumulatorFrameTooLarge", err)
+	}
+	mutations := []func(*audio.PCMFrame){
+		func(frame *audio.PCMFrame) { frame.Format = audio.PCM16DeviceFormat(16000) },
+		func(frame *audio.PCMFrame) { frame.StreamID = "other" },
+		func(frame *audio.PCMFrame) { frame.Epoch = 3 },
+		func(frame *audio.PCMFrame) { frame.PlaybackResponse.ResponseID = "other" },
+	}
+	for _, mutate := range mutations {
+		next := base
+		next.Samples = []int16{2}
+		mutate(&next)
+		if err := accumulator.WriteFrame(context.Background(), next); !errors.Is(err, audio.ErrFrameAccumulatorMetadataChanged) {
+			t.Fatalf("metadata error=%v, want ErrFrameAccumulatorMetadataChanged", err)
+		}
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 1 || !reflect.DeepEqual(target.frames[0].Samples, []int16{1}) {
+		t.Fatalf("accepted samples=%+v, want only base frame", target.frames)
+	}
+}
+
+func TestFrameAccumulatorFlushesExplicitEmptyTailOnce(t *testing.T) {
+	target := &recordingFrameTarget{}
+	accumulator, err := audio.NewFrameAccumulator(target, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := audio.PCMFrame{Format: audio.PCM16DeviceFormat(24000), StreamID: "capture", Epoch: 9, EndOfResponse: true}
+	if err := accumulator.WriteFrame(context.Background(), frame); err != nil {
+		t.Fatal(err)
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 1 || len(target.frames[0].Samples) != 0 || !target.frames[0].EndOfResponse {
+		t.Fatalf("empty tail=%+v, want one empty end marker", target.frames)
+	}
+	if err := accumulator.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, audio.ErrFrameAccumulatorClosed) {
+		t.Fatalf("write after flush=%v, want ErrFrameAccumulatorClosed", err)
+	}
+}
+
+func TestFrameAccumulatorRejectsInputCursorGaps(t *testing.T) {
+	target := &recordingFrameTarget{}
+	accumulator, err := audio.NewFrameAccumulator(target, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	format := audio.PCM16DeviceFormat(24000)
+	first := audio.PCMFrame{Samples: []int16{1, 2}, Format: format, StreamID: "capture", Epoch: 1, Sequence: 10, StartSample: 20}
+	if err := accumulator.WriteFrame(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	for _, gap := range []audio.PCMFrame{
+		{Samples: []int16{3, 4}, Format: format, StreamID: "capture", Epoch: 1, Sequence: 12, StartSample: 22},
+		{Samples: []int16{3, 4}, Format: format, StreamID: "capture", Epoch: 1, Sequence: 11, StartSample: 23},
+	} {
+		if err := accumulator.WriteFrame(context.Background(), gap); !errors.Is(err, audio.ErrFrameAccumulatorMetadataChanged) {
+			t.Fatalf("cursor gap error=%v, want ErrFrameAccumulatorMetadataChanged", err)
+		}
+	}
+	if err := accumulator.WriteFrame(context.Background(), audio.PCMFrame{
+		Samples: []int16{3, 4}, Format: format, StreamID: "capture", Epoch: 1,
+		Sequence: 11, StartSample: 22,
+	}); err != nil {
+		t.Fatalf("contiguous frame rejected after gap: %v", err)
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 1 || !reflect.DeepEqual(target.frames[0].Samples, []int16{1, 2, 3, 4}) {
+		t.Fatalf("accepted samples=%+v, want contiguous frames only", target.frames)
+	}
+}
+
+func TestFrameAccumulatorRequiresInterleavedChannelAlignment(t *testing.T) {
+	target := &recordingFrameTarget{}
+	oddBudget, err := audio.NewFrameAccumulator(target, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stereo := audio.DeviceFormat{SampleRate: 24000, Channels: 2, BitDepth: audio.DeviceBitDepthPCM16, Encoding: audio.DeviceEncodingPCM16}
+	if err := oddBudget.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1, 2}, Format: stereo}); !errors.Is(err, audio.ErrInvalidDeviceFormat) {
+		t.Fatalf("odd stereo budget error=%v, want ErrInvalidDeviceFormat", err)
+	}
+
+	accumulator, err := audio.NewFrameAccumulator(target, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accumulator.WriteFrame(context.Background(), audio.PCMFrame{Samples: []int16{1, 2}, Format: stereo, Sequence: 4, StartSample: 8}); err != nil {
+		t.Fatal(err)
+	}
+	if err := accumulator.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(target.frames) != 1 || target.frames[0].StartSample != 8 || target.frames[0].Sequence != 4 || len(target.frames[0].Samples) != 2 {
+		t.Fatalf("stereo frame=%+v, want two samples at source cursor", target.frames)
+	}
+}
+
+type recordingFrameTarget struct {
+	frames []audio.PCMFrame
+}
+
+func (target *recordingFrameTarget) WriteFrame(_ context.Context, frame audio.PCMFrame) error {
+	frame.Samples = append([]int16(nil), frame.Samples...)
+	target.frames = append(target.frames, frame)
+	return nil
+}
+
+func (*recordingFrameTarget) Close() error { return nil }

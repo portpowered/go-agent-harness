@@ -33,6 +33,14 @@ type SessionSendOutcomeSender interface {
 	SendWithOutcome(ctx context.Context, msg StreamMessage) SessionSendOutcome
 }
 
+// SessionOutboundFlusher is an optional session capability for callers that
+// must wait until every already-admitted outbound event has completed its
+// transport write. Session.Send admission normally means queue admission; a
+// realtime capture boundary may need the stronger wire-settled guarantee.
+type SessionOutboundFlusher interface {
+	FlushOutbound(ctx context.Context) error
+}
+
 // SessionResponseRequester is an optional session capability for requesting a
 // response without adding another user message or committing an input buffer.
 // It is used for audio-only tool continuations; sessions that do not expose

@@ -132,15 +132,11 @@ func runRoomParticipant(
 	if evidence != nil {
 		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
 	}
-	participantStream := RoomParticipantEventSink{}
-	if opts.Stream != nil {
-		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
-	}
 	// Computed once, before any result can reach the coordinator, so a human
 	// participant's teardown (see finishParticipant) can name this
 	// participant on a playback overflow the same way a provider
 	// participant's session diagnostics already do below.
-	runtime.diagnosticSink = combineRoomDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)...)
+	runtime.diagnosticSink = combineDiagnosticSinks(roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence)...)
 	var observer *sessionProgressObserver
 	if !roomParticipantIsHuman(runtime.plan) {
 		observer = newSessionProgressObserver(runtime.diagnosticSink, nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
@@ -149,10 +145,7 @@ func runRoomParticipant(
 			classification, _, _, _ := sessionLivenessMetadata(err)
 			if classification != "" {
 				participantID := runtime.plan.manifest.ID
-				evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
-				if opts.Stream != nil {
-					opts.Stream.PublishParticipantLivenessFault(participantID, classification)
-				}
+				evidence.recordTimelineEvent("participant_liveness_fault", participantID, map[string]string{"reason": classification})
 			}
 		}
 		observer.turnAdmission = func(msg messages.StreamMessage) bool {
@@ -164,7 +157,7 @@ func runRoomParticipant(
 				value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
 		}
 		observer.streamObserver = func(msg messages.StreamMessage) {
-			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
+			observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, msg)
 		}
 		observer.admittedTurnObserver = func(messages.StreamMessage) {
 			turns := runtime.lifecycle.observeAdmittedTurn()
@@ -236,17 +229,14 @@ func runRoomParticipant(
 		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
 		return
 	}
-	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
-	observer = newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence)
+	observer = newSessionProgressObserver(combineDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
 	observer.livenessObserver = func(err error) {
 		runtime.lifecycle.markLivenessFailure(err)
 		classification, _, _, _ := sessionLivenessMetadata(err)
 		if classification != "" {
 			participantID := runtime.plan.manifest.ID
-			evidence.recordTimelineEvent(RoomStreamEventParticipantLivenessFault, participantID, map[string]string{"reason": classification})
-			if opts.Stream != nil {
-				opts.Stream.PublishParticipantLivenessFault(participantID, classification)
-			}
+			evidence.recordTimelineEvent("participant_liveness_fault", participantID, map[string]string{"reason": classification})
 		}
 	}
 	observer.terminalObserver = runtime.lifecycle.observeTerminal
@@ -307,7 +297,7 @@ func runRoomParticipant(
 		return runtime.lifecycle.admitResponseTerminal()
 	}
 	observer.streamObserver = func(msg messages.StreamMessage) {
-		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
+		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, msg)
 	}
 	observer.admittedTurnObserver = func(messages.StreamMessage) {
 		turns := runtime.lifecycle.observeAdmittedTurn()
@@ -426,14 +416,10 @@ func roomParticipantDiagnosticSinks(
 	plan *roomParticipantPlan,
 	opts RoomRunOptions,
 	participantEvidence *roomParticipantEvidence,
-	participantStream RoomParticipantEventSink,
 ) []SessionDiagnosticSink {
 	diagnosticSinks := make([]SessionDiagnosticSink, 0, 2)
 	if participantEvidence != nil {
 		diagnosticSinks = append(diagnosticSinks, participantEvidence)
-	}
-	if opts.Stream != nil {
-		diagnosticSinks = append(diagnosticSinks, participantStream)
 	}
 	if opts.OnDiagnostic != nil {
 		diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{
@@ -450,7 +436,6 @@ func observeRoomParticipantStream(
 	opts RoomRunOptions,
 	evidence *roomEvidence,
 	participantEvidence *roomParticipantEvidence,
-	participantStream RoomParticipantEventSink,
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
@@ -459,9 +444,6 @@ func observeRoomParticipantStream(
 	}
 	if opts.onParticipantStream != nil {
 		opts.onParticipantStream(plan.manifest.ID, msg)
-	}
-	if opts.Stream != nil {
-		participantStream.ObserveStream(msg)
 	}
 	recordParticipantDelta := func() {
 		if participantEvidence == nil {
@@ -987,7 +969,7 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			// Make a dropped delivery of real (non-silent) incoming audio an
 			// explicit, diagnosable event instead of leaving it
 			// indistinguishable from ordinary silence.
-			if participantEvidence != nil && pcm16HasSignal(frame) {
+			if participantEvidence != nil && audio.PCM16HasSignal(frame) {
 				participantEvidence.recordAudioDropped(err.Error(), len(frame))
 			}
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
@@ -1127,7 +1109,7 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 	// A human participant is this room's actual customer-facing speaker.
 	// The filler covers both measured dead-air cases uniformly: a
 	// turn-transition pause and a tool-call round trip both surface here as
-	// "the mixer has nothing active right now" (see applyRoomHoldTone).
+	// "the mixer has nothing active right now" (see audio.ApplyHoldTonePCM16).
 	roomClock := roomHumanOutputClock(runtime)
 	holdTone := audio.NewHoldToneFiller(audio.DefaultHoldToneConfig(), runtime.mixer.Format().SampleRate, roomClock.Now())
 	for {
@@ -1139,7 +1121,7 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			coordinator.failParticipant(runtime.plan.manifest.ID, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
 			return
 		}
-		frame := applyRoomHoldTone(holdTone, roomClock.Now(), mixed.PCM)
+		frame := audio.ApplyHoldTonePCM16(holdTone, roomClock.Now(), mixed.PCM)
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
 			if runtime.ingress != nil {
 				runtime.ingress.resolveFrame(mixed.Sources, len(frame), roomAudioIngressReasonParticipantOutputRejected)

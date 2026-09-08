@@ -1,6 +1,13 @@
 package probe
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+)
 
 const (
 	FamilyAScenarioID = "family-a-iterative-project"
@@ -31,6 +38,29 @@ func FamilyASpokenScript() []CustomerScriptTurn {
 		{ActionID: "revise-readme", Text: "Please revise the README so its status says it is ready for review."},
 		{ActionID: "summarize-final-state", Text: "Please tell me what is actually in the finished project, including the final status."},
 	}
+}
+
+func isCustomerSimulationAgentRecord(record transcript.Record) bool {
+	return record.Peer == transcript.PeerAgent && (record.Stream == transcript.StreamRuntimeAudio || record.Stream == transcript.StreamRuntimeMessage || record.Stream == transcript.StreamWS)
+}
+
+func customerSimulationMessageIsAssistant(record customerSimulationRecordedMessage) bool {
+	msg := record.message
+	if msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model {
+		return true
+	}
+	return record.dir == transcript.DirectionOut && msg.Role != messages.RoleTool && msg.ActorID != messages.Tool
+}
+
+func customerSimulationResponseOutputBoundaries(response customerSimulationResponse) (time.Duration, time.Duration) {
+	if !response.AudioObserved || response.AudioEnd <= response.AudioStart {
+		return 0, 0
+	}
+	end := response.AudioEnd
+	if response.End > end {
+		end = response.End
+	}
+	return response.AudioStart, end
 }
 
 // NewFamilyAScenario returns the versioned, filesystem-grounded Family A
@@ -121,5 +151,233 @@ func NewFamilyAScenario() CustomerScenario {
 		},
 		Termination: TerminationNatural,
 		Deadline:    30 * time.Second,
+	}
+}
+
+// customerSimulationResponseOutputInterval maps a recorded response's audio
+// range onto the actual stdout reads from the shipped child. Session recording
+// timestamps are logical and intentionally comparable across runs; they are
+// not used as wall-clock evidence for a process-boundary interruption.
+func customerSimulationResponseOutputInterval(scenario CustomerScenario, facts customerSimulationRecordingFacts, response customerSimulationResponse, result DuplexRunResult) (time.Duration, time.Duration, bool) {
+	if strings.TrimSpace(response.ID) == "" || response.AudioBytes <= 0 {
+		return 0, 0, false
+	}
+	var target customerSimulationResponseAudioRange
+	found := false
+	for _, candidate := range customerSimulationResponseAudioRanges(scenario, facts.responses) {
+		if candidate.ResponseID == response.ID {
+			target = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		return 0, 0, false
+	}
+
+	var previousTotal int64
+	var start, end time.Duration
+	observed := false
+	for _, output := range result.Output {
+		outputEnd := output.Total
+		if outputEnd <= previousTotal || outputEnd < int64(output.Bytes) {
+			outputEnd = previousTotal + int64(output.Bytes)
+		}
+		outputStart := max(previousTotal, outputEnd-int64(output.Bytes))
+		previousTotal = outputEnd
+
+		overlapStart := maxInt64(outputStart, target.Start)
+		overlapEnd := minInt64(outputEnd, target.End)
+		if overlapEnd <= overlapStart {
+			continue
+		}
+		at := max(output.At, 0)
+		partEnd := at + max(customerSimulationPCM16Duration(int(overlapEnd-overlapStart)), time.Nanosecond)
+		if !observed {
+			start = at
+		}
+		start = min(start, at)
+		end = max(end, partEnd)
+		observed = true
+	}
+	return start, end, observed
+}
+
+func customerSimulationRecordedResponse(facts customerSimulationRecordingFacts, index int) customerSimulationResponse {
+	responses := customerSimulationResponseCandidates(facts.responses)
+	if index < 0 || index >= len(responses) {
+		return customerSimulationResponse{}
+	}
+	return responses[index]
+}
+
+func customerSimulationResponseCandidates(responses []customerSimulationResponse) []customerSimulationResponse {
+	// A Realtime tool continuation may be a distinct assistant response and
+	// may carry a small audio marker of its own. Prefer response boundaries that
+	// contain spoken transcript for action-level correction evidence; fall back
+	// to audio-bearing boundaries when a provider records audio without a
+	// transcript, and only then use every recorded response.
+	withTranscript := make([]customerSimulationResponse, 0, len(responses))
+	for _, response := range responses {
+		if strings.TrimSpace(response.Text) != "" {
+			withTranscript = append(withTranscript, response)
+		}
+	}
+	if len(withTranscript) >= 2 {
+		return withTranscript
+	}
+	withAudio := make([]customerSimulationResponse, 0, len(responses))
+	for _, response := range responses {
+		if response.AudioBytes > 0 {
+			withAudio = append(withAudio, response)
+		}
+	}
+	if len(withAudio) >= 2 {
+		return withAudio
+	}
+	return responses
+}
+
+const customerSimulationResponseIncomplete = "incomplete"
+
+func customerSimulationResponseStatus(response customerSimulationResponse) string {
+	if response.Cancelled {
+		return string(DispositionCancelled)
+	}
+	if response.Complete {
+		return string(DispositionCompleted)
+	}
+	return customerSimulationResponseIncomplete
+}
+
+func customerSimulationResponseTime(response customerSimulationResponse, fallback time.Duration, result DuplexRunResult, start bool) time.Duration {
+	wallAt := response.WallStart
+	if !start {
+		wallAt = response.WallEnd
+	}
+	if converted, ok := customerSimulationRecordedTimeOK(wallAt, result); ok {
+		return converted
+	}
+	return fallback
+}
+
+func customerSimulationRecordedTime(wallAt time.Time, fallback time.Duration, result DuplexRunResult) time.Duration {
+	if converted, ok := customerSimulationRecordedTimeOK(wallAt, result); ok {
+		return converted
+	}
+	return fallback
+}
+
+func customerSimulationRecordedTimeOK(wallAt time.Time, result DuplexRunResult) (time.Duration, bool) {
+	if wallAt.IsZero() {
+		return 0, false
+	}
+	base, ok := customerSimulationDuplexWallOrigin(result)
+	if !ok {
+		return 0, false
+	}
+	converted := wallAt.Sub(base)
+	if converted < 0 {
+		return 0, false
+	}
+	return converted, true
+}
+
+func customerSimulationDuplexWallOrigin(result DuplexRunResult) (time.Time, bool) {
+	for _, input := range result.Input {
+		if !input.Timestamp.IsZero() {
+			return input.Timestamp.Add(-input.At), true
+		}
+	}
+	for _, output := range result.Output {
+		if !output.Timestamp.IsZero() {
+			return output.Timestamp.Add(-output.At), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func customerSimulationInputStart(result DuplexRunResult, segmentID string, ordinal int) time.Duration {
+	if strings.TrimSpace(segmentID) != "" {
+		for _, input := range result.Input {
+			if input.SegmentID == segmentID {
+				return input.At
+			}
+		}
+	}
+	seenSegments := make(map[string]struct{})
+	segmentIndex := 0
+	for _, input := range result.Input {
+		if _, seen := seenSegments[input.SegmentID]; seen {
+			continue
+		}
+		seenSegments[input.SegmentID] = struct{}{}
+		if segmentIndex == ordinal {
+			return input.At
+		}
+		segmentIndex++
+	}
+	return 0
+}
+
+func customerSimulationResponseInterval(product []TranscriptEvent, index int) (time.Duration, time.Duration) {
+	if index < 0 || index >= len(product) {
+		return 0, 0
+	}
+	start := product[index].At
+	end := start + time.Millisecond
+	if index+1 < len(product) && product[index+1].At > end {
+		end = product[index+1].At
+	}
+	return start, end
+}
+
+// Media timing is joined by the provider's explicit response ID. Never infer
+// identity from arrival order of the independently consumed normalized stream.
+type customerSimulationMediaBoundary struct {
+	Kind        string                                                 `json:"kind"`
+	Admission   string                                                 `json:"admission"`
+	SampleCount int                                                    `json:"sample_count"`
+	Frame       struct{ PlaybackResponse struct{ ResponseID string } } `json:"frame"`
+}
+type customerSimulationMediaInterval struct{ start, end time.Duration }
+
+func decodeCustomerSimulationMedia(record transcript.Record) (*customerSimulationMediaBoundary, error) {
+	var media customerSimulationMediaBoundary
+	if err := json.Unmarshal(record.Payload, &media); err != nil {
+		return nil, err
+	}
+	if record.Direction != transcript.DirectionOut || media.Kind != "audio.frame" || media.Admission != "media_bridged" || media.SampleCount <= 0 || media.Frame.PlaybackResponse.ResponseID == "" {
+		return nil, nil
+	}
+	return &media, nil
+}
+
+func (p *customerSimulationStreamParser) consumeMediaBoundary(record customerSimulationRecordedMessage) {
+	id := record.media.Frame.PlaybackResponse.ResponseID
+	if p.mediaByResponse == nil {
+		p.mediaByResponse = make(map[string]customerSimulationMediaInterval)
+	}
+	interval, seen := p.mediaByResponse[id]
+	if !seen {
+		interval.start = record.at
+	}
+	interval.end = maxDuration(interval.end, record.at+customerSimulationPCM16Duration(record.media.SampleCount*2))
+	p.mediaByResponse[id] = interval
+	p.deliveredResponseID = id
+	p.inputSpeechActive = false
+}
+
+func (p *customerSimulationStreamParser) applyMediaBoundaries() {
+	for index := range p.facts.responses {
+		response := &p.facts.responses[index]
+		if interval, ok := p.mediaByResponse[response.ID]; ok {
+			response.AudioObserved = true
+			response.AudioStart = interval.start
+			response.AudioEnd = interval.end
+		}
+		if p.facts.cancelObserved && response.ID == p.facts.cancelResponseID {
+			response.Cancelled = true
+		}
 	}
 }

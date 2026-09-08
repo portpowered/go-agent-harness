@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
 const (
@@ -100,7 +100,7 @@ func TestDeliberateOverlapRoomReplayFixturePassesPeerDeliveryAndSelfHearing(t *t
 		}
 	}
 
-	analysis, err := audio.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
+	analysis, err := roomanalysis.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
 	if err != nil {
 		t.Fatalf("analyze deliberate overlap bundle: %v", err)
 	}
@@ -144,14 +144,14 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 		property  string
 		streamID  string
 		direction string
-		mutate    func(*audio.PCM16RoomInput)
+		mutate    func(*roomanalysis.PCM16RoomInput)
 	}{
 		{
 			name:      "missing forward delivery",
 			property:  "overlap-delivery",
 			streamID:  overlapParticipantB + ":received",
 			direction: overlapParticipantA + "->" + overlapParticipantB,
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				stream := deliberateOverlapStream(input, overlapParticipantB+":received")
 				stream.Samples = make([]int16, len(stream.Samples))
 			},
@@ -161,7 +161,7 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 			property:  "self-hearing",
 			streamID:  overlapParticipantB + ":received",
 			direction: overlapParticipantB + "->" + overlapParticipantB,
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				received := deliberateOverlapStream(input, overlapParticipantB+":received")
 				sent := deliberateOverlapStream(input, overlapParticipantB+":sent")
 				received.Samples = append([]int16(nil), sent.Samples...)
@@ -172,7 +172,7 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 			property:  "overlap-delivery",
 			streamID:  overlapParticipantB + ":received",
 			direction: overlapParticipantA + "->" + overlapParticipantB,
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				received := deliberateOverlapStream(input, overlapParticipantB+":received")
 				sent := deliberateOverlapStream(input, overlapParticipantA+":sent")
 				received.Samples = delayPCM16Samples(sent.Samples, 300)
@@ -185,7 +185,7 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 			bundle := loadDeliberateOverlapBundle(t)
 			input := bundle.AnalysisInput()
 			test.mutate(&input)
-			analysis, err := audio.AnalyzePCM16Room(input, bundle.AnalysisConfig())
+			analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.AnalysisConfig())
 			if err != nil {
 				t.Fatalf("analyze mutated bundle: %v", err)
 			}
@@ -226,7 +226,7 @@ func deliberateOverlapFixturePath() string {
 	return filepath.Join(filepath.Dir(filename), "..", "..", "testdata", "room-audio", "deliberate-overlap")
 }
 
-func deliberateOverlapStream(input *audio.PCM16RoomInput, streamID string) *audio.PCM16TimedStream {
+func deliberateOverlapStream(input *roomanalysis.PCM16RoomInput, streamID string) *roomanalysis.PCM16TimedStream {
 	for index := range input.Streams {
 		if input.Streams[index].StreamID == streamID {
 			return &input.Streams[index]
@@ -235,7 +235,7 @@ func deliberateOverlapStream(input *audio.PCM16RoomInput, streamID string) *audi
 	panic(fmt.Sprintf("stream %q is not in deliberate-overlap fixture", streamID))
 }
 
-func overlapAnalysisStream(streams []audio.PCM16Analysis, streamID string) audio.PCM16Analysis {
+func overlapAnalysisStream(streams []roomanalysis.PCM16Analysis, streamID string) roomanalysis.PCM16Analysis {
 	for _, stream := range streams {
 		if stream.StreamID == streamID {
 			return stream

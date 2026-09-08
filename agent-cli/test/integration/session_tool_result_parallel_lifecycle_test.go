@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 const (
@@ -36,11 +37,10 @@ var parallelLifecycleRequestOrder = []string{
 	parallelLifecycleBravoID,
 }
 
-// parallelLifecycleSession is a provider-shaped session double used through
-// the ordinary session command composition boundary. One provider response
-// carries two distinct calls. The second result can be held after the
-// provider-facing send begins but before that send is reported as accepted,
-// which creates a deterministic per-ID lifecycle checkpoint.
+// parallelLifecycleSession is a provider-shaped session double used through the
+// ordinary session command composition boundary. One provider response carries
+// two distinct calls. The second result can be held after the provider-facing
+// send begins but before it is reported as accepted, creating a deterministic per-ID lifecycle checkpoint.
 type parallelLifecycleSession struct {
 	recv *messages.TypedBuffer[messages.StreamMessage]
 	done chan struct{}
@@ -542,9 +542,7 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 
 	select {
 	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("session command returned an error: %v", err)
-		}
+		assertExpectedSemanticLiveRunResult(t, err)
 	case <-time.After(sessionLifecycleSafetyTimeout):
 		t.Fatalf("session command did not finish after the final accepted result within %s", sessionLifecycleSafetyTimeout)
 	}
@@ -589,6 +587,7 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 			Provider:          "openai",
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
+			ModelCatalog:      providerswire.NewModelCatalog(),
 			SessionInferencer: inferencer,
 			ToolExecutor:      executor,
 			Diagnostics:       sink,
@@ -666,4 +665,3 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 
 var _ messages.Session = (*parallelLifecycleSession)(nil)
 var _ messages.SessionInferencer = (*parallelLifecycleInferencer)(nil)
-var _ messages.ToolExecutor = (*parallelLifecycleExecutor)(nil)

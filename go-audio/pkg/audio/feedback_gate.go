@@ -7,6 +7,9 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const pcm16FeedbackWarning = "Acoustic feedback detected: speaker audio is entering the microphone. Use headphones or route assistant audio to a non-speaker/file output."
@@ -35,13 +38,13 @@ type heldPCM16CaptureFrame struct {
 // or discarded; a terminal path always discards the held queue.
 type PCM16FeedbackGate struct {
 	mu       sync.Mutex
-	detector *PCM16SelfHearingDetector
+	detector *selfhearing.PCM16SelfHearingDetector
 	// probe keeps the playback timeline but resets its capture window for each
 	// frame after confirmation. The primary detector needs a minimum evidence
 	// duration to avoid false positives; the probe lets an already-confirmed
 	// gate discard a short final echo frame without holding unrelated speech.
-	probe   *PCM16SelfHearingDetector
-	config  PCM16SelfHearingConfig
+	probe   *selfhearing.PCM16SelfHearingDetector
+	config  selfhearing.PCM16SelfHearingConfig
 	warning io.Writer
 
 	// playbackRate and captureRate are the true negotiated device rates, not
@@ -93,14 +96,14 @@ type PCM16FeedbackGate struct {
 // (see the PCM16FeedbackGate field comments); a non-positive value falls back
 // to the shared compatibility default so a caller that has not resolved a
 // concrete rate keeps prior behavior.
-func NewPCM16FeedbackGate(config PCM16SelfHearingConfig, warning io.Writer, playbackRate, captureRate int) (*PCM16FeedbackGate, error) {
+func NewPCM16FeedbackGate(config selfhearing.PCM16SelfHearingConfig, warning io.Writer, playbackRate, captureRate int) (*PCM16FeedbackGate, error) {
 	if playbackRate <= 0 {
 		playbackRate = SampleRate
 	}
 	if captureRate <= 0 {
 		captureRate = SampleRate
 	}
-	detector, err := NewPCM16SelfHearingDetector(config)
+	detector, err := selfhearing.NewPCM16SelfHearingDetector(config)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,7 @@ func NewPCM16FeedbackGate(config PCM16SelfHearingConfig, warning io.Writer, play
 	// The primary detector's threshold remains appropriate after the probe is
 	// narrowed to its learned acoustic lag. Lowering it here would classify
 	// moderately similar synthetic/user speech as echo in a one-frame window.
-	probe, err := NewPCM16SelfHearingDetector(probeConfig)
+	probe, err := selfhearing.NewPCM16SelfHearingDetector(probeConfig)
 	if err != nil {
 		_ = detector.Close()
 		return nil, err
@@ -160,7 +163,7 @@ func (g *PCM16FeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
-		return ErrClosed
+		return contract.ErrClosed
 	}
 	if err := write(); err != nil {
 		return err
@@ -180,14 +183,14 @@ func (g *PCM16FeedbackGate) WritePlayback(ctx context.Context, samples []int16, 
 		g.resetCaptureEvidenceLocked()
 		g.state = pcm16FeedbackGateIdle
 	}
-	if err := g.detector.ObservePlaybackContext(ctx, PCM16TimedFrame{
+	if err := g.detector.ObservePlaybackContext(ctx, selfhearing.PCM16TimedFrame{
 		Samples:    samples,
 		SampleRate: g.playbackRate,
 		Start:      g.playbackPosition,
 	}); err != nil {
 		return err
 	}
-	if err := g.probe.ObservePlaybackContext(ctx, PCM16TimedFrame{
+	if err := g.probe.ObservePlaybackContext(ctx, selfhearing.PCM16TimedFrame{
 		Samples:    samples,
 		SampleRate: g.playbackRate,
 		Start:      g.playbackPosition,
@@ -236,7 +239,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
-		return nil, ErrClosed
+		return nil, contract.ErrClosed
 	}
 
 	start := g.capturePosition
@@ -262,7 +265,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	if g.state == pcm16FeedbackGateSuppressing || g.state == pcm16FeedbackGateDraining {
 		return g.classifySuppressedCaptureLocked(ctx, owned, start, end)
 	}
-	observation, err := g.detector.ObserveCaptureContext(ctx, PCM16TimedFrame{
+	observation, err := g.detector.ObserveCaptureContext(ctx, selfhearing.PCM16TimedFrame{
 		Samples:    owned,
 		SampleRate: g.captureRate,
 		Start:      start,
@@ -276,7 +279,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		lag := observation.Measurement.BestAbsoluteLag
 		g.confirmedLag = lag
 		tolerance := pcm16DeviceDurationAtRate(FrameSize, g.captureRate)
-		probeWindow := PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
+		probeWindow := selfhearing.PCM16LagWindow{Min: lag - tolerance, Max: lag + tolerance}
 		// Each assistant response may have a different device/callback lag. Clamp
 		// to the immutable session policy, not the probe's prior response window:
 		// disjoint successive windows would otherwise clamp into Min > Max.
@@ -305,15 +308,15 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	// loop on the basis of a truncated alignment. The default analysis window
 	// is also the documented maximum release latency, so this does not extend
 	// the user-visible bound.
-	stableNonFeedback := observation.Classification == PCM16SelfHearingNonFeedback && end >= g.config.AnalysisWindow
-	if observation.Classification == PCM16SelfHearingNoEvidence && g.startupAmbiguousEvidence && g.playbackIsRelevantLocked(start) {
+	stableNonFeedback := observation.Classification == selfhearing.PCM16SelfHearingNonFeedback && end >= g.config.AnalysisWindow
+	if observation.Classification == selfhearing.PCM16SelfHearingNoEvidence && g.startupAmbiguousEvidence && g.playbackIsRelevantLocked(start) {
 		g.pending = nil
 		g.startupAmbiguousEvidence = false
 		g.resetCaptureEvidenceLocked()
 		g.state = pcm16FeedbackGateIdle
 		return nil, nil
 	}
-	if !g.playbackIsRelevantLocked(start) || observation.Classification == PCM16SelfHearingNoEvidence || observation.Classification == PCM16SelfHearingRateMismatch || stableNonFeedback {
+	if !g.playbackIsRelevantLocked(start) || observation.Classification == selfhearing.PCM16SelfHearingNoEvidence || observation.Classification == selfhearing.PCM16SelfHearingRateMismatch || stableNonFeedback {
 		if g.state == pcm16FeedbackGateSuppressing && g.playbackIsRelevantLocked(start) {
 			g.state = pcm16FeedbackGateDraining
 		} else {
@@ -321,7 +324,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 		}
 		released := g.releaseAllLocked()
 		g.startupAmbiguousEvidence = false
-		if observation.Classification != PCM16SelfHearingNonFeedback {
+		if observation.Classification != selfhearing.PCM16SelfHearingNonFeedback {
 			g.resetCaptureEvidenceLocked()
 		}
 		return released, nil
@@ -330,7 +333,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 	if g.state == pcm16FeedbackGateIdle {
 		g.state = pcm16FeedbackGateAnalyzing
 	}
-	if observation.Classification == PCM16SelfHearingInsufficientEvidence && observation.EvidenceSamples > 0 {
+	if observation.Classification == selfhearing.PCM16SelfHearingInsufficientEvidence && observation.EvidenceSamples > 0 {
 		g.startupAmbiguousEvidence = true
 	}
 	if g.startupAmbiguousEvidence {
@@ -367,7 +370,7 @@ func (g *PCM16FeedbackGate) FilterCapture(ctx context.Context, samples []int16) 
 // ongoing echo.
 func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context, owned []int16, start, end time.Duration) ([][]int16, error) {
 	g.probe.ResetCapture()
-	probeObservation, probeErr := g.probe.ObserveCaptureContext(ctx, PCM16TimedFrame{
+	probeObservation, probeErr := g.probe.ObserveCaptureContext(ctx, selfhearing.PCM16TimedFrame{
 		Samples:    owned,
 		SampleRate: g.captureRate,
 		Start:      start,
@@ -377,7 +380,7 @@ func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 	}
 
 	switch probeObservation.Classification {
-	case PCM16SelfHearingNonFeedback:
+	case selfhearing.PCM16SelfHearingNonFeedback:
 		// A one-frame room response can dip below the primary confirmation
 		// threshold at pauses while remaining moderately correlated. Only a
 		// clearly decorrelated frame contributes to an independent-speech streak;
@@ -397,7 +400,7 @@ func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 		g.state = pcm16FeedbackGateDraining
 		g.probeIndependentEvidence = 0
 		return g.releaseAllLocked(), nil
-	case PCM16SelfHearingNoEvidence:
+	case selfhearing.PCM16SelfHearingNoEvidence:
 		g.probeIndependentEvidence = 0
 		// Silence/no-evidence inside the learned acoustic alignment is a common
 		// TTS pause, not proof of independent speech. Drop it while its source
@@ -412,7 +415,7 @@ func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 		}
 		g.state = pcm16FeedbackGateDraining
 		return append(g.releaseAllLocked(), owned), nil
-	case PCM16SelfHearingInsufficientEvidence:
+	case selfhearing.PCM16SelfHearingInsufficientEvidence:
 		// Preserve a boundary fragment until subsequent frames disambiguate it.
 		// A following confirmed echo clears it; a sustained non-feedback streak
 		// releases it in order, avoiding loss of the first barge-in frame.
@@ -599,42 +602,4 @@ func (g *PCM16FeedbackGate) warnOnceLocked() {
 	go func() {
 		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning)
 	}()
-}
-
-// pcm16DeviceDurationAtRate converts a sample count into wall-clock duration
-// at the caller's declared rate. The gate always uses the true negotiated
-// device rate here rather than the shared compatibility constant, since a
-// live realtime session commonly negotiates a rate other than SampleRate
-// (see PR #350) and a wrong rate would silently rescale every latency bound
-// this file documents.
-func pcm16DeviceDurationAtRate(samples, rate int) time.Duration {
-	if samples <= 0 || rate <= 0 {
-		return 0
-	}
-	// Match PCM16TimedFrame's nearest-nanosecond conversion exactly.
-	// Flooring here while the detector rounded made the next frame start one
-	// nanosecond before the prior detector end for ordinary non-integral device
-	// quanta (for example 480 samples at 44.1 kHz or 683 at 48 kHz). Native
-	// CoreAudio callbacks therefore failed a healthy stream as "media position
-	// moved backwards" even though the sample cursor itself was monotonic.
-	return time.Duration((int64(samples)*int64(time.Second) + int64(rate)/2) / int64(rate))
-}
-
-func addPCM16FeedbackDuration(start, duration time.Duration) time.Duration {
-	if duration > 0 && start > time.Duration(1<<63-1)-duration {
-		return time.Duration(1<<63 - 1)
-	}
-	return start + duration
-}
-
-func pcm16FeedbackContextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return nil
-	}
 }

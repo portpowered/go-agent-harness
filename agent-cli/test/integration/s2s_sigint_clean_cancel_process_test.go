@@ -19,12 +19,10 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-// These tests deliberately drive the built agent binary. The local server is
-// a Realtime-shaped provider, so the signal boundary includes Cobra, the CLI
-// signal watcher, the provider session, the tool runner, and the recording
-// finalizer without credentials or a live provider.
+// These process tests exercise the full SIGINT boundary against a local Realtime-shaped provider.
 func TestShippedSessionSIGINTAfterToolResultAcceptedFinalizesCleanly(t *testing.T) {
 	fixture := newSIGINTRealtimeFixture(sigintToolContinuationFixture, "")
 	defer fixture.Close()
@@ -134,7 +132,6 @@ type sigintRealtimeFixture struct {
 	continuationRequested    bool
 	continuationResponseDone bool
 }
-
 type sigintRealtimeFixtureSnapshot struct {
 	protocolError            string
 	connectionCount          int
@@ -161,17 +158,14 @@ func newSIGINTRealtimeFixture(mode sigintFixtureMode, inFlightMarker string) *si
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture
 }
-
 func (f *sigintRealtimeFixture) WebSocketURL() string {
 	return strings.Replace(f.server.URL, "http://", "ws://", 1)
 }
-
 func (f *sigintRealtimeFixture) Close() {
 	if f.server != nil {
 		f.server.Close()
 	}
 }
-
 func (f *sigintRealtimeFixture) Snapshot() sigintRealtimeFixtureSnapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -186,7 +180,6 @@ func (f *sigintRealtimeFixture) Snapshot() sigintRealtimeFixtureSnapshot {
 		continuationResponseDone: f.continuationResponseDone,
 	}
 }
-
 func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
 		f.fail("authorization header did not arrive through the child process")
@@ -199,7 +192,6 @@ func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http
 		return
 	}
 	defer connection.Close()
-
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -295,7 +287,6 @@ func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http
 		}
 	}
 }
-
 func (f *sigintRealtimeFixture) sendToolCall(connection *websocket.Conn) error {
 	const responseID = "response-tool"
 	const callID = "call-sigint-tool"
@@ -330,7 +321,6 @@ func (f *sigintRealtimeFixture) sendToolCall(connection *websocket.Conn) error {
 		"response": map[string]string{"id": responseID, "status": "completed"},
 	})
 }
-
 func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn) error {
 	const responseID = "response-in-flight-tool"
 	const callID = "call-sigint-exec"
@@ -372,7 +362,6 @@ func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn)
 	f.readyOnce.Do(func() { close(f.ready) })
 	return nil
 }
-
 func (f *sigintRealtimeFixture) sendNoToolOutput(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
 		"type":     "response.created",
@@ -389,11 +378,9 @@ func (f *sigintRealtimeFixture) sendNoToolOutput(connection *websocket.Conn) err
 	f.readyOnce.Do(func() { close(f.ready) })
 	return nil
 }
-
 func (f *sigintRealtimeFixture) send(connection *websocket.Conn, event any) error {
 	return connection.WriteJSON(event)
 }
-
 func (f *sigintRealtimeFixture) fail(message string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -407,7 +394,6 @@ type sigintProcessResult struct {
 	stdout   string
 	stderr   string
 }
-
 type sigintOutputBuffer struct {
 	mu     sync.Mutex
 	data   bytes.Buffer
@@ -417,7 +403,6 @@ type sigintOutputBuffer struct {
 func newSIGINTOutputBuffer() *sigintOutputBuffer {
 	return &sigintOutputBuffer{notify: make(chan struct{})}
 }
-
 func (b *sigintOutputBuffer) Write(data []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -426,13 +411,11 @@ func (b *sigintOutputBuffer) Write(data []byte) (int, error) {
 	b.notify = make(chan struct{})
 	return n, err
 }
-
 func (b *sigintOutputBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.data.String()
 }
-
 func (b *sigintOutputBuffer) waitFor(fragment string, timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -451,7 +434,6 @@ func (b *sigintOutputBuffer) waitFor(fragment string, timeout time.Duration) boo
 		}
 	}
 }
-
 func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recordDir, toolName string) sigintProcessResult {
 	t.Helper()
 	configDir := filepath.Join(t.TempDir(), "config")
@@ -482,11 +464,9 @@ func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recor
 	if err := command.Start(); err != nil {
 		t.Fatalf("start agent process: %v", err)
 	}
-
 	wait := make(chan error, 1)
 	go func() { wait <- command.Wait() }()
 	waitForSIGINTFixture(t, command, fixture.ready, wait, fixture.mode, fixture.inFlightMarker, stdout)
-
 	select {
 	case err := <-wait:
 		return sigintProcessResult{exitCode: sigintExitCode(err), stdout: stdout.String(), stderr: stderr.String()}
@@ -497,7 +477,6 @@ func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recor
 		return sigintProcessResult{}
 	}
 }
-
 func waitForSIGINTFixture(t *testing.T, command *exec.Cmd, ready <-chan struct{}, wait <-chan error, mode sigintFixtureMode, inFlightMarker string, stdout *sigintOutputBuffer) {
 	t.Helper()
 	select {
@@ -525,11 +504,9 @@ func waitForSIGINTFixture(t *testing.T, command *exec.Cmd, ready <-chan struct{}
 		t.Fatalf("send SIGINT to agent: %v", err)
 	}
 }
-
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
-
 func waitForSIGINTFile(path string, timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -548,7 +525,6 @@ func waitForSIGINTFile(path string, timeout time.Duration) bool {
 		}
 	}
 }
-
 func sigintExitCode(err error) int {
 	if err == nil {
 		return 0
@@ -558,7 +534,6 @@ func sigintExitCode(err error) int {
 	}
 	return -1
 }
-
 func assertSIGINTProcessOutput(t *testing.T, result sigintProcessResult, outputState string) {
 	t.Helper()
 	combined := result.stdout + result.stderr
@@ -583,8 +558,19 @@ func assertSIGINTProcessOutput(t *testing.T, result sigintProcessResult, outputS
 		}
 	}
 }
-
 func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wantToolResult, wantToolCall bool) {
+	t.Helper()
+	assertSIGINTRecordingDirectory(t, recordDir)
+	manifest := readSIGINTManifest(t, recordDir)
+	assertSIGINTManifestTerminal(t, manifest, outputState)
+	assertSIGINTRecordingArtifacts(t, recordDir, manifest)
+	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "client.transcript.jsonl"))
+	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "agent.transcript.jsonl"))
+	assertSIGINTSessionLog(t, filepath.Join(recordDir, "session-log.jsonl"), wantToolResult, wantToolCall)
+	assertSIGINTProviderCapture(t, recordDir)
+	assertSIGINTNoPartialArtifacts(t, recordDir)
+}
+func assertSIGINTRecordingDirectory(t *testing.T, recordDir string) {
 	t.Helper()
 	entries, err := os.ReadDir(recordDir)
 	if err != nil {
@@ -593,12 +579,9 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 	if len(entries) != 6 {
 		t.Fatalf("SIGINT recording top-level entries = %d, want six final entries (including audio-trace): %v", len(entries), entries)
 	}
-	for _, entry := range entries {
-		if strings.Contains(entry.Name(), ".staging-") {
-			t.Fatalf("recording retained staging entry %q", entry.Name())
-		}
-	}
-
+}
+func readSIGINTManifest(t *testing.T, recordDir string) transcript.RecordingManifest {
+	t.Helper()
 	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
 	if err != nil {
 		t.Fatalf("read SIGINT manifest: %v", err)
@@ -610,33 +593,27 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 	if err := manifest.Validate(); err != nil {
 		t.Fatalf("validate SIGINT manifest: %v", err)
 	}
+	return manifest
+}
+func assertSIGINTManifestTerminal(t *testing.T, manifest transcript.RecordingManifest, outputState string) {
+	t.Helper()
 	if manifest.Terminal == nil {
 		t.Fatal("SIGINT manifest omitted terminal summary")
 	}
-	wantTerminal := map[string]string{
-		"reason":              "user_cancelled",
-		"classification":      "user_cancelled",
-		"terminal_reason":     "cancellation",
-		"terminal_provenance": "cli",
-		"output_state":        outputState,
+	terminal := manifest.Terminal
+	if terminal.Reason != "user_cancelled" || terminal.Classification != "user_cancelled" ||
+		string(terminal.TerminalReason) != "cancellation" || string(terminal.TerminalProvenance) != "cli" ||
+		string(terminal.OutputState) != outputState {
+		t.Fatalf("SIGINT manifest terminal = %+v, want user_cancelled/cancellation/cli/%s", terminal, outputState)
 	}
-	gotTerminal := map[string]string{
-		"reason":              manifest.Terminal.Reason,
-		"classification":      manifest.Terminal.Classification,
-		"terminal_reason":     string(manifest.Terminal.TerminalReason),
-		"terminal_provenance": string(manifest.Terminal.TerminalProvenance),
-		"output_state":        string(manifest.Terminal.OutputState),
-	}
-	for field, want := range wantTerminal {
-		if gotTerminal[field] != want {
-			t.Fatalf("SIGINT manifest terminal %s = %q, want %q", field, gotTerminal[field], want)
-		}
-	}
-
+}
+func assertSIGINTRecordingArtifacts(t *testing.T, recordDir string, manifest transcript.RecordingManifest) {
+	t.Helper()
 	wantArtifacts := map[string]bool{
 		"client.transcript.jsonl": false,
 		"agent.transcript.jsonl":  false,
 		"session-log.jsonl":       false,
+		"provider.json":           false,
 	}
 	for _, artifact := range manifest.Artifacts {
 		if _, ok := wantArtifacts[artifact.Path]; !ok {
@@ -660,15 +637,35 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 			t.Fatalf("SIGINT manifest omitted artifact %q", path)
 		}
 	}
-
-	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "client.transcript.jsonl"))
-	assertSIGINTTranscriptJSONL(t, filepath.Join(recordDir, "agent.transcript.jsonl"))
-	assertSIGINTSessionLog(t, filepath.Join(recordDir, "session-log.jsonl"), wantToolResult, wantToolCall)
-	var anyJSON map[string]any
-	if err := json.Unmarshal(manifestBytes, &anyJSON); err != nil {
-		t.Fatalf("decode final SIGINT manifest JSON: %v", err)
+}
+func assertSIGINTProviderCapture(t *testing.T, recordDir string) {
+	t.Helper()
+	providerCapture, err := gwtesting.LoadSessionCapture(filepath.Join(recordDir, "provider.json"))
+	if err != nil {
+		t.Fatalf("load SIGINT provider capture: %v", err)
 	}
-
+	if len(providerCapture.Records) == 0 {
+		t.Fatal("SIGINT provider capture is empty")
+	}
+	if providerCapture.Provider.Name != "openai" || providerCapture.Provider.Model != "gpt-realtime" {
+		t.Fatalf("SIGINT provider capture metadata = %+v, want openai/gpt-realtime", providerCapture.Provider)
+	}
+	seenSessionCreated := false
+	seenSessionUpdated := false
+	for _, record := range providerCapture.Records {
+		switch record.Type {
+		case "session.created":
+			seenSessionCreated = true
+		case "session.updated":
+			seenSessionUpdated = true
+		}
+	}
+	if !seenSessionCreated || !seenSessionUpdated {
+		t.Fatalf("SIGINT provider capture lifecycle = created:%t updated:%t, want both events", seenSessionCreated, seenSessionUpdated)
+	}
+}
+func assertSIGINTNoPartialArtifacts(t *testing.T, recordDir string) {
+	t.Helper()
 	partialFound := false
 	if err := filepath.WalkDir(recordDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -688,7 +685,6 @@ func assertSIGINTRecordingBundle(t *testing.T, recordDir, outputState string, wa
 		t.Fatal("SIGINT recording retained a temporary artifact")
 	}
 }
-
 func assertSIGINTTranscriptJSONL(t *testing.T, path string) {
 	t.Helper()
 	file, err := os.Open(path)
@@ -711,7 +707,6 @@ func assertSIGINTTranscriptJSONL(t *testing.T, path string) {
 		t.Fatalf("transcript artifact %q is empty", path)
 	}
 }
-
 func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolCall bool) {
 	t.Helper()
 	file, err := os.Open(path)
@@ -724,18 +719,23 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 	toolCalls := 0
 	toolResults := 0
 	failedResults := 0
+	toolEventSummary := make([]string, 0)
 	for scanner.Scan() {
 		var entry struct {
+			TurnIndex  int `json:"turn_index"`
 			ToolEvents []struct {
-				Type    string `json:"type"`
-				Status  string `json:"status"`
-				Content string `json:"content"`
+				Type       string `json:"type"`
+				Status     string `json:"status"`
+				Content    string `json:"content"`
+				ToolCallID string `json:"tool_call_id"`
+				ToolName   string `json:"tool_name"`
 			} `json:"tool_events"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			t.Fatalf("decode session log line %d: %v", lineCount+1, err)
 		}
 		for _, event := range entry.ToolEvents {
+			toolEventSummary = append(toolEventSummary, fmt.Sprintf("turn=%d %s id=%q name=%q status=%q", entry.TurnIndex, event.Type, event.ToolCallID, event.ToolName, event.Status))
 			switch event.Type {
 			case "tool_call":
 				toolCalls++
@@ -758,12 +758,12 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 		t.Fatal("session log is empty")
 	}
 	if wantToolResult && (toolCalls != 1 || toolResults != 1 || failedResults != 0) {
-		t.Fatalf("completed tool session log calls=%d results=%d failed=%d, want one successful result", toolCalls, toolResults, failedResults)
+		t.Fatalf("completed tool session log calls=%d results=%d failed=%d, want one successful result; events=%v", toolCalls, toolResults, failedResults, toolEventSummary)
 	}
 	if wantToolCall && !wantToolResult && (toolCalls != 1 || toolResults != 0 || failedResults != 0) {
-		t.Fatalf("in-flight tool session log calls=%d results=%d failed=%d, want one unresolved user-canceled call", toolCalls, toolResults, failedResults)
+		t.Fatalf("in-flight tool session log calls=%d results=%d failed=%d, want one unresolved user-canceled call; events=%v", toolCalls, toolResults, failedResults, toolEventSummary)
 	}
 	if !wantToolCall && (toolCalls != 0 || toolResults != 0) {
-		t.Fatalf("no-tool session log unexpectedly contains tool events: calls=%d results=%d", toolCalls, toolResults)
+		t.Fatalf("no-tool session log unexpectedly contains tool events: calls=%d results=%d; events=%v", toolCalls, toolResults, toolEventSummary)
 	}
 }

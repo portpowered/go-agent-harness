@@ -28,23 +28,23 @@ func TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration(t *t
 	}{
 		{
 			name: "prompt only, no record or replay",
-			opts: SessionRunOptions{Prompt: "hello", PromptProvided: true},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), Prompt: "hello", PromptProvided: true},
 		},
 		{
 			name: "scheduled audio input, no record or replay",
-			opts: SessionRunOptions{AudioInputs: []ScheduledAudioInput{{}}},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioInputs: []ScheduledAudioInput{{}}},
 		},
 		{
 			name: "bare invocation, no record or replay",
-			opts: SessionRunOptions{BareLive: true},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), BareLive: true},
 		},
 		{
 			name: "browser tools enabled, no record or replay",
-			opts: SessionRunOptions{BrowserToolsEnabled: true},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog(), BrowserToolsEnabled: true},
 		},
 		{
 			name: "no mode flags and not bare (e.g. audio-in, image) still admitted",
-			opts: SessionRunOptions{},
+			opts: SessionRunOptions{ModelCatalog: testModelCatalog()},
 		},
 	}
 
@@ -61,7 +61,7 @@ func TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration(t *t
 // removing the blanket --record/--replay requirement did not weaken the
 // still-meaningful capture-mode conflict and extension checks that follow it.
 func TestValidateSessionRunOptionsStillRejectsRecordAndReplayTogether(t *testing.T) {
-	err := validateSessionRunOptions(SessionRunOptions{RecordPath: "a.json", ReplayPath: "b.json"})
+	err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), RecordPath: "a.json", ReplayPath: "b.json"})
 	if err == nil || !strings.Contains(err.Error(), "does not support --record and --replay together") {
 		t.Fatalf("validateSessionRunOptions() = %v, want the record/replay conflict error", err)
 	}
@@ -70,7 +70,7 @@ func TestValidateSessionRunOptionsStillRejectsRecordAndReplayTogether(t *testing
 // TestValidateSessionRunOptionsStillRejectsNonJSONRecordPath pins that the
 // --record extension check is unaffected by removing the admission gate.
 func TestValidateSessionRunOptionsStillRejectsNonJSONRecordPath(t *testing.T) {
-	err := validateSessionRunOptions(SessionRunOptions{RecordPath: "capture.txt"})
+	err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), RecordPath: "capture.txt"})
 	if err == nil || !strings.Contains(err.Error(), `--record path "capture.txt" must end with .json`) {
 		t.Fatalf("validateSessionRunOptions() = %v, want the --record extension error", err)
 	}
@@ -81,7 +81,7 @@ func TestValidateSessionRunOptionsStillRejectsNonJSONRecordPath(t *testing.T) {
 // --record path only needs the .json extension, and a --replay path must
 // resolve to a real, valid capture.
 func TestValidateSessionRunOptionsAdmitsRecordAndReplay(t *testing.T) {
-	if err := validateSessionRunOptions(SessionRunOptions{RecordPath: filepath.Join(t.TempDir(), "capture.json")}); err != nil {
+	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), RecordPath: filepath.Join(t.TempDir(), "capture.json")}); err != nil {
 		t.Fatalf("validateSessionRunOptions(--record) = %v, want admission", err)
 	}
 
@@ -98,16 +98,16 @@ func TestValidateSessionRunOptionsAdmitsRecordAndReplay(t *testing.T) {
 	if writeErr := os.WriteFile(replayPath, data, 0o600); writeErr != nil {
 		t.Fatalf("write capture: %v", writeErr)
 	}
-	if err := validateSessionRunOptions(SessionRunOptions{ReplayPath: replayPath}); err != nil {
+	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: replayPath}); err != nil {
 		t.Fatalf("validateSessionRunOptions(--replay) = %v, want admission", err)
 	}
 }
 
 func TestValidateSessionRunOptionsReplayTiming(t *testing.T) {
-	if err := validateSessionRunOptions(SessionRunOptions{ReplayTiming: "recorded"}); err == nil || !strings.Contains(err.Error(), "requires --replay") {
+	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayTiming: "recorded"}); err == nil || !strings.Contains(err.Error(), "requires --replay") {
 		t.Fatalf("recorded timing without replay error = %v, want --replay requirement", err)
 	}
-	if err := validateSessionRunOptions(SessionRunOptions{ReplayTiming: "elastic"}); err == nil || !strings.Contains(err.Error(), "immediate or recorded") {
+	if err := validateSessionRunOptions(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayTiming: "elastic"}); err == nil || !strings.Contains(err.Error(), "immediate or recorded") {
 		t.Fatalf("invalid replay timing error = %v, want accepted-value guidance", err)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"encoding/json"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
 var (
@@ -27,8 +27,8 @@ var (
 // tighten those defaults.
 type RoomReplayToleranceProfile struct {
 	Name         string
-	StreamConfig audio.PCM16AnalysisConfig
-	RoomConfig   audio.PCM16RoomAnalysisConfig
+	StreamConfig roomanalysis.PCM16AnalysisConfig
+	RoomConfig   roomanalysis.PCM16RoomAnalysisConfig
 }
 
 // DefaultRoomReplayToleranceProfile returns the complete suite profile used
@@ -36,8 +36,8 @@ type RoomReplayToleranceProfile struct {
 func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 	return RoomReplayToleranceProfile{
 		Name:         "suite-default",
-		StreamConfig: audio.DefaultPCM16AnalysisConfig,
-		RoomConfig:   audio.DefaultPCM16RoomAnalysisConfig,
+		StreamConfig: roomanalysis.DefaultPCM16AnalysisConfig(),
+		RoomConfig:   roomanalysis.DefaultPCM16RoomAnalysisConfig(),
 	}
 }
 
@@ -60,7 +60,7 @@ type RoomReplayAudioDelta struct {
 // resolved from a room bundle. PCM and Samples are caller-owned copies; the
 // embedded audio input is ready to pass to the analysis package.
 type RoomReplayAudioStream struct {
-	audio.PCM16TimedStream
+	roomanalysis.PCM16TimedStream
 	Role          string
 	PCM           []byte
 	SampleCount   int
@@ -107,9 +107,9 @@ type RoomReplayAudioBundle struct {
 	Participants []RoomReplayAudioParticipant
 	RoomMix      RoomReplayAudioStream
 	Annotations  []RoomReplayAudioAnnotation
-	Overlaps     []audio.PCM16OverlapInterval
-	BargeIns     []audio.PCM16BargeInAnnotation
-	Loudness     []audio.PCM16LoudnessInterval
+	Overlaps     []roomanalysis.PCM16OverlapInterval
+	BargeIns     []roomanalysis.PCM16BargeInAnnotation
+	Loudness     []roomanalysis.PCM16LoudnessInterval
 }
 
 // Participant returns a participant's resolved audio evidence by stable ID.
@@ -125,11 +125,11 @@ func (b RoomReplayAudioBundle) Participant(id string) (RoomReplayAudioParticipan
 // AnalysisInput converts the resolved streams and annotations into the
 // side-effect-free audio analyzer input. Every stream identity remains
 // independent, including room mix and sent/received evidence.
-func (b RoomReplayAudioBundle) AnalysisInput() audio.PCM16RoomInput {
-	input := audio.PCM16RoomInput{
-		Overlaps: append([]audio.PCM16OverlapInterval(nil), b.Overlaps...),
-		BargeIns: append([]audio.PCM16BargeInAnnotation(nil), b.BargeIns...),
-		Loudness: append([]audio.PCM16LoudnessInterval(nil), b.Loudness...),
+func (b RoomReplayAudioBundle) AnalysisInput() roomanalysis.PCM16RoomInput {
+	input := roomanalysis.PCM16RoomInput{
+		Overlaps: append([]roomanalysis.PCM16OverlapInterval(nil), b.Overlaps...),
+		BargeIns: append([]roomanalysis.PCM16BargeInAnnotation(nil), b.BargeIns...),
+		Loudness: append([]roomanalysis.PCM16LoudnessInterval(nil), b.Loudness...),
 	}
 	for _, participant := range b.Participants {
 		input.Streams = append(input.Streams,
@@ -146,7 +146,7 @@ func (b RoomReplayAudioBundle) AnalysisInput() audio.PCM16RoomInput {
 
 // AnalysisConfig returns the fully expanded room profile for ordinary replay
 // assertions.
-func (b RoomReplayAudioBundle) AnalysisConfig() audio.PCM16RoomAnalysisConfig {
+func (b RoomReplayAudioBundle) AnalysisConfig() roomanalysis.PCM16RoomAnalysisConfig {
 	return b.Tolerances.RoomConfig
 }
 

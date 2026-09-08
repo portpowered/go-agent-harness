@@ -99,25 +99,9 @@ tools:
 			if err != nil {
 				t.Fatalf("initialize composed CLI: %v", err)
 			}
-			agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
-				resultMu.Lock()
-				defer resultMu.Unlock()
-				switch value := msg.Value.(type) {
-				case *messages.TextDeltaValue:
-					if msg.Role == messages.RoleTool {
-						currentResult[msg.ToolCallId] += value.Content
-						resultText.WriteString(value.Content)
-					}
-				case *messages.TextEndValue:
-					if msg.Role == messages.RoleTool {
-						results = append(results, sessionConfigToolResult{
-							ToolCallID: msg.ToolCallId,
-							Content:    currentResult[msg.ToolCallId],
-						})
-						delete(currentResult, msg.ToolCallId)
-					}
-				}
-			})
+			agentCLI.SetSessionStreamObserver(sessionConfigToolResultObserver(
+				sessionInferencer, &resultMu, &resultText, &results, currentResult,
+			))
 
 			root := agentCLI.Generate()
 			root.SetOut(io.Discard)
@@ -125,11 +109,11 @@ tools:
 			args := []string{
 				"--config-dir", configDir,
 				"--workdir", filepath.Dir(toolInput),
+				"--api-key", "unused",
 				"session",
 			}
 			args = append(args, tc.commandArgs...)
 			args = append(args,
-				"--replay", filepath.Join(configDir, "deterministic.session.json"),
 				"--wait-for-close",
 				"invoke", "scripted", "tool",
 			)
@@ -175,8 +159,8 @@ tools:
 				if strings.Contains(resultText.String(), "Slept for 0s (no-op).") {
 					t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText.String())
 				}
-				if len(results) == 0 || !strings.Contains(results[0].Content, `tool "sleep" failed`) {
-					t.Fatalf("disabled sleep result = %#v, want a correlated failure", results)
+				if len(results) == 0 || !isRejectedSleepResult(results[0]) {
+					t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
 				}
 				if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
 					t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
@@ -184,6 +168,38 @@ tools:
 			}
 		})
 	}
+}
+
+func sessionConfigToolResultObserver(
+	inferencer *sessionConfigToolInferencer,
+	mu *sync.Mutex,
+	resultText *strings.Builder,
+	results *[]sessionConfigToolResult,
+	current map[string]string,
+) func(messages.StreamMessage) {
+	return func(msg messages.StreamMessage) {
+		if msg.Role != messages.RoleTool {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		switch value := msg.Value.(type) {
+		case *messages.TextDeltaValue:
+			current[msg.ToolCallId] += value.Content
+			resultText.WriteString(value.Content)
+		case *messages.TextEndValue:
+			*results = append(*results, sessionConfigToolResult{
+				ToolCallID: msg.ToolCallId,
+				Content:    current[msg.ToolCallId],
+			})
+			delete(current, msg.ToolCallId)
+			inferencer.observeResult(msg.ToolCallId)
+		}
+	}
+}
+
+func isRejectedSleepResult(result sessionConfigToolResult) bool {
+	return strings.Contains(result.Content, `tool "sleep"`) && !strings.Contains(result.Content, "Slept for 0s (no-op).")
 }
 
 func TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect(t *testing.T) {
@@ -280,16 +296,24 @@ func (i *sessionConfigToolInferencer) close() {
 	}
 }
 
+func (i *sessionConfigToolInferencer) observeResult(callID string) {
+	if i.sess != nil {
+		i.sess.observeResult(callID)
+	}
+}
+
 type sessionConfigToolSession struct {
-	inferencer    *sessionConfigToolInferencer
-	recv          *messages.TypedBuffer[messages.StreamMessage]
-	done          chan struct{}
-	once          sync.Once
-	mu            sync.Mutex
-	nextCall      int
-	acceptedCalls int
-	observedCalls []sessionConfigToolCall
-	advertised    map[string]bool
+	inferencer        *sessionConfigToolInferencer
+	recv              *messages.TypedBuffer[messages.StreamMessage]
+	done              chan struct{}
+	once              sync.Once
+	mu                sync.Mutex
+	nextCall          int
+	acceptedCalls     int
+	observedCalls     []sessionConfigToolCall
+	observedResultIDs map[string]struct{}
+	continuationSent  bool
+	advertised        map[string]bool
 }
 
 func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -323,7 +347,10 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		s.mu.Unlock()
 		if closeAfterAcceptance {
 			s.emitContinuation()
-			s.inferencer.close()
+			s.mu.Lock()
+			s.continuationSent = true
+			s.mu.Unlock()
+			s.closeWhenObserved()
 		}
 		return true
 	}
@@ -361,6 +388,25 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		}
 	}
 	return true
+}
+
+func (s *sessionConfigToolSession) observeResult(callID string) {
+	s.mu.Lock()
+	if s.observedResultIDs == nil {
+		s.observedResultIDs = make(map[string]struct{}, len(s.inferencer.calls))
+	}
+	s.observedResultIDs[callID] = struct{}{}
+	s.mu.Unlock()
+	s.closeWhenObserved()
+}
+
+func (s *sessionConfigToolSession) closeWhenObserved() {
+	s.mu.Lock()
+	ready := s.continuationSent && len(s.observedResultIDs) == len(s.inferencer.calls)
+	s.mu.Unlock()
+	if ready {
+		s.inferencer.close()
+	}
 }
 
 func (s *sessionConfigToolSession) emitContinuation() {

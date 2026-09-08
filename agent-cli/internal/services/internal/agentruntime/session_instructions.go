@@ -7,21 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
-	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -32,7 +26,7 @@ import (
 // prompt content, while the provider/session runtime continues to own its
 // model configuration.
 func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -70,7 +64,7 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 // carrying the selected or default workspace instructions into provider
 // construction.
 func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -212,174 +206,65 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	return runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 }
 
-func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
-	// This is the single service-owned boundary between prompt resolution and
-	// provider construction. The tool definitions in opts are the same snapshot
-	// that the runtime planner passes to the provider, so the grounding contract
-	// cannot drift from the advertised tool surface.
-	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
-	instructions = composeSessionInstructions(opts, instructions)
-	planFactory := opts.runtimeFactory
-	if !planFactory.configured() {
-		planFactory = newDefaultSessionRuntimeFactory()
-	}
-	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
-	if useInitialProviderInstructions {
-		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
-	}
-	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	// Caller-owned/injected sessions do not have a provider factory that can
-	// receive the resolved tool surface. Configure them whenever either
-	// instructions or tools are present; an empty instruction remains empty and
-	// does not synthesize a default prompt.
-	if opts.SessionInferencer != nil && plan.inferencer != nil && !useInitialProviderInstructions && (instructions != "" || len(opts.ToolDefinitions) > 0) {
-		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
-		// The wrapper above owns the complete injected-session configuration.
-		// Suppress ModelRunner's separate tool-only update, which otherwise races
-		// an identical second SESSION.UPDATE onto the provider wire.
-		plan.loop.AdvertiseToolDefinitions = false
-	}
-	return plan, nil
-}
-
-// sessionRuntimeFactoryWithInstructions carries resolved instructions into
-// the provider's initial SessionConfig. The generic session adapter remains
-// the fallback for injected session seams, while live providers receive the
-// same value before ConnectSession can send their initial wire update.
-func sessionRuntimeFactoryWithInstructions(base sessionRuntimeFactory, instructions string) sessionRuntimeFactory {
-	factory := base
-	factory.newBareLiveSessionInferencer = func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
-		return NewLiveSessionInferencer(opts, instructions)
-	}
-	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
-		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
-	}
-	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, inputAudioTranscription)
-	}
-	factory.newGrokSessionWithTools = func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-		return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
-	}
-	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
-	}
-	factory.newOpenAIScheduledSessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
-	}
-	return factory
-}
-
-func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
-	return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, nil)
-}
-
-func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	if dialer == nil {
-		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
-	}
-	providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
-	if strings.TrimSpace(sessionCfg.BaseURL) != "" {
-		providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
-	}
-	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
-	if err != nil {
-		return nil, fmt.Errorf("create Grok session gateway: %w", err)
-	}
-	inferenceOpts := []inference.SessionOption{
-		inference.WithSessionModel(sessionCfg.Model),
-		inference.WithSessionInstructions(instructions),
-	}
-	if len(toolDefinitions) > 0 {
-		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
-	}
-	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
-}
-
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, models.InputAudioTranscriptionConfig{})
-}
-
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, nil, inputAudioTranscription)
-}
-
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
-}
-
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription, oaiprovider.WithClientOwnedAudioTurnBoundaries())
-}
-
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig, extra ...oaiprovider.Option) (messages.SessionInferencer, error) {
-	if dialer == nil {
-		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
-	}
-	if !isOpenAIRealtimeModel(sessionCfg.Model) {
-		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
-	}
-	providerOpts := []oaiprovider.Option{
-		oaiprovider.WithAPIKey(sessionCfg.APIKey),
-		oaiprovider.WithModel(sessionCfg.Model),
-		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-		oaiprovider.WithWebSocketDialer(dialer),
-	}
-	providerOpts = append(providerOpts, extra...)
-	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
-	if err != nil {
-		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
-	}
-	inferenceOpts := []inference.SessionOption{
-		inference.WithSessionModel(sessionCfg.Model),
-		inference.WithSessionInstructions(instructions),
-		inference.WithSessionInputAudioTranscription(inputAudioTranscription),
-	}
-	if sessionCfg.ReasoningEffort != "" {
-		inferenceOpts = append(inferenceOpts, inference.WithSessionReasoningEffort(sessionCfg.ReasoningEffort))
-	}
-	if voice != "" {
-		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
-	}
-	if len(toolDefinitions) > 0 {
-		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
-	}
-	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
-}
-
-// resolveSessionInstructions delegates prompt selection and path-or-literal
-// precedence to the existing ask-path Executor contract. A missing AGENTS.md
-// is intentionally an empty prompt and has no workspace side effects.
+// resolveSessionInstructions performs the host-side prompt selection for the
+// legacy realtime service. The reusable text service has the same policy in
+// its CLI resolver; keeping this tiny adapter here prevents the old realtime
+// graph from importing the extracted session implementation.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
-	toolDefinitions := messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	workDir := opts.WorkDir
 	if workDir == "" && opts.FilesystemPolicy == nil {
 		// Preserve the direct service API's historical workspace behavior. CLI
 		// sessions always supply the launch-captured policy explicitly.
 		workDir = opts.ConfigDir
 	}
-	cfg := &agent.Config{
-		SystemPrompt:        systemPrompt,
-		NoSystemInformation: true,
-		ConfigDir:           opts.ConfigDir,
-		WorkDir:             workDir,
-		AllowPaths:          append([]string(nil), opts.AllowPaths...),
+	if workDir != "" && opts.FilesystemPolicy == nil {
+		// Validate the host-selected workspace before attempting prompt
+		// discovery. A missing workspace is a startup/configuration error, not
+		// an empty prompt, and must prevent provider/session admission.
+		policy, policyErr := cliTools.ResolveFilesystemPolicy(workDir, opts.AllowPaths...)
+		if policyErr != nil {
+			return "", fmt.Errorf("resolve filesystem scope: %w", policyErr)
+		}
+		workDir = policy.PrimaryRoot()
 	}
-	executor := agent.NewExecutor(nil, nil, nil, true)
-	storage, err := executor.GetSessionStorage(cfg)
+	instructions, err := resolveSessionPromptValue(systemPrompt, workDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve session instructions: %w", err)
+		return "", err
 	}
-	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), toolDefinitions)
-	if err != nil {
-		return "", fmt.Errorf("resolve session instructions: %w", err)
+	if instructions != "" && workDir != "" {
+		loader := skills.NewLoader(workDir, opts.ConfigDir)
+		if summary, summaryErr := loader.BuildSummary(); summaryErr == nil && summary != "" {
+			instructions += "\n\n---\n\n" + summary
+		}
 	}
 	if instructions != "" && opts.FilesystemPolicy != nil {
 		instructions = appendFilesystemScopeInstructions(instructions, opts.FilesystemPolicy)
 	}
 	return instructions, nil
+}
+
+func resolveSessionPromptValue(value, workDir string) (string, error) {
+	if value == "none" {
+		return "", nil
+	}
+	if value != "" {
+		if _, err := os.Stat(value); err == nil {
+			data, readErr := os.ReadFile(value)
+			if readErr != nil {
+				return "", fmt.Errorf("read system prompt %s: %w", value, readErr)
+			}
+			return string(data), nil
+		}
+		return value, nil
+	}
+	data, err := os.ReadFile(filepath.Join(workDir, "AGENTS.md"))
+	if err == nil {
+		return string(data), nil
+	}
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	return "", fmt.Errorf("read AGENTS.md %s: %w", filepath.Join(workDir, "AGENTS.md"), err)
 }
 
 func appendFilesystemScopeInstructions(instructions string, policy interface{ ScopeDescription() string }) string {
@@ -475,191 +360,4 @@ func composeSessionInstructions(opts SessionRunOptions, instructions string) str
 		}
 	}
 	return strings.Join(filtered, "\n\n")
-}
-
-// sessionInstructionsInferencer decorates caller-owned session seams without
-// changing their provider construction. The provider-aware runtime factory
-// above handles the live provider path; injected sessions receive a generic
-// session update after the provider announces that the session is open.
-type sessionInstructionsInferencer struct {
-	inner        messages.SessionInferencer
-	instructions string
-	tools        []messages.ToolDefinition
-}
-
-var _ messages.SessionInferencer = (*sessionInstructionsInferencer)(nil)
-
-func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string, toolDefinitions []messages.ToolDefinition) messages.SessionInferencer {
-	return &sessionInstructionsInferencer{
-		inner:        inner,
-		instructions: instructions,
-		tools:        cloneSessionToolDefinitions(toolDefinitions),
-	}
-}
-
-func cloneSessionToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	return messages.CanonicalToolDefinitions(definitions)
-}
-
-func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	inner, err := i.inner.ConnectSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return newSessionInstructionsSession(inner, ctx, i.instructions, i.tools), nil
-}
-
-type sessionInstructionsSession struct {
-	inner         messages.Session
-	instructions  string
-	tools         []messages.ToolDefinition
-	receive       *messages.TypedBuffer[messages.StreamMessage]
-	ctx           context.Context
-	cancel        context.CancelFunc
-	configureOnce sync.Once
-	done          chan struct{}
-	doneOnce      sync.Once
-}
-
-var _ messages.Session = (*sessionInstructionsSession)(nil)
-var _ messages.SessionSendOutcomeSender = (*sessionInstructionsSession)(nil)
-
-func newSessionInstructionsSession(inner messages.Session, parent context.Context, instructions string, toolDefinitions []messages.ToolDefinition) messages.Session {
-	ctx, cancel := context.WithCancel(parent)
-	session := &sessionInstructionsSession{
-		inner:        inner,
-		instructions: instructions,
-		tools:        cloneSessionToolDefinitions(toolDefinitions),
-		receive:      messages.NewTypedBuffer[messages.StreamMessage](inner.Receive().Cap()),
-		ctx:          ctx,
-		cancel:       cancel,
-		done:         make(chan struct{}),
-	}
-	go session.relay()
-	return session
-}
-
-func (s *sessionInstructionsSession) relay() {
-	defer s.markDone()
-	innerReceive := s.inner.Receive()
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-s.inner.Done():
-			for {
-				msg, ok := innerReceive.Read()
-				if !ok {
-					return
-				}
-				if !s.forward(msg) {
-					return
-				}
-			}
-		case msg := <-innerReceive.Chan():
-			if !s.forward(msg) {
-				return
-			}
-		}
-	}
-}
-
-func (s *sessionInstructionsSession) forward(msg messages.StreamMessage) bool {
-	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeSessionCreated {
-		var configureErr error
-		s.configureOnce.Do(func() {
-			outcome := messages.SendSessionWithOutcome(s.ctx, s.inner, messages.StreamMessage{
-				Type: messages.StreamTypeSessionUpdate,
-				Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
-					Instructions: s.instructions,
-					Tools:        s.tools,
-				}),
-			})
-			if !outcome.OK() {
-				configureErr = fmt.Errorf("send session instructions: %s", outcome.Status)
-				if outcome.Err != nil {
-					configureErr = fmt.Errorf("%w: %v", configureErr, outcome.Err)
-				}
-			}
-		})
-		if configureErr != nil {
-			s.receive.Write(s.ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeError,
-				Value: messages.NewErrorValueWithError(configureErr),
-			})
-			_ = s.inner.Close()
-			return false
-		}
-	}
-	return s.receive.Write(s.ctx, msg)
-}
-
-func (s *sessionInstructionsSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.inner.Send(ctx, msg)
-}
-
-// RequestResponse forwards the optional explicit response capability without
-// changing the instruction-update lifecycle or replay behavior.
-func (s *sessionInstructionsSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	return messages.RequestSessionResponse(ctx, s.inner)
-}
-
-func (s *sessionInstructionsSession) SupportsResponseRequests() bool {
-	return messages.SupportsSessionResponseRequests(s.inner)
-}
-
-// SendMessage forwards the optional complete-message capability of the
-// wrapped provider session. Instruction decoration must not hide the rich
-// message path used to deliver a tool result on the next model turn.
-func (s *sessionInstructionsSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSender)
-	return ok && sender.SendMessage(ctx, msg)
-}
-
-// SendMessageWithoutResponse forwards deferred complete messages for callers
-// that batch more than one tool result before requesting the next response.
-func (s *sessionInstructionsSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
-}
-
-func (s *sessionInstructionsSession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.inner)
-	return complete
-}
-
-func (s *sessionInstructionsSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.inner)
-	return withoutResponse
-}
-
-func (s *sessionInstructionsSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	return messages.SendSessionWithOutcome(ctx, s.inner, msg)
-}
-
-func (s *sessionInstructionsSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.receive
-}
-
-func (s *sessionInstructionsSession) Done() <-chan struct{} {
-	return s.done
-}
-
-func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
-	return rtcMediaFromSession(s.inner)
-}
-
-func (s *sessionInstructionsSession) TerminalError() error {
-	return terminalSessionError(s.inner)
-}
-
-func (s *sessionInstructionsSession) Close() error {
-	s.cancel()
-	err := s.inner.Close()
-	s.markDone()
-	return err
-}
-
-func (s *sessionInstructionsSession) markDone() {
-	s.doneOnce.Do(func() { close(s.done) })
 }

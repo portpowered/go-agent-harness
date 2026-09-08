@@ -32,6 +32,15 @@ func (c *AgentCLI) SetSessionStreamObserver(observer serviceSession.SessionStrea
 	c.router.SessionCommand.SetSessionStreamObserver(observer)
 }
 
+// SetSessionHoldToneConfig installs an explicit gap-cue policy on the
+// composed session command. The default command keeps the production cue.
+func (c *AgentCLI) SetSessionHoldToneConfig(config serviceSession.HoldToneConfig) {
+	if c == nil || c.router == nil || c.router.SessionCommand == nil {
+		return
+	}
+	c.router.SessionCommand.SetHoldToneConfig(config)
+}
+
 // RootCommand holds the root "yui" command. Subcommands and persistent flags are wired in core_router.go.
 type RootCommand struct {
 	Flags *flags.GlobalFlags

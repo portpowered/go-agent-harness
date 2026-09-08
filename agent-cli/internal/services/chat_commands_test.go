@@ -169,7 +169,9 @@ func TestChatCommands_ResolutionFailuresAndEmptySkillList(t *testing.T) {
 	if err := os.WriteFile(badConfig, []byte("not a directory"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	harness.globalFlags.ConfigDirPath = badConfig
+	// Prompt and workspace skill discovery use the explicit workspace; config
+	// storage is independent after host/runtime separation.
+	harness.globalFlags.WorkDirPath = badConfig
 	harness.askFlags.SystemPrompt = ""
 	harness.model = submitChatInput(harness.model, "/system")
 	harness.model = submitChatInput(harness.model, "/broken-skill")

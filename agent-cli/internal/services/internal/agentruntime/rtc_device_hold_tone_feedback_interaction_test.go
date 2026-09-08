@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -52,8 +53,8 @@ func TestRTCDeviceSinkHoldToneConfirmedFeedbackStillForwardsGenuineBargeInPrompt
 	}
 
 	warning := make(chan string, 1)
-	feedbackConfig := audio.DefaultSelfHearingConfig()
-	feedbackConfig.CorrelationLagWindow = audio.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
+	feedbackConfig := selfhearing.DefaultSelfHearingConfig()
+	feedbackConfig.CorrelationLagWindow = selfhearing.PCM16LagWindow{Min: -5 * time.Millisecond, Max: 5 * time.Millisecond}
 	feedbackConfig.MinimumEvidence = 30 * time.Millisecond
 	feedbackConfig.MaximumReleaseLatency = 500 * time.Millisecond
 	// AnalysisWindow (120ms) and PostPlaybackAcousticTail (200ms) are left at

@@ -35,7 +35,7 @@ func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
 	}}
 
 	var stdout bytes.Buffer
-	err := RunSessionWithAudioOut(context.Background(), &stdout, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), &stdout, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, "-")
@@ -62,7 +62,7 @@ func TestRunSessionWithAudioOut_FinalizesPlayableWAV(t *testing.T) {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
 
-	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path); err != nil {
@@ -98,7 +98,7 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 	})
 
 	path := filepath.Join(t.TempDir(), "s14-response.wav")
-	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        replayPath,
 		SessionInferencer: gwtesting.NewReplaySessionInferencer(replayPath),
 	}, path)
@@ -144,7 +144,7 @@ func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T
 	}}
 	path := filepath.Join(t.TempDir(), "split-response.raw")
 
-	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path); err != nil {
@@ -177,7 +177,7 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+		errCh <- RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inf,
 		}, path)
@@ -222,7 +222,7 @@ func TestRunSessionWithAudioOut_NoAudioRemovesEmptyWAV(t *testing.T) {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
 
-	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path); err != nil {
@@ -237,7 +237,7 @@ func TestRunSessionWithAudioOut_PreflightsPathBeforeSessionConnect(t *testing.T)
 	path := filepath.Join(t.TempDir(), "missing", "response.wav")
 	inf := &scriptedSessionInferencer{}
 
-	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path)
@@ -256,7 +256,7 @@ func TestRunSessionWithAudioOut_PreflightsDirectoryTargetBeforeSessionConnect(t 
 	}
 	inf := &scriptedSessionInferencer{}
 
-	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path)
@@ -287,7 +287,7 @@ func TestRunSessionWithAudioOut_UnwritableFileFailsBeforeSessionConnect(t *testi
 	}()
 	inf := &scriptedSessionInferencer{}
 
-	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path)
@@ -307,7 +307,7 @@ func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *t
 	}
 	inf := &scriptedSessionInferencer{}
 
-	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        "record.json",
 		ReplayPath:        "replay.json",
 		SessionInferencer: inf,
@@ -342,7 +342,7 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunSessionWithAudioOut(context.Background(), writer, SessionRunOptions{
+		errCh <- RunSessionWithAudioOut(context.Background(), writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inf,
 		}, "-")
@@ -384,7 +384,7 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{
+		errCh <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inf,
 		}, path)
@@ -426,7 +426,7 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunSessionWithAudioOutAndTextSeedAndMaxDuration(context.Background(), io.Discard, SessionRunOptions{
+		errCh <- RunSessionWithAudioOutAndTextSeedAndMaxDuration(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inf,
 		}, path, 50*time.Millisecond, SessionTextSeed{})
@@ -463,7 +463,7 @@ func TestRunSessionWithAudioOut_TruncatesExistingRawFile(t *testing.T) {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
 
-	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
+	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path); err != nil {
@@ -485,7 +485,7 @@ func TestRunSessionWithAudioOut_PreservesSinkWriteError(t *testing.T) {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
 
-	err := RunSessionWithAudioOut(context.Background(), sessionAudioErrorWriter{err: wantErr}, SessionRunOptions{
+	err := RunSessionWithAudioOut(context.Background(), sessionAudioErrorWriter{err: wantErr}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, "-")

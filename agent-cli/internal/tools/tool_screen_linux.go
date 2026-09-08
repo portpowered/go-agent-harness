@@ -136,11 +136,6 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	return img, nil
 }
 
-// loadPNGasRGBA opens path, decodes the PNG, and returns an *image.RGBA.
-func loadPNGasRGBA(path string) (*image.RGBA, error) {
-	return loadPNGasRGBAWithContext(context.Background(), path)
-}
-
 func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, error) {
 	f, err := os.Open(path)
 	if err != nil {

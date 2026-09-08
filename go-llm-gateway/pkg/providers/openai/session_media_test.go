@@ -4,13 +4,28 @@ import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 )
+
+func TestDecodeOpenAIRealtimeAudioDeltaPreservesOddPCMContext(t *testing.T) {
+	_, err := decodeOpenAIRealtimeAudioDelta([]byte(`{"delta":"AA=="}`))
+	if err == nil {
+		t.Fatal("odd PCM16 delta was accepted")
+	}
+	if !errors.Is(err, codec.ErrPCM16OddLength) {
+		t.Fatalf("odd PCM16 error = %v, want codec.ErrPCM16OddLength", err)
+	}
+	if !strings.Contains(err.Error(), "PCM16 audio delta has odd byte length") {
+		t.Fatalf("odd PCM16 error = %v, want audio-delta diagnostic", err)
+	}
+}
 
 func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockWebSocketConn()

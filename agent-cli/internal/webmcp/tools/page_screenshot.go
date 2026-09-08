@@ -1,18 +1,13 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
-	"mime"
-	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 const (
@@ -113,65 +108,23 @@ func (s *BrokerToolSet) capturePageRich(ctx context.Context) ([]byte, messages.I
 }
 
 func validatePageScreenshot(screenshot webmcp.PageScreenshot) (validatedPageScreenshot, error) {
-	if screenshot.BrowserID == "" || screenshot.TargetID == "" {
-		return validatedPageScreenshot{}, invalidPageScreenshot("missing_target_identity", nil)
-	}
-	if len(screenshot.Bytes) == 0 {
-		return validatedPageScreenshot{}, invalidPageScreenshot("empty_capture", nil)
-	}
-	mimeType, _, err := mime.ParseMediaType(strings.TrimSpace(screenshot.MIMEType))
+	validated, err := runtimeToolsWire.NewService().BrowserContract().ValidatePageScreenshot(runtimeTools.PageScreenshot{
+		BrowserID: string(screenshot.BrowserID),
+		TargetID:  string(screenshot.TargetID),
+		MIMEType:  screenshot.MIMEType,
+		Bytes:     screenshot.Bytes,
+		Width:     screenshot.Width,
+		Height:    screenshot.Height,
+	})
 	if err != nil {
-		return validatedPageScreenshot{}, invalidPageScreenshot("invalid_mime_type", err)
-	}
-	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
-	if mimeType != "image/png" && mimeType != "image/jpeg" {
-		return validatedPageScreenshot{}, invalidPageScreenshot("unsupported_mime_type", nil)
-	}
-
-	decoded, format, err := image.Decode(bytes.NewReader(screenshot.Bytes))
-	if err != nil {
-		return validatedPageScreenshot{}, invalidPageScreenshot("malformed_image", err)
-	}
-	format = strings.ToLower(strings.TrimSpace(format))
-	expectedFormat := "png"
-	if mimeType == "image/jpeg" {
-		expectedFormat = "jpeg"
-	}
-	if format != expectedFormat {
-		return validatedPageScreenshot{}, invalidPageScreenshot("mime_mismatch", fmt.Errorf("declared %s, decoded %s", mimeType, format))
-	}
-	width := decoded.Bounds().Dx()
-	height := decoded.Bounds().Dy()
-	if width <= 0 || height <= 0 {
-		return validatedPageScreenshot{}, invalidPageScreenshot("invalid_dimensions", nil)
-	}
-	if screenshot.Width < 0 || screenshot.Height < 0 ||
-		(screenshot.Width != 0 && screenshot.Width != width) ||
-		(screenshot.Height != 0 && screenshot.Height != height) {
-		return validatedPageScreenshot{}, invalidPageScreenshot("dimension_mismatch", nil)
+		return validatedPageScreenshot{}, err
 	}
 	return validatedPageScreenshot{
-		browserID: screenshot.BrowserID,
-		targetID:  screenshot.TargetID,
-		mimeType:  mimeType,
-		bytes:     append([]byte(nil), screenshot.Bytes...),
-		width:     width,
-		height:    height,
+		browserID: webmcp.BrowserID(validated.BrowserID),
+		targetID:  webmcp.TargetID(validated.TargetID),
+		mimeType:  validated.MIMEType,
+		bytes:     validated.Bytes,
+		width:     validated.Width,
+		height:    validated.Height,
 	}, nil
-}
-
-func invalidPageScreenshot(reason string, cause error) error {
-	if strings.TrimSpace(reason) == "" {
-		reason = "invalid_capture"
-	}
-	return &webmcp.ClassifiedError{
-		Code:      webmcp.ErrorInvocationFailed,
-		Message:   "The browser returned an invalid page capture.",
-		Retryable: false,
-		Details: map[string]any{
-			"phase":       "capture_page",
-			"reason_code": reason,
-		},
-		Cause: cause,
-	}
 }

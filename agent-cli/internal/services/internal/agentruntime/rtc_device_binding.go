@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -36,7 +37,7 @@ type RTCDeviceBindingRequest struct {
 	OutputPresent bool
 	// SelfHearingConfig is used only when both local directions are selected.
 	// Zero fields use the documented audio default profile.
-	SelfHearingConfig audio.PCM16SelfHearingConfig
+	SelfHearingConfig selfhearing.PCM16SelfHearingConfig
 	// FeedbackWarningWriter receives the one-time local acoustic-feedback
 	// warning. The CLI supplies command stderr; nil disables presentation while
 	// retaining the audio gate.
@@ -52,6 +53,9 @@ type RTCDeviceBindingRequest struct {
 	// audio.LoudnessNormalizer / VoiceLoudnessGainDB). An empty value is the
 	// documented 0 dB no-op, matching the provider-selected default voice.
 	OutputVoice string
+	// HoldToneConfig overrides the default local gap cue for embedded owners
+	// that need a different timing policy. Nil preserves the production default.
+	HoldToneConfig *audio.HoldToneConfig
 	// InputSampleRate is the provider-owned PCM16 capture rate. A device that
 	// cannot open this rate may be opened at another supported rate and
 	// converted once by RTCDeviceSource before provider transmission.
@@ -270,13 +274,21 @@ func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBindin
 		binding.Source.SetPreGateSamplesObserver(request.PreGateSamplesObserver)
 		binding.Source.SetUploadedSamplesObserver(request.UploadedSamplesObserver)
 	}
-	if binding.Sink != nil {
-		if request.RenderedSamplesObserver != nil && !binding.Sink.SetRenderedSamplesObserver(request.RenderedSamplesObserver) && request.RenderedSamplesUnavailable != nil {
-			request.RenderedSamplesUnavailable()
-		}
-	}
+	configureRTCDeviceOutput(binding.Sink, request)
 
 	return binding, nil
+}
+
+func configureRTCDeviceOutput(sink *devicert.RTCDeviceSink, request RTCDeviceBindingRequest) {
+	if sink == nil {
+		return
+	}
+	if request.HoldToneConfig != nil {
+		sink.SetHoldToneConfig(*request.HoldToneConfig)
+	}
+	if request.RenderedSamplesObserver != nil && !sink.SetRenderedSamplesObserver(request.RenderedSamplesObserver) && request.RenderedSamplesUnavailable != nil {
+		request.RenderedSamplesUnavailable()
+	}
 }
 
 // OpenRTCDeviceBindings is a descriptive alias for callers that model the

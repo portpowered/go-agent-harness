@@ -7,18 +7,21 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
-func browserEnabledConfig() *config.Config {
+func browserEnabledConfig(t *testing.T) *config.Config {
+	t.Helper()
 	cfg := &config.Config{}
 	cfg.Browser = config.DefaultBrowserConfig()
 	cfg.Browser.Tools.Enabled = true
+	cfg.FilesystemWorkDir = t.TempDir()
 	return cfg
 }
 
 func TestServiceResolvesWithoutBrowserCapability(t *testing.T) {
-	service := New(nil, nil, nil, nil)
-	cfg := &config.Config{}
+	service := New(nil, nil, nil, nil, runtimeToolsWire.NewService())
+	cfg := &config.Config{FilesystemWorkDir: t.TempDir()}
 	cfg.Browser = config.DefaultBrowserConfig()
 	capabilities, err := service.Resolve(cfg)
 	if err != nil {
@@ -41,9 +44,9 @@ func TestServiceClosesPartiallyConstructedBrowserWhenFactoryFails(t *testing.T) 
 			closes.Add(1)
 			return nil
 		}}, wantErr
-	}, nil, nil)
+	}, nil, nil, runtimeToolsWire.NewService())
 
-	_, err := service.Resolve(browserEnabledConfig())
+	_, err := service.Resolve(browserEnabledConfig(t))
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("resolve error = %v, want wrapped factory error", err)
 	}
@@ -59,9 +62,9 @@ func TestServiceClosesBrowserWhenFactoryReturnsNilBroker(t *testing.T) {
 			closes.Add(1)
 			return nil
 		}}, nil
-	}, nil, nil)
+	}, nil, nil, runtimeToolsWire.NewService())
 
-	_, err := service.Resolve(browserEnabledConfig())
+	_, err := service.Resolve(browserEnabledConfig(t))
 	if err == nil {
 		t.Fatal("resolve error = nil, want nil broker error")
 	}

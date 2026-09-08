@@ -255,7 +255,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		}
 	}()
 
-	observation, err := servicewire.NewDeviceProbeService(registry).Run(runContext, serviceDevices.DeviceProbeRequest{
+	observation, err := servicewire.NewDeviceProbeService(registry, nil).Run(runContext, serviceDevices.DeviceProbeRequest{
 		Scenario:             scenario,
 		SessionInferencer:    &deviceProbeSessionInferencer{session: session},
 		CaptureTime:          750 * time.Millisecond,

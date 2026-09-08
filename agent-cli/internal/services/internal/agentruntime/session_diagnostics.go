@@ -131,10 +131,33 @@ type ScheduledAudioInput struct {
 	EndOfTurn bool
 }
 
-// scheduledSessionInputSender is the narrow loop seam used by the scheduler.
-// Keeping it separate from AgentLoop makes the ordering contract directly
-// observable in service tests while production still uses AgentLoop's session
-// input APIs.
+type diagnosticSinkFanout []SessionDiagnosticSink
+
+func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
+	filtered := make(diagnosticSinkFanout, 0, len(sinks))
+	for _, sink := range sinks {
+		if sink != nil {
+			filtered = append(filtered, sink)
+		}
+	}
+	switch len(filtered) {
+	case 0:
+		return nil
+	case 1:
+		return filtered[0]
+	default:
+		return filtered
+	}
+}
+
+func (f diagnosticSinkFanout) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	for _, sink := range f {
+		if sink != nil {
+			sink.RecordSessionDiagnostic(record)
+		}
+	}
+}
+
 type scheduledSessionInputSender interface {
 	SendAudioInput(context.Context, []byte) error
 	SendSessionEvent(context.Context, messages.StreamMessage) error

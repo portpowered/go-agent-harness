@@ -47,6 +47,12 @@ const (
 	StreamRTCData   Stream = "rtc-data"
 	StreamDeviceIn  Stream = "device-in"
 	StreamDeviceOut Stream = "device-out"
+	// StreamRuntimeMessage contains normalized agent-session observations, not raw transport frames.
+	StreamRuntimeMessage Stream = "runtime-message"
+	// StreamRuntimeAudio indexes PCM observed at a session media port.
+	StreamRuntimeAudio Stream = "runtime-audio"
+	// StreamRuntimeEvent preserves session/tool lifecycle observations and error text.
+	StreamRuntimeEvent Stream = "runtime-event"
 
 	// StreamWebSocket is a descriptive alias for StreamWS.
 	StreamWebSocket = StreamWS

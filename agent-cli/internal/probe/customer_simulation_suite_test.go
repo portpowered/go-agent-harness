@@ -165,8 +165,49 @@ func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T)
 	if len(facts.tools) != 1 {
 		t.Fatalf("tool observations = %d, want 1", len(facts.tools))
 	}
-	if !facts.tools[0].ResultSeen || facts.tools[0].Status != "completed" || facts.tools[0].Duration <= 0 {
+	if !facts.tools[0].ResultSeen || facts.tools[0].Status != string(DispositionCompleted) || facts.tools[0].Duration <= 0 {
 		t.Fatalf("tool observation = %+v, want completed result with positive duration", facts.tools[0])
+	}
+}
+
+func TestReadCustomerSimulationStreamIgnoresNonMessageAgentFrames(t *testing.T) {
+	root := t.TempDir()
+	base := time.Unix(0, 0)
+	var data bytes.Buffer
+	sequence := uint64(0)
+	write := func(stream transcript.Stream, payload []byte) {
+		t.Helper()
+		sequence++
+		encoded, err := transcript.Encode(transcript.NewRecord(sequence, base.Add(time.Duration(sequence)*time.Millisecond), transcript.PeerAgent, transcript.DirectionOut, stream, payload))
+		if err != nil {
+			t.Fatalf("Encode(%s): %v", stream, err)
+		}
+		data.Write(encoded)
+	}
+
+	write(transcript.StreamRuntimeEvent, []byte(`{"event":{"kind":"session"}}`))
+	write(transcript.StreamRuntimeAudio, []byte(`{"kind":"audio.frame"}`))
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, ResponseID: "response-1", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeMessageEnd, ResponseID: "response-1", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		payload, err := gatewaytesting.MarshalStreamMessage(message)
+		if err != nil {
+			t.Fatalf("MarshalStreamMessage(%s): %v", message.Type, err)
+		}
+		write(transcript.StreamRuntimeMessage, payload)
+	}
+	write(transcript.StreamRuntimeEvent, []byte(`{"event":{"kind":"terminal"}}`))
+
+	if err := os.WriteFile(filepath.Join(root, "agent.transcript.jsonl"), data.Bytes(), 0o600); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	facts, err := readCustomerSimulationStream(root, NewFamilyAScenario(), 0)
+	if err != nil {
+		t.Fatalf("readCustomerSimulationStream: %v", err)
+	}
+	if len(facts.responses) != 1 || facts.responses[0].ID != "response-1" || !facts.responses[0].Complete {
+		t.Fatalf("responses = %+v, want one complete response-1 from runtime-message frames", facts.responses)
 	}
 }
 
@@ -211,7 +252,7 @@ func TestReadCustomerSimulationStreamUsesRecordedCorrectionBoundaries(t *testing
 		Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{2, 0, 2, 0}),
 	})
 	write(6*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", Status: "cancelled"},
+		Type: messages.StreamTypeMessageEnd, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", Status: string(DispositionCancelled)},
 	})
 	write(7*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
 		Type: messages.StreamTypeMessageStart, ResponseID: "response-replacement", Value: messages.NewMessageStartValue(),

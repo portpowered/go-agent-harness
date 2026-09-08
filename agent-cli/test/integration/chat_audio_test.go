@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -66,14 +65,14 @@ func TestChatAudio_SingleUtterance(t *testing.T) {
 
 	fakeResponse := "Audio received!"
 	rec := &recordingInferencer{response: fakeResponse}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
+	service := newPublicTextSessionService(globalFlags, &mockToolExecutor{}, rec, nil)
 
 	tw := NewTestWriter()
 	ctx := context.Background()
 
-	err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), executor, globalFlags, askFlags, src)
+	err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), service, globalFlags, askFlags, src)
 	if err != nil {
 		t.Fatalf("RunChatWithAudio returned unexpected error: %v", err)
 	}
@@ -110,14 +109,14 @@ func TestChatAudio_MultipleUtterances(t *testing.T) {
 
 	src := audio.NewSliceSource(samples)
 	rec := &recordingInferencer{response: "ok"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
+	service := newPublicTextSessionService(globalFlags, &mockToolExecutor{}, rec, nil)
 
 	tw := NewTestWriter()
 	ctx := context.Background()
 
-	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), executor, globalFlags, askFlags, src); err != nil {
+	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), service, globalFlags, askFlags, src); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -136,14 +135,14 @@ func TestChatAudio_MultipleUtterances(t *testing.T) {
 func TestChatAudio_SilenceOnlySourceExitsGracefully(t *testing.T) {
 	src := audio.NewSliceSource(makePCMSilence(5))
 	rec := &recordingInferencer{response: "should not happen"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
+	service := newPublicTextSessionService(globalFlags, &mockToolExecutor{}, rec, nil)
 
 	tw := NewTestWriter()
 	ctx := context.Background()
 
-	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), executor, globalFlags, askFlags, src); err != nil {
+	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), service, globalFlags, askFlags, src); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -163,12 +162,12 @@ func TestChatAudio_ContextCancellationExitsGracefully(t *testing.T) {
 
 	src := audio.NewSliceSource(makePCMSilence(1))
 	rec := &recordingInferencer{response: "nope"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
+	service := newPublicTextSessionService(globalFlags, &mockToolExecutor{}, rec, nil)
 
 	tw := NewTestWriter()
-	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), executor, globalFlags, askFlags, src); err != nil {
+	if err := cli.RunChatWithAudio(ctx, tw.Stdout(), tw.Stderr(), service, globalFlags, askFlags, src); err != nil {
 		t.Fatalf("expected nil error on context cancel, got: %v", err)
 	}
 

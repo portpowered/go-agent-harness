@@ -1,7 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
@@ -12,12 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -96,18 +91,10 @@ func newPlainSpeechRecordingDialer(server *plainSpeechServer) *gwtesting.Recordi
 }
 
 func newPlainSpeechSessionCLI(recorder *gwtesting.RecordingWebSocketDialer) (*cli.AgentCLI, error) {
-	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
-		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
-		oaiprovider.WithWebSocketDialer(recorder),
-		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return wire.InitializeMockAgentCLIWithSessionInferencer(
-		&mockToolExecutor{},
-		&mockInferencer{response: "stateless inferencer should not be called"},
-		sessionInferencer,
+	return wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortTransportDialer, recorder),
+		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),
 	)
 }
 

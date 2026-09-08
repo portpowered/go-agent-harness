@@ -6,6 +6,16 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"image"
 	"image/color"
 	"image/png"
@@ -15,12 +25,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing.T) {
@@ -32,11 +36,23 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	recordingDir := filepath.Join(root, "recording")
 
 	session := newExactStagedImageSession(configDir, imageBytes)
-	registry := tools.NewToolRegistry()
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
-		tools.NewRegistryExecutor(registry),
-		&mockInferencerError{err: errors.New("stateless inferencer must not be used")},
-		&exactStagedImageInferencer{session: session},
+	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:        root,
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		t.Fatalf("resolve runtime tools: %v", err)
+	}
+	toolService := serviceTools.Factory(func(_ *config.Config) (serviceTools.Capabilities, error) {
+		return serviceTools.Capabilities{
+			Executor:    capability.Executor,
+			Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...),
+		}, nil
+	})
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewToolServicePort(toolService),
+		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer must not be used")}),
+		wire.NewPortSwap(wire.PortSessionInferencer, &exactStagedImageInferencer{session: session}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
@@ -66,6 +82,11 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	}
 
 	snapshot := session.snapshot()
+	assertExactStagedImageOutcome(t, snapshot, configDir, imageBytes, recordingDir)
+}
+
+func assertExactStagedImageOutcome(t *testing.T, snapshot exactStagedImageSnapshot, configDir string, imageBytes []byte, recordingDir string) {
+	t.Helper()
 	if snapshot.failure != nil {
 		t.Fatalf("scripted provider validation: %v", snapshot.failure)
 	}
@@ -113,6 +134,16 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	if err := manifest.Validate(); err != nil {
 		t.Fatalf("validate recording manifest: %v", err)
 	}
+	providerCapture, err := gwtesting.LoadSessionCapture(filepath.Join(recordingDir, "provider.json"))
+	if err != nil {
+		t.Fatalf("load provider capture: %v", err)
+	}
+	if len(providerCapture.Records) == 0 {
+		t.Fatal("provider capture is empty")
+	}
+	if violations := gwtesting.ValidateSessionCapture(filepath.Join(recordingDir, "provider.json"), providerCapture); len(violations) != 0 {
+		t.Fatalf("validate provider capture: %v", violations)
+	}
 }
 
 func writeStagedImageFixture(t *testing.T, dir string) (string, []byte) {
@@ -147,10 +178,32 @@ func writeStagedAudioFixture(t *testing.T, path string) {
 }
 
 type exactStagedImageInferencer struct {
-	session *exactStagedImageSession
+	session     *exactStagedImageSession
+	capturePath string
+}
+
+func (i *exactStagedImageInferencer) ConfigureProviderCapture(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("exact staged image provider capture path was not configured")
+	}
+	i.capturePath = path
+	return nil
+}
+
+func (i *exactStagedImageInferencer) FlushCapture() error {
+	if strings.TrimSpace(i.capturePath) == "" {
+		return errors.New("exact staged image provider capture path was not configured")
+	}
+	return i.session.flushProviderCapture(i.capturePath)
 }
 
 func (i *exactStagedImageInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	if err := i.session.capture.server(`{"type":"session.created","session":{"id":"exact-staged-image","model":"gpt-realtime-2.1-mini"}}`); err != nil {
+		return nil, err
+	}
+	if err := i.session.capture.server(`{"type":"session.updated","session":{"id":"exact-staged-image"}}`); err != nil {
+		return nil, err
+	}
 	if !i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("exact-staged-image", "gpt-realtime-2.1-mini"),
@@ -169,6 +222,7 @@ func (i *exactStagedImageInferencer) ConnectSession(ctx context.Context) (messag
 type exactStagedImageSession struct {
 	configDir    string
 	wantImage    []byte
+	capture      *exactStagedImageCapture
 	recv         *messages.TypedBuffer[messages.StreamMessage]
 	done         chan struct{}
 	closeOnce    sync.Once
@@ -190,6 +244,7 @@ func newExactStagedImageSession(configDir string, wantImage []byte) *exactStaged
 	return &exactStagedImageSession{
 		configDir: configDir,
 		wantImage: append([]byte(nil), wantImage...),
+		capture:   newExactStagedImageCapture(),
 		recv:      messages.NewTypedBuffer[messages.StreamMessage](64),
 		done:      make(chan struct{}),
 	}
@@ -230,8 +285,15 @@ func (s *exactStagedImageSession) SendMessageWithoutResponse(ctx context.Context
 			s.mu.Unlock()
 		}
 	}
+	if err := s.capture.clientInitialMessage(message); err != nil {
+		s.recordFailure(err)
+	}
 	return true
 }
+
+func (*exactStagedImageSession) SupportsCompleteMessages() bool { return true }
+
+func (*exactStagedImageSession) SupportsCompleteMessagesWithoutResponse() bool { return true }
 
 func (s *exactStagedImageSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.recv
@@ -251,7 +313,7 @@ func (s *exactStagedImageSession) captureAdvertisedPath(event messages.StreamMes
 	}
 	const marker = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
 	for _, definition := range value.Tools {
-		if definition.Name != tools.ReadImageToolID {
+		if definition.Name != runtimeTools.ReadImageToolID {
 			continue
 		}
 		for _, parameter := range definition.Parameters {
@@ -270,6 +332,9 @@ func (s *exactStagedImageSession) captureAdvertisedPath(event messages.StreamMes
 			s.mu.Lock()
 			s.advertisedPath = path
 			s.mu.Unlock()
+			if err := s.capture.clientSessionUpdate(value); err != nil {
+				s.recordFailure(err)
+			}
 			return
 		}
 	}
@@ -283,15 +348,24 @@ func (s *exactStagedImageSession) emitToolCall() {
 	s.mu.Unlock()
 	arguments, _ := json.Marshal(map[string]string{"path": path})
 	callID := "exact-staged-image-call"
+	if err := s.capture.server(fmt.Sprintf(`{"type":"response.output_item.added","item":{"type":"function_call","call_id":%q,"name":%q}}`, callID, runtimeTools.ReadImageToolID)); err != nil {
+		s.recordFailure(err)
+	}
+	if err := s.capture.server(fmt.Sprintf(`{"type":"response.function_call_arguments.done","call_id":%q,"name":%q,"arguments":%q}`, callID, runtimeTools.ReadImageToolID, string(arguments))); err != nil {
+		s.recordFailure(err)
+	}
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, tools.ReadImageToolID)},
-		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, tools.ReadImageToolID, string(arguments))},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, runtimeTools.ReadImageToolID)},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, runtimeTools.ReadImageToolID, string(arguments))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
 		if !s.recv.Write(context.Background(), event) {
 			return
 		}
+	}
+	if err := s.capture.server(`{"type":"response.done","response":{"id":"exact-staged-image-response","status":"completed"}}`); err != nil {
+		s.recordFailure(err)
 	}
 }
 
@@ -315,9 +389,18 @@ func (s *exactStagedImageSession) captureToolResult(message messages.Message) {
 		s.failure = errors.Join(s.failure, err)
 	}
 	s.mu.Unlock()
+	if err := s.capture.clientToolResult(message); err != nil {
+		s.recordFailure(err)
+	}
 }
 
 func (s *exactStagedImageSession) emitContinuation() {
+	if err := s.capture.server(`{"type":"response.output_text.delta","delta":"staged image verified"}`); err != nil {
+		s.recordFailure(err)
+	}
+	if err := s.capture.server(`{"type":"response.output_text.done","text":"staged image verified"}`); err != nil {
+		s.recordFailure(err)
+	}
 	for _, event := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("staged image verified")},
@@ -328,6 +411,16 @@ func (s *exactStagedImageSession) emitContinuation() {
 			return
 		}
 	}
+	if err := s.capture.server(`{"type":"response.done","response":{"id":"exact-staged-image-continuation","status":"completed"}}`); err != nil {
+		s.recordFailure(err)
+	}
+	if err := s.capture.server(`{"type":"session.closed"}`); err != nil {
+		s.recordFailure(err)
+	}
+}
+
+func (s *exactStagedImageSession) flushProviderCapture(path string) error {
+	return s.capture.flush(path)
 }
 
 func (s *exactStagedImageSession) recordFailure(err error) {
@@ -364,3 +457,11 @@ func (s *exactStagedImageSession) snapshot() exactStagedImageSnapshot {
 
 var _ messages.SessionInferencer = (*exactStagedImageInferencer)(nil)
 var _ messages.Session = (*exactStagedImageSession)(nil)
+var _ interface {
+	ConfigureProviderCapture(string) error
+	FlushCapture() error
+} = (*exactStagedImageInferencer)(nil)
+var _ interface {
+	SupportsCompleteMessages() bool
+	SupportsCompleteMessagesWithoutResponse() bool
+} = (*exactStagedImageSession)(nil)

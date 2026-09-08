@@ -41,6 +41,7 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 		APIKey:           "hermetic-key",
 		MaxDuration:      8 * time.Second,
 		FrameDuration:    5 * time.Millisecond,
+		BeforeInputClose: fixture.finishInput,
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "first-speech", PCM16: customerSimulationFrame(1)},
 			{ID: "first-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 4},
@@ -50,7 +51,7 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("shipped session duplex run: %v\nresult=%+v\nstdout=%x\nstderr=%s", err, result, result.Stdout, result.Stderr)
+		t.Fatalf("shipped session duplex run: %v\nprovider=%+v\nresult=%+v\nstdout=%x\nstderr=%s", err, fixture.Snapshot(), result, result.Stdout, result.Stderr)
 	}
 
 	observation := fixture.Snapshot()
@@ -72,8 +73,8 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 	if observation.nonSilentAppends != 3 || !observation.finalAppendAfterFirst {
 		t.Fatalf("provider speech progression = non-silent appends %d, final-after-first=%t; want three later frames on one connection", observation.nonSilentAppends, observation.finalAppendAfterFirst)
 	}
-	if observation.cancelCount != 1 {
-		t.Fatalf("provider response.cancel count = %d, want one interruption", observation.cancelCount)
+	if observation.cancelCount-observation.inactiveCancelCount != 1 {
+		t.Fatalf("provider successful cancellation count = %d, want one interruption", observation.cancelCount-observation.inactiveCancelCount)
 	}
 	if !observation.firstOutputAt.Before(observation.correctionAt) || !observation.cancelAt.Before(observation.correctionAt) {
 		t.Fatalf("barge-in ordering first_output=%s cancel=%s correction=%s", observation.firstOutputAt, observation.cancelAt, observation.correctionAt)
@@ -118,8 +119,10 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 }
 
 type customerSimulationFixture struct {
-	server   *httptest.Server
-	upgrader websocket.Upgrader
+	server     *httptest.Server
+	upgrader   websocket.Upgrader
+	closeReady chan struct{}
+	closeOnce  sync.Once
 
 	mu                       sync.Mutex
 	connectionCount          int
@@ -129,6 +132,7 @@ type customerSimulationFixture struct {
 	nonSilentAppends         int
 	committedTurns           int
 	cancelCount              int
+	inactiveCancelCount      int
 	firstOutputAt            time.Time
 	cancelAt                 time.Time
 	correctionAt             time.Time
@@ -150,6 +154,7 @@ type customerSimulationSnapshot struct {
 	nonSilentAppends         int
 	committedTurns           int
 	cancelCount              int
+	inactiveCancelCount      int
 	firstOutputAt            time.Time
 	cancelAt                 time.Time
 	correctionAt             time.Time
@@ -160,7 +165,8 @@ type customerSimulationSnapshot struct {
 
 func newCustomerSimulationFixture() *customerSimulationFixture {
 	fixture := &customerSimulationFixture{
-		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		upgrader:   websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		closeReady: make(chan struct{}),
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture
@@ -171,9 +177,14 @@ func (f *customerSimulationFixture) WebSocketURL() string {
 }
 
 func (f *customerSimulationFixture) Close() {
+	f.ReleaseClose()
 	if f.server != nil {
 		f.server.Close()
 	}
+}
+
+func (f *customerSimulationFixture) ReleaseClose() {
+	f.closeOnce.Do(func() { close(f.closeReady) })
 }
 
 func (f *customerSimulationFixture) Snapshot() customerSimulationSnapshot {
@@ -187,6 +198,7 @@ func (f *customerSimulationFixture) Snapshot() customerSimulationSnapshot {
 		nonSilentAppends:         f.nonSilentAppends,
 		committedTurns:           f.committedTurns,
 		cancelCount:              f.cancelCount,
+		inactiveCancelCount:      f.inactiveCancelCount,
 		firstOutputAt:            f.firstOutputAt,
 		cancelAt:                 f.cancelAt,
 		correctionAt:             f.correctionAt,
@@ -230,19 +242,7 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 		}
 		switch event.Type {
 		case "session.update":
-			f.mu.Lock()
-			f.sessionUpdates++
-			f.mu.Unlock()
-			if err := f.send(connection, map[string]any{
-				"type":    "session.created",
-				"session": map[string]string{"id": "customer-simulation", "model": "gpt-realtime"},
-			}); err != nil {
-				return
-			}
-			if err := f.send(connection, map[string]any{
-				"type":    "session.updated",
-				"session": map[string]string{"id": "customer-simulation"},
-			}); err != nil {
+			if err := f.handshake(connection); err != nil {
 				return
 			}
 		case "input_audio_buffer.append":
@@ -279,10 +279,6 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 			}
 
 			if cancelPending {
-				if activeResponse == "" {
-					f.failProtocol("response.cancel arrived without an active response")
-					return
-				}
 				if err := f.send(connection, map[string]any{
 					"type":     "response.output_audio.done",
 					"response": map[string]string{"id": activeResponse},
@@ -308,26 +304,72 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 			}
 			if complete {
 				activeResponse = ""
-				if responseNumber == 3 {
-					time.Sleep(20 * time.Millisecond)
-					_ = f.send(connection, map[string]string{"type": "session.closed", "reason": "customer_simulation_complete"})
-				}
 			}
 		case "response.cancel":
-			f.mu.Lock()
-			f.cancelCount++
-			f.cancelAt = time.Now()
-			f.mu.Unlock()
-			cancelPending = true
-		case "input_audio_buffer.commit", "response.create":
+			var cancelErr error
+			cancelPending, cancelErr = f.receiveCancel(connection, activeResponse)
+			if cancelErr != nil {
+				return
+			}
+		case "input_audio_buffer.commit":
 			// The fixture models server-VAD-shaped committed turns from the
-			// open stdin stream. The product's EOF commit is still accepted
-			// after the final response has been emitted.
+			// open stdin stream. Wait for the final PCM acknowledgment AND the
+			// product's EOF commit before closing this completed conversation.
+			// Abrupt provider-close durability is a separate contract.
+			if responseNumber == 3 {
+				<-f.closeReady
+				if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "customer_simulation_complete"}); err != nil {
+					return
+				}
+			}
 		default:
 			// session.created and provider metadata are server-to-client only;
 			// unknown client events are harmless for this focused fixture.
 		}
 	}
+}
+
+func (f *customerSimulationFixture) finishInput(ctx context.Context, progress *probe.DuplexProgress) error {
+	if err := progress.WaitForOutputSequence(ctx, []byte{3, 0x10, 0x20, 0x30}); err != nil {
+		return err
+	}
+	f.ReleaseClose()
+	return nil
+}
+
+func (f *customerSimulationFixture) handshake(connection *websocket.Conn) error {
+	f.mu.Lock()
+	f.sessionUpdates++
+	f.mu.Unlock()
+	if err := f.send(connection, map[string]any{"type": "session.created", "session": map[string]string{"id": "customer-simulation", "model": "gpt-realtime"}}); err != nil {
+		return err
+	}
+	return f.send(connection, map[string]any{"type": "session.updated", "session": map[string]string{"id": "customer-simulation"}})
+}
+
+func (f *customerSimulationFixture) receiveCancel(connection *websocket.Conn, activeResponse string) (bool, error) {
+	f.mu.Lock()
+	f.cancelCount++
+	if activeResponse != "" {
+		f.cancelAt = time.Now()
+	}
+	f.mu.Unlock()
+	if activeResponse == "" {
+		return false, f.rejectInactiveCancel(connection)
+	}
+	return true, nil
+}
+
+// A provider terminal and a client interruption cross in flight. Model the
+// real nonterminal rejection rather than closing the transport for that race.
+func (f *customerSimulationFixture) rejectInactiveCancel(connection *websocket.Conn) error {
+	f.mu.Lock()
+	f.inactiveCancelCount++
+	f.mu.Unlock()
+	return f.send(connection, map[string]any{
+		"type":  "error",
+		"error": map[string]string{"type": "invalid_request_error", "code": "response_cancel_not_active", "param": "response.cancel", "message": "Can only cancel an active response."},
+	})
 }
 
 func (f *customerSimulationFixture) send(connection *websocket.Conn, event any) error {

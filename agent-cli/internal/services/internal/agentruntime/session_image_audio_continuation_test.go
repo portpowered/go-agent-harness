@@ -61,7 +61,7 @@ func TestImageAudioSessionKeepsToolContinuationOpen(t *testing.T) {
 			runErr := make(chan error, 1)
 			go func() {
 				runErr <- tc.run(ctx, io.Discard, SessionImageRunOptions{
-					SessionRunOptions: SessionRunOptions{
+					SessionRunOptions: SessionRunOptions{ModelCatalog: testModelCatalog(),
 						RecordPath:        filepath.Join(caseDir, "capture.json"),
 						Provider:          config.ProviderOpenAI,
 						Model:             "gpt-realtime",

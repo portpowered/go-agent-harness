@@ -7,12 +7,18 @@ import (
 	"io"
 	"os"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/spf13/cobra"
+)
+
+const (
+	defaultAskIterations      = 5
+	defaultAskContextPressure = 0.8
 )
 
 // isStdinPiped returns true when stdin has been redirected/piped rather than
@@ -33,11 +39,11 @@ func isStdinPiped(cmd *cobra.Command) bool {
 
 // AskCommand wraps the ask subcommand for one-shot queries.
 type AskCommand struct {
-	executor    *agent.Executor
+	service     session.Service
 	askFlags    *flags.AskFlags
 	loopFlags   *flags.LoopFlags
 	globalFlags *flags.GlobalFlags
-	runAsk      func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error)
+	runAsk      func(context.Context, *session.Request, agentloop.ExecuteInput) (string, error)
 }
 
 var (
@@ -86,7 +92,7 @@ func tagAskError(kind error, cause error) error {
 // as a failure here: it is a deliberate, already-announced stop rather than
 // the loop failing to do the requested work, and RunIterativeLoop reports it
 // separately via its own "[Interrupted...]" banner.
-func loopRanAndAllIterationsFailed(result agent.IterativeRunResult) bool {
+func loopRanAndAllIterationsFailed(result session.IterativeResult) bool {
 	if len(result.Iterations) == 0 {
 		return false
 	}
@@ -102,7 +108,7 @@ func loopRanAndAllIterationsFailed(result agent.IterativeRunResult) bool {
 // completion without one successful iteration: exit 0 must mean the
 // requested work actually happened, and a loop that only ever failed did not
 // do the work "Loop complete" would otherwise claim.
-func newAskLoopTotalFailureError(result agent.IterativeRunResult) error {
+func newAskLoopTotalFailureError(result session.IterativeResult) error {
 	last := result.Iterations[len(result.Iterations)-1]
 	return newAskCommandError(
 		errAskLoopTotalFailure,
@@ -112,8 +118,8 @@ func newAskLoopTotalFailureError(result agent.IterativeRunResult) error {
 }
 
 // NewAskCommand creates the AskCommand with the given dependencies.
-func NewAskCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, globalFlags *flags.GlobalFlags) *AskCommand {
-	return &AskCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, globalFlags: globalFlags}
+func NewAskCommand(service session.Service, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, globalFlags *flags.GlobalFlags) *AskCommand {
+	return &AskCommand{service: service, askFlags: askFlags, loopFlags: loopFlags, globalFlags: globalFlags}
 }
 
 func validateAskFlags(cmd *cobra.Command, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags) error {
@@ -147,61 +153,7 @@ func (c *AskCommand) Generate() *cobra.Command {
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateAskFlags(cmd, c.askFlags, c.loopFlags); err != nil {
-				return err
-			}
-			argPrompt, filePaths := input.ParseAskArgs(args)
-
-			var stdinReader io.Reader
-			if isStdinPiped(cmd) {
-				stdinReader = cmd.InOrStdin()
-			}
-
-			execInput, err := services.BuildExecuteInput(stdinReader, argPrompt, filePaths)
-			if err != nil {
-				return tagAskError(errAskInput, err)
-			}
-
-			cfg := services.BuildAgentConfigFromFlags(c.globalFlags, c.askFlags, nil, "")
-			cfg.StderrWriter = cmd.ErrOrStderr()
-
-			if c.loopFlags.Loop {
-				maxIter := c.loopFlags.MaxIterations
-				if maxIter <= 0 {
-					maxIter = 5
-				}
-				loopCfg := agent.IterativeLoopConfig{
-					MaxIterations:            maxIter,
-					StopWord:                 c.loopFlags.StopWord,
-					ContextPressureThreshold: c.loopFlags.ContextPressureThreshold,
-					ContextPressureMessage:   c.loopFlags.ContextPressureMessage,
-					TraceID:                  c.loopFlags.TraceID,
-				}
-				result, loopErr := c.executor.RunIterativeLoop(cmd.Context(), cfg, loopCfg, execInput, cmd.OutOrStdout())
-				if loopErr != nil {
-					return wrapAskError(errAskLoopExecution, "loop execution failed", loopErr)
-				}
-				if loopRanAndAllIterationsFailed(result) {
-					return newAskLoopTotalFailureError(result)
-				}
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n",
-					len(result.Iterations), result.Completed, result.TraceID); err != nil {
-					return wrapAskError(errAskLoopSummary, "write loop summary", err)
-				}
-				return nil
-			}
-
-			runAsk := c.executor.RunAsk
-			if c.runAsk != nil {
-				runAsk = c.runAsk
-			}
-			_, err = runAsk(cmd.Context(), cfg, execInput, cmd.OutOrStdout())
-			if err != nil {
-				return wrapAskError(errAskExecution, "execution failed", err)
-			}
-			return nil
-		},
+		RunE:          c.execute,
 	}
 
 	cmd.Flags().BoolVar(&c.askFlags.Stream, "stream", false, "Stream response tokens")
@@ -222,11 +174,132 @@ func (c *AskCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.ModelConfig, "model-config", "", "Model-specific config as JSON string (e.g. '{\"aspect_ratio\":\"16:9\",\"duration\":6}')")
 
 	cmd.Flags().BoolVar(&c.loopFlags.Loop, "loop", false, "Enable iterative loop mode (re-instantiates fresh sessions up to --max-iterations)")
-	cmd.Flags().IntVar(&c.loopFlags.MaxIterations, "max-iterations", 5, "Maximum number of loop iterations (requires --loop)")
+	cmd.Flags().IntVar(&c.loopFlags.MaxIterations, "max-iterations", defaultAskIterations, "Maximum number of loop iterations (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.StopWord, "stop-word", "", "Stop the loop when this word appears in the response (requires --loop)")
-	cmd.Flags().Float64Var(&c.loopFlags.ContextPressureThreshold, "context-pressure-threshold", 0.8, "Context pressure threshold 0-1 that triggers a context-full warning (requires --loop)")
+	cmd.Flags().Float64Var(&c.loopFlags.ContextPressureThreshold, "context-pressure-threshold", defaultAskContextPressure, "Context pressure threshold 0-1 that triggers a context-full warning (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.ContextPressureMessage, "context-pressure-message", "", "Custom warning message when context pressure threshold is exceeded (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.TraceID, "trace-id", "", "Resume an existing loop run by trace ID (requires --loop)")
 
 	return cmd
+}
+
+func (c *AskCommand) execute(cmd *cobra.Command, args []string) error {
+	if err := validateAskFlags(cmd, c.askFlags, c.loopFlags); err != nil {
+		return err
+	}
+	prompt, files := input.ParseAskArgs(args)
+	var stdin io.Reader
+	if isStdinPiped(cmd) {
+		stdin = cmd.InOrStdin()
+	}
+	execInput, err := services.BuildExecuteInput(stdin, prompt, files)
+	if err != nil {
+		return tagAskError(errAskInput, err)
+	}
+	if c.service == nil {
+		return wrapAskError(errAskExecution, "execution failed", errors.New("session service is not configured"))
+	}
+	request := services.BuildAgentConfigFromFlags(c.globalFlags, c.askFlags, nil, "")
+	request.Input = execInput
+	if c.loopFlags.Loop {
+		return c.executeIterative(cmd, request)
+	}
+	if err := c.executeOneShot(cmd, request); err != nil {
+		return wrapAskError(errAskExecution, "execution failed", err)
+	}
+	return nil
+}
+
+func (c *AskCommand) executeOneShot(cmd *cobra.Command, request *session.Request) error {
+	if c.runAsk != nil {
+		text, err := c.runAsk(cmd.Context(), request, request.Input)
+		if err != nil {
+			return err
+		}
+		return writeAskText(cmd.OutOrStdout(), text, c.askFlags.Stream)
+	}
+	if c.askFlags.Stream {
+		return c.renderStreamingAsk(cmd.Context(), cmd, request, request.Input)
+	}
+	result, err := c.service.Run(cmd.Context(), *request)
+	if err != nil {
+		return err
+	}
+	return c.presentation(request).WriteResult(cmd.OutOrStdout(), cmd.ErrOrStderr(), result.Messages, result.Text)
+}
+
+func (c *AskCommand) executeIterative(cmd *cobra.Command, request *session.Request) error {
+	maxIterations := c.loopFlags.MaxIterations
+	if maxIterations <= 0 {
+		maxIterations = defaultAskIterations
+	}
+	options := session.IterativeRequest{
+		MaxIterations: maxIterations, StopWord: c.loopFlags.StopWord,
+		ContextPressureThreshold: c.loopFlags.ContextPressureThreshold,
+		ContextPressureMessage:   c.loopFlags.ContextPressureMessage, TraceID: c.loopFlags.TraceID,
+	}
+	result, err := c.service.RunIterative(cmd.Context(), *request, options)
+	if err != nil {
+		return wrapAskError(errAskLoopExecution, "loop execution failed", err)
+	}
+	if loopRanAndAllIterationsFailed(result) {
+		return newAskLoopTotalFailureError(result)
+	}
+	return renderAskIterations(cmd.OutOrStdout(), result)
+}
+
+func renderAskIterations(writer io.Writer, result session.IterativeResult) error {
+	if result.TraceID != "" {
+		if _, err := fmt.Fprintf(writer, "Trace ID: %s\n", result.TraceID); err != nil {
+			return wrapAskError(errAskLoopExecution, "loop execution failed: write trace ID", err)
+		}
+	}
+	for _, iteration := range result.Iterations {
+		if iteration.Text == "" {
+			continue
+		}
+		if _, err := fmt.Fprintln(writer, iteration.Text); err != nil {
+			return wrapAskError(errAskLoopExecution, "loop execution failed: write iteration output", err)
+		}
+	}
+	if _, err := fmt.Fprintf(writer, "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n", len(result.Iterations), result.Completed, result.TraceID); err != nil {
+		return wrapAskError(errAskLoopSummary, "write loop summary", err)
+	}
+	return nil
+}
+
+// renderStreamingAsk owns invocation cleanup while the output package renders
+// typed stream events. Provider deltas reach the host without final aggregation.
+func (c *AskCommand) renderStreamingAsk(ctx context.Context, cmd *cobra.Command, request *session.Request, input agentloop.ExecuteInput) (resultErr error) {
+	handle, err := c.service.Open(ctx, *request)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, handle.Close()) }()
+	stream, err := handle.Stream(ctx, input)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, stream.Close()) }()
+	if err := c.presentation(request).WriteStream(cmd.OutOrStdout(), cmd.ErrOrStderr(), stream); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	if err := stream.Err(); err != nil {
+		return err
+	}
+	if err := handle.Save(); err != nil {
+		return err
+	}
+	return handle.Flush(request.RecordCapturePath)
+}
+
+func (c *AskCommand) presentation(request *session.Request) output.SessionPresentation {
+	return output.SessionPresentation{JSON: c.askFlags.OutputJSON, Stream: c.askFlags.Stream, Modality: c.askFlags.OutputModality, Model: request.Model}
+}
+
+func writeAskText(writer io.Writer, text string, streaming bool) error {
+	if err := output.WriteSessionText(writer, text, streaming); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
 }

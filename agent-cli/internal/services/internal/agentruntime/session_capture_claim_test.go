@@ -48,7 +48,7 @@ func TestSessionRecordingClaimConcurrentPlansHaveOneProviderBuilder(t *testing.T
 		go func() {
 			defer wait.Done()
 			<-start
-			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:   path,
 				Provider:     config.ProviderGrok,
 				LoadedConfig: loaded,
@@ -100,7 +100,7 @@ func TestSessionRecordingClaimRejectsExistingCaptureWithoutChangingBytes(t *test
 		t.Fatalf("write existing capture: %v", err)
 	}
 
-	err := RunSession(context.Background(), io.Discard, SessionRunOptions{
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: path,
 		Provider:   config.ProviderGrok,
 	})
@@ -161,7 +161,7 @@ func TestSessionRecordingClaimReleasesAfterPreDialAndWriteFailure(t *testing.T) 
 		Provider: config.ProviderGrok,
 		Grok:     &config.GrokConfig{Model: "grok-pre-dial-test", APIKey: "test-key"},
 	}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   path,
 		Provider:     config.ProviderGrok,
 		LoadedConfig: loaded,

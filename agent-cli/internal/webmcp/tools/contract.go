@@ -4,53 +4,56 @@ import (
 	"encoding/json"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
+
+// Browser result contracts and the frozen error vocabulary are owned by the
+// reusable tools service. This package keeps the Lane B definition projection
+// and aliases the shared values for the CLI-hosted discovery adapter.
+type ErrorCode = runtimeTools.ErrorCode
+type ToolResultIssue = runtimeTools.ToolResultIssue
+type ToolResultError = runtimeTools.ToolResultError
+type ToolResultEnvelope = runtimeTools.ToolResultEnvelope
+
+type ResultEnvelope = runtimeTools.ResultEnvelope
+type ResultError = runtimeTools.ResultError
+type ResultIssue = runtimeTools.ResultIssue
 
 const (
-	// ToolResultVersion is the only textual result envelope version emitted by
-	// Lane B tools.
-	ToolResultVersion = "webmcp.tool-result.v1"
+	ToolResultVersion = runtimeTools.ToolResultVersion
 
-	GetContextToolName = "webmcp_get_context"
-	ListTabsToolName   = "webmcp_list_tabs"
-	SelectTabToolName  = "webmcp_select_tab"
+	GetContextToolName = runtimeTools.GetContextToolName
+	ListTabsToolName   = runtimeTools.ListTabsToolName
+	SelectTabToolName  = runtimeTools.SelectTabToolName
+
+	ErrorWebMCPDisabled         = runtimeTools.ErrorWebMCPDisabled
+	ErrorEndpointNotFound       = runtimeTools.ErrorEndpointNotFound
+	ErrorEndpointUnreachable    = runtimeTools.ErrorEndpointUnreachable
+	ErrorRemoteEndpointDenied   = runtimeTools.ErrorRemoteEndpointDenied
+	ErrorBrowserProtocol        = runtimeTools.ErrorBrowserProtocol
+	ErrorUnsupportedWebMCP      = runtimeTools.ErrorUnsupportedWebMCP
+	ErrorNoEligibleTab          = runtimeTools.ErrorNoEligibleTab
+	ErrorAmbiguousBrowser       = runtimeTools.ErrorAmbiguousBrowser
+	ErrorAmbiguousTab           = runtimeTools.ErrorAmbiguousTab
+	ErrorStaleSelection         = runtimeTools.ErrorStaleSelection
+	ErrorStaleToolRef           = runtimeTools.ErrorStaleToolRef
+	ErrorOriginDenied           = runtimeTools.ErrorOriginDenied
+	ErrorApprovalRequired       = runtimeTools.ErrorApprovalRequired
+	ErrorApprovalDenied         = runtimeTools.ErrorApprovalDenied
+	ErrorResultTooLarge         = runtimeTools.ErrorResultTooLarge
+	ErrorTargetAttachFailed     = runtimeTools.ErrorTargetAttachFailed
+	ErrorTargetDetached         = runtimeTools.ErrorTargetDetached
+	ErrorPageNavigated          = runtimeTools.ErrorPageNavigated
+	ErrorInvocationFailed       = runtimeTools.ErrorInvocationFailed
+	ErrorInvocationCanceled     = runtimeTools.ErrorInvocationCanceled
+	ErrorInvocationTimedOut     = runtimeTools.ErrorInvocationTimedOut
+	ErrorInvocationOrphaned     = runtimeTools.ErrorInvocationOrphaned
+	ErrorBrowserDisconnected    = runtimeTools.ErrorBrowserDisconnected
+	ErrorInvalidToolInput       = runtimeTools.ErrorInvalidToolInput
+	ErrorBrowserProtocolInvalid = runtimeTools.ErrorBrowserProtocolInvalid
 )
 
-// ErrorCode is the stable model-facing result vocabulary used by the tool
-// adapter. Discovery errors use discovery.Code; this string type keeps the
-// textual boundary independent of that implementation detail.
-type ErrorCode string
-
-const (
-	ErrorWebMCPDisabled         ErrorCode = "webmcp_disabled"
-	ErrorEndpointNotFound       ErrorCode = "endpoint_not_found"
-	ErrorEndpointUnreachable    ErrorCode = "endpoint_unreachable"
-	ErrorRemoteEndpointDenied   ErrorCode = "remote_endpoint_denied"
-	ErrorBrowserProtocol        ErrorCode = "browser_protocol_invalid"
-	ErrorUnsupportedWebMCP      ErrorCode = "unsupported_webmcp"
-	ErrorNoEligibleTab          ErrorCode = "no_eligible_tab"
-	ErrorAmbiguousBrowser       ErrorCode = "ambiguous_browser"
-	ErrorAmbiguousTab           ErrorCode = "ambiguous_tab"
-	ErrorStaleSelection         ErrorCode = "stale_selection"
-	ErrorStaleToolRef           ErrorCode = "stale_tool_ref"
-	ErrorOriginDenied           ErrorCode = "origin_denied"
-	ErrorApprovalRequired       ErrorCode = "approval_required"
-	ErrorApprovalDenied         ErrorCode = "approval_denied"
-	ErrorResultTooLarge         ErrorCode = "result_too_large"
-	ErrorTargetAttachFailed     ErrorCode = "target_attach_failed"
-	ErrorTargetDetached         ErrorCode = "target_detached"
-	ErrorPageNavigated          ErrorCode = "page_navigated"
-	ErrorInvocationFailed       ErrorCode = "invocation_failed"
-	ErrorInvocationCanceled     ErrorCode = "invocation_canceled"
-	ErrorInvocationTimedOut     ErrorCode = "invocation_timed_out"
-	ErrorInvocationOrphaned     ErrorCode = "invocation_orphaned"
-	ErrorBrowserDisconnected    ErrorCode = "browser_disconnected"
-	ErrorInvalidToolInput       ErrorCode = "invalid_tool_input"
-	ErrorBrowserProtocolInvalid ErrorCode = ErrorBrowserProtocol
-)
-
-// Code aliases make the result vocabulary convenient for callers that use
-// Code-prefixed constants alongside discovery.Code.
 const (
 	CodeWebMCPDisabled         = ErrorWebMCPDisabled
 	CodeEndpointNotFound       = ErrorEndpointNotFound
@@ -79,37 +82,26 @@ const (
 	CodeInvalidToolInput       = ErrorInvalidToolInput
 )
 
-var knownErrorCodes = map[ErrorCode]struct{}{
-	ErrorWebMCPDisabled:       {},
-	ErrorEndpointNotFound:     {},
-	ErrorEndpointUnreachable:  {},
-	ErrorRemoteEndpointDenied: {},
-	ErrorBrowserProtocol:      {},
-	ErrorUnsupportedWebMCP:    {},
-	ErrorNoEligibleTab:        {},
-	ErrorAmbiguousBrowser:     {},
-	ErrorAmbiguousTab:         {},
-	ErrorStaleSelection:       {},
-	ErrorStaleToolRef:         {},
-	ErrorOriginDenied:         {},
-	ErrorApprovalRequired:     {},
-	ErrorApprovalDenied:       {},
-	ErrorResultTooLarge:       {},
-	ErrorTargetAttachFailed:   {},
-	ErrorTargetDetached:       {},
-	ErrorPageNavigated:        {},
-	ErrorInvocationFailed:     {},
-	ErrorInvocationCanceled:   {},
-	ErrorInvocationTimedOut:   {},
-	ErrorInvocationOrphaned:   {},
-	ErrorBrowserDisconnected:  {},
-	ErrorInvalidToolInput:     {},
+func IsKnownErrorCode(code ErrorCode) bool { return code.IsKnown() }
+
+func NewToolResultSuccess(data any) (ToolResultEnvelope, error) {
+	return runtimeToolsWire.NewService().BrowserContract().NewToolResultSuccess(data)
 }
 
-// IsKnownErrorCode reports whether code can cross the result boundary.
-func IsKnownErrorCode(code ErrorCode) bool {
-	_, ok := knownErrorCodes[code]
-	return ok
+func NewToolResultFailure(resultError ToolResultError) ToolResultEnvelope {
+	return runtimeToolsWire.NewService().BrowserContract().NewToolResultFailure(resultError)
+}
+
+func MarshalToolResult(envelope ToolResultEnvelope) ([]byte, error) {
+	return runtimeToolsWire.NewService().BrowserContract().MarshalToolResult(envelope)
+}
+
+func EncodeToolResult(data any, resultError *ToolResultError) ([]byte, error) {
+	return runtimeToolsWire.NewService().BrowserContract().EncodeToolResult(data, resultError)
+}
+
+func UnmarshalToolResult(data []byte) (ToolResultEnvelope, error) {
+	return runtimeToolsWire.NewService().BrowserContract().UnmarshalToolResult(data)
 }
 
 // ToolDefinition is the provider-neutral complete definition for one of the
@@ -121,36 +113,37 @@ type ToolDefinition struct {
 	Parameters  map[string]any
 }
 
-// StableToolDefinitions returns fresh definitions in the frozen order.
+// StableToolDefinitions projects the reusable browser contract into the
+// legacy Lane B value shape. The runtime owns names, descriptions, defaults,
+// and closed schemas; Lane B keeps only its three discovery tools and its
+// host-side executor.
 func StableToolDefinitions() []ToolDefinition {
-	return []ToolDefinition{
-		{
-			Name:        GetContextToolName,
-			Description: "Return the current selected browser page context.",
-			Parameters: objectSchema(
-				optionalProperty("refresh", "boolean", "Refresh browser and target metadata before returning.", false),
-			),
-		},
-		{
-			Name:        ListTabsToolName,
-			Description: "List browser tabs available for WebMCP selection.",
-			Parameters: objectSchema(
-				optionalProperty("browser_id", "string", "Filter tabs to one discovered browser.", ""),
-				optionalProperty("origin_contains", "string", "Filter tabs by an origin substring.", ""),
-				optionalProperty("eligible_only", "boolean", "Return only targets eligible for WebMCP.", true),
-				optionalProperty("include_zero_tool_pages", "boolean", "Include eligible pages that currently expose no tools.", false),
-			),
-		},
-		{
-			Name:        SelectTabToolName,
-			Description: "Select a browser tab for WebMCP operations.",
-			Parameters: objectSchema(
-				requiredProperty("browser_id", "string", "Exact discovered browser identifier."),
-				requiredProperty("target_id", "string", "Exact target identifier from the selected browser."),
-				optionalProperty("activate", "boolean", "Activate the selected page after selection.", false),
-			),
-		},
+	definitions := runtimeToolsWire.NewService().BrowserContract().StableBrokerToolDefinitions()
+	result := make([]ToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if definition.Name != GetContextToolName && definition.Name != ListTabsToolName && definition.Name != SelectTabToolName {
+			continue
+		}
+		parameters := laneBCloneMap(definition.Parameters)
+		// JSON round-tripping is used by the Lane B compatibility helper, but
+		// this contract historically exposed required as []string. Preserve
+		// that typed value so the validator can distinguish required fields.
+		if required, ok := parameters["required"].([]any); ok {
+			values := make([]string, 0, len(required))
+			for _, value := range required {
+				if name, ok := value.(string); ok {
+					values = append(values, name)
+				}
+			}
+			parameters["required"] = values
+		}
+		result = append(result, ToolDefinition{
+			Name:        definition.Name,
+			Description: definition.Description,
+			Parameters:  parameters,
+		})
 	}
+	return result
 }
 
 // ToolDefinitions is a descriptive alias for StableToolDefinitions.
@@ -183,52 +176,13 @@ func ToolSchemas() []map[string]any { return StableToolSchemas() }
 // BrokerToolSchemas is a compatibility alias for StableToolSchemas.
 func BrokerToolSchemas() []map[string]any { return StableToolSchemas() }
 
-type schemaProperty struct {
-	name     string
-	schema   map[string]any
-	required bool
-}
-
-func objectSchema(properties ...schemaProperty) map[string]any {
+func objectSchema() map[string]any {
 	result := map[string]any{
 		"type":                 "object",
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
-	propertyMap := result["properties"].(map[string]any)
-	var required []string
-	for _, property := range properties {
-		propertyMap[property.name] = property.schema
-		if property.required {
-			required = append(required, property.name)
-		}
-	}
-	if len(required) > 0 {
-		result["required"] = required
-	}
 	return result
-}
-
-func optionalProperty(name, valueType, description string, defaultValue any) schemaProperty {
-	return schemaProperty{
-		name: name,
-		schema: map[string]any{
-			"type":        valueType,
-			"description": description,
-			"default":     defaultValue,
-		},
-	}
-}
-
-func requiredProperty(name, valueType, description string) schemaProperty {
-	return schemaProperty{
-		name: name,
-		schema: map[string]any{
-			"type":        valueType,
-			"description": description,
-		},
-		required: true,
-	}
 }
 
 // DefinitionSchemas returns fresh complete schemas. It is the model/provider

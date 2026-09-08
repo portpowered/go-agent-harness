@@ -9,6 +9,7 @@ import (
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -19,6 +20,9 @@ import (
 func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSession.SessionService {
 	if deps.Clock == nil {
 		deps.Clock = platformclock.Real{}
+	}
+	if deps.ModelCatalog == nil {
+		deps.ModelCatalog = providerswire.NewModelCatalog()
 	}
 	if deps.Runtime == nil {
 		factory := servicewire.NewSessionRuntimeFactory()
@@ -33,6 +37,7 @@ func newInjectedSessionService(deps servicewire.SessionDependencies) serviceSess
 			deps.RuntimeObserver,
 			deps.MetricSampler,
 			deps.Logger,
+			deps.ModelCatalog,
 		)
 	}
 	return servicewire.NewSessionService(deps)

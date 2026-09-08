@@ -7,6 +7,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -213,6 +215,10 @@ func resolveSessionBrowserConfig(globalFlags *flags.GlobalFlags, cmd *cobra.Comm
 	}
 	resolved := *loaded
 	resolved.Browser = resolvedBrowser
+	resolved.FilesystemWorkDir, err = hostServices.ResolveCLIWorkDir(globalFlags)
+	if err != nil {
+		return nil, err
+	}
 	// Keep the command's config-directory override attached to this resolved
 	// snapshot so request-scoped browser persistence follows the same -C path.
 	resolved.ConfigDir = configDir
@@ -355,4 +361,27 @@ func browserToolsAdmission(cmd *cobra.Command) bool {
 
 func browserConfigEnablesTools(cfg *config.Config) bool {
 	return cfg != nil && cfg.Browser.BrowserBackendEnabled()
+}
+
+// NewSessionBrowserBroker creates the production browser broker used by
+// browser-enabled sessions. The runtime is request-scoped so session cleanup
+// can retire both broker state and discovery resources through one idempotent
+// close hook.
+func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
+	return newSessionBrowserBrokerWithConfigDir(browser, "")
+}
+
+// NewSessionBrowserBrokerWithConfigDir constructs one request-scoped browser
+// runtime with the config directory used for persisted selection state.
+func NewSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
+	return newSessionBrowserBrokerWithConfigDir(browser, configDir)
+}
+
+func newSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
+	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionConfigDir(configDir),
+		WithWebMCPProductionSelectionStoreFactory(func() any {
+			return NewFileWebMCPSelectionStore(configDir)
+		}),
+	))
 }

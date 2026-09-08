@@ -37,6 +37,7 @@ type GlobalOrdering struct {
 	userRunner        *participants.UserRunner
 	interactionRunner *participants.InteractionRunner
 	logger            logging.Logger
+	toolBatchActive   bool
 }
 
 // NewGlobalOrdering returns an ordering that consumes from the given runners. toolRunner
@@ -288,8 +289,17 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 		return nil
 	}
 
-	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr && ev.IsTerminal() {
-		return &StreamDeltaError{Value: ev}
+	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr {
+		if ev.IsTerminal() {
+			return &StreamDeltaError{Value: ev}
+		}
+		// A failed tool invocation is a complete one-shot/turn-taking outcome:
+		// forward its typed diagnostic, then close the loop cleanly. Duplex
+		// sessions remain open so their provider-specific lifecycle can decide
+		// how to recover or close the session.
+		if ts.Mode != state.DuplexSession {
+			ts.Inputs.TerminateLoop = true
+		}
 	}
 
 	assigned := o.assignStreamOrdering(ts, delta, messages.Tool)
@@ -301,12 +311,14 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 		// UpdateWorldHistory hasn't run yet so len(buf) is the insertion point.
 		ts.History.ToolDeltaStartIndex = len(ts.History.ConversationDeltaBuffer)
 		ts.History.CurrentToolDeltaCount = 0
+		o.toolBatchActive = true
 	case *messages.MessageEndValue:
 		deltas := o.toolDeltasForCurrentBatch(ts)
 		msgs := ReconstructToolMessagesFromDeltas(deltas)
 		for _, msg := range msgs {
 			ts.Inputs.ToolOutputMessage = append(ts.Inputs.ToolOutputMessage, o.assignMessageOrdering(ts, msg, messages.Tool))
 		}
+		o.toolBatchActive = false
 	}
 
 	return nil
@@ -329,54 +341,6 @@ func ReconstructModelMessageFromDeltas(deltas []messages.StreamMessage) messages
 // to call it without creating an import cycle.
 func ReconstructToolMessagesFromDeltas(deltas []messages.StreamMessage) []messages.Message {
 	return messages.ReconstructToolMessagesFromDeltas(deltas)
-}
-
-// UpdateWorldHistory moves the current tick's inputs (ToolOutputMessage, UserOutputMessage,
-// ModelOutputMessage, ToolInputDelta, UserInputDelta, ModelInputDelta) into History
-// (ConversationBuffer and ConversationDeltaBuffer).
-//
-// Model deltas are written/truncated first so that the model-delta truncation logic
-// (which ensures no stale deltas linger past the current response end) cannot cut off
-// tool or user deltas that are appended in the same tick.
-func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
-	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ToolOutputMessage...)
-	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.UserOutputMessage...)
-	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ModelOutputMessage...)
-
-	// Model deltas: written at ModelDeltaStartIndex+CurrentModelDeltaCount.
-	// Truncation (removing stale entries past the current response boundary) is only
-	// applied when model deltas are actually written this tick — otherwise it would
-	// incorrectly cut off tool/user deltas that were appended in earlier ticks.
-	writtenModelDeltaCount := 0
-	for _, msg := range ts.Inputs.ModelInputDelta {
-		if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
-			// Keep acknowledgement deltas on the kernel-facing input path, but
-			// do not persist them in the conversation delta history. They are
-			// progress output for an in-flight tool, not model context.
-			continue
-		}
-		idx := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount + writtenModelDeltaCount
-		if idx < len(ts.History.ConversationDeltaBuffer) {
-			ts.History.ConversationDeltaBuffer[idx] = msg
-		} else {
-			ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
-		}
-		writtenModelDeltaCount++
-	}
-	if writtenModelDeltaCount > 0 {
-		ts.History.CurrentModelDeltaCount += writtenModelDeltaCount
-		newLen := ts.History.ModelDeltaStartIndex + ts.History.CurrentModelDeltaCount
-		if newLen < len(ts.History.ConversationDeltaBuffer) {
-			ts.History.ConversationDeltaBuffer = ts.History.ConversationDeltaBuffer[:newLen]
-		}
-	}
-
-	// Tool and user deltas are appended after model delta logic so they are never
-	// affected by the model delta truncation.
-	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.ToolInputDelta...)
-	ts.History.CurrentToolDeltaCount += len(ts.Inputs.ToolInputDelta)
-
-	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
 }
 
 // FlushInputs clears all input slices and resets TerminateLoop for the next tick.

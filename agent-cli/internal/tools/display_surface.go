@@ -6,200 +6,15 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"time"
+
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
-
-// ScreenCaptureState is the bounded outcome vocabulary for a display capture
-// attempt. A successful capture has state granted; all other states are
-// surfaced as typed errors and never as image-looking fallback content.
-type ScreenCaptureState string
-
-const (
-	ScreenCaptureGranted          ScreenCaptureState = "granted"
-	ScreenCaptureDenied           ScreenCaptureState = "denied"
-	ScreenCaptureUnavailable      ScreenCaptureState = "unavailable"
-	ScreenCaptureCanceled         ScreenCaptureState = "canceled"
-	ScreenCaptureTimedOut         ScreenCaptureState = "timed_out"
-	ScreenCaptureFailed           ScreenCaptureState = "failed"
-	ScreenCapturePermissionDenied ScreenCaptureState = ScreenCaptureDenied
-	ScreenCaptureTimeout          ScreenCaptureState = ScreenCaptureTimedOut
-	ScreenCaptureCancelled        ScreenCaptureState = ScreenCaptureCanceled
-)
-
-// DisplayCapabilityState is retained as an alias for callers that only need
-// to inspect the admission state of a display surface.
-type DisplayCapabilityState = ScreenCaptureState
-
-const (
-	DisplayCapabilityUsable      = ScreenCaptureGranted
-	DisplayCapabilityUnavailable = ScreenCaptureUnavailable
-)
-
-var (
-	// ErrScreenCapture is the stable identity for every classified capture
-	// failure. More specific state sentinels are joined by ScreenCaptureError.
-	ErrScreenCapture = errors.New("screen capture failed")
-	// ErrScreenRecordingPermissionDenied identifies macOS TCC denial.
-	ErrScreenRecordingPermissionDenied = errors.New("screen recording permission denied")
-	// ErrScreenCapturePermissionDenied is the descriptive compatibility alias.
-	ErrScreenCapturePermissionDenied = ErrScreenRecordingPermissionDenied
-	ErrDisplayUnavailable            = errors.New("display surface unavailable")
-	ErrScreenCaptureCanceled         = errors.New("screen capture canceled")
-	ErrScreenCaptureTimedOut         = errors.New("screen capture timed out")
-	ErrScreenCaptureFailed           = errors.New("screen capture command failed")
-)
-
-// DisplayCapability is the side-effect-free admission snapshot for the
-// display-dependent tool. On macOS, Probe runs the non-prompting Screen
-// Recording preflight before it asks the host for display metadata.
-type DisplayCapability struct {
-	State        ScreenCaptureState
-	Available    bool
-	DisplayCount int
-	Reason       string
-}
-
-// Usable reports whether the snapshot proves at least one usable display.
-// The empty state is accepted for old injected test doubles that explicitly
-// set Available and DisplayCount; production snapshots always set State.
-func (c DisplayCapability) Usable() bool {
-	return c.Available && c.DisplayCount > 0 && (c.State == "" || c.State == ScreenCaptureGranted)
-}
-
-// Advertisable reports whether display-dependent tools (show, mouse) should
-// be advertised to the model in an interactive session. It is deliberately
-// broader than Usable: a capability that is structurally present but not
-// currently capturable -- most commonly, macOS Screen Recording permission
-// has not been granted -- still returns true, so the model can invoke the
-// tool and receive the actionable, invocation-time permission-denied
-// envelope (with the customer-facing grant instructions) instead of never
-// seeing the tool exists at all. Only a capability that could not prove a
-// display exists in the first place -- headless CI, a failed or timed-out
-// probe -- returns false. The at-invocation preflight (ScreenTool.Execute)
-// remains the authority on whether a capture can actually proceed.
-func (c DisplayCapability) Advertisable() bool {
-	if c.Usable() {
-		return true
-	}
-	switch c.State {
-	case ScreenCaptureUnavailable, "":
-		return false
-	default:
-		return true
-	}
-}
-
-// UsableDisplayCapability constructs a normalized positive capability.
-func UsableDisplayCapability(displayCount int) DisplayCapability {
-	if displayCount < 0 {
-		displayCount = 0
-	}
-	return DisplayCapability{
-		State:        ScreenCaptureGranted,
-		Available:    displayCount > 0,
-		DisplayCount: displayCount,
-	}
-}
-
-// UnavailableDisplayCapability constructs a normalized failed capability.
-func UnavailableDisplayCapability(reason string) DisplayCapability {
-	return DisplayCapability{
-		State:     ScreenCaptureUnavailable,
-		Available: false,
-		Reason:    reason,
-	}
-}
-
-// ScreenCaptureError is a stable, inspectable error for display failures.
-// Reason is safe for model-facing output and Cause retains context/process
-// identity for programmatic callers.
-type ScreenCaptureError struct {
-	State     ScreenCaptureState
-	Operation string
-	Reason    string
-	Cause     error
-}
-
-// DisplayUnavailableError is the historical name for a typed display
-// capture failure. It remains an alias so callers can migrate to the richer
-// state vocabulary without losing errors.As compatibility.
-type DisplayUnavailableError = ScreenCaptureError
-
-func (e *ScreenCaptureError) Error() string {
-	if e == nil {
-		return ErrScreenCapture.Error()
-	}
-	operation := e.Operation
-	if operation == "" {
-		operation = "display capture"
-	}
-	reason := strings.TrimSpace(e.Reason)
-	if reason == "" && e.Cause != nil {
-		reason = e.Cause.Error()
-	}
-	if reason == "" {
-		reason = "the display capture boundary did not produce an image"
-	}
-	if e.State == ScreenCaptureDenied {
-		reason = strings.TrimSpace(strings.Join([]string{reason, screenRecordingPermissionGuidance()}, " "))
-	}
-	return fmt.Sprintf("%s (%s): %s", operation, e.State, reason)
-}
-
-func (e *ScreenCaptureError) Unwrap() error {
-	if e == nil {
-		return ErrScreenCapture
-	}
-	errs := []error{ErrScreenCapture}
-	switch e.State {
-	case ScreenCaptureDenied:
-		errs = append(errs, ErrScreenRecordingPermissionDenied)
-	case ScreenCaptureUnavailable:
-		errs = append(errs, ErrDisplayUnavailable)
-	case ScreenCaptureCanceled:
-		errs = append(errs, ErrScreenCaptureCanceled)
-	case ScreenCaptureTimedOut:
-		errs = append(errs, ErrScreenCaptureTimedOut)
-	case ScreenCaptureFailed:
-		errs = append(errs, ErrScreenCaptureFailed)
-	}
-	if e.Cause != nil {
-		errs = append(errs, e.Cause)
-	}
-	return errors.Join(errs...)
-}
-
-// ScreenRecordingPermissionError is used by the macOS process seam when the
-// screencapture command reports a TCC denial. The higher-level tool adds the
-// actionable System Settings guidance while retaining the raw safe detail.
-type ScreenRecordingPermissionError struct {
-	Detail string
-	Cause  error
-}
-
-func (e *ScreenRecordingPermissionError) Error() string {
-	if e == nil || strings.TrimSpace(e.Detail) == "" {
-		return ErrScreenRecordingPermissionDenied.Error()
-	}
-	return fmt.Sprintf("%s: %s", ErrScreenRecordingPermissionDenied, strings.TrimSpace(e.Detail))
-}
-
-func (e *ScreenRecordingPermissionError) Unwrap() error {
-	if e == nil || e.Cause == nil {
-		return ErrScreenRecordingPermissionDenied
-	}
-	return errors.Join(ErrScreenRecordingPermissionDenied, e.Cause)
-}
 
 // DisplayCapabilityProbe is the admission-only portion of a display surface.
 // Probe must not capture or persist screen content.
-type DisplayCapabilityProbe interface {
-	Probe(context.Context) (DisplayCapability, error)
-}
+type DisplayCapabilityProbe = runtimeTools.DisplayCapabilityProbe
 
 // DisplayCapabilityProbeFunc adapts a function to the admission probe seam.
 type DisplayCapabilityProbeFunc func(context.Context) (DisplayCapability, error)
@@ -214,21 +29,18 @@ func (f DisplayCapabilityProbeFunc) Probe(ctx context.Context) (DisplayCapabilit
 // DisplayPermissionState describes a preflight permission result. The
 // production macOS implementation obtains it from
 // CGPreflightScreenCaptureAccess; other platforms leave this boundary nil.
-type DisplayPermissionState string
+type DisplayPermissionState = runtimeTools.DisplayPermissionState
 
 const (
-	DisplayPermissionGranted     DisplayPermissionState = "granted"
-	DisplayPermissionDenied      DisplayPermissionState = "denied"
-	DisplayPermissionUnavailable DisplayPermissionState = "unavailable"
-	DisplayPermissionCanceled    DisplayPermissionState = "canceled"
-	DisplayPermissionTimedOut    DisplayPermissionState = "timed_out"
-	DisplayPermissionFailed      DisplayPermissionState = "failed"
+	DisplayPermissionGranted     = runtimeTools.DisplayPermissionGranted
+	DisplayPermissionDenied      = runtimeTools.DisplayPermissionDenied
+	DisplayPermissionUnavailable = runtimeTools.DisplayPermissionUnavailable
+	DisplayPermissionCanceled    = runtimeTools.DisplayPermissionCanceled
+	DisplayPermissionTimedOut    = runtimeTools.DisplayPermissionTimedOut
+	DisplayPermissionFailed      = runtimeTools.DisplayPermissionFailed
 )
 
-type DisplayPermission struct {
-	State  DisplayPermissionState
-	Reason string
-}
+type DisplayPermission = runtimeTools.DisplayPermission
 
 type DisplayPermissionChecker interface {
 	Check(context.Context) (DisplayPermission, error)
@@ -334,16 +146,7 @@ func (r contextReader) Read(p []byte) (int, error) {
 }
 
 // DisplaySurface is the process/platform boundary used by ScreenTool.
-type DisplaySurface interface {
-	DisplayCapabilityProbe
-	DisplayCount(context.Context) (int, error)
-	Bounds(context.Context, int) (image.Rectangle, error)
-	Capture(context.Context, image.Rectangle) (*image.RGBA, error)
-}
-
-type indexedDisplaySurface interface {
-	CaptureDisplay(context.Context, int, image.Rectangle) (*image.RGBA, error)
-}
+type DisplaySurface = runtimeTools.DisplaySurface
 
 // HostDisplaySurfaceOptions configures the production boundary and its
 // hermetic permission/process/capturer seams.
@@ -483,27 +286,6 @@ func (s *hostDisplaySurface) CaptureDisplay(ctx context.Context, display int, bo
 	return screenCaptureDisplayWithContextAndProcess(ctx, display, bounds, s.process)
 }
 
-// The display discovery helper names remain available to platform tests and
-// direct tool callers. They fail closed when discovery cannot produce a
-// positive result; session-facing callers use the typed boundary above.
-func screenDisplayCount() int {
-	count, _ := screenDisplayCountWithContext(context.Background())
-	return count
-}
-
-func screenDisplayCountWithContext(ctx context.Context) (int, error) {
-	return screenDisplayCountWithContextAndProcess(ctx, defaultDisplayProcess())
-}
-
-func screenDisplayBounds(idx int) image.Rectangle {
-	bounds, _ := screenDisplayBoundsWithContext(context.Background(), idx)
-	return bounds
-}
-
-func screenDisplayBoundsWithContext(ctx context.Context, idx int) (image.Rectangle, error) {
-	return screenDisplayBoundsWithContextAndProcess(ctx, idx, defaultDisplayProcess())
-}
-
 func normalizeDisplayProcess(process DisplayProcess) DisplayProcess {
 	if process == nil {
 		return defaultDisplayProcess()
@@ -567,21 +349,6 @@ func newScreenCaptureError(operation, reason string, cause error) *ScreenCapture
 	return &ScreenCaptureError{State: state, Operation: operation, Reason: reason, Cause: cause}
 }
 
-func displayUnavailableForCapability(operation string, capability DisplayCapability, cause error) error {
-	if cause != nil {
-		return newScreenCaptureError(operation, capability.Reason, cause)
-	}
-	state := capability.State
-	if state == "" || state == ScreenCaptureGranted {
-		state = ScreenCaptureUnavailable
-	}
-	reason := capability.Reason
-	if reason == "" {
-		reason = "no usable display or capture surface is available"
-	}
-	return &ScreenCaptureError{State: state, Operation: operation, Reason: reason}
-}
-
 func screenRecordingPermissionText(text string) bool {
 	lower := strings.ToLower(text)
 	for _, marker := range []string{
@@ -598,50 +365,4 @@ func screenRecordingPermissionText(text string) bool {
 		}
 	}
 	return false
-}
-
-const screenScreenshotBound = 5 * time.Second
-
-func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Context, func()) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if limit <= 0 {
-		return ctx, func() {}
-	}
-	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= limit {
-		return ctx, func() {}
-	}
-	return context.WithTimeout(ctx, limit)
-}
-
-func screenRecordingPermissionGuidance() string {
-	host := screenRecordingHostName()
-	return fmt.Sprintf(
-		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to open System Settings → Privacy & Security → Screen & System Audio Recording, enable the hosting application %q, then completely quit and restart that application before asking again. macOS Sequoia may require monthly re-confirmation. The CLI cannot grant this permission itself.",
-		host,
-	)
-}
-
-func screenRecordingHostName() string {
-	host := strings.TrimSpace(os.Getenv("TERM_PROGRAM"))
-	switch strings.ToLower(host) {
-	case "apple_terminal":
-		host = "Terminal"
-	case "iterm.app":
-		host = "iTerm2"
-	case "vscode":
-		host = "VS Code"
-	case "goland", "intellijidea", "pycharm", "rubymine", "webstorm":
-		host = "the JetBrains IDE terminal host"
-	}
-	if host == "" {
-		if len(os.Args) > 0 {
-			host = filepath.Base(os.Args[0])
-		}
-	}
-	if host == "" || host == "." || host == string(filepath.Separator) {
-		host = "launching terminal or CLI host"
-	}
-	return host
 }

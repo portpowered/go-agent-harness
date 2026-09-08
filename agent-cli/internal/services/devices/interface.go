@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 )
 
 // DeviceDirection is the transport-neutral spelling of a device direction.
@@ -106,27 +105,16 @@ type DeviceProbeInputPlan struct {
 }
 
 // DeviceProbeRequest carries runtime configuration for one physical device
-// probe. It contains no registry or opened-device handle; the implementation
-// owns those resources behind the service boundary.
-type DeviceProbeRequest struct {
-	Scenario             probe.Scenario
-	Provider             string
-	Model                string
-	APIKey               string
-	BaseURL              string
-	ConfigDir            string
-	CaptureTime          time.Duration
-	SessionInferencer    messages.SessionInferencer
-	Instructions         string
-	InstructionsObserved func(string)
-	WebSocketDialer      transport.Dialer
-}
+// probe. The reusable runtime owns media execution and registry access.
+type DeviceProbeRequest = runtimeDevices.ProbeRequest
 
-// DeviceProbeService runs a selected device-tier scenario behind the private
+// DeviceProbeSessionFactory constructs the provider session used by a live
+// probe through the application composition graph.
+type DeviceProbeSessionFactory = runtimeDevices.ProbeSessionFactory
+
+// DeviceProbeService runs a selected device-tier scenario behind the runtime
 // device implementation. Selection and all device leases remain service-owned.
-type DeviceProbeService interface {
-	Run(context.Context, DeviceProbeRequest) (probe.ObservationSnapshot, error)
-}
+type DeviceProbeService = runtimeDevices.ProbeService
 
 // DefaultDeviceProbeCaptureDuration is the default microphone capture window
 // used by the device probe transport when a request omits one.

@@ -1,0 +1,204 @@
+# Session CI stabilization before factory handoff
+
+The factory remains paused until PR #398 passes the complete CI suite and is
+merged. A worker retry is not evidence that a failing candidate is healthy.
+
+## Failure mechanisms and regression ownership
+
+- Provider media and normalized messages are independently consumed. Recording
+  previously assigned late PCM to a mutable current turn, creating phantom turns
+  and complete-but-empty recordings. The evidence service now joins summaries by
+  explicit response ID while retaining raw admission order and PCM offsets.
+  `TestRecordedResponseAudioIsIndependentOfQueueScheduling` enumerates all 15
+  order-preserving interleavings of two PCM frames and four response events. It
+  failed 11 interleavings before the fix; all pass after the fix.
+- Interrupts can discard a queued response-end boundary. Inbound media now carries
+  an interrupt epoch, and file playback resets conversion when the epoch changes.
+  `TestInterruptedPlaybackResetsEvenWhenQueuedEndWasDiscarded` reproduces the
+  previous stream-identity error without scheduling sleeps.
+- Provider response identity remains useful without an item ID. Media preserves
+  that identity, and correction evidence joins actual media boundaries by ID.
+  `TestCorrectionBindsMediaBeforeNormalizedResponse` checks both matching and
+  unrelated IDs when normalized messages arrive after cancellation. The full
+  Family B correction scenario passed 100 coverage-instrumented repetitions.
+- Provider input errors remain terminal failures while already-ordered messages
+  drain. Device failures still cancel promptly. The corrupt-audio CLI regression
+  checks the actual transcript and terminal classification, replacing private
+  predicate tests that merely mirrored cancellation implementation.
+
+Earlier stabilization in this PR replaces sleep-driven provider fixtures with
+observed protocol/PCM boundaries, separates hold-tone evidence from exact provider
+PCM, and admits tool continuations before synchronous provider responses arrive.
+The cumulative reproduction command is:
+
+```sh
+COUNT=3 bash scripts/test-session-ci-regressions.sh all
+```
+
+It runs normal, coverage and race modes with the existing bounded test deadlines.
+It includes every subtest of the historical failing scenarios, including stress
+trials. It uses fake providers and devices, not customer credentials or hardware.
+
+## Coverage without duplicated fixture catalogs
+
+`make coverage` instruments each module and includes runtime coverage from the
+CLI and the independent `tests/embedding` consumer. The coverage gate unions
+source blocks across test binaries; repeated blocks do not multiply the statement
+count. Complementary executions count once, and inconsistent statement counts
+are rejected as incompatible profiles.
+
+The committed manifest is checked against discovered workspace packages. A second
+492-line copy of that manifest and tests requiring deleted package names or a
+zero-percent floor were removed. Small synthetic profiles continue to test floor,
+missing-registration and malformed-input failures.
+
+52 zero floors in the affected services are replaced by measured, conservative
+nonzero floors. Pre-stabilization positive floors are not reduced. The new mouse-service floor
+is 85%, below both measured Linux (89.30%) and macOS (98.72%) coverage. Public room admission
+coverage exercises strict document decoding, conflicting paths, provider
+normalization and credential-reference isolation through the service Wire entry
+point. Room manifest decoding still has only about 36% coverage; this is an
+explicit follow-up area, not a claim of exhaustive validation.
+
+`make coverage-changed` now aliases the full behavioral coverage gate: a service
+floor includes external callers, so package-only runs cannot measure it correctly.
+This trades local speed for one consistent measurement contract. No additional
+scheduler or policy engine is introduced.
+
+## Verification and acceptance limits
+
+Full local coverage passed for 172 registered packages across seven profiles.
+Affected playback, recording, live-session, media-gate and observation packages
+passed three race repetitions. Recording integration regressions passed 20
+repetitions; Family B and corrupt-audio scenarios passed their targeted repeats.
+Final hosted CI must pass on the exact merge head before resuming workers.
+
+A local compilation attempt exhausted disk space; disposable old Go build cache
+was cleared and affected checks were rerun. That attempt is not counted as a test
+pass. Hermetic tests do not claim physical microphone/speaker or live Realtime
+model validation. The meta-planner must still inspect the broader migration and
+run acceptance probes after each completed vertical.
+
+## Hosted follow-up at 3ff17b64
+
+Run 34170296779 passed hermetic, race, unit, Windows, macOS and WebMCP jobs.
+It exposed missing response IDs in two scripted providers, asynchronous final
+error publication, a shutdown/write race, three moved-string lint errors and the
+platform-dependent mouse coverage floor. The complete failed-job log was retained
+before another push; no failing job was waived.
+
+The recording fixtures now emit their known response IDs on audio and transcript
+events. Mixed identified/legacy PCM uses the actual artifact offset, with a
+regression asserting exact bytes and per-turn offsets. The runtime samples the
+provider terminal error directly after joining the loop, rather than depending on
+a notification goroutine. A disabled-tool replay negative failed twice in 500
+repetitions before that change and passed 500 after it. Public embedding tests
+check both the returned error and terminal evidence. Media failure reporting
+precedes visibility to playback, and finalization samples the cause after drain.
+
+The session-log offset/count remains a convenience summary for contiguous response
+PCM. Per-frame audio.frame records retain exact admission order, byte offsets and
+provider identity and are the authoritative evidence for unusual interleaving.
+
+Provider shutdown now distinguishes expected connection closure after explicit
+provider/caller close from real concurrent write failures. It preserves trailing
+normalized messages after session.closed. Four transport lifecycle regressions
+passed 20 race repetitions each; assertions join the writer before inspecting
+terminal errors. Normal media EOF and cancellation caused by final teardown do
+not manufacture a new failure. Sol independently reviewed the identity join,
+interrupt reset, coverage union and shutdown behavior; approval is conditional on
+exact-head hosted CI.
+
+Final frozen semantic candidate: the cumulative runner passed COUNT=1 in all
+three modes (normal, coverage, race), including the CLI interruption scenario
+and all 16 historical integration scenarios with their stress subtests. Affected
+live-session and recording packages passed three more race repetitions. Full
+pinned lint passed; formatting, architecture/size and Wire checks passed. These
+local results supplement, rather than replace, exact-head hosted CI.
+
+Run34172481272 passed eight jobs, including full coverage and integration, but
+hermetic found one more scripted provider omitting response IDs in the shipped
+record-then-replay path. Its output events now carry their known response ID;
+a raw capture assertion rejects missing identity deterministically. An overlay
+restoring the old omission failed that assertion immediately. Shared fixture
+consumers passed 30 race and 30 coverage repetitions; final assertion cleanup
+passed another 10 race repetitions. Exact wire-sequence equality replaces
+redundant count/length loops, shrinking the file from 783 to 758 lines. The
+cumulative runner now includes this seventeenth historical integration scenario.
+All failed-job logs were collected before the corrected push. No runtime change
+or acceptance relaxation was needed for this last fixture repair.
+
+Run34173056323 passed every runtime/test job; remaining duplicate status literals
+were replaced by equal-valued constants throughout the changed probe evidence.
+Linux-targeted lint and the full probe package under race detection passed.
+Run34173626771 then passed eight jobs, including static, but the race job exposed
+a simulated-device lost wake: queue readiness was checked before capturing the
+notification generation. Both drain and capacity waits now obtain those together
+under the registry mutex through one shared helper. Capture and physical/virtual
+backend waits already used the appropriate lock scope.
+
+The simulated-device test now separates registry contracts from playback waiting.
+It verifies state/notification transitions deterministically and retains concurrent
+public wait/Advance cases plus cancellation for both wait APIs. These are contract
+checks and stress coverage, not a claim of deterministic old-gap reproduction.
+The focused pair passed 1,000 race repetitions, all simulated tests passed 100 race
+repetitions, and the full device package passed 20 normal repetitions. No timeout
+or limit was raised; the old contract test has lower complexity/statement baselines.
+The cumulative runner includes simulated-device tests in all three modes.
+
+Run34174519177 passed eight jobs, including the repaired device race and full
+coverage. A later committed-replay stage exposed a composed OpenAI fixture
+acknowledging a continuation before its request reached the wire. The fixture
+now waits for the exact four-frame prefix, sends stable response identities,
+awaits the existing provider completion broadcast, and expects exactly six final
+frames. The changing snapshot-plus-two target and obsolete early-exit helper
+were removed. Exact tool output, call identity, one continuation and user item
+shape remain asserted. No production change or timeout increase was needed.
+The fixed case passed 1,000 race repeats; all composed cases passed 30 repeats
+in each mode. Local and Linux-targeted gateway lint passed. The cumulative
+runner now retains composed provider tests alongside CLI/device regressions.
+
+## Latency follow-up
+
+CI now runs architecture and size enforcement through one architecturegate
+inventory (`make architecture-size-check`). The individual diagnostic targets,
+both rule sets, baseline checks, fixture tests and Wire validation remain.
+On the same local worktree, separate checks took 27.43s + 15.85s; combined took
+22.61s and preserved the pending test-file baseline failure. This is an indicative
+local measurement on a shared host, not a promised CI delta. The prior hosted run
+spent 28.37s + 13.33s on those separate steps. Architecturegate tests passed.
+Distinct integration, stress, coverage, race and platform jobs were retained.
+
+Both high-rate remote-audio cases retain twenty fresh-process trials and all
+sample, tool and protocol assertions. Independent trials now use Go's standard
+parallel-subtest limit, with unique provider/device ports and temporary files;
+the built executables are read-only. On the same restored production source,
+normal Test45+46 with YUI_AUDIO_STRESS=1, -count=1 and -parallel=2 took 37.85s
+wall time with the serial baseline (Go overlay), versus 25.92s in the candidate
+(about 31.5% less). Go-reported package durations were 36.408s and 23.380s.
+Candidate coverage and race modes passed all forty trials in 26.07s and 101.14s
+wall time. Those modes instrument the test host; the existing subprocess builds
+remain ordinary binaries. Linux-targeted pinned CLI lint, formatting and combined
+architecture/size enforcement passed. No timeout, trial count or limit changed.
+
+A proposed 150ms provider quiet-wait removal was reviewed and reverted: provider
+completion/model deltas do not prove asynchronous tool execution and wire writes
+have drained. The original negative assertion and prior continuation repair remain.
+Baseline 2df832df passed all nine hosted CI jobs in run34175779782 before this
+bounded latency follow-up; the final combined head still requires its own CI gate.
+
+Run34176959778 passed eight jobs, including integration, hermetic and race. Its
+coverage job hit the existing two-second wall bound in harness A of the duplex
+transcript negative control. The subsequent expected-corruption diagnostic hid
+that earlier execution failure. Exact coverage instrumentation passed 110 focused
+runs, another 100 runs under concurrent process load, and the full CLI coverage
+suite locally (231.96s). A temporary 1.8s stack/state watchdog did not fire. Review
+of replay, model input ordering, paired crossing completion and EOF release found
+no concrete cycle to patch. This intermittent deadline remains unexplained;
+passing reproductions are not evidence that its cause was fixed. Retain its name
+in the cumulative runner and preserve both harness states on any recurrence.
+All four multi-turn negative controls now validate their fresh healthy run before
+mutating evidence. A compact failure helper reports both harness errors, elapsed
+time, runtime/stream/terminal state, crossings and the final logical tick. An
+isolated overlay forcing a failed baseline exercised that diagnostic and reported
+both harnesses. No production behavior, timeout, trial or negative assertion changed.

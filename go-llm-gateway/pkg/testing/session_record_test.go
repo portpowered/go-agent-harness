@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -9,7 +10,68 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+func TestCaptureSnapshotsCannotMutateRetainedEvidence(t *testing.T) {
+	stream := NewSessionRecorder(newFakeSession(), WithSessionRelayContext(t.Context()))
+	t.Cleanup(func() {
+		if err := stream.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	stream.recordMessage(DirectionClientToServer, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("original")})
+	websocket := NewRecordingWebSocketDialer(nil, "fixture", "fixture")
+	websocket.recordMessage(DirectionClientToServer, []byte(`{"type":"session.update"}`))
+	for name, capture := range map[string]func() SessionCapture{"stream": stream.Capture, "websocket": websocket.Capture} {
+		t.Run(name, func(t *testing.T) {
+			first := capture()
+			original := bytes.Clone(first.Records[0].Payload)
+			first.Records[0].Payload[0] = '!'
+			second := capture()
+			if !bytes.Equal(second.Records[0].Payload, original) || first.Integrity != second.Integrity {
+				t.Fatal("snapshot mutation changed retained payload or digest")
+			}
+		})
+	}
+	events := stream.Events()
+	original := bytes.Clone(events[0].Payload)
+	events[0].Payload[0] = '!'
+	if !bytes.Equal(stream.Events()[0].Payload, original) {
+		t.Fatal("Events exposes retained payload")
+	}
+	legacy := []CapturedSessionEvent{{Data: []byte(`{"type":"legacy"}`)}}
+	cloned := cloneCapturedEvents(legacy)
+	cloned[0].Data[0] = '!'
+	if legacy[0].Data[0] != '{' {
+		t.Fatal("legacy Data aliases original")
+	}
+}
+
+func TestCaptureClocksUseInjectedDomain(t *testing.T) {
+	base := time.Date(2026, time.January, 1, 2, 0, 0, 0, time.FixedZone("test", 3600))
+	source := clock.NewDeterministic(base, time.Millisecond)
+	websocket := NewRecordingWebSocketDialer(nil, "fixture", "fixture", source)
+	stream := NewSessionRecorder(newFakeSession(), WithSessionCaptureClock(source), WithSessionRelayContext(t.Context()))
+	t.Cleanup(func() {
+		if err := stream.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	source.AdvanceBy(17 * time.Millisecond)
+	websocket.recordMessage(DirectionClientToServer, []byte(`{"type":"session.update"}`))
+	if !stream.Send(t.Context(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("clock")}) {
+		t.Fatal("send failed")
+	}
+	for name, capture := range map[string]SessionCapture{"websocket": websocket.Capture(), "stream": stream.Capture()} {
+		if capture.Session.StartedAtUTC != base.UTC().Format(time.RFC3339Nano) {
+			t.Fatalf("%s origin = %q", name, capture.Session.StartedAtUTC)
+		}
+		if len(capture.Records) != 1 || capture.Records[0].TimestampMs != 17 {
+			t.Fatalf("%s timestamps = %+v", name, capture.Records)
+		}
+	}
+}
 
 // fakeSession is a minimal messages.Session for testing.
 type fakeSession struct {
@@ -302,4 +364,20 @@ func containsAnyJSONKey(data []byte, keys []string) bool {
 		return false
 	}
 	return walk(decoded)
+}
+
+func TestMarshalStreamMessageRetainsInputItemAttribution(t *testing.T) {
+	want := messages.StreamMessage{Type: messages.StreamTypeInputItemAdded, Role: messages.RoleUser, Value: messages.NewInputItemAddedValue("recorded-input-item")}
+	raw, err := MarshalStreamMessage(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := UnmarshalStreamMessage(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok := got.Value.(*messages.InputItemAddedValue)
+	if !ok || value.ItemID != "recorded-input-item" || got.Role != want.Role {
+		t.Fatalf("input item attribution lost: %+v", got)
+	}
 }

@@ -263,11 +263,11 @@ func (s *selfPlaySideEvidence) observeStreamDelta(msg messages.StreamMessage) er
 	return s.streamDeltas.writeRaw(payload)
 }
 
-func (s *selfPlaySideEvidence) observeAudio(pcm []byte) error {
+func (s *selfPlaySideEvidence) observeAudio(ctx context.Context, pcm []byte) error {
 	if s == nil || s.audio == nil {
 		return errors.New("self-play WAV sink is not initialized")
 	}
-	return s.audio.write(context.Background(), pcm)
+	return s.audio.write(ctx, pcm)
 }
 
 func cloneSelfPlayStringMap(fields map[string]string) map[string]string {

@@ -23,7 +23,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 			Model:  DefaultOpenAIRealtimeModel,
 		},
 	}}
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Prompt:               "What is the current state of the cube? Then turn the top face once.",
 		PromptProvided:       true,
 		RecordPath:           recordPath,
@@ -60,7 +60,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 
 func TestConfigureSessionAudioContractPromptRecordWithoutInputUsesRealtimeRate(t *testing.T) {
 	inferencer := &sessionAudioContractInferencer{}
-	opts := SessionRunOptions{
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Prompt:               "inspect the cube",
 		RecordPath:           "cube-session.json",
 		AudioOutputRequested: true,
@@ -86,12 +86,12 @@ func TestConfigureSessionAudioContractResolution(t *testing.T) {
 	}{
 		{name: "openai no flags", provider: sessionProviderOpenAI, wantRate: sessionRealtimeAudioSampleRate},
 		{name: "grok no flags", provider: sessionProviderGrok, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{AudioOutputRequested: true}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "caller openai inferencer defaults to realtime rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "caller grok inferencer defaults to realtime rate", provider: sessionProviderGrok, opts: SessionRunOptions{SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
-		{name: "caller seam explicitly declares native rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{SessionInferencer: &sessionAudioContractInferencer{request: inference.SessionRequest{Config: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}}}}, wantRate: 16000},
+		{name: "output file", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), AudioOutputRequested: true}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "input device", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "both devices", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), RTCDeviceBinding: RTCDeviceBindingRequest{InputPresent: true, OutputPresent: true}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "caller openai inferencer defaults to realtime rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "caller grok inferencer defaults to realtime rate", provider: sessionProviderGrok, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{}}, wantRate: sessionRealtimeAudioSampleRate},
+		{name: "caller seam explicitly declares native rate", provider: sessionProviderOpenAI, opts: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: &sessionAudioContractInferencer{request: inference.SessionRequest{Config: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}}}}, wantRate: 16000},
 		{name: "explicit request input", request: models.SessionConfig{InputAudioSampleRate: models.SampleRate16000}, wantRate: 16000},
 		{name: "explicit request output", request: models.SessionConfig{OutputAudioSampleRate: models.SampleRate24000}, wantRate: 24000},
 		{name: "captured output", outputRate: 16000, wantRate: 16000},

@@ -2,17 +2,16 @@ package integration
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // recordingStepInferencer returns steps in sequence (like stepInferencer) and
@@ -86,16 +85,13 @@ func TestContinuationNudge_EndToEnd(t *testing.T) {
 		},
 	}
 
-	exec := newIterativeTestExecutor(inf)
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 1, StopWord: "DONE"}
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 1, StopWord: "DONE"}
 	input := agentloop.NewExecuteInput("complete the task")
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}
@@ -112,7 +108,7 @@ func TestContinuationNudge_EndToEnd(t *testing.T) {
 		t.Fatalf("expected at least 2 recorded requests, got %d", len(inf.recorded))
 	}
 	secondReq := inf.recorded[1]
-	nudgeText := agent.DefaultContinuationNudgeMessage
+	nudgeText := "Please continue where you left off."
 	found := false
 	for _, msg := range secondReq.Messages {
 		if strings.Contains(msg.TextContent(), nudgeText) {
@@ -149,16 +145,13 @@ func TestContinuationNudge_NotTriggeredOnStopWord(t *testing.T) {
 		},
 	}
 
-	exec := newIterativeTestExecutor(inf)
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 1, StopWord: "DONE"}
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 1, StopWord: "DONE"}
 	input := agentloop.NewExecuteInput("do the thing")
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}

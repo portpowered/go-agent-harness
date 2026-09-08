@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -442,6 +443,16 @@ func (s *asyncCollisionSession) Send(ctx context.Context, msg messages.StreamMes
 
 func (s *asyncCollisionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.inner.Receive()
+}
+
+// RTCMedia preserves the provider media capability through the tracing
+// decorator so the live runtime can bind the same PCM endpoints.
+func (s *asyncCollisionSession) RTCMedia() sharedaudio.MediaEndpoints {
+	provider, ok := s.inner.(sharedaudio.MediaSession)
+	if !ok {
+		return sharedaudio.MediaEndpoints{}
+	}
+	return provider.RTCMedia()
 }
 
 func (s *asyncCollisionSession) Done() <-chan struct{} { return s.inner.Done() }

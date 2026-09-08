@@ -39,7 +39,7 @@ func TestReplayPlannersRejectCapturedAsymmetricAudioRatesBeforeDialerConstructio
 		t.Run(test.name, func(t *testing.T) {
 			path := writeReplayAudioRateCapture(t, test.provider, 16000, 24000)
 			dialerConstructed := false
-			_, err := test.plan(SessionRunOptions{ReplayPath: path}, sessionRuntimeFactory{
+			_, err := test.plan(SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: path}, sessionRuntimeFactory{
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					dialerConstructed = true
 					return nil, errors.New("must not construct replay dialer")

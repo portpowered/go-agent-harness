@@ -6,7 +6,6 @@ import (
 	"errors"
 	"sync"
 
-	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -67,7 +66,6 @@ type LaneBToolSet struct {
 	inputs      discovery.ConnectionInputs
 	enabled     bool
 	definitions []ToolDefinition
-	tools       []cliTools.Tool
 	executor    *LaneBExecutor
 	browsers    map[string]discovery.BrowserCandidate
 	policy      map[string]any
@@ -119,10 +117,6 @@ func New(options Options) *LaneBToolSet {
 		policy:      policy,
 		pending:     setOptions.PendingCount,
 	}
-	set.tools = make([]cliTools.Tool, 0, len(set.definitions))
-	for _, definition := range set.definitions {
-		set.tools = append(set.tools, &laneBTool{set: set, definition: definition})
-	}
 	set.executor = &LaneBExecutor{set: set}
 	return set
 }
@@ -149,14 +143,6 @@ func NewLaneBExecutor(service DiscoveryService, inputs discovery.ConnectionInput
 	return NewLaneBToolSet(service, inputs, options...).Executor()
 }
 
-// Tools returns the three CLI-compatible tools in frozen order.
-func (s *LaneBToolSet) Tools() []cliTools.Tool {
-	if s == nil {
-		return nil
-	}
-	return append([]cliTools.Tool(nil), s.tools...)
-}
-
 // Definitions returns the flattened go-agent-loop representation.
 func (s *LaneBToolSet) Definitions() []messages.ToolDefinition {
 	if s == nil {
@@ -174,24 +160,6 @@ func (s *LaneBToolSet) DefinitionSchemas() []map[string]any { return StableToolS
 
 // FunctionDefinitions is a descriptive alias for DefinitionSchemas.
 func (s *LaneBToolSet) FunctionDefinitions() []map[string]any { return s.DefinitionSchemas() }
-
-// Registry creates an isolated existing-CLI registry containing only these
-// three tools. It does not mutate a process-wide static registry.
-func (s *LaneBToolSet) Registry() (*cliTools.ToolRegistry, error) {
-	registry := cliTools.NewEmptyToolRegistry()
-	if s == nil {
-		return registry, nil
-	}
-	for _, tool := range s.tools {
-		if err := registry.Register(tool); err != nil {
-			return nil, err
-		}
-	}
-	return registry, nil
-}
-
-// NewRegistry is a descriptive alias for Registry.
-func (s *LaneBToolSet) NewRegistry() (*cliTools.ToolRegistry, error) { return s.Registry() }
 
 // Executor returns the correlated textual executor.
 func (s *LaneBToolSet) Executor() *LaneBExecutor {
@@ -249,33 +217,12 @@ func (s *LaneBToolSet) Execute(ctx context.Context, name string, args map[string
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
 }
 
-type laneBTool struct {
-	set        *LaneBToolSet
-	definition ToolDefinition
-}
-
-func (t *laneBTool) Name() string               { return t.definition.Name }
-func (t *laneBTool) Description() string        { return t.definition.Description }
-func (t *laneBTool) Parameters() map[string]any { return laneBCloneMap(t.definition.Parameters) }
-
-func (t *laneBTool) Execute(ctx context.Context, args map[string]any) ([]messages.Message, error) {
-	if t == nil || t.set == nil {
-		encoded, err := laneBDisabledEnvelope()
-		if err != nil {
-			return nil, err
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	return t.set.Execute(ctx, t.definition.Name, args)
-}
-
 // LaneBExecutor adapts the tool set to messages.ToolExecutor. It always returns
 // one textual correlated result for a valid invocation or a model-input
 // failure, so classified browser errors do not terminate the agent loop.
 type LaneBExecutor struct{ set *LaneBToolSet }
 
 var _ messages.ToolExecutor = (*LaneBExecutor)(nil)
-var _ cliTools.Tool = (*laneBTool)(nil)
 
 func (e *LaneBExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	response := messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}

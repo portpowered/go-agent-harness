@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,23 +69,6 @@ func findFunctionCallOutput(frames []wireFrame) []int {
 	return idx
 }
 
-func waitForFunctionCallOutput(t *testing.T, conn *mockWebSocketConn, deadline time.Time) []wireFrame {
-	t.Helper()
-	timer := time.NewTimer(time.Until(deadline))
-	defer timer.Stop()
-	for {
-		frames := parseWireFrames(t, conn.getClientMessages())
-		if len(findFunctionCallOutput(frames)) > 0 {
-			return frames
-		}
-		select {
-		case <-conn.clientWriteCh:
-		case <-timer.C:
-			t.Fatalf("timed out waiting for function_call_output wire frame by %s; got %v", deadline.Format(time.RFC3339Nano), frames)
-		}
-	}
-}
-
 func waitForFrameCount(t *testing.T, conn *mockWebSocketConn, n int, deadline time.Time) []wireFrame {
 	t.Helper()
 	timer := time.NewTimer(time.Until(deadline))
@@ -102,17 +86,39 @@ func waitForFrameCount(t *testing.T, conn *mockWebSocketConn, n int, deadline ti
 	}
 }
 
+func finishComposedResponse(t *testing.T, conn *mockWebSocketConn, session messages.Session, responseID string, deadline time.Time) {
+	t.Helper()
+	realtime, ok := session.(*realtimeSession)
+	if !ok {
+		t.Fatalf("session type = %T, want *realtimeSession", session)
+	}
+	realtime.responseMu.Lock()
+	done := realtime.responseDone
+	realtime.responseMu.Unlock()
+	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": responseID}})
+	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": responseID, "status": "completed"}})
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		t.Fatal("provider did not finish the admitted response")
+	}
+}
+
 func addServerEvent(conn *mockWebSocketConn, eventType string, fields map[string]any) {
 	conn.addServerEvent(eventType, fields)
 }
 
 func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	const (
-		callID    = "call_composed_weather"
-		toolName  = "lookup_weather"
-		toolArgs  = `{"city":"San Francisco"}`
-		toolOut   = `{"forecast":"sunny","temp_c":21}`
-		userReply = "thanks, that is all"
+		callID                 = "call_composed_weather"
+		toolName               = "lookup_weather"
+		toolArgs               = `{"city":"San Francisco"}`
+		toolOut                = `{"forecast":"sunny","temp_c":21}`
+		userReply              = "thanks, that is all"
+		toolResponseID         = "resp_composed_tool"
+		continuationResponseID = "resp_composed_continuation"
 	)
 
 	conn := newMockWebSocketConn()
@@ -157,16 +163,17 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}
 
 	// Scripted model turn requesting one tool call.
-	addServerEvent(conn, "response.created", nil)
+	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": toolResponseID}})
 	addServerEvent(conn, "response.output_item.added", map[string]any{
-		"item": map[string]any{"type": "function_call", "id": "item_1", "call_id": callID, "name": toolName, "arguments": ""},
+		"response_id": toolResponseID,
+		"item":        map[string]any{"type": "function_call", "id": "item_1", "call_id": callID, "name": toolName, "arguments": ""},
 	})
 	addServerEvent(conn, "response.function_call_arguments.done", map[string]any{
-		"call_id": callID, "name": toolName, "arguments": toolArgs,
+		"response_id": toolResponseID, "call_id": callID, "name": toolName, "arguments": toolArgs,
 	})
-	addServerEvent(conn, "response.done", nil)
+	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": toolResponseID, "status": "completed"}})
 
-	frames = waitForFunctionCallOutput(t, conn, deadline)
+	frames = waitForFrameCount(t, conn, 4, deadline)
 	fcoIdx := findFunctionCallOutput(frames)
 	if len(fcoIdx) != 1 {
 		t.Fatalf("observed %d function_call_output frames before reply turn, want exactly 1", len(fcoIdx))
@@ -178,10 +185,12 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	if got, _ := fco["output"].(string); got != toolOut {
 		t.Errorf("function_call_output output = %q, want serialized result %q", got, toolOut)
 	}
-	// The continuation response is now admission-tracked by the provider. End
-	// that scripted response before admitting the unrelated text turn below.
-	addServerEvent(conn, "response.created", nil)
-	addServerEvent(conn, "response.done", nil)
+	if frames[3].Type != string(models.SessionEventResponseCreate) {
+		t.Fatalf("tool continuation frame = %q, want response.create", frames[3].Type)
+	}
+	// Acknowledge only after the continuation request reaches the wire, then
+	// wait for its completion to release the next response admission slot.
+	finishComposedResponse(t, conn, session, continuationResponseID, deadline)
 
 	// Turn 2: plain user-text turn must keep the unchanged pairing.
 	if err := al.SendSessionEvent(ctx, messages.StreamMessage{
@@ -190,7 +199,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SendSessionEvent: %v", err)
 	}
-	frames = waitForFrameCount(t, conn, len(parseWireFrames(t, conn.getClientMessages()))+2, deadline)
+	frames = waitForFrameCount(t, conn, 6, deadline)
 
 	// Full deterministic client-to-server event sequence.
 	gotTypes := make([]string, 0, len(frames))
@@ -205,13 +214,8 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		"conversation.item.create", // user text turn
 		"response.create",
 	}
-	if len(gotTypes) != len(wantTypes) {
+	if !slices.Equal(gotTypes, wantTypes) {
 		t.Fatalf("client event sequence = %v, want %v", gotTypes, wantTypes)
-	}
-	for i := range wantTypes {
-		if gotTypes[i] != wantTypes[i] {
-			t.Fatalf("client event sequence = %v, want %v (mismatch at %d)", gotTypes, wantTypes, i)
-		}
 	}
 
 	// Exactly one function_call_output across the whole run.

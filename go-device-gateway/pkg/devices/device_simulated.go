@@ -347,13 +347,18 @@ func (s *SimulatedDuplexStream) WaitForPlaybackCapacity(ctx context.Context, sam
 	if samples > high {
 		return audio.ErrInvalidPlaybackQueue
 	}
+	return s.waitForPlaybackQueue(ctx, high-samples)
+}
+func (s *SimulatedDuplexStream) WaitForPlayback(ctx context.Context) error {
+	return s.waitForPlaybackQueue(ctx, 0)
+}
+
+func (s *SimulatedDuplexStream) waitForPlaybackQueue(ctx context.Context, maxQueued int) error {
 	for {
-		if s.registry.playback.Snapshot().QueuedSamples+samples <= high {
+		ready, wake := s.playbackWaitState(maxQueued)
+		if ready {
 			return nil
 		}
-		s.registry.mu.Lock()
-		wake := s.registry.changed
-		s.registry.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -361,20 +366,12 @@ func (s *SimulatedDuplexStream) WaitForPlaybackCapacity(ctx context.Context, sam
 		}
 	}
 }
-func (s *SimulatedDuplexStream) WaitForPlayback(ctx context.Context) error {
-	for {
-		if s.registry.playback.Snapshot().QueuedSamples == 0 {
-			return nil
-		}
-		s.registry.mu.Lock()
-		wake := s.registry.changed
-		s.registry.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-wake:
-		}
-	}
+
+func (s *SimulatedDuplexStream) playbackWaitState(maxQueued int) (bool, <-chan struct{}) {
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	ready := s.registry.playback.Snapshot().QueuedSamples <= maxQueued
+	return ready, s.registry.changed
 }
 func (s *SimulatedDuplexStream) Close() error {
 	s.once.Do(func() {

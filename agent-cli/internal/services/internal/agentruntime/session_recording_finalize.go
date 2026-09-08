@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
 func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
@@ -229,4 +229,17 @@ func copySessionRecordingArtifacts(artifacts []transcript.RecordingArtifact) []t
 		}
 	}
 	return copyOf
+}
+
+func (s *sessionDirectoryRecordingSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok {
+			return
+		}
+		s.recording.observe(msg, false)
+		if !s.forward(msg) {
+			return
+		}
+	}
 }

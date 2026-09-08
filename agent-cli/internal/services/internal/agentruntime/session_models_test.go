@@ -11,11 +11,32 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+// These compatibility helpers are test-only. Production runtime code receives
+// the provider-owned catalog through Dependencies and SessionRunOptions.
+func testModelCatalog() interface {
+	RealtimeModels(string) []OpenAIRealtimeModel
+	LookupRealtimeModel(string, string) (OpenAIRealtimeModel, bool)
+	SupportedRealtimeModelIDs(string) []string
+} {
+	return providerswire.NewModelCatalog()
+}
+
+func OpenAIRealtimeModels() []OpenAIRealtimeModel {
+	return testModelCatalog().RealtimeModels("openai")
+}
+
+func SupportedOpenAIRealtimeModels() []OpenAIRealtimeModel { return OpenAIRealtimeModels() }
+
+func LookupOpenAIRealtimeModel(model string) (OpenAIRealtimeModel, bool) {
+	return testModelCatalog().LookupRealtimeModel("openai", model)
+}
 
 func TestOpenAIRealtimeModels_ReturnsOrderedIndependentRegistryCopy(t *testing.T) {
 	models := OpenAIRealtimeModels()
@@ -76,10 +97,10 @@ func TestNewOpenAIRealtimeSessionInferencer_UnsupportedModelsRejectBeforeDial(t 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dialer := &recordingOpenAIRealtimeDialer{}
-			_, err := NewOpenAIRealtimeSessionInferencerWithOptions(
-				configOpenAIRealtimeTestConfig(tt.model),
-				oaiprovider.WithWebSocketDialer(dialer),
-			)
+			_, _, err := NewLiveSessionInferencer(SessionRunOptions{
+				Provider: "openai", Model: tt.model, ModelProvided: true,
+				APIKey: "test-key", ModelCatalog: testModelCatalog(), WebSocketDialer: dialer,
+			}, "")
 			if err == nil {
 				t.Fatal("expected unsupported model error")
 			}
@@ -134,7 +155,8 @@ func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testin
 
 func TestNewLiveSessionInferencer_GPTRealtime21CarriesReasoningEffort(t *testing.T) {
 	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
-		Provider: config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
+		ModelCatalog: testModelCatalog(),
+		Provider:     config.ProviderOpenAI, Model: openAIRealtime21Model, ModelProvided: true,
 		APIKey: "sk-test", BaseURL: "ws://openai.test/realtime", ConfigDir: t.TempDir(),
 		ReasoningEffort: "high",
 	}, "test")
@@ -175,12 +197,13 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
-				Provider:  tt.provider,
-				Model:     tt.model,
-				APIKey:    tt.apiKey,
-				BaseURL:   tt.baseURL,
-				ConfigDir: t.TempDir(),
-				Voice:     tt.voice,
+				ModelCatalog: testModelCatalog(),
+				Provider:     tt.provider,
+				Model:        tt.model,
+				APIKey:       tt.apiKey,
+				BaseURL:      tt.baseURL,
+				ConfigDir:    t.TempDir(),
+				Voice:        tt.voice,
 			}, "respond with the device probe phrase")
 			if err != nil {
 				t.Fatalf("NewLiveSessionInferencer: %v", err)
@@ -320,9 +343,10 @@ model:
 `)
 
 	got, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
-		Provider:  config.ProviderOpenAI,
-		APIKey:    "sk-test-key",
-		ConfigDir: configDir,
+		ModelCatalog: testModelCatalog(),
+		Provider:     config.ProviderOpenAI,
+		APIKey:       "sk-test-key",
+		ConfigDir:    configDir,
 	})
 	if err != nil {
 		t.Fatalf("resolveOpenAIRealtimeSessionConfig: %v", err)
@@ -350,8 +374,9 @@ model:
 `)
 
 	_, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
-		Provider:  config.ProviderOpenAI,
-		ConfigDir: configDir,
+		ModelCatalog: testModelCatalog(),
+		Provider:     config.ProviderOpenAI,
+		ConfigDir:    configDir,
 	})
 	if err == nil {
 		t.Fatal("resolveOpenAIRealtimeSessionConfig() = nil error, want a missing-credential error")
@@ -375,6 +400,7 @@ model:
 	dialer := &recordingGrokRealtimeDialer{dialErr: errors.New("dial should not be reached")}
 
 	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
+		ModelCatalog:    testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		ModelProvided:   true,
@@ -409,9 +435,10 @@ model:
 `)
 
 	_, err := resolveOpenAIRealtimeSessionConfig(SessionRunOptions{
-		Provider:  config.ProviderOpenAI,
-		Model:     "   ",
-		ConfigDir: configDir,
+		ModelCatalog: testModelCatalog(),
+		Provider:     config.ProviderOpenAI,
+		Model:        "   ",
+		ConfigDir:    configDir,
 	})
 	if err == nil {
 		t.Fatal("expected whitespace model rejection")
@@ -425,6 +452,7 @@ func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer t
 	t.Helper()
 	var out strings.Builder
 	err := RunSession(context.Background(), &out, SessionRunOptions{
+		ModelCatalog:    testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
 		Provider:        config.ProviderOpenAI,
 		Model:           model,

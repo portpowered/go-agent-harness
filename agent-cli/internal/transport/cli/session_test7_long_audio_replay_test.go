@@ -93,7 +93,7 @@ func TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback(t *testing.T) {
 	for len(got) < len(want) {
 		batch := make([]int16, min(audio.FrameSize, len(want)-len(got)))
 		if err := observer.ReadSamples(ctx, batch); err != nil {
-			t.Fatalf("read test7 loopback at sample %d; stderr=%q: %v", len(got), stderr.String(), err)
+			t.Fatalf("read test7 loopback at sample %d/%d; context=%v playback=%+v stderr=%q: %v", len(got), len(want), context.Cause(ctx), observer.PlaybackStats(), stderr.String(), err)
 		}
 		got = append(got, batch...)
 	}

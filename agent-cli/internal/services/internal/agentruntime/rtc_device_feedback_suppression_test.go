@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -121,7 +122,7 @@ func roomCoupledCopy(playback [][]int16, delaySamples int, gain float64, noiseAm
 // warning had fired.
 func TestLocalFeedbackGateNeverForwardsRealisticSustainedFeedback(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -168,7 +169,7 @@ func TestLocalFeedbackGateNeverForwardsRealisticSustainedFeedback(t *testing.T) 
 // speech merely because the bounded startup hold expires. Forwarding it is
 // enough for provider VAD to cancel several seconds of queued assistant audio.
 func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
-	config := audio.DefaultSelfHearingConfig()
+	config := selfhearing.DefaultSelfHearingConfig()
 	gate, err := audio.NewPCM16FeedbackGate(config, nil, audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
@@ -235,7 +236,7 @@ func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
 // not be trapped in suppression forever.
 func TestLocalFeedbackGateReleasesSustainedIndependentSpeechAfterPlaybackEnds(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -298,7 +299,7 @@ func TestLocalFeedbackGateReleasesSustainedIndependentSpeechAfterPlaybackEnds(t 
 // independent signal the whole time.
 func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 	warning := make(chan string, 1)
-	gate, err := audio.NewPCM16FeedbackGate(audio.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
+	gate, err := audio.NewPCM16FeedbackGate(selfhearing.DefaultSelfHearingConfig(), feedbackWarningChannel(warning), audio.SampleRate, audio.SampleRate)
 	if err != nil {
 		t.Fatalf("new local feedback gate: %v", err)
 	}
@@ -351,7 +352,7 @@ func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 // signal is the barge-in and must be released once, with a bounded amount of
 // provider-bound audio.
 func TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses(t *testing.T) {
-	config := audio.DefaultSelfHearingConfig()
+	config := selfhearing.DefaultSelfHearingConfig()
 	config.PostPlaybackAcousticTail = 120 * time.Millisecond
 	gate, err := audio.NewPCM16FeedbackGate(config, nil, audio.SampleRate, audio.SampleRate)
 	if err != nil {

@@ -107,7 +107,7 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	if err := sessioncontract.ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
 		return err
 	}
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -233,7 +233,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	directory string,
 	audioInput *SessionAudioInput,
 ) (runErr error) {
-	var coordinator *SessionCapabilityCoordinator
+	var coordinator SessionCapabilityCoordinator
 	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
 	defer func() {
 		closeSessionCapabilityIfNeeded(coordinator, &runErr)
@@ -850,6 +850,7 @@ func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {
 	case <-s.done:
+		s.drainSource(s.inner.Receive())
 	case <-time.After(time.Second):
 	}
 	return err
@@ -866,17 +867,10 @@ func (s *sessionDirectoryRecordingSession) relay() {
 				return
 			}
 		case <-s.inner.Done():
-			for {
-				msg, ok := source.Read()
-				if !ok {
-					return
-				}
-				s.recording.observe(msg, false)
-				if !s.forward(msg) {
-					return
-				}
-			}
+			s.drainSource(source)
+			return
 		case <-s.ctx.Done():
+			s.drainSource(source)
 			return
 		}
 	}

@@ -1,8 +1,8 @@
 package agentruntime
 
 import (
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"
 	"strings"
 	"unicode"

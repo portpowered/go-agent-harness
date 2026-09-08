@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -35,17 +36,6 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		out = io.Discard
 	}
 	var err error
-	var streamTerminalOnce sync.Once
-	publishStreamTermination := func(result RoomResult) {
-		if opts.Stream == nil {
-			return
-		}
-		streamTerminalOnce.Do(func() {
-			opts.Stream.PublishRoomEvent(RoomStreamEventRunTerminated, RoomStreamRoomParticipantID, string(result.TerminationReason))
-			_ = opts.Stream.Close()
-		})
-	}
-
 	validation := opts.Validation
 	if opts.CredentialLookup != nil {
 		validation.LookupCredential = opts.CredentialLookup
@@ -54,18 +44,10 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	opts, validation, replayMode, err = prepareRoomReplayOptions(opts, validation)
 	if err != nil {
 		result := roomFailureResult(err, nil)
-		publishStreamTermination(result)
 		return result, err
 	}
 	if err = validateRoomRunAdmission(opts, validation, replayMode); err != nil {
 		result := roomFailureResult(err, nil)
-		publishStreamTermination(result)
-		return result, err
-	}
-	opts, err = normalizeRoomRecordingOptions(opts)
-	if err != nil {
-		result := roomFailureResult(err, nil)
-		publishStreamTermination(result)
 		return result, err
 	}
 	opts, roomClock := normalizeRoomClockOptions(opts)
@@ -77,17 +59,15 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		outputDir, outputErr := prepareRoomEvidenceOutput(opts.OutputDir)
 		if outputErr != nil {
 			result := roomFailureResult(outputErr, nil)
-			publishStreamTermination(result)
 			return result, outputErr
 		}
 		opts.OutputDir = outputDir
 		if !replayMode {
 			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
 		}
-		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, roomClock)
+		evidence, err = newRoomEvidenceWithLatency(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, runtimeRoomsWire.NewLatencyService(), roomClock)
 		if err != nil {
 			result := roomFailureResult(err, evidenceSecrets)
-			publishStreamTermination(result)
 			return result, err
 		}
 		if opts.onRoomEvidenceReady != nil {
@@ -103,7 +83,6 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			_ = evidence.finalize(result, runErr, roomClock.Now().UTC())
 			evidence.applyRecordingHealth(&result)
 		}
-		publishStreamTermination(result)
 		return result, runErr
 	}
 
@@ -148,19 +127,13 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return finalizeEvidence(result, safeErr)
 		}
 		evidence.recordTimelineEvent("participant_joined", plan.manifest.ID, nil)
-		if opts.Stream != nil {
-			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantJoined, plan.manifest.ID)
-		}
 	}
 
 	onParticipantTerminated := opts.OnParticipantTerminated
-	if opts.Stream != nil || onParticipantTerminated != nil || evidence != nil {
+	if onParticipantTerminated != nil || evidence != nil {
 		onParticipantTerminated = func(result RoomParticipantResult) {
 			recordRoomParticipantBoundDiagnostic(opts, evidence, result)
 			evidence.recordTimelineEvent("participant_terminated", result.ParticipantID, participantTerminalFields(result))
-			if opts.Stream != nil {
-				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantTerminated, result.ParticipantID, string(result.TerminationReason))
-			}
 			if opts.OnParticipantTerminated != nil {
 				opts.OnParticipantTerminated(result)
 			}
@@ -169,10 +142,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.BoundShutdownGrace, onParticipantTerminated, opts.onRoomBoundShutdown)
 	coordinator.setParticipantFailureObserver(func(participantID, reason string) {
 		if evidence != nil {
-			evidence.recordTimelineEvent(RoomStreamEventParticipantFailed, participantID, map[string]string{"reason": reason})
-		}
-		if opts.Stream != nil {
-			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantFailed, participantID, reason)
+			evidence.recordTimelineEvent("participant_failed", participantID, map[string]string{"reason": reason})
 		}
 	})
 	coordinator.blockEmptyStop()
@@ -328,9 +298,6 @@ func publishRoomParticipantsReady(coordinator *roomCoordinator, plans []*roomPar
 			evidence.setParticipantReady(ready)
 		}
 		evidence.recordTimelineEvent("participant_ready", ready.ParticipantID, nil)
-		if opts.Stream != nil {
-			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantReady, ready.ParticipantID)
-		}
 		if opts.OnParticipantReady != nil {
 			opts.OnParticipantReady(ready)
 		}
@@ -482,14 +449,7 @@ func validateRoomRunAdmission(opts RoomRunOptions, validation room.ValidationOpt
 			return err
 		}
 	}
-	if opts.Stream == nil {
-		return nil
-	}
-	participantIDs := make([]string, 0, len(opts.Manifest.Participants))
-	for _, participant := range opts.Manifest.Participants {
-		participantIDs = append(participantIDs, participant.ID)
-	}
-	return opts.Stream.ValidateParticipants(participantIDs)
+	return nil
 }
 
 func normalizeRoomClockOptions(opts RoomRunOptions) (RoomRunOptions, platformclock.Source) {

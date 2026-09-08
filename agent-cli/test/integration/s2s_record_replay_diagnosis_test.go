@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -32,10 +33,6 @@ const (
 	recordReplayCorruption   = "CORRUPTED_NESTED_PROMPT"
 )
 
-// TestSessionCommand_RecordThenReplayPromptUsesShippedCLI proves that a raw
-// provider capture made through the normal command boundary can be replayed
-// without credentials, while the captured tool-enabled handshake remains
-// authoritative and later prompt traffic remains strict.
 func TestSessionCommand_RecordThenReplayPromptUsesShippedCLI(t *testing.T) {
 	recordPath := recordProductionPromptCapture(t)
 	replayConfigDir := t.TempDir()
@@ -68,10 +65,6 @@ func TestSessionCommand_RecordThenReplayPromptUsesShippedCLI(t *testing.T) {
 	})
 }
 
-// TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI proves the
-// repeatable --audio-in-turn path records both provider wire traffic and the
-// finalized audio sidecar, then replays the exact scheduled sequence through
-// the shipped CLI without a provider key.
 func TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI(t *testing.T) {
 	fixture := newRecordReplayWebSocketFixture(true, 2)
 	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
@@ -109,6 +102,7 @@ func TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI(t *testing.
 	initial := firstSessionUpdateRecord(t, capture)
 	assertSessionUpdateHasInstructionsAndExec(t, initial)
 	assertScheduledAudioOutboundWireTypes(t, capture)
+	assertRecordedResponseAudioIdentity(t, capture)
 	assertCLILiveRecordingBundle(t, recordDir, 2)
 
 	replayConfigDir := t.TempDir()
@@ -128,10 +122,6 @@ func TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI(t *testing.
 	assertCLILiveRecordingBundle(t, replayRecordDir, 2)
 }
 
-// TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface drives one
-// production command through a deterministic WebSocket provider. The same run
-// is the source of terminal output, normalized transcript artifacts, the
-// completed conversation log, and raw wire capture.
 func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing.T) {
 	fixture := newRecordReplayWebSocketFixture(true, 1)
 	fixture.inputTranscriptDelta = "heard "
@@ -171,11 +161,6 @@ func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing
 	assertRawInputTranscriptEvents(t, recordPath)
 }
 
-// TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface
-// proves that a new-format capture keeps its recorded enabled handshake and
-// replays the same user transcript semantics without consulting the current
-// live default. Both the original scripted run and the replay are checked
-// through the shipped command and finalized recording directory.
 func TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface(t *testing.T) {
 	fixture := newRecordReplayWebSocketFixture(true, 1)
 	fixture.inputTranscriptDelta = "heard "
@@ -397,10 +382,6 @@ func assertRawInputTranscriptEvents(t *testing.T, path string) {
 	}
 }
 
-// TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence
-// mutates one nested field in a capture produced by the prompt test path.
-// The shipped replay command must fail quickly with its sequence, event type,
-// JSON pointer, and bounded expected/actual values visible to the operator.
 func TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence(t *testing.T) {
 	recordPath := recordProductionPromptCapture(t)
 	capture, err := gwtesting.LoadSessionCapture(recordPath)
@@ -575,39 +556,37 @@ func assertOutboundWireTypes(t *testing.T, capture gwtesting.SessionCapture, wan
 			got = append(got, record.Type)
 		}
 	}
-	if len(got) != len(want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("outbound wire types = %v, want %v", got, want)
 	}
-	for index := range want {
-		if got[index] != want[index] {
-			t.Fatalf("outbound wire types = %v, want %v", got, want)
+}
+
+func assertRecordedResponseAudioIdentity(t *testing.T, capture gwtesting.SessionCapture) {
+	t.Helper()
+	responses := 0
+	for _, record := range capture.Records {
+		if record.Direction != gwtesting.DirectionServerToClient || record.Type != "response.output_audio.delta" {
+			continue
 		}
+		responses++
+		var audio struct {
+			ResponseID string `json:"response_id"`
+		}
+		if err := json.Unmarshal(record.Payload, &audio); err != nil {
+			t.Fatal(err)
+		}
+		if want := fmt.Sprintf("resp_record_replay_%d", responses); audio.ResponseID != want {
+			t.Fatalf("recorded PCM identity = %q, want %q", audio.ResponseID, want)
+		}
+	}
+	if responses != 2 {
+		t.Fatalf("recorded PCM responses = %d, want 2", responses)
 	}
 }
 
 func assertScheduledAudioOutboundWireTypes(t *testing.T, capture gwtesting.SessionCapture) {
 	t.Helper()
-	counts := make(map[string]int)
-	ordered := make([]string, 0)
-	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer {
-			continue
-		}
-		ordered = append(ordered, record.Type)
-		counts[record.Type]++
-	}
-	for _, eventType := range []string{"session.update", "input_audio_buffer.append", "input_audio_buffer.commit", "response.create"} {
-		if counts[eventType] == 0 {
-			t.Fatalf("scheduled audio capture omitted outbound %q: %v", eventType, ordered)
-		}
-	}
-	if counts["input_audio_buffer.commit"] != 2 || counts["response.create"] != 2 {
-		t.Fatalf("scheduled audio outbound counts = commits:%d responses:%d, want 2 each; ordered=%v", counts["input_audio_buffer.commit"], counts["response.create"], ordered)
-	}
-	if counts["input_audio_buffer.append"] != 2 {
-		t.Fatalf("scheduled audio append count = %d, want one per audio-in-turn file; ordered=%v", counts["input_audio_buffer.append"], ordered)
-	}
-	want := []string{
+	assertOutboundWireTypes(t, capture, []string{
 		"session.update",
 		"input_audio_buffer.append",
 		"input_audio_buffer.commit",
@@ -615,15 +594,7 @@ func assertScheduledAudioOutboundWireTypes(t *testing.T, capture gwtesting.Sessi
 		"input_audio_buffer.append",
 		"input_audio_buffer.commit",
 		"response.create",
-	}
-	if len(ordered) != len(want) {
-		t.Fatalf("scheduled audio outbound sequence = %v, want %v", ordered, want)
-	}
-	for index := range want {
-		if ordered[index] != want[index] {
-			t.Fatalf("scheduled audio outbound sequence = %v, want %v", ordered, want)
-		}
-	}
+	})
 }
 
 type recordReplayWebSocketFixture struct {
@@ -726,8 +697,9 @@ func (f *recordReplayWebSocketFixture) writeResponse(connection *websocket.Conn,
 		}
 		if f.assistantTranscriptDelta != "" {
 			if err := connection.WriteJSON(map[string]string{
-				"type":  "response.output_audio_transcript.delta",
-				"delta": f.assistantTranscriptDelta,
+				"type":        "response.output_audio_transcript.delta",
+				"response_id": responseID,
+				"delta":       f.assistantTranscriptDelta,
 			}); err != nil {
 				return err
 			}
@@ -737,30 +709,33 @@ func (f *recordReplayWebSocketFixture) writeResponse(connection *websocket.Conn,
 			assistantTranscript = transcript
 		}
 		if err := connection.WriteJSON(map[string]string{
-			"type":       "response.output_audio_transcript.done",
-			"transcript": assistantTranscript,
+			"type":        "response.output_audio_transcript.done",
+			"response_id": responseID,
+			"transcript":  assistantTranscript,
 		}); err != nil {
 			return err
 		}
 		audio := base64.StdEncoding.EncodeToString([]byte{byte(responseNumber), 0, byte(responseNumber + 10), 0})
 		if err := connection.WriteJSON(map[string]string{
-			"type":   "response.output_audio.delta",
-			"delta":  audio,
-			"format": "pcm16",
+			"type":        "response.output_audio.delta",
+			"response_id": responseID,
+			"delta":       audio,
+			"format":      "pcm16",
 		}); err != nil {
 			return err
 		}
-		if err := connection.WriteJSON(map[string]string{"type": "response.output_audio.done"}); err != nil {
+		if err := connection.WriteJSON(map[string]string{"type": "response.output_audio.done", "response_id": responseID}); err != nil {
 			return err
 		}
 	} else {
 		if err := connection.WriteJSON(map[string]string{
-			"type":  "response.output_text.delta",
-			"delta": "prompt response",
+			"type":        "response.output_text.delta",
+			"response_id": responseID,
+			"delta":       "prompt response",
 		}); err != nil {
 			return err
 		}
-		if err := connection.WriteJSON(map[string]string{"type": "response.output_text.done"}); err != nil {
+		if err := connection.WriteJSON(map[string]string{"type": "response.output_text.done", "response_id": responseID}); err != nil {
 			return err
 		}
 	}

@@ -96,7 +96,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	}
 
 	releaseErr := make(chan error, 1)
-	go releaseSessionAudioInterruptInvocations(t, scenario, targetSession, wire, releaseErr)
+	releaseCtx, releaseCancel := context.WithCancel(context.Background())
+	defer releaseCancel()
+	dispatches := broker.Watch(releaseCtx)
+	go releaseSessionAudioInterruptInvocations(t, scenario, targetSession, wire, dispatches, releaseErr)
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(tempDir, "config")
@@ -159,6 +162,7 @@ func releaseSessionAudioInterruptInvocations(
 	scenario sessionAudioInterruptScenario,
 	targetSession *testkit.ScriptedTargetSession,
 	wire *sessionAudioInterruptWire,
+	dispatches <-chan webmcp.BrokerEvent,
 	result chan<- error,
 ) {
 	t.Helper()
@@ -176,6 +180,10 @@ func releaseSessionAudioInterruptInvocations(
 			return
 		}
 		record = nextRecord
+		if err := waitSessionAudioBrowserDispatch(ctx, dispatches, record.ToolName); err != nil {
+			result <- err
+			return
+		}
 		if scenario == sessionAudioInterruptNegative {
 			result <- targetSession.ReleaseInvocation(record.ID, json.RawMessage(`{"state":"read"}`))
 			return
@@ -215,15 +223,8 @@ func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *tes
 	t.Helper()
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()
-	// The broker gets its own real clock, deliberately independent of the
-	// browser runtime's deterministic FakeClock above. This test's assertions
-	// correlate a BrokerEvent's At (assigned synchronously, producer-side, by
-	// the broker under lock) with a provider-wire write's observed time
-	// (assigned synchronously in WriteMessage). Both need to live in the same
-	// real wall-clock domain for that comparison to mean anything; a frozen
-	// FakeClock would make every BrokerEvent.At identical and the comparison
-	// meaningless. See the ledger's watch() below for why this replaces
-	// time.Now() at observation time.
+	// Broker events and provider writes share wall time; browser simulation uses
+	// its own clock. Compare producer timestamps, not observer scheduling.
 	brokerClock := sessionAudioInterruptRealClock{}
 	candidate := webmcp.BrowserCandidate{ID: "browser-s2s-interrupt", Product: "scripted", Loopback: true}
 	target := webmcp.Target{
@@ -266,11 +267,7 @@ func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *tes
 		Discoverer: sessionAudioInterruptDiscoverer{candidate: candidate},
 		IDs:        ids,
 		Clock:      brokerClock,
-		// This timeout only needs to bound a genuine hang: with a real clock
-		// behind the broker (see brokerClock above), the deadline is now
-		// live rather than inert, so it must stay well clear of the
-		// deliberate multi-second hold this test puts on the browser
-		// invocation under CI load.
+		// Bound hangs without imposing a latency assertion under CI load.
 		InvocationTimeout: 30 * time.Second,
 	})
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
@@ -366,16 +363,7 @@ func (l *sessionAudioInterruptEventLedger) watch(ctx context.Context, broker web
 				if !ok {
 					return
 				}
-				// Use the broker's own event.At rather than time.Now() here.
-				// event.At is assigned synchronously by the broker, under its
-				// lock, at the moment of the real state transition; time.Now()
-				// at this point would instead measure when *this* goroutine
-				// got scheduled to drain its watch channel, which races
-				// independently against the production interrupt-release
-				// watcher's own, separately scheduled consumption of the same
-				// broker event. Under CI load that race can invert observed
-				// order even though the underlying transitions are correctly
-				// ordered, which is what made ordering assertions here flaky.
+				// The broker timestamps the transition under lock before publishing.
 				l.mu.Lock()
 				l.events = append(l.events, sessionAudioInterruptEventObservation{event: event, at: event.At})
 				l.mu.Unlock()
@@ -445,14 +433,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 		if !sessionAudioInterruptGroupHasPrefix(commits[1].appends, sessionAudioInterruptOverlapPCM) {
 			t.Fatalf("unfiltered interruption commit did not contain overlap audio; commits=%#v", commits)
 		}
-		// assertSessionAudioInterruptCommitInSpan above already proves the
-		// interruption commit landed causally between dispatch and terminal,
-		// which is the real property under test: the invocation was
-		// genuinely in flight when the interrupt happened. A minimum
-		// elapsed-wall-clock span on top of that is a redundant, timing-based
-		// proxy for the same fact and is what made this check flaky under CI
-		// load, so it is replaced with a plain positive-span sanity check
-		// (mirrors the negative scenario below).
+		// Require ordered transitions without a minimum wall-time duration.
 		if !targetSpan.terminal.at.After(targetSpan.start.at) {
 			t.Fatalf("unfiltered browser invocation did not have a positive in-flight span: %#v", targetSpan)
 		}
@@ -462,14 +443,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 		if len(commits) != 2 {
 			t.Fatalf("named provider commits = %d, want exactly scheduled + matching interruption; commits=%#v", len(commits), commits)
 		}
-		// Compare the broker's own authoritative, monotonically increasing
-		// event Sequence rather than either span's observed wall-clock time.
-		// Sequence is assigned once, synchronously, under the broker's lock
-		// at the moment each event is emitted, so it reflects true relative
-		// order between broker events regardless of how quickly this test's
-		// ledger goroutine (or the production interrupt watcher, a separate
-		// and independently scheduled consumer of the same broker.Watch()
-		// stream) got scheduled to observe them.
+		// Producer sequence establishes order independently of watcher scheduling.
 		if readSpan.terminal.event.Sequence >= targetSpan.start.event.Sequence {
 			t.Fatalf("named nonmatching invocation did not finish before matching invocation: read_terminal_seq=%d queue_start_seq=%d (read=%s..%s matching=%s)",
 				readSpan.terminal.event.Sequence, targetSpan.start.event.Sequence, readSpan.start.at, readSpan.terminal.at, targetSpan.start.at)
@@ -497,17 +471,7 @@ func assertSessionAudioInterruptScenario(t *testing.T, scenario sessionAudioInte
 	}
 }
 
-// assertSessionAudioInterruptCommitInSpan proves the interrupt commit landed
-// causally between the invocation's dispatch and terminal broker events. This
-// still compares wall-clock times, but both sides are now real, synchronous,
-// producer-recorded timestamps: span.start.at/span.terminal.at come from
-// BrokerEvent.At (assigned by the broker itself, under lock, at the moment of
-// the real state transition - see newSessionAudioInterruptFixture's
-// brokerClock and the ledger's watch()), and commit.at is recorded
-// synchronously inside the wire's own WriteMessage. Neither depends on a
-// separate consumer goroutine's scheduling, which is what made this
-// comparison flaky when it used the ledger's own time.Now()-at-observation
-// timestamps.
+// Both clocks are assigned at the producer boundary, before asynchronous delivery.
 func assertSessionAudioInterruptCommitInSpan(t *testing.T, commit sessionAudioInterruptCommitGroup, span sessionAudioInterruptInvocationSpan) {
 	t.Helper()
 	if !span.start.at.Before(commit.at) || !commit.at.Before(span.terminal.at) {
@@ -962,4 +926,23 @@ func sessionAudioInterruptWriteSummary(writes []sessionAudioInterruptWireWrite) 
 		types = append(types, write.Type)
 	}
 	return fmt.Sprintf("%v", types)
+}
+
+// A scripted browser announces Invoke entry before Invoke returns its ID. Releasing
+// then can manufacture a terminal without broker provenance. This scenario tests
+// interruption after admission, so wait for that actual protocol boundary.
+func waitSessionAudioBrowserDispatch(ctx context.Context, events <-chan webmcp.BrokerEvent, tool string) error {
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return fmt.Errorf("browser watch closed before dispatch of %s", tool)
+			}
+			if event.Type == webmcp.BrokerEventInvocationCreated && event.State == webmcp.InvocationDispatched && event.ToolName == tool {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("wait for browser dispatch of %s: %w", tool, ctx.Err())
+		}
+	}
 }

@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
 func TestCleanTurnTakingRoomReplayFixturePassesAudioProperties(t *testing.T) {
@@ -48,7 +49,7 @@ func TestCleanTurnTakingRoomReplayFixturePassesAudioProperties(t *testing.T) {
 		t.Fatalf("room timeline events = %d, want eight turn boundaries", len(bundle.Plan.Timeline))
 	}
 
-	analysis, err := audio.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
+	analysis, err := roomanalysis.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
 	if err != nil {
 		t.Fatalf("analyze clean turn-taking bundle: %v", err)
 	}
@@ -73,13 +74,13 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 		name     string
 		property string
 		streamID string
-		mutate   func(*audio.PCM16RoomInput)
+		mutate   func(*roomanalysis.PCM16RoomInput)
 	}{
 		{
 			name:     "clipping",
 			property: "clipping",
 			streamID: "agent-a:output",
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				cleanStream(input, "agent-a:output").Samples[400] = 32700
 			},
 		},
@@ -87,9 +88,9 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 			name:     "quiet boundary click",
 			property: "quiet-boundary-click",
 			streamID: "agent-a:output",
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				stream := cleanStream(input, "agent-a:output")
-				stream.ChunkBoundaries = []audio.ChunkBoundary{{ID: "mutated-quiet-chunk", SampleIndex: 1400}}
+				stream.ChunkBoundaries = []streamanalysis.ChunkBoundary{{ID: "mutated-quiet-chunk", SampleIndex: 1400}}
 				stream.Samples[1399] = 0
 				stream.Samples[1400] = 7000
 			},
@@ -98,7 +99,7 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 			name:     "dropout",
 			property: "dropout",
 			streamID: "agent-a:output",
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				stream := cleanStream(input, "agent-a:output")
 				for index := 200; index < 1000; index++ {
 					stream.Samples[index] = 0
@@ -109,7 +110,7 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 			name:     "bad trailing edge",
 			property: "trailing-click",
 			streamID: "agent-a:output",
-			mutate: func(input *audio.PCM16RoomInput) {
+			mutate: func(input *roomanalysis.PCM16RoomInput) {
 				stream := cleanStream(input, "agent-a:output")
 				stream.Samples[len(stream.Samples)-1] = 2000
 			},
@@ -121,7 +122,7 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 			bundle := loadCleanTurnTakingBundle(t)
 			input := bundle.AnalysisInput()
 			test.mutate(&input)
-			analysis, err := audio.AnalyzePCM16Room(input, bundle.AnalysisConfig())
+			analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.AnalysisConfig())
 			if err != nil {
 				t.Fatalf("analyze mutated bundle: %v", err)
 			}
@@ -147,7 +148,7 @@ func TestCleanTurnTakingRoomReplaySelfCopyControlFails(t *testing.T) {
 	input := bundle.AnalysisInput()
 	sent := cleanStream(&input, "agent-a:sent")
 	received := cleanStream(&input, "agent-a:received")
-	interval := audio.PCM16TimeInterval{ID: "agent-a-turn-1", Start: 200 * time.Millisecond, End: time.Second}
+	interval := roomanalysis.PCM16TimeInterval{ID: "agent-a-turn-1", Start: 200 * time.Millisecond, End: time.Second}
 	if err := assertCleanSelfHearing(*sent, *received, interval, bundle.AnalysisConfig()); err != nil {
 		t.Fatalf("clean received stream self-hearing check: %v", err)
 	}
@@ -177,7 +178,7 @@ func cleanTurnTakingFixturePath() string {
 	return filepath.Join(filepath.Dir(filename), "..", "..", "testdata", "room-audio", "clean-turn-taking")
 }
 
-func cleanStream(input *audio.PCM16RoomInput, streamID string) *audio.PCM16TimedStream {
+func cleanStream(input *roomanalysis.PCM16RoomInput, streamID string) *roomanalysis.PCM16TimedStream {
 	for index := range input.Streams {
 		if input.Streams[index].StreamID == streamID {
 			return &input.Streams[index]
@@ -186,13 +187,13 @@ func cleanStream(input *audio.PCM16RoomInput, streamID string) *audio.PCM16Timed
 	panic(fmt.Sprintf("stream %q is not in clean fixture", streamID))
 }
 
-func firstFailure(failures []audio.PropertyFailure, property, streamID string) (audio.PropertyFailure, bool) {
+func firstFailure(failures []roomanalysis.PropertyFailure, property, streamID string) (roomanalysis.PropertyFailure, bool) {
 	for _, failure := range failures {
 		if failure.Property == property && failure.StreamID == streamID {
 			return failure, true
 		}
 	}
-	return audio.PropertyFailure{}, false
+	return roomanalysis.PropertyFailure{}, false
 }
 
 func hasGoldenNonZeroSamples(samples []int16) bool {
@@ -204,15 +205,15 @@ func hasGoldenNonZeroSamples(samples []int16) bool {
 	return false
 }
 
-func assertCleanSelfHearing(source, received audio.PCM16TimedStream, interval audio.PCM16TimeInterval, config audio.PCM16RoomAnalysisConfig) error {
-	measurement, err := audio.NormalizedPCM16CrossCorrelation(source, received, interval, config.CorrelationLagWindow, config.CorrelationSilenceFloorDBFS)
+func assertCleanSelfHearing(source, received roomanalysis.PCM16TimedStream, interval roomanalysis.PCM16TimeInterval, config roomanalysis.PCM16RoomAnalysisConfig) error {
+	measurement, err := roomanalysis.NormalizedPCM16CrossCorrelation(source, received, interval, config.CorrelationLagWindow, config.CorrelationSilenceFloorDBFS)
 	if err != nil {
 		return err
 	}
 	if measurement.BestAbsoluteCorrelation < config.MaxSelfCorrelation {
 		return nil
 	}
-	return audio.PropertyFailure{
+	return roomanalysis.PropertyFailure{
 		Property:         "self-hearing",
 		StreamID:         measurement.ReceivedStreamID,
 		ParticipantID:    measurement.ReceivedParticipantID,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,11 @@ import (
 )
 
 func TestRoomBrowserCapabilitiesProveSharedTopologyIsolationAndReceipts(t *testing.T) {
+	// tests/embedding covers the public participant isolation, refresh, typed
+	// receipt, and owner-lifecycle contract. This hermetic case remains for the
+	// internal WebMCP transport details that the public session contract does
+	// not expose: target admission queues, broker receipts, ownership errors,
+	// and target-session cleanup.
 	const (
 		alphaID       = "alpha"
 		betaID        = "beta"
@@ -148,22 +154,6 @@ func TestRoomBrowserCapabilitiesProveSharedTopologyIsolationAndReceipts(t *testi
 	}
 	if len(plans) != len(ids) || len(runtime.handlesSnapshot()) != len(ids) {
 		t.Fatalf("plans/handles = %d/%d, want one per participant", len(plans), len(ids))
-	}
-
-	for _, plan := range plans {
-		assertRoomBrowserDefinitionNames(t, plan.options.ToolDefinitions,
-			webmcp.GetContextToolName,
-			webmcp.ListTabsToolName,
-			webmcp.SelectTabToolName,
-			webmcp.ListToolsToolName,
-			webmcp.InvokeToolName,
-			webmcp.CancelToolName,
-			webmcp.OpenTabToolName,
-			webmcp.NavigateTabToolName,
-			webmcp.ShowPageToolName,
-			queueTool.Name,
-			stateTool.Name,
-		)
 	}
 
 	alphaBroker := brokers[alphaID]
@@ -370,6 +360,23 @@ func TestRoomBrowserCapabilitiesProveSharedTopologyIsolationAndReceipts(t *testi
 type roomHermeticInvocationCall struct {
 	result webmcp.InvokeResult
 	err    error
+}
+
+func roomDefinitionNames(definitions []messages.ToolDefinition) []string {
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		names = append(names, definition.Name)
+	}
+	return names
+}
+
+func roomDefinitionNamesContain(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if strings.TrimSpace(definition.Name) == name {
+			return true
+		}
+	}
+	return false
 }
 
 type roomHermeticCubeState struct {

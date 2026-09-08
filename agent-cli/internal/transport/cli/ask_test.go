@@ -12,11 +12,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/spf13/cobra"
 )
 
@@ -96,12 +98,6 @@ func (w askTestFailWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func newAskTestCommand(t *testing.T, inf *askTestInferencer) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
-	t.Helper()
-	_, cmd, stdout, stderr := newAskTestSubject(t, inf)
-	return cmd, stdout, stderr
-}
-
 func newAskTestSubject(t *testing.T, inf *askTestInferencer) (*AskCommand, *cobra.Command, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
@@ -110,7 +106,10 @@ func newAskTestSubject(t *testing.T, inf *askTestInferencer) (*AskCommand, *cobr
 	askFlags.SystemPrompt = "none"
 	askFlags.NoSystemInformation = true
 	loopFlags := flags.NewLoopFlags()
-	executor := agent.NewExecutor(askTestToolExecutor{}, nil, inf)
+	executor := sessionwire.NewService(sessionwire.Dependencies{
+		ToolExecutor: askTestToolExecutor{}, Inferencer: inf,
+		Resolver: askTestResolver(globalFlags),
+	})
 	subject := NewAskCommand(executor, askFlags, loopFlags, globalFlags)
 	cmd := subject.Generate()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -119,9 +118,23 @@ func newAskTestSubject(t *testing.T, inf *askTestInferencer) (*AskCommand, *cobr
 	return subject, cmd, stdout, stderr
 }
 
+// The injected test inferencer accepts text attachments; its capability catalog
+// must not accidentally inherit the user's configured real model restrictions.
+func askTestResolver(globalFlags *flags.GlobalFlags) session.Resolver {
+	host := services.NewSessionResolverWithStoreFactory(globalFlags, sessionwire.NewFileStoreFactory())
+	return session.ResolverFunc(func(ctx context.Context, request session.Request) (session.Resolution, error) {
+		resolved, err := host.Resolve(ctx, request)
+		if err != nil {
+			return session.Resolution{}, err
+		}
+		resolved.Models = []session.ModelInfo{{Name: resolved.Provider.Model, SupportedInputMimeTypes: []string{"text/plain"}}}
+		return resolved, nil
+	})
+}
+
 func runAskTestCommand(t *testing.T, args []string, stdin io.Reader, inf *askTestInferencer, out, errOut io.Writer) error {
 	t.Helper()
-	cmd, _, _ := newAskTestCommand(t, inf)
+	_, cmd, _, _ := newAskTestSubject(t, inf)
 	cmd.SetArgs(args)
 	cmd.SetIn(stdin)
 	cmd.SetOut(out)
@@ -191,24 +204,7 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 			if tc.wantOutput != "" && !strings.Contains(stdout.String(), tc.wantOutput) {
 				t.Fatalf("stdout = %q, want substring %q", stdout.String(), tc.wantOutput)
 			}
-			if tc.wantSummary != "" {
-				output := stdout.String()
-				start := strings.Index(output, tc.wantSummary)
-				if start < 0 {
-					t.Fatalf("stdout = %q, want loop summary prefix %q", output, tc.wantSummary)
-				}
-				summaryLine := strings.SplitN(output[start:], "\n", 2)[0]
-				if !strings.HasSuffix(summaryLine, "]") {
-					t.Fatalf("loop summary = %q, want closing bracket", summaryLine)
-				}
-				traceID := strings.TrimSuffix(strings.TrimPrefix(summaryLine, tc.wantSummary), "]")
-				if traceID == "" {
-					t.Fatal("loop summary did not include a trace ID")
-				}
-				if !strings.Contains(output, "Trace ID: "+traceID+"\n") {
-					t.Errorf("stdout = %q, want summary trace ID %q to match trace banner", output, traceID)
-				}
-			}
+			assertAskLoopSummary(t, stdout.String(), tc.wantSummary)
 			inf.mu.Lock()
 			calls, streams := inf.inferCalls, inf.streamCalls
 			inf.mu.Unlock()
@@ -219,6 +215,29 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 				t.Errorf("stream calls = %d, want %d", streams, tc.wantStreams)
 			}
 		})
+	}
+}
+
+func assertAskLoopSummary(t *testing.T, output, prefix string) {
+	t.Helper()
+	if prefix == "" {
+		return
+	}
+
+	start := strings.Index(output, prefix)
+	if start < 0 {
+		t.Fatalf("stdout = %q, want loop summary prefix %q", output, prefix)
+	}
+	summaryLine := strings.SplitN(output[start:], "\n", 2)[0]
+	if !strings.HasSuffix(summaryLine, "]") {
+		t.Fatalf("loop summary = %q, want closing bracket", summaryLine)
+	}
+	traceID := strings.TrimSuffix(strings.TrimPrefix(summaryLine, prefix), "]")
+	if traceID == "" {
+		t.Fatal("loop summary did not include a trace ID")
+	}
+	if !strings.Contains(output, "Trace ID: "+traceID+"\n") {
+		t.Errorf("stdout = %q, want summary trace ID %q to match trace banner", output, traceID)
 	}
 }
 
@@ -458,13 +477,12 @@ func TestAskCommandPropagatesPromptAndFlags(t *testing.T) {
 	cmd.SetIn(strings.NewReader(""))
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	var gotCfg *agent.Config
+	var gotCfg *session.Request
 	var gotInput agentloop.ExecuteInput
-	subject.runAsk = func(_ context.Context, cfg *agent.Config, input agentloop.ExecuteInput, out io.Writer) (string, error) {
+	subject.runAsk = func(_ context.Context, cfg *session.Request, input agentloop.ExecuteInput) (string, error) {
 		gotCfg = cfg
 		gotInput = input
-		_, err := io.WriteString(out, "answer")
-		return "answer", err
+		return "answer", nil
 	}
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("execute ask: %v", err)
@@ -481,17 +499,14 @@ func TestAskCommandPropagatesPromptAndFlags(t *testing.T) {
 	if gotCfg.APIKey != wantAPIKey || gotCfg.BaseURL != wantBaseURL {
 		t.Errorf("API key/base URL = %q/%q, want %q/%q", gotCfg.APIKey, gotCfg.BaseURL, wantAPIKey, wantBaseURL)
 	}
-	if !gotCfg.Stream || !gotCfg.OutputJSON || !gotCfg.OutputReasoningTokens {
-		t.Errorf("output flags = stream:%v json:%v reasoning:%v, want all true", gotCfg.Stream, gotCfg.OutputJSON, gotCfg.OutputReasoningTokens)
+	if !subject.askFlags.Stream || !subject.askFlags.OutputJSON || !subject.askFlags.OutputReasoningTokens {
+		t.Errorf("CLI output flags = %+v, want stream/json/reasoning true", subject.askFlags)
 	}
 	if gotCfg.OutputModality != wantModality || gotCfg.ModelConfig != wantModelConfig {
 		t.Errorf("modality/model config = %q/%q, want %q/%q", gotCfg.OutputModality, gotCfg.ModelConfig, wantModality, wantModelConfig)
 	}
-	if !gotCfg.Verbose || gotCfg.VerbosityLevel != 2 || !gotCfg.LogToStdout {
-		t.Errorf("global config = verbose:%v level:%d log-to-stdout:%v, want true/2/true", gotCfg.Verbose, gotCfg.VerbosityLevel, gotCfg.LogToStdout)
-	}
-	if gotCfg.ConfigDir != subject.globalFlags.ConfigDir() {
-		t.Errorf("config dir = %q, want %q", gotCfg.ConfigDir, subject.globalFlags.ConfigDir())
+	if subject.globalFlags.VerboseMode != 2 || !subject.globalFlags.LogToStdout {
+		t.Errorf("CLI global flags = %+v, want verbosity2/log-to-stdout true", subject.globalFlags)
 	}
 	if gotInput.Message != "question" || len(gotInput.ContentParts) != 0 {
 		t.Errorf("execute input = %#v, want text-only question", gotInput)
@@ -516,7 +531,7 @@ func TestAskCommandWriterErrorKeepsIdentity(t *testing.T) {
 func TestAskCommandS4PreservesExecutionIdentity(t *testing.T) {
 	want := errors.New("inferencer sentinel")
 	subject, cmd, stdout, stderr := newAskTestSubject(t, &askTestInferencer{})
-	subject.runAsk = func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error) {
+	subject.runAsk = func(context.Context, *session.Request, agentloop.ExecuteInput) (string, error) {
 		return "", want
 	}
 	cmd.SetArgs([]string{"prompt"})

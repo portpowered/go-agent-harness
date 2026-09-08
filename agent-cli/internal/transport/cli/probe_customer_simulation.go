@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 const (
@@ -551,15 +551,13 @@ func buildCustomerSimulationValidator(providerName, model, baseURL, apiKey strin
 	if providerName != config.ProviderOpenAI && providerName != config.ProviderOpenRouter && providerName != config.ProviderLocal {
 		return nil, fmt.Errorf("unsupported --validator-provider %q; want openai, openrouter, or local", providerName)
 	}
-	loaded := config.Config{Model: config.ModelConfig{Provider: providerName}}
-	loaded = loaded.ApplyOverrides(apiKey, model, providerName, baseURL)
-	factory := agent.NewProviderFactory()
-	agent.RegisterOpenAIProvider(factory, config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal)
-	built, err := factory.Build(providerName, agent.ProviderBuildContext{LoadedConfig: &loaded, Logger: zap.NewNop(), HTTPClient: http.DefaultClient})
+	providerService := providerswire.NewService(providerswire.Dependencies{HTTPClient: http.DefaultClient})
+	providerConfig := providers.Config{Provider: providerName, Model: model, APIKey: apiKey, BaseURL: baseURL}
+	built, err := providerService.Build(context.Background(), providerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("build independent validator provider: %w", err)
 	}
-	gw, err := gateway.NewGateway(gateway.WithProvider(built.Provider))
+	gw, err := gateway.NewGateway(gateway.WithProvider(built))
 	if err != nil {
 		return nil, fmt.Errorf("build independent validator gateway: %w", err)
 	}
