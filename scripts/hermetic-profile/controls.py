@@ -449,6 +449,7 @@ def analyze_mutated_manifest(
     expected_checks: dict[str, Any],
     *,
     seed_stale_analysis: bool = False,
+    group: str | None = None,
 ) -> dict[str, Any]:
     analysis_dir = case_dir / "analysis" / mutation_name
     if seed_stale_analysis:
@@ -457,16 +458,19 @@ def analyze_mutated_manifest(
             analysis_dir / "analysis.json",
             {"status": "PASS", "fresh_timing": "PASS", "stale": True},
         )
+    argv = [
+        sys.executable,
+        str(PROFILE),
+        "analyze",
+        "--manifest",
+        str(manifest),
+        "--output",
+        str(analysis_dir),
+    ]
+    if group is not None:
+        argv.extend(["--group", group])
     record = run_child(
-        [
-            sys.executable,
-            str(PROFILE),
-            "analyze",
-            "--manifest",
-            str(manifest),
-            "--output",
-            str(analysis_dir),
-        ],
+        argv,
         cwd=case_dir,
         output_dir=case_dir / "driver" / mutation_name,
         name="analyze",
@@ -547,7 +551,6 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
                 "run_group_id": "unreferenced-invalid",
                 "requested_repetitions": 0,
                 "completed_repetitions": 0,
-                "records": [],
             }
         )
         value["run_groups"].append(invalid_group)
@@ -637,11 +640,6 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             },
         ),
         (
-            "unreferenced-invalid-run-group",
-            append_unreferenced_invalid_group,
-            {"repetitions.1.validation.valid": False},
-        ),
-        (
             "incomplete-command-record-schema",
             lambda value: [
                 value["runs"][0].pop(field, None)
@@ -664,6 +662,36 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         mutations.append(
             analyze_mutated_manifest(case_dir, manifest, mutation_name, checks)
         )
+    write_json(manifest, baseline)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "unmatched-run-group-filter",
+            {
+                "failure_references.0.record": "analysis:group-filter",
+                "failure_references.0.error": (
+                    "no captured runs match --group 'does-not-exist'"
+                ),
+            },
+            group="does-not-exist",
+        )
+    )
+    mutated = json.loads(json.dumps(baseline))
+    append_unreferenced_invalid_group(mutated)
+    write_json(manifest, mutated)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "unreferenced-invalid-run-group-filtered",
+            {
+                "failure_references.0.record": "run_group:unreferenced-invalid",
+                "repetitions.0.validation.valid": True,
+            },
+            group=baseline["run_groups"][0]["run_group_id"],
+        )
+    )
     stale_manifest = json.loads(json.dumps(baseline))
     stale_manifest["runs"][0]["selected_packages"] = None
     write_json(manifest, stale_manifest)

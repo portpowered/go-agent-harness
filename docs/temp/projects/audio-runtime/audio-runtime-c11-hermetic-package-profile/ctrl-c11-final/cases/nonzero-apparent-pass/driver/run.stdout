@@ -1,0 +1,10 @@
+{
+  "completed_repetitions": 0,
+  "failure_count": 1,
+  "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-c11-final/cases/nonzero-apparent-pass/run/manifest.json",
+  "record_count": 1,
+  "requested_repetitions": 1,
+  "run_group_id": "f9adf65d8f58",
+  "source_sha": "synthetic-control-source",
+  "status": "FAILED"
+}

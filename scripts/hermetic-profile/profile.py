@@ -1146,7 +1146,6 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     group_id = uuid.uuid4().hex[:12]
     group_root = runs_root / group_id
     records: list[dict[str, Any]] = []
-    source_validations: list[dict[str, Any]] = []
     failures: list[str] = []
     repetitions_completed = 0
     for repeat_index in range(1, args.repeat + 1):
@@ -1237,8 +1236,6 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 }
             )
             records.append(record)
-            if source_validation is not None:
-                source_validations.append(source_validation)
             if record["status"] != "PASS":
                 failures.append(f"{module['name']} repetition {repeat_index}")
                 repetition_failed = True
@@ -1255,8 +1252,6 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "selected_packages": selected_packages,
         "requested_repetitions": args.repeat,
         "completed_repetitions": repetitions_completed,
-        "records": records,
-        "source_validations": source_validations,
         "quiet_evidence": quiet,
         "status": "FAILED" if failures else "CAPTURED",
         "failures": failures,
@@ -2067,24 +2062,12 @@ def validate_repetition_group(
     if group.get("status") != "CAPTURED":
         errors.append(f"run group status is {group.get('status')!r}")
 
-    declared_records = group.get("records")
-    if not isinstance(declared_records, list):
-        errors.append("run group has no records list")
-        declared_labels: list[str] = []
-    else:
-        declared_labels = [
-            str(record.get("label"))
-            for record in declared_records
-            if isinstance(record, dict) and record.get("label") is not None
-        ]
-    actual_labels = [
-        str(record.get("label"))
-        for record in records
-        if record.get("label") is not None
-    ]
-    if sorted(declared_labels) != sorted(actual_labels):
-        errors.append("run group records do not match manifest run records")
-
+    for duplicate_field in ("records", "source_validations"):
+        if duplicate_field in group:
+            errors.append(
+                f"run group contains duplicate {duplicate_field}; "
+                "derive it from manifest runs"
+            )
     package_to_module: dict[str, str] = {}
     for module in manifest.get("modules", []):
         if not isinstance(module, dict) or not isinstance(module.get("name"), str):
@@ -2236,14 +2219,15 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest = load_manifest(manifest_path)
     root = manifest_root(manifest_path)
     all_records = normalize_run_records(manifest.get("runs", []))
-    if args.group:
-        all_records = [
-            record
-            for record in all_records
-            if record.get("run_group_id") == args.group
-        ]
+    selected_record_indices = [
+        index
+        for index, record in enumerate(all_records)
+        if args.group is None or record.get("run_group_id") == args.group
+    ]
+    records_for_analysis = [all_records[index] for index in selected_record_indices]
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
+    selection_error = None
     if not all_records:
         if manifest.get("fresh_timing_status") == "BLOCKED":
             analysis = {
@@ -2276,11 +2260,13 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "source_sha": manifest.get("source_sha"),
             }, 0
         raise ProfileError("manifest contains no captured runs and is not marked BLOCKED")
+    if not records_for_analysis:
+        selection_error = f"no captured runs match --group {args.group!r}"
 
     require_source_validation = (
         manifest.get("mode") != "synthetic" or "source_repo" in manifest
     )
-    parsed_records = [
+    parsed_all_records = [
         parse_record_stream(
             record,
             root=root,
@@ -2289,6 +2275,9 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             require_source_validation=require_source_validation,
         )
         for record in all_records
+    ]
+    parsed_records = [
+        parsed_all_records[index] for index in selected_record_indices
     ]
     inventory_test_flags: dict[str, bool] = {}
     for module in manifest.get("modules", []):
@@ -2301,7 +2290,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             has_tests = package.get("has_tests")
             if isinstance(import_path, str) and isinstance(has_tests, bool):
                 inventory_test_flags[import_path] = has_tests
-    for parsed in parsed_records:
+    for parsed in parsed_all_records:
         no_test_errors = [
             (
                 f"no-test marker for {package!r} conflicts with inventory "
@@ -2317,7 +2306,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             parsed["execution_valid"] = False
     expected_by_record = {
         record.get("label"): set(record.get("selected_packages", []))
-        for record in all_records
+        for record in records_for_analysis
     }
     all_expected = sorted(
         {package for packages in expected_by_record.values() for package in packages}
@@ -2351,7 +2340,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     ]
     unvalidated_source_records = [
         parsed.get("record_id")
-        for parsed in parsed_records
+        for parsed in parsed_all_records
         if parsed.get("source_status") == "UNVALIDATED"
     ]
     source_identity = {
@@ -2388,14 +2377,6 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     duplicate_group_ids: set[str] = set()
     if isinstance(run_groups, list):
         for index, group in enumerate(run_groups):
-            if (
-                args.group is not None
-                and (
-                    not isinstance(group, dict)
-                    or group.get("run_group_id") != args.group
-                )
-            ):
-                continue
             if not isinstance(group, dict):
                 group_validation[f"<group-{index}>"] = {
                     "status": "INVALID",
@@ -2443,7 +2424,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             "errors": [f"run_group_id {duplicate!r} is duplicated"],
             "quiet_evidence": {"status": "INVALID"},
         }
-    for parsed in parsed_records:
+    for parsed in parsed_all_records:
         record_value = parsed.get("record")
         group_id = (
             record_value.get("run_group_id")
@@ -2457,14 +2438,15 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if not isinstance(validation, dict) or validation.get("valid") is not True:
             parsed["execution_valid"] = False
     execution_valid = (
-        bool(parsed_records)
+        bool(parsed_all_records)
+        and selection_error is None
         and not manifest_metadata_errors
         and bool(group_validation)
         and all(
             validation.get("valid") is True
             for validation in group_validation.values()
         )
-        and all(parsed.get("execution_valid") for parsed in parsed_records)
+        and all(parsed.get("execution_valid") for parsed in parsed_all_records)
     )
     stream_failures = [
         {
@@ -2501,7 +2483,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 else ["record is not attached to a valid run group"]
             ),
         }
-        for parsed in parsed_records
+        for parsed in parsed_all_records
         if not parsed.get("execution_valid")
     ]
     for group_id, validation in sorted(group_validation.items()):
@@ -2531,6 +2513,19 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "run_group_errors": manifest_metadata_errors,
             }
         )
+    if selection_error is not None:
+        stream_failures.append(
+            {
+                "record": "analysis:group-filter",
+                "error": selection_error,
+                "process_status": None,
+                "source_status": None,
+                "missing_packages": [],
+                "unexpected_packages": [],
+                "cached_markers": [],
+                "run_group_errors": [selection_error],
+            }
+        )
     no_test_packages = sorted(
         {
             package["import_path"]
@@ -2544,7 +2539,7 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         for parsed in parsed_records
         if parsed.get("subtest_overlap")
     ]
-    lane = lane_times(all_records)
+    lane = lane_times(records_for_analysis)
     target_comparison = {
         "target_seconds": TARGET_SECONDS,
         "lane_wall_seconds": lane["lane_wall_seconds"],
@@ -2555,11 +2550,11 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "status": "OBSERVATION_ONLY_NOT_A_GATE",
     }
     fresh_timing = "PASS" if execution_valid and source_identity["all_match"] else "INVALID"
-    raw_stdout_retained = bool(parsed_records) and all(
-        parsed.get("raw_stdout_retained") is True for parsed in parsed_records
+    raw_stdout_retained = bool(parsed_all_records) and all(
+        parsed.get("raw_stdout_retained") is True for parsed in parsed_all_records
     )
-    raw_stderr_retained = bool(parsed_records) and all(
-        parsed.get("raw_stderr_retained") is True for parsed in parsed_records
+    raw_stderr_retained = bool(parsed_all_records) and all(
+        parsed.get("raw_stderr_retained") is True for parsed in parsed_all_records
     )
     warm = manifest.get("warm", {})
     analysis = {
@@ -2648,11 +2643,11 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "completed_repetitions": group.get("completed_repetitions"),
                 "status": group.get("status"),
                 "records": [
-                    record.get("label") if isinstance(record, dict) else None
-                    for record in group.get("records", [])
-                ]
-                if isinstance(group.get("records", []), list)
-                else [],
+                    record.get("label")
+                    for record in records_for_analysis
+                    if isinstance(group, dict)
+                    and record.get("run_group_id") == group.get("run_group_id")
+                ],
                 "validation": group_validation.get(
                     group.get("run_group_id")
                     if isinstance(group, dict)
