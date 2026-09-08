@@ -3,15 +3,17 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-  "current_branch_head_at_handoff": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-  "implementation_checkpoint": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-  "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
+  "candidate_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+  "current_branch_head_at_handoff": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+  "implementation_checkpoint": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+  "base_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "delivery_rebase": {
-    "fetched_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
-    "rebased_at_utc": "2026-09-08T11:36:00Z",
+    "fetched_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
+    "integrated_at_utc": "2026-09-08T17:03:47Z",
+    "integration_method": "isolated-worktree merge of freshly fetched origin/main; running host checkout untouched",
+    "integration_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
     "previous_submitted_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
     "previous_ci_run": 34220749840,
     "previous_ci_job": 102043028609,
@@ -41,7 +43,7 @@
   },
   "fresh_timing": {
     "status": "BLOCKED",
-    "reason": "C08 owns the shared factory host and no dedicated runner or exclusive lease is available",
+    "reason": "No isolated or dedicated runner evidence is available; the shared factory runner is not an admissible quiet runner",
     "quiet_evidence": {
       "path": "quiet-evidence-blocked.json",
       "sha256": "d26582e4050135b1a1291b3c4ec318646274a4e1230e337bc0fc5b90a73133d0"
@@ -63,8 +65,8 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl/controls.json",
-    "sha256": "236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083",
+    "path": "ctrl-current/controls.json",
+    "sha256": "0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3",
     "status": "PASS",
     "cases": 27,
     "result_groups": 17,
@@ -79,9 +81,9 @@
     }
   },
   "fresh_focused_recheck": {
-    "checked_at_utc": "2026-09-08T14:16:57.736Z",
-    "tested_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-    "controls_report_sha256": "236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083",
+    "checked_at_utc": "2026-09-08T17:03:47Z",
+    "tested_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+    "controls_report_sha256": "0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3",
     "controls": "PASS: 27 scenarios, 17 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
@@ -91,6 +93,7 @@
   "review_repairs": {
     "reviewed_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
     "repair_commit": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
+    "validated_after_main_integration": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",

@@ -15,10 +15,10 @@ under-three-minute target is met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current implementation/control repair checkpoint:
-  `e483add8fe5715e4e7b6ae34f1ca30129b3cab43`.
+  `39d177009bfca1ada9b01d5a64a071fce9d69f44`.
 - The final submitted PR head is verified immediately before script-CI handoff;
-  the repair source and evidence below are pinned to the checkpoint above.
-- Rebased `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
+  the repair source and evidence below are pinned to the merged checkpoint above.
+- Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
@@ -32,7 +32,7 @@ under-three-minute target is met.
 - The public controls cover cross-package concurrency, fail-closed heavy
   admission, stdout/stderr/quiet-artifact containment, raw-artifact truth,
   source identity, repetition completeness, missing quiet metadata, and expired
-  quiet evidence. The regenerated `ctrl/controls.json` reports 27 declared scenarios, 17 result
+  quiet evidence. The regenerated `ctrl-current/controls.json` reports 27 declared scenarios, 17 result
   groups, and zero Go/network/build invocations.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
@@ -43,20 +43,21 @@ under-three-minute target is met.
   path is 184 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
   `profile.py --help`, the 27-control suite, and `git diff --check` pass.
-- Fresh handoff recheck from `6ed49b6` passed the same controls and focused
-  checks at `2026-09-08T14:16:57.736Z`; the temporary controls report SHA-256 is
-  `628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6`.
+- Fresh merged-main recheck from `39d17700` passed the same controls and focused
+  checks at `2026-09-08T17:03:47Z`; the tracked controls report SHA-256 is
+  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
 
 ## CI rejection disposition
 
-The latest prior current-head rejection is run `34231535549`, job `102078631796`
+The latest prior pre-C12 current-head rejection is run `34231535549`, job `102078631796`
 (`CI (hermetic)`) at submitted head `0f8529a3`. Eight required jobs passed, but the
 existing integration suite failed
 `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
 because `session_tool_audio_remote_e2e_test.go:182` did not observe the final
 PCM marker before the scenario deadline. The exact metadata and failure lines
 are in `ci-rejection-hermetic.json`. This path is outside the C11 lease and is
-owned by active C12 runtime work, so this C11 repair does not claim to fix it.
+owned by the C12 runtime task, which is now merged at `668f2d88`; this C11
+repair does not claim that historical result as current-head CI.
 The new C11 head is ready for script-owned CI; no result for that new head is
 claimed here. The earlier Windows checkout rejection and its portable-path
 repair remain in `ci-rejection-windows.json`.

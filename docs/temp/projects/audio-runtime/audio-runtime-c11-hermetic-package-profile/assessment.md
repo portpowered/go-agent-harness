@@ -3,9 +3,9 @@
 ## Decision
 
 `fresh_timing=BLOCKED`. No fresh Go inventory, warm build, or hermetic test
-timing was launched on the shared factory host. The current board and worker
-snapshot shows C08 as the active owner of `work-task-5`, alongside this C11
-worker (`work-task-4`); there is no dedicated runner or exclusive lease. The
+timing was launched on the shared factory host. At the resumed checkpoint there
+was no isolated or dedicated runner evidence; the historical board/worker
+snapshot that established the shared-host blocker is retained unchanged. The
 exact machine-readable blocker is
 `quiet-evidence-blocked.json`, with before/after board, worker, process, and
 load artifacts beside this report.
@@ -21,11 +21,13 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c11-hermetic-package-profile"}`.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
-- Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
+- Fetched and integrated `origin/main`:
+  `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Current implementation/control candidate checkpoint:
-  `e483add8fe5715e4e7b6ae34f1ca30129b3cab43`.
+  `39d177009bfca1ada9b01d5a64a071fce9d69f44`.
 - The source/control evidence in this report was generated from that exact
-  checkpoint; the final submitted PR head is recorded in the PR update.
+  merged-main checkpoint; a later evidence-only commit may advance the PR tip
+  without changing the tested profiler source.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -36,12 +38,12 @@ not a waiver, and not a claim that the under-three-minute target is met.
   outside this candidate.
 
 The complete canonical board and worker-session responses are retained in
-`canonical-board.json` and `worker-sessions.json`; the immediate measurement
-snapshots are `pre-measurement-*` and `post-measurement-*`. The current board
-rejection and its exact failed job metadata are captured in `ci-rejection.json`;
-the latest current-head Windows rejection is captured in
-`ci-rejection-windows.json`, and the latest hermetic rejection is captured in
-`ci-rejection-hermetic.json`.
+`canonical-board.json`, `canonical-board-current.json`, and
+`worker-sessions.json`; the immediate measurement snapshots are
+`pre-measurement-*` and `post-measurement-*`. The current board rejection and
+its exact failed job metadata are captured in `ci-rejection.json`; the latest
+current-head Windows rejection is captured in `ci-rejection-windows.json`, and
+the latest pre-C12 hermetic rejection is captured in `ci-rejection-hermetic.json`.
 The rejected head was `5c6d24ac…`, before C08 merged into main; after the
 required rebase, the narrow rejected test passed once and no C11-owned path was
 implicated. This is a recheck and handoff record, not a claim that script CI is
@@ -72,10 +74,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl`:
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-current`:
   PASS; 27 declared scenarios and 17 result groups, zero Go, network, or build
   invocations. The report hash is
-  `1ee8327e7e340d0e9afc1d2c15249d4debec5e8e2ab25f8fe9378378fe909862`.
+  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`.
@@ -91,25 +93,24 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh repair recheck from `e483add8` passed: 27 public controls/17 result
-  groups with zero Go/network/build invocations (tracked report SHA-256
-  `236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083`),
+- Fresh merged-main recheck from `39d17700` passed: 27 public controls/17
+  result groups with zero Go/network/build invocations (tracked report
+  SHA-256 `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
 The latest prior current-head CI rejection was inspected in full from run
-`34231535549`, job `102078631796` (`CI (hermetic)`) at submitted head
+`34231535549`, job `102078631796` (`CI (hermetic)`) at pre-C12 submitted head
 `0f8529a3`. Eight
 required jobs passed, but the existing `agent-cli/test/integration` suite
 failed `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`:
 `session_tool_audio_remote_e2e_test.go:182` reported that remote playback did
 not reach its final PCM marker before the scenario deadline. This path is
-outside C11's owned directories and belongs to the C12 runtime/integration
-owner; no C11 implementation change can causally repair it. The new C11
-repair is not claimed CI-green and is ready for the script-owned gate; the
-historical failure must not be treated as fixed by this task. The earlier
-Windows checkout failure remains recorded in `ci-rejection-windows.json` and
-was causally repaired by `ca12c8a`.
+outside C11's owned directories and was owned by the C12 runtime/integration
+task. C12 is now merged at `668f2d88`; that historical failure is not treated
+as proof of a new C11 result. The new C11 repair is not claimed CI-green and is
+ready for the script-owned gate. The earlier Windows checkout failure remains
+recorded in `ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -120,8 +121,8 @@ package ranking and lane-wall evidence while leaving the canonical 60-second
 policy to `tools/timingate`; it does not duplicate that evaluator.
 The repeated synthetic cohort also proves lane wall is not the sum of package
 durations. The broad six-module hermetic/coverage suites were not duplicated
-locally because the active C08 owner makes this host non-quiet and the handoff
-explicitly assigns the script CI gate those broad checks.
+locally because no isolated/dedicated quiet runner was available and the handoff
+assigns those broad checks to the script CI gate.
 
 ## Immutable hosted evidence
 
@@ -176,7 +177,7 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `e483add8` and
+The current C11 implementation/control evidence is pinned to `39d17700` and
 the tracked control report above. The next action is to push/update PR #403
 with the exact final head and return `ACCEPTED` to the script-owned CI gate
 without polling it. Any C11-owned CI/review finding returns to this task;

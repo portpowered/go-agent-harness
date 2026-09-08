@@ -19,16 +19,16 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
   `codex/audio-runtime-c11-hermetic-package-profile`; the worktree is
   `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile`.
 - `git fetch origin main` completed before implementation. The initial
-  checkpoint was `b01dbb573a15eb61d1cacfff11d37c2461167987`; before delivery,
-  `origin/main` advanced to `02e54e6a89a7a2d7ad1ce2fa0619145c16400339` after
-  C08 merged.
+  checkpoint was `b01dbb573a15eb61d1cacfff11d37c2461167987`; before this
+  delivery, `origin/main` advanced to accepted C12 merge
+  `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Required delivery rebase completed onto `origin/main`; the current
-  implementation/control repair checkpoint is
-  `HEAD=e483add8fe5715e4e7b6ae34f1ca30129b3cab43`. The final PR head is
-  recorded in the update submitted after this evidence refresh.
+- Accepted main was merged in this isolated worktree at
+  `HEAD=39d177009bfca1ada9b01d5a64a071fce9d69f44`; the running host checkout
+  was not merged or reset. The current profiler source/control checkpoint is
+  that exact head; an evidence-only delivery commit may advance the PR tip.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -59,9 +59,9 @@ claimed green or attributed to the profiler's Go lane.
   for stdout, stderr, and quiet-evidence artifacts.
 - AST parsing of all shipped Python files: PASS.
 - `profile.py --help`: PASS.
-- `ctrl/controls.json`: PASS; 27 declared scenarios and 17 result groups, zero
+- `ctrl-current/controls.json`: PASS; 27 declared scenarios and 17 result groups, zero
   Go/network/build invocations; hash
-  `236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083`.
+  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
   Top-level `raw_evidence_retained=false` and the
   `missing-raw-artifact` case reports `raw_artifacts_retained=false`, because
   that fixture deletion is intentional negative-control evidence.
@@ -87,9 +87,9 @@ claimed green or attributed to the profiler's Go lane.
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
 - `git diff --check`: PASS.
-- Fresh repair recheck from `e483add8` passed: 27 public controls and 17
+- Fresh merged-main recheck from `39d17700` passed: 27 public controls and 17
   result groups with zero Go/network/build invocations (tracked report SHA-256
-  `236fbddebf34f5f6c5e6bb1489ed5e5d580b37f721c315a8a2caf55ce9ac2083`),
+  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. The active
@@ -114,7 +114,7 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The current source/control evidence is pinned to `e483add8`. Offline analysis
+The current source/control evidence is pinned to `39d17700`. Offline analysis
 now retains package ranking and lane-wall evidence while referencing the
 canonical 60-second `tools/timingate` policy instead of duplicating it. Quiet
 evidence and all raw command artifacts are constrained to the manifest output
