@@ -149,32 +149,6 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.
 	})
 }
 
-func requireV8MultiTurnBaseline(t *testing.T, run v8DuplexRun, frames [][]byte) {
-	t.Helper()
-	err := verifyV8MultiTurnRun(run, frames, frames)
-	if err == nil {
-		return
-	}
-	states := make([]string, 0, 2)
-	for _, name := range []string{"A", "B"} {
-		result, ok := run.harnesses[name]
-		if !ok {
-			states = append(states, fmt.Sprintf("harness %s=<missing>", name))
-			continue
-		}
-		runtimeState := make([]string, 0, len(result.Runtime))
-		for _, observation := range result.Runtime {
-			runtimeState = append(runtimeState, fmt.Sprintf("%s@%d/t%d/c%d", observation.Kind, observation.Tick, observation.TurnsCompleted, observation.InputCommit))
-		}
-		states = append(states, fmt.Sprintf("harness %s err=%v elapsed=%s runtime=%v stream=%v terminal=%+v", name, result.Err, result.Elapsed, runtimeState, result.Stream, run.terminal[name]))
-	}
-	crossingState := make([]string, 0, len(run.crossings))
-	for _, crossing := range run.crossings {
-		crossingState = append(crossingState, fmt.Sprintf("%d:%s/%s@%d", crossing.Sequence, crossing.Direction, crossing.TurnKey, crossing.Tick))
-	}
-	t.Fatalf("multi-turn negative-control baseline failed before mutation: %v; %s; %s; crossings=%d/%v final_tick=%d", err, states[0], states[1], len(run.crossings), crossingState, run.finalTick)
-}
-
 // TestSessionCLI_StartupAnnouncementRouting is a shipped-process regression
 // for the binary PCM stdout boundary. The provider emits one tool call and a
 // known PCM response; the fixture sends session.created only once so repeated
