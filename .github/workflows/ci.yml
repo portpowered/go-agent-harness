@@ -67,13 +67,9 @@ jobs:
         if: always()
         run: make wire-check
 
-      - name: Verify service architecture
+      - name: Verify service architecture and size budgets
         if: always()
-        run: make architecture-check
-
-      - name: Verify package and complexity budgets
-        if: always()
-        run: make size-check
+        run: make architecture-size-check
 
       - name: Run go vet
         if: always()

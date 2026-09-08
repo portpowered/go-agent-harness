@@ -42,7 +42,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-check size-check test-architecture-gate verify-architecture embed-check
+.PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
 .PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
@@ -181,10 +181,13 @@ architecture-check: ## Enforce service ownership, public contracts, and dependen
 size-check: ## Enforce package, file, and function budgets against exact legacy debt.
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check size
 
+architecture-size-check: ## Enforce architecture and size budgets in one shared inventory pass.
+	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture,size
+
 test-architecture-gate: ## Verify architecture enforcement against positive and negative fixtures.
 	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"
 
-verify-architecture: architecture-check size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
+verify-architecture: architecture-size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
 
 embed-check: ## Exercise the public runtime API from an independent headless consumer module.
 	@cd tests/embedding && GOWORK=off CGO_ENABLED=0 $(GO) test -mod=readonly ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"
