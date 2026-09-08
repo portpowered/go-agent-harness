@@ -199,6 +199,162 @@ func TestBaselineHistoryRejectsMessageChange(t *testing.T) {
 	}
 }
 
+func TestBaselineHistoryAcceptsInheritedBaselineAfterMainAdvances(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	writeFixture(t, root, "source.txt", "initial source\n")
+	gitTestCommand(t, root, "add", "source.txt")
+	gitTestCommand(t, root, "commit", "-m", "source")
+	sourceCommitData, err := gitOutput(context.Background(), "git", root, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceCommit := strings.TrimSpace(string(sourceCommitData))
+
+	baseline := Baseline{Version: baselineVersion, SourceCommit: sourceCommit, Entries: []BaselineEntry{{
+		Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81,
+		Rationale: "legacy holder", Phase: "P0",
+	}}}
+	data, err := baselineJSON(baseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "introduce reviewed baseline")
+	gitTestCommand(t, root, "branch", "mainline")
+	gitTestCommand(t, root, "checkout", "-b", "candidate")
+	writeFixture(t, root, "candidate.txt", "candidate work\n")
+	gitTestCommand(t, root, "add", "candidate.txt")
+	gitTestCommand(t, root, "commit", "-m", "candidate work")
+	gitTestCommand(t, root, "checkout", "mainline")
+	writeFixture(t, root, "mainline.txt", "mainline work\n")
+	gitTestCommand(t, root, "add", "mainline.txt")
+	gitTestCommand(t, root, "commit", "-m", "advance mainline")
+	gitTestCommand(t, root, "checkout", "candidate")
+
+	mergeBaseData, err := gitOutput(context.Background(), "git", root, "merge-base", "mainline", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mergeBase := strings.TrimSpace(string(mergeBaseData)); mergeBase == sourceCommit {
+		t.Fatalf("fixture merge base = source commit %s; baseline introduction was not established first", sourceCommit)
+	}
+	issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "mainline", baseline)
+	if len(issues) != 0 {
+		t.Fatalf("inherited baseline after mainline advance = %#v", issues)
+	}
+}
+
+func TestBaselineHistoryRejectsSourceReplacementOrRemoval(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{{
+		Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81,
+		Rationale: "legacy holder", Phase: "P0",
+	}}}
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "baseline")
+
+	for name, sourceCommit := range map[string]string{
+		"replacement": "replacement-source",
+		"removal":     "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			current := initial
+			current.SourceCommit = sourceCommit
+			issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
+			if !hasRule(issues, "baseline-history-source") {
+				t.Fatalf("issues = %#v; source provenance change was accepted", issues)
+			}
+		})
+	}
+}
+
+func TestBaselineHistoryPreservesDeletionAndReduction(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{{
+		Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81,
+		Rationale: "legacy holder", Phase: "P0",
+	}}}
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "baseline")
+
+	reduced := initial
+	reduced.Entries = []BaselineEntry{{
+		Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 80,
+		Rationale: "legacy holder", Phase: "P0",
+	}}
+	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", reduced); len(issues) != 0 {
+		t.Fatalf("reduced ceiling = %#v", issues)
+	}
+
+	deleted := initial
+	deleted.Entries = nil
+	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", deleted); len(issues) != 0 {
+		t.Fatalf("deleted exemption = %#v", issues)
+	}
+}
+
+func TestBaselineHistoryRejectsAddedExemptionAndMissingRenameTarget(t *testing.T) {
+	root := t.TempDir()
+	baselinePath := filepath.Join(root, "baseline.json")
+	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "legacy.go", Symbol: "Run", Value: 81, Rationale: "legacy holder", Phase: "P0"}
+	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{old}}
+	data, err := baselineJSON(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "baseline.json")
+	gitTestCommand(t, root, "commit", "-m", "baseline")
+
+	added := initial
+	added.Entries = append([]BaselineEntry(nil), initial.Entries...)
+	added.Entries = append(added.Entries, BaselineEntry{Rule: "function-lines", Module: old.Module, Package: old.Package, File: "new.go", Symbol: "New", Value: 81, Rationale: "unreviewed holder", Phase: "P0"})
+	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", added); !hasRule(issues, "baseline-history-add") {
+		t.Fatalf("issues = %#v; added exemption was accepted", issues)
+	}
+
+	invalidRename := initial
+	invalidRename.Entries = nil
+	invalidRename.Renames = []BaselineRename{{From: baselineIssue(old).Key(), To: baselineIssue(old).Key() + "-renamed"}}
+	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", invalidRename); !hasRule(issues, "baseline-history-rename") {
+		t.Fatalf("issues = %#v; missing rename target was accepted", issues)
+	}
+}
+
 func TestBaselineHistoryBootstrapsFromMergeBaseSource(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "mod/go.mod", "module example.com/bootstrap\n\ngo 1.26.7\n")
@@ -214,6 +370,11 @@ func Large() {
 	gitTestCommand(t, root, "config", "user.name", "architecturegate")
 	gitTestCommand(t, root, "add", "mod/go.mod", "mod/large.go")
 	gitTestCommand(t, root, "commit", "-m", "source")
+	sourceCommitData, err := gitOutput(context.Background(), "git", root, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceCommit := strings.TrimSpace(string(sourceCommitData))
 
 	policy := fixturePolicy()
 	policy.ModuleDirs = []string{"mod"}
@@ -229,7 +390,7 @@ func Large() {
 	for index, issue := range oldIssues {
 		entries[index] = BaselineEntry{Rule: issue.Rule, Module: issue.Module, Package: issue.Package, File: issue.File, Symbol: issue.Symbol, Value: issue.Value, Message: issue.Message, Rationale: "initial inventory", Phase: "P0"}
 	}
-	baseline := Baseline{Version: baselineVersion, Entries: entries}
+	baseline := Baseline{Version: baselineVersion, SourceCommit: sourceCommit, Entries: entries}
 	baselineData, err := baselineJSON(baseline)
 	if err != nil {
 		t.Fatal(err)
@@ -247,6 +408,29 @@ func Large() {
 	issues = compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", baseline, policy)
 	if !hasRule(issues, "baseline-history-add") {
 		t.Fatalf("bootstrap accepted an issue absent at merge base: %#v", issues)
+	}
+}
+
+func TestBaselineHistoryRejectsInvalidBootstrapProvenance(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "source.txt", "source\n")
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	gitTestCommand(t, root, "add", "source.txt")
+	gitTestCommand(t, root, "commit", "-m", "source")
+
+	for name, sourceCommit := range map[string]string{
+		"missing": "",
+		"wrong":   "not-the-merge-base",
+	} {
+		t.Run(name, func(t *testing.T) {
+			current := Baseline{Version: baselineVersion, SourceCommit: sourceCommit}
+			issues := compareBaselineHistory(context.Background(), "git", root, filepath.Join(root, "baseline.json"), "HEAD", current)
+			if !hasRule(issues, "baseline-history-source") {
+				t.Fatalf("issues = %#v; invalid bootstrap provenance was accepted", issues)
+			}
+		})
 	}
 }
 
@@ -271,6 +455,11 @@ type State struct{}
 	gitTestCommand(t, root, "config", "user.name", "architecturegate")
 	gitTestCommand(t, root, "add", "mod/go.mod", "mod/services/thing/service.go", "mod/services/thing/internal/state.go")
 	gitTestCommand(t, root, "commit", "-m", "source")
+	sourceCommitData, err := gitOutput(context.Background(), "git", root, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceCommit := strings.TrimSpace(string(sourceCommitData))
 
 	policy := fixturePolicy()
 	policy.ModuleDirs = []string{"mod"}
@@ -289,7 +478,7 @@ type State struct{}
 		t.Fatalf("historical type load did not find public leak: %#v", old.Issues)
 	}
 
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{{
+	baseline := Baseline{Version: baselineVersion, SourceCommit: sourceCommit, Entries: []BaselineEntry{{
 		Rule: leak.Rule, Module: leak.Module, Package: leak.Package, File: leak.File,
 		Symbol: leak.Symbol, Value: leak.Value, Message: leak.Message,
 		Rationale: "historical public API leak", Phase: "P0",

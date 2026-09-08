@@ -217,7 +217,9 @@ func staleBaselineIssues(entries map[string]BaselineEntry, consumed map[string]s
 // edit approve itself. If the merge base predates the baseline, the source
 // inventory at that merge base is used as a bootstrap ceiling. This makes the
 // first baseline review explicit while still rejecting entries for violations
-// that did not exist in the reviewed source tree.
+// that did not exist in the reviewed source tree. Once the baseline is already
+// present at the merge base, its recorded source identity remains authoritative
+// even as the branch containing that baseline is merged forward.
 func compareBaselineHistory(ctx context.Context, gitBinary, repoRoot, baselinePath, base string, current Baseline, policies ...Policy) []Issue {
 	relative, err := filepath.Rel(repoRoot, baselinePath)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
@@ -228,9 +230,6 @@ func compareBaselineHistory(ctx context.Context, gitBinary, repoRoot, baselinePa
 		return []Issue{{Rule: "baseline-history", File: filepath.ToSlash(relative), Message: fmt.Sprintf("cannot resolve merge base %q: %v", base, err)}}
 	}
 	mergeBaseName := strings.TrimSpace(string(mergeBase))
-	if current.SourceCommit != "" && current.SourceCommit != mergeBaseName {
-		return []Issue{{Rule: "baseline-history-source", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline source_commit %q does not identify merge base %s", current.SourceCommit, mergeBaseName)}}
-	}
 	oldData, err := gitOutput(ctx, gitBinary, repoRoot, "show", mergeBaseName+":"+filepath.ToSlash(relative))
 	if err != nil {
 		policy := Policy{Version: policyVersion, Limits: defaultLimits()}
@@ -261,8 +260,8 @@ func compareHistoricalEntries(relative string, previous, current Baseline) []Iss
 	oldEntries := baselineEntries(previous.Entries)
 	newEntries := baselineEntries(current.Entries)
 	result := make([]Issue, 0)
-	if previous.SourceCommit != "" && current.SourceCommit != "" && previous.SourceCommit != current.SourceCommit {
-		result = append(result, Issue{Rule: "baseline-history-source", File: filepath.ToSlash(relative), Message: "baseline source_commit changed relative to merge base"})
+	if previous.SourceCommit != current.SourceCommit {
+		result = append(result, Issue{Rule: "baseline-history-source", File: filepath.ToSlash(relative), Message: "baseline source_commit changed relative to established baseline"})
 	}
 	result = append(result, historyCeilingIssues(oldEntries, current)...)
 	result = append(result, historyAddedIssues(oldEntries, current)...)

@@ -15,7 +15,7 @@ import (
 // rules and source level architecture rules; type-aware checks still require
 // a baseline that already existed at the merge base.
 func compareBootstrapBaseline(ctx context.Context, gitBinary, repoRoot, relative, mergeBase string, current Baseline, policy Policy) []Issue {
-	if current.SourceCommit != "" && current.SourceCommit != mergeBase {
+	if current.SourceCommit != mergeBase {
 		return []Issue{{Rule: "baseline-history-source", File: filepath.ToSlash(relative), Message: fmt.Sprintf("baseline source_commit %q does not identify merge base %s", current.SourceCommit, mergeBase)}}
 	}
 	old, err := measureBootstrapSource(ctx, gitBinary, repoRoot, mergeBase, policy)
