@@ -15,6 +15,7 @@ under-three-minute target is met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current implementation/control checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
+- Current branch head at this handoff: `623975e5024ccaab3559371e1169396a98ff4d5c` (provenance-only refresh).
 - Rebased `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -36,6 +37,9 @@ under-three-minute target is met.
   path is 184 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
   `profile.py --help`, the 21-control suite, and `git diff --check` pass.
+- Fresh handoff recheck from `623975e5` passed the same controls and focused
+  checks; the temporary controls report SHA-256 is
+  `9f3a01248a9b9277189a42f0c5478a322c2d983fc2bf378688066673c995953c`.
 
 ## CI rejection disposition
 

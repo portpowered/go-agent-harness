@@ -23,6 +23,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
 - Current implementation/control candidate checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
+- Current branch head at this handoff: `623975e5024ccaab3559371e1169396a98ff4d5c`.
 - Implementation checkpoint after the review repair and evidence refresh:
   `ebc583f80311d9e74041e038a207cc3168015d42` (the refresh is documentation-only;
   profiler source is unchanged from the causally tested repair).
@@ -89,6 +90,11 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
+- Fresh handoff recheck from branch head `623975e5` also passed: 21 public
+  controls/17 result groups with zero Go/network/build invocations (temporary
+  report SHA-256 `9f3a01248a9b9277189a42f0c5478a322c2d983fc2bf378688066673c995953c`),
+  `profile.py --help`, AST parsing of all three Python files, and
+  `GOWORK=off go test . -count=1` in `tools/timingate`.
 
 The latest current-head CI rejection was inspected in full from run
 `34231535549`, job `102078631796` (`CI (hermetic)`) at submitted head
@@ -165,8 +171,9 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `ebc583f8`.
-The next action is for the
+The current C11 implementation/control evidence is pinned to `ebc583f8`; the
+current branch head at this handoff is `623975e5` and contains only the
+provenance refresh above. The next action is for the
 C12 owner/meta-planner to resolve the named `provider_burst` failure (or record
 a causal external disposition), then rebase this same PR if `main` advances,
 rerun the focused C11 controls, update PR #403, and return `ACCEPTED` to the
