@@ -3,11 +3,28 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "296e81e576a9645227402b5d211e0b324272d7d9",
-  "implementation_checkpoint": "03bbb0f4ce570381e145808993ef76aaf3ba8441",
-  "base_main": "b01dbb573a15eb61d1cacfff11d37c2461167987",
+  "candidate_head": "76d8c27c6bb3928178542c454c3cd2a29846156b",
+  "implementation_checkpoint": "e9c89682631c897ae103e11c629b5ca8a60ce5b6",
+  "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "delivery_rebase": {
+    "fetched_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
+    "rebased_at_utc": "2026-09-08T11:36:00Z",
+    "previous_submitted_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
+    "previous_ci_run": 34220749840,
+    "previous_ci_job": 102043028609,
+    "previous_ci_check": "CI (hermetic)",
+    "previous_ci_conclusion": "FAILURE",
+    "recheck": {
+      "test": "TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress",
+      "package": "./agent-cli/internal/services/internal/agentruntime",
+      "command": "go test ./agent-cli/internal/services/internal/agentruntime -count=1 -run ^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$ -timeout 30s",
+      "status": "PASS",
+      "interpretation": "The rejected runtime test did not reproduce after rebasing; no C11-owned implementation path is implicated."
+    },
+    "next_gate": "SCRIPT_CI_NOT_POLLED"
+  },
   "fresh_timing": {
     "status": "BLOCKED",
     "reason": "C08 owns the shared factory host and no dedicated runner or exclusive lease is available",
@@ -77,6 +94,6 @@
     }
   ],
   "fresh_run_hashes": [],
-  "ci_status": "NOT_POLLED",
+  "ci_status": "REJECTED_PREVIOUS_HEAD_RECHECKED_RESUBMISSION_PENDING",
   "review_status": "NOT_SELF_REVIEWED"
 }

@@ -18,13 +18,16 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`; the worktree is
   `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile`.
-- `git fetch origin main` completed before implementation. At the initial
-  checkpoint both `HEAD` and `origin/main` were
-  `b01dbb573a15eb61d1cacfff11d37c2461167987`.
+- `git fetch origin main` completed before implementation. The initial
+  checkpoint was `b01dbb573a15eb61d1cacfff11d37c2461167987`; before delivery,
+  `origin/main` advanced to `02e54e6a89a7a2d7ad1ce2fa0619145c16400339` after
+  C08 merged.
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
-- Delivery rebase checkpoint: `03bbb0f4ce570381e145808993ef76aaf3ba8441`.
+- Required delivery rebase completed onto `origin/main`; current candidate
+  `HEAD=76d8c27c6bb3928178542c454c3cd2a29846156b`, implementation checkpoint
+  `e9c89682631c897ae103e11c629b5ca8a60ce5b6`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -32,13 +35,11 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 
 ## Board and ownership evidence
 
-Complete canonical responses are retained in `canonical-board.json` and
+Complete initial canonical responses are retained in `canonical-board.json` and
 `worker-sessions.json`; the immediate before/after snapshots are retained as
-`pre-measurement-*` and `post-measurement-*`. The board contains C11's admitted
-idea/task (`work-task-4`) and C08's active task (`work-task-5`), but no C11
-review row or C11 rejection feedback. Worker sessions show C08
-`9ecd5b0c-de15-4254-9852-3a678840ea78` and C11
-`f0db221e-3881-44c5-a500-8101ac247010` running on the shared host.
+`pre-measurement-*` and `post-measurement-*`. The current canonical rejection
+is recorded in `ci-rejection.json`; it is the previous head's `CI (hermetic)`
+failure, not a profiler control failure.
 
 ## Implementation and causal verification
 
@@ -53,7 +54,15 @@ review row or C11 rejection feedback. Worker sessions show C08
 - `profile.py --help`: PASS.
 - `controls-rebased/controls.json`: PASS; 11 cases, 14 assertions, raw evidence
   retained, zero Go/network/build invocations.
+- Post-rebase controls rerun: `controls-final/controls.json`, PASS; 11 cases,
+  14 assertions, zero Go/network/build invocations; hash
+  `32d490fa88208d9e377e4b3a85afbf0d362401ccfdb9b631851bcc7aa69ca557`.
 - `GOWORK=off go test . -count=1` in `tools/timingate`: PASS.
+- The previous CI failure was read from job `102043028609` in run
+  `34220749840`: `TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress` failed
+  in `agent-cli/internal/services/internal/agentruntime` with a closed PCM16
+  mixer result. After rebasing onto current main, the exact test passed once;
+  no C11-owned repair was identified. The same PR remains the delivery target.
 - `git diff --check`: PASS.
 - No broad hermetic/coverage suite was launched on the shared host. The active
   C08 owner makes it non-quiet, and broad current-head checks belong to the

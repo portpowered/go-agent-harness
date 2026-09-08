@@ -21,9 +21,10 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c11-hermetic-package-profile"}`.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
-- Fetched `origin/main`: `b01dbb573a15eb61d1cacfff11d37c2461167987`.
+- Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
+- Current rebased candidate head: `76d8c27c6bb3928178542c454c3cd2a29846156b`.
 - Implementation checkpoint after the delivery rebase:
-  `03bbb0f4ce570381e145808993ef76aaf3ba8441`.
+  `e9c89682631c897ae103e11c629b5ca8a60ce5b6`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -35,8 +36,12 @@ not a waiver, and not a claim that the under-three-minute target is met.
 
 The complete canonical board and worker-session responses are retained in
 `canonical-board.json` and `worker-sessions.json`; the immediate measurement
-snapshots are `pre-measurement-*` and `post-measurement-*`. The C11 board has
-the admitted idea/task but no C11 review row and no C11 rejection feedback.
+snapshots are `pre-measurement-*` and `post-measurement-*`. The current board
+rejection and its exact failed job metadata are captured in `ci-rejection.json`.
+The rejected head was `5c6d24ac…`, before C08 merged into main; after the
+required rebase, the narrow rejected test passed once and no C11-owned path was
+implicated. This is a recheck and handoff record, not a claim that script CI is
+green.
 The live worker IDs in the snapshot are C08
 `9ecd5b0c-de15-4254-9852-3a678840ea78` and C11
 `f0db221e-3881-44c5-a500-8101ac247010`.
@@ -65,7 +70,14 @@ Focused evidence:
   PASS; 11 public cases and 14 assertions, raw evidence retained, zero Go,
   network, or build invocations. The report is
   `controls-rebased/controls.json`.
+- Post-rebase controls rerun: `controls-final/controls.json`, PASS; 11 cases,
+  14 assertions, zero Go/network/build invocations. Its hash is
+  `32d490fa88208d9e377e4b3a85afbf0d362401ccfdb9b631851bcc7aa69ca557`.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
+- Rejected CI regression recheck:
+  `go test ./agent-cli/internal/services/internal/agentruntime -count=1
+  -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
+  PASS after rebase.
 - `git diff --check`: PASS.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
