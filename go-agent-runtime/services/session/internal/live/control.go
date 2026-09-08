@@ -321,9 +321,23 @@ func sessionSendOutcomeForError(ctx context.Context, err error) messages.Session
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 }
 
-func finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
+func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.MessageEndValue)
-	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput
+	if !ok || value == nil {
+		return false
+	}
+	if value.TerminalReason == messages.TerminalReasonPartialOutput {
+		return true
+	}
+	// Realtime providers report a VAD barge-in as a cancelled response. An
+	// explicit replay plan owns the following replacement response, so this
+	// provider cancellation is an interruption boundary rather than the
+	// finite replay's successful terminal. Ordinary finite captures retain
+	// their existing cancellation semantics.
+	return h != nil && h.request.ReplayPlan != nil &&
+		h.request.ReplayPlan.InterruptionReplacementExpected &&
+		value.TerminalReason == messages.TerminalReasonCancellation &&
+		value.TerminalProvenance == messages.TerminalProvenanceProvider
 }
 
 func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
@@ -331,7 +345,7 @@ func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
 }
 
 func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
+	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !h.finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
 }
 
 func (h *handle) canFinishFiniteResponse() bool {
@@ -344,10 +358,11 @@ func (h *handle) canFinishFiniteResponse() bool {
 		responseTarget = h.captureResponseTarget
 	}
 	if h.scheduledAudioCount > 0 {
-		// Scheduled barge-in resolves input at its owned partial terminal; count
-		// every scheduled terminal after the optional opening response.
+		// Scheduled barge-in resolves input at its owned partial terminal. A
+		// completed tool continuation after that interruption owns one additional
+		// provider terminal before the scheduled final response can complete.
 		responseCount = h.observedResponseTerminals
-		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount
+		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount + h.scheduledContinuationTerminals
 	}
 	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
 }

@@ -158,20 +158,6 @@ func (i *liveInvocation) closeWithError(runErr error) (*liveInvocation, error) {
 	return nil, errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
 }
 
-func (i *liveInvocation) bindPlaybackController() {
-	if i == nil || i.device == nil || i.endpoints.Inbound == nil {
-		return
-	}
-	provider, ok := i.ports.Playback.(devices.PlaybackControllerProvider)
-	if !ok {
-		return
-	}
-	controlled, ok := i.endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
-	if ok {
-		controlled.SetPlaybackController(provider.PlaybackController())
-	}
-}
-
 func (i *liveInvocation) start() error {
 	if i == nil || i.handle == nil {
 		return errors.New("live invocation handle is unavailable")

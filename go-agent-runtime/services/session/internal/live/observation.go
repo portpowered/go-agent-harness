@@ -8,10 +8,35 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+func (i *liveInvocation) bindPlaybackController() {
+	if i == nil || i.endpoints.Inbound == nil {
+		return
+	}
+	var controller sharedaudio.PlaybackController
+	if provider, ok := i.ports.Playback.(devices.PlaybackControllerProvider); ok {
+		controller = provider.PlaybackController()
+	}
+	if controller == nil && i.options.Request.ReplayPlan != nil {
+		controller = replayVirtualPlaybackController{}
+	}
+	if controlled, ok := i.endpoints.Inbound.(sharedaudio.PlaybackControlledInbound); ok && controller != nil {
+		controlled.SetPlaybackController(controller)
+	}
+}
+
+type replayVirtualPlaybackController struct{}
+
+func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
+func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackResponse) (int, bool) {
+	return 0, true
+}
 
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
@@ -75,13 +100,12 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 }
 
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
-	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool ||
-		(msg.Role != "" && msg.Role != messages.RoleAssistant) {
+	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || (msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.scheduledAudioCount <= 0 || h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
+	if h.scheduledAudioCount <= 0 || (!h.activeScheduledAudio && h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount) {
 		return
 	}
 	if responseID := strings.TrimSpace(msg.ResponseID); responseID != "" {
@@ -99,7 +123,7 @@ func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 		wake = make(chan struct{})
 	}
 	h.responseTerminalWake = make(chan struct{})
-	if h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
+	if !h.activeScheduledAudio && h.observedResponseTerminals-h.scheduledResponseBase >= h.scheduledAudioCount {
 		h.observedResponseIDs = nil
 	}
 	close(wake)
@@ -271,8 +295,7 @@ func (h *handle) responseIsActive() bool {
 	return (h.responseActive || h.responsePending) && !h.cancelRequested && !h.closed
 }
 
-// observeSessionLifecycle admits the scheduler-backed watchdog at SESSION.OPEN.
-// Pre-OPEN UPDATE state suppresses the timer.
+// observeSessionLifecycle admits the scheduler-backed watchdog at SESSION.OPEN; pre-OPEN UPDATE state suppresses the timer.
 func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeSessionUpdated {
 		h.policyMu.Lock()
@@ -322,9 +345,9 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 		return false
 	}
 	h.mu.Lock()
+	deferredResponseComplete := len(complete) > 0 && complete[0]
 	if h.isToolResponseEnd(msg) {
 		h.pendingToolCalls = 0
-		deferredResponseComplete := len(complete) > 0 && complete[0]
 		if deferredResponseComplete {
 			h.replayResponses++
 		}
@@ -335,14 +358,11 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 		}
 		return finish
 	}
-	// A completed continuation only retires the preceding tool result.  A
-	// single assistant boundary may immediately contain the next provider tool
-	// call, whose TOOLCALL.END already incremented pendingToolCalls before this
-	// MESSAGE.END arrived.  Resetting the aggregate here would let a finite
-	// invocation stop after the first continuation and strand that next call.
-	// The RoleTool MESSAGE.END path above retires the previous result; leave the
-	// current response's pending calls intact.
+	// A completed continuation retires the prior tool result; the following assistant boundary may contain another provider tool call, so keep pending calls intact.
 	h.observeFiniteResponseMessage(msg)
+	if deferredResponseComplete && h.activeScheduledAudio && h.scheduledAudioCount > 0 && h.interruptedScheduledResponses > h.scheduledContinuationTerminals {
+		h.scheduledContinuationTerminals++
+	}
 	finish := h.shouldFinishFiniteResponse(msg)
 	h.mu.Unlock()
 	if finish {
@@ -366,8 +386,13 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		return
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
+		responseWasOpen := h.responseActive || h.responsePending
 		h.responseActive, h.responsePending = false, false
-		if h.pendingToolCalls > 0 || finiteResponseWasInterrupted(msg) {
+		interrupted := h.finiteResponseWasInterrupted(msg)
+		if h.pendingToolCalls > 0 || interrupted {
+			if interrupted && responseWasOpen && h.activeScheduledAudio && h.scheduledAudioCount > 0 {
+				h.interruptedScheduledResponses++
+			}
 			return
 		}
 		h.replayResponses++

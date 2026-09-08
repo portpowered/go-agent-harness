@@ -1,5 +1,4 @@
-// Package live owns the continuous duplex session implementation. The package
-// is deliberately private to the session service; hosts see only the narrow
+// Package live owns the continuous duplex session implementation. The package is deliberately private to the session service; hosts see only the narrow
 // LiveService/LiveHandle contracts in services/session.
 package live
 
@@ -151,15 +150,17 @@ type handle struct {
 	// finite input has crossed the ordered provider ingress. This preserves the
 	// same boundary as the response-driven scheduler without blocking ordinary
 	// response deltas that the capture worker needs in order to advance.
-	captureTurnWake           chan struct{}
-	activeScheduledAudio      bool
-	scheduledResponseBase     int
-	observedResponseTerminals int
-	observedResponseIDs       map[string]struct{}
-	pendingToolCalls          int
-	terminalValue             *messages.SessionCloseValue
-	providerCloseObserved     bool
-	localCloseObserved        bool
+	captureTurnWake                chan struct{}
+	activeScheduledAudio           bool
+	scheduledResponseBase          int
+	observedResponseTerminals      int
+	observedResponseIDs            map[string]struct{}
+	interruptedScheduledResponses  int
+	scheduledContinuationTerminals int
+	pendingToolCalls               int
+	terminalValue                  *messages.SessionCloseValue
+	providerCloseObserved          bool
+	localCloseObserved             bool
 	// userCancelled is set only when the host supplied the explicit user
 	// cancellation cause and no independent provider/loop failure won the
 	// terminal race. It keeps cancellation classification separate from the
@@ -381,7 +382,6 @@ func (h *handle) Start(ctx context.Context) error {
 		cancel(h.cancelCause)
 	}
 	h.mu.Unlock()
-
 	return h.start(runCtx)
 }
 

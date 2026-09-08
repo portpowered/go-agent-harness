@@ -53,6 +53,12 @@ type LiveReplayPlan struct {
 	// provider session-close boundary. It is advisory metadata for host
 	// rendering and lifecycle selection; replay validation remains strict.
 	ProviderCloseExpected bool
+	// InterruptionReplacementExpected records whether a provider-cancelled
+	// response is followed by a distinct provider response in the capture. Such
+	// a cancellation is an interruption boundary whose replacement must be
+	// observed before a finite replay can stop; a cancelled-only capture keeps
+	// the ordinary finite-response completion behavior.
+	InterruptionReplacementExpected bool
 }
 
 // LiveReplayAudioTurn preserves the captured append boundaries. Chunks are

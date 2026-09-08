@@ -21,6 +21,7 @@ const (
 	replayAppend          = "input_audio_buffer.append"
 	replaySessionUpdate   = "session.update"
 	replayCreateItem      = "conversation.item.create"
+	replayTruncateItem    = "conversation.item.truncate"
 )
 
 // errSelfDrivingPlanUnavailable distinguishes a valid realtime capture whose
@@ -90,11 +91,12 @@ func replayLifecyclePlan(path string, records []gatewaytesting.CapturedSessionEv
 	}
 	providerCloseExpected := replayProviderCloseExpected(records)
 	return session.LiveReplayPlan{
-		WaitForSessionUpdated: replayHasSessionUpdated(records),
-		StopAfterResponse:     !providerCloseExpected,
-		ProviderCloseExpected: providerCloseExpected,
-		InputAudioSampleRate:  inputRate,
-		OutputAudioSampleRate: outputRate,
+		WaitForSessionUpdated:           replayHasSessionUpdated(records),
+		StopAfterResponse:               !providerCloseExpected,
+		ProviderCloseExpected:           providerCloseExpected,
+		InterruptionReplacementExpected: replayHasInterruptionReplacement(records),
+		InputAudioSampleRate:            inputRate,
+		OutputAudioSampleRate:           outputRate,
 	}, nil
 }
 
@@ -122,23 +124,26 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	}
 	providerCloseExpected := replayProviderCloseExpected(capture.Records)
 	waitForSessionUpdated := replayHasSessionUpdated(capture.Records)
+	interruptionReplacementExpected := replayHasInterruptionReplacement(capture.Records)
 	inputRate, outputRate, err := replayAudioSampleRates(capture.Records)
 	if err != nil {
 		return session.LiveReplayPlan{}, fmt.Errorf("live replay plan %s: %w", path, err)
 	}
 	if len(actions) == 0 {
 		return session.LiveReplayPlan{
-			WaitForSessionUpdated: waitForSessionUpdated,
-			StopAfterResponse:     !providerCloseExpected,
-			ProviderCloseExpected: providerCloseExpected,
-			InputAudioSampleRate:  inputRate,
-			OutputAudioSampleRate: outputRate,
+			WaitForSessionUpdated:           waitForSessionUpdated,
+			StopAfterResponse:               !providerCloseExpected,
+			ProviderCloseExpected:           providerCloseExpected,
+			InterruptionReplacementExpected: interruptionReplacementExpected,
+			InputAudioSampleRate:            inputRate,
+			OutputAudioSampleRate:           outputRate,
 		}, nil
 	}
 	if plan, ok, err := replayTextPlan(path, actions); ok || err != nil {
 		plan.WaitForSessionUpdated = waitForSessionUpdated
 		plan.StopAfterResponse = !providerCloseExpected
 		plan.ProviderCloseExpected = providerCloseExpected
+		plan.InterruptionReplacementExpected = interruptionReplacementExpected
 		plan.InputAudioSampleRate = inputRate
 		plan.OutputAudioSampleRate = outputRate
 		return plan, err
@@ -150,6 +155,7 @@ func loadLivePlanFromCapture(ctx context.Context, path string, capture gatewayte
 	plan.WaitForSessionUpdated = waitForSessionUpdated
 	plan.StopAfterResponse = !providerCloseExpected
 	plan.ProviderCloseExpected = providerCloseExpected
+	plan.InterruptionReplacementExpected = interruptionReplacementExpected
 	plan.InputAudioSampleRate = inputRate
 	plan.OutputAudioSampleRate = outputRate
 	return plan, err

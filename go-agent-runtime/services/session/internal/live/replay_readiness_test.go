@@ -24,14 +24,12 @@ func (s *recordingAudioInputSender) sendAudioInput(_ context.Context, payload []
 	s.policy = policy
 	return nil
 }
-
 func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
 	sender := &recordingAudioInputSender{}
 	var admitted sharedaudio.PCMFrame
 	outbound := &loopAudioOutbound{sender: sender, onAdmit: func(frame sharedaudio.PCMFrame) { admitted = frame }}
 	want := []int16{1, -2, 32767, -32768}
 	frame := sharedaudio.PCMFrame{Samples: want, Format: sharedaudio.PCM16DeviceFormat(16000), StreamID: "capture", Sequence: 7}
-
 	if err := outbound.WriteFrame(context.Background(), frame); err != nil {
 		t.Fatalf("WriteFrame: %v", err)
 	}
@@ -62,7 +60,6 @@ type replayReadinessInferencer struct{ session messages.Session }
 func (i *replayReadinessInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
 }
-
 func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.LiveEvent {
 	t.Helper()
 	var got []session.LiveEvent
@@ -86,7 +83,6 @@ func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.L
 		}
 	}
 }
-
 func waitForSentText(t testing.TB, provider *testSession, text string) {
 	t.Helper()
 	deadline := time.NewTimer(2 * time.Second)
@@ -100,15 +96,12 @@ func waitForSentText(t testing.TB, provider *testSession, text string) {
 		}
 	}
 }
-
-func collectTestLiveEvents(events <-chan session.LiveEvent) []session.LiveEvent {
-	var got []session.LiveEvent
+func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveEvent) {
 	for event := range events {
 		got = append(got, event)
 	}
-	return got
+	return
 }
-
 func queueProviderMessages(t testing.TB, provider *testSession, messagesToQueue []messages.StreamMessage) {
 	t.Helper()
 	for _, message := range messagesToQueue {
@@ -117,7 +110,6 @@ func queueProviderMessages(t testing.TB, provider *testSession, messagesToQueue 
 		}
 	}
 }
-
 func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
 	t.Helper()
 	faultIndex, terminalIndex := -1, -1
@@ -139,7 +131,6 @@ func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
 		t.Fatalf("event order = fault %d, terminal %d, events %+v", faultIndex, terminalIndex, events)
 	}
 }
-
 func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	provider := newTestSession()
 	frameSeen := make(chan struct{})
@@ -152,7 +143,6 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		}
 		return nil
 	}, 24000)
-
 	service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 		return &replayReadinessInferencer{session: &replayReadinessSession{testSession: provider, media: media.Endpoints()}}, nil
 	}})
@@ -175,7 +165,6 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		t.Fatal("replay admitted PCM before the provider session.updated boundary")
 	case <-time.After(20 * time.Millisecond):
 	}
-
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider", "audio")},
 		{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("provider")},
@@ -196,23 +185,62 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		t.Fatalf("Wait = %v, want cancellation cause", err)
 	}
 }
-
-func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
-	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
-	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-original"})
-	if !h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputPartial}}) {
+func assertFiniteResponseReplacement(t testing.TB, h *handle, interrupted messages.StreamMessage, replacementID string) {
+	t.Helper()
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: interrupted.ResponseID})
+	if !h.observeFiniteResponse(interrupted) {
 		t.Fatal("interrupted response was not recognized as a terminal boundary")
 	}
 	if h.gracefulStop || h.replayResponses != 0 {
 		t.Fatalf("interrupted response stopped/count = %t/%d, want false/0", h.gracefulStop, h.replayResponses)
 	}
-	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-replacement"})
-	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-replacement", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: replacementID})
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: replacementID, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	if !h.gracefulStop || h.replayResponses != 1 {
 		t.Fatalf("replacement stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
 	}
 }
-
+func assertFiniteResponseCompletes(t testing.TB, h *handle, responseID string, value *messages.MessageEndValue) {
+	t.Helper()
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID})
+	if !h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}) {
+		t.Fatal("finite response did not complete at its terminal boundary")
+	}
+	if !h.gracefulStop || h.replayResponses != 1 {
+		t.Fatalf("finite response stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
+	}
+}
+func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
+	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
+	assertFiniteResponseReplacement(t, h, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputPartial}}, "response-replacement")
+}
+func TestReplayCancelledProviderResponseDoesNotFinishBeforeReplacement(t *testing.T) {
+	h := &handle{
+		request: session.LiveRequest{
+			FinishAfterResponse: true,
+			ReplayPlan: &session.LiveReplayPlan{
+				InterruptionReplacementExpected: true,
+			},
+		},
+		captureComplete:   true,
+		responseStartWake: make(chan struct{}),
+	}
+	assertFiniteResponseReplacement(t, h, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "response-interrupted",
+		Value: messages.NewMessageEndValueWithTerminal(
+			messages.TokenUsage{},
+			messages.TerminalReasonCancellation,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNone,
+		),
+	}, "response-healthy")
+}
+func TestReplayCancelledProviderResponseFinishesWithoutReplacement(t *testing.T) {
+	h := &handle{request: session.LiveRequest{FinishAfterResponse: true, ReplayPlan: &session.LiveReplayPlan{}}, captureComplete: true, responseStartWake: make(chan struct{})}
+	assertFiniteResponseCompletes(t, h, "response-cancelled-only", messages.NewMessageEndValueWithTerminal(messages.TokenUsage{}, messages.TerminalReasonCancellation, messages.TerminalProvenanceProvider, messages.TerminalOutputNone))
+}
 func TestInterruptedFiniteResponseDoesNotFinishAfterPriorResponse(t *testing.T) {
 	h := &handle{
 		request:           session.LiveRequest{FinishAfterResponse: true},
@@ -235,14 +263,12 @@ func TestInterruptedFiniteResponseDoesNotFinishAfterPriorResponse(t *testing.T) 
 		t.Fatalf("interrupted response after prior completion stopped/count = %t/%d, want false/1", h.gracefulStop, h.replayResponses)
 	}
 }
-
 func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 	h := &handle{
 		responseTerminalWake: make(chan struct{}),
 		scheduledAudioCount:  3,
 	}
 	h.configureScheduledAudio(3, 0)
-
 	result := make(chan error, 1)
 	go func() { result <- h.waitForResponseBoundary(context.Background(), 2) }()
 
@@ -259,7 +285,6 @@ func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 		t.Fatalf("boundary wait released after one cancelled response: %v", err)
 	case <-time.After(10 * time.Millisecond):
 	}
-
 	h.observeResponseTerminal(messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
 		Role:       messages.RoleAssistant,
@@ -274,7 +299,6 @@ func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 		t.Fatal("boundary wait did not release after cancelled and completed response terminals")
 	}
 }
-
 func TestScheduledBargeCompletionCountsCancelledTerminal(t *testing.T) {
 	h := &handle{
 		request: session.LiveRequest{
@@ -291,7 +315,6 @@ func TestScheduledBargeCompletionCountsCancelledTerminal(t *testing.T) {
 		t.Fatal("scheduled finite gate ignored the cancelled response terminal")
 	}
 }
-
 func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	const callID = "call-finite-continuation"
 	h := &handle{
@@ -322,7 +345,6 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 	h.observeFiniteResponse(toolMessage)
 	h.markContinuationOutput()
-
 	messageEnd := messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
 		Role:       messages.RoleAssistant,
@@ -345,7 +367,6 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 		t.Fatalf("successful continuation finite state = pending:%d graceful:%t responses:%d, want pending:0 graceful:true responses:1", pending, graceful, h.replayResponses)
 	}
 }
-
 func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.T) {
 	const firstCallID = "call-finite-first"
 	const nextCallID = "call-finite-next"
@@ -376,7 +397,6 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 	}
 	h.observeFiniteResponse(toolResultEnd)
 	h.markContinuationOutput()
-
 	nextCall := messages.StreamMessage{
 		Type:       messages.StreamTypeToolCallEnd,
 		Role:       messages.RoleAssistant,
@@ -405,7 +425,6 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 		t.Fatalf("pending tool calls = %d, want 1 for the next provider call", h.pendingToolCalls)
 	}
 }
-
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
 	result := make(chan error, 1)
@@ -436,7 +455,6 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	if err != nil {
 		t.Fatalf("register control: %v", err)
 	}
-
 	automaticStarted := make(chan struct{})
 	releaseAutomatic := make(chan struct{})
 	controlSent := make(chan struct{})
@@ -459,7 +477,6 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	case <-time.After(time.Second):
 		t.Fatal("automatic provider send did not start")
 	}
-
 	controlDone := make(chan messages.SessionSendOutcome, 1)
 	go func() {
 		controlDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
@@ -474,7 +491,6 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	case <-time.After(20 * time.Millisecond):
 	}
 	close(releaseAutomatic)
-
 	select {
 	case outcome := <-automaticDone:
 		if !outcome.OK() {
@@ -498,11 +514,7 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	}
 }
 
-type orderingSession struct {
-	automaticStarted chan struct{}
-	releaseAutomatic chan struct{}
-	controlSent      chan struct{}
-}
+type orderingSession struct{ automaticStarted, releaseAutomatic, controlSent chan struct{} }
 
 func (s *orderingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeMessageEnd {
@@ -521,15 +533,11 @@ func (s *orderingSession) Send(ctx context.Context, msg messages.StreamMessage) 
 		return false
 	}
 }
-
 func (s *orderingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return messages.NewTypedBuffer[messages.StreamMessage](1)
 }
-
 func (s *orderingSession) Done() <-chan struct{} { return nil }
-
-func (s *orderingSession) Close() error { return nil }
-
+func (s *orderingSession) Close() error          { return nil }
 func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T) {
 	const callID = "call-original-response"
 	h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
@@ -553,7 +561,6 @@ func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T)
 		t.Fatalf("accepted result after original failure = error:%v complete:%t, want pending continuation", err, complete)
 	}
 }
-
 func TestRejectedContinuationAdmissionPreservesEarlierRequest(t *testing.T) {
 	h := &handle{toolContinuations: map[string]*liveToolContinuation{
 		"accepted": {callID: "accepted", resultAccepted: true, continuationRequested: true},
@@ -572,7 +579,6 @@ func TestRejectedContinuationAdmissionPreservesEarlierRequest(t *testing.T) {
 		t.Fatal("rollback retained the rejected continuation")
 	}
 }
-
 func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
 	const callID = "call-existing"
 	h := &handle{toolContinuations: map[string]*liveToolContinuation{
