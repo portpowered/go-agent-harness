@@ -24,10 +24,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Current implementation/control candidate checkpoint:
-  `39d177009bfca1ada9b01d5a64a071fce9d69f44`.
+  `be9f11a5e6b9256df404fd236795098081237cbe`.
 - The source/control evidence in this report was generated from that exact
-  merged-main checkpoint; a later evidence-only commit may advance the PR tip
-  without changing the tested profiler source.
+  merged-main checkpoint.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -38,7 +37,8 @@ not a waiver, and not a claim that the under-three-minute target is met.
   outside this candidate.
 
 The complete canonical board and worker-session responses are retained in
-`canonical-board.json`, `canonical-board-current.json`, and
+`canonical-board.json`, `canonical-board-current.json`,
+`canonical-board-be9f11a5.json`, `canonical-findings-be9f11a5.json`, and
 `worker-sessions.json`; the immediate measurement snapshots are
 `pre-measurement-*` and `post-measurement-*`. The current board rejection and
 its exact failed job metadata are captured in `ci-rejection.json`; the latest
@@ -65,19 +65,19 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `aa55705894173d82ecb6a4f0b5c2c9fb429c5fadb65315e3fbab2438bfb9bf2d`,
-`controls.py` `8a3e7a672ecc23ebce3b36381432adcd5e79598be21c9ba64afccbba5f5233a0`,
+`profile.py` `1e511a232e13930c62f8e14852609b6ae64ced74b5cb91995b82f5c08ae377c7`,
+`controls.py` `64046d12ab6eb34d303806d5e8bd953cea06f6738c164034760ad8ad886ad2fd`,
 and `fixtures/emit_jsonl.py`
-`8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
+`d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
 
 Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-current`:
-  PASS; 27 declared scenarios and 17 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-be9f11a5`:
+  PASS; 31 declared cases and 21 result groups, zero Go, network, or build
   invocations. The report hash is
-  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
+  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`.
@@ -85,17 +85,18 @@ Focused evidence:
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and tampered
   per-record source identity, quiet-evidence provenance, requested versus
-  completed repetition counts, missing runner/load observations, and expired
-  quiet evidence remain `INVALID`.
+  completed repetition counts, missing runner/load observations, expired quiet
+  evidence, repeated package terminals, oversized `Elapsed` values, oversized
+  integer handling, and post-inventory source dirtiness remain fail-closed.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
 - Rejected CI regression recheck:
   `go test ./agent-cli/internal/services/internal/agentruntime -count=1
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh merged-main recheck from `39d17700` passed: 27 public controls/17
+- Fresh merged-main recheck from `be9f11a5` passed: 31 public cases/21
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`),
+  SHA-256 `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -177,9 +178,15 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `39d17700` and
-the tracked control report above. The next action is to push/update PR #403
-with the exact final head and return `ACCEPTED` to the script-owned CI gate
-without polling it. Any C11-owned CI/review finding returns to this task;
-independent review and post-integration vertical validation remain external
-stages. No fresh timing or under-three-minute claim is made.
+The current C11 implementation/control evidence is pinned to `be9f11a5` and
+the tracked control report above. The latest canonical task rejection named
+three defects: legal repeated package terminals were rejected, `Elapsed` values
+outside Go `time.Duration` (including huge integers) were accepted or raised an
+uncaught overflow, and run records copied the inventory SHA without checking
+current HEAD/dirty state. Commit `be9f11a5` repairs those causes and the new
+public controls reproduce each positive/negative boundary. The next action is
+to push/update PR #403 with the exact final head and return `ACCEPTED` to the
+script-owned CI gate without polling it. Any C11-owned CI/review finding
+returns to this task; independent review and post-integration vertical
+validation remain external stages. No fresh timing or under-three-minute claim
+is made.

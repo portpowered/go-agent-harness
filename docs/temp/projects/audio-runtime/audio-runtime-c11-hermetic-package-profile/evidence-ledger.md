@@ -27,8 +27,9 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
 - Accepted main was merged in this isolated worktree at
   `HEAD=39d177009bfca1ada9b01d5a64a071fce9d69f44`; the running host checkout
-  was not merged or reset. The current profiler source/control checkpoint is
-  that exact head; an evidence-only delivery commit may advance the PR tip.
+  was not merged or reset. The accepted C12 main remains an ancestor of the
+  current profiler repair checkpoint
+  `be9f11a5e6b9256df404fd236795098081237cbe`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -59,18 +60,23 @@ claimed green or attributed to the profiler's Go lane.
   for stdout, stderr, and quiet-evidence artifacts.
 - AST parsing of all shipped Python files: PASS.
 - `profile.py --help`: PASS.
-- `ctrl-current/controls.json`: PASS; 27 declared scenarios and 17 result groups, zero
-  Go/network/build invocations; hash
-  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
+- `ctrl-be9f11a5/controls.json`: PASS; 31 declared cases and 21 result groups,
+  zero Go/network/build invocations; hash
+  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`.
   Top-level `raw_evidence_retained=false` and the
   `missing-raw-artifact` case reports `raw_artifacts_retained=false`, because
   that fixture deletion is intentional negative-control evidence.
 - Current repair source hashes: `profile.py`
-  `aa55705894173d82ecb6a4f0b5c2c9fb429c5fadb65315e3fbab2438bfb9bf2d`,
+  `1e511a232e13930c62f8e14852609b6ae64ced74b5cb91995b82f5c08ae377c7`,
   `controls.py`
-  `8a3e7a672ecc23ebce3b36381432adcd5e79598be21c9ba64afccbba5f5233a0`, and
+  `64046d12ab6eb34d303806d5e8bd953cea06f6738c164034760ad8ad886ad2fd`, and
   `fixtures/emit_jsonl.py`
-  `8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856`.
+  `d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249`.
+- The new controls cover legal repeated package terminals, Go `time.Duration`
+  overflow and huge integer handling, and rejection of a post-inventory dirty
+  source before the public fixture runs. The prior review controls for overlap,
+  artifact containment, quiet provenance, repetition completeness, and
+  raw-artifact retention pass again in the same report.
 - `GOWORK=off go test . -count=1` in `tools/timingate`: PASS.
 - The previous CI failure was read from job `102043028609` in run
   `34220749840`: `TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress` failed
@@ -87,9 +93,9 @@ claimed green or attributed to the profiler's Go lane.
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
 - `git diff --check`: PASS.
-- Fresh merged-main recheck from `39d17700` passed: 27 public controls and 17
+- Fresh merged-main recheck from `be9f11a5` passed: 31 public cases and 21
   result groups with zero Go/network/build invocations (tracked report SHA-256
-  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`),
+  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. The active
@@ -114,7 +120,10 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The current source/control evidence is pinned to `39d17700`. Offline analysis
+The current source/control evidence is pinned to `be9f11a5`. The latest
+canonical task rejection named legal repeated package terminals, oversized
+`Elapsed` values/integers, and missing current source-state validation;
+`be9f11a5` repairs all three with causal public controls. Offline analysis
 now retains package ranking and lane-wall evidence while referencing the
 canonical 60-second `tools/timingate` policy instead of duplicating it. Quiet
 evidence and all raw command artifacts are constrained to the manifest output

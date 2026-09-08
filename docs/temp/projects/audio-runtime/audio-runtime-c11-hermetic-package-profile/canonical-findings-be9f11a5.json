@@ -1,0 +1,96 @@
+[
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "batch-audio-runtime-c11-hermetic-package-profile-20260908-audio-runtime-c11-hermetic-package-profile",
+    "workTypeName": "idea",
+    "state": {
+      "name": "to-complete",
+      "type": "PROCESSING"
+    },
+    "tags": {
+      "_work_name": "audio-runtime-c11-hermetic-package-profile",
+      "_work_type": "idea"
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-task-4",
+    "workTypeName": "task",
+    "state": {
+      "name": "init",
+      "type": "PROCESSING"
+    },
+    "tags": {
+      "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile\", \"branch\": \"codex/audio-runtime-c11-hermetic-package-profile\", \"baseRevision\": \"b01dbb573a15eb61d1cacfff11d37c2461167987\", \"reused\": false}",
+      "_rejection_feedback": "PR #403 head 87a92b3 has successful current-head checks, and fresh public controls passed 27 cases. Actionable defects remain: profile.py:1220-1227 rejects repeated package start/terminal records, diverging from tools/timingate and its repeated-package test; public analyze returned INVALID. profile.py:1138-1144 accepts Elapsed=1000000000000 and returned PASS, while timingate rejects durations beyond time.Duration; oversized integers also raise uncaught OverflowError and can leave stale analysis output. profile.py:1081-1084 copies manifest source_sha without revalidating current HEAD/dirty state, so post-inventory source changes can be falsely reported as matching. Fix these, add regression controls, rerun focused checks, refresh exact-head evidence, and resubmit to script CI. No merge performed.",
+      "continue_feedback": "Admission verified; PRD branch matches the isolated worktree. HEAD 0413498c is clean, pushed, and contains origin/main 02e54e6a. Focused controls pass: 21 scenarios/17 groups, zero Go/network/build; path, help, diff, and ancestry checks pass. C12 still owns the external CI failure, so do not resubmit unchanged. Next: after C12 resolves, fetch/rebase, rerun focused controls, refresh exact-head evidence, update PR403, and return ACCEPTED to script CI without polling."
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-review-12",
+    "workTypeName": "review",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "tags": {
+      "_rejection_feedback": "PR #403 head 784890b3 has successful current-head checks, and independent controls pass, but review found actionable defects: profile.py:1134-1177 tracks active tests globally, falsely reporting valid cross-package -p concurrency as subtest overlap; scope detection per package and add a public control. controls.py:407-418 omits --allow-heavy, so invalid shared-host evidence is never validated; add the flag and assert fail-closed rejection. controls.py:267-279 deletes the missing-raw fixture artifact, while lines 319-328 report raw_artifacts_retained=true; correct per-case/top-level evidence reporting. profile.py:119-123 and 1268-1297 allow absolute or traversal artifact paths; an independent redirected-record probe read files outside the manifest root and returned PASS. Enforce output-root containment. analyze also ignores missing per-record source identity, quiet-evidence provenance, and incomplete repetition counts; tampered repeated manifests with missing source, removed quiet evidence, or requested=3/completed=1 returned PASS. Validate these before fresh PASS. Finally, assessment.json, assessment.md, and evidence-ledger.md record candidate 76d8c27 while the PR/script evidence is 784890b3; update current-head provenance and hashes. Repair these in scope, add regression controls, rerun focused controls/timingate tests, update evidence, then push and resubmit the same PR to the script CI gate. No merge performed."
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-review-13",
+    "workTypeName": "review",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "tags": {
+      "_rejection_feedback": "Independent controls pass (18 scenarios; no Go/network/build), timingate and AST checks pass. However profile.py:1492-1549 accepts hermetic quiet evidence after runner/before/after metadata is removed or valid_until_utc is expired, provided the manifest hash is updated; public analyze returned status=PASS and fresh_timing=PASS in both tampered cases. Enforce the full hermetic quiet-evidence contract and add controls for metadata removal and expiry. Also update assessment.json/evidence-ledger.md: they record e83c4683 as candidate HEAD, while current PR #403 HEAD is 5bdb5123. Current-head CI is not mergeable: CI (Windows audio portable) FAILED (other eight checks passed). Repair the validator and evidence, investigate/repair that required-check failure without waiver, rerun focused controls, then resubmit the same PR to script CI; no merge performed."
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-review-19",
+    "workTypeName": "review",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "tags": {
+      "_rejection_feedback": "PR #403 head 87a92b3 has successful current-head checks, and fresh public controls passed 27 cases. Actionable defects remain: profile.py:1220-1227 rejects repeated package start/terminal records, diverging from tools/timingate and its repeated-package test; public analyze returned INVALID. profile.py:1138-1144 accepts Elapsed=1000000000000 and returned PASS, while timingate rejects durations beyond time.Duration; oversized integers also raise uncaught OverflowError and can leave stale analysis output. profile.py:1081-1084 copies manifest source_sha without revalidating current HEAD/dirty state, so post-inventory source changes can be falsely reported as matching. Fix these, add regression controls, rerun focused checks, refresh exact-head evidence, and resubmit to script CI. No merge performed."
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-plan-3",
+    "workTypeName": "plan",
+    "state": {
+      "name": "complete",
+      "type": "TERMINAL"
+    },
+    "tags": {
+      "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile\", \"branch\": \"codex/audio-runtime-c11-hermetic-package-profile\", \"baseRevision\": \"b01dbb573a15eb61d1cacfff11d37c2461167987\", \"reused\": false}"
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  },
+  {
+    "name": "audio-runtime-c11-hermetic-package-profile",
+    "workId": "work-thoughts-14",
+    "workTypeName": "thoughts",
+    "state": {
+      "name": "complete",
+      "type": "TERMINAL"
+    },
+    "tags": {
+      "_last_output": "No Work dispatched. C11 failed CI and released its worker; its checkpoint is preserved pending runtime repairs owned by active C12.\n\nUpdated `meta-status.md` and the implementation handoff with exact failures and dependencies. Stage2 remains unchanged. Next: reconcile C12 delivery, then independently probe its immutable executable before acceptance or C11 resumption. All nine project criteria remain open."
+    },
+    "requestId": "audio-runtime-c11-hermetic-package-profile-20260908"
+  }
+]

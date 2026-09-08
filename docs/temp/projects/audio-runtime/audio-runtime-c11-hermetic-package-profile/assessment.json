@@ -3,9 +3,9 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
-  "current_branch_head_at_handoff": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
-  "implementation_checkpoint": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+  "candidate_head": "be9f11a5e6b9256df404fd236795098081237cbe",
+  "current_branch_head_at_handoff": "be9f11a5e6b9256df404fd236795098081237cbe",
+  "implementation_checkpoint": "be9f11a5e6b9256df404fd236795098081237cbe",
   "base_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -14,6 +14,7 @@
     "integrated_at_utc": "2026-09-08T17:03:47Z",
     "integration_method": "isolated-worktree merge of freshly fetched origin/main; running host checkout untouched",
     "integration_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+    "repair_head": "be9f11a5e6b9256df404fd236795098081237cbe",
     "previous_submitted_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
     "previous_ci_run": 34220749840,
     "previous_ci_job": 102043028609,
@@ -65,11 +66,11 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-current/controls.json",
-    "sha256": "0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3",
+    "path": "ctrl-be9f11a5/controls.json",
+    "sha256": "731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053",
     "status": "PASS",
-    "cases": 27,
-    "result_groups": 17,
+    "cases": 31,
+    "result_groups": 21,
     "go_invocations": 0,
     "network_invocations": 0,
     "build_invocations": 0,
@@ -81,10 +82,10 @@
     }
   },
   "fresh_focused_recheck": {
-    "checked_at_utc": "2026-09-08T17:03:47Z",
-    "tested_head": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
-    "controls_report_sha256": "0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3",
-    "controls": "PASS: 27 scenarios, 17 result groups, zero Go/network/build invocations",
+    "checked_at_utc": "2026-09-08T17:45:36Z",
+    "tested_head": "be9f11a5e6b9256df404fd236795098081237cbe",
+    "controls_report_sha256": "731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053",
+    "controls": "PASS: 31 cases, 21 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
     "timingate": "PASS: GOWORK=off go test . -count=1",
@@ -93,7 +94,7 @@
   "review_repairs": {
     "reviewed_head": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
     "repair_commit": "e483add8fe5715e4e7b6ae34f1ca30129b3cab43",
-    "validated_after_main_integration": "39d177009bfca1ada9b01d5a64a071fce9d69f44",
+    "validated_after_main_integration": "be9f11a5e6b9256df404fd236795098081237cbe",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",
@@ -102,6 +103,9 @@
       "stdout/stderr and quiet-evidence artifact paths are contained under the manifest output root",
       "per-record source identity, quiet-evidence provenance, and repetition completeness are required",
       "quiet evidence requires runner/load metadata and a current validity window",
+      "repeated package terminals follow tools/timingate state transitions",
+      "Elapsed values are bounded by Go time.Duration and huge integers fail closed",
+      "run records validate current source HEAD and dirty paths before capture",
       "offline analysis retains package ranking/wall evidence while referencing, not duplicating, tools/timingate"
     ]
   },
@@ -121,9 +125,9 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "aa55705894173d82ecb6a4f0b5c2c9fb429c5fadb65315e3fbab2438bfb9bf2d",
-    "scripts/hermetic-profile/controls.py": "8a3e7a672ecc23ebce3b36381432adcd5e79598be21c9ba64afccbba5f5233a0",
-    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "8d433e20345342fb4d92405ecdfae4a2327c0047eb03ad3df0b6196468978856"
+    "scripts/hermetic-profile/profile.py": "1e511a232e13930c62f8e14852609b6ae64ced74b5cb91995b82f5c08ae377c7",
+    "scripts/hermetic-profile/controls.py": "64046d12ab6eb34d303806d5e8bd953cea06f6738c164034760ad8ad886ad2fd",
+    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "d4e4e8a43ace6ed89615362583649f71999096d9ca256cfc8a8a868f65045249"
   },
   "immutable_ci_logs": [
     {

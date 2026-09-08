@@ -30,10 +30,13 @@ the profiler never clears a shared cache.
 budget is cumulative package terminal time, not lane wall time. C11 reports a
 diagnostic reproduction of those semantics and never creates a new mandatory
 gate. Package `pass`, `fail`, and `skip` terminals require an `Elapsed` value;
-test-level terminals are not package observations. A failed process, failed
-package/test, incomplete inventory, cache marker, malformed JSON, empty stream,
-or missing raw artifact makes fresh timing invalid even if a package duration
-was emitted.
+test-level terminals are not package observations. Repeated package
+start/terminal cycles are accepted exactly as timingate accepts them, while a
+second start before the prior package terminal remains malformed. `Elapsed` is
+finite, non-negative, and bounded by Go `time.Duration`; oversized values and
+integers fail closed. A failed process, failed package/test, incomplete
+inventory, cache marker, malformed JSON, empty stream, or missing raw artifact
+makes fresh timing invalid even if a package duration was emitted.
 
 ## Public commands
 
@@ -75,7 +78,11 @@ downloads and `go test -run '^$' -c` test-binary compilation; it does not run
 tests. The first `run` is the one uncached full inventory pass. A cohort is at
 most five packages and may be invoked at most three times total: the first
 successful ranking plus two unchanged repeats. A full lane is single-shot and
-is never retried to turn a failure green.
+is never retried to turn a failure green. Before every measured run command,
+the profiler rechecks the source repository's current HEAD and dirty paths
+against inventory provenance and records the validation; changes outside the
+manifest output root reject the run before the test subprocess starts. Hermetic
+analysis requires those per-record validations.
 
 Every child process is started without a shell, with stdin closed, a bounded
 deadline, and a new process group where supported. The command record keeps the
@@ -89,7 +96,8 @@ stderr. Offline `analyze` only reads retained artifacts.
 The analyzer parses the same package-terminal event model used by timingate,
 ranks package completion durations, retains failures, marks no-test/skip packages separately,
 flags cached output, detects overlapping active subtests, and rejects missing or
-unexpected package terminals. It reports:
+unexpected package terminals. It rejects unvalidated hermetic source records
+and reports:
 
 - cold metadata/inventory and warm download/compile time separately;
 - package terminal time and ranking, with the existing 60-second PR-tier policy
@@ -120,9 +128,11 @@ hosted logs whose source/job/command provenance is recorded; unknown runner,
 cache, repeat, or wall fields remain unknown. This fallback is an honest
 assessment, not a timing pass and not a waiver.
 
-`controls.py` uses synthetic Python JSONL fixtures only. It verifies the public
-entry point for successful repetition, package/process failures, truncated,
-malformed, empty, missing, cached, no-test, and overlapping-subtest streams,
-plus help/offline no-spawn and invalid shared-host evidence. It does not invoke
-Go, download dependencies, build tests, open a live Realtime session, or claim
-physical/acoustic proof.
+`controls.py` uses synthetic Python JSONL fixtures only, plus a temporary local
+Git repository for the source-dirtiness control. It verifies the public entry
+point for successful repetition, repeated package terminals, package/process
+failures, oversized durations/integers, truncated, malformed, empty, missing,
+cached, no-test, and overlapping-subtest streams, plus help/offline no-spawn,
+invalid shared-host evidence, and post-inventory source rejection. It does not
+invoke Go, download dependencies, build tests, open a live Realtime session, or
+claim physical/acoustic proof.

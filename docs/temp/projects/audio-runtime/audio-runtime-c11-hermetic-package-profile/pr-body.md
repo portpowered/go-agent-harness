@@ -15,9 +15,9 @@ under-three-minute target is met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current implementation/control repair checkpoint:
-  `39d177009bfca1ada9b01d5a64a071fce9d69f44`.
-- The final submitted PR head is verified immediately before script-CI handoff;
-  the repair source and evidence below are pinned to the merged checkpoint above.
+  `be9f11a5e6b9256df404fd236795098081237cbe`.
+- The delivery tip may include this evidence-only checkpoint; the repair source
+  and evidence below are pinned to this exact implementation checkpoint.
 - Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -31,9 +31,11 @@ under-three-minute target is met.
   manifest-root containment before reading.
 - The public controls cover cross-package concurrency, fail-closed heavy
   admission, stdout/stderr/quiet-artifact containment, raw-artifact truth,
-  source identity, repetition completeness, missing quiet metadata, and expired
-  quiet evidence. The regenerated `ctrl-current/controls.json` reports 27 declared scenarios, 17 result
-  groups, and zero Go/network/build invocations.
+  source identity, repetition completeness, missing quiet metadata, expired
+  quiet evidence, repeated package terminals, oversized durations/integers, and
+  post-inventory source dirtiness. The regenerated `ctrl-be9f11a5/controls.json`
+  reports 31 declared cases, 21 result groups, and zero Go/network/build
+  invocations.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -42,10 +44,10 @@ under-three-minute target is met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path is 184 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 27-control suite, and `git diff --check` pass.
-- Fresh merged-main recheck from `39d17700` passed the same controls and focused
-  checks at `2026-09-08T17:03:47Z`; the tracked controls report SHA-256 is
-  `0c0f17a3850cb95605df4f358881301bedd99afe645988d54224a966dbc900e3`.
+  `profile.py --help`, the 31-case control suite, and `git diff --check` pass.
+- Fresh merged-main recheck from `be9f11a5` passed the same controls and focused
+  checks at `2026-09-08T17:45:36Z`; the tracked controls report SHA-256 is
+  `731bc9cbcfb39e1b82e7c2eec09dd8272658761e0f0c1f3487dde7dfd7f16053`.
 
 ## CI rejection disposition
 
@@ -61,6 +63,13 @@ repair does not claim that historical result as current-head CI.
 The new C11 head is ready for script-owned CI; no result for that new head is
 claimed here. The earlier Windows checkout rejection and its portable-path
 repair remain in `ci-rejection-windows.json`.
+
+The current canonical task rejection was for PR #403 head `87a92b3` and named
+three C11 defects: legal repeated package start/terminal records were rejected;
+`Elapsed=1000000000000` and oversized integers were not rejected with timingate
+semantics; and run records copied the manifest source SHA without revalidating
+current HEAD/dirty state. Commit `be9f11a5` repairs these causes, with each
+boundary covered by the new public controls.
 
 ## Handoff
 

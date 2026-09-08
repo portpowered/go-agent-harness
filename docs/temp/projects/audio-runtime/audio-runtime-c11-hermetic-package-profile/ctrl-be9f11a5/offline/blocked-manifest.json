@@ -1,0 +1,17 @@
+{
+  "ci_evidence": [
+    {
+      "source": "synthetic"
+    }
+  ],
+  "failure_references": [],
+  "fresh_timing_reason": "control-only blocked fallback",
+  "fresh_timing_status": "BLOCKED",
+  "mode": "hermetic",
+  "modules": [],
+  "provenance": {
+    "raw_logs": "not applicable"
+  },
+  "schema": "c11-hermetic-profile-manifest-v1",
+  "source_sha": "blocked-source"
+}
