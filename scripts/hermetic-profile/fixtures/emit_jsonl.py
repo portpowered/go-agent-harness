@@ -44,6 +44,7 @@ def main() -> int:
             "cached",
             "no-test",
             "overlap",
+            "cross-package",
         ),
     )
     parser.add_argument("--delay", type=float, default=0.0)
@@ -127,6 +128,22 @@ def main() -> int:
                 event("pass", "example/overlap", test="TestOverlap/b", elapsed=0.01),
                 event("pass", "example/overlap", test="TestOverlap/a", elapsed=0.01),
                 event("pass", "example/overlap", elapsed=0.03),
+            ],
+            delay=args.delay,
+        )
+        return 0
+
+    if args.scenario == "cross-package":
+        write_events(
+            [
+                event("start", "example/package-a"),
+                event("run", "example/package-a", test="TestPackageA"),
+                event("start", "example/package-b"),
+                event("run", "example/package-b", test="TestPackageB"),
+                event("pass", "example/package-b", test="TestPackageB", elapsed=0.01),
+                event("pass", "example/package-a", test="TestPackageA", elapsed=0.01),
+                event("pass", "example/package-a", elapsed=0.02),
+                event("pass", "example/package-b", elapsed=0.02),
             ],
             delay=args.delay,
         )

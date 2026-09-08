@@ -117,10 +117,16 @@ def relative_path(path: Path, root: Path) -> str:
 
 
 def artifact_path(root: Path, value: str) -> Path:
+    root_path = root.resolve()
     path = Path(value)
-    if path.is_absolute():
-        return path
-    return (root / path).resolve()
+    resolved = (path if path.is_absolute() else root_path / path).resolve()
+    try:
+        resolved.relative_to(root_path)
+    except ValueError as exc:
+        raise ProfileError(
+            f"artifact path {value!r} resolves outside output root {root_path}"
+        ) from exc
+    return resolved
 
 
 def decode_output(value: bytes) -> str:
@@ -1131,7 +1137,7 @@ def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
     test_failures: list[str] = []
     cached_markers: list[str] = []
     malformed: str | None = None
-    active_tests: set[tuple[str, str]] = set()
+    active_tests_by_package: dict[str, set[str]] = {}
     subtest_overlap = False
     line_number = 0
 
@@ -1170,16 +1176,16 @@ def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
             package_events.setdefault(package, []).append(event)
         if test:
             test_counts[package] = test_counts.get(package, 0) + 1
-            key = (package, test)
+            active_tests = active_tests_by_package.setdefault(package, set())
             if action in {"run", "cont", "start"}:
-                if active_tests and key not in active_tests:
+                if active_tests and test not in active_tests:
                     subtest_overlap = True
-                active_tests.add(key)
+                active_tests.add(test)
             elif action == "pause":
-                active_tests.discard(key)
+                active_tests.discard(test)
             elif action in TEST_TERMINALS:
                 test_terminals[package] = test_terminals.get(package, 0) + 1
-                active_tests.discard(key)
+                active_tests.discard(test)
                 if action == "fail":
                     test_failures.append(f"{package}:{test}")
         if action == "fail":
@@ -1255,31 +1261,53 @@ def parse_timing_stream(raw: bytes, *, label: str) -> dict[str, Any]:
 
 
 def parse_record_stream(
-    record: dict[str, Any], *, root: Path
+    record: dict[str, Any], *, root: Path, expected_source_sha: Any
 ) -> dict[str, Any]:
+    record_source_sha = record.get("source_sha")
+    if not isinstance(record_source_sha, str) or not record_source_sha:
+        source_status = "MISSING"
+    elif not isinstance(expected_source_sha, str) or not expected_source_sha:
+        source_status = "MANIFEST_MISSING"
+    elif record_source_sha != expected_source_sha:
+        source_status = "MISMATCH"
+    else:
+        source_status = "PASS"
+
+    base = {
+        "record_id": record.get("label"),
+        "record": record,
+        "source_status": source_status,
+        "raw_stdout_retained": False,
+        "raw_stderr_retained": False,
+        "execution_valid": False,
+    }
     path_value = record.get("stdout_path")
     if not isinstance(path_value, str):
-        return {
-            "record_id": record.get("label"),
-            "stream_status": "INVALID",
-            "error": "command record has no stdout_path",
-            "record": record,
-        }
-    path = artifact_path(root, path_value)
+        base.update(
+            {
+                "stream_status": "INVALID",
+                "error": "command record has no stdout_path",
+            }
+        )
+        return base
+    try:
+        path = artifact_path(root, path_value)
+    except ProfileError as exc:
+        base.update({"stream_status": "INVALID", "error": str(exc)})
+        return base
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        return {
-            "record_id": record.get("label"),
-            "stream_status": "INVALID",
-            "error": f"raw stdout missing: {exc}",
-            "record": record,
-        }
+        base.update(
+            {"stream_status": "INVALID", "error": f"raw stdout missing: {exc}"}
+        )
+        return base
+
     parsed = parse_timing_stream(raw, label=str(record.get("label", path)))
-    parsed["record_id"] = record.get("label")
-    parsed["record"] = record
+    parsed.update(base)
     parsed["raw_stdout_path"] = str(path)
     parsed["raw_stdout_sha256"] = sha256_bytes(raw)
+    parsed["raw_stdout_retained"] = True
     parsed["stdout_hash_matches"] = (
         isinstance(record.get("stdout_sha256"), str)
         and record.get("stdout_sha256") == parsed["raw_stdout_sha256"]
@@ -1288,15 +1316,20 @@ def parse_record_stream(
     stderr_error = None
     stderr_path_value = record.get("stderr_path")
     if isinstance(stderr_path_value, str):
-        stderr_path = artifact_path(root, stderr_path_value)
         try:
-            stderr_hash = sha256_file(stderr_path)
-            stderr_hash_matches = (
-                isinstance(record.get("stderr_sha256"), str)
-                and record.get("stderr_sha256") == stderr_hash
-            )
-        except OSError as exc:
-            stderr_error = f"raw stderr missing: {exc}"
+            stderr_path = artifact_path(root, stderr_path_value)
+        except ProfileError as exc:
+            stderr_error = str(exc)
+        else:
+            try:
+                stderr_hash = sha256_file(stderr_path)
+                parsed["raw_stderr_retained"] = True
+                stderr_hash_matches = (
+                    isinstance(record.get("stderr_sha256"), str)
+                    and record.get("stderr_sha256") == stderr_hash
+                )
+            except OSError as exc:
+                stderr_error = f"raw stderr missing: {exc}"
     else:
         stderr_error = "command record has no stderr_path"
     parsed["stderr_hash_matches"] = stderr_hash_matches
@@ -1307,11 +1340,6 @@ def parse_record_stream(
         else "TIMEOUT"
         if record.get("timed_out")
         else "FAIL"
-    )
-    parsed["source_status"] = (
-        "PASS"
-        if record.get("source_sha") is not None
-        else "UNKNOWN"
     )
     expected = set(str(item) for item in record.get("selected_packages", []))
     observed = set(parsed.get("terminal_packages", []))
@@ -1324,6 +1352,7 @@ def parse_record_stream(
     parsed["execution_valid"] = (
         parsed["stream_status"] == "PASS"
         and parsed["process_status"] == "PASS"
+        and parsed["source_status"] == "PASS"
         and parsed["inventory_complete"]
         and not parsed["package_failures"]
         and not parsed["test_failures"]
@@ -1460,6 +1489,195 @@ def lane_times(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def validate_recorded_quiet_evidence(
+    value: Any, *, root: Path, mode: str
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"status": "INVALID", "error": "run group has no quiet evidence"}
+    path_value = value.get("path")
+    expected_sha = value.get("sha256")
+    if not isinstance(path_value, str) or not path_value:
+        return {"status": "INVALID", "error": "quiet evidence has no path"}
+    if not isinstance(expected_sha, str) or not expected_sha:
+        return {"status": "INVALID", "error": "quiet evidence has no SHA-256"}
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = root / path
+    path = path.resolve()
+    try:
+        evidence = load_json(path)
+        actual_sha = sha256_file(path)
+    except (OSError, ProfileError) as exc:
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": f"quiet evidence cannot be read: {exc}",
+        }
+    if actual_sha != expected_sha:
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": "quiet evidence SHA-256 does not match the captured provenance",
+        }
+    if evidence.get("schema") != QUIET_SCHEMA or evidence.get("valid") is not True:
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": "quiet evidence is not a valid captured quiet-run record",
+        }
+    allowed = {"synthetic-control"} if mode == "synthetic" else {"isolated", "dedicated"}
+    if evidence.get("isolation") not in allowed:
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": (
+                f"quiet evidence isolation {evidence.get('isolation')!r} is not "
+                f"allowed for {mode}"
+            ),
+        }
+    if value.get("isolation") != evidence.get("isolation"):
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": "quiet evidence isolation changed after capture",
+        }
+    return {
+        "status": "PASS",
+        "path": str(path),
+        "sha256": actual_sha,
+        "isolation": evidence.get("isolation"),
+    }
+
+
+def validate_repetition_group(
+    group: dict[str, Any],
+    records: list[dict[str, Any]],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    errors: list[str] = []
+    group_id = group.get("run_group_id")
+    if not isinstance(group_id, str) or not group_id:
+        errors.append("run group has no run_group_id")
+        group_id = "<missing>"
+    requested = group.get("requested_repetitions")
+    completed = group.get("completed_repetitions")
+    if (
+        isinstance(requested, bool)
+        or not isinstance(requested, int)
+        or requested < 1
+        or requested > 3
+    ):
+        errors.append("requested_repetitions is not an integer in the range 1..3")
+        requested_count = 0
+    else:
+        requested_count = requested
+    if isinstance(completed, bool) or not isinstance(completed, int) or completed < 0:
+        errors.append("completed_repetitions is not a non-negative integer")
+        completed_count = -1
+    else:
+        completed_count = completed
+    if requested_count and completed_count != requested_count:
+        errors.append(
+            "completed_repetitions does not equal requested_repetitions; "
+            "incomplete repeats cannot produce fresh timing PASS"
+        )
+    if group.get("status") != "CAPTURED":
+        errors.append(f"run group status is {group.get('status')!r}")
+
+    declared_records = group.get("records")
+    if not isinstance(declared_records, list):
+        errors.append("run group has no records list")
+        declared_labels: list[str] = []
+    else:
+        declared_labels = [
+            str(record.get("label"))
+            for record in declared_records
+            if isinstance(record, dict) and record.get("label") is not None
+        ]
+    actual_labels = [
+        str(record.get("label"))
+        for record in records
+        if record.get("label") is not None
+    ]
+    if sorted(declared_labels) != sorted(actual_labels):
+        errors.append("run group records do not match manifest run records")
+
+    package_to_module: dict[str, str] = {}
+    for module in manifest.get("modules", []):
+        if not isinstance(module, dict) or not isinstance(module.get("name"), str):
+            continue
+        for package in module.get("packages", []):
+            if isinstance(package, dict) and isinstance(package.get("import_path"), str):
+                package_to_module[package["import_path"]] = module["name"]
+    selected_value = group.get("selected_packages")
+    if not isinstance(selected_value, list) or not selected_value:
+        errors.append("run group has no selected package inventory")
+        selected_packages: list[str] = []
+    else:
+        selected_packages = [str(item) for item in selected_value]
+        if len(set(selected_packages)) != len(selected_packages):
+            errors.append("run group selected package inventory contains duplicates")
+    selected_by_module: dict[str, set[str]] = {}
+    for package in selected_packages:
+        module_name = package_to_module.get(package)
+        if module_name is None:
+            errors.append(f"selected package {package!r} is not in the manifest inventory")
+            continue
+        selected_by_module.setdefault(module_name, set()).add(package)
+    expected_modules = set(selected_by_module)
+    if not expected_modules:
+        errors.append("run group has no module with selected packages")
+
+    records_by_repeat: dict[int, list[dict[str, Any]]] = {}
+    for record in records:
+        if record.get("run_group_id") != group_id:
+            errors.append(f"record {record.get('label')!r} has the wrong run_group_id")
+        module_name = record.get("module")
+        repeat_index = record.get("repeat_index")
+        if module_name not in expected_modules:
+            errors.append(f"record {record.get('label')!r} has an unexpected module")
+        if (
+            isinstance(repeat_index, bool)
+            or not isinstance(repeat_index, int)
+            or repeat_index < 1
+            or (requested_count and repeat_index > requested_count)
+        ):
+            errors.append(f"record {record.get('label')!r} has an invalid repeat_index")
+            continue
+        record_packages = record.get("selected_packages")
+        if not isinstance(record_packages, list):
+            errors.append(f"record {record.get('label')!r} has no selected packages")
+        elif set(str(item) for item in record_packages) != selected_by_module.get(
+            module_name, set()
+        ):
+            errors.append(
+                f"record {record.get('label')!r} selected package scope changed"
+            )
+        records_by_repeat.setdefault(repeat_index, []).append(record)
+
+    if requested_count:
+        for repeat_index in range(1, requested_count + 1):
+            repeat_records = records_by_repeat.get(repeat_index, [])
+            repeat_modules = {record.get("module") for record in repeat_records}
+            if repeat_modules != expected_modules or len(repeat_records) != len(expected_modules):
+                errors.append(
+                    f"repeat {repeat_index} has {len(repeat_records)} module records; "
+                    f"expected {len(expected_modules)}"
+                )
+
+    return {
+        "status": "PASS" if not errors else "INVALID",
+        "run_group_id": group_id,
+        "requested_repetitions": requested,
+        "completed_repetitions": completed,
+        "expected_records": (
+            requested_count * len(expected_modules) if requested_count else None
+        ),
+        "actual_records": len(records),
+        "errors": errors,
+    }
+
+
 def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
@@ -1506,7 +1724,14 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             }, 0
         raise ProfileError("manifest contains no captured runs and is not marked BLOCKED")
 
-    parsed_records = [parse_record_stream(record, root=root) for record in all_records]
+    parsed_records = [
+        parse_record_stream(
+            record,
+            root=root,
+            expected_source_sha=manifest.get("source_sha"),
+        )
+        for record in all_records
+    ]
     expected_by_record = {
         record.get("label"): set(record.get("selected_packages", []))
         for record in all_records
@@ -1523,30 +1748,147 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     )
     source_values = sorted(
         {
-            str(record.get("source_sha"))
+            record["source_sha"]
             for record in all_records
-            if record.get("source_sha") is not None
+            if isinstance(record.get("source_sha"), str)
+            and record.get("source_sha")
         }
     )
+    missing_source_records = [
+        record.get("label")
+        for record in all_records
+        if not isinstance(record.get("source_sha"), str)
+        or not record.get("source_sha")
+    ]
+    mismatched_source_records = [
+        record.get("label")
+        for record in all_records
+        if isinstance(record.get("source_sha"), str)
+        and record.get("source_sha") != manifest.get("source_sha")
+    ]
     source_identity = {
         "manifest": manifest.get("source_sha"),
         "record_values": source_values,
-        "all_match": bool(source_values)
-        and all(value == manifest.get("source_sha") for value in source_values),
+        "missing_records": missing_source_records,
+        "mismatched_records": mismatched_source_records,
+        "all_match": (
+            isinstance(manifest.get("source_sha"), str)
+            and bool(all_records)
+            and not missing_source_records
+            and not mismatched_source_records
+            and all(
+                value == manifest.get("source_sha") for value in source_values
+            )
+        ),
     }
+
+    run_groups = manifest.get("run_groups")
+    run_groups_for_analysis = run_groups if isinstance(run_groups, list) else []
+    group_validation: dict[str, dict[str, Any]] = {}
+    duplicate_group_ids: set[str] = set()
+    if isinstance(run_groups, list):
+        for index, group in enumerate(run_groups):
+            if (
+                args.group is not None
+                and (
+                    not isinstance(group, dict)
+                    or group.get("run_group_id") != args.group
+                )
+            ):
+                continue
+            if not isinstance(group, dict):
+                group_validation[f"<group-{index}>"] = {
+                    "status": "INVALID",
+                    "valid": False,
+                    "errors": ["run group is not an object"],
+                    "quiet_evidence": {"status": "INVALID"},
+                }
+                continue
+            group_id = group.get("run_group_id")
+            key = group_id if isinstance(group_id, str) and group_id else f"<group-{index}>"
+            if key in group_validation:
+                duplicate_group_ids.add(key)
+                continue
+            group_records = [
+                record
+                for record in all_records
+                if record.get("run_group_id") == group_id
+            ]
+            repetition = validate_repetition_group(group, group_records, manifest)
+            quiet = validate_recorded_quiet_evidence(
+                group.get("quiet_evidence"),
+                root=root,
+                mode=str(manifest.get("mode", "hermetic")),
+            )
+            errors = list(repetition.get("errors", []))
+            if quiet.get("status") != "PASS":
+                errors.append(str(quiet.get("error", "quiet evidence is invalid")))
+            group_validation[key] = {
+                **repetition,
+                "quiet_evidence": quiet,
+                "valid": not errors,
+                "errors": errors,
+            }
+    else:
+        group_validation["<manifest>"] = {
+            "status": "INVALID",
+            "valid": False,
+            "errors": ["manifest has no run_groups list"],
+            "quiet_evidence": {"status": "INVALID"},
+        }
+    for duplicate in sorted(duplicate_group_ids):
+        group_validation[duplicate] = {
+            "status": "INVALID",
+            "valid": False,
+            "errors": [f"run_group_id {duplicate!r} is duplicated"],
+            "quiet_evidence": {"status": "INVALID"},
+        }
+    for parsed in parsed_records:
+        record_value = parsed.get("record")
+        group_id = (
+            record_value.get("run_group_id")
+            if isinstance(record_value, dict)
+            else None
+        )
+        if not isinstance(group_id, str):
+            group_id = None
+        validation = group_validation.get(group_id)
+        parsed["run_group_validation"] = validation
+        if not isinstance(validation, dict) or validation.get("valid") is not True:
+            parsed["execution_valid"] = False
     execution_valid = all(parsed.get("execution_valid") for parsed in parsed_records)
     stream_failures = [
         {
             "record": parsed.get("record_id"),
             "error": parsed.get("error"),
             "process_status": parsed.get("process_status"),
+            "source_status": parsed.get("source_status"),
             "missing_packages": parsed.get("missing_packages", []),
             "unexpected_packages": parsed.get("unexpected_packages", []),
             "cached_markers": parsed.get("cached_markers", []),
+            "run_group_errors": (
+                parsed.get("run_group_validation", {}).get("errors", [])
+                if isinstance(parsed.get("run_group_validation"), dict)
+                else ["record is not attached to a valid run group"]
+            ),
         }
         for parsed in parsed_records
         if not parsed.get("execution_valid")
     ]
+    for group_id, validation in sorted(group_validation.items()):
+        if validation.get("valid") is not True:
+            stream_failures.append(
+                {
+                    "record": f"run_group:{group_id}",
+                    "error": "; ".join(validation.get("errors", [])),
+                    "process_status": None,
+                    "source_status": None,
+                    "missing_packages": [],
+                    "unexpected_packages": [],
+                    "cached_markers": [],
+                    "run_group_errors": validation.get("errors", []),
+                }
+            )
     no_test_packages = sorted(
         {
             package["import_path"]
@@ -1572,6 +1914,12 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     }
     timing = timingate_report(parsed_records)
     fresh_timing = "PASS" if execution_valid and source_identity["all_match"] else "INVALID"
+    raw_stdout_retained = bool(parsed_records) and all(
+        parsed.get("raw_stdout_retained") is True for parsed in parsed_records
+    )
+    raw_stderr_retained = bool(parsed_records) and all(
+        parsed.get("raw_stderr_retained") is True for parsed in parsed_records
+    )
     warm = manifest.get("warm", {})
     analysis = {
         "schema": ANALYSIS_SCHEMA,
@@ -1638,25 +1986,43 @@ def analyze(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         },
         "repetitions": [
             {
-                "run_group_id": group.get("run_group_id"),
+                "run_group_id": group.get("run_group_id")
+                if isinstance(group, dict)
+                else None,
                 "cohort": group.get("cohort"),
                 "requested_repetitions": group.get("requested_repetitions"),
                 "completed_repetitions": group.get("completed_repetitions"),
                 "status": group.get("status"),
                 "records": [record.get("label") for record in group.get("records", [])],
+                "validation": group_validation.get(
+                    group.get("run_group_id")
+                    if isinstance(group, dict)
+                    and isinstance(group.get("run_group_id"), str)
+                    else None,
+                    {
+                        "status": "INVALID",
+                        "valid": False,
+                        "errors": ["run group is not attached to the analysis"],
+                    },
+                ),
             }
-            for group in manifest.get("run_groups", [])
-            if args.group is None or group.get("run_group_id") == args.group
+            for group in run_groups_for_analysis
+            if isinstance(group, dict)
+            and (args.group is None or group.get("run_group_id") == args.group)
         ],
         "timingate": timing,
         "failure_references": stream_failures,
         "provenance": {
-            "raw_stdout_retained": True,
-            "raw_stderr_retained": True,
+            "raw_stdout_retained": raw_stdout_retained,
+            "raw_stderr_retained": raw_stderr_retained,
+            "raw_artifacts_retained": raw_stdout_retained and raw_stderr_retained,
             "test_result_cache_policy": "every run command contains -count=1",
             "cached_output_is_invalid": True,
             "lane_wall_not_sum_of_packages": True,
             "fresh_timing_requires_quiet_evidence": True,
+            "source_identity_required_per_record": True,
+            "run_group_repetition_counts_validated": True,
+            "quiet_evidence_provenance_validated": True,
         },
     }
     write_json(output / "analysis.json", analysis)

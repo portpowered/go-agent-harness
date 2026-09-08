@@ -276,7 +276,9 @@ def exercise_case(
         try:
             artifact.unlink()
         except OSError as exc:
-            raise ControlError(f"{name}: cannot remove raw stdout control artifact: {exc}") from exc
+            raise ControlError(
+                f"{name}: cannot remove raw stdout control artifact: {exc}"
+            ) from exc
     analysis_dir = case_dir / "analysis"
     analysis_record = run_child(
         [
@@ -324,7 +326,7 @@ def exercise_case(
         "analysis": analysis_record,
         "analysis_summary": analysis_summary,
         "analysis_artifact": str(analysis_dir / "analysis.json"),
-        "raw_artifacts_retained": True,
+        "raw_artifacts_retained": not remove_stdout_after_run,
     }
 
 
@@ -413,6 +415,7 @@ def exercise_fail_closed(output: Path) -> dict[str, Any]:
             str(Path(__file__).resolve().parents[2]),
             "--output",
             str(case_dir / "inventory"),
+            "--allow-heavy",
             "--quiet-evidence",
             str(invalid_quiet),
         ],
@@ -424,9 +427,202 @@ def exercise_fail_closed(output: Path) -> dict[str, Any]:
         raise ControlError(
             f"fail-closed inventory exit {record['exit_status']}, want 2"
         )
-    if "not valid" not in record["stderr"] and "opt-in" not in record["stderr"]:
-        raise ControlError("fail-closed error did not explain the missing prerequisite")
+    if "not valid" not in record["stderr"] or "C08 owns the shared host" not in record["stderr"]:
+        raise ControlError(
+            "fail-closed error did not validate and explain the shared-host prerequisite"
+        )
     return {"name": "heavy-without-admission", "record": record}
+
+
+def analyze_mutated_manifest(
+    case_dir: Path,
+    manifest: Path,
+    mutation_name: str,
+    expected_checks: dict[str, Any],
+) -> dict[str, Any]:
+    analysis_dir = case_dir / "analysis" / mutation_name
+    record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(manifest),
+            "--output",
+            str(analysis_dir),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver" / mutation_name,
+        name="analyze",
+    )
+    if record["exit_status"] != 1:
+        raise ControlError(
+            f"{mutation_name}: analyze exit {record['exit_status']}, want 1\n"
+            f"{record['stderr']}"
+        )
+    analysis = read_json(analysis_dir / "analysis.json")
+    if analysis.get("status") != "INVALID":
+        raise ControlError(
+            f"{mutation_name}: analysis status {analysis.get('status')!r}, want 'INVALID'"
+        )
+    for key, expected in expected_checks.items():
+        current: Any = analysis
+        for part in key.split("."):
+            if isinstance(current, list):
+                current = current[int(part)]
+            elif isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = None
+        if current != expected:
+            raise ControlError(
+                f"{mutation_name}: {key} = {current!r}, want {expected!r}"
+            )
+    return {
+        "name": mutation_name,
+        "record": record,
+        "analysis_artifact": str(analysis_dir / "analysis.json"),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
+    case_dir = output / "provenance-tampering"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    run_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+            "--repeat",
+            "2",
+            "--cohort",
+            "synthetic:.",
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if run_record["exit_status"] != 0:
+        raise ControlError(
+            f"provenance-tampering: run exit {run_record['exit_status']}\n"
+            f"{run_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    mutations: list[dict[str, Any]] = []
+    for mutation_name, mutate, checks in (
+        (
+            "missing-record-source",
+            lambda value: value["runs"][0].pop("source_sha", None),
+            {
+                "source.source_identity.all_match": False,
+                "source.source_identity.missing_records": [
+                    baseline["runs"][0]["label"]
+                ],
+            },
+        ),
+        (
+            "missing-quiet-evidence",
+            lambda value: value["run_groups"][0].pop("quiet_evidence", None),
+            {"repetitions.0.validation.valid": False},
+        ),
+        (
+            "incomplete-repetition-count",
+            lambda value: value["run_groups"][0].update(
+                {"requested_repetitions": 3, "completed_repetitions": 1}
+            ),
+            {
+                "repetitions.0.validation.valid": False,
+                "repetitions.0.validation.requested_repetitions": 3,
+                "repetitions.0.validation.completed_repetitions": 1,
+            },
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(case_dir, manifest, mutation_name, checks)
+        )
+    return {
+        "name": "provenance-tampering",
+        "run": run_record,
+        "mutations": mutations,
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_artifact_containment(output: Path) -> dict[str, Any]:
+    case_dir = output / "artifact-containment"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    run_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if run_record["exit_status"] != 0:
+        raise ControlError(
+            f"artifact-containment: run exit {run_record['exit_status']}\n"
+            f"{run_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    original = baseline["runs"][0]
+    original_path = manifest.parent / original["stdout_path"]
+    redirected = case_dir / "redirected.stdout.jsonl"
+    redirected.write_bytes(original_path.read_bytes())
+    redirected_sha = sha256_file(redirected)
+    mutations: list[dict[str, Any]] = []
+    for mutation_name, redirected_path in (
+        ("absolute-redirect", str(redirected.resolve())),
+        ("traversal-redirect", "../redirected.stdout.jsonl"),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutated["runs"][0]["stdout_path"] = redirected_path
+        mutated["runs"][0]["stdout_sha256"] = redirected_sha
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "failure_references.0.error": (
+                        f"artifact path {redirected_path!r} resolves outside output root "
+                        f"{manifest.parent.resolve()}"
+                    ),
+                    "provenance.raw_stdout_retained": False,
+                },
+            )
+        )
+    return {
+        "name": "artifact-containment",
+        "run": run_record,
+        "mutations": mutations,
+        "raw_artifacts_retained": True,
+    }
 
 
 def main() -> int:
@@ -550,6 +746,22 @@ def main() -> int:
             1,
             {"package_execution.subtest_overlap_count": 1},
         ),
+        (
+            "cross-package-concurrency",
+            "cross-package",
+            [
+                {"import_path": "example/package-a", "package_arg": ".", "has_tests": True},
+                {"import_path": "example/package-b", "package_arg": ".", "has_tests": True},
+            ],
+            0,
+            0,
+            "PASS",
+            1,
+            {
+                "package_execution.subtest_overlap_count": 0,
+                "package_execution.subtest_overlap_records": [],
+            },
+        ),
     ]
     for (
         name,
@@ -585,6 +797,14 @@ def main() -> int:
         results.append(exercise_fail_closed(output))
     except ControlError as exc:
         failures.append(str(exc))
+    try:
+        results.append(exercise_provenance_tampering(output))
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        results.append(exercise_artifact_containment(output))
+    except ControlError as exc:
+        failures.append(str(exc))
 
     try:
         results.append(
@@ -598,12 +818,17 @@ def main() -> int:
                 run_status=0,
                 analysis_status=1,
                 expect_analysis="INVALID",
+                expected_checks={
+                    "provenance.raw_stdout_retained": False,
+                    "provenance.raw_artifacts_retained": False,
+                },
                 remove_stdout_after_run=True,
             )
         )
     except ControlError as exc:
         failures.append(str(exc))
 
+    case_count = len(cases) + 1 + 1 + 3 + 2
     report = {
         "schema": "c11-hermetic-profile-controls-v1",
         "created_at_utc": utc_now(),
@@ -612,11 +837,24 @@ def main() -> int:
         "go_invocations": 0,
         "network_invocations": 0,
         "build_invocations": 0,
-        "case_count": len(cases) + 1,
+        "case_count": case_count,
         "passed_control_count": len(results),
         "failures": failures,
         "results": results,
-        "raw_evidence_retained": True,
+        "raw_evidence_retained": not any(
+            result.get("raw_artifacts_retained") is False for result in results
+        ),
+        "raw_evidence_retention": {
+            "all_case_artifacts_retained": not any(
+                result.get("raw_artifacts_retained") is False for result in results
+            ),
+            "deliberately_removed_cases": [
+                result.get("name")
+                for result in results
+                if result.get("raw_artifacts_retained") is False
+            ],
+            "negative_control": "missing-raw-artifact",
+        },
     }
     write_json(output / "controls.json", report)
     if failures:
@@ -633,7 +871,7 @@ def main() -> int:
             {
                 "status": "PASS",
                 "report": str(output / "controls.json"),
-                "cases": len(cases) + 1,
+                "cases": case_count,
                 "go_invocations": 0,
                 "network_invocations": 0,
             },
