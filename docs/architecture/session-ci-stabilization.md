@@ -157,3 +157,14 @@ shape remain asserted. No production change or timeout increase was needed.
 The fixed case passed 1,000 race repeats; all composed cases passed 30 repeats
 in each mode. Local and Linux-targeted gateway lint passed. The cumulative
 runner now retains composed provider tests alongside CLI/device regressions.
+
+## Latency follow-up
+
+CI now runs architecture and size enforcement through one architecturegate
+inventory (`make architecture-size-check`). The individual diagnostic targets,
+both rule sets, baseline checks, fixture tests and Wire validation remain.
+On the same local worktree, separate checks took 27.43s + 15.85s; combined took
+22.61s and preserved the pending test-file baseline failure. This is an indicative
+local measurement on a shared host, not a promised CI delta. The prior hosted run
+spent 28.37s + 13.33s on those separate steps. Architecturegate tests passed.
+Distinct integration, stress, coverage, race and platform jobs were retained.

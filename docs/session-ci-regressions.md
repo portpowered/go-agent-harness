@@ -36,6 +36,11 @@ intermittent failure, not mechanically after every edit. Once the relevant check
 pass, commit/push and let the CI script own full-suite polling; do not occupy an
 executor by repeatedly rebuilding and running the entire CI matrix locally.
 
+Use `make architecture-size-check` when a change affects both service boundaries
+and size budgets. It shares one repository inventory while enforcing both rule
+sets. The individual `architecture-check` and `size-check` targets remain available
+for focused diagnosis; `verify-architecture` also checks fixtures and Wire output.
+
 ## What the cumulative runner covers
 
 The runner preserves 17 historical CLI integration scenarios and all their
