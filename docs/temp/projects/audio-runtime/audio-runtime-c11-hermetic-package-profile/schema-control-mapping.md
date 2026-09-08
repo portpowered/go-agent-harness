@@ -15,6 +15,8 @@ never carry copies of command records.
 | `run_groups[].source_validations` duplicated per-record Git evidence | Removed from newly captured manifests. Source validation records live once in `commands`; run records retain only their two metadata record IDs. |
 | `analyze --group` filtered records before validating the manifest | The complete canonical command stream and derived groups are validated first. The group option only filters ranking, lane-wall, and displayed repetition records; an invalid unselected group still makes analysis `INVALID`. |
 | Repetition count and package scope controls | Derived from canonical records grouped by run-group id, module, and repeat index. Requested/completed counts, module coverage, selected package identity, quiet evidence, and package terminal coverage remain fail-closed. |
+| Run lifecycle admission | `run --cohort` accepts exactly two unchanged invocations (`--repeat 2`); repeat 3 and other counts are rejected. A hermetic cohort cannot start until the full lane has one complete PASS/exit-0 record for every package-bearing module, with exact module coverage and no duplicate or partial records. |
+| Inventory and warm prerequisites | Readiness and analysis require every inventory and required warm command to be `PASS` with exit status 0, without timeout or spawn error. Failed or partial phase commands reject before Go work or ranking. |
 | Raw Go JSON and package timing | `parse_timing_stream` remains the single parser for retained stdout. Package/test failures, cache markers, malformed/truncated streams, no-test conflicts, overlap classification, and timing bounds remain observable. The existing `tools/timingate` 60-second policy is not reimplemented. |
 | Source and metadata provenance | `validate_source_state` records Git head/status command artifacts once in `commands` per run and retains IDs in the run record. Analysis verifies artifact containment, bytes, hashes, exact argv/cwd/env Git identity, captured output, repository identity, expected head, and dirty paths before fresh timing can pass. |
 | Quiet-runner evidence | Each group still carries its captured quiet-evidence reference. Analysis verifies the file hash, contained path, complete runner metadata, current validity window, before/after lease/process/load observations, isolation, and copied summary fields. |
@@ -23,8 +25,9 @@ never carry copies of command records.
 ## Public causal control
 
 `controls.py` now includes canonical phase mutations for malformed inventory and
-warm records, a hermetic no-warm capture, and a malformed canonical command. It
-also adds `unreferenced-invalid-run-group-filtered`, which appends a zero-request
+warm records, a hermetic no-warm capture, malformed canonical commands, and
+public lifecycle controls for rejected repeat counts plus failed and partial
+full-trial prerequisites. It also adds `unreferenced-invalid-run-group-filtered`, which appends a zero-request
 canonical run record, asks the public analyzer to display only the valid group,
 and asserts exit 1 and `status=INVALID`. Git command argv tampering is covered
 through the source-identity control. These controls prove that phase validation,

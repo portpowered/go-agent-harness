@@ -155,6 +155,18 @@ def decode_output(value: bytes) -> str:
     return value.decode("utf-8", errors="replace")
 
 
+def command_completed_successfully(record: Any) -> bool:
+    """Return whether a captured command is safe to use as a completed phase."""
+
+    return (
+        isinstance(record, dict)
+        and record.get("status") == "PASS"
+        and record.get("exit_status") == 0
+        and record.get("timed_out") is not True
+        and not record.get("spawn_error")
+    )
+
+
 def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is not None:
         return
@@ -1029,6 +1041,34 @@ def check_ready_manifest(manifest: dict[str, Any], *, require_warm: bool = False
         raise ProfileError(
             "manifest module inventory is not the admitted six-module hermetic lane"
         )
+    commands = manifest.get("commands")
+    if not isinstance(commands, list):
+        raise ProfileError("manifest has no canonical commands list")
+    inventory_commands = [
+        command
+        for command in commands
+        if isinstance(command, dict) and command.get("phase") == "inventory"
+    ]
+    if not inventory_commands:
+        raise ProfileError(
+            "manifest has no inventory command records; complete inventory before "
+            "running hermetic phases"
+        )
+    inventory_failures = [
+        command
+        for command in inventory_commands
+        if not command_completed_successfully(command)
+    ]
+    if inventory_failures:
+        details = ", ".join(
+            f"{command.get('record_id')!r} status={command.get('status')!r} "
+            f"exit={command.get('exit_status')!r}"
+            for command in inventory_failures
+        )
+        raise ProfileError(
+            "inventory phase is not complete; every inventory command must have "
+            f"PASS/exit 0 ({details})"
+        )
     warm = manifest.get("warm")
     if require_warm and (
         not isinstance(warm, dict) or warm.get("status") != "PASS"
@@ -1037,6 +1077,32 @@ def check_ready_manifest(manifest: dict[str, Any], *, require_warm: bool = False
             "manifest warm status is not PASS; complete the explicit warm phase "
             "before running hermetic tests"
         )
+    if require_warm:
+        warm_commands = [
+            command
+            for command in commands
+            if isinstance(command, dict) and command.get("phase") == "warm"
+        ]
+        if not warm_commands:
+            raise ProfileError(
+                "manifest has no warm command records; complete the explicit warm "
+                "phase before running hermetic tests"
+            )
+        warm_failures = [
+            command
+            for command in warm_commands
+            if not command_completed_successfully(command)
+        ]
+        if warm_failures:
+            details = ", ".join(
+                f"{command.get('record_id')!r} status={command.get('status')!r} "
+                f"exit={command.get('exit_status')!r}"
+                for command in warm_failures
+            )
+            raise ProfileError(
+                "warm phase is not complete; every warm command must have "
+                f"PASS/exit 0 ({details})"
+            )
 
 
 def warm(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1260,6 +1326,72 @@ def select_packages(
     return by_module, True, list(dict.fromkeys(selected))
 
 
+def completed_full_trial_errors(
+    manifest: dict[str, Any], full_records: list[dict[str, Any]]
+) -> list[str]:
+    """Validate the prerequisite full trial before allowing a cohort run."""
+
+    errors: list[str] = []
+    expected_modules = {
+        module.get("name")
+        for module in manifest.get("modules", [])
+        if isinstance(module, dict)
+        and isinstance(module.get("name"), str)
+        and isinstance(module.get("packages"), list)
+        and module.get("packages")
+    }
+    actual_modules = {record.get("module") for record in full_records}
+    if actual_modules != expected_modules:
+        errors.append(
+            "full inventory trial is partial: expected module records "
+            f"{sorted(expected_modules)!r}, got {sorted(actual_modules)!r}"
+        )
+    group_ids = {record.get("run_group_id") for record in full_records}
+    if len(group_ids) != 1 or not isinstance(next(iter(group_ids), None), str):
+        errors.append("full inventory trial must contain exactly one run group")
+    for module in manifest.get("modules", []):
+        if not isinstance(module, dict) or not module.get("packages"):
+            continue
+        module_name = module.get("name")
+        module_records = [
+            record for record in full_records if record.get("module") == module_name
+        ]
+        if len(module_records) != 1:
+            errors.append(
+                f"full inventory trial must contain exactly one record for {module_name!r}"
+            )
+            continue
+        record = module_records[0]
+        if not command_completed_successfully(record):
+            errors.append(
+                f"full inventory trial record {record.get('record_id')!r} did not "
+                f"complete with PASS/exit 0 (status={record.get('status')!r}, "
+                f"exit={record.get('exit_status')!r})"
+            )
+        if record.get("phase") != "full":
+            errors.append(f"full inventory trial record {record.get('record_id')!r} is not full phase")
+        if record.get("repeat_index") != 1 or record.get("trial") != 1:
+            errors.append(f"full inventory trial record {record.get('record_id')!r} is not trial 1")
+        if record.get("requested_repetitions") != 1:
+            errors.append(
+                f"full inventory trial record {record.get('record_id')!r} must request one repetition"
+            )
+        if record.get("cohort") is not False:
+            errors.append(f"full inventory trial record {record.get('record_id')!r} is cohort-scoped")
+        expected_packages = {
+            package.get("import_path")
+            for package in module.get("packages", [])
+            if isinstance(package, dict) and isinstance(package.get("import_path"), str)
+        }
+        actual_packages = set(record.get("selected_packages", []))
+        if actual_packages != expected_packages:
+            errors.append(
+                f"full inventory trial record {record.get('record_id')!r} does not cover "
+                "the complete module inventory"
+            )
+    return errors
+
+
 def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
@@ -1269,10 +1401,12 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     else:
         check_ready_manifest(manifest, require_warm=True)
         quiet = require_heavy(args, mode="hermetic", root=root)
-    if args.repeat > 3:
-        raise ProfileError("repeat is capped at three invocations (one plus two repeats)")
     if args.cohort is None and args.repeat != 1:
-        raise ProfileError("full inventory runs are single-shot; repeat only a bounded cohort")
+        raise ProfileError("full inventory runs require exactly one invocation")
+    if args.cohort is not None and args.repeat != 2:
+        raise ProfileError(
+            "cohort runs require exactly two invocations (the two unchanged repeats)"
+        )
     existing_commands = manifest.get("commands")
     if not isinstance(existing_commands, list):
         raise ProfileError("manifest has no canonical commands list")
@@ -1290,10 +1424,14 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "manifest already contains the full inventory trial; "
                 "do not retry unchanged full timing"
             )
-        if args.cohort is not None and not full_records:
-            raise ProfileError(
-                "cohort timing requires the completed full inventory trial first"
-            )
+        if args.cohort is not None:
+            full_errors = completed_full_trial_errors(manifest, full_records)
+            if full_errors:
+                raise ProfileError(
+                    "cohort timing requires a successful complete full inventory "
+                    "trial first: "
+                    + "; ".join(full_errors)
+                )
     runs_root = root / "runs"
     env_overrides = manifest_env(manifest, root=root)
     synthetic = manifest.get("mode") == "synthetic"
@@ -2583,9 +2721,9 @@ def validate_repetition_group(
         isinstance(requested, bool)
         or not isinstance(requested, int)
         or requested < 1
-        or requested > 3
+        or requested > 2
     ):
-        errors.append("requested_repetitions is not an integer in the range 1..3")
+        errors.append("requested_repetitions is not an integer in the range 1..2")
         requested_count = 0
     else:
         requested_count = requested
@@ -2601,6 +2739,14 @@ def validate_repetition_group(
         )
     if group.get("status") != "CAPTURED":
         errors.append(f"run group status is {group.get('status')!r}")
+    expected_requested = (
+        1 if group.get("cohort") is False else 2 if group.get("cohort") is True else None
+    )
+    if expected_requested is not None and requested != expected_requested:
+        errors.append(
+            f"{('full' if expected_requested == 1 else 'cohort')} run group must "
+            f"request exactly {expected_requested} invocation(s)"
+        )
 
     for duplicate_field in ("records", "source_validations"):
         if duplicate_field in group:
@@ -2804,6 +2950,13 @@ def validate_capture(
     metadata_records = phase_records["metadata"]
     inventory_records = phase_records["inventory"]
     warm_records = phase_records["warm"]
+    for phase in ("metadata", "inventory", "warm"):
+        for command in phase_records[phase]:
+            if not command_completed_successfully(command):
+                errors.append(
+                    f"{phase} command {command.get('record_id')!r} did not complete "
+                    "successfully; required status is PASS with exit 0"
+                )
     warm = manifest.get("warm")
     if not isinstance(warm, dict):
         errors.append("manifest warm summary must be an object")
@@ -2988,6 +3141,10 @@ def validate_capture(
             errors.append("hermetic schedule requires exactly one full inventory group")
         elif full_groups[0].get("requested_repetitions") != 1:
             errors.append("full inventory group must request exactly one repetition")
+        elif full_groups[0].get("status") != "CAPTURED":
+            errors.append("full inventory group must complete successfully before cohort timing")
+        elif full_groups[0].get("completed_repetitions") != 1:
+            errors.append("full inventory group must contain one completed repetition")
         if not cohort_groups:
             errors.append("hermetic schedule requires a selected slow cohort after the full trial")
         elif len(cohort_groups) != 1:
@@ -3040,7 +3197,7 @@ def validate_capture(
             isinstance(requested, bool)
             or not isinstance(requested, int)
             or requested < 1
-            or requested > 3
+            or requested > 2
         ):
             errors.append(f"run record {record.get('record_id')!r} has invalid requested_repetitions")
         repeat_index = record.get("repeat_index")
@@ -3699,7 +3856,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_heavy_arguments(warm_parser)
 
     run_parser = subparsers.add_parser(
-        "run", help="capture one uncached inventory or at most five-package cohort"
+        "run", help="capture one full inventory trial or an exact two-repeat cohort"
     )
     run_parser.add_argument("--manifest", required=True, help="inventory manifest")
     run_parser.add_argument(
@@ -3710,7 +3867,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--repeat",
         type=require_positive,
         default=1,
-        help="number of unchanged cohort/inventory invocations (default: 1)",
+        help="one full trial or exactly two unchanged cohort trials",
     )
     add_heavy_arguments(run_parser)
 

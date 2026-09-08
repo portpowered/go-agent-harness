@@ -77,9 +77,12 @@ Go version and effective `go env`, the six `go list -json` package inventories,
 flags, cache paths, and command artifacts. `warm` separately records dependency
 downloads and `go test -run '^$' -c` test-binary compilation; it does not run
 tests. The first `run` is the one uncached full inventory pass. A cohort is at
-most five packages and may be invoked at most three times total: the first
-successful ranking plus two unchanged repeats. A full lane is single-shot and
-is never retried to turn a failure green. Before every measured run command,
+most five packages and is invoked exactly twice total: the initial cohort
+trial plus one unchanged repeat (`--repeat 2`). A full lane is single-shot and
+is never retried to turn a failure green. A hermetic cohort is admitted only
+after one complete successful full inventory trial; every inventory and warm
+command must be `PASS` with exit status 0 before analysis or cohort launch.
+Before every measured run command,
 the profiler rechecks the source repository's current HEAD and dirty paths
 against inventory provenance and records the validation; changes outside the
 manifest output root reject the run before the test subprocess starts. Hermetic
