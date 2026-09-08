@@ -7,7 +7,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 ## Latest canonical continuation
 
 The current exact-head implementation checkpoint is
-`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`, rebased in this isolated worktree
+`b8630dc0ceb249af76ec7b522f4f59030eea2d14`, rebased in this isolated worktree
 onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
 integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
 ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
@@ -27,9 +27,9 @@ The exact board response is retained in
 `canonical-board-recheck-20260908.json` (SHA-256
 `2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
 current public control report is
-`controls-canonical/controls.json` (SHA-256
-`c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`): PASS,
-56 cases, 24 result groups, zero Go/network/build invocations. Raw retention is
+`controls-canonical-v2/controls.json` (SHA-256
+`93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`): PASS,
+57 cases, 24 result groups, zero Go/network/build invocations. Raw retention is
 truthfully false only because the missing-raw-artifact negative control removes
 its own stdout fixture. `profile.py --help`, Python AST parsing,
 `GOWORK=off go test . -count=1` in `tools/timingate`, and `git diff --check`
@@ -220,7 +220,7 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`; the current `origin/main`
+`b8630dc0ceb249af76ec7b522f4f59030eea2d14`; the current `origin/main`
 ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest
 canonical task rejection named unreferenced invalid groups, forged retained
 Git metadata, aggregate duration overflow, incomplete command records, and

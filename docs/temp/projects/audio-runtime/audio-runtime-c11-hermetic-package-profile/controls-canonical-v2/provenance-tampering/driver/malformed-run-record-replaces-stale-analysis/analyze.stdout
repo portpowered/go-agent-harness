@@ -1,0 +1,6 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-canonical-v2/provenance-tampering/analysis/malformed-run-record-replaces-stale-analysis/analysis.json",
+  "error": "'NoneType' object is not iterable",
+  "fresh_timing": "INVALID",
+  "status": "INVALID"
+}

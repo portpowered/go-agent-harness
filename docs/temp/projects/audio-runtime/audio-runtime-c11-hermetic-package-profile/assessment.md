@@ -24,7 +24,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated the latest `origin/main`:
   `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`.
+  `b8630dc0ceb249af76ec7b522f4f59030eea2d14`.
 - The implementation and exact-head control evidence are committed against
   that candidate. This checkpoint consolidates metadata, inventory, warm-up,
   full-lane, and cohort command records into one `manifest.commands` array,
@@ -86,10 +86,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../controls-canonical`:
-  PASS; 56 declared cases and 24 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../controls-canonical-v2`:
+  PASS; 57 declared cases and 24 result groups, zero Go, network, or build
   invocations. The report hash is
-  `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`.
+  `93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -97,8 +97,8 @@ Focused evidence:
   post-inventory dirty-source rejection. New public cases reject unreferenced
   invalid groups, incomplete command-record schemas, forged retained
   source-validation artifacts, forged source-output identity, and aggregate
-  package-duration overflow, malformed canonical phase records, and a
-  hermetic capture that skips the required warm phase.
+  package-duration overflow, malformed canonical phase records, a malformed
+  warm summary, and a hermetic capture that skips the required warm phase.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and
@@ -114,9 +114,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `6b7af04` passed: 56 public cases/24
+- Fresh exact-head recheck from `b8630dc` passed: 57 public cases/24
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`),
+  SHA-256 `93956656b1606cd30d56e611ca7755f26fdb670fb44b09a998b9af18489ad018`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -225,8 +225,8 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls remain pinned to
-`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`; the tracked
-`controls-canonical/controls.json` report is recorded above. The canonical
+`b8630dc0ceb249af76ec7b522f4f59030eea2d14`; the tracked
+`controls-canonical-v2/controls.json` report is recorded above. The canonical
 review findings through review 30 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, and stale head/evidence references. This
