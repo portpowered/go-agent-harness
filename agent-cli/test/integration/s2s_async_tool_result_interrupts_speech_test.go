@@ -36,26 +36,28 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
-	asyncCollisionPrompt             = "finish the pending weather lookup"
-	asyncCollisionCallID             = "call_async_weather_1"
-	asyncCollisionToolName           = "get_weather"
-	asyncCollisionToolArgs           = `{"city":"Lisbon"}`
-	asyncCollisionResult             = `{"temperature_c":24,"condition":"clear","sentinel":"async-result-001"}`
-	asyncCollisionSessionID          = "sess_async_tool_result_interrupts_speech"
-	asyncCollisionResponseOne        = "resp_async_tool_1"
-	asyncCollisionResponseTwo        = "resp_async_speech"
-	asyncCollisionResponseThree      = "resp_async_continuation"
-	asyncCollisionCloseReason        = "async_collision_complete"
-	asyncCollisionDeltaSamples       = 1600
-	asyncCollisionDeltaCount         = 2
-	asyncCollisionInputSamples       = audio.FrameSize
+	asyncCollisionPrompt        = "finish the pending weather lookup"
+	asyncCollisionCallID        = "call_async_weather_1"
+	asyncCollisionToolName      = "get_weather"
+	asyncCollisionToolArgs      = `{"city":"Lisbon"}`
+	asyncCollisionResult        = `{"temperature_c":24,"condition":"clear","sentinel":"async-result-001"}`
+	asyncCollisionSessionID     = "sess_async_tool_result_interrupts_speech"
+	asyncCollisionResponseOne   = "resp_async_tool_1"
+	asyncCollisionResponseTwo   = "resp_async_speech"
+	asyncCollisionResponseThree = "resp_async_continuation"
+	asyncCollisionCloseReason   = "async_collision_complete"
+	asyncCollisionDeltaSamples  = 1600
+	asyncCollisionDeltaCount    = 2
+	// Keep the scheduled signal at 30 ms while writing it as a 24 kHz WAV so
+	// the transport oracle compares bytes at the provider boundary.
+	// The file header makes the same rate explicit to the CLI input path.
+	asyncCollisionInputSamples       = wavio.Rate24kHz * 30 / 1000
 	asyncCollisionMaxDuration        = 10 * time.Second
 	asyncCollisionControlMaxDuration = 250 * time.Millisecond
 	asyncCollisionDisposition        = "queue/sequence"
@@ -330,10 +332,8 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	rootCmd.SetOut(writer.Stdout())
 	rootCmd.SetErr(writer.Stderr())
 	outputPath := filepath.Join(t.TempDir(), "async-collision-response.wav")
-	inputPath := filepath.Join(t.TempDir(), "async-collision-first-turn.raw")
-	if err := os.WriteFile(inputPath, inputAudio, 0o600); err != nil {
-		t.Fatalf("write async collision input fixture: %v", err)
-	}
+	inputPath := filepath.Join(t.TempDir(), "async-collision-first-turn.wav")
+	writeAsyncCollisionInputWAV(t, inputPath, inputAudio)
 	recordingDir := filepath.Join(t.TempDir(), "async-collision-recording")
 	rootCmd.SetArgs([]string{
 		"--config-dir", t.TempDir(),
@@ -365,8 +365,8 @@ func verifyAsyncCollisionAudio(outputPath string, collision, continuation [][]in
 	if err != nil {
 		return fmt.Errorf("parse recorded --audio-out WAV: %w", err)
 	}
-	if rate != 16000 {
-		return fmt.Errorf("recorded --audio-out WAV rate = %d, want 16000", rate)
+	if rate != wavio.Rate24kHz {
+		return fmt.Errorf("recorded --audio-out WAV rate = %d, want %d", rate, wavio.Rate24kHz)
 	}
 	segments := []struct {
 		name   string

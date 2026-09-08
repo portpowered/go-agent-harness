@@ -424,14 +424,14 @@ func ReadProfiles(paths []string) (map[string]Coverage, error) {
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("%w: no profile paths provided", ErrProfileInvalid)
 	}
-	measurements := make(map[string]Coverage)
+	blocks := make(map[string]profileBlock)
 	var mode string
 	for _, path := range paths {
 		file, err := os.Open(path)
 		if err != nil {
 			return nil, fmt.Errorf("%w: open %q: %v", ErrProfileInvalid, path, err)
 		}
-		profileMode, profileMeasurements, parseErr := parseProfile(file, path)
+		profileMode, parseErr := parseProfile(file, path, blocks)
 		closeErr := file.Close()
 		if parseErr != nil {
 			return nil, parseErr
@@ -444,22 +444,24 @@ func ReadProfiles(paths []string) (map[string]Coverage, error) {
 		} else if mode != profileMode {
 			return nil, fmt.Errorf("%w: coverage profiles use different modes %q and %q", ErrProfileInvalid, mode, profileMode)
 		}
-		for packagePath, coverage := range profileMeasurements {
-			current := measurements[packagePath]
-			current.Covered += coverage.Covered
-			current.Total += coverage.Total
-			measurements[packagePath] = current
+	}
+	measurements := make(map[string]Coverage)
+	for _, block := range blocks {
+		current := measurements[block.packagePath]
+		current.Total += block.statements
+		if block.covered {
+			current.Covered += block.statements
 		}
+		measurements[block.packagePath] = current
 	}
 	return measurements, nil
 }
 
-func parseProfile(reader io.Reader, name string) (string, map[string]Coverage, error) {
+func parseProfile(reader io.Reader, name string, blocks map[string]profileBlock) (string, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 1024), 1024*1024)
 	lineNumber := 0
 	mode := ""
-	measurements := make(map[string]Coverage)
 	for scanner.Scan() {
 		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
@@ -468,55 +470,52 @@ func parseProfile(reader io.Reader, name string) (string, map[string]Coverage, e
 		}
 		if mode == "" {
 			if !strings.HasPrefix(line, "mode: ") {
-				return "", nil, profileError(name, lineNumber, "first non-empty line must declare mode")
+				return "", profileError(name, lineNumber, "first non-empty line must declare mode")
 			}
 			mode = strings.TrimSpace(strings.TrimPrefix(line, "mode: "))
 			if mode == "" {
-				return "", nil, profileError(name, lineNumber, "coverage mode is empty")
+				return "", profileError(name, lineNumber, "coverage mode is empty")
 			}
 			continue
 		}
 
 		fields := strings.Fields(line)
 		if len(fields) != 3 {
-			return "", nil, profileError(name, lineNumber, "coverage block must contain file range, statements, and count")
+			return "", profileError(name, lineNumber, "coverage block must contain file range, statements, and count")
 		}
 		fileRange := fields[0]
 		colon := strings.LastIndexByte(fileRange, ':')
 		if colon <= 0 || !strings.Contains(fileRange[colon+1:], ",") {
-			return "", nil, profileError(name, lineNumber, "coverage block has an invalid file range")
+			return "", profileError(name, lineNumber, "coverage block has an invalid file range")
 		}
 		packagePath := fileRange[:colon]
 		if slash := strings.LastIndexByte(packagePath, '/'); slash <= 0 || slash == len(packagePath)-1 {
-			return "", nil, profileError(name, lineNumber, "coverage block has an invalid import path")
+			return "", profileError(name, lineNumber, "coverage block has an invalid import path")
 		} else {
 			packagePath = packagePath[:slash]
 		}
 		statements, err := strconv.ParseInt(fields[1], 10, 64)
 		if err != nil || statements < 0 {
-			return "", nil, profileError(name, lineNumber, "statement count is invalid")
+			return "", profileError(name, lineNumber, "statement count is invalid")
 		}
 		count, err := strconv.ParseInt(fields[2], 10, 64)
 		if err != nil || count < 0 {
-			return "", nil, profileError(name, lineNumber, "execution count is invalid")
+			return "", profileError(name, lineNumber, "execution count is invalid")
 		}
 		if statements == 0 {
 			continue
 		}
-		coverage := measurements[packagePath]
-		coverage.Total += statements
-		if count > 0 {
-			coverage.Covered += statements
+		if err := mergeProfileBlock(blocks, fileRange, profileBlock{packagePath: packagePath, statements: statements, covered: count > 0}); err != nil {
+			return "", profileError(name, lineNumber, err.Error())
 		}
-		measurements[packagePath] = coverage
 	}
 	if err := scanner.Err(); err != nil {
-		return "", nil, fmt.Errorf("%w: read %q: %v", ErrProfileInvalid, name, err)
+		return "", fmt.Errorf("%w: read %q: %w", ErrProfileInvalid, name, err)
 	}
 	if mode == "" {
-		return "", nil, profileError(name, lineNumber+1, "profile does not declare a coverage mode")
+		return "", profileError(name, lineNumber+1, "profile does not declare a coverage mode")
 	}
-	return mode, measurements, nil
+	return mode, nil
 }
 
 func profileError(name string, line int, detail string) error {

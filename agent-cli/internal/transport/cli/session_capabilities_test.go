@@ -588,7 +588,7 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 		calls++
 		return nil, errors.New("broker must not be constructed")
 	})
-	cfg := browserCapabilityConfig(false)
+	cfg := browserCapabilityConfig(t, false)
 
 	capabilities, err := factory(cfg)
 	if err != nil {
@@ -615,7 +615,7 @@ func TestSessionToolCapabilitiesFactoryUsesDefaultFilesystemPolicyWithoutMetadat
 		capability: cliTools.UnavailableDisplayCapability("headless test"),
 	})
 
-	capabilities, err := factory(&config.Config{Browser: config.DefaultBrowserConfig()})
+	capabilities, err := factory(&config.Config{Browser: config.DefaultBrowserConfig(), FilesystemWorkDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 		gotBrowser = browser
 		return broker, nil
 	})
-	cfg := browserCapabilityConfig(true)
+	cfg := browserCapabilityConfig(t, true)
 
 	capabilities, err := factory(cfg)
 	if err != nil {
@@ -700,7 +700,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *
 	broker := &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Den TV", ID: "sink-den"}}}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
 
-	disabled, err := factory(browserCapabilityConfig(true))
+	disabled, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("disabled cast factory: %v", err)
 	}
@@ -714,7 +714,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *
 	}
 
 	broker = &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Den TV", ID: "sink-den"}}}
-	enabledConfig := browserCapabilityConfig(true)
+	enabledConfig := browserCapabilityConfig(t, true)
 	enabledConfig.Browser.Tools.WebCast = true
 	enabled, err := factory(enabledConfig)
 	if err != nil {
@@ -761,7 +761,7 @@ func TestSessionToolCapabilitiesRefreshKeepsBrowserControlsForOrdinaryPage(t *te
 		catalogErr: catalogPending,
 	}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
-	capabilities, err := factory(browserCapabilityConfig(true))
+	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -781,7 +781,7 @@ func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testi
 		return broker, errors.New("broker construction failed")
 	})
 
-	_, err := factory(browserCapabilityConfig(true))
+	_, err := factory(browserCapabilityConfig(t, true))
 	if err == nil || !strings.Contains(err.Error(), "broker construction failed") || !strings.Contains(err.Error(), "broker close failed") {
 		t.Fatalf("factory error = %v, want construction and cleanup failures", err)
 	}
@@ -796,7 +796,7 @@ func TestSessionToolCapabilitiesFactoryTransfersIdempotentCloseHook(t *testing.T
 		return broker, nil
 	})
 
-	capabilities, err := factory(browserCapabilityConfig(true))
+	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -910,16 +910,6 @@ func TestSessionBrowserBrokerInitializesBeforeFirstCastCall(t *testing.T) {
 	if len(devices) != 1 || devices[0].Name != "Office TV" || delegate.selected.Key.TargetID != "tab-youtube" {
 		t.Fatalf("devices/selection = %+v/%+v", devices, delegate.selected)
 	}
-}
-
-func browserCapabilityConfig(enabled bool) *config.Config {
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = enabled
-	cfg := &config.Config{Browser: browser}
-	for _, id := range config.DefaultToolIDs {
-		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "sleep"})
-	}
-	return cfg
 }
 
 func isBrokerToolName(name string) bool {
@@ -1060,7 +1050,7 @@ func TestSessionToolCapabilitiesRefreshAdvertisesFirstClassPageTools(t *testing.
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, nil
 	})
-	capabilities, err := factory(browserCapabilityConfig(true))
+	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}

@@ -118,8 +118,11 @@ type DuplexAudioSegment struct {
 	// customer gate. They are evaluated before this segment starts, allowing a
 	// correction to cross the still-active assistant stream.
 	WaitForOutputBytes int64
-	WaitForOutputReads int
-	Before             DuplexSegmentGate
+	// WaitForOutputSequence gates the segment until this exact byte sequence
+	// crosses the child stdout boundary. Matching survives split stdout reads.
+	WaitForOutputSequence []byte
+	WaitForOutputReads    int
+	Before                DuplexSegmentGate
 }
 
 // DuplexSegmentGate is invoked on the input pump immediately before a
@@ -726,17 +729,9 @@ func normalizeDuplexConfig(config DuplexSessionConfig) (normalizedDuplexConfig, 
 			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: duplicate segment ID %q", ErrDuplexConfigInvalid, segment.ID)
 		}
 		seenIDs[segment.ID] = struct{}{}
-		if len(segment.PCM16)%2 != 0 {
+		if err := validateDuplexSegment(segment); err != nil {
 			cleanup()
-			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: segment %q has odd PCM16 length %d", ErrDuplexInputInvalid, segment.ID, len(segment.PCM16))
-		}
-		if segment.DelayBefore < 0 || segment.SilenceFor < 0 || segment.WaitForOutputBytes < 0 || segment.WaitForOutputReads < 0 {
-			cleanup()
-			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: segment %q has a negative delay, silence, or output gate", ErrDuplexConfigInvalid, segment.ID)
-		}
-		if len(segment.PCM16) == 0 && segment.SilenceFor <= 0 {
-			cleanup()
-			return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: segment %q has no PCM16 or silence duration", ErrDuplexInputInvalid, segment.ID)
+			return normalizedDuplexConfig{}, func() {}, err
 		}
 		segment.PCM16 = append([]byte(nil), segment.PCM16...)
 		segments[index] = segment
@@ -927,7 +922,7 @@ func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writ
 			capture.append(data)
 			if observe {
 				now := time.Now()
-				progress.noteOutput(DuplexOutputEvent{Bytes: count, At: now.Sub(startedAt), Timestamp: now})
+				progress.noteOutput(DuplexOutputEvent{Bytes: count, At: now.Sub(startedAt), Timestamp: now}, data)
 			}
 			if destination != nil {
 				if err := writeDuplexAll(destination, data); err != nil {
@@ -960,15 +955,8 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 	frameDuration := config.FrameDuration
 	frameNumber := 0
 	for _, segment := range config.Segments {
-		if segment.WaitForOutputBytes > 0 {
-			if err := progressView.WaitForOutputBytes(ctx, segment.WaitForOutputBytes); err != nil {
-				return duplexPipeError("wait for output bytes", err)
-			}
-		}
-		if segment.WaitForOutputReads > 0 {
-			if err := progressView.WaitForOutputReads(ctx, segment.WaitForOutputReads); err != nil {
-				return duplexPipeError("wait for output reads", err)
-			}
+		if err := progressView.waitForSegmentOutput(ctx, segment); err != nil {
+			return err
 		}
 		if segment.Before != nil {
 			if err := segment.Before(ctx, progressView); err != nil {
@@ -1201,7 +1189,7 @@ func duplexExitClassification(result DuplexRunResult, termination TerminationMet
 		return "timeout"
 	}
 	if result.Cancelled {
-		return "cancelled"
+		return string(DispositionCancelled)
 	}
 	if result.SignalSent && termination == TerminationSIGINT {
 		return "sigint"

@@ -274,7 +274,7 @@ func TestSessionCommandAllowsAudioOutputFileAndDeviceToReachDevicePreflight(t *t
 func TestRunSessionRTCDevicePreflightHappensBeforeProviderConnect(t *testing.T) {
 	registry := virtualRTCRegistry(t)
 	inferencer := &countingSessionInferencer{}
-	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{
+	err := agentruntime.RunSession(context.Background(), io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inferencer,
 		RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{

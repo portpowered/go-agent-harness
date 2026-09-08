@@ -14,6 +14,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
+const (
+	realtimeFunctionCallOutputType = "function_call_output"
+	realtimeConversationNone       = "none"
+)
+
 // ConnectSession establishes an OpenAI Realtime WebSocket session through the
 // provider-agnostic session gateway contract.
 func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
@@ -45,6 +50,7 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	p.logger.Info("openai realtime: websocket connected", logging.Field{Key: "endpoint", Value: safeEndpointForError(endpoint)})
 
 	session := newRealtimeSession(conn, p.logger)
+	session.writeBackpressure = p.sessionWriteBackpressure
 	session.mediaSampleRate = int(config.OutputAudioSampleRate)
 	// Queue any immediate server audio before the read loop starts. A caller
 	// that only consumes the normalized stream releases this speculative queue
@@ -117,21 +123,14 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 	for {
 		_, data, err := s.conn.ReadMessage()
 		if err != nil {
-			select {
-			case <-s.done:
-				return
-			default:
-			}
-			if ctx.Err() != nil {
+			if s.readStopped(ctx, err) {
 				_ = s.Close()
 				return
 			}
 			s.setTerminalError(err)
 			s.logger.Error("openai realtime: websocket read error", logging.Field{Key: "error", Value: err})
-			// Every unexpected provider-side read failure is a provider-visible
-			// terminal failure. Preserve the raw error in the stream so callers
-			// can distinguish an abrupt close (including an authentication close
-			// returned after the WebSocket handshake) from intentional shutdown.
+			// Preserve unexpected read failures so callers can distinguish abrupt
+			// provider closure from intentional shutdown.
 			s.recvBuf.WriteTerminal(messages.StreamMessage{
 				Type:  messages.StreamTypeError,
 				Value: providers.NewStreamTransportErrorValue(err),
@@ -160,17 +159,16 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			_ = s.Close()
 			return
 		}
+		if event.Type == models.SessionEventSessionClosed {
+			s.providerClosed.Store(true)
+		}
 		s.observeResponseLifecycle(event)
 		if err := s.publishRTCMedia(ctx, event); err != nil {
 			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
 		}
 		for _, msg := range realtimeInboundMessages(event) {
-			// Provider frames are lossless protocol input. In particular, a
-			// response may contain dozens of audio/transcript deltas followed by
-			// a function call. A non-blocking write here used to silently discard
-			// whichever normalized messages arrived after the 64-entry buffer
-			// filled. Apply backpressure to the websocket reader instead, while
-			// retaining both cancellation paths so shutdown cannot deadlock.
+			// Provider frames are lossless. Apply backpressure when their bounded
+			// normalized buffer fills, retaining both shutdown paths.
 			if outcome := s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg); !outcome.OK() {
 				if ctx.Err() != nil {
 					_ = s.Close()
@@ -178,6 +176,15 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 				return
 			}
 		}
+	}
+}
+
+func (s *realtimeSession) readStopped(ctx context.Context, err error) bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return ctx.Err() != nil || s.providerClosed.Load() && isProviderCloseTransportError(err)
 	}
 }
 
@@ -218,14 +225,88 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
+				if isProviderCloseTransportError(err) && (s.providerClosed.Load() || sessionDone(s.done)) {
+					s.outbound.Complete()
+					return
+				}
 				s.setTerminalError(err)
+				s.outbound.Complete()
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()
 				return
 			}
 			s.markResponseRequestSent(event)
+			s.outbound.Complete()
 		}
 	}
+}
+
+// FlushOutbound waits until events already admitted to the provider queue have
+// completed their websocket writes. Queue admission alone is insufficient for
+// a finite audio boundary: the runtime may close the session immediately after
+// the commit control is acknowledged.
+func (s *realtimeSession) FlushOutbound(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	for {
+		if err := s.outbound.Flush(ctx, s.done, s.TerminalError); err != nil {
+			return err
+		}
+		settlements := s.pendingAudioIntentSettlements()
+		if len(settlements) == 0 {
+			return nil
+		}
+		if err := s.waitForAudioIntentSettlements(ctx, settlements); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *realtimeSession) waitForAudioIntentSettlements(ctx context.Context, settlements []<-chan messages.SessionSendOutcome) error {
+	for _, settled := range settlements {
+		select {
+		case outcome := <-settled:
+			if err := deferredAudioIntentError(outcome); err != nil {
+				return err
+			}
+		case <-s.done:
+			if err := s.TerminalError(); err != nil {
+				return err
+			}
+			return fmt.Errorf("provider session closed before deferred audio intent settled")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func deferredAudioIntentError(outcome messages.SessionSendOutcome) error {
+	if outcome.OK() {
+		return nil
+	}
+	if outcome.Err != nil {
+		return fmt.Errorf("deferred audio intent failed with status %q: %w", outcome.Status, outcome.Err)
+	}
+	return fmt.Errorf("deferred audio intent failed with status %q", outcome.Status)
+}
+
+func (s *realtimeSession) pendingAudioIntentSettlements() []<-chan messages.SessionSendOutcome {
+	s.responseWireMu.Lock()
+	defer s.responseWireMu.Unlock()
+	s.responseMu.Lock()
+	defer s.responseMu.Unlock()
+	settlements := make([]<-chan messages.SessionSendOutcome, 0, len(s.pendingResponseIntents)+1)
+	for _, intent := range s.pendingResponseIntents {
+		if intent.settled != nil {
+			settlements = append(settlements, intent.settled)
+		}
+	}
+	if s.activeResponseIntent != nil && s.activeResponseIntent.settled != nil {
+		settlements = append(settlements, s.activeResponseIntent.settled)
+	}
+	return settlements
 }
 
 func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
@@ -242,4 +323,76 @@ func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
 		return err
 	}
 	return s.conn.WriteMessage(1, data)
+}
+
+func realtimeEventNeedsResponseAdmission(event models.SessionEvent) bool {
+	if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
+		return true
+	}
+	if event.Type != conversationItemCreateEvent {
+		return false
+	}
+	var payload struct {
+		Item struct {
+			Type string `json:"type"`
+		} `json:"item"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == realtimeFunctionCallOutputType
+}
+
+func realtimeResponseCreateIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseCreate || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
+}
+
+func responseIntentHasFunctionCallOutput(intent responseIntent) bool {
+	for _, event := range intent.events {
+		if responseEventIsFunctionCallOutput(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func responseEventIsFunctionCallOutput(event models.SessionEvent) bool {
+	if event.Type != conversationItemCreateEvent {
+		return false
+	}
+	var payload struct {
+		Item struct {
+			Type string `json:"type"`
+		} `json:"item"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == realtimeFunctionCallOutputType
+}
+
+func realtimeResponseCreatedIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseCreated || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
+}
+
+func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
+	if event.Type != models.SessionEventResponseDone || len(event.Data) == 0 {
+		return false
+	}
+	var payload struct {
+		Response struct {
+			Conversation string `json:"conversation"`
+		} `json:"response"`
+	}
+	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
 }

@@ -60,7 +60,7 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-			opts := SessionRunOptions{
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
 				Provider:        config.ProviderOpenAI,
 				Model:           openAIRealtimeDefaultModel,
@@ -117,7 +117,7 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 			configDir := t.TempDir()
 			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
 			conn := &replayHandshakeRecordingConn{}
-			opts := SessionRunOptions{
+			opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
 				Provider:        config.ProviderOpenAI,
 				Model:           openAIRealtimeDefaultModel,
@@ -167,7 +167,7 @@ func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUp
 }
 
 func TestComposeSessionInstructionsIsIdempotentAndLeavesNoToolsUnchanged(t *testing.T) {
-	withTools := SessionRunOptions{
+	withTools := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ToolDefinitions: []messages.ToolDefinition{{Name: "exec"}},
 	}
 	first := composeSessionInstructions(withTools, "customer instructions")
@@ -179,14 +179,14 @@ func TestComposeSessionInstructionsIsIdempotentAndLeavesNoToolsUnchanged(t *test
 		t.Fatalf("idempotent grounding policy count = %d, want 1", strings.Count(second, "Tool-grounding requirements:"))
 	}
 
-	withoutTools := composeSessionInstructions(SessionRunOptions{}, "customer instructions")
+	withoutTools := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog()}, "customer instructions")
 	if withoutTools != "customer instructions" {
 		t.Fatalf("no-tools composition = %q, want unchanged customer instructions", withoutTools)
 	}
 }
 
 func TestComposeSessionInstructionsAddsDeterministicSightRouting(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions:     []messages.ToolDefinition{{Name: "show_page"}},
 	}, "customer instructions")
@@ -213,7 +213,7 @@ func TestComposeSessionInstructionsAddsDeterministicSightRouting(t *testing.T) {
 			t.Fatalf("sight instructions = %q, contains operator-only text %q", got, forbidden)
 		}
 	}
-	if second := composeSessionInstructions(SessionRunOptions{
+	if second := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions:     []messages.ToolDefinition{{Name: "show_page"}},
 	}, got); second != got {
@@ -230,7 +230,7 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 	}
 	for _, state := range states {
 		t.Run(string(state), func(t *testing.T) {
-			got := composeSessionInstructions(SessionRunOptions{
+			got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				BrowserCapabilityState: state,
 				ToolDefinitions:        []messages.ToolDefinition{{Name: webmcp.ListTabsToolName}},
 			}, "customer instructions")
@@ -240,7 +240,7 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 		})
 	}
 
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
 		ToolDefinitions:        []messages.ToolDefinition{{Name: webmcp.ListTabsToolName}, {Name: webmcp.SelectTabToolName}},
 	}, "customer instructions")
@@ -264,7 +264,7 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-	opts := SessionRunOptions{
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   filepath.Join(t.TempDir(), "session.json"),
 		Provider:     config.ProviderOpenAI,
 		Model:        openAIRealtimeDefaultModel,
@@ -301,7 +301,7 @@ func TestProviderInitialInstructionsCarryConnectedUnselectedBrowserContract(t *t
 }
 
 func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing.T) {
-	opts := SessionRunOptions{
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: "webmcp_get_context"},
@@ -333,7 +333,7 @@ func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing
 		}
 	}
 
-	withoutBrowser := composeSessionInstructions(SessionRunOptions{
+	withoutBrowser := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ToolDefinitions: opts.ToolDefinitions,
 	}, "customer instructions")
 	if strings.Contains(withoutBrowser, "WebMCP ambiguity recovery:") {
@@ -351,7 +351,7 @@ func TestComposeSessionInstructionsAddsBoundedWebMCPAmbiguityRecovery(t *testing
 // ("the local first writing app" paraphrase) live failure: a single resolved
 // candidate still produced a clarifying question instead of a switch.
 func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
@@ -381,7 +381,7 @@ func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testin
 		}
 	}
 
-	second := composeSessionInstructions(SessionRunOptions{
+	second := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
@@ -394,7 +394,7 @@ func TestComposeSessionInstructionsCalibratesSingleMatchActImmediately(t *testin
 }
 
 func TestComposeSessionInstructionsDistinguishesCurrentTabNavigation(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilitySelected,
 		BrowserToolsEnabled:    true,
 		ToolDefinitions: []messages.ToolDefinition{
@@ -420,7 +420,7 @@ func TestComposeSessionInstructionsDistinguishesCurrentTabNavigation(t *testing.
 }
 
 func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
 		BrowserToolsEnabled:    true,
 		ToolDefinitions: []messages.ToolDefinition{
@@ -452,7 +452,7 @@ func TestComposeSessionInstructionsFollowsExplicitMultiPageOrder(t *testing.T) {
 // mirrors the working "genuinely ambiguous" probe on current main, which
 // this change must not regress.
 func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserToolsEnabled: true,
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
@@ -488,7 +488,7 @@ func TestComposeSessionInstructionsNeverDeniesCapabilityForSelectionAmbiguity(t 
 	}
 	for _, state := range states {
 		t.Run(string(state)+"/enabled", func(t *testing.T) {
-			got := composeSessionInstructions(SessionRunOptions{
+			got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				BrowserCapabilityState: state,
 				BrowserToolsEnabled:    true,
 				ToolDefinitions: []messages.ToolDefinition{
@@ -507,7 +507,7 @@ func TestComposeSessionInstructionsNeverDeniesCapabilityForSelectionAmbiguity(t 
 
 	// Without browser tools enabled, the browser-specific calibration must
 	// not leak in -- this is not a browser-capable session at all.
-	withoutBrowserTools := composeSessionInstructions(SessionRunOptions{
+	withoutBrowserTools := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilitySelected,
 		ToolDefinitions: []messages.ToolDefinition{
 			{Name: webmcp.ListTabsToolName},
@@ -526,7 +526,7 @@ func TestComposeSessionInstructionsNeverDeniesCapabilityForSelectionAmbiguity(t 
 // connected-but-unselected grounding, and composition must stay idempotent
 // and free of duplicate headings when both blocks apply together.
 func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *testing.T) {
-	got := composeSessionInstructions(SessionRunOptions{
+	got := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
 		BrowserToolsEnabled:    true,
 		ToolDefinitions: []messages.ToolDefinition{
@@ -551,7 +551,7 @@ func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *test
 		t.Fatalf("connected-unselected grounding lost its current-step ambiguity rule: %q", got)
 	}
 
-	second := composeSessionInstructions(SessionRunOptions{
+	second := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		BrowserCapabilityState: webmcp.BrowserCapabilityConnectedUnselected,
 		BrowserToolsEnabled:    true,
 		ToolDefinitions: []messages.ToolDefinition{
@@ -565,7 +565,7 @@ func TestComposeSessionInstructionsSingleEligibleHappyPathStaysUnchanged(t *test
 }
 
 func TestComposeSessionInstructionsRequiresHonestFilesystemRefusalHandling(t *testing.T) {
-	instructions := composeSessionInstructions(SessionRunOptions{
+	instructions := composeSessionInstructions(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ToolDefinitions: []messages.ToolDefinition{{Name: "write_file"}},
 	}, "customer instructions")
 	for _, want := range []string{

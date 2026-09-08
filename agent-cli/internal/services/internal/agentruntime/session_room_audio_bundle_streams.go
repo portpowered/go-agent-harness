@@ -3,16 +3,16 @@ package agentruntime
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"encoding/json"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type roomReplayAudioStreamMetadata struct {
@@ -23,8 +23,8 @@ type roomReplayAudioStreamMetadata struct {
 	HasEnd          bool
 	Duration        time.Duration
 	HasDuration     bool
-	ChunkBoundaries []audio.ChunkBoundary
-	ExpectedSpeech  []audio.SpeechAnnotation
+	ChunkBoundaries []streamanalysis.ChunkBoundary
+	ExpectedSpeech  []streamanalysis.SpeechAnnotation
 }
 
 func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayParticipant, object roomReplayJSONObject) (RoomReplayAudioParticipant, error) {
@@ -101,7 +101,7 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 		for previous := 0; previous <= index; previous++ {
 			endSample += len(deltas[previous].PCM) / 2
 		}
-		wav.ChunkBoundaries = append(wav.ChunkBoundaries, audio.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
+		wav.ChunkBoundaries = append(wav.ChunkBoundaries, streamanalysis.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
 	}
 	if !wavMetadata.HasStart {
 		for _, delta := range deltas {
@@ -132,7 +132,7 @@ func loadRoomReplayAudioParticipant(plan RoomReplayPlan, participant RoomReplayP
 			for previous := 0; previous <= index; previous++ {
 				endSample += len(deltas[previous].PCM) / 2
 			}
-			wav.ChunkBoundaries = append(wav.ChunkBoundaries, audio.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
+			wav.ChunkBoundaries = append(wav.ChunkBoundaries, streamanalysis.ChunkBoundary{ID: delta.ID, SampleIndex: endSample})
 		}
 	}
 	if err := validateRoomReplayDeltaStream(wav, plan, participant.ID); err != nil {
@@ -223,7 +223,7 @@ func loadRoomReplayWAVStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 		return RoomReplayAudioStream{}, err
 	}
 	stream := RoomReplayAudioStream{
-		PCM16TimedStream: audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: streamID, ParticipantID: participantID, SampleRate: wav.SampleRate, Samples: samples}},
+		PCM16TimedStream: roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: streamID, ParticipantID: participantID, SampleRate: wav.SampleRate, Samples: samples}},
 		Role:             role,
 		PCM:              append([]byte(nil), wav.PCM...),
 		SampleCount:      len(samples),
@@ -265,7 +265,7 @@ func loadRoomReplayPCMStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 		return RoomReplayAudioStream{}, err
 	}
 	stream := RoomReplayAudioStream{
-		PCM16TimedStream: audio.PCM16TimedStream{PCM16Input: audio.PCM16Input{StreamID: streamID, ParticipantID: participantID, SampleRate: rate, Samples: samples}},
+		PCM16TimedStream: roomanalysis.PCM16TimedStream{PCM16Input: roomanalysis.PCM16Input{StreamID: streamID, ParticipantID: participantID, SampleRate: rate, Samples: samples}},
 		Role:             role,
 		PCM:              append([]byte(nil), pcm...),
 		SampleCount:      len(samples),
@@ -740,10 +740,10 @@ func mergeRoomReplayAudioStreamMetadata(destination *roomReplayAudioStreamMetada
 		destination.Duration, destination.HasDuration = source.Duration, true
 	}
 	if len(destination.ChunkBoundaries) == 0 {
-		destination.ChunkBoundaries = append([]audio.ChunkBoundary(nil), source.ChunkBoundaries...)
+		destination.ChunkBoundaries = append([]streamanalysis.ChunkBoundary(nil), source.ChunkBoundaries...)
 	}
 	if len(destination.ExpectedSpeech) == 0 {
-		destination.ExpectedSpeech = append([]audio.SpeechAnnotation(nil), source.ExpectedSpeech...)
+		destination.ExpectedSpeech = append([]streamanalysis.SpeechAnnotation(nil), source.ExpectedSpeech...)
 	}
 }
 
@@ -833,12 +833,12 @@ func roomReplayDurationValue(raw json.RawMessage, numericIsMilliseconds bool) (t
 	return 0, fmt.Errorf("duration must be a string")
 }
 
-func parseRoomReplayChunkBoundaries(raw json.RawMessage) []audio.ChunkBoundary {
+func parseRoomReplayChunkBoundaries(raw json.RawMessage) []streamanalysis.ChunkBoundary {
 	var values []json.RawMessage
 	if json.Unmarshal(raw, &values) != nil {
 		return nil
 	}
-	boundaries := make([]audio.ChunkBoundary, 0, len(values))
+	boundaries := make([]streamanalysis.ChunkBoundary, 0, len(values))
 	for index, value := range values {
 		object, err := roomReplayObject(value)
 		if err != nil {
@@ -853,18 +853,18 @@ func parseRoomReplayChunkBoundaries(raw json.RawMessage) []audio.ChunkBoundary {
 			id = fmt.Sprintf("chunk-%d", index)
 		}
 		if position > 0 && position <= int64(^uint(0)>>1) {
-			boundaries = append(boundaries, audio.ChunkBoundary{ID: id, SampleIndex: int(position)})
+			boundaries = append(boundaries, streamanalysis.ChunkBoundary{ID: id, SampleIndex: int(position)})
 		}
 	}
 	return boundaries
 }
 
-func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []audio.SpeechAnnotation {
+func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []streamanalysis.SpeechAnnotation {
 	var values []json.RawMessage
 	if json.Unmarshal(raw, &values) != nil {
 		return nil
 	}
-	annotations := make([]audio.SpeechAnnotation, 0, len(values))
+	annotations := make([]streamanalysis.SpeechAnnotation, 0, len(values))
 	for _, value := range values {
 		object, err := roomReplayObject(value)
 		if err != nil {
@@ -876,7 +876,7 @@ func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []audio.SpeechAnnotat
 			continue
 		}
 		label, _, _ := firstRoomReplayStringField(object, nil, "label", "id", "name")
-		annotations = append(annotations, audio.SpeechAnnotation{Label: label, Start: start, End: end})
+		annotations = append(annotations, streamanalysis.SpeechAnnotation{Label: label, Start: start, End: end})
 	}
 	return annotations
 }

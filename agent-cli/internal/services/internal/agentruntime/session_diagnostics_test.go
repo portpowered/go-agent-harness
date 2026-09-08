@@ -85,7 +85,7 @@ func runSessionWithDiagnostics(t *testing.T, mutate func(*SessionRunOptions)) se
 	if err != nil {
 		t.Fatalf("metrics.NewInMemorySink: %v", err)
 	}
-	opts := SessionRunOptions{
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Diagnostics:     sink,
 		MetricsRecorder: metricSink,
 	}
@@ -383,7 +383,7 @@ func TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord(t *testing.
 		},
 	}
 	sink := &diagnosticRecordSink{}
-	opts := SessionRunOptions{
+	opts := SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "scripted-drain-failure.session.json",
 		SessionInferencer: sessionInf,
 		WaitForClose:      true,

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +15,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/logger"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/spf13/cobra"
 )
 
@@ -20,8 +24,9 @@ import (
 // It loads config at run time and uses only enabled tools from config.
 type ToolCommand struct {
 	globalFlags          *flags.GlobalFlags
-	registryLoader       func() (*tools.ToolRegistry, error)
+	capabilityLoader     func() (runtimeTools.Capability, error)
 	configStorageFactory func(string) (*config.ConfigStorage, error)
+	runtimeService       runtimeTools.Service
 }
 
 var (
@@ -55,21 +60,23 @@ func newToolCommandError(kind error, message string, cause error) error {
 
 // NewToolCommand creates the ToolCommand with global flags (used to load config and resolve enabled tools).
 func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
-	return &ToolCommand{globalFlags: globalFlags}
+	return &ToolCommand{globalFlags: globalFlags, runtimeService: runtimeToolsWire.NewService()}
 }
 
-// getRegistry loads config and returns a registry with only enabled tools.
-func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
+// getCapability loads config and resolves a request-scoped runtime tool
+// capability. The CLI owns the host path snapshot; registry construction and
+// tool execution stay inside the reusable tools service.
+func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 	policy, err := c.filesystemPolicy()
 	if err != nil {
-		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("filesystem scope: %v", err), err)
+		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("filesystem scope: %v", err), err)
 	}
-	if c.registryLoader != nil {
-		registry, err := c.registryLoader()
+	if c.capabilityLoader != nil {
+		capability, err := c.capabilityLoader()
 		if err != nil {
-			return nil, newToolCommandError(errToolConfig, err.Error(), err)
+			return runtimeTools.Capability{}, newToolCommandError(errToolConfig, err.Error(), err)
 		}
-		return registry.WithFilesystemPolicy(policy), nil
+		return capability, nil
 	}
 	storageFactory := config.NewDefaultConfigStorage
 	if c.configStorageFactory != nil {
@@ -77,13 +84,35 @@ func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
 	}
 	storage, err := storageFactory(c.globalFlags.ConfigDir())
 	if err != nil {
-		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("config: %v", err), err)
+		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("config: %v", err), err)
 	}
 	cfg, err := storage.Load()
 	if err != nil {
-		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("load config: %v", err), err)
+		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("load config: %v", err), err)
 	}
-	return tools.NewToolRegistryFromConfigWithPolicy(cfg, policy), nil
+	service := c.runtimeService
+	if service == nil {
+		service = runtimeToolsWire.NewService()
+	}
+	selections := make([]runtimeTools.ToolSelection, 0, len(cfg.Tools.List))
+	for _, entry := range cfg.Tools.List {
+		selections = append(selections, runtimeTools.ToolSelection{ID: entry.ID, Enabled: entry.Enabled})
+	}
+	capability, err := service.Resolve(context.Background(), runtimeTools.Request{
+		WorkDir:    policy.PrimaryRoot(),
+		AllowPaths: policy.AdditionalRoots(),
+		Selections: selections,
+		Exec: runtimeTools.ExecPolicy{
+			EnableDenyPatterns: cfg.Tools.Exec.EnableDenyPatterns,
+			CustomDenyPatterns: append([]string(nil), cfg.Tools.Exec.CustomDenyPatterns...),
+			Configured:         true,
+		},
+		UseDefaultTool: true,
+	})
+	if err != nil {
+		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("resolve tools: %v", err), err)
+	}
+	return capability, nil
 }
 
 func (c *ToolCommand) filesystemPolicy() (*tools.FilesystemPolicy, error) {
@@ -156,61 +185,88 @@ func (c *ToolCommand) Generate() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			list, _ := cmd.Flags().GetBool("list")
-			if list && len(args) > 0 {
-				return newToolCommandError(errToolFlagConflict, "cannot combine --list with a tool id", nil)
-			}
-			registry, err := c.getRegistry()
-			if err != nil {
-				return err
-			}
-			if list {
-				return c.listTools(cmd.OutOrStdout(), registry)
-			}
-			if len(args) < 1 {
-				return newToolCommandError(errToolIDRequired, "tool-id required (e.g. agent tool read_file path=./foo.txt). Use --list to list tools", nil)
-			}
-
-			toolID := args[0]
-			keyValues := args[1:]
-
-			parsed, err := parseKeyValueArgs(keyValues)
-			if err != nil {
-				return err
-			}
-			if _, ok := registry.Get(toolID); !ok {
-				return fmt.Errorf("tool %q: %w", toolID, newToolCommandError(errToolNotFound, fmt.Sprintf("tool %q not found", toolID), nil))
-			}
-
-			ctx := cmd.Context()
-			if l := logger.GetRequestLoggerFromContext(ctx); l == nil || l == logger.GetDefaultLogger() {
-				ctx = logger.WithLogger(ctx, logger.GetDefaultLogger())
-			}
-
-			msgs, err := registry.Execute(ctx, toolID, parsed)
-			if err != nil {
-				return fmt.Errorf("tool %q: %w", toolID, err)
-			}
-			if refusal, ok := filesystemRefusalFromMessages(msgs); ok {
-				if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
-					return err
-				}
-				return newToolCommandError(errToolRefusal, refusal.Error(), &tools.FilesystemRefusalError{Refusal: refusal})
-			}
-
-			return c.writeMessages(cmd.OutOrStdout(), msgs)
-		},
+		RunE:          c.run,
 	}
 	cmd.Flags().Bool("list", false, "List available tool IDs")
 	return cmd
 }
 
-func filesystemRefusalFromMessages(msgs []messages.Message) (tools.FilesystemRefusal, bool) {
-	for _, message := range msgs {
-		if refusal, ok := tools.FilesystemRefusalFromContent(message.TextContent()); ok {
-			return refusal, true
+func (c *ToolCommand) run(cmd *cobra.Command, args []string) error {
+	list, err := cmd.Flags().GetBool("list")
+	if err != nil {
+		return fmt.Errorf("read --list flag: %w", err)
+	}
+	if err := validateToolCommandArgs(list, args); err != nil {
+		return err
+	}
+	capability, err := c.getCapability()
+	if err != nil {
+		return err
+	}
+	if list {
+		return c.listTools(cmd.OutOrStdout(), capability.Definitions)
+	}
+	return c.invoke(cmd, capability, args)
+}
+
+func validateToolCommandArgs(list bool, args []string) error {
+	if list && len(args) > 0 {
+		return newToolCommandError(errToolFlagConflict, "cannot combine --list with a tool id", nil)
+	}
+	if !list && len(args) == 0 {
+		return newToolCommandError(errToolIDRequired, "tool-id required (e.g. agent tool read_file path=./foo.txt). Use --list to list tools", nil)
+	}
+	return nil
+}
+
+func (c *ToolCommand) invoke(cmd *cobra.Command, capability runtimeTools.Capability, args []string) error {
+	toolID := args[0]
+	parsed, err := parseKeyValueArgs(args[1:])
+	if err != nil {
+		return err
+	}
+	if !hasToolDefinition(capability.Definitions, toolID) {
+		return fmt.Errorf("tool %q: %w", toolID, newToolCommandError(errToolNotFound, fmt.Sprintf("tool %q not found", toolID), nil))
+	}
+	ctx := toolCommandContext(cmd.Context())
+	return c.execute(cmd, ctx, capability, toolID, parsed)
+}
+
+func toolCommandContext(ctx context.Context) context.Context {
+	if currentLogger := logger.GetRequestLoggerFromContext(ctx); currentLogger == nil || currentLogger == logger.GetDefaultLogger() {
+		return logger.WithLogger(ctx, logger.GetDefaultLogger())
+	}
+	return ctx
+}
+
+func (c *ToolCommand) execute(cmd *cobra.Command, ctx context.Context, capability runtimeTools.Capability, toolID string, parsed map[string]any) error {
+	arguments, err := json.Marshal(parsed)
+	if err != nil {
+		return fmt.Errorf("tool %q: encode arguments: %w", toolID, err)
+	}
+	if capability.Executor == nil {
+		return fmt.Errorf("tool %q: %w", toolID, errToolUnavailable)
+	}
+	response, err := capability.Executor.Execute(ctx, messages.ToolCall{ID: toolID, Name: toolID, Arguments: string(arguments)})
+	if err != nil {
+		return fmt.Errorf("tool %q: %w", toolID, err)
+	}
+	return c.writeToolResponse(cmd, toolID, response)
+}
+
+func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, toolID string, response messages.ToolCallResponse) error {
+	if refusal, ok := filesystemRefusalFromResponse(response); ok {
+		if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
+			return err
 		}
+		return newToolCommandError(errToolRefusal, refusal.Error(), &tools.FilesystemRefusalError{Refusal: refusal})
+	}
+	return c.writeResponse(cmd.OutOrStdout(), response)
+}
+
+func filesystemRefusalFromResponse(response messages.ToolCallResponse) (tools.FilesystemRefusal, bool) {
+	if refusal, ok := tools.FilesystemRefusalFromContent(response.Content); ok {
+		return refusal, true
 	}
 	return tools.FilesystemRefusal{}, false
 }
@@ -226,8 +282,11 @@ func (c *ToolCommand) writeRefusal(w io.Writer, refusal tools.FilesystemRefusal)
 	return nil
 }
 
-func (c *ToolCommand) listTools(w io.Writer, registry *tools.ToolRegistry) error {
-	names := registry.List()
+func (c *ToolCommand) listTools(w io.Writer, definitions []messages.ToolDefinition) error {
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		names = append(names, definition.Name)
+	}
 	sort.Strings(names)
 	for _, name := range names {
 		if _, err := fmt.Fprintln(w, name); err != nil {
@@ -235,6 +294,25 @@ func (c *ToolCommand) listTools(w io.Writer, registry *tools.ToolRegistry) error
 		}
 	}
 	return nil
+}
+
+func hasToolDefinition(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ToolCommand) writeResponse(w io.Writer, response messages.ToolCallResponse) error {
+	if response.Content != "" {
+		if _, err := fmt.Fprint(w, response.Content); err != nil {
+			return err
+		}
+		return nil
+	}
+	return c.writeMessages(w, []messages.Message{{ContentParts: response.ContentParts}})
 }
 
 func (c *ToolCommand) writeMessages(w io.Writer, msgs []messages.Message) error {

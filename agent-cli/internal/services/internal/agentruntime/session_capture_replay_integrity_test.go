@@ -39,7 +39,7 @@ func TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup(t *tes
 	}
 	audioPath := filepath.Join(t.TempDir(), "derived", "assistant.wav")
 
-	err = RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ReplayPath: capturePath}, audioPath)
+	err = RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(), ReplayPath: capturePath}, audioPath)
 	if err == nil {
 		t.Fatal("corrupt replay unexpectedly succeeded")
 	}

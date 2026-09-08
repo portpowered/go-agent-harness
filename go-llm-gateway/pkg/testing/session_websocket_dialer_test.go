@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -463,6 +464,45 @@ func TestRecordingWebSocketDialerPreservesCausalOutboundOrder(t *testing.T) {
 	if records[1].Direction != DirectionServerToClient || records[1].Type != "conversation.item.created" {
 		t.Fatalf("second capture record = %+v, want provider acknowledgement", records[1])
 	}
+}
+
+type settlementCaptureSink struct {
+	mu        sync.Mutex
+	appended  int
+	committed int
+}
+
+func (s *settlementCaptureSink) Append(CapturedSessionEvent) error {
+	s.mu.Lock()
+	s.appended++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *settlementCaptureSink) Commit(int) error {
+	s.mu.Lock()
+	s.committed++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *settlementCaptureSink) Discard(int) error { return nil }
+
+func (s *settlementCaptureSink) FlushToFile(_ string, _ SessionCapture) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.appended != s.committed {
+		return errors.New("capture flush observed unsettled event")
+	}
+	return nil
+}
+
+func (s *settlementCaptureSink) Abort() error { return nil }
+
+func (s *settlementCaptureSink) counts() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.appended, s.committed
 }
 
 func writeWebSocketCapture(t *testing.T, path string, records []CapturedSessionEvent) {

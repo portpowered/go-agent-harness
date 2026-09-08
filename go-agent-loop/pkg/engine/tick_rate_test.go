@@ -2,13 +2,72 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+type observedTickClock struct {
+	*clock.Deterministic
+	admitted chan time.Duration
+}
+
+func (c *observedTickClock) NewTimer(delay time.Duration) clock.Timer {
+	timer := c.Deterministic.NewTimer(delay)
+	c.admitted <- delay
+	return timer
+}
+
+func awaitTickTimer(t *testing.T, source *observedTickClock) time.Duration {
+	t.Helper()
+	select {
+	case delay := <-source.admitted:
+		return delay
+	case <-time.After(5 * time.Second):
+		t.Fatal("hot loop did not admit its pacing timer")
+		return 0
+	}
+}
+
+func TestHotLoopUsesInjectedTimeAndCancelsPacing(t *testing.T) {
+	const interval = 25 * time.Millisecond
+	source := &observedTickClock{Deterministic: clock.NewDeterministic(time.Unix(42, 0), time.Millisecond), admitted: make(chan time.Duration, 8)}
+	eng, _ := newTickRateTestEngine(interval)
+	eng.SetClock(source)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- eng.RunHotLoop(ctx) }()
+	if delay := awaitTickTimer(t, source); delay != interval {
+		t.Fatalf("pacing delay = %v", delay)
+	}
+	before := eng.TickState().TickCount
+	source.AdvanceBy(24 * time.Millisecond)
+	if got := eng.TickState().TickCount; got != before {
+		t.Fatalf("tick advanced early: %d -> %d", before, got)
+	}
+	source.AdvanceBy(time.Millisecond)
+	if delay := awaitTickTimer(t, source); delay != interval {
+		t.Fatalf("next pacing delay = %v", delay)
+	}
+	if got := eng.TickState().TickCount; got <= before {
+		t.Fatal("clock advance did not release next tick")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancel error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancellation waited for virtual time to advance")
+	}
+}
 
 // textInferencer returns a single text response as streaming deltas.
 // It produces MESSAGE.START → TEXT.START → TEXT.DELTA → TEXT.END → MESSAGE.END.

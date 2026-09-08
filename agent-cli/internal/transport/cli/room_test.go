@@ -1,9 +1,5 @@
 package cli
 
-import "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms"
-
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
@@ -20,6 +16,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
+	rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
 func TestRoomRunCommandParsesManifestOutputAndStreamOptions(t *testing.T) {
@@ -32,7 +32,7 @@ func TestRoomRunCommandParsesManifestOutputAndStreamOptions(t *testing.T) {
 	var got rooms.RoomRunOptions
 	command.SetRunner(func(_ context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
 		got = options
-		if options.Stream == nil {
+		if options.EventSink == nil {
 			return rooms.RoomResult{}, nil
 		}
 		return rooms.RoomResult{}, nil
@@ -58,7 +58,7 @@ func TestRoomRunCommandParsesManifestOutputAndStreamOptions(t *testing.T) {
 	if got.ConfigDir != globalFlags.ConfigDir() {
 		t.Fatalf("config directory = %q, want %q", got.ConfigDir, globalFlags.ConfigDir())
 	}
-	if got.Stream == nil {
+	if got.EventSink == nil {
 		t.Fatal("stream broker is nil when --stream is configured")
 	}
 	if !strings.Contains(output.String(), "room stream listening: http://") {
@@ -75,12 +75,12 @@ func TestRoomRunCommandUsesDocumentedDefaultOutputAndBoundedProgress(t *testing.
 	var got rooms.RoomRunOptions
 	command.SetRunner(func(_ context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
 		got = options
-		options.OnDiagnostic("alice", servicetest.SessionDiagnosticRecord{
-			Event:  rooms.SessionDiagnosticEventTurn,
+		options.OnDiagnostic("alice", rooms.RoomDiagnosticRecord{
+			Event:  serviceSession.SessionDiagnosticEventTurn,
 			Fields: map[string]string{"turn_index": "2"},
 		})
-		options.OnDiagnostic("alice", servicetest.SessionDiagnosticRecord{
-			Event:  rooms.SessionDiagnosticEventToolCall,
+		options.OnDiagnostic("alice", rooms.RoomDiagnosticRecord{
+			Event:  serviceSession.SessionDiagnosticEventToolCall,
 			Fields: map[string]string{"tool_name": "read_file"},
 		})
 		return rooms.RoomResult{
@@ -337,7 +337,7 @@ func TestRoomRunCommandReplayAdmissionBypassesLiveLaunchSeams(t *testing.T) {
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"--replay", filepath.Join(t.TempDir(), "missing-room-bundle")})
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil || !errors.Is(err, rooms.ErrRoomReplayBundleIncomplete) {
+	if err == nil || !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
 		t.Fatalf("replay admission error = %v, want incomplete bundle error", err)
 	}
 	if runnerCalls.Load() != 0 || registry.defaultCalls != 0 || registry.openCalls != 0 {
@@ -355,7 +355,7 @@ func TestRoomRunCommandRejectsReplaySourceCompetition(t *testing.T) {
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"--replay", filepath.Join(t.TempDir(), "bundle"), "--config", filepath.Join(t.TempDir(), "room.json")})
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil || !errors.Is(err, rooms.ErrRoomReplaySourceConflict) {
+	if err == nil || !errors.Is(err, rooms.ErrReplaySourceConflict) {
 		t.Fatalf("source competition error = %v, want replay source conflict", err)
 	}
 	if runnerCalls.Load() != 0 {
@@ -441,7 +441,7 @@ func TestRoomRunCommandRejectsMalformedAndOccupiedStreamBeforeRunner(t *testing.
 }
 
 func TestRoomEventServerServesEventsAndShutsDown(t *testing.T) {
-	broker, err := servicetest.NewRoomEventBroker([]string{"alice"})
+	broker, err := events.New([]string{"alice"}, events.Options{})
 	if err != nil {
 		t.Fatalf("new room event broker: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestRoomEventServerServesEventsAndShutsDown(t *testing.T) {
 		_ = server.shutdown(broker)
 		t.Fatalf("event response = %d %q", response.StatusCode, response.Header.Get("Content-Type"))
 	}
-	broker.PublishRoomEvent(servicetest.RoomStreamEventParticipantJoined, "alice")
+	broker.Publish(events.EventParticipantJoined, "alice", "")
 	if err := server.shutdown(broker); err != nil {
 		t.Fatalf("shutdown event server: %v", err)
 	}

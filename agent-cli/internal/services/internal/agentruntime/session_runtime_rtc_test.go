@@ -238,7 +238,7 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	)
 	runtime := &testSessionRTCRuntime{}
 	var got SessionRuntimeSelection
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         "WebRTC",
 		Signaling:         signaling,
@@ -386,7 +386,7 @@ model:
 		return newScriptedSession(), nil
 	}}
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:  filepath.Join(t.TempDir(), "rtc.session.json"),
 		ConfigDir:   configDir,
 		Transport:   SessionTransportWebRTC,
@@ -428,7 +428,7 @@ model:
     model: grok-websocket-test
     api_key: test-key
 `)
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         SessionTransportWebSocket,
 		Provider:          config.ProviderGrok,
@@ -448,7 +448,7 @@ model:
 }
 
 func TestPlanSessionRuntime_ReplayDoesNotConstructLiveRTCRuntime(t *testing.T) {
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         SessionTransportWebRTC,
@@ -491,7 +491,7 @@ func TestRunSession_WebRTCCompletesHermeticTurnThroughExportedService(t *testing
 	}
 
 	var out bytes.Buffer
-	err := RunSession(ctx, &out, SessionRunOptions{
+	err := RunSession(ctx, &out, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        filepath.Join(t.TempDir(), "hermetic.session.json"),
 		Transport:         SessionTransportWebRTC,
 		Signaling:         signalingEndpoint,

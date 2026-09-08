@@ -150,7 +150,7 @@ func TestRunSessionWithImagesAndAudioInputRequiresAssistantOutput(t *testing.T) 
 	}
 
 	err := agentruntime.RunSessionWithImagesAndAudioInput(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath:      filepath.Join(dir, "capture.json"),
 			Provider:        "openai",
 			Model:           "gpt-realtime-2.1-mini",
@@ -183,7 +183,7 @@ func TestRunSessionWithImagesAndAudioInputUsesOneDeferredTurn(t *testing.T) {
 	server := newScriptedRealtimeServer(false)
 	var output bytes.Buffer
 	err := agentruntime.RunSessionWithImagesAndAudioInput(context.Background(), &output, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath:      filepath.Join(dir, "capture.json"),
 			Provider:        "openai",
 			Model:           "gpt-realtime-2.1-mini",
@@ -262,7 +262,7 @@ func TestRunSessionWithImagesAndScheduledAudioDirectoryWithoutRecord(t *testing.
 		context.Background(),
 		io.Discard,
 		agentruntime.SessionImageRunOptions{
-			SessionRunOptions: agentruntime.SessionRunOptions{
+			SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:        "openai",
 				Model:           "gpt-realtime-2.1-mini",
 				APIKey:          "test-key",

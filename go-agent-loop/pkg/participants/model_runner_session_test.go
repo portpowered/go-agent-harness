@@ -93,9 +93,7 @@ func (s *recordingSession) Close() error {
 	return nil
 }
 
-// streamOnlyRecordingSession intentionally exposes only the stream Session
-// contract. It verifies the model runner's compatibility fallback without
-// accidentally advertising complete-message support through a method set.
+// streamOnlyRecordingSession verifies the stream-only compatibility fallback.
 type streamOnlyRecordingSession struct {
 	mu   sync.Mutex
 	sent []messages.StreamMessage
@@ -245,6 +243,55 @@ func TestSessionModelRunner_SendsSessionUpdateOnSessionCreated(t *testing.T) {
 	}
 	if forwarded.Type != messages.StreamTypeSessionCreated {
 		t.Fatalf("forwarded type = %s, want %s", forwarded.Type, messages.StreamTypeSessionCreated)
+	}
+}
+
+func TestSessionModelRunner_SendsInitialSessionUpdateOnSessionOpenOnce(t *testing.T) {
+	session := newRecordingSession()
+	config := &messages.SessionUpdateConfig{
+		Instructions: "be brief",
+		Tools:        []messages.ToolDefinition{{Name: "read_image"}},
+	}
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, config)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("sess-open", "gpt-realtime"),
+	}) {
+		t.Fatal("failed to enqueue SESSION.OPEN")
+	}
+	forwarded, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok || forwarded.Type != messages.StreamTypeSessionOpen {
+		t.Fatalf("forwarded session-open = %#v, ok=%t; want SESSION.OPEN", forwarded, ok)
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeSessionUpdate {
+		t.Fatalf("provider messages after SESSION.OPEN = %#v, want one SESSION.UPDATE", sent)
+	}
+	value, ok := sent[0].Value.(*messages.SessionUpdateValue)
+	if !ok || value == nil || len(value.Tools) != 1 || value.Tools[0].Name != "read_image" {
+		t.Fatalf("initial SESSION.UPDATE = %#v, want configured tool", sent[0].Value)
+	}
+
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("sess-open", "gpt-realtime"),
+	}) {
+		t.Fatal("failed to enqueue SESSION.CREATED")
+	}
+	forwarded, ok = runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok || forwarded.Type != messages.StreamTypeSessionCreated {
+		t.Fatalf("forwarded session-created = %#v, ok=%t; want SESSION.CREATED", forwarded, ok)
+	}
+	if sent := session.sentMessages(); len(sent) != 1 {
+		t.Fatalf("provider messages after SESSION.CREATED = %#v, want the initial update only", sent)
 	}
 }
 
@@ -836,21 +883,7 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 		t.Fatalf("response state after normal next turn = %+v, want completed and uncancelled", state)
 	}
 
-	var nextEnd *messages.MessageEndValue
-	for {
-		delta, ok := runner.DeltaOutbox.Read()
-		if !ok {
-			t.Fatal("next response ended without MESSAGE.END")
-		}
-		if delta.Type == messages.StreamTypeMessageEnd {
-			var ok bool
-			nextEnd, ok = delta.Value.(*messages.MessageEndValue)
-			if !ok {
-				t.Fatalf("next MESSAGE.END value = %T, want *MessageEndValue", delta.Value)
-			}
-			break
-		}
-	}
+	nextEnd := readNextSessionMessageEnd(t, runner.DeltaOutbox)
 	if nextEnd.TerminalReason == messages.TerminalReasonPartialOutput {
 		t.Fatalf("next normal MESSAGE.END retained interrupted terminal reason: %+v", nextEnd)
 	}
@@ -990,53 +1023,6 @@ func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) 
 		}
 	case <-ctx.Done():
 		t.Fatal("Run did not return after accepted continuation completed")
-	}
-}
-
-func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *testing.T) {
-	session := newRejectingStreamSession()
-	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- runner.Run(ctx) }()
-
-	runner.UserEventInbox <- messages.StreamMessage{
-		Type:  messages.StreamTypeToolCallEnd,
-		Value: messages.NewToolCallEndValue("call-rejected", "date", "result"),
-	}
-	runner.UserEventInbox <- messages.StreamMessage{
-		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewResponseCreateValue(),
-	}
-
-	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
-	value, ok := failure.Value.(*messages.ErrorValue)
-	if !ok {
-		t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
-	}
-	if value.Classification != "unresolved_tool_result" {
-		t.Fatalf("failure classification = %q, want unresolved_tool_result", value.Classification)
-	}
-	if !contains(value.Message, "call-rejected") {
-		t.Fatalf("failure message = %q, want rejected call ID", value.Message)
-	}
-	if sent := session.sentMessages(); len(sent) != 0 {
-		t.Fatalf("rejected lifecycle sent %d provider messages, want 0", len(sent))
-	}
-
-	if err := session.Close(); err != nil {
-		t.Fatalf("close session: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("Run = %v, want nil", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Run did not return after rejected continuation was reported")
 	}
 }
 

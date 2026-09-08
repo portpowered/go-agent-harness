@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // AgentLoopConfig holds configuration for creating an AgentLoop.
@@ -30,8 +31,10 @@ type AgentLoopConfig struct {
 	Logger            logging.Logger
 	InferenceDefaults *messages.InferenceDefaults
 	TickRate          time.Duration
-	// SessionConfig, when set, is sent as SESSION.UPDATE immediately after the
-	// inference provider emits SESSION.CREATED. Only used in DuplexSession mode.
+	Clock             clock.TimerSource
+	// SessionConfig, when set, is sent once as SESSION.UPDATE immediately after
+	// the inference provider emits its first SESSION.OPEN or SESSION.CREATED.
+	// Only used in DuplexSession mode.
 	SessionConfig *messages.SessionUpdateConfig
 
 	// ToolAcknowledgement configures one short, one-shot progress response for a
@@ -62,6 +65,12 @@ type ToolAcknowledgementPolicy struct {
 
 // Option is a functional option for configuring an AgentLoop.
 type Option func(*AgentLoopConfig)
+
+// WithClock supplies the canonical time domain for optional hot-loop pacing.
+// Nil retains the default real clock; manual ticks never wait on this clock.
+func WithClock(source clock.TimerSource) Option {
+	return func(c *AgentLoopConfig) { c.Clock = source }
+}
 
 // WithAudioSubsystem attaches buffer observation/control to ticks. Its media
 // workers are started and stopped by the owning runtime outside the loop.
@@ -231,10 +240,11 @@ func WithTickRate(d time.Duration) Option {
 	}
 }
 
-// WithSessionConfig sets the session configuration to send as SESSION.UPDATE
-// immediately after the inference provider emits SESSION.CREATED. Only active
-// in DuplexSession mode. Use this to configure the model, system prompt, and
-// input/output modalities for a realtime session (e.g. Grok realtime API).
+// WithSessionConfig sets the session configuration to send once as
+// SESSION.UPDATE immediately after the inference provider emits its first
+// SESSION.OPEN or SESSION.CREATED. Only active in DuplexSession mode. Use this
+// to configure the model, system prompt, and input/output modalities for a
+// realtime session (e.g. Grok realtime API).
 func WithSessionConfig(cfg messages.SessionUpdateConfig) Option {
 	return func(c *AgentLoopConfig) {
 		c.SessionConfig = &cfg

@@ -3,6 +3,8 @@ package audio
 import (
 	"errors"
 	"fmt"
+	"math/bits"
+	"time"
 )
 
 const (
@@ -19,7 +21,48 @@ var (
 	// ErrUnsupportedDeviceFormat identifies a device or backend that cannot
 	// open the requested PCM format.
 	ErrUnsupportedDeviceFormat = errors.New("unsupported audio device format")
+	// ErrInvalidPCM16Duration identifies an invalid or unrepresentable PCM16
+	// payload duration request.
+	ErrInvalidPCM16Duration = errors.New("invalid PCM16 duration")
 )
+
+// PCM16Duration returns the duration represented by byteCount interleaved
+// signed little-endian PCM16 bytes. It validates frame alignment and keeps
+// the arithmetic bounded by time.Duration rather than allowing a sample
+// count to wrap during evidence or media timing calculations.
+func PCM16Duration(byteCount, sampleRate, channels int) (time.Duration, error) {
+	if byteCount < 0 || sampleRate <= 0 || channels <= 0 {
+		return 0, fmt.Errorf("%w: bytes=%d rate=%d channels=%d", ErrInvalidPCM16Duration, byteCount, sampleRate, channels)
+	}
+	frameBytes := uint64(channels) * 2
+	if frameBytes/2 != uint64(channels) || uint64(byteCount)%frameBytes != 0 {
+		return 0, fmt.Errorf("%w: %d bytes is not aligned to %d channels", ErrInvalidPCM16Duration, byteCount, channels)
+	}
+	frames := uint64(byteCount) / frameBytes
+	rate := uint64(sampleRate)
+	seconds := frames / rate
+	const nanosPerSecond = uint64(time.Second)
+	maxDuration := uint64(1<<63 - 1)
+	if seconds > maxDuration/nanosPerSecond {
+		return 0, fmt.Errorf("%w: duration overflows time.Duration", ErrInvalidPCM16Duration)
+	}
+	nanos := seconds * nanosPerSecond
+	remaining := frames % rate
+	if remaining != 0 {
+		hi, lo := bits.Mul64(remaining, nanosPerSecond)
+		fraction, remainder := bits.Div64(hi, lo, rate)
+		if remainder != 0 {
+			// Duration values are integral nanoseconds; truncate only the
+			// unrepresentable fractional nanosecond after exact division.
+			_ = remainder
+		}
+		if fraction > maxDuration-nanos {
+			return 0, fmt.Errorf("%w: duration overflows time.Duration", ErrInvalidPCM16Duration)
+		}
+		nanos += fraction
+	}
+	return time.Duration(nanos), nil
+}
 
 // DeviceFormat is the concrete PCM format requested from a local device.
 // FrameSize remains a sample count owned by AudioSource/AudioSink; the sample

@@ -14,6 +14,7 @@ import (
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -85,6 +86,7 @@ type SelfPlayRunOptions struct {
 	// runtimeFactory is installed by the service constructor. It is private so
 	// command callers cannot bypass the process-scoped Wire composition.
 	runtimeFactory sessionRuntimeFactory
+	modelCatalog   runtimeproviders.ModelCatalog
 }
 
 // SelfPlayOptions is a concise alias for callers that do not need the Run
@@ -142,9 +144,8 @@ func RunSelfPlayWithResult(ctx context.Context, out io.Writer, opts SelfPlayRunO
 		return SelfPlayResult{}, errors.New("self-play requires both customer and assistant session inferencers when using injected sessions")
 	}
 	if customerInferencer == nil {
-		// Construction is deliberately after all validation. The production
-		// factory creates providers but does not dial; the first network call is
-		// still made only by the concurrently started session loops below.
+		// Construction follows validation; provider creation is inert until the
+		// session loops start.
 		customerOptions := base
 		customerOptions.Prompt = SelfPlayOpeningSeed
 		customerInferencer, err = factory(customerOptions, SelfPlayCustomerPersona)
@@ -185,8 +186,8 @@ func normalizeSelfPlayRunOptions(opts SelfPlayRunOptions) (SelfPlayRunOptions, e
 	if opts.Model == "" {
 		opts.Model = SelfPlayDefaultModel
 	}
-	if _, ok := LookupOpenAIRealtimeModel(opts.Model); !ok {
-		return SelfPlayRunOptions{}, fmt.Errorf("self-play model %q is not an OpenAI Realtime model; supported models: %s", opts.Model, strings.Join(SupportedOpenAIRealtimeModelIDs(), ", "))
+	if err := validateSelfPlayModel(opts); err != nil {
+		return SelfPlayRunOptions{}, err
 	}
 	if opts.MaxDuration <= 0 {
 		return SelfPlayRunOptions{}, fmt.Errorf("self-play --max-duration must be positive, got %s", opts.MaxDuration)
@@ -203,8 +204,6 @@ func normalizeSelfPlayRunOptions(opts SelfPlayRunOptions) (SelfPlayRunOptions, e
 		return SelfPlayRunOptions{}, err
 	}
 
-	// An injected pair is the credential-free hermetic seam. The command and
-	// the default production factory always take this validation path.
 	if opts.CustomerInferencer == nil && opts.AssistantInferencer == nil && opts.SessionFactory == nil {
 		if _, err := resolveOpenAIRealtimeSessionConfig(selfPlaySessionRunOptions(opts)); err != nil {
 			return SelfPlayRunOptions{}, fmt.Errorf("self-play live session configuration: %w", err)
@@ -264,6 +263,7 @@ func selfPlaySessionRunOptions(opts SelfPlayRunOptions) SessionRunOptions {
 		WebSocketDialer: opts.WebSocketDialer,
 		Clock:           opts.clock,
 		runtimeFactory:  opts.runtimeFactory,
+		ModelCatalog:    opts.modelCatalog,
 		// Phase 1 is intentionally no-tools. These fields stay nil even when
 		// callers provide a composed CLI executor elsewhere in the process.
 		ToolExecutor:    nil,
@@ -502,10 +502,8 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, err
 	}
 
-	// Keep bridge cancellation under the stop owner's control. Deriving this
-	// context directly from ctx would close the pipes before the coordinator
-	// can linearize caller cancellation as the run's terminal error, allowing a
-	// cancellation race to surface as an unrelated pipe failure.
+	// Keep bridge cancellation under the stop owner's control so cancellation
+	// is reported by the coordinator rather than as an unrelated pipe failure.
 	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
 	defer bridgeCancel()
 	stop := newSelfPlayStopState(bridgeCancel)
@@ -547,31 +545,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		observer.turnAdmission = func(messages.StreamMessage) bool {
 			return stop.recordTurn(side, opts.MaxTurns)
 		}
-		observer.streamObserver = func(msg messages.StreamMessage) {
-			if err := sideEvidence.observeStreamDelta(msg); err != nil {
-				wrapped := fmt.Errorf("%s stream delta evidence: %w", name, err)
-				evidence.fail(wrapped)
-				stop.fail(wrapped)
-			}
-			if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
-				value, ok := msg.Value.(*messages.AudioDeltaValue)
-				if !ok {
-					stop.fail(fmt.Errorf("%s emitted AUDIO.DELTA with unexpected value %T", name, msg.Value))
-					return
-				}
-				if err := output.write(value.Content); err != nil && !isSessionCancellation(err) && !stop.stopped() {
-					stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
-				}
-				if err := sideEvidence.observeAudio(value.Content); err != nil {
-					wrapped := fmt.Errorf("%s WAV evidence: %w", name, err)
-					evidence.fail(wrapped)
-					stop.fail(wrapped)
-				}
-				if sideEvidence.runtimeRecord != nil {
-					sideEvidence.runtimeRecord.audioOutputMessage(value.Content, msg)
-				}
-			}
-		}
+		observer.streamObserver = selfPlayStreamObserver(ctx, name, sideEvidence, evidence, stop, output)
 
 		err := runAgentLoopSession(ctx, io.Discard, inferencer, sessionLoopOptions{
 			Prompt:        prompt,
@@ -614,9 +588,6 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		}
 	}
 
-	// Both session loops have returned at this point. Closing the pipes makes
-	// the cleanup ordering explicit and lets the pump goroutines leave even if
-	// they were waiting for a final Read after the loop stopped.
 	customerToAssistant.close()
 	assistantToCustomer.close()
 	bridgeWG.Wait()
@@ -631,6 +602,35 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	}
 	finalizeErr := evidence.finalize(result, runErr, selfPlayNow(opts))
 	return result, errors.Join(runErr, finalizeErr)
+}
+
+func selfPlayStreamObserver(ctx context.Context, name string, sideEvidence *selfPlaySideEvidence, evidence *selfPlayEvidence, stop *selfPlayStopState, output *selfPlayPCMBridge) func(messages.StreamMessage) {
+	return func(msg messages.StreamMessage) {
+		if err := sideEvidence.observeStreamDelta(msg); err != nil {
+			wrapped := fmt.Errorf("%s stream delta evidence: %w", name, err)
+			evidence.fail(wrapped)
+			stop.fail(wrapped)
+		}
+		if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
+			return
+		}
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok {
+			stop.fail(fmt.Errorf("%s emitted AUDIO.DELTA with unexpected value %T", name, msg.Value))
+			return
+		}
+		if err := output.write(value.Content); err != nil && !isSessionCancellation(err) && !stop.stopped() {
+			stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
+		}
+		if err := sideEvidence.observeAudio(ctx, value.Content); err != nil {
+			wrapped := fmt.Errorf("%s WAV evidence: %w", name, err)
+			evidence.fail(wrapped)
+			stop.fail(wrapped)
+		}
+		if sideEvidence.runtimeRecord != nil {
+			sideEvidence.runtimeRecord.audioOutputMessage(value.Content, msg)
+		}
+	}
 }
 
 func selfPlayNow(opts SelfPlayRunOptions) time.Time {

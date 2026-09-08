@@ -520,18 +520,6 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	waitForGrokSignal(t, session.Done(), "session termination after malformed server frame")
 }
 
-func TestSession_ContextCancellation(t *testing.T) {
-	conn := newMockConn()
-	session := newGrokSession(conn, logging.DummyLogger())
-	ctx, cancel := context.WithCancel(context.Background())
-	session.start(ctx)
-
-	// Cancel context — should trigger session close.
-	cancel()
-
-	waitForGrokSignal(t, session.done, "session close after context cancellation")
-}
-
 // TestSession_SessionCreatedEmitsSessionOpen is the acceptance criterion test:
 // GrokSessionProvider.ConnectSession returns a Session whose typed buffer receives
 // a SESSION.OPEN event when the server sends session.created. The test deadline

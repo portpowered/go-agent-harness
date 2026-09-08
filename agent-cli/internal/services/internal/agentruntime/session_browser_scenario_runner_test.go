@@ -171,7 +171,7 @@ func TestRunBrowserConversationDefaultRunnerUsesSharedDuplexAudioPath(t *testing
 		PostSessionProbe: func(context.Context, *BrowserConversationFixtureRun, string) (BrowserConversationTabStateProbeResult, error) {
 			return BrowserConversationTabStateProbeResult{PageID: "checkout", Alive: true, Responsive: true, AllowsMutation: true}, nil
 		},
-		SessionOptions: SessionRunOptions{SessionInferencer: sessionInferencer},
+		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: sessionInferencer},
 	})
 	if err != nil {
 		t.Fatalf("RunBrowserConversation: %v", err)
@@ -211,7 +211,7 @@ func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *
 			json.RawMessage(`{"value":true}`),
 			json.RawMessage(`{"value":true}`),
 		}},
-		SessionOptions: SessionRunOptions{SessionInferencer: inferencer},
+		SessionOptions: SessionRunOptions{ModelCatalog: testModelCatalog(), SessionInferencer: inferencer},
 	})
 	if err == nil || !errors.Is(err, ErrBrowserConversationSession) {
 		t.Fatalf("RunBrowserConversation error = %v, want expected canceled session error", err)

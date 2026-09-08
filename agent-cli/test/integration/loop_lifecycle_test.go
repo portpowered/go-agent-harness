@@ -4,16 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // --- shared helpers for lifecycle tests ---
@@ -121,17 +119,13 @@ func TestFullLoopLifecycle_HappyPath(t *testing.T) {
 		},
 	}
 
-	exec := newIterativeTestExecutor(inf)
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		WorkDir:             tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 3, StopWord: "COMPLETE"}
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 3, StopWord: "COMPLETE"}
 	input := agentloop.NewExecuteInput("run the full lifecycle")
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}
@@ -154,8 +148,8 @@ func TestFullLoopLifecycle_HappyPath(t *testing.T) {
 	}
 
 	// Verify trace record has correct lineage.
-	st := session.NewStorage(tmpDir)
-	trace, loadErr := st.LoadTrace(result.TraceID)
+	traceStore := publicTraceStore(t, globalFlags)
+	trace, loadErr := traceStore.LoadTrace(context.Background(), result.TraceID)
 	if loadErr != nil {
 		t.Fatalf("LoadTrace: %v", loadErr)
 	}
@@ -201,16 +195,13 @@ func TestFullLoopLifecycle_SubAgentFails(t *testing.T) {
 		},
 	}
 
-	exec := newIterativeTestExecutor(inf)
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 3, StopWord: "COMPLETE"}
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 3, StopWord: "COMPLETE"}
 	input := agentloop.NewExecuteInput("dispatch and handle failure")
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop returned fatal error: %v", err)
 	}
@@ -244,16 +235,13 @@ func TestFullLoopLifecycle_IterationFails(t *testing.T) {
 		},
 	}
 
-	exec := newIterativeTestExecutor(inf)
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 3, StopWord: "COMPLETE"}
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 3, StopWord: "COMPLETE"}
 	input := agentloop.NewExecuteInput("task with failure recovery")
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop returned fatal error: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -149,7 +150,7 @@ func TestLoudnessNormalizerDoesNotClipAlreadyHotInput(t *testing.T) {
 	norm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 7.3})
 
 	out := processAll(norm, chunks)
-	if clipped := countClipped(out, audio.PCM16AnalysisClipSampleThreshold); clipped != 0 {
+	if clipped := countClipped(out, streamanalysis.PCM16AnalysisClipSampleThreshold); clipped != 0 {
 		t.Fatalf("hot input produced %d clipped samples after +7.3 dB normalization, want 0", clipped)
 	}
 }
@@ -169,7 +170,7 @@ func TestLoudnessNormalizerPeakSafetyOnFullScaleTransient(t *testing.T) {
 		}
 	}
 	out := norm.Process(hot)
-	if clipped := countClipped(out, audio.PCM16AnalysisClipSampleThreshold); clipped != 0 {
+	if clipped := countClipped(out, streamanalysis.PCM16AnalysisClipSampleThreshold); clipped != 0 {
 		t.Fatalf("full-scale transient produced %d clipped samples after +7.3 dB normalization, want 0", clipped)
 	}
 }
@@ -191,7 +192,7 @@ func TestLoudnessNormalizerPeakSafetyAtLargestProductionGain(t *testing.T) {
 		}
 	}
 	out := norm.Process(hot)
-	if clipped := countClipped(out, audio.PCM16AnalysisClipSampleThreshold); clipped != 0 {
+	if clipped := countClipped(out, streamanalysis.PCM16AnalysisClipSampleThreshold); clipped != 0 {
 		t.Fatalf("full-scale transient produced %d clipped samples after +15.1 dB normalization, want 0", clipped)
 	}
 }

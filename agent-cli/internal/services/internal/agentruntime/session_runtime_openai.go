@@ -3,6 +3,7 @@ package agentruntime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -106,14 +107,13 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			promptProvided = true
 			barePromptReplay = true
 		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
-			// No recorded text-prompt shape, no caller-supplied audio turns,
-			// and no caller-owned streaming --audio-in source (which drives
-			// its own committed audio independently of ScheduledAudioInput
-			// and must keep reaching the strict replay dialer unchanged):
-			// this may be the scheduled-audio-turn shape recorded by
-			// --audio-in-turn/--record-dir. Reconstruct its turns directly from
-			// the recorded client frames so a bare replay never needs the
-			// caller to re-supply the original audio files.
+			// Without a recorded text prompt or caller-supplied audio turns, inspect
+			// the capture for a scheduled-audio-turn replay. A caller-owned streaming
+			// --audio-in source drives its own committed audio independently of
+			// ScheduledAudioInput and must keep reaching the strict replay dialer
+			// unchanged. Reconstruct scheduled turns directly from the recorded
+			// client frames so a bare replay never needs the caller to re-supply
+			// the original audio files.
 			audioTurns, audioErr := loadReplaySessionAudioTurns(opts.ReplayPath)
 			if audioErr != nil {
 				return sessionRuntimePlan{}, audioErr
@@ -146,6 +146,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		inputAudioSampleRate:  configuration.inputAudioSampleRate,
 		outputAudioSampleRate: configuration.outputAudioSampleRate,
 		inferencer:            sessionInferencer,
+		announceTools:         replayAnnouncementToolDefinitions(opts.ToolDefinitions, configuration.initialToolNames, configuration.initialToolsKnown),
 		loop: sessionLoopOptions{
 			Prompt:         prompt,
 			PromptProvided: promptProvided,
@@ -177,6 +178,52 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		}
 	}
 	return plan, nil
+}
+
+func replayAnnouncementToolDefinitions(definitions []messages.ToolDefinition, names []string, known bool) []messages.ToolDefinition {
+	if !known {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if name = strings.TrimSpace(name); name != "" {
+			allowed[name] = struct{}{}
+		}
+	}
+	selected := make([]messages.ToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if _, ok := allowed[strings.TrimSpace(definition.Name)]; ok {
+			selected = append(selected, definition)
+		}
+	}
+	return selected
+}
+
+func (p sessionRuntimePlan) toolDefinitionsForAnnouncement() []messages.ToolDefinition {
+	if p.announceTools != nil {
+		return p.announceTools
+	}
+	return p.loop.ToolDefinitions
+}
+
+func replaySessionToolNames(path string, sequence int, session map[string]json.RawMessage) ([]string, bool, error) {
+	raw, ok := session["tools"]
+	if !ok {
+		return []string{}, true, nil
+	}
+	var tools []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &tools); err != nil {
+		return nil, true, fmt.Errorf("replay session capture %s: session.tools at sequence %d is invalid: %w", path, sequence, err)
+	}
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if name := strings.TrimSpace(tool.Name); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, true, nil
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {

@@ -3,14 +3,12 @@ package services
 import (
 	"fmt"
 	"io"
-	"os"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // BuildExecuteInput constructs an ExecuteInput from optional piped stdin, a text arg prompt, and file paths.
@@ -59,11 +57,12 @@ func BuildExecuteInput(stdin io.Reader, argPrompt string, filePaths []string) (a
 	return execInput, nil
 }
 
-// BuildAgentConfigFromFlags converts CLI flags to agent.Config for use by the agent package.
-func BuildAgentConfigFromFlags(globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, initialHistory []messages.Message, sessionID string) *agent.Config {
-	cfg := &agent.Config{
+// BuildAgentConfigFromFlags converts CLI flags to the public, normalized
+// session request. Global flags are consumed by the host resolver injected at
+// composition time; they do not cross into the runtime request.
+func BuildAgentConfigFromFlags(_ *flags.GlobalFlags, askFlags *flags.AskFlags, initialHistory []messages.Message, sessionID string) *session.Request {
+	cfg := &session.Request{
 		SystemPrompt:          askFlags.SystemPrompt,
-		NoSystemInformation:   askFlags.NoSystemInformation,
 		SessionID:             sessionID,
 		ContinueLastSession:   askFlags.ContinueLastSession,
 		InitialHistory:        initialHistory,
@@ -71,26 +70,11 @@ func BuildAgentConfigFromFlags(globalFlags *flags.GlobalFlags, askFlags *flags.A
 		Provider:              askFlags.Provider,
 		APIKey:                askFlags.APIKey,
 		BaseURL:               askFlags.BaseURL,
-		Stream:                askFlags.Stream,
-		OutputJSON:            askFlags.OutputJSON,
-		OutputReasoningTokens: askFlags.OutputReasoningTokens,
 		OutputModality:        askFlags.OutputModality,
 		ModelConfig:           askFlags.ModelConfig,
+		OutputReasoningTokens: askFlags.OutputReasoningTokens,
 		RecordCapturePath:     askFlags.RecordCapturePath,
 		ReplayCapturePath:     askFlags.ReplayCapturePath,
-	}
-	if globalFlags != nil {
-		cfg.ConfigDir = globalFlags.ConfigDir()
-		cfg.WorkDir = globalFlags.WorkDir()
-		if cfg.WorkDir == "" {
-			// Capture the launch directory while command construction is still
-			// request-scoped. ConfigDir remains independent session storage.
-			cfg.WorkDir, _ = os.Getwd()
-		}
-		cfg.AllowPaths = globalFlags.AllowPaths()
-		cfg.Verbose = globalFlags.VerboseMode > 0
-		cfg.VerbosityLevel = globalFlags.VerboseMode
-		cfg.LogToStdout = globalFlags.LogToStdout
 	}
 	if askFlags.SessionID != "" {
 		cfg.SessionID = askFlags.SessionID
@@ -98,7 +82,9 @@ func BuildAgentConfigFromFlags(globalFlags *flags.GlobalFlags, askFlags *flags.A
 	return cfg
 }
 
-// DefaultToolDefs returns the default tool definitions for use with agent.NewExecutor.
-func DefaultToolDefs(registry *tools.ToolRegistry) []messages.ToolDefinition {
-	return registry.ToAgentLoopDefs()
+// DefaultToolDefs returns an owned copy of the definitions selected by the
+// runtime tools capability. Keeping this helper value-oriented prevents the
+// CLI service layer from depending on a concrete tool registry.
+func DefaultToolDefs(definitions []messages.ToolDefinition) []messages.ToolDefinition {
+	return append([]messages.ToolDefinition(nil), definitions...)
 }

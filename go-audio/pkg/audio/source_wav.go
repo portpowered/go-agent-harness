@@ -25,6 +25,7 @@ type WAVSource struct {
 }
 
 var _ AudioSource = (*WAVSource)(nil)
+var _ SampleSource = (*WAVSource)(nil)
 
 func (s *WAVSource) SampleRate() int {
 	if s == nil {
@@ -62,18 +63,38 @@ func (s *WAVSource) ReadFrame(ctx context.Context, buf []int16) error {
 		return &FrameSizeError{Operation: "read", Got: len(buf), Want: FrameSize}
 	}
 
+	n, err := s.ReadSamples(ctx, buf)
+	if err != nil {
+		return err
+	}
+	clear(buf[n:])
+	return nil
+}
+
+// ReadSamples returns up to len(buf) decoded payload samples without padding
+// a short final chunk. It is the count-aware companion to ReadFrame and keeps
+// the source's original sample count available to finite media adapters.
+func (s *WAVSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return &ClosedError{Operation: "read", Path: s.path}
+		return 0, &ClosedError{Operation: "read", Path: s.path}
 	}
 	if s.done {
-		return io.EOF
+		return 0, io.EOF
 	}
 
-	want := int64(FrameSize * 2)
-	count := want
+	count := int64(len(buf) * 2)
 	if s.remaining < count {
 		count = s.remaining
 	}
@@ -81,23 +102,23 @@ func (s *WAVSource) ReadFrame(ctx context.Context, buf []int16) error {
 	if _, err := io.ReadFull(s.file, encoded); err != nil {
 		s.done = true
 		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
-			return &TruncatedPCMError{Path: s.path, Bytes: int(count % 2)}
+			return 0, &TruncatedPCMError{Path: s.path, Bytes: int(count % 2)}
 		}
-		return &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
+		return 0, &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
 	}
 	s.remaining -= count
 	if count%2 != 0 {
 		s.done = true
-		return &TruncatedPCMError{Path: s.path, Bytes: 1}
+		return 0, &TruncatedPCMError{Path: s.path, Bytes: 1}
 	}
-	clear(buf)
-	if err := codec.DecodePCM16Into(buf, encoded); err != nil {
-		return &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
+	n := int(count / 2)
+	if err := codec.DecodePCM16Into(buf[:n], encoded); err != nil {
+		return 0, &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
 	}
 	if s.remaining == 0 {
 		s.done = true
 	}
-	return nil
+	return n, nil
 }
 
 // Close releases the owned file. It is safe to call more than once.

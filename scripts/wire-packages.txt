@@ -1,0 +1,9 @@
+# Every generated Wire injector in workspace modules must be registered here.
+agent-cli/internal/wire
+go-agent-runtime/services/devices/wire
+go-agent-runtime/services/providers/wire
+go-agent-runtime/services/session/wire
+go-agent-runtime/services/rooms/wire
+go-agent-runtime/services/tools/wire
+go-agent-runtime/services/replay/wire
+go-agent-runtime/services/recording/wire

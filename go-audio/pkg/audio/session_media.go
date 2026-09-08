@@ -102,7 +102,7 @@ func (m *SessionMedia) PushInbound(samples []int16) error {
 // StartInboundResponse associates following inbound PCM with one provider
 // response. Repeated calls for the same response are ignored.
 func (m *SessionMedia) StartInboundResponse(response PlaybackResponse) {
-	if m == nil || m.inbound == nil || response.ItemID == "" {
+	if m == nil || m.inbound == nil || !response.HasIdentity() {
 		return
 	}
 	m.inbound.startResponse(response)
@@ -200,18 +200,19 @@ func (m *sessionOutboundMedia) close() {
 }
 
 type sessionInboundMedia struct {
-	mu           sync.Mutex
-	frameSamples int
-	sampleRate   int
-	padPartial   bool
-	pending      []int16
-	frames       []PCMFrame
-	terminal     error
-	closed       bool
-	done         chan struct{}
-	wake         chan struct{}
-	closeOnce    sync.Once
-	response     PlaybackResponse
+	mu                        sync.Mutex
+	frameSamples              int
+	sampleRate                int
+	padPartial, emitAvailable bool
+	pending                   []int16
+	frames                    []PCMFrame
+	terminal                  error
+	closed                    bool
+	done                      chan struct{}
+	wake                      chan struct{}
+	closeOnce                 sync.Once
+	response                  PlaybackResponse
+	epoch                     uint64
 	// responseSamples retains provider-rate PCM by response. Network delivery
 	// can open later responses while an earlier response is still reaching the
 	// physical device, so one mutable counter cannot cap the audible response's
@@ -357,14 +358,13 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	}
 	m.frames = nil
 	m.pending = nil
+	m.epoch++
 	m.response = PlaybackResponse{}
 	m.playbackResponse = PlaybackResponse{}
 	m.responseSamples = make(map[PlaybackResponse]uint64)
-	// Discard late deltas from the newest ingress response in this cancelled
-	// chain. The audible response can be older when tool continuations have
-	// already arrived and queued behind it.
+	// Discard late deltas from the interrupted ingress response.
 	m.interrupted = ingressResponse
-	m.discarding = ingressResponse.ItemID != ""
+	m.discarding = ingressResponse.HasIdentity()
 	if controller == nil || response.ItemID == "" {
 		m.mu.Unlock()
 		m.notify()
@@ -428,9 +428,9 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.mu.Unlock()
 		return ErrSessionMediaInboundBacklog
 	}
-	completeFrames := (len(m.pending) + len(samples)) / m.frameSamples
+	framesToAppend := m.inboundFramesNeeded(len(samples))
 	availableFrames := sessionMediaMaxQueuedFrames - len(m.frames)
-	if availableFrames < 0 || completeFrames > availableFrames {
+	if availableFrames < 0 || framesToAppend > availableFrames {
 		m.mu.Unlock()
 		return ErrSessionMediaInboundBacklog
 	}
@@ -438,7 +438,7 @@ func (m *sessionInboundMedia) push(samples []int16) error {
 		m.responseSamples[m.response] += uint64(len(samples))
 	}
 	m.pending = append(m.pending, samples...)
-	m.appendCompleteFramesLocked()
+	m.appendInboundFramesLocked()
 	m.activateQueuedPlaybackLocked()
 	m.mu.Unlock()
 	m.notify()
@@ -507,13 +507,13 @@ func (m *sessionInboundMedia) appendResponseBoundaryLocked(includeEmpty bool) bo
 		}
 		samples := make([]int16, sampleCount)
 		copy(samples, m.pending)
-		m.frames = append(m.frames, PCMFrame{Samples: samples, EndOfResponse: true, PlaybackResponse: m.response})
+		m.frames = append(m.frames, PCMFrame{Samples: samples, EndOfResponse: true, PlaybackResponse: m.response, Epoch: m.epoch})
 		m.pending = nil
 	} else if includeEmpty && !m.padPartial {
 		// A complete frame may already have been consumed before the provider's
 		// done event arrives. Publish an explicit zero-sample boundary so a sink
 		// can flush any rate-conversion remainder without inventing audio.
-		m.frames = append(m.frames, PCMFrame{EndOfResponse: true, PlaybackResponse: m.response})
+		m.frames = append(m.frames, PCMFrame{EndOfResponse: true, PlaybackResponse: m.response, Epoch: m.epoch})
 	}
 	return true
 }
@@ -537,7 +537,7 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 	for len(m.pending) >= m.frameSamples {
 		samples := make([]int16, m.frameSamples)
 		copy(samples, m.pending[:m.frameSamples])
-		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response})
+		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response, Epoch: m.epoch})
 		m.pending = m.pending[m.frameSamples:]
 	}
 }

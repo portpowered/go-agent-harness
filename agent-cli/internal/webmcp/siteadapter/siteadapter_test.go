@@ -257,3 +257,15 @@ func TestNeedsTrustedActivationIsNarrowlyScoped(t *testing.T) {
 		}
 	}
 }
+
+func TestSiteAdapterUnknownLookupsFailClosed(t *testing.T) {
+	if source, ok := Source("missing-adapter"); ok || source != "" {
+		t.Fatalf("Source(missing-adapter) = %q, %t; want empty miss", source, ok)
+	}
+	if _, ok := ForURL("https://user@youtube.com/watch?v=abc123"); ok {
+		t.Fatal("ForURL accepted a URL containing user information")
+	}
+	if NeedsTrustedActivation("https://www.youtube.com/", "missing_tool") {
+		t.Fatal("unknown tool requested trusted activation")
+	}
+}

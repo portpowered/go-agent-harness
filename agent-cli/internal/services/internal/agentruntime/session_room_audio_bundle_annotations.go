@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"encoding/json"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
-func parseRoomReplayAudioAnnotations(manifest roomReplayJSONObject, plan RoomReplayPlan, participants []RoomReplayAudioParticipant, streamParticipants map[string]string) ([]RoomReplayAudioAnnotation, []audio.PCM16OverlapInterval, []audio.PCM16BargeInAnnotation, []audio.PCM16LoudnessInterval, error) {
+func parseRoomReplayAudioAnnotations(manifest roomReplayJSONObject, plan RoomReplayPlan, participants []RoomReplayAudioParticipant, streamParticipants map[string]string) ([]RoomReplayAudioAnnotation, []roomanalysis.PCM16OverlapInterval, []roomanalysis.PCM16BargeInAnnotation, []roomanalysis.PCM16LoudnessInterval, error) {
 	participantByID := make(map[string]RoomReplayAudioParticipant, len(participants))
 	for _, participant := range participants {
 		participantByID[participant.ID] = participant
@@ -40,9 +40,9 @@ func parseRoomReplayAudioAnnotations(manifest roomReplayJSONObject, plan RoomRep
 		}
 	}
 	annotations := make([]RoomReplayAudioAnnotation, 0, len(rawAnnotations))
-	overlaps := make([]audio.PCM16OverlapInterval, 0)
-	barges := make([]audio.PCM16BargeInAnnotation, 0)
-	loudness := make([]audio.PCM16LoudnessInterval, 0)
+	overlaps := make([]roomanalysis.PCM16OverlapInterval, 0)
+	barges := make([]roomanalysis.PCM16BargeInAnnotation, 0)
+	loudness := make([]roomanalysis.PCM16LoudnessInterval, 0)
 	seenAnnotationIDs := make(map[string]int)
 	for index, raw := range rawAnnotations {
 		annotation, overlap, barge, loudnessInterval, recognized, err := parseRoomReplayAudioAnnotation(raw, index, plan, participantByID, streamParticipants)
@@ -99,7 +99,7 @@ func roomReplayAnnotationEntries(raw json.RawMessage, field string) ([]json.RawM
 	return []json.RawMessage{raw}, nil
 }
 
-func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomReplayPlan, participants map[string]RoomReplayAudioParticipant, streamParticipants map[string]string) (RoomReplayAudioAnnotation, *audio.PCM16OverlapInterval, *audio.PCM16BargeInAnnotation, *audio.PCM16LoudnessInterval, bool, error) {
+func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomReplayPlan, participants map[string]RoomReplayAudioParticipant, streamParticipants map[string]string) (RoomReplayAudioAnnotation, *roomanalysis.PCM16OverlapInterval, *roomanalysis.PCM16BargeInAnnotation, *roomanalysis.PCM16LoudnessInterval, bool, error) {
 	object, err := roomReplayObject(raw)
 	if err != nil {
 		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d]", index), "run-manifest.json", "annotation object", "invalid", err)
@@ -151,7 +151,7 @@ func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomRep
 		if err != nil {
 			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
 		}
-		overlap := audio.PCM16OverlapInterval{PCM16TimeInterval: audio.PCM16TimeInterval{ID: id, Start: start, End: end}, A: audio.PCM16OverlapParticipant{ParticipantID: a, SentStreamID: forwardSent, ReceivedStreamID: forwardReceived}, B: audio.PCM16OverlapParticipant{ParticipantID: b, SentStreamID: reverseSent, ReceivedStreamID: reverseReceived}}
+		overlap := roomanalysis.PCM16OverlapInterval{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, A: roomanalysis.PCM16OverlapParticipant{ParticipantID: a, SentStreamID: forwardSent, ReceivedStreamID: forwardReceived}, B: roomanalysis.PCM16OverlapParticipant{ParticipantID: b, SentStreamID: reverseSent, ReceivedStreamID: reverseReceived}}
 		return annotation, &overlap, nil, nil, true, nil
 	}
 	if strings.Contains(kind, "barge") || strings.Contains(kind, "interrupt") {
@@ -165,7 +165,7 @@ func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomRep
 		}
 		annotation.Participants = []string{interrupter, interrupted}
 		annotation.InterrupterParticipantID, annotation.InterruptedParticipantID = interrupter, interrupted
-		barge := audio.PCM16BargeInAnnotation{PCM16TimeInterval: audio.PCM16TimeInterval{ID: id, Start: start, End: end}, InterrupterStreamID: participants[interrupter].Sent.StreamID, InterruptedStreamID: participants[interrupted].WAV.StreamID}
+		barge := roomanalysis.PCM16BargeInAnnotation{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, InterrupterStreamID: participants[interrupter].Sent.StreamID, InterruptedStreamID: participants[interrupted].WAV.StreamID}
 		return annotation, nil, &barge, nil, true, nil
 	}
 	left := normalizeRoomReplayParticipantReference(roomReplayAnnotationEndpoint(object, "left", "left_participant", "left_participant_id", "participant_a", "a"), streamParticipants)
@@ -183,7 +183,7 @@ func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomRep
 		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch("annotations["+id+"]", "run-manifest.json", "distinct loudness participants", left, nil)
 	}
 	annotation.Participants = []string{left, right}
-	loudness := audio.PCM16LoudnessInterval{PCM16TimeInterval: audio.PCM16TimeInterval{ID: id, Start: start, End: end}, LeftStreamID: participants[left].WAV.StreamID, RightStreamID: participants[right].WAV.StreamID}
+	loudness := roomanalysis.PCM16LoudnessInterval{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, LeftStreamID: participants[left].WAV.StreamID, RightStreamID: participants[right].WAV.StreamID}
 	return annotation, nil, nil, &loudness, true, nil
 }
 

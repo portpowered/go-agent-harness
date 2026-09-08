@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // newSessionSignalContext keeps OS signal ownership at the CLI boundary while
@@ -16,7 +18,7 @@ func newSessionSignalContext(parent context.Context) (context.Context, func(), *
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 	intent := serviceSession.NewSessionCancellationIntent()
@@ -29,9 +31,13 @@ func newSessionSignalContext(parent context.Context) (context.Context, func(), *
 		select {
 		case <-signals:
 			intent.MarkSIGINT()
-			cancel()
+			cancel(runtimeSession.ErrLiveUserCancellation)
 		case <-parent.Done():
-			cancel()
+			cause := context.Cause(parent)
+			if cause == nil {
+				cause = parent.Err()
+			}
+			cancel(cause)
 		case <-stopped:
 		}
 	}()
@@ -40,7 +46,7 @@ func newSessionSignalContext(parent context.Context) (context.Context, func(), *
 		stopOnce.Do(func() {
 			signal.Stop(signals)
 			close(stopped)
-			cancel()
+			cancel(context.Canceled)
 			<-watcherDone
 		})
 	}

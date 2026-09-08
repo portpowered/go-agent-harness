@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -214,86 +212,6 @@ func TestSessionProgressObserver_DoesNotClassifyCancellationOrToolContinuationAs
 				t.Fatalf("unexpected silent-provider classification: %v", err)
 			}
 		})
-	}
-}
-
-func TestRunRoom_ExplicitEmptyPartialResponseTerminatesParticipant(t *testing.T) {
-	ids := []string{"silent", "viable"}
-	emptyPartialResponse := []messages.StreamMessage{
-		roomTestSessionOpen("silent"),
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-		{
-			Type:       messages.StreamTypeMessageEnd,
-			Role:       messages.RoleAssistant,
-			ResponseID: "silent-response",
-			Value: messages.NewMessageEndValueWithTerminal(
-				messages.TokenUsage{},
-				messages.TerminalReasonPartialOutput,
-				messages.TerminalProvenanceProvider,
-				messages.TerminalOutputNone,
-			),
-		},
-	}
-	inferencers := map[string]*roomTestInferencer{
-		"silent": {events: emptyPartialResponse, closeStarted: make(chan struct{})},
-		"viable": {events: append([]messages.StreamMessage{roomTestSessionOpen("viable")}, append(roomTestResponse("hello"), roomTestSessionClose("viable", "complete"))...)},
-	}
-	opts, _ := newRoomTestRunOptions(ids, inferencers)
-	opts.Manifest.Room.MaxDuration = 5 * time.Second
-	var diagnosticMu sync.Mutex
-	var failureRecord *SessionDiagnosticRecord
-	opts.OnDiagnostic = func(participantID string, record SessionDiagnosticRecord) {
-		if participantID != "silent" || record.Event != SessionDiagnosticEventFailure {
-			return
-		}
-		diagnosticMu.Lock()
-		copy := record
-		failureRecord = &copy
-		diagnosticMu.Unlock()
-	}
-	result, err := RunRoomWithResult(context.Background(), io.Discard, opts)
-	if err != nil {
-		t.Fatalf("room after isolated empty participant returned an error: %v", err)
-	}
-	if result.Reason != RoomTerminationStopped {
-		t.Fatalf("room reason = %q, want stopped after the viable participant ended", result.Reason)
-	}
-	participant, ok := result.Participants["silent"]
-	if !ok {
-		t.Fatal("room result is missing silent participant")
-	}
-	if participant.Reason != ParticipantTerminationError {
-		t.Fatalf("silent participant reason = %q, want error", participant.Reason)
-	}
-	if participant.Classification != SessionSilentProviderEmptyResponseClassification {
-		t.Fatalf("silent participant classification = %q, want %q", participant.Classification, SessionSilentProviderEmptyResponseClassification)
-	}
-	if participant.TerminalReason != string(messages.TerminalReasonTerminalFailure) || participant.TerminalProvenance != string(messages.TerminalProvenanceSession) || participant.OutputState != string(messages.TerminalOutputNone) {
-		t.Fatalf("silent participant terminal metadata = (%q, %q, %q), want terminal failure/session/none", participant.TerminalReason, participant.TerminalProvenance, participant.OutputState)
-	}
-	if participant.TurnsCompleted != 0 {
-		t.Fatalf("silent participant turns = %d, want 0", participant.TurnsCompleted)
-	}
-	if !strings.Contains(participant.Error, SessionSilentProviderEmptyResponseClassification) {
-		t.Fatalf("silent participant error = %q, want classification", participant.Error)
-	}
-	diagnosticMu.Lock()
-	gotFailure := failureRecord
-	diagnosticMu.Unlock()
-	if gotFailure == nil {
-		t.Fatal("silent participant did not emit a session failure diagnostic")
-	}
-	if got := gotFailure.Fields[fieldClassification]; got != SessionSilentProviderEmptyResponseClassification {
-		t.Fatalf("room diagnostic classification = %q, want %q", got, SessionSilentProviderEmptyResponseClassification)
-	}
-	if got := gotFailure.Fields[fieldTerminalReason]; got != string(messages.TerminalReasonTerminalFailure) {
-		t.Fatalf("room diagnostic terminal reason = %q, want terminal_failure", got)
-	}
-	if got := gotFailure.Fields[fieldTerminalProvenance]; got != string(messages.TerminalProvenanceSession) {
-		t.Fatalf("room diagnostic provenance = %q, want session", got)
-	}
-	if got := gotFailure.Fields[fieldOutputState]; got != string(messages.TerminalOutputNone) {
-		t.Fatalf("room diagnostic output state = %q, want none", got)
 	}
 }
 

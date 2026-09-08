@@ -346,36 +346,10 @@ func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
 	if err := out.WaitForPlayback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := out.WriteFrame(context.Background(), frame); err != nil {
-		t.Fatal(err)
-	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := out.WriteSamples(cancelled, frame); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled write = %v", err)
-	}
-	if err := out.WaitForPlayback(cancelled); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled drain = %v", err)
-	}
-	_, high, _ := audio.PlaybackQueueWatermarks(r.format)
-	_ = out.WriteSamples(context.Background(), make([]int16, high-audio.FrameSize))
-	if err := out.WaitForPlaybackCapacity(cancelled, audio.FrameSize); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled capacity wait = %v", err)
-	}
-	out.DiscardPlayback()
-	_ = out.WriteFrame(context.Background(), frame)
-	wait := make(chan error, 1)
-	go func() { wait <- out.WaitForPlayback(context.Background()) }()
-	if err := r.Advance(1); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case err := <-wait:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("playback wait did not wake")
 	}
 	if err := out.Close(); err != nil {
 		t.Fatal(err)
@@ -384,6 +358,89 @@ func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := in.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSimulatedDuplexPlaybackWaitsTrackQueueChanges(t *testing.T) {
+	r, out := openSimulatedOutput(t, simulatedScenario(16000, []int{audio.FrameSize}))
+	_, high, err := audio.PlaybackQueueWatermarks(r.format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := out.WriteSamples(context.Background(), make([]int16, high)); err != nil {
+		t.Fatal(err)
+	}
+	assertSimulatedPlaybackWaitTransition(t, r, out, high-audio.FrameSize, func() error {
+		return out.WaitForPlaybackCapacity(context.Background(), audio.FrameSize)
+	})
+	out.DiscardPlayback()
+	if err := out.WriteSamples(context.Background(), make([]int16, high)); err != nil {
+		t.Fatal(err)
+	}
+	assertSimulatedConcurrentPlaybackWait(t, func() error {
+		return out.WaitForPlaybackCapacity(t.Context(), audio.FrameSize)
+	}, func() error { return r.Advance(1) })
+	out.DiscardPlayback()
+
+	if err := out.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
+		t.Fatal(err)
+	}
+	assertSimulatedPlaybackWaitTransition(t, r, out, 0, func() error {
+		return out.WaitForPlayback(context.Background())
+	})
+	if err := out.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
+		t.Fatal(err)
+	}
+	assertSimulatedConcurrentPlaybackWait(t, func() error {
+		return out.WaitForPlayback(t.Context())
+	}, func() error { return r.Advance(1) })
+
+	if err := out.WriteSamples(context.Background(), make([]int16, high)); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := out.WaitForPlayback(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled drain = %v", err)
+	}
+	if err := out.WaitForPlaybackCapacity(cancelled, audio.FrameSize); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled capacity wait = %v", err)
+	}
+}
+
+func assertSimulatedConcurrentPlaybackWait(t *testing.T, wait, advance func() error) {
+	t.Helper()
+	result := make(chan error, 1)
+	go func() { result <- wait() }()
+	if err := advance(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("public playback wait did not observe the queue change")
+	}
+}
+
+func assertSimulatedPlaybackWaitTransition(t *testing.T, registry *SimulatedDuplexRegistry, stream *SimulatedDuplexStream, maxQueued int, wait func() error) {
+	t.Helper()
+	ready, wake := stream.playbackWaitState(maxQueued)
+	if ready {
+		t.Fatal("playback wait unexpectedly ready before the device callback")
+	}
+	if err := registry.Advance(1); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-wake:
+	default:
+		t.Fatal("armed playback wait was not notified of the queue change")
+	}
+	if err := wait(); err != nil {
 		t.Fatal(err)
 	}
 }

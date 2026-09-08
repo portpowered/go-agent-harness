@@ -52,7 +52,7 @@ func TestResolveInputAudioTranscriptionPolicyIsRequestScoped(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := resolveInputAudioTranscriptionPolicy(SessionRunOptions{
+			got := resolveInputAudioTranscriptionPolicy(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				NoInputTranscription: testCase.noInput,
 				ReplayPath:           testCase.replay,
 			}, testCase.provider, testCase.audioInput)

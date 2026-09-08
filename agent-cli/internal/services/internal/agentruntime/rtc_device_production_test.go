@@ -115,7 +115,7 @@ func exerciseRTCDeviceAudioPass(t *testing.T, registry *devicegw.VirtualRegistry
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath: "device-record-replay.json", SessionInferencer: inferencer,
 			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
 				Registry: registry, InputDevice: rtcRoundtripInputID, OutputDevice: rtcRoundtripOutputID,
@@ -220,7 +220,7 @@ func TestRunSessionRTCDeviceBindingUsesProductionProviderMediaOwner(t *testing.T
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inferencer,
 			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{

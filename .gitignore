@@ -41,3 +41,6 @@ prd.json
 progress.txt
 prd.md
 factory/inputs/BATCH/
+
+# Factory runtime caches and provider artifacts (never source).
+.you-agent-factory/

@@ -126,7 +126,7 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 	}
 	outputData, err := json.Marshal(map[string]any{
 		"item": map[string]any{
-			"type":    "function_call_output",
+			"type":    realtimeFunctionCallOutputType,
 			"call_id": msg.ToolCallID,
 			"output":  text,
 		},

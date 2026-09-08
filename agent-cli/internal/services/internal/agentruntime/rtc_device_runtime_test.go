@@ -49,7 +49,7 @@ func TestRunSessionRTCDeviceBindingStartsRuntimePumps(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: sessionInferencer,
 			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{
@@ -140,7 +140,7 @@ func TestRunSessionRTCDeviceBindingPropagatesPumpError(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+		runErrCh <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: sessionInferencer,
 			RTCDeviceBinding: agentruntime.RTCDeviceBindingRequest{

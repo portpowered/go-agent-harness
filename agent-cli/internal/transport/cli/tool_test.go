@@ -3,12 +3,14 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 type cliTestTool struct {
@@ -26,6 +29,49 @@ type cliTestTool struct {
 	mu       sync.Mutex
 	calls    int
 	lastArgs map[string]any
+}
+
+type cliTestExecutor struct {
+	tools map[string]*cliTestTool
+}
+
+func (e *cliTestExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	tool, ok := e.tools[call.Name]
+	if !ok {
+		return messages.ToolCallResponse{}, fmt.Errorf("tool %q not found", call.Name)
+	}
+	var args map[string]any
+	if call.Arguments != "" {
+		decoder := json.NewDecoder(strings.NewReader(call.Arguments))
+		decoder.UseNumber()
+		if err := decoder.Decode(&args); err != nil {
+			return messages.ToolCallResponse{}, err
+		}
+		for key, value := range args {
+			number, ok := value.(json.Number)
+			if !ok {
+				continue
+			}
+			if integer, err := strconv.ParseInt(string(number), 10, 64); err == nil {
+				args[key] = integer
+				continue
+			}
+			if decimal, err := strconv.ParseFloat(string(number), 64); err == nil {
+				args[key] = decimal
+			}
+		}
+	}
+	result, err := tool.Execute(ctx, args)
+	if err != nil {
+		return messages.ToolCallResponse{}, err
+	}
+	var content strings.Builder
+	var parts []messages.ContentPart
+	for _, message := range result {
+		content.WriteString(message.TextContent())
+		parts = append(parts, message.ContentParts...)
+	}
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: content.String(), ContentParts: parts}, nil
 }
 
 func (t *cliTestTool) Name() string               { return t.id }
@@ -46,13 +92,23 @@ type toolTestFailWriter struct{ err error }
 
 func (w toolTestFailWriter) Write([]byte) (int, error) { return 0, w.err }
 
-func newToolTestCommand(t *testing.T, registry *tools.ToolRegistry) *ToolCommand {
+func newToolTestCommand(t *testing.T, capability runtimeTools.Capability) *ToolCommand {
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	command := NewToolCommand(globalFlags)
-	command.registryLoader = func() (*tools.ToolRegistry, error) { return registry, nil }
+	command.capabilityLoader = func() (runtimeTools.Capability, error) { return capability, nil }
 	return command
+}
+
+func testToolCapability(testTools ...*cliTestTool) runtimeTools.Capability {
+	definitions := make([]messages.ToolDefinition, 0, len(testTools))
+	byName := make(map[string]*cliTestTool, len(testTools))
+	for _, tool := range testTools {
+		byName[tool.id] = tool
+		definitions = append(definitions, messages.ToolDefinition{Name: tool.id, Description: tool.Description()})
+	}
+	return runtimeTools.Capability{Executor: &cliTestExecutor{tools: byName}, Definitions: definitions}
 }
 
 func runToolTestCommand(t *testing.T, command *ToolCommand, args []string, out io.Writer) error {
@@ -70,24 +126,24 @@ func TestToolCommandS2FlagMatrix(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       []string
-		registry   *tools.ToolRegistry
+		capability runtimeTools.Capability
 		wantOutput string
 		wantErr    string
 		wantIs     error
 	}{
-		{name: "list mode", args: []string{"--list"}, registry: testToolRegistry(&cliTestTool{id: "zeta"}, listTool), wantOutput: "only-tool\nzeta\n"},
-		{name: "missing tool id", args: nil, registry: testToolRegistry(), wantErr: "tool-id required", wantIs: errToolIDRequired},
-		{name: "coerced key values", args: []string{"capture", "name='Ada Lovelace'", "count=7", "ratio=2.5", "enabled=true", "text=hello=world"}, registry: testToolRegistry(good), wantOutput: "captured"},
-		{name: "malformed key value", args: []string{"capture", "broken"}, registry: testToolRegistry(good), wantErr: `invalid argument "broken": expected key=value`, wantIs: errToolArguments},
-		{name: "empty key", args: []string{"capture", "=value"}, registry: testToolRegistry(good), wantErr: `invalid argument "=value": expected key=value`, wantIs: errToolArguments},
-		{name: "trimmed empty key", args: []string{"capture", " =value"}, registry: testToolRegistry(good), wantErr: `invalid argument " =value": empty key`, wantIs: errToolArguments},
-		{name: "list and invocation conflict", args: []string{"--list", "capture"}, registry: testToolRegistry(listTool), wantErr: "cannot combine --list with a tool id", wantIs: errToolFlagConflict},
+		{name: "list mode", args: []string{"--list"}, capability: testToolCapability(&cliTestTool{id: "zeta"}, listTool), wantOutput: "only-tool\nzeta\n"},
+		{name: "missing tool id", args: nil, capability: testToolCapability(), wantErr: "tool-id required", wantIs: errToolIDRequired},
+		{name: "coerced key values", args: []string{"capture", "name='Ada Lovelace'", "count=7", "ratio=2.5", "enabled=true", "text=hello=world"}, capability: testToolCapability(good), wantOutput: "captured"},
+		{name: "malformed key value", args: []string{"capture", "broken"}, capability: testToolCapability(good), wantErr: `invalid argument "broken": expected key=value`, wantIs: errToolArguments},
+		{name: "empty key", args: []string{"capture", "=value"}, capability: testToolCapability(good), wantErr: `invalid argument "=value": expected key=value`, wantIs: errToolArguments},
+		{name: "trimmed empty key", args: []string{"capture", " =value"}, capability: testToolCapability(good), wantErr: `invalid argument " =value": empty key`, wantIs: errToolArguments},
+		{name: "list and invocation conflict", args: []string{"--list", "capture"}, capability: testToolCapability(listTool), wantErr: "cannot combine --list with a tool id", wantIs: errToolFlagConflict},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			stdout := &bytes.Buffer{}
-			err := runToolTestCommand(t, newToolTestCommand(t, tc.registry), tc.args, stdout)
+			err := runToolTestCommand(t, newToolTestCommand(t, tc.capability), tc.args, stdout)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v, want message containing %q", err, tc.wantErr)
@@ -118,7 +174,7 @@ func TestToolCommandS2FlagMatrix(t *testing.T) {
 }
 
 func TestToolCommandS4ErrorTable(t *testing.T) {
-	unknown := testToolRegistry()
+	unknown := testToolCapability()
 	unavailable := &cliTestTool{id: "unavailable", err: errToolUnavailable}
 	writeErr := errors.New("tool output failed")
 	configInitErr := errors.New("config directory could not be resolved")
@@ -131,12 +187,12 @@ func TestToolCommandS4ErrorTable(t *testing.T) {
 		wantIs     error
 	}{
 		{name: "unknown tool", command: newToolTestCommand(t, unknown), args: []string{"missing"}, wantErrors: []string{`tool "missing": tool "missing" not found`}, wantIs: errToolNotFound},
-		{name: "malformed arguments", command: newToolTestCommand(t, testToolRegistry(unavailable)), args: []string{"unavailable", " =value"}, wantErrors: []string{`invalid argument " =value": empty key`}, wantIs: errToolArguments},
-		{name: "registered unavailable tool", command: newToolTestCommand(t, testToolRegistry(unavailable)), args: []string{"unavailable"}, wantErrors: []string{"tool \"unavailable\": tool unavailable in this build"}, wantIs: errToolUnavailable},
+		{name: "malformed arguments", command: newToolTestCommand(t, testToolCapability(unavailable)), args: []string{"unavailable", " =value"}, wantErrors: []string{`invalid argument " =value": empty key`}, wantIs: errToolArguments},
+		{name: "registered unavailable tool", command: newToolTestCommand(t, testToolCapability(unavailable)), args: []string{"unavailable"}, wantErrors: []string{"tool \"unavailable\": tool unavailable in this build"}, wantIs: errToolUnavailable},
 		{name: "config initialization failure", command: toolCommandWithStorageError(t, configInitErr), args: []string{"anything"}, wantErrors: []string{"config: config directory could not be resolved"}, wantIs: errToolConfig},
 		{name: "registry load failure", command: toolCommandWithLoaderError(t, errors.New("config load failed")), args: []string{"anything"}, wantErrors: []string{"config load failed"}, wantIs: errToolConfig},
-		{name: "list writer failure", command: newToolTestCommand(t, testToolRegistry(&cliTestTool{id: "listed"})), args: []string{"--list"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
-		{name: "message writer failure", command: newToolTestCommand(t, testToolRegistry(&cliTestTool{id: "writer", result: []messages.Message{messages.NewTextMessage(messages.RoleTool, "payload")}})), args: []string{"writer"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
+		{name: "list writer failure", command: newToolTestCommand(t, testToolCapability(&cliTestTool{id: "listed"})), args: []string{"--list"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
+		{name: "message writer failure", command: newToolTestCommand(t, testToolCapability(&cliTestTool{id: "writer", result: []messages.Message{messages.NewTextMessage(messages.RoleTool, "payload")}})), args: []string{"writer"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
 	}
 
 	for _, tc := range tests {
@@ -161,22 +217,12 @@ func TestToolCommandS4ErrorTable(t *testing.T) {
 	}
 }
 
-func testToolRegistry(testTools ...*cliTestTool) *tools.ToolRegistry {
-	entries := make([]config.ToolEntry, 0, len(config.DefaultToolIDs))
-	for _, id := range config.DefaultToolIDs {
-		entries = append(entries, config.ToolEntry{ID: id, Enabled: false})
-	}
-	registry := tools.NewToolRegistryFromConfig(&config.Config{Tools: config.ToolsConfig{List: entries}})
-	for _, testTool := range testTools {
-		_ = registry.Register(testTool)
-	}
-	return registry
-}
-
 func toolCommandWithLoaderError(t *testing.T, want error) *ToolCommand {
 	t.Helper()
 	command := NewToolCommand(flags.NewGlobalFlags())
-	command.registryLoader = func() (*tools.ToolRegistry, error) { return nil, fmt.Errorf("config: %w", want) }
+	command.capabilityLoader = func() (runtimeTools.Capability, error) {
+		return runtimeTools.Capability{}, fmt.Errorf("config: %w", want)
+	}
 	return command
 }
 
@@ -223,15 +269,15 @@ func TestToolCommandLoadsTemporaryConfig(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	command := NewToolCommand(globalFlags)
-	registry, err := command.getRegistry()
+	capability, err := command.getCapability()
 	if err != nil {
-		t.Fatalf("getRegistry: %v", err)
+		t.Fatalf("getCapability: %v", err)
 	}
-	if registry.Count() == 0 {
-		t.Fatal("default registry should contain tools")
+	if len(capability.Definitions) == 0 {
+		t.Fatal("default capability should contain tools")
 	}
-	if _, ok := registry.Get("read_file"); !ok {
-		t.Fatal("default registry should contain read_file")
+	if !hasToolDefinition(capability.Definitions, "read_file") {
+		t.Fatal("default capability should contain read_file")
 	}
 }
 
@@ -257,9 +303,6 @@ func TestToolCommandFilesystemScopeUsesLaunchCwdOrExplicitWorkdir(t *testing.T) 
 			globalFlags.ConfigDirPath = configDir
 			globalFlags.WorkDirPath = tt.workdir
 			command := NewToolCommand(globalFlags)
-			command.registryLoader = func() (*tools.ToolRegistry, error) {
-				return tools.NewToolRegistryFromConfig(&config.Config{}), nil
-			}
 
 			var out bytes.Buffer
 			err := runToolTestCommand(t, command, []string{"write_file", "path=" + fileName, "content=cwd-marker"}, &out)
@@ -293,9 +336,6 @@ func TestToolCommandFilesystemScopeAllowsMultipleRootsAndRejectsOutside(t *testi
 	globalFlags.WorkDirPath = launchDir
 	globalFlags.AllowPathList = []string{allowedOne, allowedTwo, allowedOne}
 	command := NewToolCommand(globalFlags)
-	command.registryLoader = func() (*tools.ToolRegistry, error) {
-		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
-	}
 
 	for _, root := range []string{allowedOne, allowedTwo} {
 		name := filepath.Join(root, "written.txt")
@@ -360,9 +400,6 @@ func TestToolCommandFilesystemRefusalIsStderrAndNonZero(t *testing.T) {
 	globalFlags.ConfigDirPath = t.TempDir()
 	globalFlags.WorkDirPath = workdir
 	command := NewToolCommand(globalFlags)
-	command.registryLoader = func() (*tools.ToolRegistry, error) {
-		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
-	}
 
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=MUST-NOT-WRITE"})
@@ -400,9 +437,9 @@ func TestToolCommandInvalidWorkdirFailsBeforeRegistryLoad(t *testing.T) {
 	globalFlags.WorkDirPath = filepath.Join(t.TempDir(), "missing-workdir")
 	command := NewToolCommand(globalFlags)
 	loaderCalled := false
-	command.registryLoader = func() (*tools.ToolRegistry, error) {
+	command.capabilityLoader = func() (runtimeTools.Capability, error) {
 		loaderCalled = true
-		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+		return runtimeTools.Capability{}, nil
 	}
 
 	err := runToolTestCommand(t, command, []string{"write_file", "path=relative.txt", "content=should-not-run"}, &bytes.Buffer{})
@@ -420,9 +457,9 @@ func TestToolCommandInvalidAllowPathFailsBeforeRegistryLoad(t *testing.T) {
 	globalFlags.AllowPathList = []string{filepath.Join(t.TempDir(), "missing-allowed-root")}
 	command := NewToolCommand(globalFlags)
 	loaderCalled := false
-	command.registryLoader = func() (*tools.ToolRegistry, error) {
+	command.capabilityLoader = func() (runtimeTools.Capability, error) {
 		loaderCalled = true
-		return tools.NewToolRegistryFromConfig(&config.Config{}), nil
+		return runtimeTools.Capability{}, nil
 	}
 
 	err := runToolTestCommand(t, command, []string{"write_file", "path=relative.txt", "content=should-not-run"}, &bytes.Buffer{})
@@ -441,19 +478,19 @@ func TestToolCommandConfigLoadError(t *testing.T) {
 	}
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = dir
-	_, err := NewToolCommand(globalFlags).getRegistry()
+	_, err := NewToolCommand(globalFlags).getCapability()
 	if err == nil || !strings.Contains(err.Error(), "load config") {
-		t.Fatalf("getRegistry error = %v, want load config context", err)
+		t.Fatalf("getCapability error = %v, want load config context", err)
 	}
 	if !errors.Is(err, errToolConfig) {
-		t.Fatalf("getRegistry error = %v, want tool config identity", err)
+		t.Fatalf("getCapability error = %v, want tool config identity", err)
 	}
 }
 
 func TestToolCommandListOrderingIsStableForMultipleTools(t *testing.T) {
-	registry := testToolRegistry(&cliTestTool{id: "zeta"}, &cliTestTool{id: "alpha"})
+	capability := testToolCapability(&cliTestTool{id: "zeta"}, &cliTestTool{id: "alpha"})
 	var out bytes.Buffer
-	if err := NewToolCommand(flags.NewGlobalFlags()).listTools(&out, registry); err != nil {
+	if err := NewToolCommand(flags.NewGlobalFlags()).listTools(&out, capability.Definitions); err != nil {
 		t.Fatalf("listTools: %v", err)
 	}
 	if got, want := out.String(), "alpha\nzeta\n"; got != want {

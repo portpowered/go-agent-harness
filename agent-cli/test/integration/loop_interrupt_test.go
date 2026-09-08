@@ -3,18 +3,17 @@ package integration
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 // createIterativeTestDir sets up a temp directory with a minimal agent-cli config.yaml.
@@ -33,12 +32,6 @@ func createIterativeTestDir(t *testing.T) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return tmpDir
-}
-
-// newIterativeTestExecutor creates an Executor with the given inferencer override.
-// Both executor and toolDefs are nil — BuildLoop creates its own from config.
-func newIterativeTestExecutor(inf messages.Inferencer) *agent.Executor {
-	return agent.NewExecutor(nil, nil, inf, true)
 }
 
 // blockingMockInferencer blocks in Infer until the context is cancelled.
@@ -94,24 +87,22 @@ func TestIterativeLoop_InterruptMidIteration(t *testing.T) {
 	tmpDir := createIterativeTestDir(t)
 
 	inf := newBlockingMockInferencer("response")
-	exec := newIterativeTestExecutor(inf)
+	exec, globalFlags := newPublicIterativeSessionService(tmpDir, inf)
 
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{MaxIterations: 3}
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{MaxIterations: 3}
 	input := agentloop.NewExecuteInput("test task")
+	cfg.Input = input
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var result agent.IterativeRunResult
+	var result session.IterativeResult
+	var runErr error
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		result, _ = exec.RunIterativeLoop(ctx, cfg, loopCfg, input, io.Discard)
+		result, runErr = exec.RunIterative(ctx, *cfg, loopCfg)
 	}()
 
 	// Wait until Infer is blocking, then simulate Ctrl+C by cancelling the parent context.
@@ -127,6 +118,7 @@ func TestIterativeLoop_InterruptMidIteration(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for loop to finish")
 	}
+	t.Logf("iterative result=%+v err=%v", result, runErr)
 
 	// The loop should have exited with a non-empty trace ID.
 	if result.TraceID == "" {
@@ -134,8 +126,8 @@ func TestIterativeLoop_InterruptMidIteration(t *testing.T) {
 	}
 
 	// Verify the trace on disk is marked as interrupted.
-	st := session.NewStorage(tmpDir)
-	trace, err := st.LoadTrace(result.TraceID)
+	traceStore := publicTraceStore(t, globalFlags)
+	trace, err := traceStore.LoadTrace(context.Background(), result.TraceID)
 	if err != nil {
 		t.Fatalf("LoadTrace: %v", err)
 	}
@@ -166,11 +158,18 @@ func TestIterativeLoop_InterruptMidIteration(t *testing.T) {
 // restarted fresh (not skipped to the next one).
 func TestIterativeLoop_ResumeFromInterruptedTrace(t *testing.T) {
 	tmpDir := createIterativeTestDir(t)
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = tmpDir
+	globalFlags.WorkDirPath = tmpDir
+	traceStore := publicTraceStore(t, globalFlags)
+	traceID, err := traceStore.NewTraceID(context.Background())
+	if err != nil {
+		t.Fatalf("NewTraceID: %v", err)
+	}
 
 	// Pre-create a trace with iteration 1 completed and iteration 2 interrupted.
-	st := session.NewStorage(tmpDir)
 	preTrace := session.TraceRecord{
-		TraceID: st.NewTraceID(),
+		TraceID: traceID,
 		Status:  session.TraceStatusInterrupted,
 		Config: session.TraceConfig{
 			MaxIterations: 3,
@@ -183,25 +182,22 @@ func TestIterativeLoop_ResumeFromInterruptedTrace(t *testing.T) {
 			{Iteration: 2, Status: session.IterationStatusInterrupted},
 		},
 	}
-	if err := st.SaveTrace(preTrace); err != nil {
+	if err := traceStore.SaveTrace(context.Background(), preTrace); err != nil {
 		t.Fatalf("SaveTrace: %v", err)
 	}
 
 	inf := &mockInferencer{response: "ok"}
-	exec := newIterativeTestExecutor(inf)
+	exec := newPublicIterativeServiceWithFlags(globalFlags, inf)
 
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{
 		MaxIterations: 3,
 		TraceID:       preTrace.TraceID,
 	}
 	input := agentloop.NewExecuteInput("other task") // should be overridden by trace config
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}
@@ -218,7 +214,7 @@ func TestIterativeLoop_ResumeFromInterruptedTrace(t *testing.T) {
 	}
 
 	// The final trace should have all 3 iterations: 1 (preloaded), 2 (retried), 3 (new).
-	finalTrace, loadErr := st.LoadTrace(preTrace.TraceID)
+	finalTrace, loadErr := traceStore.LoadTrace(context.Background(), preTrace.TraceID)
 	if loadErr != nil {
 		t.Fatalf("LoadTrace: %v", loadErr)
 	}
@@ -237,11 +233,18 @@ func TestIterativeLoop_ResumeFromInterruptedTrace(t *testing.T) {
 // trace was completed (not interrupted), the loop resumes from the NEXT iteration.
 func TestIterativeLoop_ResumeAtCorrectIteration(t *testing.T) {
 	tmpDir := createIterativeTestDir(t)
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = tmpDir
+	globalFlags.WorkDirPath = tmpDir
+	traceStore := publicTraceStore(t, globalFlags)
+	traceID, err := traceStore.NewTraceID(context.Background())
+	if err != nil {
+		t.Fatalf("NewTraceID: %v", err)
+	}
 
-	st := session.NewStorage(tmpDir)
 	// Trace with only iteration 1 completed (no interrupted entry).
 	preTrace := session.TraceRecord{
-		TraceID: st.NewTraceID(),
+		TraceID: traceID,
 		Status:  session.TraceStatusRunning,
 		Config: session.TraceConfig{
 			MaxIterations: 3,
@@ -252,24 +255,21 @@ func TestIterativeLoop_ResumeAtCorrectIteration(t *testing.T) {
 			{Iteration: 1, Status: session.IterationStatusCompleted},
 		},
 	}
-	if err := st.SaveTrace(preTrace); err != nil {
+	if err := traceStore.SaveTrace(context.Background(), preTrace); err != nil {
 		t.Fatalf("SaveTrace: %v", err)
 	}
 
 	inf := &mockInferencer{response: "ok"}
-	exec := newIterativeTestExecutor(inf)
+	exec := newPublicIterativeServiceWithFlags(globalFlags, inf)
 
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
-	loopCfg := agent.IterativeLoopConfig{
+	cfg := newPublicIterativeRequest(globalFlags)
+	loopCfg := session.IterativeRequest{
 		MaxIterations: 3,
 		TraceID:       preTrace.TraceID,
 	}
+	cfg.Input = agentloop.NewExecuteInput("x")
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, agentloop.NewExecuteInput("x"), io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}
@@ -290,11 +290,18 @@ func TestIterativeLoop_ResumeAtCorrectIteration(t *testing.T) {
 // prompt are all restored from the trace record's Config field when resuming.
 func TestIterativeLoop_ConfigRestoredOnResume(t *testing.T) {
 	tmpDir := createIterativeTestDir(t)
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = tmpDir
+	globalFlags.WorkDirPath = tmpDir
+	traceStore := publicTraceStore(t, globalFlags)
+	traceID, err := traceStore.NewTraceID(context.Background())
+	if err != nil {
+		t.Fatalf("NewTraceID: %v", err)
+	}
 
-	st := session.NewStorage(tmpDir)
 	// Pre-create a trace with specific config and an interrupted first iteration.
 	preTrace := session.TraceRecord{
-		TraceID: st.NewTraceID(),
+		TraceID: traceID,
 		Status:  session.TraceStatusInterrupted,
 		Config: session.TraceConfig{
 			MaxIterations: 4,
@@ -306,28 +313,25 @@ func TestIterativeLoop_ConfigRestoredOnResume(t *testing.T) {
 			{Iteration: 1, Status: session.IterationStatusInterrupted},
 		},
 	}
-	if err := st.SaveTrace(preTrace); err != nil {
+	if err := traceStore.SaveTrace(context.Background(), preTrace); err != nil {
 		t.Fatalf("SaveTrace: %v", err)
 	}
 
 	// Recording inferencer returns "STOP" so the stop word (if correctly restored) ends the loop.
 	rec := &recordingInferencer{response: "STOP"}
-	exec := newIterativeTestExecutor(rec)
+	exec := newPublicIterativeServiceWithFlags(globalFlags, rec)
 
-	cfg := &agent.Config{
-		ConfigDir:           tmpDir,
-		NoSystemInformation: true,
-		SystemPrompt:        "none",
-	}
+	cfg := newPublicIterativeRequest(globalFlags)
 	// Pass different values — these should be overridden by the trace config.
-	loopCfg := agent.IterativeLoopConfig{
+	loopCfg := session.IterativeRequest{
 		MaxIterations: 2,
 		StopWord:      "OTHER",
 		TraceID:       preTrace.TraceID,
 	}
 	input := agentloop.NewExecuteInput("other-task") // should be overridden by trace config
+	cfg.Input = input
 
-	result, err := exec.RunIterativeLoop(context.Background(), cfg, loopCfg, input, io.Discard)
+	result, err := exec.RunIterative(context.Background(), *cfg, loopCfg)
 	if err != nil {
 		t.Fatalf("RunIterativeLoop: %v", err)
 	}

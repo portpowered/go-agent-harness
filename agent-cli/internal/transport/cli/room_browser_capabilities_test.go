@@ -4,15 +4,15 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
 func TestNewRoomParticipantBrowserCapabilitiesFactoryCreatesIndependentOwners(t *testing.T) {
 	factory := NewRoomParticipantBrowserCapabilitiesFactory(t.TempDir())
-	participant := func(id string) room.Participant {
-		browser := room.DefaultBrowserToolsConfig()
+	participant := func(id string) runtimeRooms.Participant {
+		browser := defaultRuntimeBrowserToolsConfig()
 		browser.Connection.CDPURL = "http://127.0.0.1:9222"
-		return room.Participant{ID: id, BrowserTools: &browser}
+		return runtimeRooms.Participant{ID: id, BrowserTools: &browser}
 	}
 
 	alpha, err := factory(participant("alpha"))

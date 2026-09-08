@@ -58,8 +58,8 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 	}
 	opts := RoomRunOptions{
 		Manifest:  manifest,
-		ConfigDir: configDir,
-		BaseURL:   "wss://room-input-transcription.invalid/v1/realtime",
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		BaseURL: "wss://room-input-transcription.invalid/v1/realtime",
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
 			return value, ok

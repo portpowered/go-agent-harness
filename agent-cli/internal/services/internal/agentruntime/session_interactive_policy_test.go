@@ -119,7 +119,7 @@ func TestPlanSessionRuntimeThreadsResolvedInteractivePolicyBeforeProviderSetup(t
 	settings.LongRunningTimeout = 18 * time.Second
 	cfg := &config.Config{Tools: config.ToolsConfig{Interactive: settings}}
 
-	plan, err := planSessionRuntime(SessionRunOptions{
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "unused.json",
 		LoadedConfig:      cfg,
 		SessionInferencer: stubPlanSessionInferencer{},
@@ -151,7 +151,7 @@ func TestPlanSessionRuntimeLoadsInteractivePolicyFromConfigDir(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	plan, err := planSessionRuntime(SessionRunOptions{
+	plan, err := planSessionRuntime(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ConfigDir:         dir,
 		ReplayPath:        "unused.json",
 		SessionInferencer: stubPlanSessionInferencer{},
@@ -178,7 +178,7 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 		return nil, errors.New("provider must not be built")
 	}
 
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig:    &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
 		Provider:        config.ProviderGrok,
 		RecordPath:      "capture.json",

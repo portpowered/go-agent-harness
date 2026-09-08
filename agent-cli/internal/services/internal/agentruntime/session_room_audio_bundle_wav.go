@@ -11,7 +11,8 @@ import (
 
 	"encoding/json"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
 func roomReplaySampleDuration(samples, sampleRate int) time.Duration {
@@ -23,10 +24,10 @@ func roomReplaySampleDuration(samples, sampleRate int) time.Duration {
 	return time.Duration(seconds)*time.Second + time.Duration(remainder)*time.Second/time.Duration(sampleRate)
 }
 
-func cloneTimedStream(stream audio.PCM16TimedStream) audio.PCM16TimedStream {
+func cloneTimedStream(stream roomanalysis.PCM16TimedStream) roomanalysis.PCM16TimedStream {
 	stream.Samples = append([]int16(nil), stream.Samples...)
-	stream.ExpectedSpeech = append([]audio.SpeechAnnotation(nil), stream.ExpectedSpeech...)
-	stream.ChunkBoundaries = append([]audio.ChunkBoundary(nil), stream.ChunkBoundaries...)
+	stream.ExpectedSpeech = append([]streamanalysis.SpeechAnnotation(nil), stream.ExpectedSpeech...)
+	stream.ChunkBoundaries = append([]streamanalysis.ChunkBoundary(nil), stream.ChunkBoundaries...)
 	return stream
 }
 

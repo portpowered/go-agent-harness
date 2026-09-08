@@ -4,8 +4,10 @@ import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/intern
 
 import (
 	"context"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -172,4 +174,30 @@ type v8HarnessResult struct {
 type v8StreamRecord struct {
 	Type string
 	Text string
+}
+
+func requireV8MultiTurnBaseline(t *testing.T, run v8DuplexRun, frames [][]byte) {
+	t.Helper()
+	err := verifyV8MultiTurnRun(run, frames, frames)
+	if err == nil {
+		return
+	}
+	states := make([]string, 0, 2)
+	for _, name := range []string{"A", "B"} {
+		result, ok := run.harnesses[name]
+		if !ok {
+			states = append(states, fmt.Sprintf("harness %s=<missing>", name))
+			continue
+		}
+		runtimeState := make([]string, 0, len(result.Runtime))
+		for _, observation := range result.Runtime {
+			runtimeState = append(runtimeState, fmt.Sprintf("%s@%d/t%d/c%d", observation.Kind, observation.Tick, observation.TurnsCompleted, observation.InputCommit))
+		}
+		states = append(states, fmt.Sprintf("harness %s err=%v elapsed=%s runtime=%v stream=%v terminal=%+v", name, result.Err, result.Elapsed, runtimeState, result.Stream, run.terminal[name]))
+	}
+	crossingState := make([]string, 0, len(run.crossings))
+	for _, crossing := range run.crossings {
+		crossingState = append(crossingState, fmt.Sprintf("%d:%s/%s@%d", crossing.Sequence, crossing.Direction, crossing.TurnKey, crossing.Tick))
+	}
+	t.Fatalf("multi-turn negative-control baseline failed before mutation: %v; %s; %s; crossings=%d/%v final_tick=%d", err, states[0], states[1], len(run.crossings), crossingState, run.finalTick)
 }

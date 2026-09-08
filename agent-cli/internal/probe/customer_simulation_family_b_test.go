@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
 func TestFamilyBScenarioIsVersionedAndDeclaresCorrection(t *testing.T) {
@@ -84,7 +87,7 @@ func TestFamilyBCorrectionOracleRejectsIgnoredCorrection(t *testing.T) {
 	scenario := NewFamilyBScenario()
 	results, checkpoints, tools, product := familyBPositiveEvidence(scenario)
 	evidence := familyBCorrectionEvidence()
-	evidence.OriginalResponseStatus = "completed"
+	evidence.OriginalResponseStatus = string(DispositionCompleted)
 	verdict, err := EvaluateCustomerSimulationCorrection(scenario, results, checkpoints, tools, product, evidence)
 	if err != nil {
 		t.Fatalf("EvaluateCustomerSimulationCorrection: %v", err)
@@ -177,8 +180,8 @@ func familyBPositiveEvidence(scenario CustomerScenario) ([]ActionResult, []Files
 			familyBCheckpoint("checkpoint-original", FamilyBOriginalActionID, 600*time.Millisecond, scenario.Actions[0].Oracle.Checkpoints),
 			familyBCheckpoint("checkpoint-replacement", FamilyBReplacementActionID, 1300*time.Millisecond, scenario.Actions[1].Oracle.Checkpoints),
 		}, []ToolObservation{
-			{ID: "tool-original", ActionID: FamilyBOriginalActionID, TurnID: "turn-1", Tool: "write_file", Status: "completed", At: 450 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: draft/brief.md"},
-			{ID: "tool-replacement", ActionID: FamilyBReplacementActionID, TurnID: "turn-2", Tool: "write_file", Status: "completed", At: 1050 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: final/brief.md"},
+			{ID: "tool-original", ActionID: FamilyBOriginalActionID, TurnID: "turn-1", Tool: "write_file", Status: string(DispositionCompleted), At: 450 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: draft/brief.md"},
+			{ID: "tool-replacement", ActionID: FamilyBReplacementActionID, TurnID: "turn-2", Tool: "write_file", Status: string(DispositionCompleted), At: 1050 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: final/brief.md"},
 		}, []TranscriptEvent{
 			{ID: "product-turn-1", TurnID: "turn-1", Speaker: TranscriptProduct, Text: "Created draft/brief.md and kept the original draft while I explained the next step.", At: 650 * time.Millisecond, Final: true},
 			{ID: "product-turn-2", TurnID: "turn-2", Speaker: TranscriptProduct, Text: "Created final/brief.md as the corrected release note.", At: 1400 * time.Millisecond, Final: true},
@@ -198,8 +201,8 @@ func familyBCorrectionEvidence() CorrectionEvidence {
 		OriginalResponseEndedAt:      900 * time.Millisecond,
 		ReplacementResponseStartedAt: 1000 * time.Millisecond,
 		ReplacementResponseEndedAt:   1200 * time.Millisecond,
-		OriginalResponseStatus:       "cancelled",
-		ReplacementResponseStatus:    "completed",
+		OriginalResponseStatus:       string(DispositionCancelled),
+		ReplacementResponseStatus:    string(DispositionCompleted),
 		CancellationEventRecorded:    true,
 		CancellationResponseID:       "response-original",
 		Process: &ProcessFacts{
@@ -234,4 +237,36 @@ func familyBMechanicalFindingContains(verdict MechanicalVerdict, code string) bo
 		}
 	}
 	return false
+}
+
+// The media queue can reach the device before the normalized response stream.
+// Cancellation must bind to the delivered response without stealing a later one.
+func TestCorrectionBindsMediaBeforeNormalizedResponse(t *testing.T) {
+	for _, mediaID := range []string{"original", "unrelated"} {
+		t.Run(mediaID, func(t *testing.T) {
+			p := customerSimulationStreamParser{scenario: NewFamilyBScenario()}
+			boundary := &customerSimulationMediaBoundary{SampleCount: 24}
+			boundary.Frame.PlaybackResponse.ResponseID = mediaID
+			p.consume(customerSimulationRecordedMessage{at: time.Millisecond, media: boundary})
+			p.consume(customerSimulationRecordedMessage{at: 2 * time.Millisecond, dir: transcript.DirectionIn, message: messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}})
+			for i, id := range []string{"original", "replacement"} {
+				at := time.Duration(3+i*2) * time.Millisecond
+				p.consume(customerSimulationRecordedMessage{at: at, dir: transcript.DirectionOut, message: messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: id, Value: messages.NewMessageStartValue()}})
+				p.consume(customerSimulationRecordedMessage{at: at + time.Millisecond, dir: transcript.DirectionOut, message: messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})}})
+			}
+			p.finish()
+			p.applyMediaBoundaries()
+			if len(p.facts.responses) != 2 {
+				t.Fatalf("responses = %+v", p.facts.responses)
+			}
+			original, replacement := p.facts.responses[0], p.facts.responses[1]
+			matched := mediaID == "original"
+			if original.AudioObserved != matched || original.Cancelled != matched || replacement.AudioObserved || replacement.Cancelled {
+				t.Fatalf("media/cancellation crossed response identity: original=%+v replacement=%+v", original, replacement)
+			}
+			if p.facts.cancelResponseID != mediaID {
+				t.Fatalf("cancel ID = %q, want %q", p.facts.cancelResponseID, mediaID)
+			}
+		})
+	}
 }

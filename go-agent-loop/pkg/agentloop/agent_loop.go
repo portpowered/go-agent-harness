@@ -188,7 +188,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 		hlps = append(hlps, notifier)
 	}
 
-	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools)
+	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools, cfg.Clock)
 	// Record real executor availability so subsystems can distinguish
 	// executable tool calls from provider-issued calls that cannot run: the
 	// fallback runner above is idle plumbing, not a public executor.
@@ -546,13 +546,12 @@ func (al *AgentLoop) Send(ctx context.Context, msg []messages.Message) error {
 // SendAudioInput injects raw PCM audio into the running session loop for barge-in
 // and user audio forwarding. Its unspecified origin preserves the legacy
 // interrupting-by-default behavior. Only meaningful in DuplexSession mode.
-// Returns an error if the loop is not in session mode or the channel is full.
 func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
 	mr := al.engine.GetModelRunner()
 	if mr == nil || mr.UserAudioInbox == nil {
 		return fmt.Errorf("SendAudioInput: not in session mode")
 	}
-	return mr.EnqueueSessionAudioInput(ctx, pcm)
+	return mr.EnqueueSessionAudioInputWithPolicyWaiting(ctx, pcm, messages.SessionAudioInputPolicyDefault)
 }
 
 // SendAudioInputWithPolicy injects raw PCM audio together with the admission
@@ -565,7 +564,7 @@ func (al *AgentLoop) SendAudioInputWithPolicy(ctx context.Context, pcm []byte, p
 	if mr == nil || mr.UserAudioInbox == nil {
 		return fmt.Errorf("SendAudioInputWithPolicy: not in session mode")
 	}
-	return mr.EnqueueSessionAudioInputWithPolicy(ctx, pcm, policy)
+	return mr.EnqueueSessionAudioInputWithPolicyWaiting(ctx, pcm, policy)
 }
 
 // SendSessionEvent delivers a pre-built outbound StreamMessage to the running

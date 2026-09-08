@@ -11,7 +11,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+type HoldToneConfig = audio.HoldToneConfig
 
 // SessionCancellationIntent is the run-scoped operator cancellation marker.
 type SessionCancellationIntent struct{ sigint atomic.Bool }
@@ -115,6 +118,7 @@ type Request struct {
 	AudioInputDevicePresent       bool
 	AudioOutputDevicePresent      bool
 	AudioDeviceServer             string
+	HoldToneConfig                *audio.HoldToneConfig
 	InteractiveDevices            bool
 	FeedbackWarningWriter         io.Writer
 	TraceAudio                    bool

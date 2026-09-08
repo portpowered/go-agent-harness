@@ -2,6 +2,8 @@ package agentloop
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"image"
 	"image/jpeg"
 
@@ -99,4 +101,16 @@ func encodeAudioToPCM(a *Audio) []byte {
 // NewExecuteInput creates an ExecuteInput with only text. Convenience for text-only prompts.
 func NewExecuteInput(message string) ExecuteInput {
 	return ExecuteInput{Message: message}
+}
+
+// SendSessionMessage delivers one complete message through the same bounded,
+// ordered session ingress as PCM and control events. Rich providers use this
+// for multimodal opening turns; requestResponse selects whether the provider
+// starts a response immediately or waits for a later audio boundary.
+func (al *AgentLoop) SendSessionMessage(ctx context.Context, msg messages.Message, requestResponse bool) error {
+	mr := al.engine.GetModelRunner()
+	if mr == nil || mr.UserEventInbox == nil {
+		return fmt.Errorf("SendSessionMessage: not in session mode")
+	}
+	return mr.EnqueueSessionMessage(ctx, msg, requestResponse)
 }

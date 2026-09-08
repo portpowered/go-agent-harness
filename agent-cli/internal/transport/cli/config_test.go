@@ -13,7 +13,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,6 +21,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/spf13/cobra"
 	yamlv3 "gopkg.in/yaml.v3"
 )
@@ -32,6 +33,10 @@ type cliResult struct {
 	stdout string
 	stderr string
 	err    error
+}
+
+func testFileStoreFactory() runtimeSession.FileStoreFactory {
+	return runtimeSessionWire.NewFileStoreFactory()
 }
 
 func newGeneratedCLIRoot(configDir string) *cobra.Command {
@@ -49,7 +54,7 @@ func newGeneratedCLIRootWithPathResolver(configDir string, resolver *pathResolve
 		globalFlags,
 		NewRootCommand(globalFlags),
 		NewAskCommand(nil, askFlags, loopFlags, globalFlags),
-		NewChatCommand(nil, askFlags, loopFlags, chatFlags, globalFlags),
+		NewChatCommand(nil, askFlags, loopFlags, chatFlags, globalFlags, testFileStoreFactory()),
 		NewToolCommand(globalFlags),
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
@@ -59,9 +64,9 @@ func newGeneratedCLIRootWithPathResolver(configDir string, resolver *pathResolve
 		NewProbeReportCommand(),
 		NewProbeFleetCommand(nil, nil),
 		NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil),
-		NewSessionShowCommand(globalFlags),
-		NewSessionListCommand(globalFlags),
-		NewSessionDeleteCommand(globalFlags),
+		NewSessionShowCommand(globalFlags, testFileStoreFactory()),
+		NewSessionListCommand(globalFlags, testFileStoreFactory()),
+		NewSessionDeleteCommand(globalFlags, testFileStoreFactory()),
 		NewSessionReplayCommand(nil),
 		newTestRoomRunCommand(globalFlags, defaultTestDeviceRegistry{}),
 		NewConfigCommand(),
@@ -87,17 +92,7 @@ func executeGeneratedCLI(ctx context.Context, configDir string, args ...string) 
 
 func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 	configSummaryPath := filepath.Join("<config-dir>", config.ConfigFileName)
-	tests := []struct {
-		name       string
-		baseURL    func(string) string
-		statuses   map[string]int
-		seed       string
-		model      string
-		wantStdout string
-		wantStderr string
-		wantError  string
-		wantPaths  []string
-	}{
+	tests := []configAddLocalCase{
 		{
 			name:    "default reachable config",
 			baseURL: func(url string) string { return url },
@@ -158,71 +153,9 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			configDir := t.TempDir()
-			server := newProbeServer(t, tc.statuses)
-			defer server.Close()
-
-			baseURL := ""
-			if tc.baseURL != nil {
-				baseURL = tc.baseURL(server.URL)
-			}
-			if tc.seed != "" {
-				if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(tc.seed), 0600); err != nil {
-					t.Fatalf("seed config: %v", err)
-				}
-			}
-
-			args := []string{"--config-dir", configDir, "config", "add-local"}
-			if tc.baseURL != nil {
-				args = append(args, "--base-url", baseURL)
-			}
-			if tc.model != "" {
-				args = append(args, "--model", tc.model)
-			}
-			if tc.name == "unsupported provider flag" {
-				args = append(args, "--provider", "local")
-			}
-
-			got := executeGeneratedCLI(context.Background(), configDir, args...)
-			if tc.wantError != "" {
-				if got.err == nil {
-					t.Fatalf("expected error %q, got nil", tc.wantError)
-				}
-				if got.err.Error() != tc.wantError {
-					t.Fatalf("error = %q, want exact Cobra validation error %q", got.err, tc.wantError)
-				}
-				return
-			}
-			if got.err != nil {
-				t.Fatalf("execute config add-local: %v", got.err)
-			}
-
-			normalizedStdout := normalizeCLIOutput(got.stdout, configDir, server.URL)
-			normalizedStderr := normalizeCLIOutput(got.stderr, configDir, server.URL)
-			if normalizedStdout != tc.wantStdout {
-				t.Fatalf("stdout = %q, want %q", normalizedStdout, tc.wantStdout)
-			}
-			if normalizedStderr != tc.wantStderr {
-				t.Fatalf("stderr = %q, want %q", normalizedStderr, tc.wantStderr)
-			}
-			if !reflect.DeepEqual(server.paths, tc.wantPaths) {
-				t.Fatalf("probe paths = %v, want %v", server.paths, tc.wantPaths)
-			}
-
-			data, err := os.ReadFile(filepath.Join(configDir, config.ConfigFileName))
-			if err != nil {
-				t.Fatalf("read persisted config: %v", err)
-			}
-			if tc.name == "default reachable config" || tc.seed != "" {
-				golden := "config_default.yaml"
-				if tc.seed != "" {
-					golden = "config_non_default.yaml"
-				}
-				assertConfigGolden(t, golden, normalizeCLIOutput(string(data), configDir, server.URL))
-			} else if !strings.Contains(string(data), "model: offline-model") {
-				t.Fatalf("warning path did not persist requested model: %s", data)
-			}
+			runConfigAddLocalCase(t, tc)
 		})
 	}
 }

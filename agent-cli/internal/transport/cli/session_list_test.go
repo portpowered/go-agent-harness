@@ -9,16 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 func TestSessionListCommandBoundsAndComposesMetadataFilters(t *testing.T) {
 	configDir := t.TempDir()
-	storage := session.NewStorage(configDir)
+	storage := newManagedSessionStoreForTest(t, configDir)
 	base := time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC)
 	for i := 0; i < 105; i++ {
 		id := fmt.Sprintf("bulk-%03d", i)
-		if err := storage.Save(id, nil); err != nil {
+		if err := storage.Save(t.Context(), id, nil); err != nil {
 			t.Fatalf("Save %q: %v", id, err)
 		}
 		path := filepath.Join(configDir, "sessions", "session-"+id+".json")
@@ -79,8 +79,8 @@ func TestSessionListCommandBoundsAndComposesMetadataFilters(t *testing.T) {
 
 func TestSessionListCommandRejectsInvalidQueriesBeforeOutput(t *testing.T) {
 	configDir := t.TempDir()
-	storage := session.NewStorage(configDir)
-	if err := storage.Save("existing", nil); err != nil {
+	storage := newManagedSessionStoreForTest(t, configDir)
+	if err := storage.Save(t.Context(), "existing", nil); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 

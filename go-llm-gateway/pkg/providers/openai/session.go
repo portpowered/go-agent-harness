@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -21,23 +22,25 @@ var (
 	_ messages.SessionResponseRequester  = (*realtimeSession)(nil)
 	_ messages.SessionResponseCapability = (*realtimeSession)(nil)
 	_ messages.SessionDropCounters       = (*realtimeSession)(nil)
+	_ messages.SessionOutboundFlusher    = (*realtimeSession)(nil)
 )
 
 type realtimeSession struct {
 	conn   transport.Conn
 	logger logging.Logger
-	// sendQueue buffers outbound wire events (client-to-provider, the
-	// session's input path). Overflow drops are counted by the buffer itself
-	// and logged through the default drop observer attached below.
-	sendQueue *messages.TypedBuffer[models.SessionEvent]
-	// recvBuf buffers translated inbound events (provider-to-client, the
-	// session's output path).
+	// sendQueue buffers client-to-provider events. Overflow drops are counted
+	// and logged through the default observer attached below.
+	sendQueue         *messages.TypedBuffer[models.SessionEvent]
+	writeBackpressure bool
+	outbound          providers.OutboundWireDrain
+	// recvBuf buffers translated provider-to-client events.
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
-	done        chan struct{}
-	closeOnce   sync.Once
-	errMu       sync.Mutex
-	terminalErr error
+	done           chan struct{}
+	closeOnce      sync.Once
+	errMu          sync.Mutex
+	terminalErr    error
+	providerClosed atomic.Bool
 
 	// responseAdmission is the provider-side response.create gate. Realtime
 	// accepts only one active response; the read loop learns about server-side
@@ -56,6 +59,7 @@ type realtimeSession struct {
 	responseRetryPending             bool
 	responseGeneration               uint64
 	responseDispatching              bool
+	activeResponseIntent             *responseIntent
 	pendingResponseIntents           []responseIntent
 	pendingResponseWake              chan struct{}
 	// responseWireMu orders cancellation invalidation with response intent
@@ -68,15 +72,14 @@ type realtimeSession struct {
 	// the hook here makes pop/enqueue/cancel ordering testable without delaying
 	// the read loop or exposing a production control surface.
 	responseDispatchBarrier func()
-	// responseDispatchFailureBarrier freezes a failed dispatch before its
-	// generation is invalidated, proving that responseWireMu remains held
-	// across failure cleanup.
+	// responseDispatchFailureBarrier freezes failed dispatch cleanup while the
+	// response wire lock remains held.
 	responseDispatchFailureBarrier func()
 
-	mediaMu         sync.Mutex
-	media           *sharedaudio.SessionMedia
-	mediaClaimed    bool
-	mediaSampleRate int
+	mediaMu                       sync.Mutex
+	media                         *sharedaudio.SessionMedia
+	mediaClaimed, mediaContinuous bool
+	mediaSampleRate               int
 }
 
 const maxPendingResponseIntents = 32
@@ -85,6 +88,7 @@ type responseIntent struct {
 	events                []models.SessionEvent
 	generation            uint64
 	deferredAudioResponse bool
+	settled               chan messages.SessionSendOutcome
 }
 
 var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
@@ -166,6 +170,17 @@ func (s *realtimeSession) sendEvents(ctx context.Context, events []models.Sessio
 	return s.enqueueWireEvents(ctx, events)
 }
 
+func cloneSessionEvents(events []models.SessionEvent) []models.SessionEvent {
+	cloned := make([]models.SessionEvent, len(events))
+	for index, event := range events {
+		cloned[index] = event
+		if event.Data != nil {
+			cloned[index].Data = append(json.RawMessage(nil), event.Data...)
+		}
+	}
+	return cloned
+}
+
 func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []models.SessionEvent, reservesResponse bool) messages.SessionSendOutcome {
 	select {
 	case <-ctx.Done():
@@ -225,7 +240,7 @@ func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []mode
 		s.responseWireMu.Unlock()
 		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
 	}
-	intent = responseIntent{events: cloneSessionEvents(events), generation: s.responseGeneration}
+	intent = newResponseIntent(events, s.responseGeneration)
 	clearFunctionCallSuppression := standalone && s.suppressStandaloneResponseCreate && s.toolResultAdmitted
 	if s.responseActive || s.responseDispatching || len(s.pendingResponseIntents) > 0 {
 		if standalone && s.responseActive && s.responseHasFunctionCall && !s.toolResultAdmitted && !responseIntentHasAudioCommit(intent) {
@@ -303,22 +318,10 @@ func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []mode
 	return outcome
 }
 
-func cloneSessionEvents(events []models.SessionEvent) []models.SessionEvent {
-	cloned := make([]models.SessionEvent, len(events))
-	for index, event := range events {
-		cloned[index] = event
-		if event.Data != nil {
-			cloned[index].Data = append(json.RawMessage(nil), event.Data...)
-		}
-	}
-	return cloned
-}
-
-func (s *realtimeSession) signalResponseIntentWorker() {
-	select {
-	case s.pendingResponseWake <- struct{}{}:
-	default:
-	}
+func newResponseIntent(events []models.SessionEvent, generation uint64) responseIntent {
+	intent := responseIntent{events: cloneSessionEvents(events), generation: generation}
+	intent.settled = responseIntentSettlement(intent)
+	return intent
 }
 
 func (s *realtimeSession) responseIntentLoop() {
@@ -341,27 +344,18 @@ func (s *realtimeSession) dispatchPendingResponseIntents() {
 			s.responseWireMu.Unlock()
 			return
 		}
-		intentIndex := 0
-		if s.suppressStandaloneResponseCreate && !s.toolResultAdmitted {
-			intentIndex = -1
-			for index, pending := range s.pendingResponseIntents {
-				if responseIntentHasFunctionCallOutput(pending) {
-					intentIndex = index
-					break
-				}
-			}
-			if intentIndex < 0 {
-				s.responseMu.Unlock()
-				s.responseWireMu.Unlock()
-				return
-			}
-		}
-		intent := s.pendingResponseIntents[intentIndex]
-		copy(s.pendingResponseIntents[intentIndex:], s.pendingResponseIntents[intentIndex+1:])
-		s.pendingResponseIntents = s.pendingResponseIntents[:len(s.pendingResponseIntents)-1]
-		if intent.generation != s.responseGeneration {
+		intent, ok := s.popPendingResponseIntentLocked()
+		if !ok {
 			s.responseMu.Unlock()
 			s.responseWireMu.Unlock()
+			return
+		}
+		s.activeResponseIntent = &intent
+		if intent.generation != s.responseGeneration {
+			s.activeResponseIntent = nil
+			s.responseMu.Unlock()
+			s.responseWireMu.Unlock()
+			settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
 			continue
 		}
 		reservesResponse := false
@@ -391,7 +385,9 @@ func (s *realtimeSession) dispatchPendingResponseIntents() {
 		outcome := s.enqueueWireEvents(context.Background(), intent.events)
 		s.responseMu.Lock()
 		s.responseDispatching = false
+		s.activeResponseIntent = nil
 		s.responseMu.Unlock()
+		settleResponseIntent(intent, outcome)
 		if !outcome.OK() {
 			// A failed dispatch invalidates the remainder of this intent chain;
 			// continuing would create an ungrounded response or hide a lost tool
@@ -411,9 +407,32 @@ func (s *realtimeSession) dispatchPendingResponseIntents() {
 	}
 }
 
+func (s *realtimeSession) popPendingResponseIntentLocked() (responseIntent, bool) {
+	intentIndex := 0
+	if s.suppressStandaloneResponseCreate && !s.toolResultAdmitted {
+		intentIndex = -1
+		for index, pending := range s.pendingResponseIntents {
+			if responseIntentHasFunctionCallOutput(pending) {
+				intentIndex = index
+				break
+			}
+		}
+		if intentIndex < 0 {
+			return responseIntent{}, false
+		}
+	}
+	intent := s.pendingResponseIntents[intentIndex]
+	copy(s.pendingResponseIntents[intentIndex:], s.pendingResponseIntents[intentIndex+1:])
+	s.pendingResponseIntents = s.pendingResponseIntents[:len(s.pendingResponseIntents)-1]
+	return intent, true
+}
+
 func (s *realtimeSession) invalidatePendingResponseIntents() {
 	s.responseMu.Lock()
 	s.responseGeneration++
+	for _, intent := range s.pendingResponseIntents {
+		settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
+	}
 	s.pendingResponseIntents = nil
 	s.responseRetry = nil
 	s.responseSent = false
@@ -437,25 +456,11 @@ func (s *realtimeSession) publishResponseIntentFailure(outcome messages.SessionS
 	s.recvBuf.WriteTerminal(messages.StreamMessage{Type: messages.StreamTypeError, Value: value})
 }
 
-func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
-	for _, event := range events {
-		// A terminated session reports closed regardless of remaining
-		// outbound buffer capacity.
-		select {
-		case <-s.done:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-		default:
-		}
-		outcome := s.sendQueue.WriteContext(ctx, event)
-		switch outcome.Status {
-		case messages.BufferWriteSucceeded:
-		case messages.BufferWriteBufferFull:
-			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-		default:
-			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-		}
+func (s *realtimeSession) signalResponseIntentWorker() {
+	select {
+	case s.pendingResponseWake <- struct{}{}:
+	default:
 	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
 
 func (s *realtimeSession) rememberResponseRequest(event models.SessionEvent) {
@@ -484,36 +489,6 @@ func (s *realtimeSession) markResponseRequestSent(event models.SessionEvent) {
 		s.responseSent = true
 	}
 	s.responseMu.Unlock()
-}
-
-func realtimeEventNeedsResponseAdmission(event models.SessionEvent) bool {
-	if event.Type == models.SessionEventResponseCreate && !realtimeResponseCreateIsOutOfBand(event) {
-		return true
-	}
-	if event.Type != conversationItemCreateEvent {
-		return false
-	}
-	// A late function_call_output belongs to the response that produced the
-	// call. Hold it with its continuation while an unrelated response is
-	// active, preserving the provider's required item-then-create boundary.
-	var payload struct {
-		Item struct {
-			Type string `json:"type"`
-		} `json:"item"`
-	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
-}
-
-func realtimeResponseCreateIsOutOfBand(event models.SessionEvent) bool {
-	if event.Type != models.SessionEventResponseCreate || len(event.Data) == 0 {
-		return false
-	}
-	var payload struct {
-		Response struct {
-			Conversation string `json:"conversation"`
-		} `json:"response"`
-	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
 }
 
 func (s *realtimeSession) releaseResponseAdmission() {
@@ -632,15 +607,6 @@ func responseCreateEvents(events []models.SessionEvent) []models.SessionEvent {
 	return kept
 }
 
-func responseIntentHasFunctionCallOutput(intent responseIntent) bool {
-	for _, event := range intent.events {
-		if responseEventIsFunctionCallOutput(event) {
-			return true
-		}
-	}
-	return false
-}
-
 func responseIntentHasAudioCommit(intent responseIntent) bool {
 	for _, event := range intent.events {
 		if event.Type == models.SessionEventInputAudioBufferCommit {
@@ -650,40 +616,21 @@ func responseIntentHasAudioCommit(intent responseIntent) bool {
 	return false
 }
 
-func responseEventIsFunctionCallOutput(event models.SessionEvent) bool {
-	if event.Type != conversationItemCreateEvent {
-		return false
+func responseIntentSettlement(intent responseIntent) chan messages.SessionSendOutcome {
+	if !responseIntentHasAudioCommit(intent) {
+		return nil
 	}
-	var payload struct {
-		Item struct {
-			Type string `json:"type"`
-		} `json:"item"`
-	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Item.Type == "function_call_output"
+	return make(chan messages.SessionSendOutcome, 1)
 }
 
-func realtimeResponseCreatedIsOutOfBand(event models.SessionEvent) bool {
-	if event.Type != models.SessionEventResponseCreated || len(event.Data) == 0 {
-		return false
+func settleResponseIntent(intent responseIntent, outcome messages.SessionSendOutcome) {
+	if intent.settled == nil {
+		return
 	}
-	var payload struct {
-		Response struct {
-			Conversation string `json:"conversation"`
-		} `json:"response"`
+	select {
+	case intent.settled <- outcome:
+	default:
 	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
-}
-
-func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
-	if event.Type != models.SessionEventResponseDone || len(event.Data) == 0 {
-		return false
-	}
-	var payload struct {
-		Response struct {
-			Conversation string `json:"conversation"`
-		} `json:"response"`
-	}
-	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == "none"
 }
 
 func (s *realtimeSession) observeResponseDone(event models.SessionEvent) {

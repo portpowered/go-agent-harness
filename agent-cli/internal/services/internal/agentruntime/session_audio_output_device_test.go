@@ -50,7 +50,7 @@ func TestRunSessionWithAudioOutAndRTCDeviceOutputRoutesOneSession(t *testing.T) 
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{
+		runErr <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			Prompt:            "hello",
 			PromptProvided:    true,

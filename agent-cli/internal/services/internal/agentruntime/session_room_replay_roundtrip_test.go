@@ -281,7 +281,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	defer recordCancel()
 	recordResult, err := RunRoomWithResult(recordCtx, io.Discard, RoomRunOptions{
 		Manifest:  manifest,
-		ConfigDir: configDir,
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
 		BaseURL:   "wss://room-record.invalid/v1/realtime",
 		OutputDir: outputDir,
 		CredentialLookup: func(name string) (string, bool) {
@@ -365,7 +365,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	replayResult, err := RunRoomWithResult(replayCtx, io.Discard, RoomRunOptions{
 		Manifest:   room.Manifest{SchemaVersion: 999},
 		ReplayPlan: &plan,
-		ReplayPath: outputDir,
+		ReplayPath: outputDir, ModelCatalog: testModelCatalog(),
 		CredentialLookup: func(string) (string, bool) {
 			t.Fatal("room replay looked up a live credential")
 			return "", false

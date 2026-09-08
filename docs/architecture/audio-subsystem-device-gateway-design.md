@@ -2,6 +2,8 @@
 
 Status: implementation and validation in progress. Design date: 2026-09-04; evidence updated 2026-09-05.
 
+Follow-up: [Embeddable runtime and service-boundary refactor plan](embeddable-agent-runtime-refactor-plan.md) specifies extraction from the CLI, service-local `internal/` and `wire/` packages, and architecture/size/complexity enforcement. Its service-local layout supersedes the shared implementation layout here. That follow-up also records the current extraction checkpoint and remaining CLI ownership; older validation snapshots below are not a claim that the current aggregate checks pass.
+
 This document is the decision and acceptance record for consolidating audio handling and device access. It is based on inspection of this checkout; it does not claim that the reported customer failure has been reproduced. This change first establishes ownership and evidence, then fixes regressions through those boundaries.
 
 ## 1. Outcome and scope

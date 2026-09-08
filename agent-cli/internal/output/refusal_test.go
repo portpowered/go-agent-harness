@@ -9,7 +9,9 @@ import (
 
 func TestWriteRefusal_PlainText(t *testing.T) {
 	var buf bytes.Buffer
-	WriteRefusal(&buf, "I cannot assist with that.")
+	if err := WriteRefusal(&buf, "I cannot assist with that."); err != nil {
+		t.Fatal(err)
+	}
 
 	got := buf.String()
 	if !strings.Contains(got, "[REFUSAL]") {
@@ -26,7 +28,9 @@ func TestWriteRefusal_PlainText(t *testing.T) {
 
 func TestWriteRefusal_EmptyText(t *testing.T) {
 	var buf bytes.Buffer
-	WriteRefusal(&buf, "")
+	if err := WriteRefusal(&buf, ""); err != nil {
+		t.Fatal(err)
+	}
 	if buf.Len() != 0 {
 		t.Errorf("expected no output for empty refusal, got %q", buf.String())
 	}
@@ -34,7 +38,9 @@ func TestWriteRefusal_EmptyText(t *testing.T) {
 
 func TestWriteRefusal_TrailingNewline(t *testing.T) {
 	var buf bytes.Buffer
-	WriteRefusal(&buf, "Refused.")
+	if err := WriteRefusal(&buf, "Refused."); err != nil {
+		t.Fatal(err)
+	}
 	got := buf.String()
 	if !strings.HasSuffix(got, "\n") {
 		t.Errorf("expected trailing newline, got %q", got)

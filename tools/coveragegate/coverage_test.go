@@ -288,103 +288,20 @@ func TestLoadManifestDirReportsMalformedFragmentPath(t *testing.T) {
 	}
 }
 
-func TestRepositoryFragmentCatalogMatchesCheckedInBaseline(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "repository-coverage-manifest.json"))
-	if err != nil {
-		t.Fatalf("read repository coverage baseline: %v", err)
-	}
-	want, err := ParseManifest(data)
-	if err != nil {
-		t.Fatalf("ParseManifest() error = %v", err)
-	}
-	got := mustLoadRepositoryManifest(t)
-	if len(got.Packages) != len(want.Packages) {
-		t.Fatalf("registered package count = %d, want %d", len(got.Packages), len(want.Packages))
-	}
-	for i := range want.Packages {
-		if got.Packages[i] != want.Packages[i] {
-			t.Fatalf("package registration %d = %#v, want %#v", i, got.Packages[i], want.Packages[i])
-		}
-	}
-}
-
-func TestRepositoryFragmentCatalogPreservesCoverageEnforcement(t *testing.T) {
+// Discover the current package set instead of maintaining a second copy of the
+// manifest. Floor enforcement is tested above with small, synthetic profiles.
+func TestRepositoryManifestRegistersWorkspacePackages(t *testing.T) {
 	manifest := mustLoadRepositoryManifest(t)
-	measurements := allPackagesMeasured(manifest)
-	if err := Compare(manifest, measurements); err != nil {
-		t.Fatalf("non-regressing repository measurements rejected: %v", err)
+	modules := []string{"agent-cli", "go-agent-loop", "go-agent-runtime", "go-audio", "go-llm-gateway", "go-device-gateway"}
+	for i := range modules {
+		modules[i] = filepath.Join("..", "..", modules[i])
 	}
-
-	withUnregistered := cloneMeasurements(measurements)
-	const unregisteredPackage = "github.com/portpowered/go-agent-harness/new/package"
-	withUnregistered[unregisteredPackage] = Coverage{Covered: 1, Total: 1}
-	err := Compare(manifest, withUnregistered)
-	if !errors.Is(err, ErrUnregisteredPackage) {
-		t.Fatalf("errors.Is(%v, ErrUnregisteredPackage) = false", err)
+	packages, err := DiscoverWorkspacePackages(t.Context(), "go", modules)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), unregisteredPackage) {
-		t.Fatalf("unregistered-package report = %q, want %q", err, unregisteredPackage)
-	}
-
-	const targetPackage = "github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	withoutMeasurement := cloneMeasurements(measurements)
-	delete(withoutMeasurement, targetPackage)
-	err = Compare(manifest, withoutMeasurement)
-	if !errors.Is(err, ErrMissingCoverage) {
-		t.Fatalf("errors.Is(%v, ErrMissingCoverage) = false", err)
-	}
-	if !strings.Contains(err.Error(), targetPackage) {
-		t.Fatalf("missing-coverage report = %q, want %q", err, targetPackage)
-	}
-
-	withRegression := cloneMeasurements(measurements)
-	withRegression[targetPackage] = Coverage{Covered: 397, Total: 1000}
-	err = Compare(manifest, withRegression)
-	if !errors.Is(err, ErrCoverageFloorViolation) {
-		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
-	}
-	var findings *FindingsError
-	if !errors.As(err, &findings) {
-		t.Fatalf("coverage regression error %T does not expose FindingsError", err)
-	}
-	wantViolation := Violation{ImportPath: targetPackage, ExpectedCents: 4020, ActualCents: 3970, DeltaCents: -50}
-	if len(findings.Violations) != 1 || findings.Violations[0] != wantViolation {
-		t.Fatalf("coverage violations = %#v, want %#v", findings.Violations, []Violation{wantViolation})
-	}
-}
-
-func TestKnownGoodManifestAndProfiles(t *testing.T) {
-	manifest := mustLoadRepositoryManifest(t)
-	if len(manifest.Packages) == 0 {
-		t.Fatal("manifest contains no packages")
-	}
-	hasZeroMinimum := false
-	hasPositiveMinimum := false
-	for _, entry := range manifest.Packages {
-		if entry.ImportPath == "" || entry.HasMinimum == entry.HasException {
-			t.Fatalf("entry %q is not a minimum registration: %#v", entry.ImportPath, entry)
-		}
-		if entry.HasException {
-			continue
-		}
-		if entry.MinimumCents == 0 {
-			hasZeroMinimum = true
-		} else if entry.MinimumCents > 0 {
-			hasPositiveMinimum = true
-		}
-	}
-	if !hasZeroMinimum {
-		t.Fatal("manifest contains no zero-coverage package")
-	}
-	if !hasPositiveMinimum {
-		t.Fatal("manifest contains no positive coverage package")
-	}
-	measurements := make(map[string]Coverage, len(manifest.Packages))
-	for _, entry := range manifest.Packages {
-		measurements[entry.ImportPath] = Coverage{Covered: 1, Total: 1}
-	}
-	if err := Compare(manifest, measurements); err != nil {
-		t.Fatalf("known-good committed manifest rejected: %v", err)
+	if err := ValidateRegistration(manifest, packages); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -440,22 +357,6 @@ func mustLoadRepositoryManifest(t *testing.T) Manifest {
 	return manifest
 }
 
-func allPackagesMeasured(manifest Manifest) map[string]Coverage {
-	measurements := make(map[string]Coverage, len(manifest.Packages))
-	for _, entry := range manifest.Packages {
-		measurements[entry.ImportPath] = Coverage{Covered: 1, Total: 1}
-	}
-	return measurements
-}
-
-func cloneMeasurements(measurements map[string]Coverage) map[string]Coverage {
-	clone := make(map[string]Coverage, len(measurements))
-	for packagePath, coverage := range measurements {
-		clone[packagePath] = coverage
-	}
-	return clone
-}
-
 func manifestJSON(entry string) string {
 	return fmt.Sprintf(`{"packages":[%s]}`, entry)
 }
@@ -485,5 +386,21 @@ func writeManifestFragment(t *testing.T, path, data string) {
 	}
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatalf("write manifest fragment: %v", err)
+	}
+}
+
+func TestReadProfilesUnionsRepeatedBlocksAcrossTestBinaries(t *testing.T) {
+	first := writeProfile(t, "mode: set\nexample/a/a.go:1.1,1.2 2 0\nexample/a/a.go:1.1,1.2 2 1\nexample/a/a.go:2.1,2.2 3 0\n")
+	second := writeProfile(t, "mode: set\nexample/a/a.go:1.1,1.2 2 0\nexample/a/a.go:2.1,2.2 3 1\n")
+	got, err := ReadProfiles([]string{first, second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["example/a"] != (Coverage{Covered: 5, Total: 5}) {
+		t.Fatalf("union = %+v, want 5/5", got)
+	}
+	inconsistent := writeProfile(t, "mode: set\nexample/a/a.go:1.1,1.2 9 1\n")
+	if _, err := ReadProfiles([]string{first, inconsistent}); !errors.Is(err, ErrProfileInvalid) {
+		t.Fatalf("inconsistent source accepted: %v", err)
 	}
 }

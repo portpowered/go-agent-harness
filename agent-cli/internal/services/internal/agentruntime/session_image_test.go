@@ -193,7 +193,7 @@ func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	}
 	inf := &countingSessionImageInferencer{session: session}
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath: filepath.Join(dir, "capture.json"), Provider: "openai", Model: "gpt-realtime",
 			APIKey: "sk-test-key", ConfigDir: filepath.Join(dir, "config"), Prompt: "describe these", SessionInferencer: inf,
 		},
@@ -217,7 +217,7 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 	inf := &countingSessionImageInferencer{}
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(t.TempDir(), "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",
@@ -253,7 +253,7 @@ models:
 	inf := &countingSessionImageInferencer{}
 
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
-		SessionRunOptions: agentruntime.SessionRunOptions{
+		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(dir, "capture.json"),
 			Provider:          "openai",
 			Model:             "gpt-realtime",

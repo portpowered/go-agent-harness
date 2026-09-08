@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
@@ -213,19 +212,19 @@ Step 2: Verify the thing.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir // Point to temp dir with skills
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/mock-skill")
@@ -267,19 +266,19 @@ Body of the skill.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/nonexistent-skill")
@@ -321,19 +320,19 @@ Test skill body.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
-	sessionID, err := agentExec.NewChatSessionID(cfg)
+	chatService := newPublicTextSessionService(globalFlags, exec, inf, nil)
+	sessionID, err := chatService.NewSessionID(context.Background(), *cfg)
 	if err != nil {
 		t.Fatalf("NewChatSessionID: %v", err)
 	}
 
 	var out bytes.Buffer
 	ctx := context.Background()
-	model := services.NewChatModel(agentExec, sessionID, globalFlags, askFlags, ctx, &out, &out)
+	model := services.NewChatModel(chatService, sessionID, globalFlags, askFlags, ctx, &out, &out)
 	model = runInit(model)
 
 	model = typeInput(model, "/test-skill")
