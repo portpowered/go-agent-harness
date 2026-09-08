@@ -518,6 +518,7 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             f"{run_record['stderr']}"
         )
     baseline = read_json(manifest)
+    quiet_baseline = read_json(quiet)
     mutations: list[dict[str, Any]] = []
     for mutation_name, mutate, checks in (
         (
@@ -553,6 +554,44 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
         mutations.append(
             analyze_mutated_manifest(case_dir, manifest, mutation_name, checks)
         )
+    for mutation_name, mutate, expected_error in (
+        (
+            "missing-quiet-runner",
+            lambda value: value.pop("runner", None),
+            "quiet evidence is missing runner metadata",
+        ),
+        (
+            "missing-quiet-observations",
+            lambda value: (value.pop("before", None), value.pop("after", None)),
+            "quiet evidence must include before and after load/lease observations",
+        ),
+        (
+            "expired-quiet-evidence",
+            lambda value: value.update({"valid_until_utc": "2000-01-01T00:00:00Z"}),
+            "quiet evidence has expired",
+        ),
+    ):
+        write_json(quiet, quiet_baseline)
+        tampered_quiet = json.loads(json.dumps(quiet_baseline))
+        mutate(tampered_quiet)
+        write_json(quiet, tampered_quiet)
+        mutated = json.loads(json.dumps(baseline))
+        mutated["run_groups"][0]["quiet_evidence"]["sha256"] = sha256_file(quiet)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "repetitions.0.validation.valid": False,
+                    "repetitions.0.validation.quiet_evidence.status": "INVALID",
+                    "repetitions.0.validation.quiet_evidence.error": expected_error,
+                },
+            )
+        )
+    write_json(quiet, quiet_baseline)
+    write_json(manifest, baseline)
     return {
         "name": "provenance-tampering",
         "run": run_record,
@@ -828,7 +867,7 @@ def main() -> int:
     except ControlError as exc:
         failures.append(str(exc))
 
-    case_count = len(cases) + 1 + 1 + 3 + 2
+    case_count = len(cases) + 1 + 1 + 3 + 2 + 3
     report = {
         "schema": "c11-hermetic-profile-controls-v1",
         "created_at_utc": utc_now(),

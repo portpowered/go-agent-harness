@@ -329,49 +329,61 @@ def parse_go_env(stdout: bytes) -> dict[str, str]:
     }
 
 
-def validate_quiet_evidence(path: Path, *, mode: str) -> dict[str, Any]:
-    evidence = load_json(path)
+def quiet_evidence_contract_error(evidence: Any, *, mode: str) -> str | None:
+    if not isinstance(evidence, dict):
+        return "quiet evidence is not a JSON object"
     if evidence.get("schema") != QUIET_SCHEMA:
-        raise ProfileError(
-            f"quiet evidence {path} has schema {evidence.get('schema')!r}, "
+        return (
+            f"quiet evidence has schema {evidence.get('schema')!r}, "
             f"want {QUIET_SCHEMA!r}"
         )
     if evidence.get("valid") is not True:
         reason = evidence.get("reason") or "valid=false"
-        raise ProfileError(f"quiet evidence is not valid: {reason}")
+        return f"quiet evidence is not valid: {reason}"
     isolation = evidence.get("isolation")
     allowed = {"synthetic-control"} if mode == "synthetic" else {"isolated", "dedicated"}
     if isolation not in allowed:
-        raise ProfileError(
+        return (
             f"quiet evidence isolation {isolation!r} is not allowed for {mode}; "
             f"required one of {sorted(allowed)}"
         )
-    if mode != "synthetic":
-        runner = evidence.get("runner")
-        if not isinstance(runner, dict):
-            raise ProfileError("quiet evidence is missing runner metadata")
-        missing = [
-            key
-            for key in ("os", "architecture", "cpu", "go_version")
-            if not str(runner.get(key, "")).strip()
-        ]
-        if missing:
-            raise ProfileError(
-                "quiet evidence is missing runner fields: " + ", ".join(missing)
-            )
-        if not isinstance(evidence.get("before"), dict) or not isinstance(
-            evidence.get("after"), dict
-        ):
-            raise ProfileError(
-                "quiet evidence must include before and after load/lease observations"
-            )
-    expires = evidence.get("valid_until_utc")
-    if expires is not None:
-        parsed_expiry = parse_utc(expires)
-        if parsed_expiry is None:
-            raise ProfileError("quiet evidence valid_until_utc is not an ISO timestamp")
-        if parsed_expiry <= _datetime.datetime.now(_datetime.timezone.utc):
-            raise ProfileError("quiet evidence has expired")
+    captured = parse_utc(evidence.get("captured_at_utc"))
+    if captured is None:
+        return "quiet evidence captured_at_utc is not an ISO timestamp"
+    expires = parse_utc(evidence.get("valid_until_utc"))
+    if expires is None:
+        return "quiet evidence valid_until_utc is not an ISO timestamp"
+    now = _datetime.datetime.now(_datetime.timezone.utc)
+    if captured > now:
+        return "quiet evidence captured_at_utc is in the future"
+    if expires <= now:
+        return "quiet evidence has expired"
+    if expires <= captured:
+        return "quiet evidence valid_until_utc is not after captured_at_utc"
+    runner = evidence.get("runner")
+    if not isinstance(runner, dict):
+        return "quiet evidence is missing runner metadata"
+    missing = [
+        key
+        for key in ("os", "architecture", "cpu", "go_version")
+        if not str(runner.get(key, "")).strip()
+    ]
+    if missing:
+        return "quiet evidence is missing runner fields: " + ", ".join(missing)
+    if not isinstance(evidence.get("before"), dict) or not isinstance(
+        evidence.get("after"), dict
+    ):
+        return "quiet evidence must include before and after load/lease observations"
+    return None
+
+
+def validate_quiet_evidence(path: Path, *, mode: str) -> dict[str, Any]:
+    evidence = load_json(path)
+    error = quiet_evidence_contract_error(evidence, mode=mode)
+    if error:
+        raise ProfileError(error)
+    isolation = evidence["isolation"]
+    expires = evidence["valid_until_utc"]
     return {
         "path": str(path.resolve()),
         "sha256": sha256_file(path),
@@ -993,7 +1005,7 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     selected_by_module, cohort_mode, selected_packages = select_packages(
         manifest, args.cohort
     )
-    group_id = f"{utc_now().replace(':', '').replace('-', '')}-{uuid.uuid4().hex[:10]}"
+    group_id = uuid.uuid4().hex[:12]
     group_root = runs_root / group_id
     records: list[dict[str, Any]] = []
     failures: list[str] = []
@@ -1055,8 +1067,8 @@ def run_profile(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 env_overrides=env_overrides,
                 timeout_seconds=timeout,
                 output_root=root,
-                output_dir=group_root / f"repeat-{repeat_index:03d}" / safe_label(module["name"]),
-                label=f"run-{group_id}-{repeat_index:03d}-{module['name']}",
+                output_dir=group_root / f"r{repeat_index}" / safe_label(module["name"]),
+                label=f"run-{group_id[:6]}-r{repeat_index}-{safe_label(module['name'])}",
                 stdout_suffix="stdout.jsonl",
             )
             record.update(
@@ -1519,27 +1531,36 @@ def validate_recorded_quiet_evidence(
             "path": str(path),
             "error": "quiet evidence SHA-256 does not match the captured provenance",
         }
-    if evidence.get("schema") != QUIET_SCHEMA or evidence.get("valid") is not True:
+    error = quiet_evidence_contract_error(evidence, mode=mode)
+    if error:
+        return {"status": "INVALID", "path": str(path), "error": error}
+    if value.get("path") != str(path):
         return {
             "status": "INVALID",
             "path": str(path),
-            "error": "quiet evidence is not a valid captured quiet-run record",
-        }
-    allowed = {"synthetic-control"} if mode == "synthetic" else {"isolated", "dedicated"}
-    if evidence.get("isolation") not in allowed:
-        return {
-            "status": "INVALID",
-            "path": str(path),
-            "error": (
-                f"quiet evidence isolation {evidence.get('isolation')!r} is not "
-                f"allowed for {mode}"
-            ),
+            "error": "quiet evidence path changed after capture",
         }
     if value.get("isolation") != evidence.get("isolation"):
         return {
             "status": "INVALID",
             "path": str(path),
             "error": "quiet evidence isolation changed after capture",
+        }
+    for key in ("captured_at_utc", "valid_until_utc", "runner"):
+        if value.get(key) != evidence.get(key):
+            return {
+                "status": "INVALID",
+                "path": str(path),
+                "error": f"quiet evidence {key} changed after capture",
+            }
+    before = evidence.get("before")
+    if value.get("active_work") != (
+        before.get("active_work") if isinstance(before, dict) else None
+    ):
+        return {
+            "status": "INVALID",
+            "path": str(path),
+            "error": "quiet evidence active-work provenance changed after capture",
         }
     return {
         "status": "PASS",
