@@ -24,6 +24,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - `git merge-base --is-ancestor` passed for startup integration
   `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
+- Delivery rebase checkpoint: `03bbb0f4ce570381e145808993ef76aaf3ba8441`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -50,7 +51,7 @@ review row or C11 rejection feedback. Worker sessions show C08
   help/offline no-spawn, and invalid shared-host evidence.
 - AST parsing of all shipped Python files: PASS.
 - `profile.py --help`: PASS.
-- `controls-v4/controls.json`: PASS; 11 cases, 14 assertions, raw evidence
+- `controls-rebased/controls.json`: PASS; 11 cases, 14 assertions, raw evidence
   retained, zero Go/network/build invocations.
 - `GOWORK=off go test . -count=1` in `tools/timingate`: PASS.
 - `git diff --check`: PASS.
@@ -74,7 +75,6 @@ none is fabricated.
 
 ## Handoff
 
-The next bounded step is commit/checkpoint, fetch and rebase latest main,
-rerun controls plus the focused timingate regression, push/update the single C11
-PR, and return `ACCEPTED` to script CI. Do not poll CI, self-review, claim CI
-green, or close any of the nine immutable project gates.
+The next bounded step is push/update the single C11 PR and return `ACCEPTED` to
+script CI. Do not poll CI, self-review, claim CI green, or close any of the nine
+immutable project gates.

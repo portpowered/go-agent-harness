@@ -22,6 +22,8 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `b01dbb573a15eb61d1cacfff11d37c2461167987`.
+- Implementation checkpoint after the delivery rebase:
+  `03bbb0f4ce570381e145808993ef76aaf3ba8441`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -49,14 +51,20 @@ runner metadata, package timing, repeat variation, no-test/skip classification,
 subtest overlap, and timingate-compatible diagnostics. Heavy commands fail
 closed without explicit opt-in and valid isolated/dedicated evidence.
 
+Source file hashes at the rebased checkpoint are:
+`profile.py` `0cb0ed7ea403c2da0ee072aa38f760abaf977616cb92ef1a23982fd9b4e365e2`,
+`controls.py` `3adacedcd97491bdc86c1289928828b78b7580ba49fee03e66214681fd780bcb`,
+and `fixtures/emit_jsonl.py`
+`0f1892f763e02dcb43bd5008729ededd14a45ef1c7580ac73271811a2938e8c8`.
+
 Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../controls-v4`:
+- `python3 scripts/hermetic-profile/controls.py --output .../controls-rebased`:
   PASS; 11 public cases and 14 assertions, raw evidence retained, zero Go,
   network, or build invocations. The report is
-  `controls-v4/controls.json`.
+  `controls-rebased/controls.json`.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
 - `git diff --check`: PASS.
 
@@ -122,9 +130,7 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The exact next action is to checkpoint the owned implementation and evidence,
-fetch/rebase onto the latest `origin/main`, rerun the public controls and
-focused timingate regression, push the same branch, and open/update one C11 PR.
+The exact next action is push this rebased branch and open/update one C11 PR.
 Return `ACCEPTED` to the script-owned CI gate after that submission; do not poll
 CI or claim that CI is green. Any exact current-head rejection returns to this
 same task for a scoped repair. Independent review and post-integration vertical
