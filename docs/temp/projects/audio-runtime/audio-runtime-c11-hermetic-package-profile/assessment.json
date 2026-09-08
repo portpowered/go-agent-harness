@@ -4,7 +4,7 @@
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
   "candidate_head": "ebc583f80311d9e74041e038a207cc3168015d42",
-  "current_branch_head_at_handoff": "623975e5024ccaab3559371e1169396a98ff4d5c",
+  "current_branch_head_at_handoff": "6ed49b6152b4f284dbaf0b5032a3191676ff8bc0",
   "implementation_checkpoint": "ebc583f80311d9e74041e038a207cc3168015d42",
   "base_main": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -79,9 +79,9 @@
     }
   },
   "fresh_focused_recheck": {
-    "checked_at_utc": "2026-09-08T14:01:35Z",
-    "tested_head": "623975e5024ccaab3559371e1169396a98ff4d5c",
-    "controls_report_sha256": "9f3a01248a9b9277189a42f0c5478a322c2d983fc2bf378688066673c995953c",
+    "checked_at_utc": "2026-09-08T14:16:57.736Z",
+    "tested_head": "6ed49b6152b4f284dbaf0b5032a3191676ff8bc0",
+    "controls_report_sha256": "628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6",
     "controls": "PASS: 21 scenarios, 17 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",

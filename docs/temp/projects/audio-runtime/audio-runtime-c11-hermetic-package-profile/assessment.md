@@ -23,7 +23,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched `origin/main`: `02e54e6a89a7a2d7ad1ce2fa0619145c16400339`.
 - Current implementation/control candidate checkpoint: `ebc583f80311d9e74041e038a207cc3168015d42`.
-- Current branch head at this handoff: `623975e5024ccaab3559371e1169396a98ff4d5c`.
+- Current branch head at this handoff: `6ed49b6152b4f284dbaf0b5032a3191676ff8bc0`.
 - Implementation checkpoint after the review repair and evidence refresh:
   `ebc583f80311d9e74041e038a207cc3168015d42` (the refresh is documentation-only;
   profiler source is unchanged from the causally tested repair).
@@ -90,9 +90,10 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh handoff recheck from branch head `623975e5` also passed: 21 public
+- Fresh handoff recheck from branch head `6ed49b6` also passed at
+  `2026-09-08T14:16:57.736Z`: 21 public
   controls/17 result groups with zero Go/network/build invocations (temporary
-  report SHA-256 `9f3a01248a9b9277189a42f0c5478a322c2d983fc2bf378688066673c995953c`),
+  report SHA-256 `628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -172,7 +173,7 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation/control evidence is pinned to `ebc583f8`; the
-current branch head at this handoff is `623975e5` and contains only the
+current branch head at this handoff is `6ed49b6` and contains only the
 provenance refresh above. The next action is for the
 C12 owner/meta-planner to resolve the named `provider_burst` failure (or record
 a causal external disposition), then rebase this same PR if `main` advances,

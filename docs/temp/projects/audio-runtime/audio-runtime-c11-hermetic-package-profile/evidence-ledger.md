@@ -28,8 +28,8 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 - Required delivery rebase completed onto `origin/main`; the current
   implementation/control evidence checkpoint is
   `HEAD=ebc583f80311d9e74041e038a207cc3168015d42`. The subsequent handoff
-  refresh is documentation-only; the branch head at this handoff is
-  `623975e5024ccaab3559371e1169396a98ff4d5c`.
+  refreshes are documentation-only; the branch head at this handoff is
+  `6ed49b6152b4f284dbaf0b5032a3191676ff8bc0`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, C08's active
   owner/worktree/PR400, the parent checkout, and factory configuration were
@@ -87,9 +87,10 @@ claimed green or attributed to the profiler's Go lane.
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
 - `git diff --check`: PASS.
-- Fresh focused handoff recheck from `623975e5` passed: 21 public controls and
+- Fresh focused handoff recheck from `6ed49b6` passed at
+  `2026-09-08T14:16:57.736Z`: 21 public controls and
   17 result groups with zero Go/network/build invocations (temporary report
-  SHA-256 `9f3a01248a9b9277189a42f0c5478a322c2d983fc2bf378688066673c995953c`),
+  SHA-256 `628289f4f8ea6364358216576646c22eece2a36fb1ea9415e7dd0853dd7affd6`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. The active
@@ -115,7 +116,7 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The current source/control evidence is pinned to `ebc583f8`; the current branch
-head at this handoff is `623975e5` and only refreshes provenance. The next
+head at this handoff is `6ed49b6` and only refreshes provenance. The next
 bounded step is to retain this task while the active C12 owner resolves the named
 hermetic prerequisite; after that, rebase if required, rerun the focused C11
 controls, update PR #403, and return `ACCEPTED` to script CI. Do not poll CI,
