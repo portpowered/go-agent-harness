@@ -186,3 +186,19 @@ completion/model deltas do not prove asynchronous tool execution and wire writes
 have drained. The original negative assertion and prior continuation repair remain.
 Baseline 2df832df passed all nine hosted CI jobs in run34175779782 before this
 bounded latency follow-up; the final combined head still requires its own CI gate.
+
+Run34176959778 passed eight jobs, including integration, hermetic and race. Its
+coverage job hit the existing two-second wall bound in harness A of the duplex
+transcript negative control. The subsequent expected-corruption diagnostic hid
+that earlier execution failure. Exact coverage instrumentation passed 110 focused
+runs, another 100 runs under concurrent process load, and the full CLI coverage
+suite locally (231.96s). A temporary 1.8s stack/state watchdog did not fire. Review
+of replay, model input ordering, paired crossing completion and EOF release found
+no concrete cycle to patch. This intermittent deadline remains unexplained;
+passing reproductions are not evidence that its cause was fixed. Retain its name
+in the cumulative runner and preserve both harness states on any recurrence.
+All four multi-turn negative controls now validate their fresh healthy run before
+mutating evidence. A compact failure helper reports both harness errors, elapsed
+time, runtime/stream/terminal state, crossings and the final logical tick. An
+isolated overlay forcing a failed baseline exercised that diagnostic and reported
+both harnesses. No production behavior, timeout, trial or negative assertion changed.
