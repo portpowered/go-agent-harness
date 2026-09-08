@@ -84,9 +84,9 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	if got := customerSimulationRecordedResponse(customerSimulationRecordingFacts{responses: withTranscript}, 5); got.ID != "" {
 		t.Fatalf("out-of-range recorded response = %+v, want zero response", got)
 	}
-	if customerSimulationResponseStatus(customerSimulationResponse{Cancelled: true}) != "cancelled" ||
-		customerSimulationResponseStatus(customerSimulationResponse{Complete: true}) != "completed" ||
-		customerSimulationResponseStatus(customerSimulationResponse{}) != "incomplete" {
+	if customerSimulationResponseStatus(customerSimulationResponse{Cancelled: true}) != string(DispositionCancelled) ||
+		customerSimulationResponseStatus(customerSimulationResponse{Complete: true}) != string(DispositionCompleted) ||
+		customerSimulationResponseStatus(customerSimulationResponse{}) != customerSimulationResponseIncomplete {
 		t.Fatal("recorded response statuses did not preserve cancelled, completed, and incomplete states")
 	}
 
@@ -145,12 +145,12 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	}
 
 	dFacts := customerSimulationRecordingFacts{tools: []ToolObservation{
-		{ID: "done", Status: "completed", ResultSeen: true},
+		{ID: "done", Status: string(DispositionCompleted), ResultSeen: true},
 		{ID: "pending", Status: "started", ResultSeen: false},
 	}}
 	natural := NewFamilyDScenario(TerminationNatural)
 	naturalEvidence := customerSimulationTerminationEvidence(natural, []TranscriptEvent{{At: 2 * time.Second, Final: true}}, ProcessFacts{}, DuplexRunResult{}, dFacts)
-	if naturalEvidence.ActiveResponseStatus != "completed" || !naturalEvidence.SatisfactionDeclared || naturalEvidence.SatisfactionAt == 0 || len(naturalEvidence.OutstandingToolIDs) != 1 {
+	if naturalEvidence.ActiveResponseStatus != string(DispositionCompleted) || !naturalEvidence.SatisfactionDeclared || naturalEvidence.SatisfactionAt == 0 || len(naturalEvidence.OutstandingToolIDs) != 1 {
 		t.Fatalf("natural termination fallback evidence = %+v, want completed satisfaction and pending tool", naturalEvidence)
 	}
 	sigint := NewFamilyDScenario(TerminationSIGINT)
@@ -160,7 +160,7 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	}
 	dFacts.cancelObserved = true
 	sigintEvidence = customerSimulationTerminationEvidence(sigint, []TranscriptEvent{{At: time.Second}}, ProcessFacts{SignalSent: true, Signal: "SIGINT", SignalAt: 1500 * time.Millisecond}, DuplexRunResult{}, dFacts)
-	if sigintEvidence.ActiveResponseStatus != "cancelled" {
+	if sigintEvidence.ActiveResponseStatus != string(DispositionCancelled) {
 		t.Fatalf("cancelled termination evidence = %+v, want cancelled", sigintEvidence)
 	}
 
@@ -173,7 +173,7 @@ func TestCustomerSimulationEvidenceHelpersPreserveFallbackStates(t *testing.T) {
 	if timedOut.Outcome != PatienceOutcomeTimeout || timedOut.DeadAirAt != 0 {
 		t.Fatalf("timeout patience fallback evidence = %+v, want timeout without dead-air fields", timedOut)
 	}
-	cancelled := customerSimulationPatienceEvidence(eScenario, nil, ProcessFacts{ExitClassification: "cancelled", EndedAt: 5 * time.Millisecond}, DuplexRunResult{Cancelled: true}, nil, customerSimulationRecordingFacts{}, nil)
+	cancelled := customerSimulationPatienceEvidence(eScenario, nil, ProcessFacts{ExitClassification: string(DispositionCancelled), EndedAt: 5 * time.Millisecond}, DuplexRunResult{Cancelled: true}, nil, customerSimulationRecordingFacts{}, nil)
 	if cancelled.Outcome != PatienceOutcomeCancelled {
 		t.Fatalf("cancelled patience fallback evidence = %+v, want cancelled", cancelled)
 	}

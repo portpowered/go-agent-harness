@@ -1189,7 +1189,7 @@ func duplexExitClassification(result DuplexRunResult, termination TerminationMet
 		return "timeout"
 	}
 	if result.Cancelled {
-		return "cancelled"
+		return string(DispositionCancelled)
 	}
 	if result.SignalSent && termination == TerminationSIGINT {
 		return "sigint"

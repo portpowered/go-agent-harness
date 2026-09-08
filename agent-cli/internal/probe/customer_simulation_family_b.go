@@ -208,8 +208,8 @@ func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []T
 	}
 
 	originalStatus := customerSimulationResponseStatus(original)
-	if originalStatus == "incomplete" && facts.cancelObserved && facts.cancelResponseID == original.ID {
-		originalStatus = "cancelled"
+	if originalStatus == customerSimulationResponseIncomplete && facts.cancelObserved && facts.cancelResponseID == original.ID {
+		originalStatus = string(DispositionCancelled)
 	}
 	replacementStatus := customerSimulationResponseStatus(replacement)
 	originalResponseID := original.ID

@@ -392,7 +392,7 @@ func (p *customerSimulationStreamParser) finish() {
 		status := "started"
 		duration := maxDuration(0, resultAt-tool.Start)
 		if resultSeen {
-			status = "completed"
+			status = string(DispositionCompleted)
 		}
 		p.facts.tools = append(p.facts.tools, ToolObservation{ID: tool.ID, ActionID: p.scenario.Actions[actionIndex].ID, TurnID: turnID, Tool: customerSimulationSlug(tool.Name), Status: status, At: tool.Start, Duration: duration, ResultSeen: resultSeen})
 	}
@@ -463,18 +463,18 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 	if start == 0 && len(result.Output) > 0 {
 		start = result.Output[0].At
 	}
-	status := "incomplete"
+	status := customerSimulationResponseIncomplete
 	if scenario.Termination == TerminationSIGINT {
 		if process.SignalSent {
 			status = "interrupted"
 			if facts.cancelObserved {
-				status = "cancelled"
+				status = string(DispositionCancelled)
 			}
 		}
 	} else if len(product) > 0 && product[0].Final {
-		status = "completed"
+		status = string(DispositionCompleted)
 	}
-	if status != "incomplete" {
+	if status != customerSimulationResponseIncomplete {
 		if end <= start {
 			end = start + time.Millisecond
 		}
@@ -482,7 +482,7 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 			end = process.SignalAt
 		}
 	}
-	satisfaction := status == "completed" && scenario.Termination == TerminationNatural
+	satisfaction := status == string(DispositionCompleted) && scenario.Termination == TerminationNatural
 	satisfactionAt := time.Duration(0)
 	if satisfaction {
 		satisfactionAt = end + time.Nanosecond
@@ -498,7 +498,7 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 func factsOutstandingToolIDs(facts customerSimulationRecordingFacts) []string {
 	var result []string
 	for _, tool := range facts.tools {
-		if tool.Status != "completed" || !tool.ResultSeen {
+		if tool.Status != string(DispositionCompleted) || !tool.ResultSeen {
 			result = append(result, tool.ID)
 		}
 	}
@@ -583,7 +583,7 @@ func customerSimulationPatienceEvidence(scenario CustomerScenario, product []Tra
 	} else if outcome == PatienceOutcomeTimeout {
 		events = append(events, PatienceEvent{ID: "timeout", TurnID: turnID, Kind: PatienceEventTimeout, At: terminal, Detail: "the shipped session reached its deadline before a terminal customer response"})
 	} else {
-		events = append(events, PatienceEvent{ID: "cancelled", TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
+		events = append(events, PatienceEvent{ID: string(PatienceEventCancelled), TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
 	}
 	_ = scenario
 	_ = product
@@ -598,7 +598,7 @@ func customerSimulationPatienceEvidence(scenario CustomerScenario, product []Tra
 func toolObservationIDsNotComplete(tools []ToolObservation) []string {
 	var result []string
 	for _, tool := range tools {
-		if tool.Status != "completed" || !tool.ResultSeen {
+		if tool.Status != string(DispositionCompleted) || !tool.ResultSeen {
 			result = append(result, tool.ID)
 		}
 	}

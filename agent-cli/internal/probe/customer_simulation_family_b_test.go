@@ -87,7 +87,7 @@ func TestFamilyBCorrectionOracleRejectsIgnoredCorrection(t *testing.T) {
 	scenario := NewFamilyBScenario()
 	results, checkpoints, tools, product := familyBPositiveEvidence(scenario)
 	evidence := familyBCorrectionEvidence()
-	evidence.OriginalResponseStatus = "completed"
+	evidence.OriginalResponseStatus = string(DispositionCompleted)
 	verdict, err := EvaluateCustomerSimulationCorrection(scenario, results, checkpoints, tools, product, evidence)
 	if err != nil {
 		t.Fatalf("EvaluateCustomerSimulationCorrection: %v", err)
@@ -180,8 +180,8 @@ func familyBPositiveEvidence(scenario CustomerScenario) ([]ActionResult, []Files
 			familyBCheckpoint("checkpoint-original", FamilyBOriginalActionID, 600*time.Millisecond, scenario.Actions[0].Oracle.Checkpoints),
 			familyBCheckpoint("checkpoint-replacement", FamilyBReplacementActionID, 1300*time.Millisecond, scenario.Actions[1].Oracle.Checkpoints),
 		}, []ToolObservation{
-			{ID: "tool-original", ActionID: FamilyBOriginalActionID, TurnID: "turn-1", Tool: "write_file", Status: "completed", At: 450 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: draft/brief.md"},
-			{ID: "tool-replacement", ActionID: FamilyBReplacementActionID, TurnID: "turn-2", Tool: "write_file", Status: "completed", At: 1050 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: final/brief.md"},
+			{ID: "tool-original", ActionID: FamilyBOriginalActionID, TurnID: "turn-1", Tool: "write_file", Status: string(DispositionCompleted), At: 450 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: draft/brief.md"},
+			{ID: "tool-replacement", ActionID: FamilyBReplacementActionID, TurnID: "turn-2", Tool: "write_file", Status: string(DispositionCompleted), At: 1050 * time.Millisecond, Duration: 100 * time.Millisecond, ResultSeen: true, Summary: "File written: final/brief.md"},
 		}, []TranscriptEvent{
 			{ID: "product-turn-1", TurnID: "turn-1", Speaker: TranscriptProduct, Text: "Created draft/brief.md and kept the original draft while I explained the next step.", At: 650 * time.Millisecond, Final: true},
 			{ID: "product-turn-2", TurnID: "turn-2", Speaker: TranscriptProduct, Text: "Created final/brief.md as the corrected release note.", At: 1400 * time.Millisecond, Final: true},
@@ -201,8 +201,8 @@ func familyBCorrectionEvidence() CorrectionEvidence {
 		OriginalResponseEndedAt:      900 * time.Millisecond,
 		ReplacementResponseStartedAt: 1000 * time.Millisecond,
 		ReplacementResponseEndedAt:   1200 * time.Millisecond,
-		OriginalResponseStatus:       "cancelled",
-		ReplacementResponseStatus:    "completed",
+		OriginalResponseStatus:       string(DispositionCancelled),
+		ReplacementResponseStatus:    string(DispositionCompleted),
 		CancellationEventRecorded:    true,
 		CancellationResponseID:       "response-original",
 		Process: &ProcessFacts{
