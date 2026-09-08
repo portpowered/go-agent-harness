@@ -4,6 +4,39 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 `audio-runtime`; factory session `~default`; server
 `http://127.0.0.1:7439`.
 
+## Latest canonical continuation
+
+The current exact-head implementation checkpoint is
+`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`, rebased in this isolated worktree
+onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
+integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
+ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
+remote predecessor head `e367da898437464ffa707d2cfa58626d10f0fe18` was
+preserved by an explicit lease-guarded branch update after the required rebase;
+the running host checkout was not merged or reset.
+
+This repair makes `manifest.commands` the sole command-record authority across
+metadata, inventory, warm, full, and cohort phases. ID arrays reference that
+stream, repetition groups are derived, every phase is schema/timing/artifact
+validated before filtering, Git/test argv/cwd/environment identity is bound,
+and hermetic analysis requires PASS warm-up followed by one full trial and one
+two-repeat cohort schedule. Legacy duplicate arrays and nested command copies
+are rejected.
+
+The exact board response is retained in
+`canonical-board-recheck-20260908.json` (SHA-256
+`2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
+current public control report is
+`controls-canonical/controls.json` (SHA-256
+`c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`): PASS,
+56 cases, 24 result groups, zero Go/network/build invocations. Raw retention is
+truthfully false only because the missing-raw-artifact negative control removes
+its own stdout fixture. `profile.py --help`, Python AST parsing,
+`GOWORK=off go test . -count=1` in `tools/timingate`, and `git diff --check`
+also pass. Fresh timing remains BLOCKED because no isolated/dedicated runner is
+available; no broad suite was started on the shared host and no CI result is
+claimed.
+
 ## Required admission and preservation checks
 
 - Read the immutable `prd.json`, inherited `progress.txt`, operating policy,
@@ -187,8 +220,8 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the accepted `origin/main`
-ancestor remains `668f2d8816beaa078d058b3f0bcc59600b71a023`. The latest
+`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`; the current `origin/main`
+ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest
 canonical task rejection named unreferenced invalid groups, forged retained
 Git metadata, aggregate duration overflow, incomplete command records, and
 stale head/evidence references. This repair closes those causes with causal

@@ -15,13 +15,13 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
-- The implementation and exact-head controls are committed at
-  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; this checkpoint consolidates
-  command records into `manifest.runs`, validates the whole input before
-  `--group` display filtering, and records the old-to-new mapping in
-  `schema-control-mapping.md`.
-- Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
+  `6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`.
+- The implementation and exact-head controls are committed against that
+  candidate; this checkpoint consolidates all phase command records into one
+  `manifest.commands` array, validates the whole input before `--group`
+  display filtering, binds Git/test command identity, enforces warm/full/cohort
+  scheduling, and records the old-to-new mapping in `schema-control-mapping.md`.
+- Integrated `origin/main`: `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
@@ -43,12 +43,13 @@ met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `ctrl-c11-final/controls.json` reports 48 declared cases, 23 result groups,
+  `controls-canonical/controls.json` reports 56 declared cases, 24 result groups,
   and zero Go/network/build invocations; its SHA-256 is
-  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
+  `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
-  source-validation output/identity, and aggregate duration overflow.
+  source-validation output/identity, aggregate duration overflow, malformed
+  canonical phase records, and hermetic captures that skip warm-up.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -57,10 +58,10 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 48-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `9b3f4ebc` passed the same controls and focused
-  checks at `2026-09-08T21:13:08.118Z`; the tracked controls report SHA-256 is
-  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
+  `profile.py --help`, the 56-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `6b7af04` passed the same controls and focused
+  checks at `2026-09-08T22:39:06.276Z`; the tracked controls report SHA-256 is
+  `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`.
 
 ## CI rejection disposition
 
@@ -88,11 +89,11 @@ in `ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`. This
 path is outside C11's owned directories; this is not a claim that hosted CI is
 green or that C11 owns a runtime repair.
 
-The canonical review inbox through review attempt 27 named unreferenced
+The canonical review inbox through review attempt 30 named unreferenced
 invalid groups, forged retained Git metadata, aggregate duration overflow,
 incomplete command records, stale head/evidence references, and the preceding
 timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`9b3f4ebc` repairs the remaining code causes, and the current public controls
+`6b7af04` repairs the remaining code causes, and the current public controls
 cover every finding.
 
 ## Handoff

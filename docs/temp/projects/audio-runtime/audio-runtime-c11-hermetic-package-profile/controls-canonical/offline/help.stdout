@@ -1,0 +1,16 @@
+usage: profile.py [-h] {inventory,warm,run,analyze} ...
+
+Profile the existing CGO-disabled nomicrophone hermetic lane. Heavy commands
+are opt-in and fail closed without dedicated-runner evidence.
+
+positional arguments:
+  {inventory,warm,run,analyze}
+    inventory           discover the six hermetic module package inventories
+    warm                download dependencies and compile test binaries
+                        without running tests
+    run                 capture one uncached inventory or at most five-package
+                        cohort
+    analyze             analyze retained raw JSON/stderr completely offline
+
+options:
+  -h, --help            show this help message and exit

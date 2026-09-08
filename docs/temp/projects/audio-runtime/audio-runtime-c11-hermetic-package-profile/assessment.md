@@ -21,15 +21,16 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c11-hermetic-package-profile"}`.
 - `prd.json.branchName` and the isolated branch are
   `codex/audio-runtime-c11-hermetic-package-profile`.
-- Fetched and integrated `origin/main`:
-  `668f2d8816beaa078d058b3f0bcc59600b71a023`.
+- Fetched and integrated the latest `origin/main`:
+  `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`.
-- The implementation and exact-head control evidence are committed together
-  at `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`. This checkpoint consolidates
-  command records into `manifest.runs`, adds the whole-input validation
-  boundary before `--group` display filtering, and records the old-to-new
-  mapping in `schema-control-mapping.md`.
+  `6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`.
+- The implementation and exact-head control evidence are committed against
+  that candidate. This checkpoint consolidates metadata, inventory, warm-up,
+  full-lane, and cohort command records into one `manifest.commands` array,
+  validates the whole input before `--group` display filtering, binds Git/test
+  command identity, enforces warm/full/cohort scheduling, and records the
+  old-to-new mapping in `schema-control-mapping.md`.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -58,7 +59,7 @@ multi-turn duplex positive baseline. The new candidate is not claimed
 CI-green.
 This is a recheck and handoff record, not a claim that script CI is green.
 The exact current board response, including current task/review states and
-leases, is preserved in `canonical-board-c11-final.json` as well as the
+leases, is preserved in `canonical-board-recheck-20260908.json` as well as the
 historical snapshots; historical C08/C12
 worker IDs are not used as current ownership evidence. C11 does not claim
 runtime ownership outside `scripts/hermetic-profile/` and this evidence root.
@@ -76,8 +77,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `aa03244a9169c9334fad66380e2867e562663117e07e1eece7aafa07134ef230`,
-`controls.py` `58bc31eb710c22ca3344ba07afc3c2e41ba6a0ed1107eb7a4d6d7c70f00090da`,
+`profile.py` `6bd53e3c994fa647c5edd1ba1485485223b3a1e399ba562c38945bd4805a211b`,
+`controls.py` `2f1173ed74db61f3c58d79936c4b7307f2631f7186a9a7c203724f3e40ff3d64`,
 and `fixtures/emit_jsonl.py`
 `0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a`.
 
@@ -85,10 +86,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-c11-final`:
-  PASS; 48 declared cases and 23 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../controls-canonical`:
+  PASS; 56 declared cases and 24 result groups, zero Go, network, or build
   invocations. The report hash is
-  `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`.
+  `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -96,7 +97,8 @@ Focused evidence:
   post-inventory dirty-source rejection. New public cases reject unreferenced
   invalid groups, incomplete command-record schemas, forged retained
   source-validation artifacts, forged source-output identity, and aggregate
-  package-duration overflow.
+  package-duration overflow, malformed canonical phase records, and a
+  hermetic capture that skips the required warm phase.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and
@@ -112,9 +114,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `9b3f4ebc` passed: 48 public cases/23
+- Fresh exact-head recheck from `6b7af04` passed: 56 public cases/24
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `626785c4f464a46c207e5d8a8998bb5f64a53d4550d58df0d02f27061ae2ea95`),
+  SHA-256 `c72e30c8309bf96d418a39caa2b042a192e8650bed7aee32de97f35944aee7ca`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -223,12 +225,15 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls remain pinned to
-`9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the tracked `ctrl-c11-final`
-report is recorded above. The canonical review findings through review 27 named
+`6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb`; the tracked
+`controls-canonical/controls.json` report is recorded above. The canonical
+review findings through review 30 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, and stale head/evidence references. This
 repair closes those causes and the public controls reproduce each
-positive/negative boundary, including unmatched and unselected-group filters,
+positive/negative boundary, including canonical phase validation, exact Git
+argv/cwd/environment validation, warm/full/cohort schedule rejection, unmatched
+and unselected-group filters,
 while retaining the earlier repairs for lane
 timing, quiet observations, cache containment, no-test markers, repeated
 package terminals, and artifact provenance. The next action is to
