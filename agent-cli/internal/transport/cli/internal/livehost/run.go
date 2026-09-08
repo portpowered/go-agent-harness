@@ -203,6 +203,13 @@ func openRecorder(request serviceSession.Request, liveRequest *runtimeSession.Li
 		return nil, fmt.Errorf("open live recording: %w", err)
 	}
 	configureLiveCapturePath(request, replayInputPath, recorder, liveRequest)
+	return traceLiveRecorderIfRequested(request, replayInputPath, recorder, liveRequest, deps)
+}
+
+func traceLiveRecorderIfRequested(request serviceSession.Request, replayInputPath string, recorder runtimeSession.LiveRecorder, liveRequest *runtimeSession.LiveRequest, deps Dependencies) (runtimeSession.LiveRecorder, error) {
+	if !request.TraceAudio {
+		return recorder, nil
+	}
 	providerPath := liveProviderCapturePath(request.RecordPath, replayInputPath)
 	if providerPath == "" {
 		providerPath = filepath.Join(request.RecordDirectory, "provider.json")
