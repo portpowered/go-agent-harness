@@ -2,6 +2,8 @@ package chrome
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -259,3 +261,211 @@ document.addEventListener("click", (event) => {
   }
 });
 </script></body></html>`
+
+type xPreparedReply struct {
+	Data struct {
+		Token string `json:"draft_token"`
+		Text  string `json:"text"`
+	} `json:"data"`
+}
+
+func testXAdapterJourney(t *testing.T) {
+	source, _ := siteadapter.Source(siteadapter.XName)
+	handler := func(writer http.ResponseWriter, _ *http.Request) {
+		adapterFixtureHeaders(writer)
+		_, _ = fmt.Fprint(writer, xAdapterFixtureHTML)
+	}
+	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
+
+	contextOutput := invokeAdapterTool(t, fixture, "x_get_context", `{}`)
+	if !strings.Contains(string(contextOutput), `"signed_in":true`) || !strings.Contains(string(contextOutput), `"account_handle":"@fixture_user"`) {
+		t.Fatalf("X context = %s", contextOutput)
+	}
+	preparedOutput := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"this is a test of the webmcp connection"}`)
+	var prepared xPreparedReply
+	if err := json.Unmarshal(preparedOutput, &prepared); err != nil || prepared.Data.Token == "" || prepared.Data.Text != "this is a test of the webmcp connection" {
+		t.Fatalf("decode X prepared draft: %v: %s", err, preparedOutput)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"changed","confirm":true}`, prepared.Data.Token), "text_mismatch")
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":false}`, prepared.Data.Token, prepared.Data.Text), "confirmation_required")
+	published := invokeAdapterTool(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text))
+	if !strings.Contains(string(published), `"published":true`) || !strings.Contains(string(published), `"duplicate_retry_blocked":true`) {
+		t.Fatalf("X publish result = %s", published)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text), "already_published")
+
+	second := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"draft to clear"}`)
+	if err := json.Unmarshal(second, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("decode second X draft: %v: %s", err, second)
+	}
+	cleared := invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
+	if !strings.Contains(string(cleared), `"cleared":true`) || !strings.Contains(string(cleared), `"published":false`) {
+		t.Fatalf("X clear result = %s", cleared)
+	}
+	testXAdapterPendingMedia(t, fixture)
+	testXAdapterVideoJourney(t, fixture)
+	t.Logf("WEBMCP_X_ADAPTER_PASS chrome=%s one_use_publish=true", fixture.version)
+}
+
+func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
+	t.Helper()
+	var prepared xPreparedReply
+	// File selection can precede its preview while Post is still enabled.
+	pending := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"text only pending guard"}`)
+	if err := json.Unmarshal(pending, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("pending draft=%s error=%v", pending, err)
+	}
+	var pendingState bool
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`(() => {
+      window.deferMediaPreview = true;
+      window.addPendingFile = () => {
+        const input = document.querySelector('input[type="file"]');
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(['pending'], 'pending.mp4', {type:'video/mp4'}));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', {bubbles:true}));
+      };
+      window.addPendingFile();
+      return !document.querySelector('video') && !document.querySelector('[data-testid="tweetButtonInline"]').disabled;
+    })()`, &pendingState)); err != nil || !pendingState {
+		t.Fatalf("pending fixture state=%v error=%v", pendingState, err)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"text only pending guard","confirm":true}`, prepared.Data.Token), "media_changed")
+	var ignored any
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
+	// Inject media synchronously on caption entry, after preparation's initial
+	// media check and before its delayed verification.
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"media during preparation"}`, "existing_media")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
+	t.Helper()
+	var prepared xPreparedReply
+	var ignored any
+	// The fixture accepts File objects but does not contact X. Exercise the
+	// production transfer, hashing, composer, and one-use confirmation code.
+	video := []byte("\x00\x00\x00\x18ftypisomfixture-video")
+	hash := fmt.Sprintf("%x", sha256.Sum256(video))
+	begin := fmt.Sprintf(`{"filename":"clip.mp4","size":%d,"sha256":%q,"account":"@fixture_user"}`, len(video), hash)
+	requireAdapterFailure(t, fixture, "x_begin_video_upload", strings.Replace(begin, "@fixture_user", "@wrong", 1), "account_mismatch")
+	started := invokeAdapterTool(t, fixture, "x_begin_video_upload", begin)
+	var transfer struct {
+		Data struct {
+			Token string `json:"upload_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(started, &transfer); err != nil || transfer.Data.Token == "" {
+		t.Fatalf("begin=%s error=%v", started, err)
+	}
+	token := transfer.Data.Token
+	requireAdapterFailure(t, fixture, "x_begin_video_upload", begin, "upload_in_progress")
+	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token), "incomplete_upload")
+	chunk := fmt.Sprintf(`{"upload_token":%q,"offset":0,"data_base64":%q}`, token, base64.StdEncoding.EncodeToString(video))
+	requireAdapterFailure(t, fixture, "x_append_video_chunk", strings.Replace(chunk, `"offset":0`, `"offset":1`, 1), "chunk_order")
+	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
+	requireAdapterFailure(t, fixture, "x_append_video_chunk", chunk, "chunk_order")
+	videoPrepared := invokeAdapterTool(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token))
+	if err := json.Unmarshal(videoPrepared, &prepared); err != nil || prepared.Data.Token == "" {
+		t.Fatalf("video prepare=%s error=%v", videoPrepared, err)
+	}
+	if !strings.Contains(string(videoPrepared), hash) {
+		t.Fatalf("missing verified hash: %s", videoPrepared)
+	}
+	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"unrelated"}`, "existing_media")
+	requireAdapterFailure(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token), "manual_clear_required")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	publishVideo := fmt.Sprintf(`{"draft_token":%q,"text":"video test","confirm":true}`, prepared.Data.Token)
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "account_mismatch")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "media_changed")
+	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	invokeAdapterTool(t, fixture, "x_publish_post", publishVideo)
+	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "already_published")
+	started = invokeAdapterTool(t, fixture, "x_begin_video_upload", strings.Replace(begin, hash, strings.Repeat("0", 64), 1))
+	if err := json.Unmarshal(started, &transfer); err != nil {
+		t.Fatal(err)
+	}
+	chunk = strings.Replace(chunk, token, transfer.Data.Token, 1)
+	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
+	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"bad hash"}`, transfer.Data.Token), "hash_mismatch")
+	invokeAdapterTool(t, fixture, "x_cancel_video_upload", fmt.Sprintf(`{"upload_token":%q}`, transfer.Data.Token))
+}
+
+// Opt-in real media proof: unlike the synthetic guard fixture, this requires
+// Chrome to decode a caller-supplied MP4 before preparation can finish.
+func TestXAdapterRealMP4Decode(t *testing.T) {
+	path := os.Getenv("WEBMCP_X_VIDEO_FILE")
+	if os.Getenv(xAdapterIntegrationEnv) != "1" || path == "" {
+		t.Skip("set WEBMCP_X_ADAPTER_INTEGRATION=1 and WEBMCP_X_VIDEO_FILE to an MP4")
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 64*1024*1024 {
+		t.Fatal("expected bounded regular video file")
+	}
+	video, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, _ := siteadapter.Source(siteadapter.XName)
+	html := strings.Replace(xAdapterFixtureHTML, "src=\"blob:fixture-video\"", "", 1)
+	html = strings.Replace(html, "</video></div>';", "</video></div>'; const v=document.querySelector('video'); const button=document.querySelector('[data-testid=\"tweetButtonInline\"]');button.disabled=true;v.onloadedmetadata=()=>{button.disabled=false;};v.src=URL.createObjectURL(event.target.files[0]);v.load();", 1)
+	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, func(w http.ResponseWriter, _ *http.Request) {
+		adapterFixtureHeaders(w)
+		_, _ = fmt.Fprint(w, html)
+	})
+	release, err := fixture.target.AcquirePageFocus(fixture.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := release(fixture.ctx); err != nil {
+			t.Error(err)
+		}
+	}()
+	started := invokeAdapterTool(t, fixture, "x_begin_video_upload", fmt.Sprintf(`{"filename":"video.mp4","size":%d,"sha256":"%x","account":"@fixture_user"}`, len(video), sha256.Sum256(video)))
+	var reply struct {
+		Data struct {
+			UploadToken string `json:"upload_token"`
+			DraftToken  string `json:"draft_token"`
+			Processing  bool   `json:"video_processing"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(started, &reply); err != nil || reply.Data.UploadToken == "" {
+		t.Fatalf("begin=%s err=%v", started, err)
+	}
+	token := reply.Data.UploadToken
+	for offset := 0; offset < len(video); offset += 32768 {
+		invokeAdapterTool(t, fixture, "x_append_video_chunk", fmt.Sprintf(`{"upload_token":%q,"offset":%d,"data_base64":%q}`, token, offset, base64.StdEncoding.EncodeToString(video[offset:min(offset+32768, len(video))])))
+	}
+	for {
+		output := invokeAdapterTool(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"Real media decode test; never published"}`, token))
+		reply.Data.DraftToken = ""
+		if err := json.Unmarshal(output, &reply); err != nil {
+			t.Fatal(err)
+		}
+		if reply.Data.DraftToken != "" {
+			t.Logf("WEBMCP_X_REAL_MP4_PASS bytes=%d sha256=%x chrome=%s", len(video), sha256.Sum256(video), fixture.version)
+			return
+		}
+		select {
+		case <-fixture.ctx.Done():
+			t.Fatal("real MP4 never became ready")
+		case <-time.After(time.Second):
+		}
+	}
+}

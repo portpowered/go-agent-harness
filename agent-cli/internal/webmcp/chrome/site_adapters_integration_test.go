@@ -2,8 +2,6 @@ package chrome
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/chromedp/chromedp"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
@@ -382,135 +378,6 @@ func testCapitalOneShoppingAdapterJourney(t *testing.T) {
 	invokeAdapterTool(t, fixture, "capital_one_shopping_reset_scan", `{}`)
 	requireAdapterFailure(t, fixture, "capital_one_shopping_list_matches", fmt.Sprintf(`{"scan_generation":%d}`, scan.Data.Generation), "stale_result")
 	t.Logf("WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_PASS chrome=%s pages=%d offers=%d", fixture.version, scan.Data.PagesScanned, scan.Data.OffersObserved)
-}
-
-func testXAdapterJourney(t *testing.T) {
-	source, _ := siteadapter.Source(siteadapter.XName)
-	handler := func(writer http.ResponseWriter, _ *http.Request) {
-		adapterFixtureHeaders(writer)
-		_, _ = fmt.Fprint(writer, xAdapterFixtureHTML)
-	}
-	fixture := newAdapterFixture(t, "x", "https://x.com/home", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
-
-	contextOutput := invokeAdapterTool(t, fixture, "x_get_context", `{}`)
-	if !strings.Contains(string(contextOutput), `"signed_in":true`) || !strings.Contains(string(contextOutput), `"account_handle":"@fixture_user"`) {
-		t.Fatalf("X context = %s", contextOutput)
-	}
-	preparedOutput := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"this is a test of the webmcp connection"}`)
-	var prepared struct {
-		Data struct {
-			Token string `json:"draft_token"`
-			Text  string `json:"text"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(preparedOutput, &prepared); err != nil || prepared.Data.Token == "" || prepared.Data.Text != "this is a test of the webmcp connection" {
-		t.Fatalf("decode X prepared draft: %v: %s", err, preparedOutput)
-	}
-	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"changed","confirm":true}`, prepared.Data.Token), "text_mismatch")
-	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":false}`, prepared.Data.Token, prepared.Data.Text), "confirmation_required")
-	published := invokeAdapterTool(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text))
-	if !strings.Contains(string(published), `"published":true`) || !strings.Contains(string(published), `"duplicate_retry_blocked":true`) {
-		t.Fatalf("X publish result = %s", published)
-	}
-	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":%q,"confirm":true}`, prepared.Data.Token, prepared.Data.Text), "already_published")
-
-	second := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"draft to clear"}`)
-	if err := json.Unmarshal(second, &prepared); err != nil || prepared.Data.Token == "" {
-		t.Fatalf("decode second X draft: %v: %s", err, second)
-	}
-	cleared := invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
-	if !strings.Contains(string(cleared), `"cleared":true`) || !strings.Contains(string(cleared), `"published":false`) {
-		t.Fatalf("X clear result = %s", cleared)
-	}
-	// File selection can precede its preview while Post is still enabled.
-	pending := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"text only pending guard"}`)
-	if err := json.Unmarshal(pending, &prepared); err != nil || prepared.Data.Token == "" {
-		t.Fatalf("pending draft=%s error=%v", pending, err)
-	}
-	var pendingState bool
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`(() => {
-      window.deferMediaPreview = true;
-      window.addPendingFile = () => {
-        const input = document.querySelector('input[type="file"]');
-        const transfer = new DataTransfer();
-        transfer.items.add(new File(['pending'], 'pending.mp4', {type:'video/mp4'}));
-        input.files = transfer.files;
-        input.dispatchEvent(new Event('change', {bubbles:true}));
-      };
-      window.addPendingFile();
-      return !document.querySelector('video') && !document.querySelector('[data-testid="tweetButtonInline"]').disabled;
-    })()`, &pendingState)); err != nil || !pendingState {
-		t.Fatalf("pending fixture state=%v error=%v", pendingState, err)
-	}
-	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"text only pending guard","confirm":true}`, prepared.Data.Token), "media_changed")
-	var ignored any
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
-	// Inject media synchronously on caption entry, after preparation's initial
-	// media check and before its delayed verification.
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"media during preparation"}`, "existing_media")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	// The fixture accepts File objects but does not contact X. Exercise the
-	// production transfer, hashing, composer, and one-use confirmation code.
-	video := []byte("\x00\x00\x00\x18ftypisomfixture-video")
-	hash := fmt.Sprintf("%x", sha256.Sum256(video))
-	begin := fmt.Sprintf(`{"filename":"clip.mp4","size":%d,"sha256":%q,"account":"@fixture_user"}`, len(video), hash)
-	requireAdapterFailure(t, fixture, "x_begin_video_upload", strings.Replace(begin, "@fixture_user", "@wrong", 1), "account_mismatch")
-	started := invokeAdapterTool(t, fixture, "x_begin_video_upload", begin)
-	var transfer struct {
-		Data struct {
-			Token string `json:"upload_token"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(started, &transfer); err != nil || transfer.Data.Token == "" {
-		t.Fatalf("begin=%s error=%v", started, err)
-	}
-	token := transfer.Data.Token
-	requireAdapterFailure(t, fixture, "x_begin_video_upload", begin, "upload_in_progress")
-	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token), "incomplete_upload")
-	chunk := fmt.Sprintf(`{"upload_token":%q,"offset":0,"data_base64":%q}`, token, base64.StdEncoding.EncodeToString(video))
-	requireAdapterFailure(t, fixture, "x_append_video_chunk", strings.Replace(chunk, `"offset":0`, `"offset":1`, 1), "chunk_order")
-	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
-	requireAdapterFailure(t, fixture, "x_append_video_chunk", chunk, "chunk_order")
-	videoPrepared := invokeAdapterTool(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"video test"}`, token))
-	if err := json.Unmarshal(videoPrepared, &prepared); err != nil || prepared.Data.Token == "" {
-		t.Fatalf("video prepare=%s error=%v", videoPrepared, err)
-	}
-	if !strings.Contains(string(videoPrepared), hash) {
-		t.Fatalf("missing verified hash: %s", videoPrepared)
-	}
-	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"unrelated"}`, "existing_media")
-	requireAdapterFailure(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token), "manual_clear_required")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	publishVideo := fmt.Sprintf(`{"draft_token":%q,"text":"video test","confirm":true}`, prepared.Data.Token)
-	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "account_mismatch")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "media_changed")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
-		t.Fatal(err)
-	}
-	invokeAdapterTool(t, fixture, "x_publish_post", publishVideo)
-	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "already_published")
-	started = invokeAdapterTool(t, fixture, "x_begin_video_upload", strings.Replace(begin, hash, strings.Repeat("0", 64), 1))
-	if err := json.Unmarshal(started, &transfer); err != nil {
-		t.Fatal(err)
-	}
-	chunk = strings.Replace(chunk, token, transfer.Data.Token, 1)
-	invokeAdapterTool(t, fixture, "x_append_video_chunk", chunk)
-	requireAdapterFailure(t, fixture, "x_prepare_video_post", fmt.Sprintf(`{"upload_token":%q,"text":"bad hash"}`, transfer.Data.Token), "hash_mismatch")
-	invokeAdapterTool(t, fixture, "x_cancel_video_upload", fmt.Sprintf(`{"upload_token":%q}`, transfer.Data.Token))
-	t.Logf("WEBMCP_X_ADAPTER_PASS chrome=%s one_use_publish=true", fixture.version)
 }
 
 const capitalOneShoppingAdapterFixtureHTML = `<!doctype html>

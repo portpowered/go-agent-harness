@@ -218,8 +218,7 @@ func (c *WebMCPOperationsCommand) AddCommands(parent *cobra.Command) {
 		c.cancelCommand(),
 		c.watchCommand(),
 	}
-	// Direct operations render their own stable result envelope or human
-	// diagnostic. Cobra must not render the returned classified error again,
+	// Direct operations render their own output. Cobra must not render errors again,
 	// otherwise human output is duplicated and JSON mode is contaminated with
 	// a second, non-JSON stderr line.
 	for _, command := range commands {

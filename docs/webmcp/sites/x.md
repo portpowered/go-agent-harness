@@ -19,8 +19,9 @@ Text posts are bounded to 280 characters. The experimental video path stages
 one MP4 of at most 64 MiB (a harness limit, not X's account limit). It does not
 create threads, quote posts, reply, repost, follow accounts, or send direct
 messages. See [selfiepostx acceptance status](../../selfiepostx/README.md):
-fixture tests and live X video preparation/preview pass, but actual publishing
-has not yet passed acceptance with an approved clip.
+fixture tests and live publishing of two user-authorized AI-disclosed videos pass,
+including playback verification in fresh permalink tabs. Review limitations and
+the exact artifacts are recorded in that log.
 
 ## Tools
 
@@ -92,6 +93,13 @@ expected account), `x_append_video_chunk` (token, byte offset, base64),
 Transfers expire after ten minutes. Repeating prepare while `video_processing`
 is true checks the same attachment; it does not upload again. Stale, reordered,
 oversized, wrong-hash, changed-account, and changed-draft inputs fail closed.
+
+Prefer a single-line caption: X can expand paragraph newlines, in which case the
+exact-text guard refuses preparation rather than publishing changed text. After a
+page-generation error, inspect state before retrying; an empty staged transfer may
+need cancellation by its exact token. Cancellation releases staged bytes, not text
+already entered in the composer. Never clear an unrelated draft or retry publishing
+merely because preparation/upload previously succeeded.
 
 The transfer receipt on stderr allows inspection/cancellation after an error.
 Cancellation frees transfer state but preserves already attached media. Video

@@ -76,6 +76,27 @@ synthetic performance, not a recording of the reference person.
 No daily automation was enabled. Generation stopped after these two verified posts.
 The earlier sections below are historical snapshots, superseded by this outcome.
 
+### Integration and CI follow-up
+
+Feature commit 099a1145 was integrated with upstream 00c14758 and pushed as PR399.
+The initial PR run passed unit, race, real-Chrome, macOS audio and Windows checks,
+but identified new lint/size debt. The command was split into bounded preparation,
+transfer and polling methods; tests were split by concern and consolidated into
+existing files to respect package file-count limits. File-close/type-assertion
+errors are handled; cleanup uses WithoutCancel to retain context lineage while
+remaining independent of operation cancellation. No baseline or policy was relaxed.
+
+Post-refactor local checks pass: the three affected packages' architecture/size
+lane (249 files, 4086 functions), all focused X/focus/CLI tests, actual final MP4
+decode, core WebMCP/adapter tests, build and vet. The scoped gate was run with
+the checked-in manifest/baseline but without historical comparison. Historical
+comparison separately encounters the pre-existing contradictory source-commit
+check: upstream run 34179765022 already failed because baseline source ddebb8f4
+does not equal merge base 00c14758; changing that source would also violate its
+unchanged-source rule. This unrelated gate is not bypassed or modified here.
+PR: https://github.com/portpowered/go-agent-harness/pull/399. Merge is conditional
+on an acceptable CI result; do not infer that pushing the feature merged main.
+
 
 ## Latest update: live video preparation fixed
 
