@@ -11,7 +11,7 @@ Project: admitted `audio-runtime`; factory session `~default`; branch `codex/aud
 - `prd.json.branchName`: `codex/audio-runtime-c08-recorded-bundle-roundtrip`; exact worktree branch matches.
 - current fetched `origin/main` and pre-change `HEAD`: `00c147585f31808c7bdbbf6051cc9df423dbdf37`.
 - required startup pin `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline pin `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and `origin/main` are ancestors of the isolated worktree. `git fetch origin main` completed before implementation.
-- rollback checkpoint: preserve `00c147585f31808c7bdbbf6051cc9df423dbdf37`; no merge/reset/host-checkout operation was used.
+- implementation checkpoint: `71986c13db2dedfdc7b794111b751cb5bf354554` (`fix: restore recorded audio bundle replay`). Rollback checkpoint remains `00c147585f31808c7bdbbf6051cc9df423dbdf37`; no merge/reset/host-checkout operation was used.
 
 ## Baseline reproduction
 
@@ -33,7 +33,7 @@ The preserved baseline executable SHA256 is `c1a03f25b11a941c4df0a076bddc7f5cabc
 
 ## Candidate public round trip
 
-Final candidate source was built from this worktree with:
+Final candidate source was built from this worktree at implementation checkpoint `71986c13db2dedfdc7b794111b751cb5bf354554` with:
 
 ```text
 cwd: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c08-recorded-bundle-roundtrip/agent-cli
@@ -85,6 +85,6 @@ Actual exit `0`; raw output: `strict replay continuationReplay verified: 18 wire
 - `rtk git diff --check`: clean.
 - Controls: missing `timeline.jsonl` remains rejected with `replay bundle is incomplete`; live trace unit controls retain staged evidence and do not attach a trace when provider capture is missing or corrupt.
 - Candidate-only `rtk make architecture-size-check ARCHITECTURE_BASE=` passed: `181 package(s), 1853 file(s), 26924 function(s) checked`. The configured default comparison reports only the inherited mainline `baseline-history-source` mismatch (`ddebb8f...` versus merge base `00c147...`); no new candidate architecture/size issue remains and the out-of-lease baseline file was not changed.
-- Final candidate `go build` and public replay round trip were rerun after the architecture-compliance refactors; no CI was polled or claimed green.
+- Final candidate `go build` and public replay round trip were rerun after the architecture-compliance and lint repairs; no CI was polled or claimed green.
 
-No CI was polled or claimed green. The next checkpoint is final formatting/diff review, commit, push, PR update, and script-CI handoff on this same task.
+No CI was polled or claimed green. The next checkpoint is push `71986c13db2dedfdc7b794111b751cb5bf354554`, open/update the same task PR against `main`, verify submission to script CI without polling terminal CI, and retain the task for any exact CI rejection.
