@@ -108,3 +108,10 @@ terminal errors. Normal media EOF and cancellation caused by final teardown do
 not manufacture a new failure. Sol independently reviewed the identity join,
 interrupt reset, coverage union and shutdown behavior; approval is conditional on
 exact-head hosted CI.
+
+Final frozen semantic candidate: the cumulative runner passed COUNT=1 in all
+three modes (normal, coverage, race), including the CLI interruption scenario
+and all 16 historical integration scenarios with their stress subtests. Affected
+live-session and recording packages passed three more race repetitions. Full
+pinned lint passed; formatting, architecture/size and Wire checks passed. These
+local results supplement, rather than replace, exact-head hosted CI.
