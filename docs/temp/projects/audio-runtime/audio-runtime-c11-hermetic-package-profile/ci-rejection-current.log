@@ -1,0 +1,376 @@
+CI (hermetic)	Set up job	﻿2026-09-08T19:37:58.6699211Z Current runner version: '2.337.0'
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6719673Z ##[group]Runner Image Provisioner
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6720453Z Hosted Compute Agent
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6720922Z Version: 20260828.587
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6721499Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6722106Z Build Date: 2026-08-28T16:44:25Z
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6723033Z Worker ID: {5a247328-c009-4585-9723-6d1aa4ce3b99}
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6723640Z Azure Region: westus3
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6724115Z ##[endgroup]
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6725332Z ##[group]Operating System
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6725852Z Ubuntu
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6726311Z 24.04.5
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6726754Z LTS
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6727187Z ##[endgroup]
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6727658Z ##[group]Runner Image
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6728157Z Image: ubuntu-24.04
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6728632Z Version: 20260907.300.1
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6729522Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6730949Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6731724Z ##[endgroup]
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6733005Z ##[group]GITHUB_TOKEN Permissions
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6734837Z Contents: read
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6735316Z Metadata: read
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6735853Z ##[endgroup]
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6737493Z Secret source: Actions
+CI (hermetic)	Set up job	2026-09-08T19:37:58.6738338Z Prepare workflow directory
+CI (hermetic)	Set up job	2026-09-08T19:37:58.7032343Z Prepare all required actions
+CI (hermetic)	Set up job	2026-09-08T19:37:58.7075581Z Getting action download info
+CI (hermetic)	Set up job	2026-09-08T19:37:59.0048081Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+CI (hermetic)	Set up job	2026-09-08T19:37:59.3850302Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+CI (hermetic)	Set up job	2026-09-08T19:38:00.2314823Z Complete job name: CI (hermetic)
+CI (hermetic)	Check out repository	﻿2026-09-08T19:38:00.2940821Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2948664Z ##[group]Run actions/checkout@v4
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2949447Z with:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2950018Z   repository: portpowered/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2954052Z   token: ***
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2954588Z   ssh-strict: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2955144Z   ssh-user: git
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2955670Z   persist-credentials: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2956240Z   clean: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2956958Z   sparse-checkout-cone-mode: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2957530Z   fetch-depth: 1
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2958004Z   fetch-tags: false
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2958551Z   show-progress: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2959079Z   lfs: false
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2959577Z   submodules: false
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2960235Z   set-safe-directory: true
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2960800Z   allow-unsafe-pr-checkout: false
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.2961550Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.3877838Z Syncing repository: portpowered/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.3880640Z ##[group]Getting Git version info
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.3881864Z Working directory is '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.3884103Z [command]/usr/bin/git version
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4114072Z git version 2.55.0
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4132664Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4144873Z Temporarily overriding HOME='/home/runner/work/_temp/3425ef12-6131-4a9e-bd4b-7ff809c92000' before making global git config changes
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4147425Z Adding repository directory to the temporary git global config as a safe directory
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4149716Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4197309Z Deleting the contents of '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4213535Z ##[group]Initializing the repository
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4215958Z [command]/usr/bin/git init /home/runner/work/go-agent-harness/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4491684Z hint: Using 'master' as the name for the initial branch. This default branch name
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4494360Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4496022Z hint: to use in all of your new repositories, which will suppress this warning,
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4497390Z hint: call:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4498166Z hint:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4499156Z hint: 	git config --global init.defaultBranch <name>
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4500622Z hint:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4501883Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4503888Z hint: 'development'. The just-created branch can be renamed via this command:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4505293Z hint:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4506001Z hint: 	git branch -m <name>
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4506700Z hint:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4507804Z hint: Disable this message with "git config set advice.defaultBranchName false"
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4510174Z Initialized empty Git repository in /home/runner/work/go-agent-harness/go-agent-harness/.git/
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4513876Z [command]/usr/bin/git remote add origin https://github.com/portpowered/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4546924Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4548490Z ##[group]Disabling automatic garbage collection
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4557978Z [command]/usr/bin/git config --local gc.auto 0
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4581172Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4582822Z ##[group]Setting up auth
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4588168Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.4620591Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5302489Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5326808Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5493411Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5550109Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5723326Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5753174Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5754380Z ##[group]Fetching the repository
+CI (hermetic)	Check out repository	2026-09-08T19:38:00.5761873Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +19dd498b9101aa2b0c5a464fdde1517241c247b2:refs/remotes/pull/403/merge
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4420573Z From https://github.com/portpowered/go-agent-harness
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4422636Z  * [new ref]         19dd498b9101aa2b0c5a464fdde1517241c247b2 -> pull/403/merge
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4434338Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4435738Z ##[group]Determining the checkout info
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4436940Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4437665Z [command]/usr/bin/git sparse-checkout disable
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4479909Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4540621Z ##[group]Checking out the ref
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.4545110Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/403/merge
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6549817Z Note: switching to 'refs/remotes/pull/403/merge'.
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6550628Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6550919Z You are in 'detached HEAD' state. You can look around, make experimental
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6551682Z changes and commit them, and you can discard any commits you make in this
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6552587Z state without impacting any branches by switching back to a branch.
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6556898Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6557367Z If you want to create a new branch to retain commits you create, you may
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6557967Z do so (now or later) by using -c with the switch command. Example:
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6558299Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6558471Z   git switch -c <new-branch-name>
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6558778Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6558991Z Or undo this operation with:
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6559213Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6559391Z   git switch -
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6559603Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6559912Z Turn off this advice by setting config variable advice.detachedHead to false
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6560289Z 
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6560661Z HEAD is now at 19dd498 Merge bc7609b5fcad50f65eff89f0ce91f3f08edabeb3 into 668f2d8816beaa078d058b3f0bcc59600b71a023
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6724756Z ##[endgroup]
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6765095Z [command]/usr/bin/git log -1 --format=%H
+CI (hermetic)	Check out repository	2026-09-08T19:38:02.6785179Z 19dd498b9101aa2b0c5a464fdde1517241c247b2
+CI (hermetic)	Set up Go	﻿2026-09-08T19:38:02.7020955Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7023232Z ##[group]Run actions/setup-go@v5
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7023690Z with:
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7024088Z   go-version: 1.26.7
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7024448Z   cache: true
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7025304Z   cache-dependency-path: go.work.sum
+CI (hermetic)	Set up Go	agent-cli/go.sum
+CI (hermetic)	Set up Go	go-agent-loop/go.sum
+CI (hermetic)	Set up Go	go-llm-gateway/go.sum
+CI (hermetic)	Set up Go	go-audio/go.sum
+CI (hermetic)	Set up Go	go-device-gateway/go.sum
+CI (hermetic)	Set up Go	go-agent-runtime/go.sum
+CI (hermetic)	Set up Go	tools/architecturegate/go.sum
+CI (hermetic)	Set up Go	tests/embedding/go.sum
+CI (hermetic)	Set up Go	
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7026278Z   check-latest: false
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7028904Z   token: ***
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.7029239Z ##[endgroup]
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.8257933Z Setup go version spec 1.26.7
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.8266407Z Attempting to download 1.26.7...
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.8405465Z (node:2022) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+CI (hermetic)	Set up Go	2026-09-08T19:38:02.8406583Z (Use `node --trace-deprecation ...` to show where the warning was created)
+CI (hermetic)	Set up Go	2026-09-08T19:38:03.7751583Z matching 1.26.7...
+CI (hermetic)	Set up Go	2026-09-08T19:38:03.7782928Z Acquiring 1.26.7 from https://github.com/actions/go-versions/releases/download/1.26.7-32325178046/go-1.26.7-linux-x64.tar.gz
+CI (hermetic)	Set up Go	2026-09-08T19:38:04.4258923Z Extracting Go...
+CI (hermetic)	Set up Go	2026-09-08T19:38:04.4348532Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/72d00571-c473-497a-9981-e120f1a6a436 -f /home/runner/work/_temp/0020e6ee-1408-4315-b42d-d69c983da29b
+CI (hermetic)	Set up Go	2026-09-08T19:38:05.9626435Z Successfully extracted go to /home/runner/work/_temp/72d00571-c473-497a-9981-e120f1a6a436
+CI (hermetic)	Set up Go	2026-09-08T19:38:05.9627576Z Adding to the cache ...
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2195296Z Successfully cached go to /opt/hostedtoolcache/go/1.26.7/x64
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2197373Z Added go to the path
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2199765Z Successfully set up Go version 1.26.7
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2391407Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOMODCACHE
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2419995Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOCACHE
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2450667Z /home/runner/go/pkg/mod
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.2466789Z /home/runner/.cache/go-build
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.5483571Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (hermetic)	Set up Go	2026-09-08T19:38:10.5589661Z (node:2022) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+CI (hermetic)	Set up Go	2026-09-08T19:38:11.7870071Z Received 25165824 of 193794498 (13.0%), 24.0 MBs/sec
+CI (hermetic)	Set up Go	2026-09-08T19:38:12.7894180Z Received 181211586 of 193794498 (93.5%), 86.3 MBs/sec
+CI (hermetic)	Set up Go	2026-09-08T19:38:12.8926103Z Received 193794498 of 193794498 (100.0%), 87.8 MBs/sec
+CI (hermetic)	Set up Go	2026-09-08T19:38:12.8927362Z Cache Size: ~185 MB (193794498 B)
+CI (hermetic)	Set up Go	2026-09-08T19:38:12.8957864Z [command]/usr/bin/tar -xf /home/runner/work/_temp/55451e0a-8e7d-4ba1-9b8b-3988486f870d/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.0568502Z Cache restored successfully
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.0640329Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.0664003Z go version go1.26.7 linux/amd64
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.0664302Z 
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.0664651Z ##[group]go env
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1382115Z AR='ar'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1382767Z CC='gcc'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1383520Z CGO_CFLAGS='-O2 -g'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1383924Z CGO_CPPFLAGS=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1384231Z CGO_CXXFLAGS='-O2 -g'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1384652Z CGO_ENABLED='1'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1384966Z CGO_FFLAGS='-O2 -g'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1385319Z CGO_LDFLAGS='-O2 -g'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1385626Z CXX='g++'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1386250Z GCCGO='gccgo'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1386566Z GO111MODULE=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1386868Z GOAMD64='v1'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1387206Z GOARCH='amd64'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1387536Z GOAUTH='netrc'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1387828Z GOBIN=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1388188Z GOCACHE='/home/runner/.cache/go-build'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1388564Z GOCACHEPROG=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1388899Z GODEBUG=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1389246Z GOENV='/home/runner/.config/go/env'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1389599Z GOEXE=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1389897Z GOEXPERIMENT=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1390199Z GOFIPS140='off'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1390561Z GOFLAGS=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1391295Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build1502030074=/tmp/go-build -gno-record-gcc-switches'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1392017Z GOHOSTARCH='amd64'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1392664Z GOHOSTOS='linux'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1393021Z GOINSECURE=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1393371Z GOMOD='/dev/null'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1393723Z GOMODCACHE='/home/runner/go/pkg/mod'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1394172Z GONOPROXY=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1394576Z GONOSUMDB=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1394874Z GOOS='linux'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1395228Z GOPATH='/home/runner/go'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1395592Z GOPRIVATE=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1395971Z GOPROXY='https://proxy.golang.org,direct'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1396481Z GOROOT='/opt/hostedtoolcache/go/1.26.7/x64'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1396899Z GOSUMDB='sum.golang.org'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1397300Z GOTELEMETRY='local'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1397664Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1398076Z GOTMPDIR=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1398376Z GOTOOLCHAIN='auto'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1398854Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.7/x64/pkg/tool/linux_amd64'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1399306Z GOVCS=''
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1399604Z GOVERSION='go1.26.7'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1400117Z GOWORK='/home/runner/work/go-agent-harness/go-agent-harness/go.work'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1400661Z PKG_CONFIG='pkg-config'
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1400851Z 
+CI (hermetic)	Set up Go	2026-09-08T19:38:14.1401318Z ##[endgroup]
+CI (hermetic)	Run hermetic test pipeline	﻿2026-09-08T19:38:14.1551304Z ##[group]Run make test-hermetic
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:14.1551808Z [36;1mmake test-hermetic[0m
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:14.1580089Z shell: /usr/bin/bash -e {0}
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:14.1580451Z ##[endgroup]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:14.2168230Z ==> test-hermetic agent-cli (CGO_ENABLED=0, tags=nomicrophone, target-wide timeout for ./test/integration: 480s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:46.3547001Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/agent	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:46.3548361Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/audio-device-server	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.2476683Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/room-latency-report	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.2565385Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/session-timing-report	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.3067830Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout	0.048s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.3074798Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.3076035Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/yui	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:47.9863411Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/acceptance	0.049s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1194498Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/config	0.129s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1196035Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/execctx	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1197378Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/flags	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1198448Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/input	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1273535Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/logger	0.051s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:48.1289282Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/output	0.005s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:51.4771765Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe	1.414s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:51.4793589Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:51.4812910Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet	0.014s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.6834366Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	3.602s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.6893343Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services	0.049s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.6923163Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.6975722Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.7043478Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:38:53.7093260Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7063450Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	62.657s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7064413Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7065164Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices	0.744s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7065863Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay	0.013s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7066563Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools	0.019s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7067218Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7069666Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7070327Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7071271Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7072741Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7073694Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7074690Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7075569Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7076615Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/internal/runtimeadapter	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7077710Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7078636Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7079549Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7080540Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/sight	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7081282Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/skills	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7082078Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7083064Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout	8.578s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7083917Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming	0.005s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7084634Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/tools	0.013s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7085210Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	14.731s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7085848Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events	10.038s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7086530Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost	0.030s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7087175Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp	2.927s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7087785Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome	4.151s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7088376Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7088988Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7089580Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit	0.013s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7090152Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools	2.213s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7090711Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/wire	0.092s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7091258Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/workspace	0.005s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7091816Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:40:09.7092608Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional/parity	0.015s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0416201Z Error: replay interaction fixture "/tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError1466742644/001/invalid.interaction.json": /tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError1466742644/001/invalid.interaction.json: events[0].textDelta: is required for text.delta events
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0417359Z Usage:
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0417640Z   yui interaction replay <fixture-path> [flags]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0417850Z 
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0417938Z Examples:
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0418368Z   yui interaction replay ./fixtures/example.interaction.json
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0418604Z 
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0418689Z Flags:
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0418920Z   -h, --help   help for replay
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0419100Z 
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0419184Z Global Flags:
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0419727Z       --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0420628Z   -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0421347Z       --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0421910Z   -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0423737Z       --workdir string           Filesystem-tool workdir (default: the process current directory)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0424178Z 
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0425311Z Error: replay session capture : run session loop: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0426674Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0427799Z session transport: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0428788Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0430194Z replay session capture : replay session capture /tmp/TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay2287115538/001/vision-describe.session.json: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0431518Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0432698Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0433694Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0434588Z replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0435460Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0436473Z Error: replay session capture /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError575350855/001/missing.json: read session capture file: open /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError575350855/001/missing.json: no such file or directory
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0437582Z Error: --record path "capture.txt" must end with .json
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0438200Z Error: openai realtime api key is missing (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure the provider in config.yaml)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0439091Z Error: grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in config.yaml)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0440152Z Error: OpenAI model "gpt-4o" is not realtime-capable for agent session; supported realtime models: gpt-realtime, gpt-realtime-2.1-mini, gpt-realtime-2.1
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0441032Z Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0442161Z session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0443303Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0444092Z replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0444890Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0445416Z scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2 (status=transport; detail=provider_closed)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0446221Z capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0446933Z Error: invalid OpenAI Realtime voice "not-a-voice"; supported voices: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0447767Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0448975Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0449879Z Tools: none
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0450330Z [session terminal: classification=terminal_failure terminal_reason=terminal_failure terminal_provenance=session output_state=none]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0450904Z live session terminated: session error: Realtime fixture rejected request
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0451288Z Error: session error: Realtime fixture rejected request
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0451834Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0453082Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0453868Z Tools: none
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0453977Z 
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0454088Z [session closed: provider_closed]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0454559Z [session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=none]
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0455618Z live session terminated: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0456404Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0457083Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0457990Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0458828Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0459710Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0460592Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0461384Z replay mismatch
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0461710Z --- FAIL: TestSessionCLI_DuplexPCMMultiTurnSchedule (2.01s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0464776Z     session_duplex_overlap_test.go:56: positive v8 multi-turn duplex proof failed: multi-turn harness A terminal facts are not clean or complete: {Clean:true Turns:3 FinalTick:10 FinalTimestamp:2026-08-26 12:00:00.1 +0000 UTC InputEOF:false OutputFrame:true Error:}
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0466010Z --- FAIL: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls (2.28s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0466746Z     --- FAIL: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit (2.01s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0468912Z         session_duplex_overlap_test.go:111: multi-turn negative-control baseline failed before mutation: multi-turn harness A CLI failed after 2.001822248s: replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls2551622660/001/harness-a-multiturn.session.json: run session loop: session cancelled while awaiting model response after end-of-turn: context deadline exceeded
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0470426Z             context deadline exceeded
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0470987Z             --audio-out "-": audio write "-" (raw PCM16): context canceled
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0473683Z             replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls2551622660/001/harness-a-multiturn.session.json: context deadline exceeded; harness A err=replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls2551622660/001/harness-a-multiturn.session.json: run session loop: session cancelled while awaiting model response after end-of-turn: context deadline exceeded
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0475268Z             context deadline exceeded
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0475795Z             --audio-out "-": audio write "-" (raw PCM16): context canceled
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0484548Z             replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls2551622660/001/harness-a-multiturn.session.json: context deadline exceeded elapsed=2.001822248s runtime=[audio_output@7/t0/c0 audio_input@7/t0/c0 input_commit@8/t0/c1 response_create@8/t0/c0 audio_output@8/t0/c0 turn_completed@8/t1/c0 audio_input@8/t0/c0 input_commit@8/t0/c2 response_create@8/t0/c0 audio_output@9/t0/c0 turn_completed@9/t2/c0 audio_input@10/t0/c0 input_commit@10/t0/c3 response_create@10/t0/c0 terminal@10/t2/c0] stream=[{SESSION.OPEN } {TEXT.DELTA A transcript turn 1} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA A transcript turn 2} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA A transcript turn 3}] terminal={Clean:false Turns:2 FinalTick:10 FinalTimestamp:2026-08-26 12:00:00.1 +0000 UTC InputEOF:true OutputFrame:true Error:}; harness B err=<nil> elapsed=258.393671ms runtime=[audio_output@7/t0/c0 audio_input@7/t0/c0 input_commit@8/t0/c1 response_create@8/t0/c0 audio_output@8/t0/c0 audio_input@8/t0/c0 turn_completed@8/t1/c0 audio_input@9/t0/c0 input_commit@10/t0/c2 response_create@10/t0/c0 input_commit@10/t0/c3 response_create@10/t0/c0 audio_output@10/t0/c0 turn_completed@10/t2/c0 turn_completed@10/t3/c0 terminal@10/t3/c0] stream=[{SESSION.OPEN } {TEXT.DELTA B transcript turn 1} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA B transcript turn 2} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA B transcript turn 3} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {SESSION.CLOSE }] terminal={Clean:true Turns:3 FinalTick:10 FinalTimestamp:2026-08-26 12:00:00.1 +0000 UTC InputEOF:false OutputFrame:true Error:}; crossings=6/[1:A-to-B/A-turn-1@7 2:B-to-A/B-turn-1@7 3:A-to-B/A-turn-2@8 4:B-to-A/B-turn-2@8 5:A-to-B/A-turn-3@9 6:B-to-A/B-turn-3@10] final_tick=10
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0489276Z FAIL
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0489689Z FAIL	github.com/portpowered/go-agent-harness/agent-cli/test/integration	241.661s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0490323Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent	0.031s
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.0490816Z FAIL
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.1369270Z agent-cli test command exited with status 1: command=go "test" "./..." "-tags=nomicrophone" "-timeout" "480s" pid=2130
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.1371972Z exit status 1
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.1382869Z make: *** [Makefile:456: test-hermetic] Error 1
+CI (hermetic)	Run hermetic test pipeline	2026-09-08T19:43:24.1399152Z ##[error]Process completed with exit code 2.
+CI (hermetic)	Post Check out repository	﻿2026-09-08T19:43:24.1521929Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.1523240Z Post job cleanup.
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2288649Z [command]/usr/bin/git version
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2332377Z git version 2.55.0
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2371502Z Temporarily overriding HOME='/home/runner/work/_temp/7066a79b-8779-48e9-89de-13ef5ff4f77d' before making global git config changes
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2372836Z Adding repository directory to the temporary git global config as a safe directory
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2377487Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2410383Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2437934Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2636461Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2660669Z http.https://github.com/.extraheader
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2669218Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2694427Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2904511Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+CI (hermetic)	Post Check out repository	2026-09-08T19:43:24.2930272Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+CI (hermetic)	Complete job	﻿2026-09-08T19:43:24.3285412Z Cleaning up orphan processes
+CI (hermetic)	Complete job	2026-09-08T19:43:24.3506892Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-go@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

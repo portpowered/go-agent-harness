@@ -3,8 +3,8 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
-  "current_branch_head_at_handoff": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+  "candidate_head": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
+  "current_branch_head_at_handoff": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
   "implementation_checkpoint": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
   "base_main": "668f2d8816beaa078d058b3f0bcc59600b71a023",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -30,21 +30,34 @@
     "next_gate": "SCRIPT_CI_NOT_POLLED"
   },
   "latest_ci_rejection": {
-    "path": "ci-rejection-hermetic.json",
-    "run_id": 34231535549,
-    "job_id": 102078631796,
+    "path": "ci-rejection-current.json",
+    "log_path": "ci-rejection-current.log",
+    "run_id": 34270089010,
+    "job_id": 102209193353,
     "check": "CI (hermetic)",
-    "head_sha": "0f8529a3c56f52e459d4d271c3a637c4fbab08ba",
+    "head_sha": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
     "failure_step": "Run hermetic test pipeline",
-    "failure": "agent-cli/test/integration TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst timed out waiting for the final PCM marker",
-    "owned_path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
-    "owner": "audio-runtime-c12-interruption-replay-progress",
+    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnSchedule and TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit failed after the positive harness-A two-second response deadline",
+    "owned_path": "agent-cli/test/integration/session_duplex_overlap_test.go",
+    "owner": "out-of-scope merged runtime test; no C11 implementation path is authorized",
     "go_tests_started": true,
-    "ci_claim": "NOT_GREEN_NOT_POLLED"
+    "ci_claim": "NOT_GREEN; full log preserved; current exact tests rechecked locally",
+    "metadata_sha256": "7c04cd1014413642b1f4ef28298cfdbc73afa7d33176783e8c98803f765a42a5",
+    "log_sha256": "75599affc7fdada1598ea95c9f419d82c182167b61d3ec46aeb3dde028d63f42",
+    "local_rechecks": [
+      {
+        "command": "go run ./cmd/testtimeout --timeout 60s -- go test ./test/integration -tags=nomicrophone -count=1 -timeout 60s -run '^TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations$'",
+        "status": "PASS"
+      },
+      {
+        "command": "go run ./cmd/testtimeout --timeout 60s -- go test ./test/integration -tags=nomicrophone -count=1 -timeout 60s -run '^TestSessionCLI_DuplexPCMMultiTurn(Schedule|RejectsLaterTurnCommitControls)$'",
+        "status": "PASS"
+      }
+    ]
   },
   "canonical_board_snapshot": {
-    "path": "canonical-board-f2a5be3.json",
-    "sha256": "330d72d6d5d98f65f31f20d91a47d238fe0c94cfd081e0da14a6f10eb01d95c6"
+    "path": "canonical-board-bc7609b.json",
+    "sha256": "d4471d07631548e19dd6d9e186742217c8a9b19ad713c6fc39eaf8afd51e213c"
   },
   "fresh_timing": {
     "status": "BLOCKED",
@@ -70,8 +83,8 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-f2a5be3/controls.json",
-    "sha256": "602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f",
+    "path": "ctrl-bc7609b/controls.json",
+    "sha256": "b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2",
     "status": "PASS",
     "cases": 42,
     "result_groups": 22,
@@ -86,9 +99,9 @@
     }
   },
   "fresh_focused_recheck": {
-    "checked_at_utc": "2026-09-08T19:26:45Z",
-    "tested_head": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
-    "controls_report_sha256": "602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f",
+    "checked_at_utc": "2026-09-08T19:51:48.998Z",
+    "tested_head": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
+    "controls_report_sha256": "b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2",
     "controls": "PASS: 42 cases, 22 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
@@ -98,7 +111,7 @@
   "review_repairs": {
     "reviewed_head": "5d153a533fd881afb268860d98692bb00d560c9d",
     "repair_commit": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
-    "validated_after_main_integration": "f2a5be30e93a5d436d123ed828e75e91e4e88e30",
+    "validated_after_main_integration": "bc7609b5fcad50f65eff89f0ce91f3f08edabeb3",
     "status": "REPAIRED_AND_CAUSALLY_TESTED",
     "items": [
       "subtest overlap is scoped per package and cross-package concurrency is covered",

@@ -2,22 +2,23 @@
 
 ## Decision
 
-`fresh_timing=BLOCKED`. C08 owns the shared factory host and no isolated or
-dedicated runner lease is available, so no fresh Go inventory, warm build, or
-hermetic package timing was launched. `quiet-evidence-blocked.json` and the
-before/after board, worker, process, and load snapshots are the immutable
-fallback. This is not a performance PASS, waiver, or claim that the
-under-three-minute target is met.
+`fresh_timing=BLOCKED`. No isolated or dedicated runner lease is available, so
+no fresh Go inventory, warm build, or hermetic package timing was launched on
+the shared factory host. `quiet-evidence-blocked.json` and the before/after
+board, worker, process, and load snapshots are the immutable fallback. This is
+not a performance PASS, waiver, or claim that the under-three-minute target is
+met.
 
 ## Current candidate and admission
 
 - Project/work: admitted `audio-runtime` / `audio-runtime-c11-hermetic-package-profile`.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
-- Current implementation/control repair checkpoint:
-  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
-- The delivery tip may include this evidence-only checkpoint; the repair source
-  and evidence below are pinned to this exact implementation checkpoint.
+- Current delivery/evidence checkpoint:
+  `bc7609b5fcad50f65eff89f0ce91f3f08edabeb3`.
+- The implementation repair is committed at
+  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`; the current checkpoint adds only
+  owned evidence/provenance updates.
 - Integrated `origin/main`: `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -40,9 +41,9 @@ under-three-minute target is met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `ctrl-f2a5be3/controls.json` reports 42 declared cases, 22 result groups, and
+  `ctrl-bc7609b/controls.json` reports 42 declared cases, 22 result groups, and
   zero Go/network/build invocations; its SHA-256 is
-  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
+  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -52,9 +53,9 @@ under-three-minute target is met.
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
   `profile.py --help`, the 42-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `f2a5be3` passed the same controls and focused
-  checks at `2026-09-08T19:26:45Z`; the tracked controls report SHA-256 is
-  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
+- Fresh exact-head recheck from `bc7609b5` passed the same controls and focused
+  checks at `2026-09-08T19:51:48.998Z`; the tracked controls report SHA-256 is
+  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
 
 ## CI rejection disposition
 
@@ -71,17 +72,28 @@ The new C11 head is ready for script-owned CI; no result for that new head is
 claimed here. The earlier Windows checkout rejection and its portable-path
 repair remain in `ci-rejection-windows.json`.
 
-The current canonical task rejection was for PR #403 head `5d153a53` and named
-forged captured source provenance, malformed selected-package records,
-oversized monotonic timestamps, and stale analysis output. Commit `f2a5be3`
-repairs these causes, with each boundary covered by the new public controls;
-the earlier lane-timing, quiet-observation, cache, no-test, repeated-terminal,
-and artifact-provenance repairs remain covered as well.
+The latest current-head rejection is run `34270089010`, job `102209193353`,
+at submitted head `bc7609b5`. Its full log and job metadata are retained in
+`ci-rejection-current.log` and `ci-rejection-current.json`. The hermetic job
+failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` positive
+harness and the
+`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
+positive baseline before its negative mutation. Both paths are outside C11's
+owned directories. Bounded local rechecks of the tool-barge oracle and both
+multi-turn tests passed; this is not a claim that hosted CI is green or that
+C11 owns a runtime repair.
+
+The canonical review inbox through review attempt 24 named forged captured
+source provenance, malformed selected-package records, oversized monotonic
+timestamps, stale analysis output, and the preceding timing/quiet/cache/
+no-test/repeated-terminal/artifact controls. Commit `f2a5be3` repairs the
+remaining code causes, and the current public controls cover every finding.
 
 ## Handoff
 
-Push this same task, update PR #403 with the exact final head and evidence, and
-return `ACCEPTED` to the script-owned CI gate without polling it. Any C11-owned
+Commit/push this same task, update PR #403 with the exact final head and
+evidence, and return `ACCEPTED` to the script-owned CI gate without polling it.
+Any C11-owned
 current-head rejection returns to this task; independent review, guarded merge,
 and post-integration vertical validation remain external. All nine immutable
 project gates remain open.

@@ -31,21 +31,31 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
   current profiler repair checkpoint
   `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
-  evidence directory are in C11 scope; predecessor checkpoints, C08's active
-  owner/worktree/PR400, the parent checkout, and factory configuration were
-  preserved.
+  evidence directory are in C11 scope; predecessor checkpoints, the C08
+  predecessor worktree/PR400, the parent checkout, and factory configuration
+  were preserved. No historical C08 lease is used as current ownership
+  evidence.
 
 ## Board and ownership evidence
 
 Complete initial canonical responses are retained in `canonical-board.json` and
 `worker-sessions.json`; the immediate before/after snapshots are retained as
-`pre-measurement-*` and `post-measurement-*`. The final canonical board response
-used for this handoff is retained in `canonical-board-f2a5be3.json` (SHA-256
+`pre-measurement-*` and `post-measurement-*`. The prior canonical board response
+is retained in `canonical-board-f2a5be3.json` (SHA-256
 `330d72d6d5d98f65f31f20d91a47d238fe0c94cfd081e0da14a6f10eb01d95c6`). The prior
 canonical rejection is recorded in `ci-rejection.json`; the latest current-head
 Windows checkout rejection is recorded in `ci-rejection-windows.json`; and the
 subsequent hermetic rejection is recorded in `ci-rejection-hermetic.json`.
 Neither is claimed green or attributed to the profiler's Go lane.
+The current canonical board response is retained in
+`canonical-board-bc7609b.json` (SHA-256
+`d4471d07631548e19dd6d9e186742217c8a9b19ad713c6fc39eaf8afd51e213c`). It records
+the current task/review state and the latest rejected C11 head. The current
+hermetic rejection metadata and full log are retained in
+`ci-rejection-current.json` (SHA-256
+`7c04cd1014413642b1f4ef28298cfdbc73afa7d33176783e8c98803f765a42a5`) and
+`ci-rejection-current.log` (SHA-256
+`75599affc7fdada1598ea95c9f419d82c182167b61d3ec46aeb3dde028d63f42`).
 
 ## Implementation and causal verification
 
@@ -85,6 +95,11 @@ Neither is claimed green or attributed to the profiler's Go lane.
   report false because that fixture deletion is intentional negative-control
   evidence. The source-identity control includes three forged-capture
   provenance mutations plus the post-inventory dirty-source rejection.
+- Exact current-delivery report `ctrl-bc7609b/controls.json`: PASS; 42
+  declared cases and 22 result groups, zero Go/network/build invocations; hash
+  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
+  It was generated at the current delivery head and preserves the intentional
+  missing-raw-artifact negative-control truth.
 - The exact-head controls cover legal repeated package terminals, Go
   `time.Duration` overflow and huge integer handling, forged captured
   head/repository/dirty-path provenance, malformed record schema, stale
@@ -104,26 +119,38 @@ Neither is claimed green or attributed to the profiler's Go lane.
   `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
   case in `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go`;
   its final PCM marker was not observed before the scenario deadline. The
-  failing path is outside C11's lease and is owned by active C12 runtime work;
+  failing path is outside C11's lease and belonged to the C12 runtime work that
+  is now merged;
   this is not a C11 repair or a green-CI claim. The earlier Windows checkout
   failure remains recorded and was causally repaired by `ca12c8a`.
+- The latest current-delivery CI rejection was read in full from job
+  `102209193353` in run `34270089010` at submitted head `bc7609b5`. The hermetic
+  job failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` positive
+  harness and
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
+  positive baseline before its negative mutation. The exact metadata and
+  376-line log are retained above. Both paths are outside C11's owned
+  directories; bounded exact local rechecks of the tool-barge oracle and both
+  multi-turn tests passed. This does not claim hosted CI green or authorize a
+  runtime edit in C11.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `f2a5be3` passed: 42 public cases and 22
+- Fresh exact-head recheck from delivery head `bc7609b5` passed: 42 public cases and 22
   result groups with zero Go/network/build invocations (tracked report SHA-256
-  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`),
+  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
-- No broad hermetic/coverage suite was launched on the shared host. The active
-  C08 owner makes it non-quiet, and broad current-head checks belong to the
-  script CI gate under the handoff.
+- No broad hermetic/coverage suite was launched on the shared host. No
+  isolated/dedicated quiet runner lease was available, and broad current-head
+  checks belong to the script CI gate under the handoff.
 
 ## Fresh timing disposition
 
 The before/after load, process, board, and worker snapshots are recorded in
 `quiet-evidence-blocked.json`. Runner metadata observed without starting Go
-tests: Darwin/arm64, Apple M1 Max, Go 1.26.7. C08 remained active at both
-snapshots, so fresh inventory/warm/run is `BLOCKED`; elapsed time was not used as
-quiet evidence. `blocked-manifest.json` and `blocked-analysis/analysis.json`
+tests: Darwin/arm64, Apple M1 Max, Go 1.26.7. The factory board and worker
+activity showed no admissible isolated/dedicated quiet runner at both
+snapshots, so fresh inventory/warm/run is `BLOCKED`; elapsed time was not used
+as quiet evidence. `blocked-manifest.json` and `blocked-analysis/analysis.json`
 are the offline machine-readable fallback.
 
 Immutable hosted references and their hashes, provenance, historical package
@@ -135,7 +162,8 @@ synthetic controls and the focused timingate package test.
 
 ## Handoff
 
-The current source/control evidence is pinned to `f2a5be3`; the accepted
+The implementation source/control checkpoint remains pinned to `f2a5be3`; the
+current delivery/evidence head is `bc7609b5` and the accepted
 `origin/main` ancestor remains `668f2d8816beaa078d058b3f0bcc59600b71a023`.
 The latest canonical task rejection named forged captured source provenance,
 malformed selected-package records, oversized monotonic timestamps, and stale
@@ -146,6 +174,8 @@ and artifact provenance. Offline analysis now retains package ranking and
 lane-wall evidence while referencing the canonical 60-second `tools/timingate`
 policy instead of duplicating it. Quiet evidence, all raw command artifacts,
 and both Go cache paths are constrained to the manifest output root before use.
-The next bounded step is to push/update PR #403 with the exact final head and
-return `ACCEPTED` to script CI. Do not poll CI, self-review, claim CI green, or
-close any of the nine immutable project gates.
+The current canonical board snapshot and current hermetic rejection log are
+retained above. The next bounded step is to commit/push this exact evidence
+checkpoint, update PR #403 with the final head and evidence, and return
+`ACCEPTED` to script CI. Do not poll CI, self-review, claim CI green, or close
+any of the nine immutable project gates.

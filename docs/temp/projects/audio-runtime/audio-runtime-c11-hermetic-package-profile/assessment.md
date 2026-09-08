@@ -4,8 +4,8 @@
 
 `fresh_timing=BLOCKED`. No fresh Go inventory, warm build, or hermetic test
 timing was launched on the shared factory host. At the resumed checkpoint there
-was no isolated or dedicated runner evidence; the historical board/worker
-snapshot that established the shared-host blocker is retained unchanged. The
+was no isolated or dedicated runner evidence; the current board/worker
+snapshot establishes that the shared host is not an admissible quiet runner.
 exact machine-readable blocker is
 `quiet-evidence-blocked.json`, with before/after board, worker, process, and
 load artifacts beside this report.
@@ -23,10 +23,12 @@ not a waiver, and not a claim that the under-three-minute target is met.
   `codex/audio-runtime-c11-hermetic-package-profile`.
 - Fetched and integrated `origin/main`:
   `668f2d8816beaa078d058b3f0bcc59600b71a023`.
-- Current implementation/control candidate checkpoint:
-  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`.
-- The source/control evidence in this report was generated from that exact
-  repair checkpoint; the later evidence checkpoint only adds owned reports.
+- Current delivery candidate checkpoint:
+  `bc7609b5fcad50f65eff89f0ce91f3f08edabeb3`.
+- The implementation repair is committed at
+  `f2a5be30e93a5d436d123ed828e75e91e4e88e30`; the current delivery checkpoint
+  adds only owned evidence/provenance updates and preserves the same source
+  files and repair behavior.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -44,14 +46,15 @@ The complete canonical board and worker-session responses are retained in
 `worker-sessions.json`; the immediate measurement snapshots are
 `pre-measurement-*` and `post-measurement-*`. The current board rejection and
 its exact failed job metadata are captured in `ci-rejection.json`; the latest
-current-head Windows rejection is captured in `ci-rejection-windows.json`, and
-the latest pre-C12 hermetic rejection is captured in `ci-rejection-hermetic.json`.
-The rejected head was `5c6d24ac…`, before C08 merged into main; after the
-required rebase, the narrow rejected test passed once and no C11-owned path was
-implicated. This is a recheck and handoff record, not a claim that script CI is
-green.
+current-head Windows rejection is captured in `ci-rejection-windows.json`, the
+prior pre-C12 hermetic rejection is captured in `ci-rejection-hermetic.json`,
+and the latest current-head hermetic metadata/full log are captured in
+`ci-rejection-current.json` and `ci-rejection-current.log`. The latest
+rejected head was `bc7609b5`; the hosted hermetic job reported the existing
+multi-turn duplex schedule and missing-commit positive-baseline failures.
+This is a recheck and handoff record, not a claim that script CI is green.
 The exact current board response, including current task/review states and
-leases, is preserved in `canonical-board-f2a5be3.json`; historical C08/C12
+leases, is preserved in `canonical-board-bc7609b.json`; historical C08/C12
 worker IDs are not used as current ownership evidence. C11 does not claim
 runtime ownership outside `scripts/hermetic-profile/` and this evidence root.
 
@@ -77,10 +80,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-f2a5be3`:
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-bc7609b`:
   PASS; 42 declared cases and 22 result groups, zero Go, network, or build
   invocations. The report hash is
-  `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`.
+  `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -101,9 +104,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `f2a5be3` passed: 42 public cases/22
+- Fresh exact-head recheck from `bc7609b5` passed: 42 public cases/22
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `602f156dd848d9ec0bd0f2113ddf25a6c7902f317209b1741dbd77498d982b0f`),
+  SHA-256 `b3a96ae9f05e973e7692e1a257476de0a795703fe891828875879949f71c70a2`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -119,6 +122,20 @@ task. C12 is now merged at `668f2d88`; that historical failure is not treated
 as proof of a new C11 result. The new C11 repair is not claimed CI-green and is
 ready for the script-owned gate. The earlier Windows checkout failure remains
 recorded in `ci-rejection-windows.json` and was causally repaired by `ca12c8a`.
+
+The latest current-head rejection is run `34270089010`, job `102209193353`,
+at submitted head `bc7609b5`. The full 376-line hosted log and job metadata are
+retained in `ci-rejection-current.log` and `ci-rejection-current.json`. The
+hermetic job failed the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule`
+positive harness and the
+`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
+case before its negative mutation. The log also contains expected negative
+control diagnostics; they are not additional failures. Both named test paths
+are outside C11's two owned directories. Bounded exact local rechecks on this
+branch passed the tool-barge oracle control and both multi-turn tests; this does
+not convert the hosted failure to green or establish a runtime repair. The new
+evidence checkpoint is submitted again to script-owned CI without a waiver or
+C11 runtime edit.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -148,8 +165,9 @@ proof:
 The logs do not contain a complete uncached C11 `go test -json` stream or three
 same-source cohort trials. Their package values are retained as historical
 diagnostics only; no timingate PASS, lane-wall PASS, or measured savings is
-derived from them. The known replay failures remain with the C08/runtime owner;
-C11 does not alter those paths or claim to repair them.
+derived from them. The known runtime/replay failures remain outside C11's
+lease; C11 does not alter those paths or claim to repair broad intermittency
+from a focused local pass.
 
 ## Ranked observations and future work
 
@@ -188,15 +206,16 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation/control evidence is pinned to `f2a5be3` and the
-tracked `ctrl-f2a5be3` report above. The latest canonical task rejection named
+The current C11 implementation repair remains pinned to `f2a5be3`; the current
+delivery/evidence head is `bc7609b5` and the tracked `ctrl-bc7609b` report is
+recorded above. The canonical review findings named
 forged captured source provenance, malformed selected-package records,
 oversized monotonic timestamps, and stale analysis output. Commit `f2a5be3`
 repairs those causes and the public controls reproduce each positive/negative
 boundary, while retaining the earlier repairs for lane timing, quiet
 observations, cache containment, no-test markers, repeated package terminals,
-and artifact provenance. The next action is to push/update PR #403 with the
-exact final head and return `ACCEPTED` to the script-owned CI gate without
-polling it. Any C11-owned CI/review finding returns to this task; independent
-review and post-integration vertical validation remain external stages. No
-fresh timing or under-three-minute claim is made.
+and artifact provenance. The next action is to commit/push this exact evidence
+checkpoint, update PR #403, and return `ACCEPTED` to the script-owned CI gate
+without polling it. Any C11-owned CI/review finding returns to this task;
+independent review and post-integration vertical validation remain external
+stages. No fresh timing or under-three-minute claim is made.
