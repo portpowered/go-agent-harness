@@ -1427,3 +1427,44 @@ C18 latest CI rejection reconciliation and same-owner handoff checkpoint 2026-09
   actionable C18 rejection returns to this same task with `CONTINUE`; CI,
   independent review, guarded merge, post-merge vertical validation and
   project acceptance remain external.
+
+C18 current-head hermetic ownership reconciliation 2026-09-09
+
+- Admission was reverified with `project-control.py verify-work --type task
+  --name audio-runtime-c18-public-strict-replay`, returning `admitted` for
+  `work-task-24`. The isolated branch remains exactly
+  `codex/audio-runtime-c18-public-strict-replay`, matching `prd.json`; the
+  worktree was clean before evidence capture. `origin/main` was fetched at
+  `5d5afcb14d7b269378020809f5a2418c499ac94d`, already an ancestor of
+  `HEAD=5266b4cb93d50a38abea39decc94cee00f4e746d`; startup, baseline and
+  planning-main ancestry remain preserved. No host checkout or predecessor
+  worktree was merged, reset or edited.
+- Canonical board rejection is run `34389523251`, current head
+  `5266b4cb93d50a38abea39decc94cee00f4e746d`, failed job
+  `102594107999` (`CI (hermetic)`). The complete raw run/job responses and
+  complete 367-line log are saved as
+  `ci-rejection-34389523251-run.json`,
+  `ci-rejection-34389523251-job.json` and
+  `ci-rejection-34389523251.log`; log SHA256 is
+  `44fd1a4d4d06223310f93f1c41948ed4190b6db9f0c8a70d419ef89445ce716f`.
+- The only failed assertion is
+  `TestRunRoomLifecycleDiagnosis_ForcedOrderings/fast_connection_failure_before_sibling_completion`
+  in `agent-cli/internal/services/internal/agentruntime/session_room_lifecycle_test.go`:
+  the target participant returned cancellation/ended disposition instead of
+  the required causal error disposition after the forced dial failure. The
+  exact test passes `100/100` locally with
+  `CGO_ENABLED=0 -tags=nomicrophone`; no C18 replay or clock failure
+  reproduced.
+- The canonical CI-coordination decision assigns
+  `agent-cli/internal/services/internal/agentruntime/session_room*.go`
+  exclusively to C21 for room lifecycle/fixture repair. C18 owns only
+  strict replay and `go-audio/pkg/clock/`; the failing path is outside the
+  admitted C18 diff and cannot be edited without a new primary ownership
+  decision. No unchanged CI retry, cross-owner mutation, deadline weakening,
+  assertion removal or acceptance waiver was made.
+- Required next action: primary meta-planner/C21 must repair or explicitly
+  reassign the room-lifecycle failure on the owning task, then C18 can
+  integrate the reviewed main result and resubmit the same PR through the
+  script CI gate. This C18 task is blocked by that ownership prerequisite;
+  all C18 implementation/review findings remain mapped and no C18 repair is
+  actionable from this exact rejection.
