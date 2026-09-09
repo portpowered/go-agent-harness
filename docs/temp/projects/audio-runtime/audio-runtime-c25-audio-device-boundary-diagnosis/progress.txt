@@ -35,3 +35,8 @@ Current-head CI rejection characterization
 
 Next action
 - Commit and push the verifier/evidence repair and update PR417 with the exact rejection and ownership handoff. Do not poll CI. Retain C25 ownership until C20's reviewed repair (if any) is integrated, then refresh exact-source evidence and submit the changed same task through script CI.
+
+Exact current-head refresh
+- At candidate source checkpoint 3c2aea55f8c86ab293e074b50bc14edbb4837901, reran `verify.py --mode all`: ACCEPTED in 9.774s with 19 commands, no unexpected failure, source ancestry/path checks clean, and no surviving child process. Generated diagnosis/provenance now identify this exact checkpoint; the prior 0eb46135 evidence remains preserved.
+- Updated the owned README, evidence ledger, extraction plan metadata, ownership checkpoint, and progress with the refreshed candidate identity. No production, shared module, fixture, baseline, device, provider, or realtime path changed.
+- The hosted test46/provider_burst snapshot timeout remains the exact C20-owned failure from run34397773527/job102621627290. No C25 repair or CI-green claim is made; after this evidence checkpoint is pushed, the next action is C20 reviewed repair/main integration, then same-task C25 refresh and script-gate submission.

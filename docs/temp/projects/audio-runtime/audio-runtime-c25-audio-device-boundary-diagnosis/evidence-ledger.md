@@ -55,3 +55,15 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - The adjacent production-binary audio-device replay passed in 80.567 seconds and the committed replay/fixture regression package passed in 9.617 seconds. The hosted evidence therefore demonstrates a snapshot/evidence-phase timeout, not provider response loss, a source-path compile failure, or a proven PCM/EOF cause.
 - A bounded local single-subtest run passed: `test46/provider_burst` 12.38s, package 21.896s (raw log `/tmp/factory-c25-local-test46-provider-burst-raw.log`, 602 bytes, SHA-256 `1bf92f54005fa0eb4d32fea0288b409ade41d8267dc2978385ae4858f9fa695f`). The one full 12-subtest matrix also passed: `test46/provider_burst` 12.44s and package 29.362s (raw log `/tmp/factory-c25-local-test45-48-matrix-raw.log`, 5,046 bytes, SHA-256 `7460f44f141f64518282d7dbf90bb5d0a73dda88ef3e0f411727d7149d1023cf`). No focused child remained after either run.
 - C20 retains exclusive production/fixture ownership of `session_tool_audio_remote_e2e_test.go` and live-session repair. C25 makes no edit outside its evidence folder. The exact next owner action is C20 to capture bounded server/snapshot phase timing on its same task; if its reviewed repair changes `main`, primary resumes C25 on the same task to refresh this source-only evidence and submit a changed head through script CI.
+
+## Exact current-head refresh
+
+- At current HEAD `3c2aea55f8c86ab293e074b50bc14edbb4837901`, the bounded
+  `verify.py --mode all` rerun completed in `9.774` seconds with `19`
+  commands, decision `ACCEPTED`, no unexpected failure, clean source ancestry
+  and audited-path diff checks, and `children_alive=false` for every child.
+  The source-only diagnosis and all focused regressions remain unchanged; this
+  refresh only aligns the generated evidence with the pushed candidate head.
+- The known CI rejection remains historical and externally owned: C20 owns the
+  `test46/provider_burst` remote snapshot phase. No C25 production or fixture
+  repair is authorized, and no CI result is claimed from this local refresh.

@@ -1,7 +1,7 @@
 # C25 audio/device boundary diagnosis
 
 - Task: `audio-runtime-c25-audio-device-boundary-diagnosis`
-- Candidate revision: `0eb46135bdeb3f2976e4658a02a6f39cf1d47459`
+- Candidate revision: `3c2aea55f8c86ab293e074b50bc14edbb4837901`
 - Source revision: `5d5afcb14d7b269378020809f5a2418c499ac94d`
 - Source archive SHA-256: `0bebedbf449193683267220769084393f0c3e175d59d7e6dc7ba0992c06364ac`
 - Decision basis: source-only diagnosis; no realtime, provider, physical-device, or acoustic claim.
