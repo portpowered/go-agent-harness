@@ -1,0 +1,232 @@
+{
+  "deadline_seconds": 90.0,
+  "diagnostic_processes": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/config",
+        "-tags=nomicrophone",
+        "-v",
+        "-run",
+        "^TestC22PermissionDiagnostic$",
+        "-count=1",
+        "-timeout=90s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-6t6kagms/source",
+      "elapsed_seconds": 0.583,
+      "exit_status": 0,
+      "stderr": "",
+      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.02s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.197s\n",
+      "timed_out": false,
+      "umask": "022"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/config",
+        "-tags=nomicrophone",
+        "-v",
+        "-run",
+        "^TestC22PermissionDiagnostic$",
+        "-count=1",
+        "-timeout=90s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-6t6kagms/source",
+      "elapsed_seconds": 0.451,
+      "exit_status": 0,
+      "stderr": "",
+      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.03s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.200s\n",
+      "timed_out": false,
+      "umask": "077"
+    }
+  ],
+  "diagnostics": [
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "640",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "640",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "",
+      "name": "raw_requested_0640",
+      "requested_mode": "640",
+      "umask": "022"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "640",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "640",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "640",
+      "name": "explicit_0640",
+      "requested_mode": "600",
+      "umask": "022"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "600",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "600",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "600",
+      "name": "explicit_0600",
+      "requested_mode": "600",
+      "umask": "022"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "600",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "exists": false
+      },
+      "established_mode": "",
+      "name": "absent_default",
+      "requested_mode": "000",
+      "umask": "022"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "600",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "600",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "",
+      "name": "raw_requested_0640",
+      "requested_mode": "640",
+      "umask": "077"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "640",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "640",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "640",
+      "name": "explicit_0640",
+      "requested_mode": "600",
+      "umask": "077"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "600",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "bytes": 7,
+        "exists": true,
+        "mode": "600",
+        "sha256": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb"
+      },
+      "established_mode": "600",
+      "name": "explicit_0600",
+      "requested_mode": "600",
+      "umask": "077"
+    },
+    {
+      "after": {
+        "bytes": 6,
+        "exists": true,
+        "mode": "600",
+        "sha256": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      },
+      "before": {
+        "exists": false
+      },
+      "established_mode": "",
+      "name": "absent_default",
+      "requested_mode": "000",
+      "umask": "077"
+    }
+  ],
+  "elapsed_seconds": 17.115,
+  "exact_test": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/config",
+        "-tags=nomicrophone",
+        "-run",
+        "^TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically$",
+        "-count=1",
+        "-timeout=90s"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
+      "elapsed_seconds": 11.666,
+      "exit_status": 0,
+      "stderr": "go: downloading go1.26.7 (darwin/arm64)\ngo: downloading github.com/knadh/koanf/v2 v2.3.2\ngo: downloading github.com/knadh/koanf/providers/file v1.2.1\ngo: downloading github.com/knadh/koanf/providers/env v1.1.0\ngo: downloading github.com/knadh/koanf/providers/structs v1.0.0\ngo: downloading github.com/knadh/koanf/parsers/yaml v1.1.0\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading github.com/fsnotify/fsnotify v1.9.0\ngo: downloading github.com/knadh/koanf/maps v0.1.2\ngo: downloading github.com/fatih/structs v1.1.0\ngo: downloading github.com/go-viper/mapstructure/v2 v2.4.0\ngo: downloading github.com/mitchellh/copystructure v1.2.0\ngo: downloading go.yaml.in/yaml/v3 v3.0.3\ngo: downloading github.com/mitchellh/reflectwalk v1.0.2\ngo: downloading golang.org/x/sys v0.47.0\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.172s\n",
+      "timed_out": false,
+      "umask": "022"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/config",
+        "-tags=nomicrophone",
+        "-run",
+        "^TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically$",
+        "-count=1",
+        "-timeout=90s"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
+      "elapsed_seconds": 0.525,
+      "exit_status": 1,
+      "stderr": "",
+      "stdout": "--- FAIL: TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically (0.02s)\n    revision_test.go:86: config mode = 600, want 640\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.187s\nFAIL\n",
+      "timed_out": false,
+      "umask": "077"
+    }
+  ],
+  "failures": [],
+  "phase": "baseline",
+  "schema": "audio-runtime-c22-permission-matrix-v1",
+  "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
+  "source_revision": "e4137eba6a6499142f50701609c1149afc71db84",
+  "status": "passed"
+}
