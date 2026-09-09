@@ -1,0 +1,49 @@
+{
+  "work": "audio-runtime-c19-bounded-conversation-summary",
+  "project": "audio-runtime",
+  "pre_fix_revision": "3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84",
+  "candidate_revision": "150fffd9cbbe06e9fd884937e73df6a8fee68426",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "candidate_consumer_source_sha256": "f0b43ca36e1fff0f485f10f4da7a38a130a17aebb7179c751889fd3658fe596f",
+  "candidate_consumer_verifier_sha256": "90aab30013239dd604d6be5be068e58f74906db57ee5392aa84e74a5dc4e50a6",
+  "candidate_consumer_binary_sha256": "e10e289df132df14ca30e8a334b66304e2ab9b7974b91bc18b1d37f9d8e71262",
+  "pre_fix_consumer_binary_sha256": "169293bbb27145c9a17f457111c37b09a71e295ae4cdc556a45c5a6c82e8318b",
+  "provider_fixture_sha256": "7f6d3ebae69be0c59e55aca2fdee2a5e137c3c9da4a1c513ae00d84b61d0707d",
+  "provider_fixture_bytes": "{\"fixture\":\"c19-provider-capture\"}",
+  "workload": {
+    "characterize_turns": [16, 64, 128, 256, 512],
+    "overflow_text_bytes": 6250000,
+    "queue_capacity_bytes": 16777216,
+    "summary_max_bytes": 2097152,
+    "summary_max_items": 4096,
+    "forced_gc_after_quiescent_drain": true,
+    "no_recording_control": true
+  },
+  "reports_sha256": {
+    "before.json": "5de19799828ab8d0d74ca5950be8bb832764b8b5b1e64475f800769134596e7c",
+    "before-overflow.json": "191ec6e28cad596bd60a01ac5e91408004daac2bfe6a6d4b87f6b782fba136ee",
+    "after.json": "2436855e1bfde51f56dcf61c3b04f372538af4d63109041ee903405eac4d6537",
+    "normal.json": "42de78e578bb8d4f490ddb06120504c102b09d62b511352c9151d3097a2283fc",
+    "overflow.json": "85795c1d091711cf347f7aef034d4247b3101c32f17139dd3c9ef25e4856d875",
+    "matrix.json": "4938f94225a61e9451e5f2a82969d4473471965325863127b597363e3a995ec6",
+    "verify-normal.json": "94e2ba22b2aaa500a8b2c22b47160e18c938df4dfb20f314fbc2c1b398ab3301",
+    "verify-overflow.json": "f0b257ea4c4a953d532af65a0efeff594bc16891da55b757141792858b5ee0dd",
+    "verify-characterize.json": "631386ebfde7771c1a768745ae9d654012ed9b8c235cf9afcc8f52430c4ee8b5",
+    "verify-matrix.json": "a823a4fb023a26efc333fe6622b6ee72607030853e12f71b20970b80c2a6706b"
+  },
+  "source_sha256": {
+    "go-agent-runtime/services/recording/internal/evidence/directory.go": "499aba4587af9fd2d1df49c07a21703e51a9afbab8b1e2a52414b42b2a2b0340",
+    "go-agent-runtime/services/recording/internal/evidence/directory_capture.go": "74e7d9479ebfb6b6deda9702fe45fac5486bae8c1f43ba9880d6dc18ef3dbf20",
+    "go-agent-runtime/services/recording/internal/evidence/directory_conversation.go": "36cbbcde466fd306f3e4d91f333e0fcfaa62ebbb54a41f6b179a1d383359b435",
+    "go-agent-runtime/services/recording/internal/evidence/directory_conversation_projection.go": "36b05b77f95982ae253fbde6a96cdeb7e45f4f362779961fe40e620c0c0b85f7",
+    "go-agent-runtime/services/recording/internal/evidence/directory_finalize.go": "039bf817a88b3f018452e98a339d1efdf38ec2657bfff3929e2668388adc4c37",
+    "go-agent-runtime/services/recording/internal/evidence/directory_response_audio.go": "23923261e401e962af67658e6a810ba36c24f1b6e18f7c797f1ed3a8198004dc"
+  },
+  "notes": [
+    "The pre-fix binary was built from the detached 3bbd052b worktree as its cwd; the candidate binary was built from this worktree after candidate_revision.",
+    "The pre-fix overflow report is intentionally a negative control: it records silent success and no partial status while preserving raw tail/PCM/terminal evidence.",
+    "The candidate summary budget bounds the convenience projection and final JSONL accounting only; raw evidence and destination disk growth remain unbounded residuals.",
+    "The matrix report runs normal and overflow in independent recorder lifecycles and records separate finalization reports; no Realtime, credentials, physical devices, C18 replay/embedding paths, acceptance waiver, or CI polling was used."
+  ]
+}

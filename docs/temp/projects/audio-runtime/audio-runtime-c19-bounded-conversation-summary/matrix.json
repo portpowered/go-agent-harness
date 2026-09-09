@@ -1,0 +1,61 @@
+{
+  "case": "matrix",
+  "source": "150fffd9cbbe06e9fd884937e73df6a8fee68426; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "summary_budget": {
+    "max_bytes": 2097152,
+    "max_items": 4096,
+    "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+  },
+  "queue": {
+    "capacity_bytes": 16777216,
+    "drain_wait_ms": 2000,
+    "events": 5,
+    "payload_bytes": 12500938
+  },
+  "finalization": {
+    "first_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+    "second_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+    "stable": true,
+    "heap_live_bytes": 542144,
+    "heap_after_finalize_bytes": 548696,
+    "shutdown_total_alloc_bytes": 236053248,
+    "shutdown_elapsed_ms": 69
+  },
+  "normal_finalization": {
+    "stable": true,
+    "heap_live_bytes": 504456,
+    "heap_after_finalize_bytes": 537872,
+    "shutdown_total_alloc_bytes": 5306608,
+    "shutdown_elapsed_ms": 27
+  },
+  "overflow_finalization": {
+    "first_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+    "second_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+    "stable": true,
+    "heap_live_bytes": 542144,
+    "heap_after_finalize_bytes": 548696,
+    "shutdown_total_alloc_bytes": 236053248,
+    "shutdown_elapsed_ms": 69
+  },
+  "normal": {
+    "expected_turns": 24,
+    "complete_summary": true,
+    "transcript_snapshots": true,
+    "tool_result_exact_once": true,
+    "late_audio_attributed": true,
+    "pcm_bytes": 48
+  },
+  "overflow": {
+    "partial_status": true,
+    "accepted_turns": 2,
+    "raw_tail_present": true,
+    "raw_pcm_bytes": 6,
+    "terminal_preserved": true,
+    "silent_success": false
+  },
+  "raw_evidence_after_limit": true,
+  "clean_shutdown": true,
+  "lock_released": true,
+  "session_log_bytes": 369,
+  "session_log_turns": 2
+}

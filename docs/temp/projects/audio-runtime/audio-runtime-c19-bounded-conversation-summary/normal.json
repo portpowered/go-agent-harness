@@ -1,0 +1,34 @@
+{
+  "case": "normal",
+  "source": "150fffd9cbbe06e9fd884937e73df6a8fee68426; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "summary_budget": {
+    "max_bytes": 2097152,
+    "max_items": 4096,
+    "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+  },
+  "queue": {
+    "capacity_bytes": 16777216,
+    "drain_wait_ms": 400,
+    "events": 149,
+    "payload_bytes": 16614
+  },
+  "finalization": {
+    "stable": true,
+    "heap_live_bytes": 504808,
+    "heap_after_finalize_bytes": 543304,
+    "shutdown_total_alloc_bytes": 5312040,
+    "shutdown_elapsed_ms": 32
+  },
+  "normal": {
+    "expected_turns": 24,
+    "complete_summary": true,
+    "transcript_snapshots": true,
+    "tool_result_exact_once": true,
+    "late_audio_attributed": true,
+    "pcm_bytes": 48
+  },
+  "clean_shutdown": true,
+  "lock_released": true,
+  "session_log_bytes": 6812,
+  "session_log_turns": 24
+}

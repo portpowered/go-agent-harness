@@ -58,9 +58,11 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	if result != nil {
 		config.RecordingStatus = &transcript.RecordingStatus{State: transcript.RecordingStatusPartial, Reason: result.Error()}
 	}
-	if logErr == nil {
-		result = errors.Join(result, transcript.WriteRecordingBundle(config))
-	}
+	// A summary projection can be incomplete while the raw transcript/PCM
+	// artifacts remain useful. Publish the valid JSONL prefix even when its
+	// bounded finalization reports an error; the partial status prevents replay
+	// from certifying the convenience projection as complete.
+	result = errors.Join(result, transcript.WriteRecordingBundle(config))
 	result = errors.Join(result, releaseEvidenceClaim(r.lock, r.lockPath))
 	if r.spool != "" {
 		result = errors.Join(result, os.RemoveAll(r.spool))

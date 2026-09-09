@@ -1,15 +1,18 @@
 package evidence
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // evidenceConversation is intentionally small and transport-neutral. The
 // detailed provider transcript remains in the two raw JSONL artifacts; this
 // index preserves the useful turn summary used by CLI and room tooling.
+//
+// The projection is bounded independently of the admission queue. Once its
+// budget is exhausted, the raw recorder continues to drain and the accepted
+// prefix is published as a partial session log.
 type evidenceConversation struct {
 	responseAudio       map[string]evidenceResponseAudio
 	closed              []evidenceTurn
@@ -17,6 +20,10 @@ type evidenceConversation struct {
 	toolNames           map[string]string
 	toolResultEventByID map[string]int
 	nextToolSequence    uint64
+
+	budget      *summaryBudget
+	summaryErr  error
+	summaryFull bool
 }
 
 type evidenceTurn struct {
@@ -33,6 +40,7 @@ type evidenceTurn struct {
 	complete       bool
 	toolMessage    bool
 	toolEvents     []evidenceToolEvent
+	reserved       bool
 }
 
 type evidenceToolEvent struct {
@@ -43,30 +51,90 @@ type evidenceToolEvent struct {
 	Arguments  string `json:"arguments,omitempty"`
 	Status     string `json:"status,omitempty"`
 	Content    string `json:"content,omitempty"`
+
+	// retainedBytes includes the fixed event and slice charges. It is not part
+	// of the public JSON shape and lets a result delta be re-accounted without
+	// retaining a second copy of the complete event.
+	retainedBytes int64
 }
 
-type evidenceLogEntry struct {
-	TurnIndex int `json:"turn_index"`
-	Input     struct {
-		Text             string   `json:"text"`
-		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
-		AudioBytes       uint64   `json:"audio_bytes"`
-		Committed        bool     `json:"committed"`
-		AudioSegments    []string `json:"audio_segments,omitempty"`
-	} `json:"input"`
-	Response struct {
-		Text             string   `json:"text"`
-		Complete         bool     `json:"complete"`
-		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
-		AudioBytes       uint64   `json:"audio_bytes"`
-		AudioSegments    []string `json:"audio_segments,omitempty"`
-	} `json:"response"`
-	ToolEvents []evidenceToolEvent `json:"tool_events,omitempty"`
+func newEvidenceConversation() evidenceConversation {
+	conversation := evidenceConversation{budget: &summaryBudget{}}
+	conversation.bindTurn()
+	return conversation
+}
+
+func (c *evidenceConversation) ensureBudget() {
+	if c == nil {
+		return
+	}
+	if c.budget == nil {
+		c.budget = &summaryBudget{}
+	}
+	c.bindTurn()
+}
+
+func (c *evidenceConversation) bindTurn() {
+	if c == nil || c.budget == nil {
+		return
+	}
+	c.turn.inputText.budget = c.budget
+	c.turn.responseText.budget = c.budget
+}
+
+func (c *evidenceConversation) failBudget(bytes int64, items int) {
+	if c == nil || c.summaryFull {
+		return
+	}
+	c.summaryFull = true
+	// Prefer the item identity when both dimensions are exhausted. The error
+	// is fixed text and never includes caller payloads or credentials.
+	itemLimit := items > directorySummaryMaxItems-c.budget.items
+	byteLimit := bytes > directorySummaryMaxBytes-c.budget.bytes
+	c.summaryErr = summaryBudgetError(itemLimit && !byteLimit)
+}
+
+func (c *evidenceConversation) reserve(bytes int64, items int) bool {
+	if c == nil || c.summaryFull {
+		return false
+	}
+	c.ensureBudget()
+	if c.budget.reserve(bytes, items) {
+		return true
+	}
+	c.failBudget(bytes, items)
+	return false
+}
+
+func (c *evidenceConversation) projectionError() error {
+	if c == nil {
+		return nil
+	}
+	return c.summaryErr
+}
+
+func (c *evidenceConversation) ensureTurn() bool {
+	if c == nil || c.summaryFull {
+		return false
+	}
+	c.ensureBudget()
+	if c.turn.reserved {
+		return true
+	}
+	if !c.reserve(summaryTurnFixedBytes+summaryJSONTurnFixedBytes, 1) {
+		return false
+	}
+	c.turn.reserved = true
+	return true
 }
 
 // observe builds a convenience projection. The typed transcript retains every
 // admitted message, including types that have no conversation summary field.
 func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool, _ uint64) {
+	if c == nil || c.summaryFull {
+		return
+	}
+	c.ensureBudget()
 	if msg.Role == messages.RoleTool {
 		c.observeToolResult(msg, 0)
 		return
@@ -82,7 +150,7 @@ func (c *evidenceConversation) observe(msg messages.StreamMessage, outbound bool
 }
 
 func (c *evidenceConversation) observeToolCall(msg messages.StreamMessage, outbound bool) {
-	if outbound || (msg.Type != messages.StreamTypeToolCallStart && msg.Type != messages.StreamTypeToolCallDelta && msg.Type != messages.StreamTypeToolCallEnd) {
+	if c == nil || c.summaryFull || outbound || (msg.Type != messages.StreamTypeToolCallStart && msg.Type != messages.StreamTypeToolCallDelta && msg.Type != messages.StreamTypeToolCallEnd) {
 		return
 	}
 	c.turn.toolMessage = true
@@ -93,81 +161,151 @@ func (c *evidenceConversation) observeToolCall(msg messages.StreamMessage, outbo
 
 func (c *evidenceConversation) observeToolCallEnd(msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.ToolCallEndValue)
-	if !ok || value == nil {
+	if !ok || value == nil || c == nil || c.summaryFull || !c.ensureTurn() {
 		return
-	}
-	if c.toolNames == nil {
-		c.toolNames = make(map[string]string)
 	}
 	callID := strings.TrimSpace(value.ToolCallID)
 	if callID == "" {
 		callID = strings.TrimSpace(msg.ToolCallId)
 	}
-	c.toolNames[callID] = value.Name
+	if c.toolNames == nil {
+		c.toolNames = make(map[string]string)
+	}
+	if oldName, exists := c.toolNames[callID]; exists {
+		if oldName != value.Name {
+			oldCost := summaryMapEntryBytes + summaryCost(callID, oldName)
+			newCost := summaryMapEntryBytes + summaryCost(callID, value.Name)
+			if !c.replaceRetained(oldCost, newCost) {
+				return
+			}
+			c.toolNames[callID] = value.Name
+		}
+	} else {
+		entryCost := summaryMapEntryBytes + summaryCost(callID, value.Name)
+		if !c.reserve(entryCost, 1) {
+			return
+		}
+		c.toolNames[callID] = value.Name
+	}
 	c.nextToolSequence++
-	c.turn.toolEvents = append(c.turn.toolEvents, evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments})
+	event := evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments}
+	c.appendToolEvent(event)
 }
 
 func (c *evidenceConversation) observeToolResult(msg messages.StreamMessage, _ uint64) {
-	if c == nil {
+	if c == nil || c.summaryFull {
 		return
-	}
-	if c.toolResultEventByID == nil {
-		c.toolResultEventByID = make(map[string]int)
 	}
 	callID := strings.TrimSpace(msg.ToolCallId)
 	if callID == "" {
 		return
 	}
+	c.ensureToolResultIndex()
 	index, exists := c.toolResultEventByID[callID]
 	if !exists {
-		c.nextToolSequence++
-		event := evidenceToolEvent{
-			Sequence: c.nextToolSequence, Type: "tool_result", ToolCallID: callID,
-			ToolName: c.toolNames[callID], Status: "completed",
+		var ok bool
+		index, ok = c.startToolResult(callID)
+		if !ok {
+			return
 		}
-		c.turn.toolEvents = append(c.turn.toolEvents, event)
-		index = len(c.turn.toolEvents) - 1
-		c.toolResultEventByID[callID] = index
 	}
-	event := &c.turn.toolEvents[index]
+	c.updateToolResult(&c.turn.toolEvents[index], callID, msg)
+}
+
+func (c *evidenceConversation) ensureToolResultIndex() {
+	if c.toolResultEventByID == nil {
+		c.toolResultEventByID = make(map[string]int)
+	}
+}
+
+func (c *evidenceConversation) startToolResult(callID string) (int, bool) {
+	if !c.ensureTurn() {
+		return 0, false
+	}
+	c.nextToolSequence++
+	event := evidenceToolEvent{
+		Sequence: c.nextToolSequence, Type: "tool_result", ToolCallID: callID,
+		ToolName: c.toolNames[callID], Status: "completed",
+	}
+	entryCost := summaryMapEntryBytes + summaryCost(callID) + toolEventCost(event)
+	if !c.reserve(entryCost, 2) {
+		return 0, false
+	}
+	event.retainedBytes = toolEventCost(event)
+	c.turn.toolEvents = append(c.turn.toolEvents, event)
+	index := len(c.turn.toolEvents) - 1
+	c.toolResultEventByID[callID] = index
+	return index, true
+}
+
+func (c *evidenceConversation) updateToolResult(event *evidenceToolEvent, callID string, msg messages.StreamMessage) {
 	if event.ToolName == "" {
-		event.ToolName = c.toolNames[callID]
+		if name := c.toolNames[callID]; name != "" {
+			c.updateToolEvent(event, name, event.Arguments, event.Content)
+		}
+	}
+	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil && value.Content != "" {
+		c.updateToolEvent(event, event.ToolName, event.Arguments, event.Content+value.Content)
 	}
 	if event.Status == "" {
-		event.Status = "completed"
-	}
-	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
-		event.Content += value.Content
+		c.updateToolEvent(event, event.ToolName, event.Arguments, event.Content)
 	}
 }
 
-func (c *evidenceConversation) observeText(msg messages.StreamMessage, outbound bool) {
-	switch value := msg.Value.(type) {
-	case *messages.TextDeltaValue:
-		if value != nil && msg.Type == messages.StreamTypeTextDelta {
-			c.appendText(outbound, value.Content)
-		}
-	case *messages.TranscriptDeltaValue:
-		if value != nil && !outbound && msg.Type == messages.StreamTypeTranscriptDelta {
-			c.transcriptText(msg.Role == messages.RoleUser).observeTranscript(value.ItemID, value.Text, false)
-		}
-	case *messages.TranscriptEndValue:
-		if value != nil && !outbound && msg.Type == messages.StreamTypeTranscriptEnd {
-			c.transcriptText(msg.Role == messages.RoleUser).observeTranscript(value.ItemID, value.FullText, true)
-		}
+func (c *evidenceConversation) appendToolEvent(event evidenceToolEvent) bool {
+	eventCost := toolEventCost(event)
+	if !c.reserve(eventCost, 1) {
+		return false
 	}
+	event.retainedBytes = eventCost
+	c.turn.toolEvents = append(c.turn.toolEvents, event)
+	return true
 }
 
-func (c *evidenceConversation) appendText(input bool, text string) {
-	if input {
-		c.turn.inputText.WriteString(text)
-	} else {
-		c.turn.responseText.WriteString(text)
+func toolEventCost(event evidenceToolEvent) int64 {
+	return summaryToolEventFixedBytes + summarySliceEntryBytes + summaryCost(event.Type, event.ToolCallID, event.ToolName, event.Arguments, event.Status, event.Content)
+}
+
+func (c *evidenceConversation) updateToolEvent(event *evidenceToolEvent, name, arguments, content string) bool {
+	if event == nil || c == nil || c.summaryFull {
+		return false
 	}
+	updated := *event
+	updated.ToolName = name
+	updated.Arguments = arguments
+	updated.Content = content
+	if updated.Status == "" {
+		updated.Status = "completed"
+	}
+	newCost := toolEventCost(updated)
+	if !c.replaceRetained(event.retainedBytes, newCost) {
+		return false
+	}
+	event.ToolName = name
+	event.Arguments = arguments
+	event.Content = content
+	event.Status = updated.Status
+	event.retainedBytes = newCost
+	return true
+}
+
+func (c *evidenceConversation) replaceRetained(oldBytes, newBytes int64) bool {
+	if c == nil || c.summaryFull {
+		return false
+	}
+	if newBytes > oldBytes && !c.reserve(newBytes-oldBytes, 0) {
+		return false
+	}
+	if newBytes < oldBytes {
+		c.budget.release(oldBytes-newBytes, 0)
+	}
+	return true
 }
 
 func (c *evidenceConversation) endMessage(outbound bool) {
+	if c == nil || c.summaryFull {
+		return
+	}
 	if outbound {
 		c.turn.committed = true
 		return
@@ -176,16 +314,31 @@ func (c *evidenceConversation) endMessage(outbound bool) {
 		c.turn.toolMessage = false
 		return
 	}
-	c.turn.complete = true
-	if c.turn.observed() {
-		c.closed = append(c.closed, c.turn)
+	if !c.turn.observed() {
+		return
 	}
+	c.turn.complete = true
+	if !c.reserve(summarySliceEntryBytes, 1) {
+		return
+	}
+	c.closed = append(c.closed, c.turn)
+	c.resetToolResultIndex()
 	c.turn = evidenceTurn{}
+	c.bindTurn()
+}
+
+func (c *evidenceConversation) resetToolResultIndex() {
+	if c == nil || c.toolResultEventByID == nil {
+		return
+	}
+	for callID := range c.toolResultEventByID {
+		c.budget.release(summaryMapEntryBytes+summaryCost(callID), 1)
+	}
 	c.toolResultEventByID = nil
 }
 
 func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64, segment string) {
-	if c == nil {
+	if c == nil || c.summaryFull || bytes <= 0 || !c.ensureTurn() {
 		return
 	}
 	if input {
@@ -194,6 +347,10 @@ func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64
 		}
 		c.turn.inputAudio += uint64(bytes)
 		if len(c.turn.inputSegments) == 0 {
+			need := summarySliceEntryBytes + summaryCost(segment)
+			if !c.reserve(need, 1) {
+				return
+			}
 			c.turn.inputSegments = []string{segment}
 		}
 		return
@@ -203,90 +360,10 @@ func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64
 	}
 	c.turn.outputAudio += uint64(bytes)
 	if len(c.turn.outputSegments) == 0 {
-		c.turn.outputSegments = []string{segment}
-	}
-}
-
-func (t evidenceTurn) observed() bool {
-	return len(t.responseIDs) > 0 || t.inputText.Len() > 0 || t.responseText.Len() > 0 || t.inputAudio > 0 || t.outputAudio > 0 || len(t.toolEvents) > 0
-}
-
-func (c evidenceConversation) json() ([]byte, error) {
-	turns := append([]evidenceTurn(nil), c.closed...)
-	if c.turn.observed() {
-		turns = append(turns, c.turn)
-	}
-	if len(turns) == 0 {
-		return nil, nil
-	}
-	var data []byte
-	for index, turn := range turns {
-		turn = c.withResponseAudio(turn)
-		entry := evidenceLogEntry{TurnIndex: index + 1, ToolEvents: append([]evidenceToolEvent(nil), turn.toolEvents...)}
-		entry.Input.Text = turn.inputText.String()
-		entry.Input.AudioBytes = turn.inputAudio
-		entry.Input.AudioOffsetBytes = turn.inputOffset
-		entry.Input.Committed = turn.committed
-		entry.Input.AudioSegments = append([]string(nil), turn.inputSegments...)
-		entry.Response.Text = turn.responseText.String()
-		entry.Response.Complete = turn.complete
-		entry.Response.AudioBytes = turn.outputAudio
-		entry.Response.AudioOffsetBytes = turn.outputOffset
-		entry.Response.AudioSegments = append([]string(nil), turn.outputSegments...)
-		line, err := json.Marshal(entry)
-		if err != nil {
-			return nil, fmt.Errorf("encode session log entry %d: %w", index+1, err)
-		}
-		data = append(data, line...)
-		data = append(data, '\n')
-	}
-	return data, nil
-}
-
-// Full transcripts replace deltas for the same item; they are snapshots, not
-// another fragment. Distinct items remain distinct within a turn projection.
-// The typed transcript is authoritative for asynchronous cross-turn attribution.
-type evidenceText struct {
-	strings.Builder
-	transcripts []evidenceTranscript
-}
-
-type evidenceTranscript struct{ itemID, text string }
-
-func (c *evidenceConversation) transcriptText(input bool) *evidenceText {
-	if input {
-		return &c.turn.inputText
-	}
-	return &c.turn.responseText
-}
-
-func (t *evidenceText) observeTranscript(itemID, text string, complete bool) {
-	for index := range t.transcripts {
-		if t.transcripts[index].itemID == itemID {
-			if complete {
-				t.transcripts[index].text = text
-			} else {
-				t.transcripts[index].text += text
-			}
+		need := summarySliceEntryBytes + summaryCost(segment)
+		if !c.reserve(need, 1) {
 			return
 		}
+		c.turn.outputSegments = []string{segment}
 	}
-	t.transcripts = append(t.transcripts, evidenceTranscript{itemID: itemID, text: text})
-}
-
-func (t evidenceText) String() string {
-	var value strings.Builder
-	value.WriteString(t.Builder.String())
-	for _, item := range t.transcripts {
-		value.WriteString(item.text)
-	}
-	return value.String()
-}
-
-func (t evidenceText) Len() int {
-	size := t.Builder.Len()
-	for _, item := range t.transcripts {
-		size += len(item.text)
-	}
-	return size
 }

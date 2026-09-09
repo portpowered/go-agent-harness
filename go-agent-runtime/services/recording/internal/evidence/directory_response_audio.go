@@ -11,14 +11,29 @@ type evidenceResponseAudio struct {
 }
 
 func (c *evidenceConversation) trackResponse(id string) {
-	if id != "" && !slices.Contains(c.turn.responseIDs, id) {
-		c.turn.responseIDs = append(c.turn.responseIDs, id)
+	if c == nil || c.summaryFull || id == "" || slices.Contains(c.turn.responseIDs, id) || !c.ensureTurn() {
+		return
 	}
+	need := summarySliceEntryBytes + summaryCost(id)
+	if !c.reserve(need, 1) {
+		return
+	}
+	c.turn.responseIDs = append(c.turn.responseIDs, id)
 }
 
 func (c *evidenceConversation) recordResponseAudio(id string, count, offset uint64, segment string) {
+	if c == nil || c.summaryFull || id == "" {
+		return
+	}
+	c.ensureBudget()
 	if c.responseAudio == nil {
 		c.responseAudio = make(map[string]evidenceResponseAudio)
+	}
+	if _, exists := c.responseAudio[id]; !exists {
+		need := summaryMapEntryBytes + summaryCost(id, segment)
+		if !c.reserve(need, 1) {
+			return
+		}
 	}
 	audio := c.responseAudio[id]
 	if audio.bytes == 0 {
