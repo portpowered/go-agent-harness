@@ -67,7 +67,7 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 		runtimeHandle.configureCaptureSource(options.DeviceRequest.CaptureEnabled || len(options.CaptureTurns) > 0)
 	}
 	if runtimeHandle, ok := handle.(interface{ configureMediaRequirement(bool) }); ok {
-		runtimeHandle.configureMediaRequirement(deviceRequestHasDirection(options.DeviceRequest) || len(options.CaptureTurns) > 0)
+		runtimeHandle.configureMediaRequirement(deviceRequestHasDirection(options.DeviceRequest))
 	}
 	invocation.attachRecorder()
 	if err := invocation.validateDeviceAdmission(); err != nil {
