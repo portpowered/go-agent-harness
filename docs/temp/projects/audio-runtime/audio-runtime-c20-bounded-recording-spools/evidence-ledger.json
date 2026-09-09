@@ -1,7 +1,7 @@
 {
   "task": "audio-runtime-c20-bounded-recording-spools",
   "project": "audio-runtime",
-  "sourceRevision": "42624d62b4bb8bb153cd574377bbd50bd1518dd2",
+  "sourceRevision": "c9d43764c682dfeb9606a1f8f11ffd87be29c57f",
   "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
   "requiredAncestry": {
     "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -16,8 +16,8 @@
   },
   "consumerBuild": {
     "command": "go build -trimpath -mod=mod -o consumer consumer.go",
-    "candidateSHA256": "5ddb1a4afdfdc10a4a9302373a15fdfcba7b34344d57f0c1c71aabdfeb778ff5",
-    "baselineSHA256": "547e78219c39d8e144281eecf630789165dde63dad62d6f8b3b0d9c551e6bb03",
+    "candidateSHA256": "fd9368a691188fa0ab9776875153eca093ae17bf95b2555fdfc97930ced6299d",
+    "baselineSHA256": "2b6a71a6b4234dbf75aa6f520ba6dceacab92e45d6d571d4606c97951b67d509",
     "surface": "recording Wire, LiveRecorder, ProviderCaptureSink; no CLI or recording internals",
     "processLimitSeconds": 60
   },
@@ -35,7 +35,7 @@
       "case": "many-small",
       "pacedEvents": 512,
       "status": "complete",
-      "totalBytes": 277995,
+      "totalBytes": 277989,
       "transcriptLines": 513,
       "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
     },
@@ -70,11 +70,11 @@
     }
   },
   "focusedChecks": {
-    "goTestRecording": "71 passed in 4 packages",
-    "goTestRecordingRace": "71 passed in 4 packages",
+    "goTestRecording": "74 passed in 4 packages",
+    "goTestRecordingRace": "74 passed in 4 packages",
     "goVetRecording": "no issues",
-    "coverageRecordingEvidence": "62 passed; 80.3% focused package coverage (939/1170 statements covered after repair)",
-    "architectureSize": "passed: 181 packages, 1860 files, 27175 functions",
+    "coverageRecordingEvidence": "65 passed; 80.7% focused package coverage",
+    "architectureSize": "passed: 181 packages, 1860 files, 27182 functions",
     "diffCheck": "passed",
     "ci": "not polled; script-owned gate remains external",
     "review": "not performed by executor"
