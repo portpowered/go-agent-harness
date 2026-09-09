@@ -1173,3 +1173,36 @@ C18 current-head rejection evidence handoff checkpoint
   vertical probe, or project acceptance is claimed. The next owner must use
   the exact new-head check result; any actionable C18 failure returns to this
   same task, while the unrelated RTC timing failure remains outside scope.
+
+C18 hermetic rejection reconciliation and same-owner handoff checkpoint
+
+- Re-read the canonical board for `work-task-24` and all concluded C18 review
+  rows. The current PR #410 head `ee754fc00baff93d7949b770602cf00c0e95f95d`
+  was rejected by completed run `34377065588`, job `102552434392`, whose full
+  372-line log is recorded with SHA256
+  `58890efda3339b8f5f254de1aa60e5d4194ef83f90084876f94a9fa763931ad2` in
+  `ci-rejection-34377065588.json`. The sole failure is
+  `go-audio/pkg/clock/clock_test.go:326`,
+  `TestDeterministicContextDeadlineAndParentCancellation`, reporting that
+  parent cancellation did not propagate.
+- The exact named clock control passes `20/20` on the current source. The
+  clock package and test are absent from `git diff origin/main...HEAD`; C18's
+  extracted replay/Wire/embedding paths are not involved, so this remains
+  non-waived external CI evidence and no unrelated repair is authorized.
+- C18 causal validation remains green at the exact candidate: replay normal
+  and race each pass `252` tests across four packages; separate
+  `GOWORK=off` embedding normal and race each pass `129` tests; and
+  `rtk env COUNT=1 bash scripts/test-session-ci-regressions.sh all` exits `0` in
+  normal, coverage and race modes with expected mismatch/PCM/transcript
+  negative controls. `origin/main` is `e4137eba6a6499142f50701609c1149afc71db84`
+  and remains an ancestor; the worktree was clean before this evidence update.
+- Review30/37/40/42/43 repairs remain mapped to `087d30c5`, `0df3e912`,
+  `02478f63`, `e2e7bbff` and `cf663a66`; the authorized architecture delta
+  remains exactly 14 stale baseline-entry deletions plus the external
+  consumer `cmd` allowlist. No CI success, independent review, merge,
+  vertical acceptance or project acceptance is claimed.
+- Exact next action: commit this raw rejection/evidence checkpoint, push the
+  same admitted branch, update PR #410 with the non-waived clock failure and
+  current causal proof, then return `ACCEPTED` to the script-owned current-head
+  CI gate without polling. Retain ownership through `CONTINUE` for any exact
+  same-head actionable C18 rejection; do not self-review or broaden scope.
