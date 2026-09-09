@@ -171,3 +171,38 @@ post-merge vertical/project acceptance. Next action: commit this evidence
 checkpoint, push the same branch, update PR #414 with exact head/base and
 repair evidence, and return `ACCEPTED` to the script-owned CI gate without
 polling it. Retain this task for any exact C21-owned rejection.
+
+## Residual duplex EOF repair checkpoint
+
+The current-head CI rejection for PR #414 at `84558cdc` was inspected from
+the complete saved job log `/tmp/audio-runtime-c21-ci-coverage-34384515490-api.log`.
+It failed only
+`TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`:
+both harnesses completed three turns and all six crossings, but harness B
+reported `Clean=true`, `FinalTick=10`, `OutputFrame=true`, and
+`InputEOF=false`; harness A completed cleanly. This is distinct from the
+earlier absent-tail/deadlock signature and is not waived or treated as an
+intermittent pass.
+
+The causal fixture defect was the bridge reader's simultaneous
+`ctx.Done()`/queued-EOF select. Provider close can cancel the audio source
+after the final bridge writer has published EOF; the old select could return
+cancellation before consuming that already-published packet. The repair in
+`session_duplex_overlap_bridges_test.go` first drains an available packet and
+rechecks the queue when cancellation wins. EOF accounting remains in the
+single packet-consumption helper, so `observedEOF` is set only after the
+reader actually returns `io.EOF`; queued EOF is never labeled consumed by
+publication alone. A focused
+`TestV8MultiTurnBridgeReadConsumesQueuedEOFAfterCancellation` regression pins
+the ordering.
+
+Post-repair causal evidence from the same worktree: the focused EOF regression
+and exact missing-commit control passed; the complete multi-turn family passed
+normal and under `-race`, including six crossings and PCM/transcript/commit
+negative controls. C21 gateway normal/race, sample-only DeviceSink, closed-
+target room normal/race, targeted vet, `git diff --check`, and the architecture
+gate also passed. The architecture gate reports 181 packages, 1860 files, and
+27218 functions without baseline changes. Existing public consumer/YUI/parity
+evidence from `e7605d95` remains unchanged because this repair is limited to
+the admitted duplex fixture path. CI, independent review, guarded merge and
+post-merge validation remain external.

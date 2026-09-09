@@ -5,10 +5,12 @@ import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/intern
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"io"
 	"sync"
+	"testing"
 )
 
 type v8MultiTurnBridgePacket struct {
@@ -244,23 +246,63 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 	if len(destination) < v8PCMFrameBytes {
 		return 0, fmt.Errorf("%s receiver requested %d PCM bytes, want at least %d", b.direction, len(destination), v8PCMFrameBytes)
 	}
+	// A provider close cancels the audio source at the same boundary where the
+	// final bridge writer may already have published EOF. Prefer a packet that
+	// is already queued, then recheck after cancellation, so cancellation does
+	// not turn an actually consumed EOF into a false missing-EOF observation.
+	if count, err, ok := b.tryReadPacket(destination); ok {
+		return count, err
+	}
 	select {
 	case <-ctx.Done():
+		if count, err, ok := b.tryReadPacket(destination); ok {
+			return count, err
+		}
 		return 0, ctx.Err()
 	case <-b.coordinator.abort:
 		return 0, context.Canceled
 	case packet := <-b.packets:
-		if packet.eof {
-			b.mu.Lock()
-			b.eofRead = true
-			b.mu.Unlock()
-			b.eofOnce.Do(func() { close(b.eofSeen) })
-			return 0, io.EOF
-		}
-		copy(destination, packet.crossing.Emitted)
-		b.receiver.record(packet.crossing, packet.crossing.Emitted)
-		close(packet.ack)
-		return len(packet.crossing.Emitted), nil
+		return b.consumePacket(destination, packet)
+	}
+}
+
+func (b *v8MultiTurnBridge) tryReadPacket(destination []byte) (int, error, bool) {
+	select {
+	case packet := <-b.packets:
+		count, err := b.consumePacket(destination, packet)
+		return count, err, true
+	default:
+		return 0, nil, false
+	}
+}
+
+func (b *v8MultiTurnBridge) consumePacket(destination []byte, packet v8MultiTurnBridgePacket) (int, error) {
+	if packet.eof {
+		b.mu.Lock()
+		b.eofRead = true
+		b.mu.Unlock()
+		b.eofOnce.Do(func() { close(b.eofSeen) })
+		return 0, io.EOF
+	}
+	copy(destination, packet.crossing.Emitted)
+	b.receiver.record(packet.crossing, packet.crossing.Emitted)
+	close(packet.ack)
+	return len(packet.crossing.Emitted), nil
+}
+
+func TestV8MultiTurnBridgeReadConsumesQueuedEOFAfterCancellation(t *testing.T) {
+	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
+	bridge := newV8MultiTurnBridge(coordinator, "A-to-B", &v8RecordingView{}, &v8RecordingView{}, nil)
+	bridge.packets <- v8MultiTurnBridgePacket{eof: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	count, err := bridge.read(ctx, make([]byte, v8PCMFrameBytes))
+	if !errors.Is(err, io.EOF) || count != 0 {
+		t.Fatalf("read after cancellation = count %d, err %v; want consumed EOF", count, err)
+	}
+	if !bridge.observedEOF() {
+		t.Fatal("queued EOF was returned but not recorded as consumed")
 	}
 }
 
