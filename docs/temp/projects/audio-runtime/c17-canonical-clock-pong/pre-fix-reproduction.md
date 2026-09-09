@@ -102,3 +102,18 @@ CI rejection repair checkpoint:
   tests each), full `pkg/subsystems` plus `pkg/agentloop` normal and race
   suites (151 tests each), package build/vet, the public-loop consumer, and
   pinned `make lint` with `0 issues` in every module.
+
+Fresh-main delivery checkpoint:
+
+- `git fetch origin main` refreshed `origin/main` to
+  `f98733864d9c46c691a1198d714943afbd52fbcb`. The branch integrated it with
+  merge commit `d2beea5a25f5b420db5cf58bd204af2a3416928f`; the repair commit is
+  `2daca50e`. Required startup, baseline, planning-main, C15, and current-main
+  ancestors all pass `git merge-base --is-ancestor`.
+- The isolated branch remains
+  `codex/audio-runtime-c17-canonical-clock-pong`, matching `prd.json`, and the
+  candidate diff remains limited to the five original owned implementation/
+  evidence paths plus the canonical board checkpoint under the owned C17
+  directory. Consumer source/executable hashes remain
+  `7b0954a36e5b57d0d0f41e7d6ecab14029bb2c9ba33fd9342706febab4ac579d` and
+  `632bc6f2498f47baa48bd605d38d0fa694f37e005ff2ae2d91f9a03b8072e7a3`.
