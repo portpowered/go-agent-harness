@@ -20,7 +20,7 @@ Run from the repository root:
 python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all
 ```
 
-The verifier pins freshly fetched main revision `98ce636dd67349ba64f22cd7916dd370cf4ba484` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
+The verifier pins freshly fetched main revision `a1156f0c0c6271643578cb37894026944df2a633` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
 
 - canonical `go-audio/pkg/mixer` mixer/accumulator tests;
 - canonical playback queue/callback-boundary tests;
@@ -117,6 +117,32 @@ fixture digests, changed-path allowlist, focused normal/race/vet checks, zero-te
 and child-hang controls all remained accepted, with no surviving child process.
 This is an owned evidence refresh only; it does not repair the C20 composition
 failure or authorize an unchanged CI resubmission.
+
+## Current-main refresh after reviewed C21 merge
+
+The fetched `origin/main` advanced to reviewed PR414 merge commit
+`a1156f0c0c6271643578cb37894026944df2a633` (all nine required checks passed).
+It is a C21 device-consumption merge, not the missing C20 composition repair.
+That main was merged into the isolated C25 branch at candidate
+`39f7b6a8b454adb170b010ac280c65d96354278f`, preserving the C21 ancestry and
+leaving the C25 change set confined to its admitted evidence folder relative
+to current main.
+
+The verifier now pins `a1156f0c0c6271643578cb37894026944df2a633` and its reproducible
+55,592,960-byte archive SHA-256
+`0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+At measured candidate `39f7b6a8b454adb170b010ac280c65d96354278f`,
+`verify.py --mode all` returned `ACCEPTED` in 10.4 seconds across 25 bounded
+commands: source-gap, archive, fixture, AST dependency, allowlist, focused
+normal/race/vet, zero-test, timeout-cleanup, and aggregate-shutdown controls
+all passed with no surviving child process.
+
+This remains source/package evidence only. PR417 is still rejected at
+`b061bf852076d4b36526600377ad916751e32b4b` by the C20-owned coverage failure
+at `agent-cli/internal/wire/composition_test.go:417`; PR412 has not put a
+reviewed C20 repair on main. C25 will retain the task, avoid an unchanged
+submission, and refresh again only after that same-task C20 repair is reviewed
+into main.
 
 ## Extraction plan
 

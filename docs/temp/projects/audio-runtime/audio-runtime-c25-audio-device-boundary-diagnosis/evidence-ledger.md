@@ -5,7 +5,8 @@
 - Factory admission command: `python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c25-audio-device-boundary-diagnosis`.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c25-audio-device-boundary-diagnosis"}`.
 - PRD branch: `codex/audio-runtime-c25-audio-device-boundary-diagnosis`; isolated worktree and `git branch --show-current` agree.
-- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`. The latest pre-repair evidence baseline is `8e96dc077744d204994274b22356af8e856a8aa7`; earlier `67265932` and later documentation successors remain preserved checkpoints.
+- Earlier `origin/main` refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`. The latest pre-repair evidence baseline is `8e96dc077744d204994274b22356af8e856a8aa7`; earlier `67265932` and later documentation successors remain preserved checkpoints.
+- Current `origin/main`: reviewed PR414 merge `a1156f0c0c6271643578cb37894026944df2a633`; it was merged into the isolated candidate at `39f7b6a8b454adb170b010ac280c65d96354278f` and is pinned by the current verifier.
 - Baseline ancestry: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` is an ancestor of the admitted head.
 - Integration ancestry: `8bdafc7f947a3a2c9856220abdc539437035bd21` is an ancestor of the admitted head.
 - Refreshed source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
@@ -16,6 +17,14 @@
 - C15 `docs/temp/projects/audio-runtime/c15-probe-result-reconciliation/report.json`: accepted relative/absolute/nested/dot-dot software replay and fail-closed unsafe inputs; no physical/acoustic/live proof.
 - C16 `docs/temp/projects/audio-runtime/c16-probe-result-reconciliation/report.json`: accepted software sample-only sink partial/full/cancel/error/close behavior; actual physical consumption remains unproved.
 - C17 `docs/temp/projects/audio-runtime/c17-probe-result-reconciliation/report.json`: accepted injected canonical PONG clock/compatibility/clean cancellation; broader parsing, DSP, sample timing, buffer centralization, and device I/O remain open.
+
+## Current-main ancestry and exact-head refresh
+
+- The fetched reviewed `origin/main` is PR414 merge `a1156f0c0c6271643578cb37894026944df2a633`; all nine required checks on that merge passed. It is the C21 device-consumption merge, not a C20 composition repair.
+- The isolated C25 branch merged that main at candidate `39f7b6a8b454adb170b010ac280c65d96354278f`. Relative to `a1156f0`, the committed C25 changes remain under the admitted evidence prefix; no C21, C20, production, shared-module, baseline, or existing-fixture path was edited by C25.
+- The verifier and fixture manifest now pin `a1156f0`. The rebuilt/materialized source archive is 55,592,960 bytes with SHA-256 `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- At measured candidate `39f7b6a8b454adb170b010ac280c65d96354278f`, `verify.py --mode all` returned `ACCEPTED` in 10.4 seconds across 25 bounded commands. Source-gap, AST dependency, fixture, archive, allowlist, focused normal/race/vet, zero-test, child-cleanup, and aggregate-shutdown controls passed with no surviving child.
+- PR417 remains rejected at `b061bf852076d4b36526600377ad916751e32b4b` by C20-owned `agent-cli/internal/wire/composition_test.go:417`; PR412 still has no reviewed C20 repair on main. C25 makes no unchanged script-CI submission.
 
 ## Causal source evidence at the admitted head
 

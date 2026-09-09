@@ -1,9 +1,9 @@
 # C25 audio/device boundary diagnosis
 
 - Task: `audio-runtime-c25-audio-device-boundary-diagnosis`
-- Candidate revision: `a52291203d244d9d4f4d3a06511b9519ac65acc9`
-- Source revision: `98ce636dd67349ba64f22cd7916dd370cf4ba484`
-- Source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`
+- Candidate revision: `39f7b6a8b454adb170b010ac280c65d96354278f`
+- Source revision: `a1156f0c0c6271643578cb37894026944df2a633`
+- Source archive SHA-256: `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`
 - Decision basis: source-only diagnosis; no realtime, provider, physical-device, or acoustic claim.
 - The pinned source is required to be an ancestor of the candidate and every audited production path is required to be unchanged from that source.
 
@@ -42,7 +42,7 @@ That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device co
 - Positive canonical graph: `ACCEPTED`.
 - Negative bypass graph: `REJECTED_AS_FORBIDDEN`.
 - Fixture manifest: `ACCEPTED` with exact SHA-256/byte/line checks for both owned fixtures.
-- Pinned source archive: `ACCEPTED`; rebuilt Git archive SHA-256 is `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
+- Pinned source archive: `ACCEPTED`; rebuilt Git archive SHA-256 is `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
 - Changed-path allowlist: `ACCEPTED` for the complete source-to-candidate and working-tree path set.
 - The canonical `go-audio/pkg/mixer` consumes an injected `clock.TimerSource`, submits `audio.PCMFrame` values into bounded frame buffers, and exposes media ports; device runtime owns the playback queue and callback boundary.
 

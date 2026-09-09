@@ -8,7 +8,9 @@
   "sharedModulePathsModified": [],
   "baselinePathsModified": [],
   "realtimeOrDeviceAccess": false,
-  "candidateHeadAtCheckpoint": "a52291203d244d9d4f4d3a06511b9519ac65acc9",
+  "candidateHeadAtCheckpoint": "39f7b6a8b454adb170b010ac280c65d96354278f",
+  "sourceRevisionAtCheckpoint": "a1156f0c0c6271643578cb37894026944df2a633",
+  "originMainAtCheckpoint": "a1156f0c0c6271643578cb37894026944df2a633",
   "pullRequest": 417,
   "latestCIRejection": {
     "run": "34413969081",

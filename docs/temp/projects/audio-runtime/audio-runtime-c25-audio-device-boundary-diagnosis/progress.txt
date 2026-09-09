@@ -128,3 +128,26 @@ Exact-head verifier refresh after coverage rejection
   path and will not submit unchanged implementation. Next action is a reviewed
   C20 repair integrated into `origin/main`, then a fresh C25 refresh and same-task
   script-CI handoff.
+
+Current-main ancestry and exact-head refresh
+- Fetched `origin/main` at reviewed PR414 merge
+  `a1156f0c0c6271643578cb37894026944df2a633`; all nine required checks passed.
+  This is the C21 device-consumption merge, not the missing C20 composition
+  repair. Merged it into the isolated C25 branch at candidate
+  `39f7b6a8b454adb170b010ac280c65d96354278f`, preserving reviewed ancestry and
+  leaving the C25 diff relative to current main under the admitted evidence
+  prefix.
+- Re-pinned the verifier and fixture manifest to `a1156f0`. The reproducible
+  and materialized 55,592,960-byte source archive has SHA-256
+  `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- At measured candidate `39f7b6a8b454adb170b010ac280c65d96354278f`,
+  `verify.py --mode all` returned `ACCEPTED` in 10.4 seconds across 25 bounded
+  commands. Source-gap, archive, fixture, AST dependency, allowlist, focused
+  normal/race/vet, zero-test, timeout-cleanup, and aggregate-shutdown controls
+  passed with no surviving child process.
+- PR417 remains rejected at `b061bf852076d4b36526600377ad916751e32b4b` by the
+  C20-owned coverage assertion at
+  `agent-cli/internal/wire/composition_test.go:417`; PR412 still has no reviewed
+  C20 repair on main. Next action: retain C25, wait for the reviewed same-task
+  C20 repair, then refresh exact-head evidence and submit the changed task to
+  script CI without polling.

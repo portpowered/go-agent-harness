@@ -1,7 +1,9 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "candidate_revision_at_diagnosis": "a52291203d244d9d4f4d3a06511b9519ac65acc9",
+  "candidate_revision_at_diagnosis": "39f7b6a8b454adb170b010ac280c65d96354278f",
+  "source_revision_at_diagnosis": "a1156f0c0c6271643578cb37894026944df2a633",
+  "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
   "chosen_dependency": {
     "name": "legacy room-owned PCM16 cadence/mixer dependency",
     "current_paths": [
