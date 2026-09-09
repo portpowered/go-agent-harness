@@ -1812,6 +1812,46 @@ def command_record_artifact_errors(
     return errors
 
 
+def warm_test_binary_artifact_errors(
+    binary: dict[str, Any],
+    compile_command: dict[str, Any],
+    *,
+    root: Path,
+    label: str,
+) -> list[str]:
+    """Validate the retained artifact that backs a successful warm compile."""
+
+    errors: list[str] = []
+    path_value = binary.get("path")
+    if not isinstance(path_value, str) or not path_value:
+        return [f"{label} has no retained test binary path"]
+    try:
+        path = artifact_path(root, path_value)
+        raw = path.read_bytes()
+    except (OSError, ProfileError) as exc:
+        errors.append(f"{label} test binary artifact is unreadable: {exc}")
+        return errors
+    if sha256_bytes(raw) != binary.get("sha256"):
+        errors.append(f"{label} test binary sha256 does not match retained artifact")
+    if len(raw) != binary.get("bytes"):
+        errors.append(f"{label} test binary bytes does not match retained artifact")
+
+    compile_path_value = compile_command.get("binary_path")
+    if not isinstance(compile_path_value, str) or not compile_path_value:
+        errors.append(f"{label} compile command has no binary_path")
+    else:
+        try:
+            compile_path = artifact_path(root, compile_path_value)
+        except ProfileError as exc:
+            errors.append(f"{label} compile command binary_path is invalid: {exc}")
+        else:
+            if compile_path != path:
+                errors.append(
+                    f"{label} retained test binary path does not match compile command"
+                )
+    return errors
+
+
 def validate_metadata_commands(
     value: Any, *, root: Path, label: str
 ) -> list[str]:
@@ -1910,6 +1950,16 @@ def command_timing_errors(record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     starts = record.get("monotonic_start_ns")
     ends = record.get("monotonic_end_ns")
+    valid_start = (
+        isinstance(starts, int)
+        and not isinstance(starts, bool)
+        and 0 <= starts <= MAX_MONOTONIC_NANOSECONDS
+    )
+    valid_end = (
+        isinstance(ends, int)
+        and not isinstance(ends, bool)
+        and 0 <= ends <= MAX_MONOTONIC_NANOSECONDS
+    )
     if isinstance(starts, bool) or not isinstance(starts, int) or starts < 0:
         errors.append("monotonic_start_ns must be a non-negative integer")
     elif starts > MAX_MONOTONIC_NANOSECONDS:
@@ -1930,10 +1980,23 @@ def command_timing_errors(record: dict[str, Any]) -> list[str]:
     ended_at = parse_utc(record.get("ended_at_utc"))
     if started_at is not None and ended_at is not None and ended_at < started_at:
         errors.append("ended_at_utc must not precede started_at_utc")
+    wall_seconds: float | None = None
     try:
-        parse_elapsed(record.get("wall_seconds"))
+        wall_seconds = parse_elapsed(record.get("wall_seconds"))
     except ValueError as exc:
         errors.append(f"wall_seconds is invalid: {exc}")
+    if valid_start and valid_end and ends >= starts and wall_seconds is not None:
+        monotonic_seconds = (ends - starts) / 1_000_000_000.0
+        if not math.isclose(
+            wall_seconds,
+            monotonic_seconds,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            errors.append(
+                "wall_seconds does not match the monotonic interval "
+                f"({wall_seconds!r} != {monotonic_seconds!r})"
+            )
     return errors
 
 
@@ -3209,6 +3272,19 @@ def validate_capture(
                     field in binary for field in ("path", "sha256", "bytes")
                 ):
                     errors.append("successful warm compile must retain its test binary artifact")
+                elif (
+                    warm.get("status") == "PASS"
+                    and binary.get("status") == "PASS"
+                    and isinstance(command, dict)
+                ):
+                    errors.extend(
+                        warm_test_binary_artifact_errors(
+                            binary,
+                            command,
+                            root=root,
+                            label=f"warm test binary {binary.get('package')!r}",
+                        )
+                    )
 
         full_records = phase_records["full"]
         cohort_records = phase_records["cohort"]
@@ -3239,6 +3315,32 @@ def validate_capture(
             )
             if first_cohort_index <= last_full_index:
                 errors.append("cohort commands must follow the full inventory commands")
+        for module in manifest.get("modules", []):
+            if not isinstance(module, dict) or not isinstance(module.get("name"), str):
+                continue
+            expected_packages = [
+                package.get("import_path")
+                for package in module.get("packages", [])
+                if isinstance(package, dict)
+                and isinstance(package.get("import_path"), str)
+            ]
+            if not expected_packages:
+                continue
+            module_full_records = [
+                record
+                for record in full_records
+                if record.get("module") == module.get("name")
+            ]
+            if len(module_full_records) != 1:
+                continue
+            full_record = module_full_records[0]
+            if full_record.get("selected_packages") != expected_packages:
+                errors.append(
+                    f"full inventory trial record {full_record.get('record_id')!r} "
+                    "does not cover the complete module inventory: "
+                    f"expected {expected_packages!r}, got "
+                    f"{full_record.get('selected_packages')!r}"
+                )
 
     for record in run_records:
         phase = record.get("phase")

@@ -30,6 +30,14 @@ const (
 // MESSAGE.START, TEXT.*, AUDIO.*, REASONING.*, TOOLCALL.*, USAGE_INFO, MESSAGE.END.
 // Supports delta.reasoning for OpenRouter/DeepInfra thinking tokens and delta.audio for audio output.
 func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
+	streamSSEToGatewayWithClose(reader, ch, nil)
+}
+
+// streamSSEToGatewayWithClose joins response-body cleanup to the provider
+// terminal event. The caller must not expose MESSAGE.END until closeBody has
+// returned; otherwise consumers can flush an HTTP recorder while its body is
+// still active.
+func streamSSEToGatewayWithClose(reader io.Reader, ch chan<- messages.StreamMessage, closeBody func() error) {
 	const defaultIndex = 0
 
 	ch <- messages.StreamMessage{
@@ -256,12 +264,24 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 			}
 		}
 	}
+	scanErr := scanner.Err()
+	if closeBody != nil {
+		if err := closeBody(); err != nil {
+			ch <- messages.StreamMessage{
+				Type:               messages.StreamTypeError,
+				ActorProvidedIndex: defaultIndex,
+				Value:              providers.NewStreamTransportErrorValue(err),
+			}
+			return
+		}
+	}
+
 	sendMessageEnd()
 
-	if err := scanner.Err(); err != nil {
-		streamErr := gateway.NewTransportError("openai", "chat completions stream", err)
+	if scanErr != nil {
+		streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
 		classification := providers.ErrorClassTransport
-		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", scanErr); cancellationErr != nil {
 			streamErr = cancellationErr
 			classification = providers.ErrorClassCancellation
 		}

@@ -334,6 +334,480 @@ def hermetic_lifecycle_manifest(
     return manifest_path, quiet
 
 
+def hermetic_analyzer_fixture(case_dir: Path) -> tuple[Path, Path, Path]:
+    """Build a complete offline hermetic capture for analyzer tamper controls."""
+
+    root = case_dir / "run"
+    root.mkdir(parents=True, exist_ok=True)
+    repo = str(case_dir.resolve())
+    source_sha = "a" * 40
+    go = sys.executable
+    cache_root = root / "cache"
+    cache_paths = {
+        "root": str(cache_root.resolve()),
+        "gocache": str((cache_root / "gocache").resolve()),
+        "gomodcache": str((cache_root / "gomodcache").resolve()),
+    }
+    env = {
+        "CGO_ENABLED": "0",
+        "GOMAXPROCS": "1",
+        "GOCACHE": cache_paths["gocache"],
+        "GOMODCACHE": cache_paths["gomodcache"],
+    }
+    captured = _datetime.datetime.now(_datetime.timezone.utc)
+    quiet_path = root / "quiet-evidence.json"
+    quiet_value = {
+        "schema": QUIET_SCHEMA,
+        "valid": True,
+        "isolation": "dedicated",
+        "captured_at_utc": captured.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "valid_until_utc": (captured + _datetime.timedelta(minutes=10)).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "runner": {
+            "os": "synthetic-dedicated",
+            "architecture": "synthetic",
+            "cpu": "synthetic",
+            "go_version": "not-used",
+        },
+        "before": {"active_work": [], "processes": [], "load": "synthetic"},
+        "after": {"active_work": [], "processes": [], "load": "synthetic"},
+    }
+    write_json(quiet_path, quiet_value)
+    quiet_ref = {
+        "active_work": [],
+        "captured_at_utc": quiet_value["captured_at_utc"],
+        "isolation": quiet_value["isolation"],
+        "path": str(quiet_path.resolve()),
+        "runner": quiet_value["runner"],
+        "sha256": sha256_file(quiet_path),
+        "valid_until_utc": quiet_value["valid_until_utc"],
+    }
+
+    commands: list[dict[str, Any]] = []
+    record_index = 0
+
+    def add_command(
+        record_id: str,
+        *,
+        phase: str,
+        module: str,
+        role: str,
+        scope: str,
+        trial: int | None,
+        selected_packages: list[str],
+        argv: list[str],
+        cwd: str,
+        env_overrides: dict[str, str],
+        stdout: bytes = b"",
+        package: str | None = None,
+        binary_path: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        nonlocal record_index
+        record_index += 1
+        stdout_path = root / "artifacts" / f"{record_id}.stdout"
+        stderr_path = root / "artifacts" / f"{record_id}.stderr"
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_bytes(stdout)
+        stderr_path.write_bytes(b"")
+        start_ns = 1_000_000_000 + record_index * 1_000_000
+        record: dict[str, Any] = {
+            "schema": "c11-command-record-v1",
+            "record_id": record_id,
+            "label": record_id,
+            "phase": phase,
+            "module": module,
+            "role": role,
+            "scope": scope,
+            "trial": trial,
+            "selected_packages": selected_packages,
+            "argv": argv,
+            "cwd": cwd,
+            "env_overrides": env_overrides,
+            "timeout_seconds": 5,
+            "started_at_utc": "2026-09-09T00:00:00.000Z",
+            "ended_at_utc": "2026-09-09T00:00:00.001Z",
+            "monotonic_start_ns": start_ns,
+            "monotonic_end_ns": start_ns + 1_000_000,
+            "wall_seconds": 0.001,
+            "timed_out": False,
+            "exit_status": 0,
+            "signal": None,
+            "spawn_error": None,
+            "stdout_path": str(stdout_path.relative_to(root)),
+            "stdout_sha256": sha256_file(stdout_path),
+            "stdout_bytes": len(stdout),
+            "stderr_path": str(stderr_path.relative_to(root)),
+            "stderr_sha256": sha256_file(stderr_path),
+            "stderr_bytes": 0,
+            "status": "PASS",
+        }
+        if package is not None:
+            record["package"] = package
+        if binary_path is not None:
+            record["binary_path"] = binary_path
+        if extra:
+            record.update(extra)
+        commands.append(record)
+        return record
+
+    packages = [
+        {
+            "import_path": "example/agent-cli",
+            "package_arg": ".",
+            "has_tests": True,
+        },
+        {
+            "import_path": "example/omitted",
+            "package_arg": ".",
+            "has_tests": False,
+        },
+    ]
+    modules = [
+        {
+            "name": name,
+            "path": repo,
+            "relative": name,
+            "packages": packages if name == "agent-cli" else [],
+        }
+        for name in HERMETIC_MODULES
+    ]
+    module_paths = {module["name"]: module["path"] for module in modules}
+
+    metadata_command_ids: list[str] = []
+    manifest_metadata = (
+        (
+            "manifest-source-head",
+            "source-rev-parse",
+            ["git", "-C", repo, "rev-parse", "HEAD"],
+            {},
+            f"{source_sha}\n".encode(),
+        ),
+        (
+            "manifest-source-status",
+            "source-status",
+            ["git", "-C", repo, "status", "--porcelain"],
+            {},
+            b"",
+        ),
+        (
+            "manifest-go-env",
+            "go-env",
+            [
+                go,
+                "env",
+                "-json",
+                "GOOS",
+                "GOARCH",
+                "GOVERSION",
+                "GOMODCACHE",
+                "GOCACHE",
+                "GOPATH",
+                "GOWORK",
+            ],
+            env,
+            b"{}\n",
+        ),
+        (
+            "manifest-go-version",
+            "go-version",
+            [go, "version"],
+            env,
+            b"go version synthetic\n",
+        ),
+    )
+    for record_id, role, argv, command_env, stdout in manifest_metadata:
+        add_command(
+            record_id,
+            phase="metadata",
+            module="manifest",
+            role=role,
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=argv,
+            cwd=repo,
+            env_overrides=command_env,
+            stdout=stdout,
+        )
+        metadata_command_ids.append(record_id)
+
+    inventory_command_ids: list[str] = []
+    for module in modules:
+        record_id = f"inventory-{module['name']}"
+        add_command(
+            record_id,
+            phase="inventory",
+            module=module["name"],
+            role="go-list",
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=[go, "list", "-json", "-tags=nomicrophone", "./..."],
+            cwd=module_paths[module["name"]],
+            env_overrides=env,
+            stdout=b"{}\n",
+        )
+        inventory_command_ids.append(record_id)
+
+    binary_path = root / "warm" / "test-binaries" / "agent-cli.test"
+    binary_path.parent.mkdir(parents=True, exist_ok=True)
+    binary_path.write_bytes(b"synthetic test binary\n")
+    binary_relative = str(binary_path.relative_to(root))
+    warm_command_ids: list[str] = []
+    for module in modules:
+        record_id = f"warm-download-{module['name']}"
+        add_command(
+            record_id,
+            phase="warm",
+            module=module["name"],
+            role="go-mod-download",
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=[go, "mod", "download"],
+            cwd=module_paths[module["name"]],
+            env_overrides=env,
+        )
+        warm_command_ids.append(record_id)
+    compile_record_id = "warm-compile-agent-cli-example-agent-cli"
+    add_command(
+        compile_record_id,
+        phase="warm",
+        module="agent-cli",
+        role="go-test-binary-compile",
+        scope="manifest",
+        trial=1,
+        selected_packages=["example/agent-cli"],
+        argv=[
+            go,
+            "test",
+            "-tags=nomicrophone",
+            "-run",
+            "^$",
+            "-count=1",
+            "-p",
+            "1",
+            "-timeout",
+            "5s",
+            "-c",
+            "-o",
+            str(binary_path.resolve()),
+            ".",
+        ],
+        cwd=repo,
+        env_overrides=env,
+        package="example/agent-cli",
+        binary_path=str(binary_path.resolve()),
+    )
+    warm_command_ids.append(compile_record_id)
+
+    full_output = (
+        b'{"Action":"start","Package":"example/agent-cli"}\n'
+        b'{"Action":"pass","Package":"example/agent-cli","Elapsed":0.02}\n'
+        b'{"Action":"start","Package":"example/omitted"}\n'
+        b'{"Action":"output","Package":"example/omitted","Output":"? [no test files]\\n"}\n'
+        b'{"Action":"skip","Package":"example/omitted","Elapsed":0.0}\n'
+    )
+    cohort_output = b'{"Action":"start","Package":"example/agent-cli"}\n{"Action":"pass","Package":"example/agent-cli","Elapsed":0.01}\n'
+
+    def add_run_metadata(module: str, trial: int, prefix: str) -> list[str]:
+        ids = [
+            f"{prefix}-source-head-{module}-{trial}",
+            f"{prefix}-source-status-{module}-{trial}",
+        ]
+        add_command(
+            ids[0],
+            phase="metadata",
+            module=module,
+            role="source-rev-parse",
+            scope="run",
+            trial=trial,
+            selected_packages=[],
+            argv=["git", "-C", repo, "rev-parse", "HEAD"],
+            cwd=repo,
+            env_overrides={},
+            stdout=f"{source_sha}\n".encode(),
+        )
+        add_command(
+            ids[1],
+            phase="metadata",
+            module=module,
+            role="source-status",
+            scope="run",
+            trial=trial,
+            selected_packages=[],
+            argv=["git", "-C", repo, "status", "--porcelain"],
+            cwd=repo,
+            env_overrides={},
+            stdout=b"",
+        )
+        return ids
+
+    full_group = "full-inventory"
+    full_metadata_ids = add_run_metadata("agent-cli", 1, "full")
+    add_command(
+        "full-agent-cli",
+        phase="full",
+        module="agent-cli",
+        role="go-test",
+        scope="run",
+        trial=1,
+        selected_packages=[package["import_path"] for package in packages],
+        argv=[
+            go,
+            "run",
+            "./cmd/testtimeout",
+            "--timeout",
+            "5s",
+            "--",
+            go,
+            "test",
+            "./...",
+            "-json",
+            "-count=1",
+            "-tags=nomicrophone",
+            "-p",
+            "1",
+            "-timeout",
+            "5s",
+        ],
+        cwd=repo,
+        env_overrides=env,
+        stdout=full_output,
+        extra={
+            "source_sha": source_sha,
+            "source_validation": {
+                "repo": repo,
+                "head": source_sha,
+                "expected_head": source_sha,
+                "dirty_paths": [],
+                "expected_dirty_paths": [],
+                "matches_manifest": True,
+                "metadata_record_ids": full_metadata_ids,
+            },
+            "run_group_id": full_group,
+            "repeat_index": 1,
+            "requested_repetitions": 1,
+            "cohort": False,
+            "expected_package_count": 2,
+            "test_result_cache_policy": "disabled-by--count=1",
+            "quiet_evidence": quiet_ref,
+        },
+    )
+
+    cohort_group = "cohort-agent-cli"
+    for trial in (1, 2):
+        metadata_ids = add_run_metadata("agent-cli", trial, "cohort")
+        add_command(
+            f"cohort-agent-cli-{trial}",
+            phase="cohort",
+            module="agent-cli",
+            role="go-test",
+            scope="run",
+            trial=trial,
+            selected_packages=["example/agent-cli"],
+            argv=[
+                go,
+                "run",
+                "./cmd/testtimeout",
+                "--timeout",
+                "5s",
+                "--",
+                go,
+                "test",
+                ".",
+                "-json",
+                "-count=1",
+                "-tags=nomicrophone",
+                "-p",
+                "1",
+                "-timeout",
+                "5s",
+            ],
+            cwd=repo,
+            env_overrides=env,
+            stdout=cohort_output,
+            extra={
+                "source_sha": source_sha,
+                "source_validation": {
+                    "repo": repo,
+                    "head": source_sha,
+                    "expected_head": source_sha,
+                    "dirty_paths": [],
+                    "expected_dirty_paths": [],
+                    "matches_manifest": True,
+                    "metadata_record_ids": metadata_ids,
+                },
+                "run_group_id": cohort_group,
+                "repeat_index": trial,
+                "requested_repetitions": 2,
+                "cohort": True,
+                "expected_package_count": 1,
+                "test_result_cache_policy": "disabled-by--count=1",
+                "quiet_evidence": quiet_ref,
+            },
+        )
+
+    manifest = {
+        "schema": SCHEMA,
+        "project": "audio-runtime",
+        "work": "audio-runtime-c11-hermetic-package-profile-controls",
+        "mode": "hermetic",
+        "created_at_utc": utc_now(),
+        "repo": repo,
+        "source_repo": repo,
+        "source_sha": source_sha,
+        "source_dirty_paths": [],
+        "runner": quiet_value["runner"],
+        "go": {"executable": go, "version": "go version synthetic", "env": {}},
+        "flags": {
+            "cgo_enabled": "0",
+            "tags": ["nomicrophone"],
+            "count": 1,
+            "gomaxprocs": 1,
+            "go_test_p": 1,
+            "general_timeout_seconds": 5,
+            "agent_cli_timeout_seconds": 5,
+        },
+        "cache_paths": cache_paths,
+        "paths": {"manifest": str((root / "manifest.json").resolve())},
+        "inventory_status": "PASS",
+        "metadata_command_ids": metadata_command_ids,
+        "inventory_command_ids": inventory_command_ids,
+        "commands": commands,
+        "modules": modules,
+        "warm": {
+            "status": "PASS",
+            "started_at_utc": quiet_value["captured_at_utc"],
+            "ended_at_utc": quiet_value["captured_at_utc"],
+            "quiet_evidence": quiet_ref,
+            "command_ids": warm_command_ids,
+            "test_binaries": [
+                {
+                    "module": "agent-cli",
+                    "package": "example/agent-cli",
+                    "status": "PASS",
+                    "command_id": compile_record_id,
+                    "path": binary_relative,
+                    "sha256": sha256_file(binary_path),
+                    "bytes": binary_path.stat().st_size,
+                },
+                {
+                    "module": "agent-cli",
+                    "package": "example/omitted",
+                    "status": "SKIPPED_NO_TEST_FILES",
+                    "reason": "inventory has no TestGoFiles or XTestGoFiles",
+                },
+            ],
+            "failures": [],
+        },
+        "measurement_status": "RUN_CAPTURED",
+    }
+    manifest_path = root / "manifest.json"
+    write_json(manifest_path, manifest)
+    return manifest_path, quiet_path, binary_path
+
+
 def parse_driver_json(record: dict[str, Any], label: str) -> dict[str, Any]:
     if record["timed_out"]:
         raise ControlError(f"{label} child timed out")
@@ -725,6 +1199,128 @@ def exercise_run_lifecycle(output: Path) -> dict[str, Any]:
     return {
         "name": "run-lifecycle",
         "scenarios": results,
+        "scenario_count": len(results),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_hermetic_validation_regressions(output: Path) -> dict[str, Any]:
+    """Keep hermetic inventory, artifact, and timing checks on the public analyzer path."""
+
+    results: list[dict[str, Any]] = []
+
+    omitted_case = output / "hermetic-validation" / "omitted-full-package"
+    omitted_manifest, _, _ = hermetic_analyzer_fixture(omitted_case)
+    baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(omitted_manifest),
+            "--output",
+            str(omitted_case / "baseline-analysis"),
+        ],
+        cwd=omitted_case,
+        output_dir=omitted_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if baseline["exit_status"] != 0 or read_json(omitted_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "hermetic-validation fixture did not produce a valid PASS baseline\n"
+            + baseline["stderr"]
+        )
+    omitted_value = read_json(omitted_manifest)
+    full_record = next(
+        record for record in omitted_value["commands"] if record.get("phase") == "full"
+    )
+    full_record["selected_packages"] = ["example/agent-cli"]
+    full_record["expected_package_count"] = 1
+    write_json(omitted_manifest, omitted_value)
+    results.append(
+        analyze_mutated_manifest(
+            omitted_case,
+            omitted_manifest,
+            "full-trial-must-cover-inventoried-packages",
+            {},
+            reason_contains="does not cover the complete module inventory",
+        )
+    )
+
+    binary_case = output / "hermetic-validation" / "missing-warm-binary"
+    binary_manifest, _, binary_path = hermetic_analyzer_fixture(binary_case)
+    binary_baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(binary_manifest),
+            "--output",
+            str(binary_case / "baseline-analysis"),
+        ],
+        cwd=binary_case,
+        output_dir=binary_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if binary_baseline["exit_status"] != 0 or read_json(binary_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "missing-warm-binary fixture did not produce a valid PASS baseline\n"
+            + binary_baseline["stderr"]
+        )
+    try:
+        binary_path.unlink()
+    except OSError as exc:
+        raise ControlError(f"missing-warm-binary: cannot remove fixture artifact: {exc}") from exc
+    results.append(
+        analyze_mutated_manifest(
+            binary_case,
+            binary_manifest,
+            "successful-warm-compile-requires-binary-artifact",
+            {},
+            reason_contains="test binary artifact is unreadable",
+        )
+    )
+
+    timing_case = output / "hermetic-validation" / "wall-matches-monotonic"
+    timing_manifest, _, _ = hermetic_analyzer_fixture(timing_case)
+    timing_baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(timing_manifest),
+            "--output",
+            str(timing_case / "baseline-analysis"),
+        ],
+        cwd=timing_case,
+        output_dir=timing_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if timing_baseline["exit_status"] != 0 or read_json(timing_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "wall-time fixture did not produce a valid PASS baseline\n"
+            + timing_baseline["stderr"]
+        )
+    timing_value = read_json(timing_manifest)
+    timing_record = next(
+        record for record in timing_value["commands"] if record.get("phase") == "full"
+    )
+    timing_record["wall_seconds"] = 1.0
+    write_json(timing_manifest, timing_value)
+    results.append(
+        analyze_mutated_manifest(
+            timing_case,
+            timing_manifest,
+            "wall-time-must-match-monotonic-interval",
+            {},
+            reason_contains="wall_seconds does not match the monotonic interval",
+        )
+    )
+    return {
+        "name": "hermetic-validation-regressions",
+        "mutations": results,
         "scenario_count": len(results),
         "raw_artifacts_retained": True,
     }
@@ -1757,6 +2353,12 @@ def main() -> int:
         lifecycle_result = exercise_run_lifecycle(output)
         results.append(lifecycle_result)
         case_count += lifecycle_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        hermetic_validation_result = exercise_hermetic_validation_regressions(output)
+        results.append(hermetic_validation_result)
+        case_count += hermetic_validation_result["scenario_count"]
     except ControlError as exc:
         failures.append(str(exc))
     try:
