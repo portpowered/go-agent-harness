@@ -244,7 +244,7 @@ func (i *pingClockInferencer) ConnectSession(ctx context.Context) (messages.Sess
 		return nil, err
 	}
 	session := newPingClockSession()
-	if !session.recv.Write(context.Background(), messages.StreamMessage{
+	if !session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("ping-clock-test", "session"),
 	}) {
@@ -338,7 +338,11 @@ func startPingClockLoop(t *testing.T, source clock.TimerSource) (*agentloop.Agen
 
 	var deterministic *clock.Deterministic
 	if source != nil {
-		deterministic, _ = source.(*clock.Deterministic)
+		var ok bool
+		deterministic, ok = source.(*clock.Deterministic)
+		if !ok {
+			t.Fatalf("configured clock source = %T, want *clock.Deterministic", source)
+		}
 	}
 	return loop, session, deterministic
 }

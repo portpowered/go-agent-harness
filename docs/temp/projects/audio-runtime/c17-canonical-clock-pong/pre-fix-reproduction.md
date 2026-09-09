@@ -83,3 +83,22 @@ The first size-check attempt with a separate `agentloop/ping_clock_test.go`
 correctly rejected immutable baseline drift (`18 > 17` files). The public-loop
 tests were consolidated into the owned external `subsystems/ping_pong_test.go`
 without changing assertions or the baseline; the final size gate is green.
+
+CI rejection repair checkpoint:
+
+- The canonical board was captured verbatim at
+  `canonical-board-20260909T052106Z.json`. The matching task row is
+  `work-task-12`; there is no C17 review row. Its authoritative rejection was
+  PR #409 head `628409b3f29d24c45202b7eb2eb992be452defa8`, CI run
+  `34313840472`, static job `102345799159`.
+- The full static job log reported two findings in the owned test fixture:
+  `contextcheck` at `ping_pong_test.go:247` for a non-inherited
+  `context.Background()` and `errcheck` at `ping_pong_test.go:341` for an
+  unchecked `*clock.Deterministic` assertion. All other static steps passed.
+- The repair uses the session's inherited `ctx` for the fixture write and
+  fails the test helper with the actual source type when the configured clock
+  is not deterministic. No production behavior or assertion was weakened.
+- Post-repair causal validation passed: focused normal and race suites (16
+  tests each), full `pkg/subsystems` plus `pkg/agentloop` normal and race
+  suites (151 tests each), package build/vet, the public-loop consumer, and
+  pinned `make lint` with `0 issues` in every module.
