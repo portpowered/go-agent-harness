@@ -68,7 +68,10 @@ func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(
 	if err := sink.Discard(events[0].Sequence); err != nil {
 		t.Fatal(err)
 	}
-	spool := sink.(*providerCaptureSpool)
+	spool, ok := sink.(*providerCaptureSpool)
+	if !ok {
+		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
+	}
 	deadline := time.Now().Add(time.Second)
 	for {
 		spool.mu.Lock()
@@ -247,7 +250,10 @@ func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testi
 	if err := sink.Discard(events[0].Sequence); err != nil {
 		t.Fatal(err)
 	}
-	spool := sink.(*providerCaptureSpool)
+	spool, ok := sink.(*providerCaptureSpool)
+	if !ok {
+		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
+	}
 	deadline := time.Now().Add(time.Second)
 	for {
 		spool.mu.Lock()
