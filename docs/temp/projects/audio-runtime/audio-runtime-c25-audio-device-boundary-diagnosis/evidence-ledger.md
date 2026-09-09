@@ -5,10 +5,10 @@
 - Factory admission command: `python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c25-audio-device-boundary-diagnosis`.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c25-audio-device-boundary-diagnosis"}`.
 - PRD branch: `codex/audio-runtime-c25-audio-device-boundary-diagnosis`; isolated worktree and `git branch --show-current` agree.
-- `origin/main` after fetch: `5d5afcb14d7b269378020809f5a2418c499ac94d`.
+- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`.
 - Baseline ancestry: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` is an ancestor of the admitted head.
 - Integration ancestry: `8bdafc7f947a3a2c9856220abdc539437035bd21` is an ancestor of the admitted head.
-- Admitted source archive SHA-256: `0bebedbf449193683267220769084393f0c3e175d59d7e6dc7ba0992c06364ac`.
+- Refreshed source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
 - The canonical board had task row `work-task-71` in `PROCESSING`, plan row `work-plan-70` complete, no C25 review row, and the task-row CI rejection for PR417 at `1040f92478bd1da6450f0f9a1fc1f4532ff34937`. C18/C21 review findings were read and remain outside this owned path.
 
 ## Prior accepted evidence
@@ -69,3 +69,18 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - The known CI rejection remains historical and externally owned: C20 owns the
   `test46/provider_burst` remote snapshot phase. No C25 production or fixture
   repair is authorized, and no CI result is claimed from this local refresh.
+
+## Current-main refresh
+
+- The fetched reviewed main `98ce636dd67349ba64f22cd7916dd370cf4ba484` changed
+  only C24 factory gate/docs paths relative to the C25 candidate; every audited
+  production path is byte-identical to that main revision.
+- At candidate `88f996c5384222d97b92578a6ba7f1ea83adbf2e`, `verify.py --mode all`
+  completed in `9.475` seconds with 19 bounded commands. It returned
+  `SOURCE_GAP_CONFIRMED`; source ancestry, production-path status and
+  source-path equality were `ACCEPTED`; all focused tests/list/vet and the
+  positive/negative controls were accepted. The intentional child-hang control
+  timed out at 1 second, was terminated with native `-15`, and left no child.
+- The C20 `test46/provider_burst` rejection remains the only unclaimed red check
+  and is not fixed or waived by this documentation-only refresh. C25 remains
+  source-only and retains no C20 production ownership.

@@ -8,7 +8,7 @@
   "sharedModulePathsModified": [],
   "baselinePathsModified": [],
   "realtimeOrDeviceAccess": false,
-  "candidateHeadAtCheckpoint": "209afd4ceca417fdca7964e3c0301ad4d3d1c250",
+  "candidateHeadAtCheckpoint": "88f996c5384222d97b92578a6ba7f1ea83adbf2e",
   "pullRequest": 417,
   "chosenDependency": "legacy room-owned PCM16 cadence/mixer dependency",
   "chosenDependencyPlan": "extraction-plan.md",
@@ -16,8 +16,8 @@
   "adjacentOwners": {
     "c18": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go, session_room_coordinator.go, session_room_terminal.go and their tests",
     "c21": "session duplex overlap and remaining gateway/room/duplex regression paths",
-    "c20": "recording/live paths; current row failed/inactive",
-    "c23": "evidence characterization; current row failed/inactive",
+    "c20": "recording/live paths and test46/provider_burst; current row remains separately owned",
+    "c23": "evidence characterization; read-only dependency",
     "c24": "isolated script/fixture capacity"
   },
   "handoffRule": "Candidate diagnosis may identify the extraction owner and plan, but no production repair is included in C25. C20 retains test46/provider_burst repair; C21 retains room/gateway/duplex; C18 retains exact lifecycle files."

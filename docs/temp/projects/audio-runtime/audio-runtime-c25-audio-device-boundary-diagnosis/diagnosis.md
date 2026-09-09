@@ -1,9 +1,9 @@
 # C25 audio/device boundary diagnosis
 
 - Task: `audio-runtime-c25-audio-device-boundary-diagnosis`
-- Candidate revision: `209afd4ceca417fdca7964e3c0301ad4d3d1c250`
-- Source revision: `5d5afcb14d7b269378020809f5a2418c499ac94d`
-- Source archive SHA-256: `0bebedbf449193683267220769084393f0c3e175d59d7e6dc7ba0992c06364ac`
+- Candidate revision: `88f996c5384222d97b92578a6ba7f1ea83adbf2e`
+- Source revision: `98ce636dd67349ba64f22cd7916dd370cf4ba484`
+- Source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`
 - Decision basis: source-only diagnosis; no realtime, provider, physical-device, or acoustic claim.
 - The pinned source is required to be an ancestor of the candidate and every audited production path is required to be unchanged from that source.
 
