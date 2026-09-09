@@ -192,3 +192,22 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - This refresh changes only owned evidence metadata. The latest hosted coverage
   rejection remains C20-owned at `b061bf85`; C25 does not claim a repair or
   resubmit unchanged implementation.
+
+## Current-head verifier refresh
+
+- At measured candidate `70f2496f16b8bf036cbe654d99a121ac0a1346f7`, the bounded
+  command `python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all`
+  returned `ACCEPTED` in `14.582s` across `25` commands.
+- `SOURCE_GAP_CONFIRMED`, source ancestry/path equality, the reproducible and
+  materialized archive digest, fixture manifest, AST positive/negative/mutation
+  controls, focused normal/race/vet regressions, zero-test discovery and
+  child-hang cleanup all passed. The runner reported clean shutdown with no
+  surviving child process; the archive remained `55,592,960` bytes with SHA-256
+  `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- The source-to-candidate and working-tree allowlists remained confined to the
+  owned C25 evidence prefix, and every audited production path remained
+  unchanged from `origin/main=a1156f0c0c6271643578cb37894026944df2a633`.
+- This is an evidence-only successor; it does not repair the C20-owned
+  `composition_test.go:417` coverage failure at `b061bf85`. Do not submit an
+  unchanged implementation. After the reviewed C20 repair reaches `origin/main`,
+  refresh this evidence again and submit the changed same task through script CI.

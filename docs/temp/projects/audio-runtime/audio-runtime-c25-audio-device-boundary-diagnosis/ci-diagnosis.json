@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "current_candidate_revision": "39f7b6a8b454adb170b010ac280c65d96354278f",
+  "current_candidate_revision": "70f2496f16b8bf036cbe654d99a121ac0a1346f7",
   "current_origin_main": "a1156f0c0c6271643578cb37894026944df2a633",
   "candidate_at_ci_submission": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
   "ci": {
@@ -134,11 +134,11 @@
     "next_action": "C20 captures bounded server/snapshot phase timing on its same task; primary resumes C25 after any reviewed main change to refresh exact-source evidence and submit a changed head through script CI."
   },
   "owned_exact_head_refresh": {
-    "candidate": "39f7b6a8b454adb170b010ac280c65d96354278f",
+    "candidate": "70f2496f16b8bf036cbe654d99a121ac0a1346f7",
     "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all",
     "verdict": "ACCEPTED",
     "bounded_commands": 25,
-    "aggregate_seconds": 10.4,
+    "aggregate_seconds": 14.582,
     "source_revision": "a1156f0c0c6271643578cb37894026944df2a633",
     "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
     "clean_shutdown": true,

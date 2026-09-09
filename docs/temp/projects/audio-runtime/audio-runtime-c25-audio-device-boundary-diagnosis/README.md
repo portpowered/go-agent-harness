@@ -149,3 +149,19 @@ into main.
 The single chosen dependency is the legacy room-owned PCM16 cadence/mixer boundary. The exact current/proposed paths, APIs, callers, ownership, wire sequence, trigger, executable regression, and AUDIO/DEVICE/SERVICE/QUALITY gate map are in [`extraction-plan.md`](extraction-plan.md) and [`extraction-plan.json`](extraction-plan.json).
 
 Accepted C15/C16/C17 evidence proves software replay, software sink lifecycle, and canonical PONG-clock behavior only. Physical playback, microphone capture, live provider behavior, and acoustics remain unproved.
+
+## Current-head verifier refresh
+
+At measured candidate `70f2496f16b8bf036cbe654d99a121ac0a1346f7`, the bounded
+`verify.py --mode all` command returned `ACCEPTED` in `14.582s` across `25`
+commands. Source-gap, ancestry/path, archive, fixture, AST dependency,
+focused normal/race/vet, zero-test, timeout-cleanup and aggregate-shutdown
+controls passed with no surviving child process. The source archive remained
+`55,592,960` bytes with SHA-256
+`0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+
+This refresh changes only the owned evidence checkpoint. The C20-owned
+`composition_test.go:417` coverage rejection at `b061bf85` remains unresolved
+on `origin/main`; C25 has no authorized repair path and will not resubmit an
+unchanged implementation. After reviewed C20 repair reaches main, refresh the
+exact source evidence and submit the changed same task through script CI.

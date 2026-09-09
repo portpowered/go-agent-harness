@@ -157,3 +157,21 @@ Current-main ancestry and exact-head refresh
   coverage. The test observed the expected live-media-unavailable error; this
   confirms the hosted C20 coverage rejection remains external and does not
   repair or transfer ownership of `composition_test.go:417`.
+
+Current-head verifier checkpoint
+- After re-fetching `origin/main=a1156f0c0c6271643578cb37894026944df2a633`,
+  candidate `70f2496f16b8bf036cbe654d99a121ac0a1346f7` ran
+  `python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all`.
+- The verifier returned `ACCEPTED` in `14.582s` across `25` bounded commands:
+  `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist checks, focused normal
+  and race regressions, vet, zero-test discovery, and child-hang cleanup all
+  passed with no surviving child process.
+- Audited production paths remain unchanged and the source archive is
+  `55,592,960` bytes with SHA-256
+  `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- This is an evidence-only refresh. The latest hosted CI rejection remains the
+  C20-owned coverage failure at `agent-cli/internal/wire/composition_test.go:417`
+  on PR417 head `b061bf852076d4b36526600377ad916751e32b4b`; C25 will not submit
+  unchanged source. Next action: C20 reviewed repair reaches `origin/main`,
+  then C25 refreshes exact-head evidence and submits the changed same task to
+  script CI without polling.
