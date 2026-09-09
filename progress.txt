@@ -1015,3 +1015,29 @@ C18 completion-forgery repair checkpoint
   same task, update PR #410 with the exact current head and repair evidence,
   submit `ACCEPTED` to script-owned CI without polling, and retain ownership
   through `CONTINUE` for any exact-head rejection.
+
+C18 hermetic local reproduction checkpoint
+
+- The bounded same-source `make test-hermetic` reproduction reached the full
+  agent-cli package lane and failed only at the unrelated
+  `agent-cli/internal/config/TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically`
+  control: `revision_test.go:86: config mode = 600, want 640`. Every C18
+  replay/integration package reported success in the same run.
+- The exact focused command repeated this diagnostic 20/20 times:
+  `go test ./agent-cli/internal/config -tags=nomicrophone -run
+  '^TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically$'
+  -count=20 -timeout=90s`; result `0 passed, 20 failed`. The package is
+  outside C18 owned paths, the branch diff does not touch it, and no unrelated
+  repair is authorized. The machine-readable evidence is
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/hermetic-local-reproduction-ca6452f3.json`.
+- Current-source C18 causal evidence remains green: replay and embedding
+  normal/race, CLI replay/integration regressions, public external/strict/
+  provider/interruption/ask harness, architecture-size, Wire regeneration and
+  diff checks. GitHub run `34362228180`/job `102501845709` was still in progress
+  when its log was requested, so no completed CI log or CI-green result is
+  claimed.
+- Next action: commit this owned evidence checkpoint, push the same task and
+  update PR #410 with the exact non-waived hermetic failure reconciliation;
+  return `ACCEPTED` to the script-owned current-head gate without polling.
+  Retain ownership through `CONTINUE` for any exact-head actionable C18
+  rejection; do not modify the unrelated config package or self-review.
