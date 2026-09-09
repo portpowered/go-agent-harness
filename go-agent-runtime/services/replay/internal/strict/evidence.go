@@ -22,6 +22,7 @@ type evidenceBuilder struct {
 	createdModel    string
 	sawClosed       bool
 	sawResponseDone bool
+	terminalDone    bool
 }
 
 func deriveEvidence(events []recording.Event, request replay.Request) (gwtesting.SessionCapture, *recordedToolExecutor, []int, int, int, error) {
@@ -121,6 +122,9 @@ func (b *evidenceBuilder) skipFailedReceive(event recording.Event) bool {
 }
 
 func (b *evidenceBuilder) observeWireMetadata(event recording.Event, wireType string, payload []byte) error {
+	if event.RuntimeKind == providerWireSend {
+		b.terminalDone = false
+	}
 	if event.RuntimeKind == providerWireSend && b.firstSendType == "" {
 		b.firstSendType = wireType
 		if wireType == sessionUpdateType {
@@ -137,6 +141,10 @@ func (b *evidenceBuilder) observeWireMetadata(event recording.Event, wireType st
 	}
 	if event.RuntimeKind == providerWireReceive && wireType == "response.done" {
 		b.sawResponseDone = true
+		b.terminalDone = true
+	}
+	if event.RuntimeKind == providerWireReceive && wireType != "response.done" && wireType != sessionClosedType {
+		b.terminalDone = false
 	}
 	return nil
 }
@@ -158,6 +166,9 @@ func (b *evidenceBuilder) validate(request replay.Request) error {
 	}
 	if b.handshakeModel != "" && b.createdModel != "" && b.handshakeModel != b.createdModel {
 		return fmt.Errorf("%w: captured handshake model %q differs from session.created model %q", replay.ErrBundleMismatch, b.handshakeModel, b.createdModel)
+	}
+	if !b.sawResponseDone || !b.terminalDone {
+		return fmt.Errorf("%w: provider session has no terminal response.done completion", replay.ErrBundleIncomplete)
 	}
 	verifiedModel := b.handshakeModel
 	if verifiedModel == "" {

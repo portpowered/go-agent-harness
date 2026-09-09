@@ -3,6 +3,7 @@ package embedding_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -208,4 +209,79 @@ func TestPublicStrictReplayRejectsMissingRecordedToolResult(t *testing.T) {
 	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "has no result") {
 		t.Fatalf("missing tool result error=%v, want causal incomplete diagnostic", err)
 	}
+}
+
+func TestPublicStrictReplayRejectsMissingFinalResponseDone(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "replay", "timeline.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := replaceLastResponseDone(t, data)
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "timeline.jsonl"), mutated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var output bytes.Buffer
+	_, err = runtimeReplayWire.NewStrictService().Run(t.Context(), &output, runtimeReplay.StrictRequest{BundlePath: directory})
+	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "terminal response.done") {
+		t.Fatalf("missing terminal error=%v, want causal incomplete diagnostic", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("missing terminal replay produced %d bytes of success output", output.Len())
+	}
+}
+
+func replaceLastResponseDone(t *testing.T, data []byte) []byte {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		var event map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(lines[index]), &event); err != nil {
+			t.Fatal(err)
+		}
+		var runtimeKind string
+		if err := json.Unmarshal(event["runtime_kind"], &runtimeKind); err != nil || runtimeKind != "provider_wire_receive" {
+			continue
+		}
+		var encoded []byte
+		if err := json.Unmarshal(event["payload"], &encoded); err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &wire); err != nil {
+			t.Fatal(err)
+		}
+		var message map[string]json.RawMessage
+		if err := json.Unmarshal(wire["payload"], &message); err != nil {
+			t.Fatal(err)
+		}
+		var messageType string
+		if err := json.Unmarshal(message["type"], &messageType); err != nil || messageType != "response.done" {
+			continue
+		}
+		message["type"] = json.RawMessage(`"response.output_text.done"`)
+		messageBytes, err := json.Marshal(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wire["payload"] = messageBytes
+		wireBytes, err := json.Marshal(wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event["payload"], err = json.Marshal(wireBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var line []byte
+		line, err = json.Marshal(event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines[index] = string(line)
+		return []byte(strings.Join(lines, "\n") + "\n")
+	}
+	t.Fatal("fixture has no response.done event")
+	return nil
 }

@@ -123,9 +123,13 @@ func countResponseEnds(records []gwtesting.CapturedSessionEvent) int {
 
 func validateInputActions(actions []replayInputAction) error {
 	for index := range actions {
-		if index+1 < len(actions) && actions[index].responseEnds == 0 {
+		if actions[index].responseEnds > 0 {
+			continue
+		}
+		if index+1 < len(actions) {
 			return fmt.Errorf("%w: recorded input overlaps an unfinished provider response", replay.ErrBundleMismatch)
 		}
+		return fmt.Errorf("%w: final recorded input has no response.done completion boundary", replay.ErrBundleIncomplete)
 	}
 	return nil
 }

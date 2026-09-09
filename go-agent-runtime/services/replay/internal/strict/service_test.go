@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestServicePrepareAndRecordedToolExactOnce(t *testing.T) {
@@ -151,6 +153,34 @@ func TestServiceRejectsRequestedModelWithoutCapturedModel(t *testing.T) {
 	_, _, _, _, _, err := deriveEvidence(events, publicreplay.Request{Model: "gpt-test"})
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 		t.Fatalf("err=%v, want incomplete", err)
+	}
+}
+
+func TestServiceRejectsMissingTerminalResponseDone(t *testing.T) {
+	events := []recording.Event{
+		{Kind: runtimeEventKind, RuntimeKind: providerWireSend, Payload: wireEnvelope(t, `{"type":"session.update","session":{"model":"gpt-test"}}`), Clean: true},
+		{Kind: runtimeEventKind, RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"session.created","session":{"model":"gpt-test"}}`), Clean: true},
+		{Kind: runtimeEventKind, RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"response.output_text.done"}`), Clean: true},
+	}
+	_, _, _, _, _, err := deriveEvidence(events, publicreplay.Request{})
+	if !errors.Is(err, publicreplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "terminal response.done") {
+		t.Fatalf("err=%v, want terminal response.done incomplete error", err)
+	}
+}
+
+func TestDeriveInputActionsRejectsFinalMissingResponseBoundary(t *testing.T) {
+	capture := gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{
+		{
+			Sequence:  1,
+			Direction: gwtesting.DirectionClientToServer,
+			Type:      "conversation.item.create",
+			Payload:   []byte(`{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}`),
+		},
+		{Sequence: 2, Direction: gwtesting.DirectionServerToClient, Type: "response.output_text.done", Payload: []byte(`{"type":"response.output_text.done"}`)},
+	}}
+	_, err := deriveInputActions(capture)
+	if !errors.Is(err, publicreplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "response.done") {
+		t.Fatalf("err=%v, want missing response.done incomplete error", err)
 	}
 }
 

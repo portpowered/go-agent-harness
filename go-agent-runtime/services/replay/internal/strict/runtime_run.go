@@ -84,6 +84,9 @@ func (r *coreRuntime) awaitSessionOpen(readCtx context.Context, cancel context.C
 }
 
 func (r *coreRuntime) runAction(runCtx, readCtx context.Context, cancel context.CancelFunc, state *runState, action replayInputAction, out io.Writer) error {
+	if action.responseEnds <= 0 {
+		return fmt.Errorf("%w: final recorded input has no response.done completion boundary", publicreplay.ErrBundleIncomplete)
+	}
 	if err := r.runInput(runCtx, action); err != nil {
 		return err
 	}
