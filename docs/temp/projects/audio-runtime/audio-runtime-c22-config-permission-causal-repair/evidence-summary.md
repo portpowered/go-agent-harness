@@ -73,9 +73,8 @@ semantics, negative controls, and PCM/transcript/commit/terminal assertions
 remain unchanged. The architecture-size gate passes without changing the
 immutable migration baseline: 181 packages, 1860 files and 27151 functions.
 
-Current candidate source revision for refreshed evidence is
-`289a3fe994ac9162e4140e9b9182f5865a010987`; the fixture repair is the pending
-working-tree change. Final focused proof passed the complete
+Current candidate source revision for refreshed evidence is the committed
+`d78e7b8f7d9f40a3cd15b3a98dfa8b411f72806e`. Final focused proof passed the complete
 `TestSessionCLI_DuplexPCMMultiTurn*` family 5/5 in normal mode and once under
 `-race`, plus the same family under `GOMAXPROCS=1`, `GOMAXPROCS=8`, and
 `CGO_ENABLED=0 -tags=nomicrophone`. Config evidence also passed the candidate

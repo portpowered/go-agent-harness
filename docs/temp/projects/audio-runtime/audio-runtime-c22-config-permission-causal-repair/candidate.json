@@ -227,6 +227,6 @@
   "phase": "candidate",
   "schema": "audio-runtime-c22-permission-matrix-v1",
   "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
-  "source_revision": "289a3fe994ac9162e4140e9b9182f5865a010987",
+  "source_revision": "d78e7b8f7d9f40a3cd15b3a98dfa8b411f72806e",
   "status": "passed"
 }
