@@ -5,7 +5,7 @@
   "goos": "darwin",
   "goarch": "arm64",
   "int_bits": 64,
-  "started_at": "2026-09-09T23:33:46.616098Z",
+  "started_at": "2026-09-09T23:33:41.108458Z",
   "duration_ms": 0,
   "cases": [
     {
