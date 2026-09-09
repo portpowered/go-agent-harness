@@ -112,6 +112,7 @@ func TestServiceRejectsHostClock(t *testing.T) {
 
 func TestServiceRejectsNilContext(t *testing.T) {
 	directory := writeBundle(t, true)
+	//lint:ignore SA1012 Exercise nil-context rejection at the public boundary.
 	_, err := New(Dependencies{ClockFactory: testClockFactory}).Prepare(nil, publicreplay.Request{BundlePath: directory})
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 		t.Fatalf("err=%v, want incomplete error for nil context", err)

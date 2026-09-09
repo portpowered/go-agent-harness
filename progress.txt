@@ -613,3 +613,36 @@ C18 authorized manifest repair and handoff checkpoint
   script-owned current-head CI gate without polling. Retain this task for any
   exact-head CI/review rejection and repair it with `CONTINUE`; do not claim CI,
   merge, vertical probe or project acceptance.
+
+C18 CI static rejection repair checkpoint
+
+- The canonical task inbox returned PR #410 head `a4adb05b` after the script
+  gate rejected run `34332114114` on `CI (static)`. The completed static job
+  log was inspected through job `102402885146`; all preceding formatting,
+  generated Wire, architecture-size, vet and golangci-lint steps passed. The
+  exact analyzer failure was pinned Staticcheck `2026.1`:
+  `go-agent-runtime/services/replay/internal/strict/service_test.go:115:70`
+  `SA1012`, caused by the intentional nil-context public-boundary regression.
+- The same run's completed hermetic and coverage jobs also showed unrelated
+  broad-suite failures (`TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence`
+  liveness publication and `TestFamilyAIterativeBuildUpThroughShippedProcess`
+  streamed marker count). They are outside C18 owned paths and remain
+  non-waived evidence; no C18 implementation or deadline was weakened.
+- Repair is limited to the two intentional nil-context tests: added localized
+  `//lint:ignore SA1012` comments above the strict internal regression and the
+  separate `GOWORK=off` embedding consumer regression. The nil context remains
+  passed at the external boundary, and the production rejection plus
+  unforgeable completion witness from review30 remain unchanged.
+- Post-repair evidence is green: pinned `make staticcheck`; replay normal and
+  race suites; separate embedding-module normal and race tests; architecture
+  size (`182` packages, `1869` files, `27180` functions); Wire regeneration
+  check; focused replay vet; `git diff --check`; and
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` in normal,
+  coverage and race modes. Existing negative-control diagnostics remain
+  asserted. Fresh `origin/main=e4137eba` is already an ancestor of the branch;
+  worktree is clean apart from these two test comments and this ledger.
+- Exact next action: commit and push the repair checkpoint, update PR #410 with
+  the full CI diagnostic and causal validation, then return `ACCEPTED` to the
+  script-owned current-head CI gate without polling. Retain the same task with
+  `CONTINUE` for any exact-head rejection; do not claim CI, review, merge,
+  vertical or project acceptance.

@@ -125,6 +125,7 @@ func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
 
 func TestPublicStrictReplayRejectsNilContext(t *testing.T) {
 	service := runtimeReplayWire.NewStrictService()
+	//lint:ignore SA1012 Exercise nil-context rejection at the public boundary.
 	_, err := service.Prepare(nil, runtimeReplay.StrictRequest{BundlePath: filepath.Join("testdata", "replay")})
 	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
 		t.Fatalf("nil context error=%v, want incomplete error", err)
