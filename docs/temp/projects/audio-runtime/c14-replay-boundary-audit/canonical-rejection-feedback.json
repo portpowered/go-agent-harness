@@ -127,7 +127,7 @@
     },
     "workId": "work-task-34",
     "workTypeName": "task",
-    "_rejection_feedback": "PR #406 head 2eb3150244a42f2d58bd4f7ddc36433fc5f65fd9 has all required checks green, but the audit is not actionable: audit.md:495-510 permits strict code to call replay/wire.NewService while audit.md:526-539 makes replay/wire import internal/strict, creating a Go import cycle. Specify an acyclic injected admission dependency or shared plan constructor and exact Wire ownership. Also document the provider-route tool/cwd boundary: independent pinned strict replay passed, but provider replay from the reviewer worktree failed on the fixture's relative tool path; historical C13 passed only from the evidence-root cwd. Add exact capability/factory symbols, cwd/sandbox precondition, and classify portability honestly. Record canonicalValidation complete/TERMINAL explicitly. Repair audit.md, rerun bounded checks, push, and resubmit the same PR to script CI; do not merge this head."
+    "_rejection_feedback": "Independent hash-verified replay proof passed: strict route verified 18 wire events/1 tool call; provider route produced the marker, fixture_complete, and expected 3,200-byte PCM. Current head 025b8f48 has all nine required checks successful. The audit still omits a material clock boundary: runtime.go:31-70 never reads Prepared.Clock, while agentloop.New defaults to clock.Real unless WithClock is supplied. Amend audit.md to state this current limitation and specify exact future clock wiring plus a regression preventing wall-clock substitution. Preserve prior repairs, rerun bounded evidence checks, push, and resubmit; do not merge."
   },
   {
     "name": "audio-runtime-c14-replay-boundary-audit",
@@ -158,5 +158,15 @@
     "workId": "work-review-41",
     "workTypeName": "review",
     "_rejection_feedback": "PR #406 head 2eb3150244a42f2d58bd4f7ddc36433fc5f65fd9 has all required checks green, but the audit is not actionable: audit.md:495-510 permits strict code to call replay/wire.NewService while audit.md:526-539 makes replay/wire import internal/strict, creating a Go import cycle. Specify an acyclic injected admission dependency or shared plan constructor and exact Wire ownership. Also document the provider-route tool/cwd boundary: independent pinned strict replay passed, but provider replay from the reviewer worktree failed on the fixture's relative tool path; historical C13 passed only from the evidence-root cwd. Add exact capability/factory symbols, cwd/sandbox precondition, and classify portability honestly. Record canonicalValidation complete/TERMINAL explicitly. Repair audit.md, rerun bounded checks, push, and resubmit the same PR to script CI; do not merge this head."
+  },
+  {
+    "name": "audio-runtime-c14-replay-boundary-audit",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-42",
+    "workTypeName": "review",
+    "_rejection_feedback": "Independent hash-verified replay proof passed: strict route verified 18 wire events/1 tool call; provider route produced the marker, fixture_complete, and expected 3,200-byte PCM. Current head 025b8f48 has all nine required checks successful. The audit still omits a material clock boundary: runtime.go:31-70 never reads Prepared.Clock, while agentloop.New defaults to clock.Real unless WithClock is supplied. Amend audit.md to state this current limitation and specify exact future clock wiring plus a regression preventing wall-clock substitution. Preserve prior repairs, rerun bounded evidence checks, push, and resubmit; do not merge."
   }
 ]

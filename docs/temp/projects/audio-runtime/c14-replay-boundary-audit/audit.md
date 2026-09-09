@@ -48,10 +48,12 @@ the task and review rows had no `_rejection_feedback`; that historical board
 snapshot and the complete extracted rejection inbox are preserved in
 `canonical-board.json` and `canonical-rejection-feedback.json`. The initial
 extraction contains 12 rows from prior C11/C12/C13 work, with no C14 finding at
-that snapshot. The current evidence index contains 16 rows: those 12 prior
-rows plus the later C14 task and review-36/review-39/review-41 rows, without
-replacing the prior inbox. The later executor re-admission and review findings
-are recorded in the current reconciliation below.
+that snapshot. The current evidence index contains 17 rows: those 12 prior
+rows plus the later C14 task and review-36/review-39/review-41/review-42 rows,
+without replacing the prior inbox. The latest task feedback is retained on the
+task entry and review-42 is appended; earlier C14 findings remain individually
+preserved. The later executor re-admission and review findings are recorded in
+the current reconciliation below.
 
 The admission command, run from the admitted FACTORY_ROOT, returned:
 
@@ -153,6 +155,7 @@ root router
        -> resolveTraceDirectory -> readTimeline
           (sequence, nonnegative elapsed_ns, nonempty timeline)
        -> timelineOrigin -> injected ClockFactory -> clock.Deterministic
+          -> Prepared.Clock and audioReplay.Clock (evidence-loader timing only)
        -> go-audio/pkg/recording.OpenReplay
           (loads canonical audio-trace evidence and supplies Prepared.Audio;
            production packet input is derived separately from provider wires)
@@ -168,6 +171,8 @@ root router
        -> inference.NewSessionGatewayInferencer
        -> replayMediaInferencer -> headless MediaSession inbound drain
        -> agentloop.New(engine.DuplexSession, prepared tools, bounded buffer)
+          (current runtime omits agentloop.WithClock(Prepared.Clock), so the
+           engine defaults to clock.Real; future extraction must wire it)
        -> deriveInputActions
        -> coreRuntime.Run
             -> wait for SessionOpen
@@ -208,6 +213,15 @@ test fake in `agent-cli/internal/services/internal/replay/service_test.go:260-27
 The future extraction must keep these as separate evidence-loading and
 runtime-packet-consumption contracts; a non-nil audio reader or a
 `RecordedPCM` scope flag is not proof that production replay consumed it.
+
+The same current factory also never reads `Prepared.Clock`: its
+`agentloop.New` call at `runtime.go:56-62` omits `agentloop.WithClock`, and
+`go-agent-loop/pkg/engine/engine.go:87-98` consequently retains its default
+`clock.Real{}`. The future extraction must keep audio evidence loading and
+runtime-packet consumption separate, while explicitly passing the prepared
+deterministic scheduler into the AgentLoop. A non-nil audio reader, a
+`RecordedPCM` scope flag, or a deterministic clock attached only to the trace
+reader is not proof of production packet or timing-domain parity.
 
 The strict path is produced by the generated CLI graph:
 
@@ -557,7 +571,7 @@ service boundary:
 | `readTimeline`, `timelineOrigin`, event decoding and `deriveEvidence` | `go-agent-runtime/services/replay/internal/strict/evidence.go` | Keep bounded JSONL parsing, exact sequence/elapsed checks, initial handshake/model/terminal validation, provider send/receive projection, and tool shape validation. |
 | `trackingDialer`, `trackingConn`, replay state | `go-agent-runtime/services/replay/internal/strict/transport.go` | Keep one-connection, ordered message type/count/write/read validation and bounded divergence errors. |
 | `recordedToolExecutor` and tool decoders | `go-agent-runtime/services/replay/internal/strict/tools.go` | Keep exact call ID/name/arguments, result matching, exact-once consumption, and unconsumed/missing-result failures. |
-| `NewOpenAIRuntimeFactory`, `openAIRuntimeFactory`, `coreRuntime`, `deriveInputActions`, initial-update wrapper | `go-agent-runtime/services/replay/internal/strict/runtime.go` | Keep offline OpenAI gateway + AgentLoop construction, decode PCM from captured provider-wire input actions (not `Prepared.Audio`), explicit input action boundaries, provider terminal counting, cancellation drain, and no live credentials. |
+| `NewOpenAIRuntimeFactory`, `openAIRuntimeFactory`, `coreRuntime`, `deriveInputActions`, initial-update wrapper | `go-agent-runtime/services/replay/internal/strict/runtime.go` | Keep offline OpenAI gateway + AgentLoop construction, decode PCM from captured provider-wire input actions (not `Prepared.Audio`), explicitly reject a nil `Prepared.Clock`, pass `agentloop.WithClock(prepared.Clock)` beside the mode/inferencer/tool/buffer options, preserve input action boundaries/provider terminal counting/cancellation drain, and use no live credentials. |
 | `replayMediaInferencer`, virtual playback controller, inbound drain | `go-agent-runtime/services/replay/internal/strict/media.go` | Keep headless media claim needed for provider-owned truncate/interruption and explicitly report no device execution. |
 | `NewReplayClockFactory` behavior | `go-agent-runtime/services/replay/internal/strict/clock.go` or a constructor in `strict/service.go` | Build one fresh `clock.Deterministic` from the trace origin per preparation; never fall back to wall time. |
 
@@ -672,6 +686,14 @@ is evidence availability, not proof that production consumed `Prepared.Audio`.
 The future test must separately verify that the strict runtime sends the exact
 PCM encoded in captured provider-wire `input_audio_buffer.append` records,
 while the evidence-loader test verifies trace PCM availability and scope. It
+must also include a scheduler-observability regression: inject a
+`clock.Scheduler` whose `Now`/timer calls are observable, exercise a non-zero
+hot-loop pacing case (or the equivalent strict runtime timing seam), and fail
+if the AgentLoop uses `clock.Real`. A nil-clock constructor control must return
+`ErrDeterministicClockRequired`, and a source-level control must retain
+`agentloop.WithClock(prepared.Clock)` in the production option list. This
+prevents a deterministic clock that is attached only to `Prepared.Audio` from
+being mistaken for runtime timing parity. It
 must also cover the negative controls below through the public Wire constructor,
 not through a private implementation. This is the proof needed to close
 EMBED/SERVICE for a future slice; C14 does not claim it.
@@ -700,6 +722,7 @@ The exact historical source and artifact references are:
 | Valid finalized bundle, provider wire and tool | `session replay <bundle>` and `session --replay <bundle> --audio-out <file>` over C13 artifact-2; strict reported 18 wire events/1 tool call, flag route emitted `PROBE_TOOL_MARKER_9182`, continuation and clean terminal | **Historical software proof.** Future public runtime test must preserve both route results and exact tool count; no credential/device claim. |
 | Provider-route tool cwd/sandbox portability | The fixture's `exec` call writes to relative `evidence/runs/exec-invocations-v4.log`; provider construction reaches `newLiveInferencerFactory` -> `providers.SessionService.BuildSession` -> `sessionDialer`/`NewReplayWebSocketDialer`, while CLI capabilities resolve `WorkDir`/allow paths through `NewSessionToolCapabilitiesFactoryFromService` and `ResolveFilesystemPolicy` | **Conditional historical proof / C14-unrun.** C13 provider replay passed from the evidence-root cwd; the independent strict route passed, but a provider replay from the reviewer worktree failed on the relative path. Future parity must record an explicit WorkDir and sandbox/allow-path policy, assert the marker and side effect, and report missing cwd prerequisites as BLOCKED. |
 | Audio evidence loading versus strict input packets | Strict `Prepare` opens `audio-trace` with `recording.OpenReplay` and reports `RecordedPCM`; production `runtime.go:31-70` instead uses `Capture` and `deriveInputActions` to decode provider-wire `input_audio_buffer.append` records, while only the test fake calls `Prepared.Audio.Next()` | **Source-proved / C14-unrun.** Future extraction must test these separately: validate/read trace evidence and scope, then compare the runtime's encoded input writes with the captured provider-wire PCM. Do not infer packet-consumption parity from a non-nil audio reader or scope bit. |
+| Prepared clock reaches the strict AgentLoop | `service.go:98-122` creates and stores a deterministic clock from `timelineOrigin`; `runtime.go:56-62` does not read `Prepared.Clock`; `agentloop.WithClock` is available at `go-agent-loop/pkg/agentloop/options.go:69-72`; `agentloop.New` forwards `cfg.Clock` at `agent_loop.go:191`; `engine.NewEngine` defaults to `clock.Real{}` at `engine.go:87-98` | **Current limitation / C14-unrun.** The present strict factory is deterministic only for the trace reader, not for AgentLoop hot-loop pacing. Future `strict/runtime.go` must reject nil and pass `agentloop.WithClock(prepared.Clock)`; a scheduler-observing non-zero pacing regression and nil-clock negative control must fail on omission or wall-clock substitution. |
 | Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. These hashes prove fixture/output bytes, not production consumption of `Prepared.Audio`. |
 | Ordered handshake and turns | strict `trackingConn` validates exact message type/order; live `LiveReplayPlan.WaitForSessionUpdated`, `runReplay`, and `waitForResponse` keep PCM/commit behind the provider boundary | **Source-proved / C14-unrun.** Add public positive and reordered/early-append negatives. |
 | Clean shutdown and explicit terminal | strict `deriveEvidence`/`coreRuntime.Run` plus `ValidateComplete`; live `finishOnceBody`, `finishMedia`, `TerminalReasonReplayComplete` | **Historical software proof** for C13 clean close and **source-proved / C14-unrun** for the boundary map. Future test must reject success before terminal/close evidence. |
@@ -829,13 +852,84 @@ CI suite, or CI polling:
   '^(TestSessionRecordedPCMIntegrity|TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact)$'`
   exited `0`: `5` tests in `1` package.
 - `rtk proxy git diff --check`, nonempty audit, `canonical-rejection-feedback.json`
-  JSON length `16`, assessment `canonicalValidation`=`complete`/`TERMINAL`,
+  JSON length `17`, assessment `canonicalValidation`=`complete`/`TERMINAL`,
   startup/source ancestry, and all named Wire/provider/cwd source markers
   passed.
 
 These checks validate the audit evidence and pinned baseline behavior only. The
 future extraction, external-module consumer, explicit provider WorkDir replay,
 and fresh exact-artifact vertical probe remain proposed or unrun.
+
+## Review-42 clock-boundary reconciliation
+
+The live canonical board was re-read for the same admitted task before this
+repair. It retains `work-task-34` as the sole C14 executor row and adds
+concluded `work-review-42` in `fin`/`FAILED`; no replacement task, second
+project, waiver, or ownership transfer exists. Review-42 reports that PR #406
+head `025b8f48a93c059563c7eb505af0061e18fe69d7` had the required checks and
+independent exact-binary replay evidence, but found one remaining audit gap:
+the strict production factory does not wire `Prepared.Clock` into AgentLoop.
+
+The finding is causal in the pinned source. `service.go:98-122` creates a fresh
+`clock.Deterministic` from `timelineOrigin` and stores it in both
+`Prepared.Clock` and the trace reader. However,
+`agent-cli/internal/services/internal/replay/runtime.go:56-62` passes mode,
+session inferencer, tool executor, tools, and buffer capacity to
+`agentloop.New` without `agentloop.WithClock(prepared.Clock)`. The option is
+available at `go-agent-loop/pkg/agentloop/options.go:69-72`; the constructor
+passes `cfg.Clock` to `engine.NewEngine` at
+`go-agent-loop/pkg/agentloop/agent_loop.go:191`, and
+`go-agent-loop/pkg/engine/engine.go:87-98` initializes `clock.Real{}` before
+overriding it only when an option was supplied. Thus the current strict route
+has deterministic trace-evidence timing but a reachable wall-clock default for
+AgentLoop hot-loop pacing. This is a real current limitation, not a claim that
+C14 should edit runtime source.
+
+The future extraction repair is now exact: in
+`go-agent-runtime/services/replay/internal/strict/runtime.go`, reject a nil
+`Prepared.Clock` with `ErrDeterministicClockRequired` before constructing the
+loop, and add `agentloop.WithClock(prepared.Clock)` to the same production
+option list as `WithMode`, `WithSessionInferencer`, `WithToolExecutor`,
+`WithTools`, and `WithBufferCapacity`. Keep the `ClockFactory` origin at
+`timelineOrigin`; do not construct `clock.Real` or attach the scheduler only to
+`recording.Replay`. The runtime Wire constructor must provide the same
+per-preparation scheduler and must not add a second clock source.
+
+The required causal control is also explicit. Future
+`go-agent-runtime/services/replay/internal/strict/runtime_test.go` must inject
+an observable `clock.Scheduler`, exercise a non-zero hot-loop pacing case (or an
+equivalent strict runtime timing seam), and assert that its `Now`/timer path is
+used; a wall-clock default must fail the test. A nil-clock constructor control
+must return `ErrDeterministicClockRequired`, and a source-level control must
+retain `agentloop.WithClock(prepared.Clock)` in the production option list.
+The public `tests/embedding/replay_test.go` must retain the same timing
+assertion through the public Wire constructor. Until that future implementation
+and control exist, clock parity is **OPEN / Proposed-unrun**, even though the
+trace reader itself is deterministic.
+
+### Review-42 bounded validation
+
+After this documentation repair, the focused baseline and accumulated controls
+were rerun without changing runtime source, building the product executable,
+using a provider/device, profiling, duplicating broad CI, or polling CI:
+
+- `agent-cli`: `rtk go test ./internal/services/internal/replay ./internal/services/replay ./internal/transport/cli -count=1` exited `0` with `719` tests passed in `3` packages.
+- `go-agent-runtime`: `rtk go test ./services/replay/... -count=1` exited `0` with `43` tests passed in `3` packages.
+- `go-agent-runtime`: `rtk go test ./services/session/internal/live -count=1` exited `0` with `68` tests passed in `1` package.
+- `agent-cli`: the accumulated C13 controls `rtk go test ./test/integration -count=1 -run '^(TestSessionRecordedPCMIntegrity|TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact)$'` exited `0` with `5` tests passed in `1` package.
+
+The exact admission command returned the admitted single-project identity again;
+the branch matched `prd.branchName`; `origin/main` remained
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; baseline, startup, and source
+objects existed; startup/source ancestry checks passed; and `git diff --check`
+passed. The current canonical re-read included the latest task feedback and
+`work-review-42`; the owned rejection extraction validates as JSON with `17`
+rows. The pinned runtime source check confirmed `agentloop.New` at
+`runtime.go:56` and no `agentloop.WithClock` in that current implementation;
+the audit contains the future wiring and non-wall-clock regression requirement.
+The worktree remained limited to C14 evidence changes. These checks close the
+Review-42 audit finding as documentation, not as a runtime repair or a project
+acceptance claim.
 
 ## Audio, clock, buffer, and device boundary audit
 
@@ -871,8 +965,13 @@ claim AUDIO or DEVICE completion.
    `Tick` then `waitForNextTick` in `engine.go:220-234`. `go-audio/pkg/clock/clock.go`
    separates `Source`, `TimerSource`, and `Scheduler`, and
    `clock.Deterministic` advances virtual elapsed time independently of logical
-   ticks. Strict replay's future `ClockFactory` must inject this scheduler;
-   neither route may silently substitute wall time for trace timing.
+   ticks. `Prepare` creates this scheduler, but the current strict
+   `runtime.go:56-62` fails to pass it to `agentloop.New`, so the engine's
+   `clock.Real{}` default remains reachable. The future strict constructor must
+   reject a missing scheduler and call `agentloop.WithClock(prepared.Clock)`;
+   its timing regression must observe a deterministic scheduler during pacing
+   and fail if wall time is substituted. Neither route may silently substitute
+   wall time for trace timing.
 5. `go-agent-runtime/services/devices/contract.go:31-180` keeps `Service.Open`,
    `Capture.Pump`, `Playback.Pump`, `PlaybackControllerProvider`, and
    `MediaPorts` behind a public device boundary. The live route binds the
@@ -1010,7 +1109,7 @@ for this source revision are:
 
 | ID | immutable rubric | C14 scoped judgment | named later gate |
 | --- | --- | --- | --- |
-| AUDIO | One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO. | **OPEN.** Source shows memory-only loop ports and canonical go-audio buffer/codec/clock edges (`go-agent-loop/pkg/subsystems/audio/audio.go`, `go-audio/pkg/{audio,codec,clock}`), but replay callers and device/audio ownership are not a complete independent subsystem proof. | Canonical audio subsystem extraction plus independent clocks/codec/DSP/sample/buffer validation. |
+| AUDIO | One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO. | **OPEN.** Source shows memory-only loop ports and canonical go-audio buffer/codec/clock edges (`go-agent-loop/pkg/subsystems/audio/audio.go`, `go-audio/pkg/{audio,codec,clock}`), but replay callers and device/audio ownership are not a complete independent subsystem proof; the current strict factory also leaves AgentLoop pacing on its `clock.Real{}` default. | Canonical audio subsystem extraction plus independent clocks/codec/DSP/sample/buffer validation and explicit runtime clock injection. |
 | DEVICE | The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission. | **OPEN.** `go-agent-runtime/services/devices/contract.go` is a thin boundary and strict replay is explicitly headless; C13 file/speaker-enqueued evidence cannot prove physical consumption. | Physical device lifecycle and consumed-output tracing with actual device evidence. |
 | EMBED | A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization. | **OPEN.** `tests/embedding` is separate and imports runtime Wire, but it has no strict replay consumer because the current strict contract is CLI-internal. | Implement extraction and add `tests/embedding/replay_test.go` with `GOWORK=off`. |
 | SERVICE | Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior. | **OPEN.** Admission/session/device services satisfy parts of this shape, but strict replay business logic remains under `agent-cli/internal` and CLI Wire constructs it. | Move strict contract/private implementation and add runtime replay Wire; keep CLI presentation-only. |
