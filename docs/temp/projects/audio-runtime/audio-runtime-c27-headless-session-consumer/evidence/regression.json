@@ -1,0 +1,96 @@
+{
+  "credentials": {
+    "config_directory": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/config",
+    "environment_allowlist": true,
+    "network_or_provider_credentials": false
+  },
+  "fixture": {
+    "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
+    "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+  },
+  "replay": {
+    "audio": {
+      "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+      "size": 3200
+    },
+    "bundle_files": [
+      "agent.transcript.jsonl",
+      "audio-trace/speaker-enqueued.wav",
+      "audio-trace/timeline.jsonl",
+      "audio/out-000.pcm",
+      "client.transcript.jsonl",
+      "manifest.json",
+      "provider.json",
+      "session-log.jsonl"
+    ],
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
+      "-C",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/config",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/fixtures/c07-audio-tool-traced.session.json",
+      "--audio-out",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/out.pcm",
+      "--record-dir",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/bundle",
+      "--trace-audio"
+    ],
+    "result": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/fixtures/c07-audio-tool-traced.session.json",
+        "--audio-out",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/out.pcm",
+        "--record-dir",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/bundle",
+        "--trace-audio"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9",
+      "duration_seconds": 0.527734,
+      "exit_code": 0,
+      "process_group_alive": false,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "timed_out": false
+    }
+  },
+  "same_source_yui": {
+    "path": "evidence/artifacts/yui.archive",
+    "sha256": "a6e1d99a8f48b0d4e7992fead48cf24591d43eb496e5a7880ecb42f06a019bb5",
+    "size": 52440082
+  },
+  "strict_replay": {
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
+      "-C",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/config",
+      "session",
+      "replay",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/bundle"
+    ],
+    "result": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/config",
+        "session",
+        "replay",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9/run/bundle"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-_o1dexk9",
+      "duration_seconds": 0.025266,
+      "exit_code": 0,
+      "process_group_alive": false,
+      "reaped": true,
+      "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+      "stdout": "strict replay continuation",
+      "timed_out": false
+    }
+  }
+}

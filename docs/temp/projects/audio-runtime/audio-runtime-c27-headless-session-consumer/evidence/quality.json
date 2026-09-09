@@ -1,0 +1,80 @@
+{
+  "commands": [
+    {
+      "label": "consumer focused tests",
+      "result": {
+        "argv": [
+          "go",
+          "test",
+          "./..."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
+        "duration_seconds": 11.241556,
+        "exit_code": 0,
+        "process_group_alive": false,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \texample.com/audio-runtime-c27-headless-session-consumer/cmd/headless-session\t0.189s\n",
+        "timed_out": false
+      }
+    },
+    {
+      "label": "consumer race tests",
+      "result": {
+        "argv": [
+          "go",
+          "test",
+          "-race",
+          "./..."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
+        "duration_seconds": 14.350257,
+        "exit_code": 0,
+        "process_group_alive": false,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \texample.com/audio-runtime-c27-headless-session-consumer/cmd/headless-session\t1.209s\n",
+        "timed_out": false
+      }
+    },
+    {
+      "label": "consumer vet",
+      "result": {
+        "argv": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
+        "duration_seconds": 1.318622,
+        "exit_code": 0,
+        "process_group_alive": false,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      }
+    },
+    {
+      "label": "accumulated embedding consumer regression",
+      "result": {
+        "argv": [
+          "go",
+          "test",
+          "./..."
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/tests/embedding",
+        "duration_seconds": 5.595553,
+        "exit_code": 0,
+        "process_group_alive": false,
+        "reaped": true,
+        "stderr": "go: downloading github.com/pion/webrtc/v4 v4.2.18\ngo: downloading github.com/pion/rtp v1.10.5\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading golang.org/x/image v0.36.0\ngo: downloading github.com/gorilla/websocket v1.5.3\ngo: downloading github.com/pion/randutil v0.1.0\ngo: downloading github.com/pion/interceptor v0.1.47\ngo: downloading github.com/pion/dtls/v3 v3.1.5\ngo: downloading github.com/pion/datachannel v1.6.2\ngo: downloading github.com/pion/ice/v4 v4.4.0\ngo: downloading github.com/pion/rtcp v1.2.17\ngo: downloading github.com/pion/logging v0.2.4\ngo: downloading github.com/pion/sctp v1.11.1\ngo: downloading github.com/pion/sdp/v3 v3.0.19\ngo: downloading github.com/pion/srtp/v3 v3.0.12\ngo: downloading github.com/pion/stun/v3 v3.1.6\ngo: downloading github.com/pion/transport/v4 v4.0.2\ngo: downloading golang.org/x/net v0.50.0\ngo: downloading github.com/google/uuid v1.6.0\ngo: downloading github.com/pion/mdns/v2 v2.1.0\ngo: downloading github.com/pion/turn/v5 v5.0.12\ngo: downloading golang.org/x/crypto v0.48.0\ngo: downloading golang.org/x/time v0.14.0\ngo: downloading github.com/wlynxg/anet v0.0.5\ngo: downloading golang.org/x/sys v0.47.0\n",
+        "stdout": "ok  \texample.com/agent-runtime-consumer\t0.728s\n",
+        "timed_out": false
+      }
+    }
+  ],
+  "full_ci_polled": false,
+  "scope": "focused consumer plus accumulated tests/embedding regression",
+  "status": "verified"
+}

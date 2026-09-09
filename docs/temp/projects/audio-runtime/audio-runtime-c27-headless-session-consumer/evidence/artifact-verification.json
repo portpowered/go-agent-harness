@@ -1,0 +1,49 @@
+{
+  "descriptor": {
+    "path": "evidence/package.json",
+    "sha256": "d1129928db22b786ec32b9c7da73d688d5d48750f6f497065b185ef023c4a3fb",
+    "size": 11295
+  },
+  "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
+  "tamper_control": "tampered artifact digest/size rejected",
+  "verified": {
+    "all_digests_match": true,
+    "checked": [
+      {
+        "path": "evidence/artifacts/source.tar.gz",
+        "sha256": "43ddee5f62ef8736f36d1097df792c29ce32b4d22fb5186193d5e6c7526e17a4",
+        "size": 7538419
+      },
+      {
+        "path": "evidence/artifacts/headless-session.archive",
+        "sha256": "ed1b935b149142c30e522c9463d15af44bf2a3cbd6e943bb567150541d7abfba",
+        "size": 9190898
+      },
+      {
+        "path": "evidence/artifacts/yui.archive",
+        "sha256": "a6e1d99a8f48b0d4e7992fead48cf24591d43eb496e5a7880ecb42f06a019bb5",
+        "size": 52440082
+      },
+      {
+        "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
+        "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+        "size": 14060
+      },
+      {
+        "path": "go.mod",
+        "sha256": "2fb77900f9904a3383f779995808ed82a7ca023d68f2cf02c154f4c77b0740b7",
+        "size": 1173
+      },
+      {
+        "path": "go.sum",
+        "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a",
+        "size": 5445
+      },
+      {
+        "path": "scripts/verify.py",
+        "sha256": "19bc6bb581c6eaea8099f6775780fb7e5fb724595fc146e146bee56e66b7cf4a",
+        "size": 48147
+      }
+    ]
+  }
+}
