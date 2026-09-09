@@ -19,7 +19,7 @@
         "./docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/consumer/main.go"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing",
-      "duration_seconds": 0.067785,
+      "duration_seconds": 0.071277,
       "exit_code": 0,
       "stderr": "",
       "stdout": ""
@@ -33,7 +33,7 @@
         "./agent-cli/cmd/yui"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing",
-      "duration_seconds": 0.244769,
+      "duration_seconds": 0.244604,
       "exit_code": 0,
       "stderr": "",
       "stdout": ""
@@ -43,7 +43,7 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/pcm-consumer"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing",
-      "duration_seconds": 0.063213,
+      "duration_seconds": 0.065875,
       "exit_code": 0,
       "stderr": "",
       "stdout": "{\"direct_pcm\":[32766,3,-32767],\"canonical_pcm\":[32766,3,-32767,0],\"canonical_sources\":[\"alpha\",\"beta\",\"gamma\"],\"tail_pcm\":[7,8],\"tail_end\":true,\"boundary_pcm\":[],\"boundary_end\":true,\"input_isolation\":true,\"wall_time_did_not_advance\":true,\"source_limit_error\":\"PCM16 mix source count exceeds supported bound: got 1048577 sources, want at most 1048576\",\"clean_shutdown\":true}\n"
@@ -90,84 +90,84 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/config",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-3.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/rendered.pcm",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/rendered.pcm",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/bundle",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/bundle",
           "--max-duration",
           "60s",
           "--trace-audio"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws",
-        "duration_seconds": 0.045088,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak",
+        "duration_seconds": 0.048158,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
       },
       "provider": {
         "bytes": 3840,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/bundle/audio/out-000.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/bundle/audio/out-000.pcm",
         "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
       },
       "rendered": {
         "bytes": 3360,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/rendered.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/rendered.pcm",
         "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
       },
       "replay": {
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-p71z1vhr/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-kvztxsrx/config",
           "session",
           "replay",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-8glrg_ws/bundle"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-t_g_1cak/bundle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-p71z1vhr",
-        "duration_seconds": 0.02104,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-kvztxsrx",
+        "duration_seconds": 0.020109,
         "exit_code": 0,
         "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
         "stdout": ""
       },
-      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-p71z1vhr"
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/interruption-directory-replay-kvztxsrx"
     },
     "tool_no_trace": {
       "capture": {
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/config",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/rendered.pcm",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/rendered.pcm",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/bundle",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/bundle",
           "--max-duration",
           "60s"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j",
-        "duration_seconds": 0.054331,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo",
+        "duration_seconds": 0.055751,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
       },
       "provider": {
         "bytes": 4800,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/bundle/audio/out-000.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/bundle/audio/out-000.pcm",
         "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
       },
       "rendered": {
         "bytes": 3200,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/rendered.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/rendered.pcm",
         "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
       },
-      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j"
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo"
     },
     "tool_no_trace_strict_control": {
       "expected": "missing timeline rejection",
@@ -175,71 +175,71 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-n9ltaxdf/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-cs2awdi8/config",
           "session",
           "replay",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/bundle"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/bundle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-n9ltaxdf",
-        "duration_seconds": 0.018018,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-cs2awdi8",
+        "duration_seconds": 0.018761,
         "exit_code": 1,
-        "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-g8uz2f3j/bundle/audio-trace\n",
+        "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-no-trace-5wjl6svo/bundle/audio-trace\n",
         "stdout": ""
       },
-      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-n9ltaxdf"
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/no-trace-strict-control-cs2awdi8"
     },
     "tool_trace": {
       "capture": {
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/config",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/rendered.pcm",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/rendered.pcm",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/bundle",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/bundle",
           "--max-duration",
           "60s",
           "--trace-audio"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1",
-        "duration_seconds": 0.426478,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4",
+        "duration_seconds": 0.43754,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
       },
       "provider": {
         "bytes": 4800,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/bundle/audio/out-000.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/bundle/audio/out-000.pcm",
         "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
       },
       "rendered": {
         "bytes": 3200,
-        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/rendered.pcm",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/rendered.pcm",
         "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
       },
-      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1"
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4"
     },
     "tool_trace_directory_replay": {
       "replay": {
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-bdhg826g/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-y1t21moy/config",
           "session",
           "replay",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-wxzi4vh1/bundle"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-rired6o4/bundle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-bdhg826g",
-        "duration_seconds": 0.021183,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-y1t21moy",
+        "duration_seconds": 0.021003,
         "exit_code": 0,
         "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
         "stdout": "strict replay continuation"
       },
-      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-bdhg826g"
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c26-shared-pcm-mixing/docs/temp/projects/audio-runtime/audio-runtime-c26-shared-pcm-mixing/runs/tool-trace-directory-replay-y1t21moy"
     }
   },
   "scope": "standalone public consumer plus accepted software regressions",
@@ -251,6 +251,6 @@
     "go-audio/pkg/mixer/mixer.go": "4d04f83f613676850e66a95899a1f8a248b029ecf68de3376771e444fc0212d4",
     "go-audio/pkg/mixer/pcm_mix.go": "54809ee5d6faa86c6d1686932a99432f0ea59f581f30223e4ff68ae3dd3a402a"
   },
-  "source_revision": "a18240d2120842ff8d0924eff180c0b361a8a248",
+  "source_revision": "c021268721405d4049e95b50e5c46057da3816a2",
   "work": "audio-runtime-c26-shared-pcm-mixing"
 }
