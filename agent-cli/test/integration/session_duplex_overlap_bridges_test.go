@@ -5,10 +5,13 @@ import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/intern
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"io"
 	"sync"
+	"testing"
+	"time"
 )
 
 type v8MultiTurnBridgePacket struct {
@@ -34,25 +37,28 @@ type v8MultiTurnBridge struct {
 	runtimeOut  chan runtimecontract.SessionRuntimeObservation
 	runtimeIn   chan v8RuntimeInputEvent
 
-	packets chan v8MultiTurnBridgePacket
-	mu      sync.Mutex
-	writes  int
-	eofRead bool
-	eofSeen chan struct{}
-	eofOnce sync.Once
+	packets          chan v8MultiTurnBridgePacket
+	mu               sync.Mutex
+	writes           int
+	eofRead          bool
+	eofSeen          chan struct{}
+	eofOnce          sync.Once
+	eofWaitStarted   chan struct{}
+	eofWaitStartOnce sync.Once
 }
 
 func newV8MultiTurnBridge(coordinator *v8MultiTurnCoordinator, direction string, sender, receiver *v8RecordingView, eofReady <-chan struct{}) *v8MultiTurnBridge {
 	return &v8MultiTurnBridge{
-		coordinator: coordinator,
-		direction:   direction,
-		sender:      sender,
-		receiver:    receiver,
-		eofReady:    eofReady,
-		runtimeOut:  make(chan runtimecontract.SessionRuntimeObservation, 1),
-		runtimeIn:   make(chan v8RuntimeInputEvent),
-		packets:     make(chan v8MultiTurnBridgePacket, 2),
-		eofSeen:     make(chan struct{}),
+		coordinator:    coordinator,
+		direction:      direction,
+		sender:         sender,
+		receiver:       receiver,
+		eofReady:       eofReady,
+		runtimeOut:     make(chan runtimecontract.SessionRuntimeObservation, 1),
+		runtimeIn:      make(chan v8RuntimeInputEvent),
+		packets:        make(chan v8MultiTurnBridgePacket, 2),
+		eofSeen:        make(chan struct{}),
+		eofWaitStarted: make(chan struct{}),
 	}
 }
 
@@ -244,23 +250,117 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 	if len(destination) < v8PCMFrameBytes {
 		return 0, fmt.Errorf("%s receiver requested %d PCM bytes, want at least %d", b.direction, len(destination), v8PCMFrameBytes)
 	}
+	// A provider close cancels the audio source at the same boundary where the
+	// final bridge writer may be about to publish EOF. Prefer a queued packet,
+	// then wait for actual packet publication so cancellation cannot turn an
+	// eventual EOF into a false missing-EOF observation.
+	if count, err, ok := b.tryReadPacket(destination); ok {
+		return count, err
+	}
 	select {
 	case <-ctx.Done():
+		if count, err, ok := b.tryReadPacket(destination); ok {
+			return count, err
+		}
+		b.eofWaitStartOnce.Do(func() { close(b.eofWaitStarted) })
+		select {
+		case packet := <-b.packets:
+			return b.consumePacket(destination, packet)
+		case <-b.coordinator.abort:
+			if count, err, ok := b.tryReadPacket(destination); ok {
+				return count, err
+			}
+		}
 		return 0, ctx.Err()
 	case <-b.coordinator.abort:
 		return 0, context.Canceled
 	case packet := <-b.packets:
-		if packet.eof {
-			b.mu.Lock()
-			b.eofRead = true
-			b.mu.Unlock()
-			b.eofOnce.Do(func() { close(b.eofSeen) })
-			return 0, io.EOF
+		return b.consumePacket(destination, packet)
+	}
+}
+
+func (b *v8MultiTurnBridge) publishEOF() error {
+	select {
+	case b.packets <- v8MultiTurnBridgePacket{eof: true}:
+		return nil
+	case <-b.coordinator.abort:
+		return context.Canceled
+	}
+}
+
+func (b *v8MultiTurnBridge) tryReadPacket(destination []byte) (int, error, bool) {
+	select {
+	case packet := <-b.packets:
+		count, err := b.consumePacket(destination, packet)
+		return count, err, true
+	default:
+		return 0, nil, false
+	}
+}
+
+func (b *v8MultiTurnBridge) consumePacket(destination []byte, packet v8MultiTurnBridgePacket) (int, error) {
+	if packet.eof {
+		b.mu.Lock()
+		b.eofRead = true
+		b.mu.Unlock()
+		b.eofOnce.Do(func() { close(b.eofSeen) })
+		return 0, io.EOF
+	}
+	copy(destination, packet.crossing.Emitted)
+	b.receiver.record(packet.crossing, packet.crossing.Emitted)
+	close(packet.ack)
+	return len(packet.crossing.Emitted), nil
+}
+
+func TestV8MultiTurnBridgeReadConsumesQueuedEOFAfterCancellation(t *testing.T) {
+	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
+	bridge := newV8MultiTurnBridge(coordinator, "A-to-B", &v8RecordingView{}, &v8RecordingView{}, nil)
+	bridge.packets <- v8MultiTurnBridgePacket{eof: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	count, err := bridge.read(ctx, make([]byte, v8PCMFrameBytes))
+	if !errors.Is(err, io.EOF) || count != 0 {
+		t.Fatalf("read after cancellation = count %d, err %v; want consumed EOF", count, err)
+	}
+	if !bridge.observedEOF() {
+		t.Fatal("queued EOF was returned but not recorded as consumed")
+	}
+}
+
+func TestV8MultiTurnBridgeReadConsumesEOFPublishedAfterCancellation(t *testing.T) {
+	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
+	bridge := newV8MultiTurnBridge(coordinator, "A-to-B", &v8RecordingView{}, &v8RecordingView{}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	type readResult struct {
+		count int
+		err   error
+	}
+	result := make(chan readResult, 1)
+	go func() {
+		count, err := bridge.read(ctx, make([]byte, v8PCMFrameBytes))
+		result <- readResult{count: count, err: err}
+	}()
+	select {
+	case <-bridge.eofWaitStarted:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled bridge read did not wait for EOF publication")
+	}
+	if err := bridge.publishEOF(); err != nil {
+		t.Fatalf("publish EOF after cancellation: %v", err)
+	}
+	select {
+	case got := <-result:
+		if !errors.Is(got.err, io.EOF) || got.count != 0 {
+			t.Fatalf("read after delayed EOF publication = count %d, err %v; want consumed EOF", got.count, got.err)
 		}
-		copy(destination, packet.crossing.Emitted)
-		b.receiver.record(packet.crossing, packet.crossing.Emitted)
-		close(packet.ack)
-		return len(packet.crossing.Emitted), nil
+	case <-time.After(time.Second):
+		t.Fatal("bridge read did not return after EOF publication")
+	}
+	if !bridge.observedEOF() {
+		t.Fatal("published EOF was returned but not recorded as consumed")
 	}
 }
 
@@ -274,6 +374,33 @@ func (b *v8MultiTurnBridge) observedEOF() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.eofRead
+}
+
+func (b *v8MultiTurnBridge) waitForEOFSeen(ctx context.Context) bool {
+	select {
+	case <-b.eofSeen:
+		return true
+	case <-ctx.Done():
+		return false
+	case <-b.coordinator.abort:
+		return false
+	}
+}
+
+func (b *v8MultiTurnBridge) eofState() string {
+	b.mu.Lock()
+	eofRead := b.eofRead
+	b.mu.Unlock()
+	return fmt.Sprintf("seen=%t queued=%d wait_started=%t", eofRead, len(b.packets), channelClosed(b.eofWaitStarted))
+}
+
+func channelClosed(channel <-chan struct{}) bool {
+	select {
+	case <-channel:
+		return true
+	default:
+		return false
+	}
 }
 
 type v8MultiTurnPCMWriter struct{ bridge *v8MultiTurnBridge }

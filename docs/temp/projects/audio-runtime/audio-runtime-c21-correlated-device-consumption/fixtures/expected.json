@@ -1,0 +1,39 @@
+{
+  "device_rate": 16000,
+  "paused_device_samples": 0,
+  "primary_kinds": [
+    "admission",
+    "admission",
+    "consumed",
+    "consumed",
+    "consumed",
+    "underflow",
+    "admission",
+    "hold_tone",
+    "underflow",
+    "admission",
+    "discard",
+    "admission",
+    "consumed"
+  ],
+  "primary_consumed": [
+    {"item_id": "consumer-item-1", "start": 0, "end": 3, "pcm": [10, 11, 12]},
+    {"item_id": "consumer-item-2", "start": 3, "end": 4, "pcm": [20]},
+    {"item_id": "consumer-item-2", "start": 4, "end": 6, "pcm": [21, 22]},
+    {"item_id": "consumer-item-healthy", "start": 12, "end": 16, "pcm": [40, 41, 42, 43]}
+  ],
+  "underflow_ranges": [
+    {"start": 6, "end": 8, "pcm": [0, 0]},
+    {"start": 10, "end": 12, "pcm": [0, 0]}
+  ],
+  "discard": {"item_id": "consumer-item-interrupted", "start": 12, "end": 16, "count": 4},
+  "rate_pcm": [0, 0, 0, 0, 1, -1, 2, -2, 2, -2, -4, 4, -24, 22, -103, 500, 1104, 980, 1028, 1001, 1005, 1002, 1001, 1006, 1003, 1001, 1001, 1004, 1006, 1003, 1000, 1003],
+  "stalled": {
+    "device_samples": 300,
+    "published_observations": 1,
+    "dropped_observations": 599,
+    "dropped_samples": 599,
+    "metadata_lost_samples": 45,
+    "last_sequence": 600
+  }
+}
