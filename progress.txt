@@ -1160,3 +1160,16 @@ C18 current-head coverage rejection reconciliation and same-owner handoff checkp
   without polling. Retain ownership through `CONTINUE` for any exact-head
   actionable C18 rejection; do not self-review or broaden scope to the
   unrelated RTC failure.
+
+C18 current-head rejection evidence handoff checkpoint
+
+- Committed the owned raw rejection and progress reconciliation as
+  `be054d16` (`docs: reconcile current C18 coverage rejection`) and pushed it
+  to the existing `codex/audio-runtime-c18-public-strict-replay` branch. PR
+  #410 now points at that exact candidate; the executor evidence update is
+  recorded at https://github.com/portpowered/go-agent-harness/pull/410#issuecomment-5605250060.
+- The candidate is ready for the script-owned current-head CI gate. This is
+  an executor handoff only: no CI success, independent review, guarded merge,
+  vertical probe, or project acceptance is claimed. The next owner must use
+  the exact new-head check result; any actionable C18 failure returns to this
+  same task, while the unrelated RTC timing failure remains outside scope.
