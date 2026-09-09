@@ -1,7 +1,6 @@
 package runtime
 
 import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
@@ -67,7 +66,6 @@ func (e *RTCDeviceSinkError) Error() string {
 	}
 	return fmt.Sprintf("RTC device sink %q %s failed: %v", e.DeviceID, e.Operation, e.Err)
 }
-
 func (e *RTCDeviceSinkError) Unwrap() error {
 	if e == nil {
 		return nil
@@ -134,11 +132,9 @@ type RTCDeviceSink struct {
 func NewRTCDeviceSink(registry devicegw.DeviceRegistry, id devicegw.DeviceID) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, audio.SampleRate, "", nil)
 }
-
 func NewRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, rate, "", nil)
 }
-
 func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int, voice string, playbackObserver RTCDevicePlaybackObserver) (*RTCDeviceSink, error) {
 	if rate == 0 {
 		rate = audio.SampleRate
@@ -149,7 +145,6 @@ func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.Device
 	}
 	return newRTCDeviceSinkFromOpened(sink, deviceRate, rate, voice, playbackObserver), nil
 }
-
 func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, playbackObserver RTCDevicePlaybackObserver) *RTCDeviceSink {
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	commands, _ := audio.NewPlaybackCommands(32)
@@ -177,19 +172,15 @@ func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerR
 	go result.runRenderObservations()
 	return result
 }
-
 func NewDefaultRTCDeviceSink(registry devicegw.DeviceRegistry) (*RTCDeviceSink, error) {
 	return NewRTCDeviceSink(registry, "")
 }
-
 func NewRTCDeviceSinkAtRateWithOptions(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, rate, voice, observer)
 }
-
 func NewRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) *RTCDeviceSink {
 	return newRTCDeviceSinkFromOpened(sink, deviceRate, providerRate, voice, observer)
 }
-
 func (s *RTCDeviceSink) SetPlaybackObserver(observer PlaybackObserver) {
 	if s != nil {
 		s.observer = observer
@@ -208,7 +199,6 @@ func (s *RTCDeviceSink) SetPlaybackReceiptObserver(observer RTCDevicePlaybackRec
 	s.playbackReceiptObserver = observer
 	s.playbackReceiptMu.Unlock()
 }
-
 func (s *RTCDeviceSink) observePlaybackReceipt(receipt audio.PlaybackReceipt) {
 	if s == nil {
 		return
@@ -220,13 +210,11 @@ func (s *RTCDeviceSink) observePlaybackReceipt(receipt audio.PlaybackReceipt) {
 		observer(receipt)
 	}
 }
-
 func (s *RTCDeviceSink) SetPlaybackSamplesObserver(observer func(context.Context, int, []int16) error) {
 	if s != nil {
 		s.playbackSamplesObserver = observer
 	}
 }
-
 func (s *RTCDeviceSink) SetRenderedSamplesObserver(observer func(int, []int16)) bool {
 	if s == nil || observer == nil {
 		return false
@@ -278,9 +266,9 @@ func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 		return audio.PlaybackQueueStats{}
 	}
 	stats := s.sink.PlaybackStats()
-	// A supported runtime cancellation is still an explicit discard boundary
-	// when the callback has already drained the native queue. Keep that logical
-	// event visible even though the native queue has no samples to remove.
+	// Supported cancellation remains visible as an explicit discard boundary
+	// even when the callback has already drained the native queue.
+	// Keep that logical event visible to synchronized observers.
 	stats.DiscardEvents += s.playbackNoopDiscards.Load()
 	s.snapshotStats.Store(&stats)
 	return stats
@@ -315,7 +303,6 @@ func (s *RTCDeviceSink) InterruptPlayback(response audio.PlaybackResponse) (int,
 func (s *RTCDeviceSink) InterruptActivePlayback() (audio.PlaybackInterruption, bool) {
 	return s.interruptPlayback(audio.PlaybackResponse{}, false)
 }
-
 func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requireRequested bool) (audio.PlaybackInterruption, bool) {
 	if s == nil || s.sink == nil || requireRequested && requested.ItemID == "" {
 		return audio.PlaybackInterruption{}, false
@@ -323,12 +310,9 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	requestedIdentity := newRTCDevicePlaybackIdentity(requested)
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	// Native discard and the ledger transition share one observation boundary.
 	s.discardPlaybackObservations("interruption", s.playbackGeneration)
 	current := consumedPlaybackSamples(s.PlaybackStats())
 	var active rtcDevicePlaybackSpan
-	var boundary rtcDevicePlaybackSpan
-	boundaryFound := false
 	found := false
 	for _, span := range s.playbackSpans {
 		if requireRequested {
@@ -337,35 +321,17 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 				found = true
 				break
 			}
-		} else {
-			if current < span.end {
-				active = span
-				found = true
-				break
-			}
-			// A response without an end marker can be fully consumed at the
-			// interruption boundary. Retain that exact endpoint as a fallback,
-			// but prefer a later span above when its audio has actually started.
-			if current == span.end && !span.complete {
-				boundary = span
-				boundaryFound = true
-			}
+		} else if current < span.end {
+			active = span
+			found = true
+			break
 		}
 	}
-	if !found && !requireRequested && boundaryFound {
-		active = boundary
-		found = true
+	if !found && !requireRequested {
+		active, found = s.playbackFallbackSpanLocked(current)
 	}
-	if !found && !requireRequested && s.playbackResponse.hasItem() {
-		active = rtcDevicePlaybackSpan{response: s.playbackResponse}
-		found = true
-	}
-	s.playbackBlocked = true
-	s.playbackGeneration++
-	s.snapshotEpoch.Store(s.playbackGeneration)
-	s.playbackResponse = rtcDevicePlaybackIdentity{}
-	s.playbackSpans = nil
-	if !found || s.deviceRate <= 0 || requireRequested && !active.response.equal(requestedIdentity) {
+	s.blockPlaybackLocked()
+	if !found || s.deviceRate <= 0 || active.end < active.start || requireRequested && !active.response.equal(requestedIdentity) {
 		return audio.PlaybackInterruption{}, false
 	}
 	heard := uint64(0)
@@ -442,7 +408,6 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 		}
 	}
 }
-
 func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.PlaybackProcessor, providerFrame audio.PCMFrame, generation uint64, blocked bool) error {
 	samples := providerFrame.Samples
 	if s.loudness != nil {
@@ -610,10 +575,6 @@ func (s *RTCDeviceSink) recordPlaybackSpanLocked(response rtcDevicePlaybackIdent
 func (s *RTCDeviceSink) prunePlaybackSpansLocked(consumed uint64) {
 	first := 0
 	for first < len(s.playbackSpans) && s.playbackSpans[first].end <= consumed {
-		// Keep the fully heard prefix of the still-open response until the next
-		// admission can merge it with a contiguous continuation. Otherwise a
-		// producer that races the callback clock drops the prefix and an
-		// interruption at the continuation boundary reports only the last chunk.
 		if !s.playbackSpans[first].complete && s.playbackResponse.hasItem() && s.playbackSpans[first].response.equal(s.playbackResponse) {
 			break
 		}
@@ -647,11 +608,6 @@ func (s *RTCDeviceSink) Close() error {
 		}
 		var playbackSnapshot audio.PlaybackQueueStats
 		if s.playbackObserver != nil {
-			// Wait for an in-flight producer before taking the legacy queue
-			// snapshot. The observation ledger must still discard the native
-			// queue before close so a callback cannot be classified as both
-			// consumed and discarded, but the older queue observer's contract
-			// reports the queued depth that existed at the close boundary.
 			s.pacingMu.Lock()
 			s.playbackMu.Lock()
 			playbackSnapshot = s.PlaybackStats()

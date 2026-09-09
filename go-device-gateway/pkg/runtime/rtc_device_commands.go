@@ -17,7 +17,6 @@ type rtcDevicePlaybackSegment struct {
 	remaining  int
 	precise    bool
 }
-
 type rtcDevicePlaybackReservation struct {
 	id         uint64
 	kind       RTCDevicePlaybackObservationKind
@@ -27,7 +26,6 @@ type rtcDevicePlaybackReservation struct {
 	length     int
 	precise    bool
 }
-
 type rtcDevicePlaybackObservationState struct {
 	mu                   sync.Mutex
 	supported            bool
@@ -262,8 +260,7 @@ func (s *RTCDeviceSink) discardPlaybackObservations(reason string, generation ui
 	}
 	s.playbackBoundaryMu.Lock()
 	defer s.playbackBoundaryMu.Unlock()
-	before := s.sink.PlaybackStats()
-	discarded := s.sink.DiscardPlayback()
+	before, discarded := s.sink.PlaybackStats(), s.sink.DiscardPlayback()
 	if discarded == 0 && s.renderBoundarySupported.Load() {
 		s.playbackNoopDiscards.Add(1)
 	}

@@ -240,6 +240,46 @@ func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation
 	return s.observedWriteHoldTone(ctx, tail, generation, blocked)
 }
 
+func (s *RTCDeviceSink) playbackSpanForInterruptionLocked(current uint64, requested rtcDevicePlaybackIdentity, requireRequested bool) (rtcDevicePlaybackSpan, bool) {
+	var boundary rtcDevicePlaybackSpan
+	boundaryFound := false
+	for _, span := range s.playbackSpans {
+		if requireRequested {
+			if span.response.equal(requested) && current > span.start && (!span.complete || current < span.end) {
+				return span, true
+			}
+			continue
+		}
+		if current < span.end {
+			return span, true
+		}
+		// An open response can be fully consumed at the interruption boundary.
+		// Prefer a later span above when its audio has actually started.
+		if current == span.end && !span.complete {
+			boundary, boundaryFound = span, true
+		}
+	}
+	return boundary, boundaryFound
+}
+
+func (s *RTCDeviceSink) playbackFallbackSpanLocked(current uint64) (rtcDevicePlaybackSpan, bool) {
+	if active, found := s.playbackSpanForInterruptionLocked(current, rtcDevicePlaybackIdentity{}, false); found {
+		return active, true
+	}
+	if s.playbackResponse.hasItem() {
+		return rtcDevicePlaybackSpan{response: s.playbackResponse}, true
+	}
+	return rtcDevicePlaybackSpan{}, false
+}
+
+func (s *RTCDeviceSink) blockPlaybackLocked() {
+	s.playbackBlocked = true
+	s.playbackGeneration++
+	s.snapshotEpoch.Store(s.playbackGeneration)
+	s.playbackResponse = rtcDevicePlaybackIdentity{}
+	s.playbackSpans = nil
+}
+
 // SetHoldToneConfig updates the filler profile used by subsequent hold-tone
 // ticks. It is intended for session composition and deterministic tests.
 func (s *RTCDeviceSink) SetHoldToneConfig(config audio.HoldToneConfig) {
