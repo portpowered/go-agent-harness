@@ -41,22 +41,13 @@ func TestRelativeBundlePathResolvesFromNestedWorkingDirectories(t *testing.T) {
 		{path: "provider.json", data: []byte(`{"records":[]}`)},
 		{path: "audio/out-000.pcm", data: []byte{1, 2, 3, 4}},
 	})
-	original, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(original); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	}()
 
 	parent := filepath.Dir(root)
 	nested := filepath.Join(parent, "nested-working-directory")
 	if err := os.Mkdir(nested, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	canonicalRoot, err := filepath.EvalSymlinks(root)
+	expectedRoot, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,14 +63,12 @@ func TestRelativeBundlePathResolvesFromNestedWorkingDirectories(t *testing.T) {
 		{name: "nested-normalized-dot-dot", cwd: nested, bundle: filepath.Join("..", filepath.Base(nested), "..", base)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Chdir(test.cwd); err != nil {
-				t.Fatal(err)
-			}
+			t.Chdir(test.cwd)
 			resolved, err := New().ResolveCapturePath(t.Context(), test.bundle)
 			if err != nil {
 				t.Fatalf("resolve %q from %q: %v", test.bundle, test.cwd, err)
 			}
-			want := filepath.Join(canonicalRoot, "provider.json")
+			want := filepath.Join(expectedRoot, "provider.json")
 			if resolved != want {
 				t.Fatalf("resolved provider = %q, want %q", resolved, want)
 			}

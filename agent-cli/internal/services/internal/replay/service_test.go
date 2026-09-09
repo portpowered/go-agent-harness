@@ -467,15 +467,6 @@ func TestServiceRejectsMissingTimeline(t *testing.T) {
 
 func TestRelativeBundlePathServicePrepare(t *testing.T) {
 	root := writeManifestedReplayRoot(t)
-	original, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(original); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	}()
 
 	parent := filepath.Dir(root)
 	nested := filepath.Join(parent, "nested-working-directory")
@@ -493,9 +484,7 @@ func TestRelativeBundlePathServicePrepare(t *testing.T) {
 		{name: "nested-dot-dot", cwd: nested, bundle: filepath.Join("..", base)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := os.Chdir(test.cwd); err != nil {
-				t.Fatal(err)
-			}
+			t.Chdir(test.cwd)
 			prepared, err := New(Dependencies{ClockFactory: func(origin time.Time) *clock.Deterministic {
 				return clock.NewDeterministic(origin, 10)
 			}}).Prepare(context.Background(), publicreplay.Request{BundlePath: test.bundle})
