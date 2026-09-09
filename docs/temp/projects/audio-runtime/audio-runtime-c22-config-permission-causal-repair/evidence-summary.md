@@ -3,8 +3,8 @@
 - Work: `audio-runtime-c22-config-permission-causal-repair`
 - Branch/worktree: `codex/audio-runtime-c22-config-permission-causal-repair`
 - Fetched `origin/main`: `e4137eba6a6499142f50701609c1149afc71db84`
-- Implementation checkpoint: `e927682a8e7da9912d3ea9fd2cfb2b01db50c653`
-- Current candidate/evidence HEAD: `b8b446288c408b35cb74af70703efd831635bfbc`
+- Initial implementation checkpoint: `e927682a8e7da9912d3ea9fd2cfb2b01db50c653`
+- Test6 repair source checkpoint: `370c2ba80b3d13c08459b006dbcb858385055981`
 - Required startup and baseline pins are ancestors of the candidate:
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
@@ -90,3 +90,38 @@ and the evidence-provenance follow-up is committed/pushed as
 green. No terminal CI polling, independent review, merge, or post-merge
 vertical acceptance is claimed; next action is the script-owned current-head
 CI gate.
+
+## C22 Test6 hermetic rejection and fixture repair
+
+The next current-head CI run, `34377069046` job `102552446547`, rejected PR
+#413 at `f1a2f595dcc69ba12a25c4caa2f7ae6c6f00bdc3`. The exact failure was
+`TestSessionCommandReplaysTest6CustomerBargeInThenNewAssistantAudio` in
+`agent-cli/internal/transport/cli`: the strict replay reached server
+`input_audio_buffer.speech_started` and then the command closed the connection
+instead of writing the expected `conversation.item.truncate` at sequence 8.
+All other required jobs in that run passed. The full rejection record is kept
+in `ci-rejection-34377069046.md`.
+
+The fixture diagnosis is bounded to the newly admitted Test6 path. A
+device-bound session starts the sink pump asynchronously after the provider
+handshake returns; with immediate raw replay, server audio/VAD can therefore
+arrive before the sink has installed its playback controller. The media
+adapter then correctly declines a device-clock truncation, and strict replay
+reports the connection close. The fixture now selects the existing recorded
+replay-timing mode and models a 100 ms handshake-to-first-turn startup gap.
+This changes no provider payload, event order, audio fixture bytes/hashes,
+resampled PCM assertions, discard bounds, or the original 5-second context.
+
+Repair commit `370c2ba80b3d13c08459b006dbcb858385055981` is test-only and
+within the explicit C22 extra-owned path. Bounded proof passed: Test6 normal
+`100/100`, Test6 hermetic `CGO_ENABLED=0 -tags=nomicrophone` `20/20`, Test6
+race `30/30`, the duplex commit-control fixture `CGO_ENABLED=0 -tags=nomicrophone`
+`5/5` and once under `-race`, the neighboring OpenAI server-VAD/EAC8 replay
+tests, config normal/nomicrophone/race tests, and focused vet. No production
+replay/live/gateway/clock file changed.
+
+This is a repaired implementation candidate, not a claim of green CI,
+independent review, guarded merge, post-merge vertical validation, physical
+device evidence, or project acceptance. The next action is to push this same
+task head, update PR #413 with the exact rejection/repair evidence, and return
+it to the script-owned current-head CI gate without polling it.
