@@ -187,53 +187,11 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 		}
 	}
 	sink := &diagnosticRecordSink{}
-	rejected := make(chan struct{})
-	var rejectOnce sync.Once
-	bobFailed := make(chan struct{})
-	var bobFailureOnce sync.Once
 	options.OnDiagnostic = func(_ string, record SessionDiagnosticRecord) {
 		sink.RecordSessionDiagnostic(record)
-		if record.Event == SessionDiagnosticEventRoomAudioIngress &&
-			record.Fields[SessionDiagnosticFieldParticipantID] == "bob" &&
-			record.Fields[SessionDiagnosticFieldReason] == "mixer_closed" {
-			rejectOnce.Do(func() { close(rejected) })
-		}
-	}
-	options.OnParticipantTerminated = func(result RoomParticipantResult) {
-		if result.ParticipantID == "bob" && result.TerminationReason == ParticipantTerminationError && result.Error != "" {
-			bobFailureOnce.Do(func() { close(bobFailed) })
-		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	outcome := make(chan roomTestRunOutcome, 1)
-	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, options)
-		outcome <- roomTestRunOutcome{result: result, err: err}
-	}()
-	select {
-	case <-rejected:
-	case <-ctx.Done():
-		t.Fatal("closed-target rejection was not observed before the room deadline")
-	}
-	select {
-	case <-bobFailed:
-		// The closed target is an expected participant-local failure. Stop the
-		// room after both the diagnostic and participant result are committed so
-		// cancellation cannot race the failure attribution, while still
-		// exercising session close and observer join immediately.
-		cancel()
-	case <-ctx.Done():
-		t.Fatal("closed-target participant failure was not observed before the room deadline")
-	}
-	var got roomTestRunOutcome
-	select {
-	case got = <-outcome:
-	case <-time.After(2 * time.Second):
-		t.Fatal("room did not finish after closed-target rejection cancellation")
-	}
-	result, runErr := got.result, got.err
+	result, runErr := runClosedTargetRoom(t, options)
 	bobResult, bobPresent := result.Participants["bob"]
 	if runErr != nil || result.Reason != RoomTerminationStopped || !bobPresent || bobResult.TerminationReason != ParticipantTerminationError || bobResult.Error == "" {
 		t.Fatalf("closed-target room result=%+v err=%v, want participant-scoped rejection with a clean room stop", result, runErr)
@@ -294,6 +252,74 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 	}
 	if _, hasPCMField := rejection.Fields["pcm"]; hasPCMField {
 		t.Fatalf("rejection diagnostic unexpectedly contains a raw PCM field: %v", rejection.Fields)
+	}
+}
+
+type closedTargetRoomLifecycle struct {
+	diagnostic     RoomParticipantDiagnosticObserver
+	terminated     RoomParticipantObserver
+	rejected       chan struct{}
+	bobFailed      chan struct{}
+	rejectOnce     sync.Once
+	bobFailureOnce sync.Once
+}
+
+func runClosedTargetRoom(t *testing.T, options RoomRunOptions) (RoomResult, error) {
+	lifecycle := closedTargetRoomLifecycle{
+		diagnostic: options.OnDiagnostic,
+		terminated: options.OnParticipantTerminated,
+		rejected:   make(chan struct{}),
+		bobFailed:  make(chan struct{}),
+	}
+	options.OnDiagnostic = lifecycle.recordDiagnostic
+	options.OnParticipantTerminated = lifecycle.recordParticipantTermination
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, options)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+	waitForClosedTargetSignal(t, ctx, lifecycle.rejected, "closed-target rejection was not observed before the room deadline")
+	waitForClosedTargetSignal(t, ctx, lifecycle.bobFailed, "closed-target participant failure was not observed before the room deadline")
+	// Stop after both the diagnostic and participant result are committed so
+	// cancellation cannot race failure attribution, while still exercising
+	// session close and observer join immediately.
+	cancel()
+	select {
+	case got := <-outcome:
+		return got.result, got.err
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after closed-target rejection cancellation")
+		return RoomResult{}, errors.New("closed-target room outcome unavailable")
+	}
+}
+
+func waitForClosedTargetSignal(t *testing.T, ctx context.Context, signal <-chan struct{}, message string) {
+	select {
+	case <-signal:
+	case <-ctx.Done():
+		t.Fatal(message)
+	}
+}
+
+func (h *closedTargetRoomLifecycle) recordDiagnostic(participantID string, record SessionDiagnosticRecord) {
+	if h.diagnostic != nil {
+		h.diagnostic(participantID, record)
+	}
+	if record.Event == SessionDiagnosticEventRoomAudioIngress &&
+		record.Fields[SessionDiagnosticFieldParticipantID] == "bob" &&
+		record.Fields[SessionDiagnosticFieldReason] == "mixer_closed" {
+		h.rejectOnce.Do(func() { close(h.rejected) })
+	}
+}
+
+func (h *closedTargetRoomLifecycle) recordParticipantTermination(result RoomParticipantResult) {
+	if h.terminated != nil {
+		h.terminated(result)
+	}
+	if result.ParticipantID == "bob" && result.TerminationReason == ParticipantTerminationError && result.Error != "" {
+		h.bobFailureOnce.Do(func() { close(h.bobFailed) })
 	}
 }
 
