@@ -151,3 +151,9 @@ Current-main ancestry and exact-head refresh
   C20 repair on main. Next action: retain C25, wait for the reviewed same-task
   C20 repair, then refresh exact-head evidence and submit the changed task to
   script CI without polling.
+- Fresh read-only reproduction on the merged current-main candidate
+  `74ef3dae3f3eeb07f7ebdaffbd2a47d24cbf5b7c` reran the same composition test
+  with coverage instrumentation: PASS in 0.573 seconds at 4.7% package
+  coverage. The test observed the expected live-media-unavailable error; this
+  confirms the hosted C20 coverage rejection remains external and does not
+  repair or transfer ownership of `composition_test.go:417`.

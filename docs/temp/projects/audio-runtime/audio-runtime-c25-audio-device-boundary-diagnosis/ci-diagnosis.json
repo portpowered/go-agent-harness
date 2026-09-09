@@ -143,5 +143,14 @@
     "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
     "clean_shutdown": true,
     "outside_allowed_paths": []
+  },
+  "current_main_focused_composition_control": {
+    "candidate": "74ef3dae92bbc82dfa0ca4a27facec52e04e9625",
+    "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/factory-c25-wire-coverage-current-main.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
+    "verdict": "PASS",
+    "package_duration_seconds": 0.573,
+    "test_duration_seconds": 0.01,
+    "coverage": "4.7% of statements",
+    "interpretation": "The focused local composition seam still produces the expected live-media-unavailable error and passes; hosted CI's C20 failure remains an external coverage-path discrepancy."
   }
 }
