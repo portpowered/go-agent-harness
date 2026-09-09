@@ -187,13 +187,53 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 		}
 	}
 	sink := &diagnosticRecordSink{}
+	rejected := make(chan struct{})
+	var rejectOnce sync.Once
+	bobFailed := make(chan struct{})
+	var bobFailureOnce sync.Once
 	options.OnDiagnostic = func(_ string, record SessionDiagnosticRecord) {
 		sink.RecordSessionDiagnostic(record)
+		if record.Event == SessionDiagnosticEventRoomAudioIngress &&
+			record.Fields[SessionDiagnosticFieldParticipantID] == "bob" &&
+			record.Fields[SessionDiagnosticFieldReason] == "mixer_closed" {
+			rejectOnce.Do(func() { close(rejected) })
+		}
+	}
+	options.OnParticipantTerminated = func(result RoomParticipantResult) {
+		if result.ParticipantID == "bob" && result.TerminationReason == ParticipantTerminationError && result.Error != "" {
+			bobFailureOnce.Do(func() { close(bobFailed) })
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	result, runErr := RunRoomWithResult(ctx, io.Discard, options)
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, options)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+	select {
+	case <-rejected:
+	case <-ctx.Done():
+		t.Fatal("closed-target rejection was not observed before the room deadline")
+	}
+	select {
+	case <-bobFailed:
+		// The closed target is an expected participant-local failure. Stop the
+		// room after both the diagnostic and participant result are committed so
+		// cancellation cannot race the failure attribution, while still
+		// exercising session close and observer join immediately.
+		cancel()
+	case <-ctx.Done():
+		t.Fatal("closed-target participant failure was not observed before the room deadline")
+	}
+	var got roomTestRunOutcome
+	select {
+	case got = <-outcome:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after closed-target rejection cancellation")
+	}
+	result, runErr := got.result, got.err
 	bobResult, bobPresent := result.Participants["bob"]
 	if runErr != nil || result.Reason != RoomTerminationStopped || !bobPresent || bobResult.TerminationReason != ParticipantTerminationError || bobResult.Error == "" {
 		t.Fatalf("closed-target room result=%+v err=%v, want participant-scoped rejection with a clean room stop", result, runErr)
