@@ -139,11 +139,11 @@ func (b *evidenceBuilder) observeWireMetadata(event recording.Event, wireType st
 	if event.RuntimeKind == providerWireReceive && wireType == sessionClosedType {
 		b.sawClosed = true
 	}
-	if event.RuntimeKind == providerWireReceive && wireType == "response.done" {
+	if event.RuntimeKind == providerWireReceive && wireType == responseDoneType {
 		b.sawResponseDone = true
 		b.terminalDone = true
 	}
-	if event.RuntimeKind == providerWireReceive && wireType != "response.done" && wireType != sessionClosedType {
+	if event.RuntimeKind == providerWireReceive && wireType != responseDoneType && wireType != sessionClosedType {
 		b.terminalDone = false
 	}
 	return nil

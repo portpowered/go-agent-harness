@@ -236,52 +236,70 @@ func replaceLastResponseDone(t *testing.T, data []byte) []byte {
 	t.Helper()
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
-		var event map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(lines[index]), &event); err != nil {
+		line, err := replaceResponseDoneLine(lines[index])
+		if err != nil {
 			t.Fatal(err)
 		}
-		var runtimeKind string
-		if err := json.Unmarshal(event["runtime_kind"], &runtimeKind); err != nil || runtimeKind != "provider_wire_receive" {
+		if line == "" {
 			continue
 		}
-		var encoded []byte
-		if err := json.Unmarshal(event["payload"], &encoded); err != nil {
-			t.Fatal(err)
-		}
-		var wire map[string]json.RawMessage
-		if err := json.Unmarshal(encoded, &wire); err != nil {
-			t.Fatal(err)
-		}
-		var message map[string]json.RawMessage
-		if err := json.Unmarshal(wire["payload"], &message); err != nil {
-			t.Fatal(err)
-		}
-		var messageType string
-		if err := json.Unmarshal(message["type"], &messageType); err != nil || messageType != "response.done" {
-			continue
-		}
-		message["type"] = json.RawMessage(`"response.output_text.done"`)
-		messageBytes, err := json.Marshal(message)
-		if err != nil {
-			t.Fatal(err)
-		}
-		wire["payload"] = messageBytes
-		wireBytes, err := json.Marshal(wire)
-		if err != nil {
-			t.Fatal(err)
-		}
-		event["payload"], err = json.Marshal(wireBytes)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var line []byte
-		line, err = json.Marshal(event)
-		if err != nil {
-			t.Fatal(err)
-		}
-		lines[index] = string(line)
+		lines[index] = line
 		return []byte(strings.Join(lines, "\n") + "\n")
 	}
 	t.Fatal("fixture has no response.done event")
 	return nil
+}
+
+func replaceResponseDoneLine(line string) (string, error) {
+	var event map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &event); err != nil {
+		return "", err
+	}
+	runtimeKind, ok := decodeJSONText(event["runtime_kind"])
+	if !ok || runtimeKind != "provider_wire_receive" {
+		return "", nil
+	}
+	var encoded []byte
+	if err := json.Unmarshal(event["payload"], &encoded); err != nil {
+		return "", err
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		return "", err
+	}
+	var message map[string]json.RawMessage
+	if err := json.Unmarshal(wire["payload"], &message); err != nil {
+		return "", err
+	}
+	messageType, ok := decodeJSONText(message["type"])
+	if !ok || messageType != "response.done" {
+		return "", nil
+	}
+	message["type"] = json.RawMessage(`"response.output_text.done"`)
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		return "", err
+	}
+	wire["payload"] = messageBytes
+	wireBytes, err := json.Marshal(wire)
+	if err != nil {
+		return "", err
+	}
+	event["payload"], err = json.Marshal(wireBytes)
+	if err != nil {
+		return "", err
+	}
+	lineBytes, err := json.Marshal(event)
+	if err != nil {
+		return "", err
+	}
+	return string(lineBytes), nil
+}
+
+func decodeJSONText(raw json.RawMessage) (string, bool) {
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		return "", false
+	}
+	return value, true
 }

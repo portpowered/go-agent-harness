@@ -850,3 +850,28 @@ C18 strict terminal completion repair and public evidence harness checkpoint
   `ACCEPTED` to the script-owned CI gate without polling. Retain ownership
   through `CONTINUE` for any exact-head CI rejection and repair that same
   task; do not self-review.
+
+C18 static rejection repair checkpoint
+
+- The canonical task row returned PR #410 head `1fc825e6508fa24455129800ac19a8edf84fa371`
+  after CI run `34349136729`, job `102457795875`, rejected by `CI (static)`.
+  The complete 786-line log and raw job metadata are preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34349136729.json`.
+  It reported only the external terminal-fixture helper above the test cognitive
+  complexity budget (`23 > 20`) and the repeated strict `response.done` literal
+  rejected by `goconst`; gofmt, Wire, vet and Staticcheck passed.
+- The causal repair splits the fixture mutation into bounded helpers while
+  preserving the original skip behavior for non-provider/non-terminal records,
+  and centralizes `response.done` in the strict package constant used by input
+  and evidence validation. No production limit, assertion, deadline, baseline,
+  policy, or unrelated path changed.
+- Fresh focused evidence is green: architecture-size (`182` packages, `1869`
+  files, `27204` functions), pinned golangci-lint (`0` issues), strict replay
+  normal/race (`84` tests in four packages each), independent embedding
+  `GOWORK=off` normal/race, and `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
+  across normal/coverage/race. No CI, review, merge, vertical probe or project
+  acceptance is claimed.
+- Exact next action: inspect the owned diff, commit and push the same admitted
+  task, update PR #410 with the repair and full rejection evidence, then return
+  `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
+  ownership through `CONTINUE` for any exact-head rejection; do not self-review.

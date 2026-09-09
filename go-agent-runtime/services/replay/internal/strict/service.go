@@ -25,6 +25,7 @@ const (
 	runtimeEventKind    = "runtime"
 	sessionUpdateType   = "session.update"
 	sessionClosedType   = "session.closed"
+	responseDoneType    = "response.done"
 )
 
 // ClockFactory creates a fresh virtual clock for each prepared replay. The

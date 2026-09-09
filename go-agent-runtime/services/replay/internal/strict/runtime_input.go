@@ -114,7 +114,7 @@ func finishInputActions(actions []replayInputAction, capture gwtesting.SessionCa
 func countResponseEnds(records []gwtesting.CapturedSessionEvent) int {
 	count := 0
 	for _, record := range records {
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.done" {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == responseDoneType {
 			count++
 		}
 	}
