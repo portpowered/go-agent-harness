@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	internalreplay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay"
-	publicreplay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -74,9 +74,7 @@ func TestReplayServiceConsumesActualWireObservationEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	prepared, err := internalreplay.New(internalreplay.Dependencies{ClockFactory: func(origin time.Time) *clock.Deterministic {
-		return clock.NewDeterministic(origin, time.Millisecond)
-	}}).Prepare(context.Background(), publicreplay.Request{BundlePath: directory, Model: "gpt-test"})
+	prepared, err := runtimeReplayWire.NewStrictService().Prepare(context.Background(), publicreplay.Request{BundlePath: directory, Model: "gpt-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,10 +193,7 @@ func TestReplayServiceRunsRealCoreLoopAgainstRecordedWire(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := internalreplay.New(internalreplay.Dependencies{
-		ClockFactory: func(origin time.Time) *clock.Deterministic { return clock.NewDeterministic(origin, time.Millisecond) },
-		Runtime:      internalreplay.NewOpenAIRuntimeFactory(),
-	})
+	service := runtimeReplayWire.NewStrictService()
 	var output bytes.Buffer
 	replayCtx, replayCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer replayCancel()

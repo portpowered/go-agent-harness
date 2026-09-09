@@ -1,4 +1,4 @@
-package replay
+package strict
 
 import (
 	"bytes"
@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	publicreplay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
@@ -159,6 +159,13 @@ func TestOpenAIRuntimeFactoryRejectsUnsupportedProvider(t *testing.T) {
 	}
 }
 
+func TestOpenAIRuntimeFactoryRejectsMissingClock(t *testing.T) {
+	_, err := NewOpenAIRuntimeFactory().New(publicreplay.Prepared{})
+	if !errors.Is(err, publicreplay.ErrDeterministicClockRequired) {
+		t.Fatalf("err=%v, want deterministic clock error", err)
+	}
+}
+
 func TestRecordedToolRejectsMismatchedRequest(t *testing.T) {
 	directory := writeBundle(t, true)
 	prepared, err := New(Dependencies{ClockFactory: func(time.Time) *clock.Deterministic { return clock.NewDeterministic(time.Unix(0, 0).UTC(), 10) }}).Prepare(context.Background(), publicreplay.Request{BundlePath: directory})
@@ -184,42 +191,96 @@ type replayRuntimeFunc func(context.Context, io.Writer) error
 
 func (f replayRuntimeFunc) Run(ctx context.Context, out io.Writer) error { return f(ctx, out) }
 
+func testClockFactory(origin time.Time) *clock.Deterministic {
+	return clock.NewDeterministic(origin, time.Millisecond)
+}
+
+type bundleReplayFactory struct{}
+
+func (bundleReplayFactory) New(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
+	return bundleReplayRuntime{prepared: prepared}, nil
+}
+
+type bundleReplayRuntime struct {
+	prepared publicreplay.Prepared
+}
+
+func (r bundleReplayRuntime) Run(ctx context.Context, out io.Writer) error {
+	if err := consumeCapturedWire(r.prepared); err != nil {
+		return err
+	}
+	if _, err := r.prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`}); err != nil {
+		return err
+	}
+	_, err := io.WriteString(out, "replayed")
+	return err
+}
+
+type audioReplayFactory struct {
+	samples *int
+}
+
+func (f audioReplayFactory) New(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
+	return audioReplayRuntime{prepared: prepared, samples: f.samples}, nil
+}
+
+type audioReplayRuntime struct {
+	prepared publicreplay.Prepared
+	samples  *int
+}
+
+func (r audioReplayRuntime) Run(ctx context.Context, _ io.Writer) error {
+	for {
+		_, frame, err := r.prepared.Audio.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if frame != nil {
+			*r.samples += len(frame.Samples)
+		}
+	}
+	if err := consumeCapturedWire(r.prepared); err != nil {
+		return err
+	}
+	_, err := r.prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`})
+	return err
+}
+
+func consumeCapturedWire(prepared publicreplay.Prepared) error {
+	conn, err := prepared.Dialer.Dial("offline", nil)
+	if err != nil {
+		return err
+	}
+	for _, event := range prepared.Capture.Records {
+		if event.Direction == "client_to_server" {
+			if err := conn.WriteMessage(1, event.Payload); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, _, err := conn.ReadMessage(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestServiceRunInvokesHeadlessRuntimeAndStrictCompletion(t *testing.T) {
 	directory := writeBundle(t, true)
-	var invoked bool
 	service := New(Dependencies{
-		ClockFactory: func(origin time.Time) *clock.Deterministic { return clock.NewDeterministic(origin, time.Millisecond) },
-		Runtime: runtimeFactoryFunc(func(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
-			return replayRuntimeFunc(func(ctx context.Context, out io.Writer) error {
-				invoked = true
-				conn, err := prepared.Dialer.Dial("offline", nil)
-				if err != nil {
-					return err
-				}
-				for _, event := range prepared.Capture.Records {
-					if event.Direction == "client_to_server" {
-						if err := conn.WriteMessage(1, event.Payload); err != nil {
-							return err
-						}
-					} else if _, _, err := conn.ReadMessage(); err != nil {
-						return err
-					}
-				}
-				if _, err := prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`}); err != nil {
-					return err
-				}
-				_, err = io.WriteString(out, "replayed")
-				return err
-			}), nil
-		}),
+		ClockFactory: testClockFactory,
+		Runtime:      bundleReplayFactory{},
 	})
 	var out bytes.Buffer
 	result, err := service.Run(context.Background(), &out, publicreplay.Request{BundlePath: directory})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !invoked || out.String() != "replayed" || result.WireEvents != 3 || result.ToolCalls != 1 {
-		t.Fatalf("invoked=%v out=%q result=%+v", invoked, out.String(), result)
+	if out.String() != "replayed" || result.WireEvents != 3 || result.ToolCalls != 1 {
+		t.Fatalf("out=%q result=%+v", out.String(), result)
 	}
 }
 
@@ -251,40 +312,8 @@ func TestServiceRunMakesRecordedPCMAvailableToHeadlessRuntime(t *testing.T) {
 	directory := writeAudioBundle(t)
 	var gotSamples int
 	service := New(Dependencies{
-		ClockFactory: func(origin time.Time) *clock.Deterministic {
-			return clock.NewDeterministic(origin, time.Millisecond)
-		},
-		Runtime: runtimeFactoryFunc(func(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
-			return replayRuntimeFunc(func(ctx context.Context, _ io.Writer) error {
-				for {
-					_, frame, err := prepared.Audio.Next()
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					if err != nil {
-						return err
-					}
-					if frame != nil {
-						gotSamples += len(frame.Samples)
-					}
-				}
-				conn, err := prepared.Dialer.Dial("offline", nil)
-				if err != nil {
-					return err
-				}
-				for _, event := range prepared.Capture.Records {
-					if event.Direction == "client_to_server" {
-						if err := conn.WriteMessage(1, event.Payload); err != nil {
-							return err
-						}
-					} else if _, _, err := conn.ReadMessage(); err != nil {
-						return err
-					}
-				}
-				_, err = prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`})
-				return err
-			}), nil
-		}),
+		ClockFactory: testClockFactory,
+		Runtime:      audioReplayFactory{samples: &gotSamples},
 	})
 	result, err := service.Run(context.Background(), io.Discard, publicreplay.Request{BundlePath: directory})
 	if err != nil {

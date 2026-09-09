@@ -1,4 +1,4 @@
-package replay
+package strict
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	publicreplay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
-	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan"
 )
 
 // validateRecordingBundle is deliberately only a root-manifest detector. A
@@ -16,7 +16,7 @@ import (
 // trace replay scope. Once a root manifest is present, the shared runtime
 // admission boundary validates every declared artifact before this service
 // selects timeline.jsonl or opens any replay evidence.
-func validateRecordingBundle(ctx context.Context, bundlePath string) error {
+func validateRecordingBundle(ctx context.Context, bundlePath string, admission publicreplay.CaptureAdmission) error {
 	manifestPath := filepath.Join(bundlePath, "manifest.json")
 	info, err := os.Lstat(manifestPath)
 	if err != nil {
@@ -31,7 +31,10 @@ func validateRecordingBundle(ctx context.Context, bundlePath string) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("%w: recording manifest %s is not a regular file", publicreplay.ErrBundleIncomplete, manifestPath)
 	}
-	if _, err := runtimeReplayWire.NewService().ResolveCapturePath(ctx, bundlePath); err != nil {
+	if admission == nil {
+		admission = plan.New()
+	}
+	if _, err := admission.ResolveCapturePath(ctx, bundlePath); err != nil {
 		if cause := context.Cause(ctx); cause != nil {
 			return cause
 		}
@@ -40,8 +43,8 @@ func validateRecordingBundle(ctx context.Context, bundlePath string) error {
 	return nil
 }
 
-func prepareTraceDirectory(ctx context.Context, bundlePath string) (string, error) {
-	if err := validateRecordingBundle(ctx, bundlePath); err != nil {
+func prepareTraceDirectory(ctx context.Context, bundlePath string, admission publicreplay.CaptureAdmission) (string, error) {
+	if err := validateRecordingBundle(ctx, bundlePath, admission); err != nil {
 		return "", err
 	}
 	return resolveTraceDirectory(bundlePath)

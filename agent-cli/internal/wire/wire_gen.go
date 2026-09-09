@@ -102,16 +102,15 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
-	clockFactory := wire2.NewReplayClockFactory()
-	service2 := wire2.NewReplayService(clockFactory)
-	sessionReplayCommand := cli.NewSessionReplayCommand(service2)
+	v6 := wire2.NewReplayService()
+	sessionReplayCommand := cli.NewSessionReplayCommand(v6)
 	scheduler := provideRoomClock(clockSource)
 	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler)
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	v6 := provideAcceptanceCommands()
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v6...)
+	v7 := provideAcceptanceCommands()
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v7...)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -364,7 +363,7 @@ func provideSessionDependencies(clockSource Clock, resolver tools.Service, runti
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire4.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayClockFactory, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
 	provideRuntimeToolService, wire.NewFileStoreFactory, provideRecordingService,
 	provideProviderCaptureService,
 	provideSessionBrowserCapabilityFactory,

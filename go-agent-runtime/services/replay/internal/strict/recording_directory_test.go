@@ -1,4 +1,4 @@
-package replay
+package strict
 
 import (
 	"context"
@@ -12,8 +12,9 @@ import (
 	"testing"
 	"time"
 
-	publicreplay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -73,7 +74,7 @@ func TestValidateRecordingBundleRejectsSymlinkedOrNonRegularManifest(t *testing.
 				t.Fatal(err)
 			}
 
-			err := validateRecordingBundle(context.Background(), root)
+			err := validateRecordingBundle(context.Background(), root, plan.New())
 			if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 				t.Fatalf("manifest error = %v, want ErrBundleIncomplete", err)
 			}
@@ -86,7 +87,7 @@ func TestValidateRecordingBundleRejectsSymlinkedOrNonRegularManifest(t *testing.
 
 func TestPrepareTraceDirectoryPreservesManifestlessTraceReplay(t *testing.T) {
 	root := writeBundle(t, true)
-	tracePath, err := prepareTraceDirectory(context.Background(), root)
+	tracePath, err := prepareTraceDirectory(context.Background(), root, plan.New())
 	if err != nil {
 		t.Fatalf("manifestless trace rejected: %v", err)
 	}

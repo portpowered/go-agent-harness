@@ -319,3 +319,95 @@ C12 CI rejection repair: static budgets and active continuation progress
 - Final-shaped source dimensions are `capture.go=349`, `interruption.go=72`, `control.go=386`, `observation.go=400`, `service.go=400`, and `replay_readiness_test.go=600`; the direct live package has `15` Go files. `make architecture-size-check` passes: `181` packages, `1856` files, `27008` functions. `git diff --check` is clean.
 - Causal validation passes: replay/live packages pass `-count=5`; the active/completion/live CLI neighbors pass `-tags=nomicrophone -count=10`; the active scheduled test passes `-count=20` and `-race -count=5`; replay/readiness regressions pass `-count=3`. No timeout or assertion was weakened. The earlier hermetic full integration package run also passed on the repaired tree; terminal CI remains unpolled and unclaimed green.
 - Next action: commit this implementation and ledger checkpoint, push the same admitted branch, update PR #404 with the new head and exact evidence, then return `ACCEPTED` to the script-owned CI gate without polling it. Retain ownership for any exact same-head rejection and repair the reported check rather than resubmitting unchanged code.
+
+C18 public strict replay extraction checkpoint
+
+- Admission verified for `audio-runtime-c18-public-strict-replay`; branch and
+  `prd.json.branchName` match. Fetched `origin/main` at
+  `3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84`; required startup and original
+  baseline ancestry remain available. No host checkout or predecessor worktree
+  was reset or edited.
+- Strict contracts moved to `go-agent-runtime/services/replay`; private
+  implementation and migrated tests moved to
+  `go-agent-runtime/services/replay/internal/strict`. Runtime generated Wire
+  now constructs `NewStrictService` through canonical `plan.Service` admission;
+  CLI replay Wire is a delegation adapter and existing live/provider/passive
+  routes remain separate. `Prepared.Audio` remains evidence-only while
+  provider-wire input PCM drives strict actions; `Prepared.Clock` is rejected
+  when nil and passed through `agentloop.WithClock`.
+- `tests/embedding` now has a GOWORK=off public consumer, buildable
+  `cmd/strict-replay`, checked-in provider-wire/tool/audio-input fixture, valid
+  positive replay, no-device/no-marker proof, missing-timeline and missing-tool
+  negative controls. Normal and race embedding tests pass; the consumer command
+  exits 0 with 16 wire events, one recorded tool and `Device execution: false`.
+- Focused runtime replay normal/race tests pass; CLI replay packages compile and
+  the isolated audio-interrupt regression passed five repetitions. The broad
+  CLI transport run had one unrelated timing failure in
+  `TestSessionCommandAudioInterruptOrdering/unfiltered`; its isolated rerun
+  passed. No CI was polled or claimed green.
+- Next action: add/refresh the accumulated strict replay regressions and
+  architecture/static/Wire checks, commit a bounded checkpoint, then build and
+  run exact public candidate evidence before pushing/updating the C18 PR. Keep
+  ownership through CONTINUE for any actionable test or review repair; do not
+  self-review or claim CI/project acceptance.
+
+C18 structural repair and focused-gate checkpoint
+
+- The first architecture-size run correctly exposed 42 extraction issues: old
+  CLI replay debt was stale after the move; the new strict package still
+  exceeded file/function budgets; root constructors and the exported clock
+  provider crossed the public boundary; replay sentinels needed narrow policy
+  exceptions; and the independent consumer needed an explicit `cmd` shape.
+  The stale 139 baseline entries were deleted, strict code was decomposed into
+  bounded timeline/evidence/tools/transport/input/runtime files, constructors
+  were removed from the public root, the Wire clock provider is private, and
+  the policy additions are exact package/file/name entries. The gate now passes
+  with `182` packages, `1867` files, and `27133` functions.
+- The extracted strict package now preserves the canonical plan admission,
+  public Prepare/Run/ValidateComplete contracts, provider-wire audio-input
+  consumption, Prepared.Audio evidence, injected deterministic clock, exact
+  tool replay, and no-device/no-executable-tool scope. The existing CLI
+  internal replay package is gone; its public aliases and Wire adapter delegate
+  to runtime replay, while provider/live/passive paths remain on their routes.
+- Final focused behavior after structural and lint repairs: runtime replay
+  normal and race pass; independent `tests/embedding` normal and race pass;
+  CLI replay/agentruntime pass; accumulated
+  `TestSessionRecordedPCMIntegrity` and
+  `TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact`
+  pass; and the unfiltered audio-interrupt ordering control passes five
+  repetitions. The independent command built from `tests/embedding/cmd/strict-replay`
+  has SHA256
+  `0be6340d04019fe4fd5a2b0c3a13d6dae8438d8062b82ffe3f5d88e20699223c`, exits
+  `0` on the checked-in fixture, prints the exact continuation, reports `16`
+  wire events/`1` recorded tool, and reports `Device execution: false` without
+  creating the fixture marker.
+- Current quality evidence is green: `make fmt`, `make wire-check`,
+  `make architecture-size-check`, `make vet`, pinned `make lint` (all modules,
+  0 issues), pinned `make staticcheck`, and `git diff --check`. No CI was
+  polled or claimed green.
+- Next action: commit this implementation and ledger checkpoint, push the same
+  admitted branch, open/update the C18 PR, and return `ACCEPTED` to the
+  script-owned CI gate. Retain ownership for any exact CI rejection; do not
+  self-review or claim CI/project acceptance.
+
+C18 final local validation checkpoint
+
+- Added the independent prepared-dialer proof: the external consumer consumes
+  the complete recorded wire order, asserts the exact
+  `input_audio_buffer.append` payload `{"type":"input_audio_buffer.append","audio":"AQD+/wMA"}`,
+  executes the recorded `exec` call once, and validates strict completion.
+  External normal/race tests remain green.
+- `make coverage-registration` now passes all `172` workspace packages after
+  moving the strict coverage floor from the removed CLI-internal package to
+  `go-agent-runtime/services/replay/internal/strict`. The root `make build`
+  passes for yui, audio-device-server, all product modules, and analyzergate;
+  `GOWORK=off go vet ./cmd/strict-replay` passes and its dependency list has
+  `239` entries with no `agent-cli` import.
+- The checked-in strict fixture remains manifestless by design for the public
+  external proof; canonical manifest/digest/confinement controls remain in the
+  migrated strict tests and shared plan admission. No physical-device,
+  executable-tool, live-network, Prepared.Audio-consumption, or production
+  Prepared.Clock-pacing claim is made.
+- Next action: stage and inspect the exact owned diff, commit/push the same
+  admitted branch, open/update its PR, and return `ACCEPTED` to script CI
+  without polling terminal checks. Keep the task for any exact rejection.
