@@ -460,8 +460,8 @@ def verify_provenance(args: argparse.Namespace) -> dict[str, Any]:
     require(git_is_ancestor(provenance["source_revision"], provenance["candidate_revision"]), "provenance ancestry no longer verifies")
     fixture = provenance["fixture"]
     require(fixture.get("sha256") == fixture_hash(), "fixture changed after prepare")
-    consumer = REPO_ROOT / provenance["consumer"]["path"]
-    yui = REPO_ROOT / provenance["yui"]["path"]
+    consumer = OWNED_ROOT / provenance["consumer"]["path"]
+    yui = OWNED_ROOT / provenance["yui"]["path"]
     require(sha256_file(consumer) == provenance["consumer"]["sha256"], "consumer binary changed after prepare")
     require(sha256_file(yui) == provenance["yui"]["sha256"], "yui binary changed after prepare")
     negative: dict[str, Any] = {}
