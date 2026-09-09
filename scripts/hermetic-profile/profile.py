@@ -155,6 +155,83 @@ def decode_output(value: bytes) -> str:
     return value.decode("utf-8", errors="replace")
 
 
+def command_process_status_errors(record: Any, *, label: str) -> list[str]:
+    """Reject contradictory timeout, exit, signal, and spawn declarations."""
+
+    if not isinstance(record, dict):
+        return []
+    status = record.get("status")
+    timed_out = record.get("timed_out")
+    exit_status = record.get("exit_status")
+    signal_value = record.get("signal")
+    spawn_error = record.get("spawn_error")
+    if status not in {"PASS", "FAIL", "TIMEOUT", "SPAWN_ERROR"}:
+        return []
+    if not isinstance(timed_out, bool):
+        return []
+    if exit_status is not None and (
+        isinstance(exit_status, bool) or not isinstance(exit_status, int)
+    ):
+        return []
+    if signal_value is not None and (
+        isinstance(signal_value, bool) or not isinstance(signal_value, int)
+    ):
+        return []
+    errors: list[str] = []
+    if status == "PASS":
+        if timed_out:
+            errors.append(f"{label} timed_out=true requires status TIMEOUT")
+        if exit_status != 0:
+            errors.append(f"{label} PASS status requires exit_status 0")
+        if signal_value is not None:
+            errors.append(f"{label} PASS status must not report a signal")
+        if spawn_error is not None:
+            errors.append(f"{label} PASS status must not report spawn_error")
+    elif status == "TIMEOUT":
+        if not timed_out:
+            errors.append(f"{label} TIMEOUT status requires timed_out=true")
+        if exit_status is None or exit_status == 0:
+            errors.append(f"{label} TIMEOUT status requires a non-zero exit_status")
+        if spawn_error is not None:
+            errors.append(f"{label} TIMEOUT status must not report spawn_error")
+    elif status == "FAIL":
+        if timed_out:
+            errors.append(f"{label} FAIL status must not report timed_out=true")
+        if exit_status is None or exit_status == 0:
+            errors.append(f"{label} FAIL status requires a non-zero exit_status")
+        if spawn_error is not None:
+            errors.append(f"{label} FAIL status must not report spawn_error")
+    elif status == "SPAWN_ERROR":
+        if timed_out:
+            errors.append(f"{label} SPAWN_ERROR status must not report timed_out=true")
+        if not isinstance(spawn_error, str) or not spawn_error:
+            errors.append(f"{label} SPAWN_ERROR status requires spawn_error")
+        if exit_status is not None:
+            errors.append(f"{label} SPAWN_ERROR status must not report exit_status")
+        if signal_value is not None:
+            errors.append(f"{label} SPAWN_ERROR status must not report a signal")
+    if isinstance(exit_status, int) and not isinstance(exit_status, bool):
+        expected_signal = -exit_status if exit_status < 0 else None
+        if signal_value != expected_signal:
+            errors.append(
+                f"{label} signal does not match exit_status "
+                f"(expected {expected_signal!r})"
+            )
+    return errors
+
+
+def command_process_status(record: dict[str, Any]) -> str:
+    """Classify process outcome with timeout precedence over apparent success."""
+
+    if record.get("timed_out") is True:
+        return "TIMEOUT"
+    if record.get("status") == "SPAWN_ERROR":
+        return "SPAWN_ERROR"
+    if record.get("status") == "PASS" and record.get("exit_status") == 0:
+        return "PASS"
+    return "FAIL"
+
+
 def command_completed_successfully(record: Any) -> bool:
     """Return whether a captured command is safe to use as a completed phase."""
 
@@ -164,6 +241,7 @@ def command_completed_successfully(record: Any) -> bool:
         and record.get("exit_status") == 0
         and record.get("timed_out") is not True
         and not record.get("spawn_error")
+        and not command_process_status_errors(record, label="command")
     )
 
 
@@ -1706,6 +1784,7 @@ def command_record_schema_errors(record: Any, *, label: str) -> list[str]:
             errors.append(f"{label} {field} must be a non-negative integer")
     if record.get("status") not in {"PASS", "FAIL", "TIMEOUT", "SPAWN_ERROR"}:
         errors.append(f"{label} status is not a recognized command status")
+    errors.extend(command_process_status_errors(record, label=label))
     return errors
 
 
@@ -2447,6 +2526,10 @@ def parse_record_stream(
         ),
         "artifact_errors": [],
         "source_validation_errors": source_validation_errors,
+        "process_status": command_process_status(record),
+        "process_status_errors": command_process_status_errors(
+            record, label=f"run record {record.get('label')!r}"
+        ),
         "execution_valid": False,
     }
     base["artifact_errors"] = command_record_artifact_errors(
@@ -2519,13 +2602,6 @@ def parse_record_stream(
     parsed["stderr_hash_matches"] = stderr_hash_matches
     parsed.setdefault("stderr_bytes_matches", False)
     parsed["stderr_error"] = stderr_error
-    parsed["process_status"] = (
-        "PASS"
-        if record.get("status") == "PASS" and record.get("exit_status") == 0
-        else "TIMEOUT"
-        if record.get("timed_out")
-        else "FAIL"
-    )
     selected_value = record.get("selected_packages")
     expected = set(
         str(item) for item in selected_value
@@ -2540,6 +2616,7 @@ def parse_record_stream(
     parsed["execution_valid"] = (
         parsed["stream_status"] == "PASS"
         and parsed["process_status"] == "PASS"
+        and not parsed["process_status_errors"]
         and parsed["source_status"] == "PASS"
         and parsed["timing_status"] == "PASS"
         and not parsed["record_schema_errors"]

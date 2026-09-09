@@ -1060,6 +1060,19 @@ def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
             seed_stale_analysis=True,
         )
     )
+    timed_out_manifest = json.loads(json.dumps(baseline))
+    first_run(timed_out_manifest)["timed_out"] = True
+    write_json(manifest, timed_out_manifest)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "timed-out-pass-status-mismatch",
+            {},
+            reason_contains="timed_out=true requires status TIMEOUT",
+        )
+    )
+    write_json(manifest, baseline)
     for mutation_name, mutate, expected_error in (
         (
             "missing-quiet-runner",
