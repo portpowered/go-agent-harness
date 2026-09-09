@@ -725,3 +725,38 @@ C18 latest coverage rejection inspection and handoff checkpoint
   script-owned CI gate without polling. Do not claim CI, independent review,
   merge, vertical acceptance or project acceptance; retain this task for any
   exact same-head rejection.
+
+C18 coverage-floor repair checkpoint
+
+- The canonical task row was reread after CI run `34339298146`, job
+  `102426027492`, rejected at head `8f769888c7621d04d1fd13636592c327636541e1`.
+  The complete 437-line job log ended only with the replay package coverage
+  floor failure: expected `95.00%`, actual `71.90%`; all package test output
+  completed and no additional C18 replay test failed. The raw job response,
+  full-log command, exact feedback and extracted failure are preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34339298146.json`.
+- Added public-boundary tests in
+  `go-agent-runtime/services/replay/service_test.go` for exact opaque
+  completion accounting, duplicate dial rejection, first-failure retention,
+  nil receivers, nil dependencies, and dial/read/write/close/tool failures.
+  The tests preserve underlying error identity and prove completion cannot
+  succeed without the expected operations; no production limit, policy,
+  baseline, assertion, or deadline was changed.
+- Causal validation after repair: direct public replay coverage is `97.8%`;
+  full go-agent-runtime coverage instrumentation reports every public replay
+  service function at `100.0%`; normal and race replay suites pass (`82` tests
+  across four packages each); architecture-size passes (`182` packages,
+  `1869` files, `27198` functions); Wire regeneration is unchanged; pinned
+  Staticcheck, focused vet, coverage registration, and independent embedding
+  normal/race tests pass. The accumulated
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` matrix passes in
+  normal, coverage, and race modes with its expected negative controls.
+- The branch remains clean except for this test repair and the owned rejection
+  evidence, with `origin/main=e4137eba6a6499142f50701609c1149afc71db84` and
+  required startup/baseline ancestry preserved. Review30/37 repairs and the
+  authorized 14-entry baseline plus external `cmd` scope delta remain intact;
+  no CI, review, merge, vertical probe, or project acceptance is claimed.
+- Next action: commit the focused coverage repair and evidence, push the same
+  admitted branch, update PR #410 with the exact rejection and causal proof,
+  then return `ACCEPTED` to script-owned current-head CI without polling. Keep
+  ownership through `CONTINUE` for any exact-head rejection.
