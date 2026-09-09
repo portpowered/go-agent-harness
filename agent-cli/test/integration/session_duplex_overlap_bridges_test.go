@@ -37,18 +37,12 @@ type v8MultiTurnBridge struct {
 	runtimeOut  chan runtimecontract.SessionRuntimeObservation
 	runtimeIn   chan v8RuntimeInputEvent
 
-	packets chan v8MultiTurnBridgePacket
-	mu      sync.Mutex
-	writes  int
-	eofRead bool
-	eofSeen chan struct{}
-	eofOnce sync.Once
-	// eofPublished closes only after the final writer has queued EOF. A
-	// provider close can cancel a reader just before that queue operation; the
-	// reader must wait for this publication rather than turn an actual EOF
-	// into a false missing-EOF observation.
-	eofPublished     chan struct{}
-	eofPublishOnce   sync.Once
+	packets          chan v8MultiTurnBridgePacket
+	mu               sync.Mutex
+	writes           int
+	eofRead          bool
+	eofSeen          chan struct{}
+	eofOnce          sync.Once
 	eofWaitStarted   chan struct{}
 	eofWaitStartOnce sync.Once
 }
@@ -64,7 +58,6 @@ func newV8MultiTurnBridge(coordinator *v8MultiTurnCoordinator, direction string,
 		runtimeIn:      make(chan v8RuntimeInputEvent),
 		packets:        make(chan v8MultiTurnBridgePacket, 2),
 		eofSeen:        make(chan struct{}),
-		eofPublished:   make(chan struct{}),
 		eofWaitStarted: make(chan struct{}),
 	}
 }
@@ -173,8 +166,10 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 			if err := b.waitForEOF(); err != nil {
 				return 0, err
 			}
-			if err := b.publishEOF(); err != nil {
-				return 0, err
+			select {
+			case b.packets <- v8MultiTurnBridgePacket{eof: true}:
+			case <-b.coordinator.abort:
+				return 0, context.Canceled
 			}
 			select {
 			case <-b.eofSeen:
@@ -224,8 +219,10 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 		if err := b.waitForEOF(); err != nil {
 			return 0, err
 		}
-		if err := b.publishEOF(); err != nil {
-			return 0, err
+		select {
+		case b.packets <- v8MultiTurnBridgePacket{eof: true}:
+		case <-b.coordinator.abort:
+			return 0, context.Canceled
 		}
 		select {
 		case <-b.eofSeen:
@@ -254,9 +251,9 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 		return 0, fmt.Errorf("%s receiver requested %d PCM bytes, want at least %d", b.direction, len(destination), v8PCMFrameBytes)
 	}
 	// A provider close cancels the audio source at the same boundary where the
-	// final bridge writer may already have published EOF. Prefer a packet that
-	// is already queued, then recheck after cancellation, so cancellation does
-	// not turn an actually consumed EOF into a false missing-EOF observation.
+	// final bridge writer may be about to publish EOF. Prefer a queued packet,
+	// then wait for actual packet publication so cancellation cannot turn an
+	// eventual EOF into a false missing-EOF observation.
 	if count, err, ok := b.tryReadPacket(destination); ok {
 		return count, err
 	}
@@ -267,10 +264,8 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 		}
 		b.eofWaitStartOnce.Do(func() { close(b.eofWaitStarted) })
 		select {
-		case <-b.eofPublished:
-			if count, err, ok := b.tryReadPacket(destination); ok {
-				return count, err
-			}
+		case packet := <-b.packets:
+			return b.consumePacket(destination, packet)
 		case <-b.coordinator.abort:
 			if count, err, ok := b.tryReadPacket(destination); ok {
 				return count, err
@@ -287,9 +282,6 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 func (b *v8MultiTurnBridge) publishEOF() error {
 	select {
 	case b.packets <- v8MultiTurnBridgePacket{eof: true}:
-		// Publish only after the EOF packet is in the bridge. A cancelled reader
-		// may wake on this signal and must be able to consume the queued packet.
-		b.eofPublishOnce.Do(func() { close(b.eofPublished) })
 		return nil
 	case <-b.coordinator.abort:
 		return context.Canceled
@@ -399,7 +391,7 @@ func (b *v8MultiTurnBridge) eofState() string {
 	b.mu.Lock()
 	eofRead := b.eofRead
 	b.mu.Unlock()
-	return fmt.Sprintf("published=%t seen=%t queued=%d wait_started=%t", channelClosed(b.eofPublished), eofRead, len(b.packets), channelClosed(b.eofWaitStarted))
+	return fmt.Sprintf("seen=%t queued=%d wait_started=%t", eofRead, len(b.packets), channelClosed(b.eofWaitStarted))
 }
 
 func channelClosed(channel <-chan struct{}) bool {
