@@ -153,6 +153,9 @@ func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	if s.frameWriter != nil {
 		return s.adapter.finish("write", s.frameWriter.WriteFrame(ctx, append([]int16(nil), frame...)))
 	}
+	if s.sampleWriter != nil {
+		return s.adapter.finish("write", s.sampleWriter.WriteSamples(ctx, append([]int16(nil), frame...)))
+	}
 	encoded := make([]byte, audio.FrameSize*2)
 	_ = codec.EncodePCM16Into(encoded, frame)
 	return s.adapter.finish("write", s.byteWriter.Write(ctx, encoded))

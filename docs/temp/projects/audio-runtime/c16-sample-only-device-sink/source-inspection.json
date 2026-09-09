@@ -1,0 +1,33 @@
+{
+  "sourceRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "files": [
+    {
+      "path": "go-device-gateway/pkg/devices/sink_device.go",
+      "sha256": "6f089f6548a82e7222ae7685118a7ed12ca8b7b8e3bdbfb407cfaee14621b055"
+    },
+    {
+      "path": "go-device-gateway/pkg/devices/source_device.go",
+      "sha256": "737789f7cb026d470697f022c2073f9c8fbfe40d3f432d5060ab3ea75b6fd6f9"
+    },
+    {
+      "path": "go-device-gateway/pkg/devices/device_errors.go",
+      "sha256": "08d283b666160cb9383cbe8b6735767d0b4e08450550ec1850a0bcd63d694690"
+    },
+    {
+      "path": "go-device-gateway/pkg/devices/device_open.go",
+      "sha256": "07960ee6414d5183768d9df358a301bc498de131396612341a48398bd41e07c5"
+    },
+    {
+      "path": "go-agent-loop/pkg/subsystems/ping_pong.go",
+      "sha256": "ac2990d3e0c887769ed2d2ab8f2f2a64dd1eea149bf51871a06bcb636461b22f"
+    },
+    {
+      "path": "go-agent-loop/pkg/agentloop/agent_loop.go",
+      "sha256": "69aa608324932e8ec9f9ea2f594d041e6e33007bc091d52b129c489e65628f62"
+    },
+    {
+      "path": "go-agent-loop/pkg/agentloop/options.go",
+      "sha256": "20d6777fdae00413dd0aa91a3f29bd7d9ec99ed2668dfef7973ddd92f23d859e"
+    }
+  ]
+}
