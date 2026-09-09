@@ -4,6 +4,7 @@ import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"reflect"
 	"runtime"
@@ -374,4 +375,226 @@ func (h *blockingDeviceHandle) WriteFrame(ctx context.Context, _ []int16) error 
 func (h *blockingDeviceHandle) Close() error {
 	h.closeOnce.Do(func() { close(h.released) })
 	return nil
+}
+func TestDeviceSinkSampleOnlyWritesExactFramesAndTail(t *testing.T) {
+	handle := &sampleOnlyHandle{mutate: true}
+	sink := newSampleOnlySink(t, handle)
+	frame := int16Samples(-240, audio.FrameSize)
+	frame[0], frame[1], frame[len(frame)-1] = -32768, 32767, -1
+	full := int16Samples(240, audio.FrameSize)
+	full[0], full[1], full[len(full)-1] = -32768, 32767, 239
+	tail := []int16{-32768, -17, 0, 19, 32767}
+	want := [][]int16{append([]int16(nil), frame...), append([]int16(nil), full...), append([]int16(nil), tail...)}
+	if err := sink.WriteFrame(context.Background(), frame); err != nil {
+		t.Fatalf("sample-only WriteFrame = %v", err)
+	}
+	if err := sink.WriteSamples(context.Background(), full); err != nil {
+		t.Fatalf("sample-only full WriteSamples = %v", err)
+	}
+	if err := sink.WriteSamples(context.Background(), tail); err != nil {
+		t.Fatalf("sample-only tail WriteSamples = %v", err)
+	}
+	if frame[0] != -32768 || full[0] != -32768 || tail[0] != -32768 {
+		t.Fatal("backend mutation reached a caller buffer")
+	}
+	frame[0], full[0], tail[0] = 1, 2, 3
+	if got := handle.writesCopy(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("sample-only writes = %v, want exact ordered PCM %v", got, want)
+	}
+}
+func TestDeviceSinkSampleOnlyErrorsValidationAndCancellation(t *testing.T) {
+	sentinel := errors.New("sample-only backend write failed")
+	handle := &sampleOnlyHandle{err: sentinel}
+	sink := newSampleOnlySink(t, handle)
+	if err := sink.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); !errors.Is(err, sentinel) {
+		t.Fatalf("sample-only WriteFrame error = %v, want sentinel", err)
+	}
+	if err := sink.WriteSamples(context.Background(), []int16{1, 2, 3}); !errors.Is(err, sentinel) {
+		t.Fatalf("sample-only WriteSamples error = %v, want sentinel", err)
+	}
+	before, _ := handle.counts()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sink.WriteFrame(cancelled, make([]int16, audio.FrameSize)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-cancelled sample-only WriteFrame = %v", err)
+	}
+	if err := sink.WriteSamples(cancelled, []int16{4, 5, 6}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-cancelled sample-only WriteSamples = %v", err)
+	}
+	for _, invalid := range [][]int16{nil, make([]int16, audio.FrameSize-1), make([]int16, audio.FrameSize+1)} {
+		if err := sink.WriteFrame(context.Background(), invalid); !errors.Is(err, audio.ErrInvalidFrameSize) {
+			t.Errorf("invalid sample-only frame length %d = %v", len(invalid), err)
+		}
+	}
+	if got, _ := handle.counts(); got != before {
+		t.Fatalf("rejected sample-only writes = %d, want %d", got, before)
+	}
+	var nilContext context.Context
+	if err := sink.WriteSamples(nilContext, nil); err != nil {
+		t.Fatalf("empty sample-only WriteSamples = %v", err)
+	}
+	blocked := &sampleOnlyHandle{block: true, started: make(chan struct{}), release: make(chan struct{})}
+	blockedSink := newSampleOnlySink(t, blocked)
+	done := make(chan error, 1)
+	ctx, stop := context.WithCancel(context.Background())
+	go func() { done <- blockedSink.WriteSamples(ctx, []int16{7, 8, 9}) }()
+	waitDeviceSignal(t, blocked.started)
+	stop()
+	if err := waitDeviceError(t, done); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled blocked sample-only write = %v", err)
+	}
+}
+func TestDeviceSinkSampleOnlyCloseAndCapabilityPrecedence(t *testing.T) {
+	handle := &sampleOnlyHandle{block: true, started: make(chan struct{}), release: make(chan struct{})}
+	sink := newSampleOnlySink(t, handle)
+	done := make(chan error, 1)
+	go func() { done <- sink.WriteFrame(context.Background(), make([]int16, audio.FrameSize)) }()
+	waitDeviceSignal(t, handle.started)
+	if err := sink.Close(); err != nil {
+		t.Fatalf("sample-only Close = %v", err)
+	}
+	if err := waitDeviceError(t, done); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("blocked sample-only write after Close = %v", err)
+	}
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := sink.Close(); err != nil {
+				t.Errorf("concurrent sample-only Close = %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if _, closes := handle.counts(); closes != 1 {
+		t.Fatalf("sample-only close calls = %d, want one", closes)
+	}
+	if err := sink.WriteSamples(context.Background(), []int16{1}); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("sample-only write after Close = %v", err)
+	}
+	multi := &multiCapabilityHandle{}
+	multiSink := newSampleOnlySink(t, multi)
+	mustSampleWrite(t, multiSink.WriteFrame(context.Background(), make([]int16, audio.FrameSize)))
+	mustSampleWrite(t, multiSink.WriteSamples(context.Background(), make([]int16, audio.FrameSize)))
+	mustSampleWrite(t, multiSink.WriteSamples(context.Background(), []int16{1, 2, 3}))
+	if frames, samples := multi.calls(); frames != 2 || samples != 1 {
+		t.Fatalf("multi-capability dispatch = frame:%d sample:%d, want frame:2 sample:1", frames, samples)
+	}
+	byteHandle := &adapterSinkByteHandle{direction: DirectionOutput}
+	byteSink := newSampleOnlySink(t, byteHandle)
+	byteFrame := make([]int16, audio.FrameSize)
+	copy(byteFrame, []int16{-32768, -1, 0, 1, 32767})
+	mustSampleWrite(t, byteSink.WriteFrame(context.Background(), byteFrame))
+	if !reflect.DeepEqual(byteHandle.data, pcm16Bytes(byteFrame)) {
+		t.Fatalf("byte-only full PCM = %v, want exact PCM", byteHandle.data)
+	}
+	partial := []int16{-32768, -17, 0, 19, 32767}
+	mustSampleWrite(t, byteSink.WriteSamples(context.Background(), partial))
+	if !reflect.DeepEqual(byteHandle.data, pcm16Bytes(partial)) {
+		t.Fatalf("byte-only partial PCM = %v, want exact PCM", byteHandle.data)
+	}
+}
+
+type sampleOnlyHandle struct {
+	mu                     sync.Mutex
+	writes                 [][]int16
+	err                    error
+	mutate, block          bool
+	started, release       chan struct{}
+	startOnce, closeOnce   sync.Once
+	closeCount, writeCount int
+}
+
+func (h *sampleOnlyHandle) DeviceDirection() Direction { return DirectionOutput }
+func (h *sampleOnlyHandle) WriteSamples(ctx context.Context, samples []int16) error {
+	h.mu.Lock()
+	h.writeCount++
+	h.writes = append(h.writes, append([]int16(nil), samples...))
+	h.mu.Unlock()
+	h.startOnce.Do(func() {
+		if h.started != nil {
+			close(h.started)
+		}
+	})
+	if h.mutate && len(samples) > 0 {
+		samples[0] = 1234
+	}
+	if !h.block {
+		return h.err
+	}
+	select {
+	case <-h.release:
+		return audio.ErrClosed
+	case <-ctx.Done():
+		return audio.ContextError(ctx)
+	}
+}
+func (h *sampleOnlyHandle) Close() error {
+	h.closeOnce.Do(func() {
+		h.mu.Lock()
+		h.closeCount++
+		h.mu.Unlock()
+		if h.release != nil {
+			close(h.release)
+		}
+	})
+	return nil
+}
+func (h *sampleOnlyHandle) writesCopy() [][]int16 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	got := make([][]int16, len(h.writes))
+	for i := range h.writes {
+		got[i] = append([]int16(nil), h.writes[i]...)
+	}
+	return got
+}
+func (h *sampleOnlyHandle) counts() (int, int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.writeCount, h.closeCount
+}
+
+type multiCapabilityHandle struct {
+	sampleOnlyHandle
+	frameCount int
+}
+
+func (h *multiCapabilityHandle) WriteFrame(context.Context, []int16) error {
+	h.mu.Lock()
+	h.frameCount++
+	h.mu.Unlock()
+	return nil
+}
+func (h *multiCapabilityHandle) calls() (int, int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.frameCount, h.writeCount
+}
+func newSampleOnlySink(t *testing.T, handle OpenedDevice) *DeviceSink {
+	t.Helper()
+	sink, err := NewDeviceSink(&adapterTestRegistryStub{handle: handle}, "output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("sample-only cleanup: %v", err)
+		}
+	})
+	return sink
+}
+func mustSampleWrite(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func pcm16Bytes(samples []int16) []byte {
+	encoded := make([]byte, len(samples)*2)
+	for i, sample := range samples {
+		binary.LittleEndian.PutUint16(encoded[i*2:], uint16(sample))
+	}
+	return encoded
 }
