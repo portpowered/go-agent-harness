@@ -111,7 +111,7 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 		return replay.Prepared{}, fmt.Errorf("%w: open audio trace: %w", replay.ErrBundleIncomplete, err)
 	}
 	audioReplay.Clock = deterministic
-	capture, toolExecutor, wireTypes, wireCount, toolCount, err := deriveEvidence(events, request)
+	capture, toolExecutor, wireTypes, _, _, err := deriveEvidence(events, request)
 	if err != nil {
 		return replay.Prepared{}, err
 	}
@@ -128,8 +128,6 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 		audioReplay,
 		deterministic,
 		deriveScope(events),
-		wireCount,
-		toolCount,
 	), nil
 }
 

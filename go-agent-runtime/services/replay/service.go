@@ -115,6 +115,7 @@ type strictCompletion struct {
 	expectedTools int
 	consumedTools int
 	dialed        bool
+	invalid       bool
 	err           error
 }
 
@@ -172,20 +173,27 @@ func (c *strictCompletion) validate() error {
 	if c.err != nil {
 		return c.err
 	}
-	if !c.dialed || c.consumedWire != c.expectedWire || c.consumedTools != c.expectedTools {
+	if c.invalid || !c.dialed || c.consumedWire != c.expectedWire || c.consumedTools != c.expectedTools {
 		return fmt.Errorf("%w: provider wire consumed %d/%d and tools consumed %d/%d", ErrBundleIncomplete, c.consumedWire, c.expectedWire, c.consumedTools, c.expectedTools)
 	}
 	return nil
 }
 
+type strictToolCallCounter interface {
+	ExpectedToolCalls() int
+}
+
 // StrictPreparedBuilder tracks successful public dialer and tool operations
 // and is the only construction path for a prepared completion witness. It
-// accepts no caller-supplied validator; completion can succeed only after the
-// tracked dependencies report the expected evidence consumption.
+// derives expected operation counts from the supplied evidence dependencies;
+// callers cannot provide or override those counts. Runtime hosts should obtain
+// prepared values from StrictService.
 type StrictPreparedBuilder struct{}
 
 // Build creates one prepared replay with operation-based completion tracking.
-// Runtime hosts should obtain prepared values from StrictService.
+// The capture and executor own the expected evidence counts. An empty capture
+// or an executor without service-owned count metadata remains incomplete even
+// if a caller supplies no-op dependencies.
 func (StrictPreparedBuilder) Build(
 	capture testing.SessionCapture,
 	dialer transport.Dialer,
@@ -193,9 +201,17 @@ func (StrictPreparedBuilder) Build(
 	audio *recording.Replay,
 	scheduler clock.Scheduler,
 	scope StrictEvidenceScope,
-	wireEvents, toolCalls int,
 ) StrictPrepared {
-	completion := &strictCompletion{expectedWire: wireEvents, expectedTools: toolCalls}
+	expectedTools, hasToolCount := 0, false
+	if counter, ok := toolExecutor.(strictToolCallCounter); ok {
+		expectedTools = counter.ExpectedToolCalls()
+		hasToolCount = expectedTools >= 0
+	}
+	completion := &strictCompletion{
+		expectedWire:  len(capture.Records),
+		expectedTools: expectedTools,
+		invalid:       len(capture.Records) == 0 || toolExecutor == nil || !hasToolCount,
+	}
 	return StrictPrepared{
 		Capture:      capture,
 		Dialer:       &completionDialer{inner: dialer, state: completion},
@@ -203,8 +219,8 @@ func (StrictPreparedBuilder) Build(
 		Audio:        audio,
 		Clock:        scheduler,
 		Scope:        scope,
-		WireEvents:   wireEvents,
-		ToolCalls:    toolCalls,
+		WireEvents:   len(capture.Records),
+		ToolCalls:    expectedTools,
 		completion:   completion,
 	}
 }
@@ -300,6 +316,15 @@ func (e *completionToolExecutor) Execute(ctx context.Context, call messages.Tool
 		e.state.markTool()
 	}
 	return response, err
+}
+
+func (e *completionToolExecutor) ExpectedToolCalls() int {
+	if e == nil || e.state == nil {
+		return -1
+	}
+	e.state.mu.Lock()
+	defer e.state.mu.Unlock()
+	return e.state.expectedTools
 }
 
 var _ transport.Dialer = (*completionDialer)(nil)

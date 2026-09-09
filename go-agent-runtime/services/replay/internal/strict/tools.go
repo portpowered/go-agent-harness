@@ -67,6 +67,15 @@ func (e *recordedToolExecutor) validateShape() error {
 	return nil
 }
 
+func (e *recordedToolExecutor) ExpectedToolCalls() int {
+	if e == nil {
+		return -1
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.calls)
+}
+
 func (e *recordedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	if err := contextError(ctx); err != nil {
 		return messages.ToolCallResponse{}, err

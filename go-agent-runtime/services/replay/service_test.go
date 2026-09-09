@@ -31,14 +31,12 @@ func TestReplayPublicValueContracts(t *testing.T) {
 func TestStrictPreparedBuilderTracksExactOperations(t *testing.T) {
 	conn := &replayTestConn{readType: 1, readPayload: []byte("server")}
 	prepared := StrictPreparedBuilder{}.Build(
-		gwtesting.SessionCapture{},
+		gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{{}, {}}},
 		&replayTestDialer{conn: conn},
-		&replayTestToolExecutor{response: messages.ToolCallResponse{ToolCallID: "call-1", Content: "ok"}},
+		&replayTestToolExecutor{expected: 1, response: messages.ToolCallResponse{ToolCallID: "call-1", Content: "ok"}},
 		nil,
 		nil,
 		StrictEvidenceScope{Protocol: true, Tools: true},
-		2,
-		1,
 	)
 
 	gotConn, err := prepared.Dialer.Dial("offline", map[string]string{"Authorization": "ignored"})
@@ -115,21 +113,21 @@ func TestStrictCompletionTracksIncompleteAndFirstFailure(t *testing.T) {
 
 func TestStrictPreparedWrappersRejectUnavailableAndFailedOperations(t *testing.T) {
 	dialErr := errors.New("dial failed")
-	if _, err := (StrictPreparedBuilder{}).Build(gwtesting.SessionCapture{}, nil, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 0, 0).Dialer.Dial("offline", nil); !errors.Is(err, ErrBundleIncomplete) {
+	if _, err := (StrictPreparedBuilder{}).Build(gwtesting.SessionCapture{}, nil, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}).Dialer.Dial("offline", nil); !errors.Is(err, ErrBundleIncomplete) {
 		t.Fatalf("nil dialer = %v, want ErrBundleIncomplete", err)
 	}
-	dialFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{err: dialErr}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 0, 0)
+	dialFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{{}}}, &replayTestDialer{err: dialErr}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{})
 	if _, err := dialFailure.Dialer.Dial("offline", nil); !errors.Is(err, dialErr) {
 		t.Fatalf("dial failure = %v, want underlying error", err)
 	}
 
-	nilConnection := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 0, 0)
+	nilConnection := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{{}}}, &replayTestDialer{}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{})
 	if _, err := nilConnection.Dialer.Dial("offline", nil); !errors.Is(err, ErrBundleIncomplete) {
 		t.Fatalf("nil connection = %v, want ErrBundleIncomplete", err)
 	}
 
 	readErr := errors.New("read failed")
-	readFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{conn: &replayTestConn{readErr: readErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 1, 0)
+	readFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{{}}}, &replayTestDialer{conn: &replayTestConn{readErr: readErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{})
 	readConn, err := readFailure.Dialer.Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +140,7 @@ func TestStrictPreparedWrappersRejectUnavailableAndFailedOperations(t *testing.T
 	}
 
 	writeErr := errors.New("write failed")
-	writeFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{conn: &replayTestConn{writeErr: writeErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 1, 0)
+	writeFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{Records: []gwtesting.CapturedSessionEvent{{}}}, &replayTestDialer{conn: &replayTestConn{writeErr: writeErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{})
 	writeConn, err := writeFailure.Dialer.Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +153,7 @@ func TestStrictPreparedWrappersRejectUnavailableAndFailedOperations(t *testing.T
 	}
 
 	closeErr := errors.New("close failed")
-	closeFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{conn: &replayTestConn{closeErr: closeErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{}, 0, 0)
+	closeFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{conn: &replayTestConn{closeErr: closeErr}}, &replayTestToolExecutor{}, nil, nil, StrictEvidenceScope{})
 	closeConn, err := closeFailure.Dialer.Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +166,7 @@ func TestStrictPreparedWrappersRejectUnavailableAndFailedOperations(t *testing.T
 	}
 
 	toolErr := errors.New("tool failed")
-	toolFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{}, &replayTestToolExecutor{err: toolErr}, nil, nil, StrictEvidenceScope{}, 0, 1)
+	toolFailure := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{}, &replayTestToolExecutor{expected: 1, err: toolErr}, nil, nil, StrictEvidenceScope{})
 	if _, err := toolFailure.ToolExecutor.Execute(context.Background(), messages.ToolCall{ID: "call-1"}); !errors.Is(err, toolErr) {
 		t.Fatalf("tool failure = %v, want underlying error", err)
 	}
@@ -176,7 +174,7 @@ func TestStrictPreparedWrappersRejectUnavailableAndFailedOperations(t *testing.T
 		t.Fatalf("tool completion = %v, want incomplete", err)
 	}
 
-	nilTool := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{}, nil, nil, nil, StrictEvidenceScope{}, 0, 1)
+	nilTool := StrictPreparedBuilder{}.Build(gwtesting.SessionCapture{}, &replayTestDialer{}, nil, nil, nil, StrictEvidenceScope{})
 	if _, err := nilTool.ToolExecutor.Execute(context.Background(), messages.ToolCall{ID: "call-1"}); !errors.Is(err, ErrToolFailure) {
 		t.Fatalf("nil tool executor = %v, want ErrToolFailure", err)
 	}
@@ -233,6 +231,7 @@ func (c *replayTestConn) WriteMessage(int, []byte) error { return c.writeErr }
 func (c *replayTestConn) Close() error { return c.closeErr }
 
 type replayTestToolExecutor struct {
+	expected int
 	response messages.ToolCallResponse
 	err      error
 }
@@ -240,6 +239,8 @@ type replayTestToolExecutor struct {
 func (e *replayTestToolExecutor) Execute(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
 	return e.response, e.err
 }
+
+func (e *replayTestToolExecutor) ExpectedToolCalls() int { return e.expected }
 
 var _ transport.Dialer = (*replayTestDialer)(nil)
 var _ transport.Conn = (*replayTestConn)(nil)
