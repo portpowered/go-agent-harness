@@ -110,6 +110,14 @@ func TestServiceRejectsHostClock(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsNilContext(t *testing.T) {
+	directory := writeBundle(t, true)
+	_, err := New(Dependencies{ClockFactory: testClockFactory}).Prepare(nil, publicreplay.Request{BundlePath: directory})
+	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
+		t.Fatalf("err=%v, want incomplete error for nil context", err)
+	}
+}
+
 func TestServiceRejectsHandshakeModelMismatch(t *testing.T) {
 	directory := writeBundle(t, true)
 	_, err := New(Dependencies{ClockFactory: func(time.Time) *clock.Deterministic { return clock.NewDeterministic(time.Unix(0, 0).UTC(), 10) }}).Prepare(context.Background(), publicreplay.Request{BundlePath: directory, Model: "different-model"})

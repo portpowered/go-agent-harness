@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -94,6 +95,39 @@ func TestPublicStrictReplayExposesPreparedEvidenceAndRejectsIncompleteBundle(t *
 	_, err = service.Run(t.Context(), &bytes.Buffer{}, runtimeReplay.StrictRequest{BundlePath: empty})
 	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "timeline.jsonl") {
 		t.Fatalf("missing timeline error=%v, want bounded incomplete diagnostic", err)
+	}
+}
+
+func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
+	prepared, err := runtimeReplayWire.NewStrictService().Prepare(t.Context(), runtimeReplay.StrictRequest{
+		BundlePath: filepath.Join("testdata", "replay"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reflect.TypeOf(prepared).FieldByName("Complete"); ok {
+		t.Fatal("public prepared contract exposes mutable completion callback")
+	}
+	forged := runtimeReplay.StrictPrepared{
+		Capture:      prepared.Capture,
+		Dialer:       prepared.Dialer,
+		ToolExecutor: prepared.ToolExecutor,
+		Audio:        prepared.Audio,
+		Clock:        prepared.Clock,
+		Scope:        prepared.Scope,
+		WireEvents:   prepared.WireEvents,
+		ToolCalls:    prepared.ToolCalls,
+	}
+	if err := forged.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
+		t.Fatalf("forged completion error=%v, want incomplete evidence", err)
+	}
+}
+
+func TestPublicStrictReplayRejectsNilContext(t *testing.T) {
+	service := runtimeReplayWire.NewStrictService()
+	_, err := service.Prepare(nil, runtimeReplay.StrictRequest{BundlePath: filepath.Join("testdata", "replay")})
+	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
+		t.Fatalf("nil context error=%v, want incomplete error", err)
 	}
 }
 

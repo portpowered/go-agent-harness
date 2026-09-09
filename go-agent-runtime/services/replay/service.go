@@ -3,7 +3,6 @@ package replay
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -14,7 +13,19 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-var ErrCaptureUnavailable = errors.New("replay capture is unavailable")
+type errorCode string
+
+func (e errorCode) Error() string { return string(e) }
+
+const (
+	ErrCaptureUnavailable         errorCode = "replay capture is unavailable"
+	ErrBundleIncomplete           errorCode = "replay bundle is incomplete"
+	ErrBundleMismatch             errorCode = "replay bundle evidence mismatch"
+	ErrToolMismatch               errorCode = "replay tool invocation mismatch"
+	ErrToolFailure                errorCode = "recorded tool execution failed"
+	ErrDeterministicClockRequired errorCode = "offline replay requires an injected deterministic clock"
+	ErrRuntimeFactoryRequired     errorCode = "offline replay runtime factory is required"
+)
 
 // CaptureKind identifies the protocol represented by an admitted capture.
 // Turn captures are consumed by the ordinary session replay service; realtime
@@ -70,15 +81,6 @@ type CaptureAdmission interface {
 	ResolveCapturePath(context.Context, string) (string, error)
 }
 
-var (
-	ErrBundleIncomplete           = errors.New("replay bundle is incomplete")
-	ErrBundleMismatch             = errors.New("replay bundle evidence mismatch")
-	ErrToolMismatch               = errors.New("replay tool invocation mismatch")
-	ErrToolFailure                = errors.New("recorded tool execution failed")
-	ErrDeterministicClockRequired = errors.New("offline replay requires an injected deterministic clock")
-	ErrRuntimeFactoryRequired     = errors.New("offline replay runtime factory is required")
-)
-
 // StrictRequest identifies a canonical finalized recording bundle. Provider
 // selects the offline protocol adapter and Model, when supplied, is checked
 // against the captured provider handshake. No credentials, device selectors,
@@ -89,10 +91,9 @@ type StrictRequest struct {
 	Model      string
 }
 
-// StrictPrepared contains hermetic dependencies for one headless replay.
-// Audio is recorded evidence; production input is derived from captured
-// provider-wire packets by the strict runtime. DeviceExecution is never true
-// for this service.
+// StrictPrepared contains hermetic dependencies and an opaque completion
+// witness for one headless replay. Only a prepared value with an internal
+// completion witness can validate successfully.
 type StrictPrepared struct {
 	Capture      testing.SessionCapture
 	Dialer       transport.Dialer
@@ -102,9 +103,41 @@ type StrictPrepared struct {
 	Scope        StrictEvidenceScope
 	WireEvents   int
 	ToolCalls    int
-	// Complete is populated by StrictService.Prepare. A zero StrictPrepared
-	// cannot validate a complete replay.
-	Complete func() error
+	completion   *strictCompletion
+}
+
+type strictCompletion struct {
+	validate func() error
+}
+
+// StrictPreparedBuilder is the private implementation bridge for creating a
+// prepared value. It carries no state; the returned value remains incomplete
+// unless the builder supplies an implementation-owned validation witness.
+type StrictPreparedBuilder struct{}
+
+// Build creates one prepared replay with its implementation-owned completion
+// witness. Runtime hosts should obtain prepared values from StrictService.
+func (StrictPreparedBuilder) Build(
+	capture testing.SessionCapture,
+	dialer transport.Dialer,
+	toolExecutor messages.ToolExecutor,
+	audio *recording.Replay,
+	scheduler clock.Scheduler,
+	scope StrictEvidenceScope,
+	wireEvents, toolCalls int,
+	validate func() error,
+) StrictPrepared {
+	return StrictPrepared{
+		Capture:      capture,
+		Dialer:       dialer,
+		ToolExecutor: toolExecutor,
+		Audio:        audio,
+		Clock:        scheduler,
+		Scope:        scope,
+		WireEvents:   wireEvents,
+		ToolCalls:    toolCalls,
+		completion:   &strictCompletion{validate: validate},
+	}
 }
 
 // StrictEvidenceScope describes what a credential-free headless run can
@@ -142,10 +175,10 @@ type StrictResult struct {
 // ValidateComplete verifies that every recorded wire and tool event was
 // consumed exactly once at the strict runtime's terminal boundary.
 func (p StrictPrepared) ValidateComplete() error {
-	if p.Complete == nil {
+	if p.completion == nil || p.completion.validate == nil {
 		return ErrBundleIncomplete
 	}
-	return p.Complete()
+	return p.completion.validate()
 }
 
 // Close validates completion. Strict preparation owns no live resources, so

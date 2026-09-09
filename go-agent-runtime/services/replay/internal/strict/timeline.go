@@ -18,7 +18,7 @@ const timelineScanBuffer = 4096
 
 func contextError(ctx context.Context) error {
 	if ctx == nil {
-		return nil
+		return fmt.Errorf("%w: context is nil", replay.ErrBundleIncomplete)
 	}
 	select {
 	case <-ctx.Done():

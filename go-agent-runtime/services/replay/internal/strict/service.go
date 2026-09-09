@@ -120,22 +120,22 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 	}
 	state := &replayState{expected: wireCount, messageTypes: wireTypes}
 	trackedDialer := transport.Dialer(&trackingDialer{inner: dialer, state: state})
-	return replay.Prepared{
-		Capture:      capture,
-		Dialer:       trackedDialer,
-		ToolExecutor: toolExecutor,
-		Audio:        audioReplay,
-		Clock:        deterministic,
-		Scope:        deriveScope(events),
-		WireEvents:   wireCount,
-		ToolCalls:    toolCount,
-		Complete: func() error {
+	return replay.StrictPreparedBuilder{}.Build(
+		capture,
+		trackedDialer,
+		toolExecutor,
+		audioReplay,
+		deterministic,
+		deriveScope(events),
+		wireCount,
+		toolCount,
+		func() error {
 			if err := state.validate(); err != nil {
 				return err
 			}
 			return toolExecutor.validateComplete()
 		},
-	}, nil
+	), nil
 }
 
 func deriveScope(events []recording.Event) replay.EvidenceScope {
