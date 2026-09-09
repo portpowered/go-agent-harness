@@ -819,10 +819,12 @@ Delivery record:
   focused-validation handoff commit: `d6ebbcaa010b34c286cc0b0a9b492df4333bf074`.
 - Review-36 repair commit: `afd4015cb04972f068091bf80427b83a7ba8287d`.
 - Final pre-push handoff ledger commit: `7fe1eabad755c6548e067cf092ba6335c61ab3e6`.
+- Pushed-head record commit: `7184993fd76acec1e432179bc942ac5890cec392`
+  (`docs: record C14 pushed head`).
 - Pushed branch: `codex/audio-runtime-c14-replay-boundary-audit`.
 - Pull request: [#406](https://github.com/portpowered/go-agent-harness/pull/406),
   base `main` at `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, state OPEN, current
-  head `7fe1eabad755c6548e067cf092ba6335c61ab3e6`. The pushed head has no merge
+  head `7184993fd76acec1e432179bc942ac5890cec392`. The pushed head has no merge
   SHA at this executor handoff.
 - CI was not polled and no CI result is claimed. The next factory action is
   the script-owned current-head CI gate, followed by independent review if the
