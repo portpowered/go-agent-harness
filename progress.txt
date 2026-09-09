@@ -1350,3 +1350,29 @@ C18 ordering-repair handoff checkpoint 2026-09-09
   post-checkpoint build. Next action: commit this ledger checkpoint, rebuild
   both public binaries, rerun all five bounded public cases, then push/update
   PR410 and return `ACCEPTED` to script-owned CI without polling.
+
+C18 final-source handoff evidence 2026-09-09
+
+- From source revision `f311225cfca5746a44fd393c0c547b82feeddfcc`, fresh builds
+  produced the independent `GOWORK=off` consumer SHA256
+  `fca5d806fad37c63a814e25c7eac778adeb07a397b3beb59051239f5c1f02b6b` and
+  yui SHA256
+  `34d096537740e94e2eac919560f4019825661f84c10e6762722a06800315dbef`.
+- Fresh `verify-public.py` reports from that source passed all five bounded
+  cases: external `2/2`, strict `5/5`, provider `7/7`, interruption `4/4`,
+  and ask `2/2`. Strict/provider relative and absolute finalized-directory
+  positives passed; missing/corrupt/path-escape mutations and provider wrong
+  cwd rejected before successful marker/output. Provider output remained the
+  `3200`-byte SHA256
+  `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`;
+  interruption output remained the `3360`-byte SHA256
+  `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff` with
+  healthy-tail SHA256
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`.
+  The isolated interruption stability follow-up passed `5/5` after the
+  bounded `12/12` diagnostic matrix.
+- The reports are implementation/handoff evidence only. Script CI,
+  independent review, guarded merge, fresh post-merge vertical validation and
+  project acceptance remain external; CI was not polled or claimed green.
+  Next action: push this same admitted task head, update PR410 with the exact
+  evidence and return `ACCEPTED` to the script-owned CI gate.
