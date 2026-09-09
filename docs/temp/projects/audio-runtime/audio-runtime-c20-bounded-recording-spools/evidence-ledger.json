@@ -1,7 +1,7 @@
 {
   "task": "audio-runtime-c20-bounded-recording-spools",
   "project": "audio-runtime",
-  "sourceRevision": "c9d43764c682dfeb9606a1f8f11ffd87be29c57f",
+  "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
   "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
   "requiredAncestry": {
     "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -10,14 +10,14 @@
     "fetchedMain": "e4137eba6a6499142f50701609c1149afc71db84"
   },
   "fixtureAndHarnessSHA256": {
-    "consumer.go": "92db363b429e7b60411b91ff3548cc3734212cf2a44d07ba5bd68a62c835e79f",
-    "verify-public.py": "01a8f1201ab7577e5084cf2218a8c2f45a4bbe8e52a0144d32d0ebf6ddec2601",
-    "README.md": "5de43fca1b1478c2d16818ef545d3357c8ded88b8bdbfd4406f6ca0f7d134563"
+    "consumer.go": "9aa6ac129d961dbe74b7f51cbeb21d93fbedb6309dd6c5b2321542b980a8bc13",
+    "verify-public.py": "edd3177967b475d5a747ffe4619d02fd6ed298147aac67872419a66756f49d9a",
+    "README.md": "176812b2a1d979dbbabfbb771a325a11d4b5ab62b1c9235fe6e6571d0f2e3310"
   },
   "consumerBuild": {
     "command": "go build -trimpath -mod=mod -o consumer consumer.go",
-    "candidateSHA256": "fd9368a691188fa0ab9776875153eca093ae17bf95b2555fdfc97930ced6299d",
-    "baselineSHA256": "2b6a71a6b4234dbf75aa6f520ba6dceacab92e45d6d571d4606c97951b67d509",
+    "candidateSHA256": "496fd6bc3bae7b4722de5982668a6677201f9f950755832ed22bf593aa4d307e",
+    "baselineSHA256": "99bd08a2111244d440b52d6c7d966e4ffdecda373cbc382640d40ac28741473c",
     "surface": "recording Wire, LiveRecorder, ProviderCaptureSink; no CLI or recording internals",
     "processLimitSeconds": 60
   },
@@ -35,20 +35,22 @@
       "case": "many-small",
       "pacedEvents": 512,
       "status": "complete",
-      "totalBytes": 277989,
+      "totalBytes": 277997,
       "transcriptLines": 513,
       "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
     },
     "candidateBaselinePair": {
       "case": "many-small",
       "status": "partial",
-      "totalBytes": 38303,
+      "totalBytes": 38295,
       "transcriptLines": 66,
       "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
       "candidateProviderBytes": 433,
-      "terminalSidecarBytes": 448
+      "terminalSidecarBytes": 448,
+      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7"
     },
     "normal": {
+      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
       "status": "complete",
       "totalBytes": 5238,
       "pcmBytes": 8,
@@ -57,6 +59,7 @@
       "transcriptLinesPerSide": 3
     },
     "largeRecord": {
+      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
       "status": "partial",
       "totalBytes": 3276,
       "transcriptLinesPerSide": 1,
@@ -64,17 +67,43 @@
       "terminalPreserved": true
     },
     "providerOverflow": {
+      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
       "providerError": "provider capture cumulative budget exceeded",
       "publishedProviderBytes": 0,
       "normalEnvelopePublished": false
+    },
+    "defaultOverflow": {
+      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+      "case": "default-overflow",
+      "requestedLimits": {
+        "transcriptBytes": 0,
+        "transcriptItems": 0,
+        "audioBytes": 0,
+        "audioItems": 0,
+        "providerBytes": 0,
+        "providerItems": 0
+      },
+      "pacedRecords": 48,
+      "status": "partial",
+      "totalBytes": 53487973,
+      "transcriptBytesPerSide": 26743250,
+      "transcriptLinesPerSide": 19,
+      "providerBytes": 439,
+      "sidecarBytes": 448,
+      "finalizationErrorClass": "recording conversation summary budget exceeded / io.ErrShortBuffer",
+      "terminalPreserved": true,
+      "recordedOutput": {
+        "path": "default-overflow.json",
+        "sha256": "783a54800d8db6e217b9daf889e2e26ef4506a426a1afa74b10dcd4d08a447e9"
+      }
     }
   },
   "focusedChecks": {
     "goTestRecording": "74 passed in 4 packages",
     "goTestRecordingRace": "74 passed in 4 packages",
     "goVetRecording": "no issues",
-    "coverageRecordingEvidence": "65 passed; 80.7% focused package coverage",
-    "architectureSize": "passed: 181 packages, 1860 files, 27182 functions",
+    "coverageRecordingEvidence": "74 passed; 80.7% focused package coverage",
+    "architectureSize": "passed: 181 packages, 1860 files, 27197 functions",
     "diffCheck": "passed",
     "ci": "not polled; script-owned gate remains external",
     "review": "not performed by executor"

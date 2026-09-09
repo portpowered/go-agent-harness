@@ -1,0 +1,31 @@
+{
+  "binary": "496fd6bc3bae7b4722de5982668a6677201f9f950755832ed22bf593aa4d307e",
+  "case": "default-overflow",
+  "result": {
+    "case": "default-overflow",
+    "file_bytes": {
+      "agent.transcript.jsonl": 26743250,
+      "client.transcript.jsonl": 26743250,
+      "manifest.json": 1034,
+      "provider.json": 439
+    },
+    "finalization_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+    "limits_applied": {
+      "audio_bytes": 0,
+      "audio_items": 0,
+      "provider_bytes": 0,
+      "provider_items": 0,
+      "transcript_bytes": 0,
+      "transcript_items": 0
+    },
+    "provider_bytes": 439,
+    "sidecar_bytes": 448,
+    "source_revision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+    "status": "partial",
+    "total_bytes": 53487973,
+    "transcript_lines": {
+      "agent.transcript.jsonl": 19,
+      "client.transcript.jsonl": 19
+    }
+  }
+}
