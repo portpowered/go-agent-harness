@@ -719,6 +719,16 @@ changed-path check remained limited to the three pre-existing C14 evidence
 paths: `audit.md`, `canonical-board.json`, and
 `canonical-rejection-feedback.json`.
 
+This corrected audit was checkpointed in commit
+`afd4015cb04972f068091bf80427b83a7ba8287d` (`docs: repair C14 baseline
+provenance`). Post-commit checks at that exact local HEAD reported a clean
+worktree, `git diff --check` PASS, the same three-file candidate diff against
+`origin/main`, a one-file commit diff (`audit.md`), corrected baseline/source
+Git-object and ancestry checks PASS, `origin/main`
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`, current branch
+`codex/audio-runtime-c14-replay-boundary-audit`, and a non-empty audit file.
+The local branch was one commit ahead of the remote PR branch pending push.
+
 ## Immutable acceptance criteria and later gates
 
 All nine criteria remain `OPEN`. C14 is an audit/extraction decision and cannot
@@ -807,6 +817,7 @@ Delivery record:
 
 - Initial evidence commit: `8c3d34f4cc317c506e28d15b1fa8f8f05930790b`;
   focused-validation handoff commit: `d6ebbcaa010b34c286cc0b0a9b492df4333bf074`.
+- Review-36 repair commit: `afd4015cb04972f068091bf80427b83a7ba8287d`.
 - Pushed branch: `codex/audio-runtime-c14-replay-boundary-audit`.
 - Pull request: [#406](https://github.com/portpowered/go-agent-harness/pull/406),
   base `main`, state OPEN. The PR metadata records the current exact head;
@@ -815,14 +826,14 @@ Delivery record:
   the script-owned current-head CI gate, followed by independent review if the
   gate succeeds.
 
-After these checks, commit and push this same branch, open/update its PR
-against `main`, and return `ACCEPTED` to the script-owned current-head CI
-gate. `ACCEPTED` means submitted to CI; it does not mean CI is green. Do not
-poll CI. If the script returns an exact rejection, retain this task, inspect
-the full same-head logs/feedback, repair only the actionable issue within the
-C14 evidence lease, rerun the bounded evidence check, and resubmit the same
-task. Independent review must follow successful script CI, and meta must later
-run the fresh exact-artifact vertical probe and read its report plus canonical
+After the review repair checkpoint, push this same branch and update its PR
+against `main`, then return `ACCEPTED` to the script-owned current-head CI gate.
+`ACCEPTED` means submitted to CI; it does not mean CI is green. Do not poll
+CI. If the script returns an exact rejection, retain this task, inspect the
+full same-head logs/feedback, repair only the actionable issue within the C14
+evidence lease, rerun the bounded evidence check, and resubmit the same task.
+Independent review must follow successful script CI, and meta must later run
+the fresh exact-artifact vertical probe and read its report plus canonical
 outcome. No audit merge or historical C13 software evidence closes any of the
 nine project gates.
 
