@@ -880,3 +880,55 @@ C18 static rejection repair checkpoint
   and full rejection evidence, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
   ownership through `CONTINUE` for any exact-head rejection; do not self-review.
+
+C18 hermetic rejection reconciliation and current candidate checkpoint
+
+- Reverified admission for `audio-runtime-c18-public-strict-replay`; the task
+  remains `work-task-24`, `prd.json.branchName` exactly matches
+  `codex/audio-runtime-c18-public-strict-replay`, and current HEAD is
+  `02f4304222dc1244522cdd91c543167f42cf9a0e`. Fetched `origin/main` at
+  `e4137eba6a6499142f50701609c1149afc71db84`; the startup integration
+  revision, original baseline, planning main, and current main remain ancestors.
+  The isolated worktree stayed clean before this checkpoint; the running host,
+  predecessor checkpoints, C05 and unrelated work remain untouched.
+- Read the complete latest CI rejection for PR #410, run `34350759027`, job
+  `102463170993`, and saved the raw job response plus exact extraction in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34350759027.json`.
+  `CI (hermetic)` failed in the broad `agent-cli/test/integration` package at
+  `TestS2SV4DSuppressedTimeoutOutcomeFailsNonVacuously` with the scripted
+  session ending before its final assistant response. The complete 373-line
+  log SHA256 is recorded there; expected replay/fixture/credential negative
+  control diagnostics preceded the one failure.
+- The exact failure was causally isolated with the same `nomicrophone` test
+  command at `-count=20`: all 20 passed in `10.269s`. The test is outside C18
+  owned paths and does not exercise the extracted strict replay service; no
+  C18 repair is demonstrated or authorized for that unrelated intermittent
+  failure. It remains non-waived script-gate evidence for the next submission.
+- Current focused evidence is green: runtime replay normal and race each pass
+  84 tests across four packages; `tests/embedding` passes normal and race with
+  `GOWORK=off`; CLI replay normal/race and the repeated shared-registry checks
+  pass; architecture-size passes (`182` packages, `1869` files, `27204`
+  functions); Wire generation/check, coverage registration (`172` packages),
+  pinned golangci-lint `2.9.0`, pinned Staticcheck `2026.1`, focused hermetic
+  test, and `git diff --check` pass. The accumulated
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` matrix passes in
+  normal, coverage and race modes with its expected negative controls.
+- Fresh current-source public artifacts pass all owned cases. The yui binary
+  SHA256 is `ab4271420158afbe383001d7cf44e46b502bb673e9bfd09827060bcb5dbb75c0`
+  and the separate GOWORK=off consumer SHA256 is
+  `1e49019724db553923132ad60b8553d9cd8f90f3d4607c94e22de0a6c11965b8`.
+  External relative/absolute replay reports 16 wire events, one tool and
+  `Device execution: false`; strict relative/absolute replay reports 18 wire
+  events and one tool; provider, wrong-cwd negative, interruption (15-event
+  strict replay), and stopped-helper local ask record/replay all pass.
+- Review30/37/40 findings remain causally covered by repair commits
+  `087d30c5`, `0df3e912`, `02478f63`, and `e2e7bbff`; the latest static repair
+  is `cf663a66`. The authorized architecture scope delta is unchanged: exactly
+  14 stale CLI baseline entries and the external consumer `cmd` layout rule.
+  No CI, independent review, merge, vertical probe or project acceptance is
+  claimed.
+- Next action: commit this raw rejection/evidence checkpoint, push the same
+  admitted task, update PR #410 with the exact current head and non-waived
+  failure reconciliation, then return `ACCEPTED` to the script-owned current-
+  head CI gate without polling. Retain ownership through `CONTINUE` for any
+  exact-head rejection; do not self-review.
