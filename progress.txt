@@ -1286,19 +1286,20 @@ C18 current-main integration and clock repair checkpoint
   and preserving the `progress.txt` conflict. The authorized architecture
   scope delta remains exactly fourteen stale baseline-entry removals plus the
   external consumer `cmd` layout addition.
-- Coordination additionally assigns `go-audio/pkg/clock/` to C18. Repair
-  `71b2c0f` makes the scheduler deadline context wrap `context.WithCancelCause`
-  so the standard parent-cancellation fast path closes `Done` synchronously,
-  preserves custom causes and virtual `DeadlineExceeded`, and stops the
-  deterministic timer through the single child cancellation owner. New
-  `context_test.go` covers immediate parent closure, cause preservation and
-  timer-heap cleanup; no deadline, timeout, assertion, baseline or policy was
-  weakened or changed.
+- Coordination additionally assigns `go-audio/pkg/clock/` to C18. The
+  intermediate `71b2c0f` standard-context repair was superseded after its
+  cancellation path changed the public interruption PCM timing. Final repair
+  `ab5c7da` keeps the custom scheduler deadline context and makes `Done()`
+  eagerly finish from an already-canceled parent, while the watcher still
+  handles callers that cached the channel and the child channel still owns
+  explicit timer cleanup. New `context_test.go` covers immediate parent
+  closure, cause preservation and timer-heap cleanup; no deadline, timeout,
+  assertion, baseline or policy was weakened or changed.
 - Causal validation is green: the full clock package, exact parent control
   `100/100` normal and `50/50` race, strict replay normal/race (`84` tests in
   four packages each), public embedding strict controls normal/race, CLI
   replay/integration normal/race, focused vet, Wire regeneration, and
-  architecture-size (`182` packages, `1871` files, `27219` functions). The
+  architecture-size (`182` packages, `1871` files, `27223` functions). The
   five fresh public verifier cases also passed at the pre-ledger source
   checkpoint: external `2/2`, strict `5/5`, provider `7/7`, interruption
   `4/4`, ask `2/2`; rebuilt final-source artifacts are still required below.
@@ -1308,8 +1309,43 @@ C18 current-main integration and clock repair checkpoint
   passed. The exact outside-scope control passed `20/20` under
   `-tags=nomicrophone` with the original deadlines. This is retained as
   non-waived C22 evidence; no C22 path was edited.
-- Next action: rebuild yui and the independent `GOWORK=off` consumer from the
-  final evidence checkpoint, rerun all five bounded public cases, append exact
-  hashes/results, push the same branch, update PR410, and return `ACCEPTED` to
-  script-owned CI without polling. No CI/review/merge/vertical/project
-  acceptance is claimed.
+- Next action: append the final-source public evidence below, push the same
+  branch, update PR410, and return `ACCEPTED` to script-owned CI without
+  polling. No CI/review/merge/vertical/project acceptance is claimed.
+
+C18 final-source public evidence checkpoint 2026-09-09
+
+- Final clock repair commit `ab5c7dae77bff15f95ddde80193901d618cfb6ad` passes
+  the exact parent-cancellation control `100/100` normal and `50/50` race,
+  the full clock package (`22` tests), strict replay normal/race (`84` tests
+  in four packages each), the independent embedding strict controls
+  normal/race, and the focused shipped CLI replay controls normal/race. The
+  clock source remains exactly `547` lines; architecture-size passes with
+  `182` packages, `1871` files and `27223` functions; Wire regeneration and
+  focused vet are clean.
+- Fresh final-source builds from the same revision produced the independent
+  consumer SHA256 `d6cfcf4e8587508905a7a128737f6146311e78421a40c6a73d0397eb460b9378`
+  and yui SHA256
+  `661d296042d4d2ef1869347b2cfb47255084c0297343a8353bfd13771914a0a6`.
+  `verify-public.py` recorded source revision
+  `ab5c7dae77bff15f95ddde80193901d618cfb6ad` and all five bounded cases
+  passed: external `2/2`, strict `5/5`, provider `7/7`, interruption `4/4`,
+  and ask `2/2`. Strict/provider relative and absolute finalized-directory
+  positives passed; missing/corrupt/path-escape mutations and provider wrong
+  cwd rejected with no successful marker/output. The provider render oracle
+  remained the required `3200` bytes / SHA256
+  `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`; the
+  interruption oracle remained `3360` bytes / SHA256
+  `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff` with
+  the preserved healthy-tail SHA256
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`.
+- The accumulated session regression command still has one retained C22
+  coverage-only failure before mutation (`InputEOF:false` in
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl`); the
+  exact outside-scope control passed `20/20` with original deadlines and no
+  C22 path was edited. This is not an acceptance waiver or a C18 red test.
+- This is implementation and handoff evidence only. Script CI, independent
+  review, guarded merge, fresh post-merge vertical validation and project
+  acceptance remain external; CI was not polled or claimed green. Next action:
+  push this same task head, update PR410 with the evidence, and return
+  `ACCEPTED` to the script-owned CI gate.
