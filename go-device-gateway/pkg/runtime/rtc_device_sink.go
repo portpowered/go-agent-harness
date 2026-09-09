@@ -618,9 +618,26 @@ func (s *RTCDeviceSink) Close() error {
 			s.commands.Close()
 			<-s.commandDone
 		}
-		if s.renderBoundarySupported.Load() {
+		var playbackSnapshot audio.PlaybackQueueStats
+		if s.playbackObserver != nil {
+			// Wait for an in-flight producer before taking the legacy queue
+			// snapshot. The observation ledger must still discard the native
+			// queue before close so a callback cannot be classified as both
+			// consumed and discarded, but the older queue observer's contract
+			// reports the queued depth that existed at the close boundary.
+			s.pacingMu.Lock()
 			s.playbackMu.Lock()
-			s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+			playbackSnapshot = s.PlaybackStats()
+			if s.renderBoundarySupported.Load() {
+				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+			}
+			s.playbackMu.Unlock()
+			s.pacingMu.Unlock()
+		} else {
+			s.playbackMu.Lock()
+			if s.renderBoundarySupported.Load() {
+				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+			}
 			s.playbackMu.Unlock()
 		}
 		s.closeErr = s.sink.Close()
@@ -630,7 +647,7 @@ func (s *RTCDeviceSink) Close() error {
 			<-done
 		}
 		if s.playbackObserver != nil {
-			s.playbackObserver(s.id, s.PlaybackStats())
+			s.playbackObserver(s.id, playbackSnapshot)
 		}
 		s.closePlaybackObservations()
 	})
