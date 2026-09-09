@@ -3,11 +3,11 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-  "current_branch_head_at_handoff": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-  "implementation_checkpoint": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-  "evidence_checkpoint": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-  "evidence_generated_from_sha": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "candidate_head": "aeef9126ae54ea925dabb260818082db8675b324",
+  "current_branch_head_at_handoff": "aeef9126ae54ea925dabb260818082db8675b324",
+  "implementation_checkpoint": "aeef9126ae54ea925dabb260818082db8675b324",
+  "evidence_checkpoint": "aeef9126ae54ea925dabb260818082db8675b324",
+  "evidence_generated_from_sha": "aeef9126ae54ea925dabb260818082db8675b324",
   "evidence_packaging_note": "The candidate SHA above is the exact tree used for the current focused recheck; evidence is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
   "base_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -42,7 +42,7 @@
     "failure_step": "Run coverage profiles and coverage gate",
     "failure": "agent-cli/test/integration TestAskRecordsAndReplaysThroughProviderService/stream=true failed because failed to flush captures: HTTP capture has an active response body",
     "owned_path": "agent-cli/test/integration/ask_capture_test.go",
-    "owner": "out-of-scope C12/runtime coverage failure; no C11 implementation path is authorized",
+    "owner": "triggering predecessor rejection; repaired in current C11 head; hosted CI remains unclaimed",
     "go_tests_started": true,
     "ci_claim": "NOT_GREEN; current-head rejection read in full; no waiver",
     "metadata_sha256": "7d6a26ce15623a5c9e99a49a35654749035dc6848399f3350e7a5fe6813b3bbd",
@@ -86,11 +86,11 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-6079ce2/controls.json",
-    "sha256": "d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8",
+    "path": "ctrl-aeef9126/controls.json",
+    "sha256": "52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3",
     "status": "PASS",
-    "cases": 64,
-    "result_groups": 26,
+    "cases": 67,
+    "result_groups": 27,
     "go_invocations": 0,
     "network_invocations": 0,
     "build_invocations": 0,
@@ -103,10 +103,10 @@
   },
   "schema_control_mapping": "schema-control-mapping.md",
   "fresh_focused_recheck": {
-      "checked_at_utc": "2026-09-09T00:36:56Z",
-      "tested_head": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-      "controls_report_sha256": "d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8",
-      "controls": "PASS: 64 cases, 26 result groups, zero Go/network/build invocations",
+      "checked_at_utc": "2026-09-09T01:41:53Z",
+      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324",
+      "controls_report_sha256": "52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3",
+      "controls": "PASS: 67 cases, 27 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files (recursive scripts/hermetic-profile/**/*.py)",
     "timingate": "PASS: GOWORK=off go test . -count=1",
@@ -127,6 +127,17 @@
       "review": 37,
       "reviewed_head": "d31122d2afbb4baa9436e3aad9c1abcfc7c036d2",
       "repair_commit": "e2e1faebe7610c18edea672e493f973fc6981425",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_c11_profile_repair": {
+      "review": 40,
+      "reviewed_head": "b7f70f2f7c877ccb9aea51683ab8980b79946c68",
+      "repair_commit": "aeef9126ae54ea925dabb260818082db8675b324",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_capture_shutdown_repair": {
+      "trigger": "ci-rejection-34294562855",
+      "repair_commit": "aeef9126ae54ea925dabb260818082db8675b324",
       "status": "REPAIRED_AND_CAUSALLY_TESTED"
     },
     "items": [
@@ -156,7 +167,11 @@
       "cohort capture accepts exactly two invocations and rejects repeat 3",
       "hermetic cohort capture requires one complete successful full inventory trial before any Go command",
       "inventory and warm phase commands must be PASS with exit status 0 before analysis or cohort launch",
-      "timeout, exit, signal, spawn-error, and status consistency are validated; timed-out PASS/exit-0 mutations fail closed"
+      "timeout, exit, signal, spawn-error, and status consistency are validated; timed-out PASS/exit-0 mutations fail closed",
+      "hermetic full records must cover every package in the inventoried module",
+      "successful warm test binaries are contained, present, and hash/byte verified",
+      "declared wall_seconds must match the monotonic interval",
+      "streaming capture closes response bodies before Save/Flush and preserves cleanup errors"
     ]
   },
   "focused_regressions": [
@@ -172,11 +187,21 @@
     {
       "command": "git diff --check",
       "status": "PASS"
+    },
+    {
+      "command": "go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/testing ./go-agent-runtime/services/providers/internal/service ./go-agent-runtime/services/session/internal/service ./go-agent-loop/pkg/agentloop -count=1 -timeout 180s",
+      "status": "PASS",
+      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324"
+    },
+    {
+      "command": "go test ./agent-cli/internal/acceptance -run '^TestAskRecordsAndReplaysThroughProviderService$|^TestAskStreamingCaptureJoinsResponseBodyBeforeFlush$' -count=10 -timeout 180s",
+      "status": "PASS",
+      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324"
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "74cd27f8dd7b2889d2f01bb3374b279cafe0ef16e1be36a455a954109c21e96c",
-    "scripts/hermetic-profile/controls.py": "e376551bacb7889c5b0ad0ef40d0c748b2ca565da5e2cd6c3a3198fcf91b8232",
+    "scripts/hermetic-profile/profile.py": "fe740adc0333033bf526a935d9b91e5ff84508bcb15eedbb14adea4a78ab3f75",
+    "scripts/hermetic-profile/controls.py": "cf8800c34306eea85fcacaf0e86e1115661f36cb504f58dfe120a17a70adeb5a",
     "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a"
   },
   "immutable_ci_logs": [

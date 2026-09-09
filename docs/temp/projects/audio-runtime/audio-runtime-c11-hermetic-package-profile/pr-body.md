@@ -15,7 +15,7 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `6079ce29b98e553514c2aeb82e78a762f0131faa`.
+  `aeef9126ae54ea925dabb260818082db8675b324`.
 - The implementation and exact-head controls are committed against that
   candidate; the evidence report is generated from that exact implementation
   SHA and packaged separately. This checkpoint consolidates all phase command records into one
@@ -23,7 +23,11 @@ met.
   display filtering, binds Git/test command identity, enforces warm/full/cohort
   scheduling, and records the old-to-new mapping in `schema-control-mapping.md`.
   It also rejects contradictory timeout/status/exit/signal/spawn declarations
-  before analysis.
+  before analysis. The current repair additionally rejects omitted packages from
+  a hermetic full trial, missing or mismatched successful warm binaries, and
+  wall time forged independently of the monotonic interval. Streaming capture
+  closes the OpenAI response body before the terminal event and the CLI stream
+  before Save/Flush.
 - Integrated `origin/main`: `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -45,11 +49,11 @@ met.
   missing quiet metadata, expired quiet evidence, repeated package terminals,
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
-  records, and stale-analysis replacement. The regenerated
-  The preserved predecessor `ctrl-c11-repair/controls.json` reports 63 cases;
-  the current `ctrl-6079ce2/controls.json` reports 64 declared cases, 26 result
+  records, and stale-analysis replacement. The preserved predecessor
+  `ctrl-c11-repair/controls.json` reports 63 cases;
+  the current `ctrl-aeef9126/controls.json` reports 67 declared cases, 27 result
   groups, and zero Go/network/build invocations; its SHA-256 is
-  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
   source-validation output/identity, aggregate duration overflow, malformed
@@ -57,7 +61,9 @@ met.
   warm-up. The new timed-out/PASS mutation is rejected before aggregation.
   Lifecycle regressions reject cohort repeat 3, failed full trials,
   partial full-trial module coverage, and non-PASS inventory/warm commands
-  before any Go command can start.
+  before any Go command can start. The valid hermetic baseline controls also
+  reject omitted full-inventory packages, deleted warm binaries, and forged
+  wall/monotonic timing.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
   evidence, while the canonical 60-second package-budget policy remains in
   `tools/timingate` and is not duplicated.
@@ -66,10 +72,12 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 64-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `6079ce29` passed the same controls and focused
+  `profile.py --help`, the 67-case control suite, focused capture/provider/
+  recorder/session/agent-loop Go tests, and `git diff --check` pass. The
+  barrier capture/replay pair also passed with `-count=10`.
+- Fresh exact-head recheck from `aeef9126` passed the same controls and focused
   checks; the tracked controls report SHA-256 is
-  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
 
 ## CI rejection disposition
 
@@ -97,15 +105,17 @@ in `ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`. This
 path is outside C11's owned directories; this is not a claim that hosted CI is
 green or that C11 owns a runtime repair.
 
-The latest inspected current-head rejection is run `34294562855`, job
+The latest inspected predecessor rejection is run `34294562855`, job
 `102288251336` (`CI (coverage)`) at head
 `6079ce29b98e553514c2aeb82e78a762f0131faa`. Eight required jobs passed; the
 coverage job failed
 `TestAskRecordsAndReplaysThroughProviderService/stream=true` at
 `agent-cli/test/integration/ask_capture_test.go:58` because capture flush found
 an active HTTP response body. Exact metadata and the 82-line log are retained
-in `ci-rejection-34294562855.json` and `ci-rejection-34294562855.log`. This is
-outside C11's owned directories and is not a C11 repair or green-CI claim.
+in `ci-rejection-34294562855.json` and `ci-rejection-34294562855.log`. That
+rejection supplied the current C11 repair target; the deterministic barrier
+regression now covers the causal ordering. The new candidate is still not a
+green-CI claim.
 
 The canonical review inbox through review attempt 37 named the timed-out/PASS
 process-status mismatch in addition to stale exact-head evidence, cohort repeat
@@ -113,7 +123,7 @@ overrun, failed/partial full-trial admission, non-PASS
 inventory/warm phase commands, unreferenced invalid groups, forged retained Git
 metadata, aggregate duration overflow, incomplete command records, and the
 preceding timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`6079ce29` contains the remaining code repairs, and the current public controls
+`aeef9126` contains the remaining code repairs, and the current public controls
 cover every finding.
 
 ## Handoff

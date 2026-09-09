@@ -7,7 +7,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 ## Latest canonical continuation
 
 The current exact-head implementation checkpoint is
-`6079ce29b98e553514c2aeb82e78a762f0131faa`, rebased in this isolated worktree
+`aeef9126ae54ea925dabb260818082db8675b324`, rebased in this isolated worktree
 onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
 integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
 ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
@@ -28,13 +28,23 @@ and status consistency before aggregation. A timed-out record cannot retain a
 PASS/exit-0 declaration, and timeout classification takes precedence in the
 process-status summary.
 
+The latest repair closes the review-40 defects: hermetic full records must list
+the complete inventoried package set, successful warm test binaries must remain
+contained and match their retained hash/byte metadata, and wall seconds must
+match the monotonic interval. It also repairs streaming capture shutdown by
+closing the OpenAI response body before publishing MESSAGE.END and closing the
+CLI stream before Save/Flush. The barrier-controlled acceptance regression
+proves complete request/response bytes, exactly-once body cleanup,
+credential-free replay equality, no second live transport, and truthful close
+failure handling.
+
 The exact board response is retained in
 `canonical-board-recheck-20260908.json` (SHA-256
 `2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
 current public control report is
-`ctrl-6079ce2/controls.json` (SHA-256
-`d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`): PASS,
-64 cases, 26 result groups, zero Go/network/build invocations. It was generated
+`ctrl-aeef9126/controls.json` (SHA-256
+`52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`): PASS,
+67 cases, 27 result groups, zero Go/network/build invocations. It was generated
 from the exact implementation SHA above; evidence is packaged in a subsequent
 commit so the record does not make a self-referential future-commit claim. Raw retention is
 truthfully false only because the missing-raw-artifact negative control removes
@@ -48,14 +58,15 @@ The post-CI canonical board response is retained in
 `canonical-board-after-ci-20260909.json` (SHA-256
 `30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07`). The
 current task row is `work-task-4`; the task/review rejection inbox contains 10
-rows. The latest inspected current-head CI rejection is run `34294562855`, job
+rows. The latest inspected predecessor CI rejection is run `34294562855`, job
 `102288251336` at head `6079ce29b98e553514c2aeb82e78a762f0131faa`: coverage
 failed `TestAskRecordsAndReplaysThroughProviderService/stream=true` with
 `HTTP capture has an active response body` at
 `agent-cli/test/integration/ask_capture_test.go:58`. Its metadata SHA-256 is
 `7d6a26ce15623a5c9e99a49a35654749035dc6848399f3350e7a5fe6813b3bbd` and log
 SHA-256 is `8f40682f176a630c59b36d625f654b185024a9000d40e06257118fb027d70c10`.
-The failure is outside C11's owned directories and is not a green-CI claim.
+That rejection supplied the current C11 repair target; the new candidate is
+still not a green-CI claim and has not been polled after repair.
 
 ## Required admission and preservation checks
 
@@ -225,12 +236,13 @@ The exact CI coverage rejection inspected before this repair is retained in
   `ci-rejection-34294562855.log`; this is an out-of-scope C12/runtime failure,
   not a C11 repair target or a green-CI claim.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from implementation head `6079ce29` passed: 64 public
-  cases and 26 result groups with zero Go/network/build invocations (tracked
+- Fresh exact-head recheck from implementation head `aeef9126` passed: 67 public
+  cases and 27 result groups with zero Go/network/build invocations (tracked
   report SHA-256
-  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`),
-  profiler help, AST parsing of all three Python files, and
-  `GOWORK=off go test . -count=1` in `tools/timingate`.
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`),
+  profiler help, AST parsing of all three Python files, focused capture/provider/
+  recorder/session/agent-loop Go tests, and `git diff --check`. The barrier
+  capture/replay pair passed with `-count=10`.
 - No broad hermetic/coverage suite was launched on the shared host. No
   isolated/dedicated quiet runner lease was available, and broad current-head
   checks belong to the script CI gate under the handoff.
@@ -255,7 +267,7 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`6079ce29b98e553514c2aeb82e78a762f0131faa`; the current `origin/main`
+`aeef9126ae54ea925dabb260818082db8675b324`; the current `origin/main`
 ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest review-37
 task rejection identified a command record whose `timed_out=true` declaration
 was accepted with PASS/exit 0. The repair adds the command-status consistency

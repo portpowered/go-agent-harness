@@ -24,7 +24,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated the latest `origin/main`:
   `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `6079ce29b98e553514c2aeb82e78a762f0131faa`.
+  `aeef9126ae54ea925dabb260818082db8675b324`.
 - The implementation and exact-head control evidence are committed against
   that candidate. The evidence report is generated from that exact candidate
   SHA and packaged separately in a later evidence commit so the record does not
@@ -34,15 +34,21 @@ not a waiver, and not a claim that the under-three-minute target is met.
   command identity, enforces warm/full/cohort scheduling, and records the
   old-to-new mapping in `schema-control-mapping.md`. It also rejects
   contradictory timeout/status/exit/signal/spawn declarations before analysis.
+  The repair also verifies that every hermetic full record covers the complete
+  inventoried module package list, that successful warm binaries still exist
+  with matching hashes/bytes, and that declared wall time matches the captured
+  monotonic interval. The streaming capture repair closes OpenAI response
+  bodies before publishing the terminal event and explicitly closes the CLI
+  stream before Save/Flush.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 - Preserved baseline ancestor:
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 - Fresh current-head focused evidence is
-  `ctrl-6079ce2/controls.json`: 64 declared cases, 26 result groups, zero
+  `ctrl-aeef9126/controls.json`: 67 declared cases, 27 result groups, zero
   Go/network/build invocations, SHA-256
-  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
 - The post-CI canonical board is
   `canonical-board-after-ci-20260909.json` (SHA-256
   `30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07`).
@@ -92,8 +98,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `74cd27f8dd7b2889d2f01bb3374b279cafe0ef16e1be36a455a954109c21e96c`,
-`controls.py` `e376551bacb7889c5b0ad0ef40d0c748b2ca565da5e2cd6c3a3198fcf91b8232`,
+`profile.py` `fe740adc0333033bf526a935d9b91e5ff84508bcb15eedbb14adea4a78ab3f75`,
+`controls.py` `cf8800c34306eea85fcacaf0e86e1115661f36cb504f58dfe120a17a70adeb5a`,
 and `fixtures/emit_jsonl.py`
 `0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a`.
 
@@ -101,10 +107,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-6079ce2`:
-  PASS; 64 declared cases and 26 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-aeef9126`:
+  PASS; 67 declared cases and 27 result groups, zero Go, network, or build
   invocations. The report hash is
-  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -116,7 +122,10 @@ Focused evidence:
   warm summary, and a hermetic capture that skips the required warm phase. The
   new timed-out/PASS status mutation is rejected as INVALID before aggregation.
   lifecycle controls also reject `--cohort --repeat 3`, failed full trials,
-  and partial full-trial module coverage before any Go command can start.
+  and partial full-trial module coverage before any Go command can start. The
+  hermetic analyzer baseline is valid before each new tamper, and the new
+  public regressions reject omitted full-inventory packages, deleted warm
+  binaries, and forged wall/monotonic timing.
 - Review repair controls additionally prove that cross-package test activity is
   not subtest overlap, `--allow-heavy` reaches invalid shared-host validation,
   absolute and traversal stdout/stderr/quiet-evidence redirects are rejected, and
@@ -132,11 +141,22 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `6079ce29` passed: 64 public cases/26
-  result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`),
-  `profile.py --help`, recursive AST parsing of all three Python files, and
-  `GOWORK=off go test . -count=1` in `tools/timingate`.
+- Focused causal Go regressions passed at `aeef9126`:
+  `go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai
+  ./go-llm-gateway/pkg/testing
+  ./go-agent-runtime/services/providers/internal/service
+  ./go-agent-runtime/services/session/internal/service
+  ./go-agent-loop/pkg/agentloop -count=1 -timeout 180s`.
+  This includes streaming/non-streaming record/replay, the barrier-controlled
+  response-body join and exactly-once cleanup, provider close-error truthfulness,
+  recorder close/read failures, cancellation cleanup, and session lifecycle
+  cleanup. The barrier regression was repeated with `-count=10` for the two
+  capture/replay tests.
+- Fresh exact-head recheck from `aeef9126` passed: 67 public cases/27 result
+  groups with zero Go/network/build invocations (tracked report SHA-256
+  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`),
+  Python AST parsing, profiler help, the focused Go packages above, and
+  `git diff --check`.
 
 The latest prior current-head CI rejection was inspected in full from run
 `34231535549`, job `102078631796` (`CI (hermetic)`) at pre-C12 submitted head
@@ -164,7 +184,7 @@ directories, so no runtime repair is authorized here. The new C11 checkpoint
 changes the script-owned surface and is being submitted to script CI without a
 waiver; this is not a claim that hosted CI is green.
 
-The latest inspected current-head rejection is run `34294562855`, job
+The latest inspected predecessor rejection is run `34294562855`, job
 `102288251336` (`CI (coverage)`) at submitted head
 `6079ce29b98e553514c2aeb82e78a762f0131faa`. Eight required jobs passed; the
 coverage job failed the existing
@@ -173,10 +193,10 @@ coverage job failed the existing
 `failed to flush captures: HTTP capture has an active response body`. The exact
 metadata and 82-line log are retained in
 `ci-rejection-34294562855.json` and `ci-rejection-34294562855.log`, with
-SHA-256 values recorded in `assessment.json`. This is an out-of-scope C12
-runtime/coverage path; no C11 repair is authorized. The candidate remains
-NOT_GREEN and is handed to the script-owned gate after this evidence
-checkpoint.
+SHA-256 values recorded in `assessment.json`. That rejection supplied the
+current C11 repair target; the causal fix and deterministic acceptance
+regressions are recorded above. The new candidate remains NOT_GREEN until the
+script-owned gate runs.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -256,9 +276,9 @@ protocol and honest fallback rather than restructuring suites.
 
 ## Residual handoff
 
-The current C11 implementation and exact-head controls remain pinned to
-`6079ce29b98e553514c2aeb82e78a762f0131faa`; the tracked
-`ctrl-6079ce2/controls.json` report is recorded above. The canonical
+The current C11 implementation and exact-head controls are pinned to
+`aeef9126ae54ea925dabb260818082db8675b324`; the tracked
+`ctrl-aeef9126/controls.json` report is recorded above. The canonical
 review findings through review 37 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, stale head/evidence references, and
