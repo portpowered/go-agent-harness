@@ -1,0 +1,147 @@
+{
+  "case": "characterize",
+  "consumer": "docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
+  "execution": {
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c19-bounded-conversation-summary/docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
+      "--case",
+      "characterize",
+      "--output",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-pycwfm6o/characterize.json"
+    ],
+    "report": {
+      "case": "characterize",
+      "clean_shutdown": true,
+      "finalization": {
+        "heap_after_finalize_bytes": 768448,
+        "heap_live_bytes": 768448,
+        "shutdown_elapsed_ms": 30,
+        "shutdown_total_alloc_bytes": 39625352,
+        "stable": true
+      },
+      "lock_released": true,
+      "measurements": [
+        {
+          "drain_wait_ms": 100,
+          "events": 64,
+          "finalization_stable": true,
+          "heap_live_bytes": 478760,
+          "heap_objects": 1420,
+          "lock_released": true,
+          "payload_bytes": 10992,
+          "shutdown_alloc_bytes": 4132832,
+          "shutdown_elapsed_ms": 18,
+          "shutdown_heap_bytes": 512336,
+          "turns": 16
+        },
+        {
+          "drain_wait_ms": 300,
+          "events": 256,
+          "finalization_stable": true,
+          "heap_live_bytes": 534848,
+          "heap_objects": 2091,
+          "lock_released": true,
+          "payload_bytes": 44208,
+          "shutdown_alloc_bytes": 8796944,
+          "shutdown_elapsed_ms": 23,
+          "shutdown_heap_bytes": 540280,
+          "turns": 64
+        },
+        {
+          "drain_wait_ms": 500,
+          "events": 512,
+          "finalization_stable": true,
+          "heap_live_bytes": 576104,
+          "heap_objects": 2484,
+          "lock_released": true,
+          "payload_bytes": 88720,
+          "shutdown_alloc_bytes": 14971704,
+          "shutdown_elapsed_ms": 22,
+          "shutdown_heap_bytes": 576104,
+          "turns": 128
+        },
+        {
+          "drain_wait_ms": 900,
+          "events": 1024,
+          "finalization_stable": true,
+          "heap_live_bytes": 641384,
+          "heap_objects": 3255,
+          "lock_released": true,
+          "payload_bytes": 178320,
+          "shutdown_alloc_bytes": 24196360,
+          "shutdown_elapsed_ms": 23,
+          "shutdown_heap_bytes": 646720,
+          "turns": 256
+        },
+        {
+          "drain_wait_ms": 1700,
+          "events": 2048,
+          "finalization_stable": true,
+          "heap_live_bytes": 768448,
+          "heap_objects": 4802,
+          "lock_released": true,
+          "payload_bytes": 357520,
+          "shutdown_alloc_bytes": 39625352,
+          "shutdown_elapsed_ms": 30,
+          "shutdown_heap_bytes": 768448,
+          "turns": 512
+        }
+      ],
+      "no_recording_control": [
+        {
+          "events": 64,
+          "heap_live_bytes": 361096,
+          "heap_objects": 829,
+          "payload_bytes": 10992,
+          "turns": 16
+        },
+        {
+          "events": 256,
+          "heap_live_bytes": 436712,
+          "heap_objects": 1677,
+          "payload_bytes": 44208,
+          "turns": 64
+        },
+        {
+          "events": 512,
+          "heap_live_bytes": 442512,
+          "heap_objects": 1687,
+          "payload_bytes": 88720,
+          "turns": 128
+        },
+        {
+          "events": 1024,
+          "heap_live_bytes": 443360,
+          "heap_objects": 1690,
+          "payload_bytes": 178320,
+          "turns": 256
+        },
+        {
+          "events": 2048,
+          "heap_live_bytes": 449288,
+          "heap_objects": 1699,
+          "payload_bytes": 357520,
+          "turns": 512
+        }
+      ],
+      "queue": {
+        "capacity_bytes": 16777216,
+        "drain_wait_ms": 3500,
+        "events": 3904,
+        "payload_bytes": 679760
+      },
+      "session_log_bytes": 0,
+      "session_log_turns": 0,
+      "source": "daf1c3a2d91cdfc08bb596f5861d483fb1e69509; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+      "summary_budget": {
+        "max_bytes": 2097152,
+        "max_items": 4096,
+        "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+      }
+    },
+    "returncode": 0,
+    "stderr": "",
+    "stdout": ""
+  },
+  "passed": true
+}

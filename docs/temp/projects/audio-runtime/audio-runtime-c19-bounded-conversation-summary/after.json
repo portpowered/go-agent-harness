@@ -1,0 +1,130 @@
+{
+  "case": "characterize",
+  "source": "daf1c3a2d91cdfc08bb596f5861d483fb1e69509; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "summary_budget": {
+    "max_bytes": 2097152,
+    "max_items": 4096,
+    "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+  },
+  "queue": {
+    "capacity_bytes": 16777216,
+    "drain_wait_ms": 3500,
+    "events": 3904,
+    "payload_bytes": 679760
+  },
+  "finalization": {
+    "stable": true,
+    "heap_live_bytes": 767512,
+    "heap_after_finalize_bytes": 767624,
+    "shutdown_total_alloc_bytes": 39624864,
+    "shutdown_elapsed_ms": 27
+  },
+  "measurements": [
+    {
+      "turns": 16,
+      "events": 64,
+      "payload_bytes": 10992,
+      "heap_live_bytes": 479104,
+      "heap_objects": 1421,
+      "shutdown_heap_bytes": 506528,
+      "shutdown_alloc_bytes": 4127024,
+      "shutdown_elapsed_ms": 17,
+      "drain_wait_ms": 100,
+      "finalization_stable": true,
+      "lock_released": true
+    },
+    {
+      "turns": 64,
+      "events": 256,
+      "payload_bytes": 44208,
+      "heap_live_bytes": 534488,
+      "heap_objects": 2091,
+      "shutdown_heap_bytes": 545128,
+      "shutdown_alloc_bytes": 8800224,
+      "shutdown_elapsed_ms": 25,
+      "drain_wait_ms": 300,
+      "finalization_stable": true,
+      "lock_released": true
+    },
+    {
+      "turns": 128,
+      "events": 512,
+      "payload_bytes": 88720,
+      "heap_live_bytes": 580472,
+      "heap_objects": 2488,
+      "shutdown_heap_bytes": 580472,
+      "shutdown_alloc_bytes": 14974672,
+      "shutdown_elapsed_ms": 22,
+      "drain_wait_ms": 500,
+      "finalization_stable": true,
+      "lock_released": true
+    },
+    {
+      "turns": 256,
+      "events": 1024,
+      "payload_bytes": 178320,
+      "heap_live_bytes": 645640,
+      "heap_objects": 3258,
+      "shutdown_heap_bytes": 645688,
+      "shutdown_alloc_bytes": 24193976,
+      "shutdown_elapsed_ms": 27,
+      "drain_wait_ms": 900,
+      "finalization_stable": true,
+      "lock_released": true
+    },
+    {
+      "turns": 512,
+      "events": 2048,
+      "payload_bytes": 357520,
+      "heap_live_bytes": 767512,
+      "heap_objects": 4799,
+      "shutdown_heap_bytes": 767624,
+      "shutdown_alloc_bytes": 39624864,
+      "shutdown_elapsed_ms": 25,
+      "drain_wait_ms": 1700,
+      "finalization_stable": true,
+      "lock_released": true
+    }
+  ],
+  "no_recording_control": [
+    {
+      "turns": 16,
+      "events": 64,
+      "payload_bytes": 10992,
+      "heap_live_bytes": 366136,
+      "heap_objects": 833
+    },
+    {
+      "turns": 64,
+      "events": 256,
+      "payload_bytes": 44208,
+      "heap_live_bytes": 436256,
+      "heap_objects": 1676
+    },
+    {
+      "turns": 128,
+      "events": 512,
+      "payload_bytes": 88720,
+      "heap_live_bytes": 447360,
+      "heap_objects": 1692
+    },
+    {
+      "turns": 256,
+      "events": 1024,
+      "payload_bytes": 178320,
+      "heap_live_bytes": 447712,
+      "heap_objects": 1693
+    },
+    {
+      "turns": 512,
+      "events": 2048,
+      "payload_bytes": 357520,
+      "heap_live_bytes": 448256,
+      "heap_objects": 1696
+    }
+  ],
+  "clean_shutdown": true,
+  "lock_released": true,
+  "session_log_bytes": 0,
+  "session_log_turns": 0
+}
