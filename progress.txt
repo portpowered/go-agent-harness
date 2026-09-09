@@ -569,3 +569,47 @@ C18 current review repair and gate checkpoint
   architecture gate and resubmit this same task. Until that prerequisite is
   supplied, this task must escalate as `FAILED`, not use a waiver or second
   project.
+
+C18 authorized manifest repair and handoff checkpoint
+
+- Re-read the canonical board and matched task `work-task-24` plus concluded
+  review `work-review-30`; the latest inbox finding remains the three repairs
+  already present in `087d30c5` and `0df3e912`. Verified admission with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c18-public-strict-replay`, which returned `admitted`; the PRD
+  branch name exactly matches this isolated worktree. Preserved the running
+  host checkout, predecessor commits, and required ancestry.
+- Applied only the two corrections authorized by
+  `meta-scope-decision.md`: removed exactly 14 stale baseline entries for the
+  deleted CLI replay package and added `cmd` only to
+  `example.com/agent-runtime-consumer` `allowed_top_level`. The machine-readable
+  before/after inventory is
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/manifest-scope-delta.json`;
+  it records zero baseline additions/value changes, unchanged retained-entry
+  and policy-other-field hashes, and no production-limit or mutable-global
+  exception changes.
+- Current local gate evidence: `make architecture-size-check` passes with
+  `182` packages, `1869` files and `27180` functions; architecture-gate tests,
+  `make wire-check` (no generated drift), `make coverage-registration` (`172`
+  workspace packages), focused replay vet, and `git diff --check` pass. Runtime
+  replay normal/race each pass `77` tests in four packages; scoped CLI replay
+  normal/race each pass `114` agent-runtime replay tests and `32` transport
+  replay tests; independent `GOWORK=off` embedding tests pass normal/race.
+- `COUNT=1 bash scripts/test-session-ci-regressions.sh all` passes in normal,
+  coverage and race modes with expected mismatch/PCM/transcript negative
+  diagnostics. The separately built consumer binary
+  `/tmp/audio-runtime-c18-strict-replay-213835` passes both relative and
+  absolute fixture paths, returns the recorded continuation, `16` wire events,
+  `1` tool call and `Device execution: false`, and has SHA256
+  `f40ff95030013e3bcf6f6e8d23a8efc1fb57fde14a737db2c5359a64eeef7b8b`.
+- A broad unrelated `agentruntime` race run had `1050` passes and one failure:
+  `TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict`
+  timed out at its fixed one-second validator deadline; the same test passes
+  normally, while the scoped replay race controls pass. This is outside C18
+  owned paths and is not claimed repaired. Historical slow-device rejection
+  `34323462820` remains preserved and non-waived.
+- Next action: add the owned scope inventory and manifest repair, commit and
+  push the same admitted branch, update PR #410, and return `ACCEPTED` to the
+  script-owned current-head CI gate without polling. Retain this task for any
+  exact-head CI/review rejection and repair it with `CONTINUE`; do not claim CI,
+  merge, vertical probe or project acceptance.
