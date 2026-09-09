@@ -42,5 +42,9 @@ Exact current-head refresh
 - The hosted test46/provider_burst snapshot timeout remains the exact C20-owned failure from run34397773527/job102621627290. No C25 repair or CI-green claim is made; after this evidence checkpoint is pushed, the next action is C20 reviewed repair/main integration, then same-task C25 refresh and script-gate submission.
 
 Current-head verifier refresh
-- At candidate source checkpoint `dab5c3731b8aa23b3e71bf0e067dab4c3d4d9961`, reran `verify.py --mode all`: ACCEPTED in `13.442s` with `19` bounded commands, no unexpected failure, source ancestry/path checks clean, and no surviving child process. The generated diagnosis/provenance now identify the exact pushed head; the 3c2aea55 and 0eb46135 evidence checkpoints remain preserved.
+- At candidate source checkpoint `dab5c3731b8aa23b3e71bf0e067dab4c3d4d9961`, reran `verify.py --mode all`: ACCEPTED in `13.442s` with `19` bounded commands, no unexpected failure, source ancestry/path checks clean, and no surviving child process. The 3c2aea55 and 0eb46135 evidence checkpoints remain preserved.
 - This refresh changes only owned evidence metadata and generated verifier outputs. The source-only legacy-room gap, positive/negative dependency controls, focused causal regressions, and C20 ownership of the hosted snapshot timeout are unchanged. Next action remains C20 reviewed repair/main integration, then a same-task C25 refresh and script-gate submission; no CI-green claim is made.
+
+Exact-head provenance refresh
+- After the evidence checkpoint commit `ff00c0375a25a98c5d9398c8ffb5e26ccd70151`, reran `verify.py --mode all`: ACCEPTED in `10.059s` with `19` bounded commands, clean source/path checks, and no surviving child process. Generated diagnosis/provenance now identify `ff00c037`; the prior dab5c373 evidence remains preserved.
+- This is an exact-head evidence successor only; no production or shared path changed, and the hosted C20-owned snapshot timeout remains unresolved and unclaimed as CI green. Update PR417 with this head, then hand the same task to script CI without polling.
