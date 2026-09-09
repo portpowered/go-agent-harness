@@ -1270,3 +1270,46 @@ C22 Test6 current-head CI rejection repair checkpoint 2026-09-09
 - Repair commit `370c2ba80b3d13c08459b006dbcb858385055981` selects existing recorded replay timing and adds a bounded 100 ms handshake-to-first-turn fixture interval. Provider event payload/order, audio fixture hashes, exact resampled PCM, discard/accepted assertions, negative controls and original 5-second context are unchanged.
 - Focused proof is green: Test6 normal `100/100`, hermetic `CGO_ENABLED=0 -tags=nomicrophone` `20/20`, race `30/30`; duplex commit-control hermetic `5/5` and race once; neighboring OpenAI server-VAD/EAC8 replay tests; config normal/nomicrophone/race tests; and focused `go vet -tags=nomicrophone` all pass. The earlier malformed vet invocation (tag placed after package arguments) is not evidence; the corrected command passes.
 - Current state is a repaired implementation candidate only. No script CI success, independent review, guarded merge, post-merge vertical validation, physical/acoustic evidence or project acceptance is claimed. Next action: push the same admitted task head, update PR #413 with exact head/base/rejection/repair evidence, and return `ACCEPTED` to the script-owned current-head CI gate without polling it; retain ownership for any exact rejection.
+
+C18 current-main integration and clock repair checkpoint
+
+- Admission remains verified for `audio-runtime-c18-public-strict-replay` as
+  `work-task-24`; the isolated branch exactly matches `prd.json.branchName`.
+  Fetched `origin/main=5d5afcb14d7b269378020809f5a2418c499ac94d` and integrated
+  it with merge `2db7a124`, preserving the incoming C22 files and both C18/C22
+  ledger records; `fe7c844` removes the final merge-marker residue. The
+  running host checkout, predecessor worktrees and required startup,
+  baseline and planning-main ancestors remain untouched.
+- The complete canonical C18 inbox was reread. Review30/37/40/42/43 repairs
+  remain present and mapped to `087d30c5`, `0df3e912`, `02478f63`, `e2e7bbff`
+  and `cf663a66`; review56's only new requirement was current-main integration
+  and preserving the `progress.txt` conflict. The authorized architecture
+  scope delta remains exactly fourteen stale baseline-entry removals plus the
+  external consumer `cmd` layout addition.
+- Coordination additionally assigns `go-audio/pkg/clock/` to C18. Repair
+  `71b2c0f` makes the scheduler deadline context wrap `context.WithCancelCause`
+  so the standard parent-cancellation fast path closes `Done` synchronously,
+  preserves custom causes and virtual `DeadlineExceeded`, and stops the
+  deterministic timer through the single child cancellation owner. New
+  `context_test.go` covers immediate parent closure, cause preservation and
+  timer-heap cleanup; no deadline, timeout, assertion, baseline or policy was
+  weakened or changed.
+- Causal validation is green: the full clock package, exact parent control
+  `100/100` normal and `50/50` race, strict replay normal/race (`84` tests in
+  four packages each), public embedding strict controls normal/race, CLI
+  replay/integration normal/race, focused vet, Wire regeneration, and
+  architecture-size (`182` packages, `1871` files, `27219` functions). The
+  five fresh public verifier cases also passed at the pre-ledger source
+  checkpoint: external `2/2`, strict `5/5`, provider `7/7`, interruption
+  `4/4`, ask `2/2`; rebuilt final-source artifacts are still required below.
+- The accumulated session matrix exited `1` only in coverage before mutation
+  for the C22-owned `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl`
+  because harness B reported `InputEOF:false`; all C18 replay/tool controls
+  passed. The exact outside-scope control passed `20/20` under
+  `-tags=nomicrophone` with the original deadlines. This is retained as
+  non-waived C22 evidence; no C22 path was edited.
+- Next action: rebuild yui and the independent `GOWORK=off` consumer from the
+  final evidence checkpoint, rerun all five bounded public cases, append exact
+  hashes/results, push the same branch, update PR410, and return `ACCEPTED` to
+  script-owned CI without polling. No CI/review/merge/vertical/project
+  acceptance is claimed.
