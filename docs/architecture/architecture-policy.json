@@ -98,8 +98,7 @@
     {
       "module": "example.com/agent-runtime-consumer",
       "allowed_top_level": [
-        ".",
-        "cmd"
+        "."
       ]
     }
   ],
@@ -269,42 +268,6 @@
       "file": "services/providers/models.go",
       "name": "ErrModelCatalogRequired",
       "reason": "public sentinel error identity distinguishes missing composition from unsupported user models"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrBundleIncomplete",
-      "reason": "public replay admission sentinel distinguishes incomplete evidence bundles"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrBundleMismatch",
-      "reason": "public replay admission sentinel distinguishes evidence divergence"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrDeterministicClockRequired",
-      "reason": "public replay admission sentinel distinguishes missing deterministic scheduling"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrRuntimeFactoryRequired",
-      "reason": "public replay composition sentinel distinguishes missing runtime construction"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrToolFailure",
-      "reason": "public replay tool sentinel preserves recorded tool failure identity"
-    },
-    {
-      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
-      "file": "services/replay/service.go",
-      "name": "ErrToolMismatch",
-      "reason": "public replay tool sentinel distinguishes an unrecorded or duplicate call"
     },
     {
       "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file",
