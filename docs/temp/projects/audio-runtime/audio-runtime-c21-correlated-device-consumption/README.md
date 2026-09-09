@@ -251,3 +251,28 @@ guarded merge, post-merge validation and project acceptance are not claimed.
 Next action is to push the same task head, update PR #414 with this exact
 repair evidence, and return `ACCEPTED` to the script-owned CI gate without
 polling it.
+
+## Mixed-rate interruption repair checkpoint
+
+The accumulated race matrix found an exact-boundary interruption defect in the
+gateway runtime: an incomplete response ending at the consumed device cursor
+could fall back to a zero-length identity span, and a racing continuation could
+prune its already-heard prefix. The repair is in the owned runtime only and
+adds `TestC21ConsumptionInterruptionAtIncompleteSpanBoundary`; supported
+zero-sample cancellation boundaries also remain visible as logical discard
+events.
+
+The new regression passed 50 normal and 20 race repetitions, the original
+mixed-rate agent-runtime regression passed 50 race repetitions, and the
+runtime/device, RTC/room, duplex, vet and diff gates passed. Fresh
+`verify.py --mode all` run
+`runs/verify-20260909T211732Z-94752` returned `ACCEPTED` from source
+`0bbd8ef087aa2c68bcaaa01d7d38d9b1d908097b`, preserving paused-device samples
+`0`, audio-tool PCM `4800` bytes, interruption PCM `3840` bytes and the
+`2400`-byte healthy tail hash from the preceding evidence.
+
+This is still a handoff candidate: CI, review, merge, post-merge validation
+and project acceptance are external. The separate full integration
+`provider_burst` failure remains C20-owned and was not changed. Next action is
+to push the same task head, update PR #414, submit to the script-owned CI gate
+and return `ACCEPTED` without polling.
