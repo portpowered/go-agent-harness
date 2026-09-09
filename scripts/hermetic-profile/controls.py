@@ -1,0 +1,2481 @@
+#!/usr/bin/env python3
+"""Bounded behavioral controls for the public hermetic profiler entry point.
+
+Controls invoke profile.py as a child process and inspect its retained artifacts.
+They intentionally do not import implementation helpers and never invoke Go.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as _datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+from typing import Any
+
+
+PROFILE = Path(__file__).resolve().with_name("profile.py")
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "emit_jsonl.py"
+SCHEMA = "c11-hermetic-profile-manifest-v1"
+QUIET_SCHEMA = "c11-quiet-evidence-v1"
+HERMETIC_MODULES = (
+    "agent-cli",
+    "go-agent-loop",
+    "go-llm-gateway",
+    "go-audio",
+    "go-device-gateway",
+    "go-agent-runtime",
+)
+
+
+class ControlError(Exception):
+    """A control assertion or child-process failure."""
+
+
+def utc_now() -> str:
+    return _datetime.datetime.now(_datetime.timezone.utc).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_child(
+    argv: list[str],
+    *,
+    cwd: Path,
+    output_dir: Path,
+    name: str,
+    env: dict[str, str] | None = None,
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic_ns()
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=str(cwd),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        timed_out = False
+    except subprocess.TimeoutExpired as exc:
+        completed = None
+        timed_out = True
+        stdout = exc.output if isinstance(exc.output, bytes) else b""
+        stderr = exc.stderr if isinstance(exc.stderr, bytes) else b""
+    else:
+        stdout = completed.stdout
+        stderr = completed.stderr
+    ended = time.monotonic_ns()
+    stdout_path = output_dir / f"{name}.stdout"
+    stderr_path = output_dir / f"{name}.stderr"
+    stdout_path.write_bytes(stdout)
+    stderr_path.write_bytes(stderr)
+    return {
+        "argv": argv,
+        "cwd": str(cwd),
+        "exit_status": None if completed is None else completed.returncode,
+        "timed_out": timed_out,
+        "wall_seconds": (ended - started) / 1_000_000_000.0,
+        "stdout_path": str(stdout_path),
+        "stdout_sha256": sha256_file(stdout_path),
+        "stderr_path": str(stderr_path),
+        "stderr_sha256": sha256_file(stderr_path),
+        "stdout": stdout.decode("utf-8", errors="replace"),
+        "stderr": stderr.decode("utf-8", errors="replace"),
+    }
+
+
+def quiet_evidence(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "schema": QUIET_SCHEMA,
+            "valid": True,
+            "isolation": "synthetic-control",
+            "captured_at_utc": utc_now(),
+            "valid_until_utc": (
+                _datetime.datetime.now(_datetime.timezone.utc)
+                + _datetime.timedelta(minutes=10)
+            ).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "runner": {
+                "os": "synthetic",
+                "architecture": "synthetic",
+                "cpu": "synthetic",
+                "go_version": "not-used",
+            },
+            "before": {"active_work": [], "processes": [], "load": "synthetic"},
+            "after": {"active_work": [], "processes": [], "load": "synthetic"},
+        },
+    )
+
+
+def synthetic_manifest(
+    case_dir: Path,
+    scenario: str,
+    packages: list[dict[str, Any]],
+    *,
+    source_repo: Path | None = None,
+    source_sha: str | None = None,
+    source_dirty_paths: list[str] | None = None,
+) -> tuple[Path, Path]:
+    root = case_dir / "run"
+    root.mkdir(parents=True, exist_ok=True)
+    quiet = root / "quiet-evidence.json"
+    quiet_evidence(quiet)
+    manifest = {
+        "schema": SCHEMA,
+        "project": "audio-runtime",
+        "work": "audio-runtime-c11-hermetic-package-profile-controls",
+        "mode": "synthetic",
+        "created_at_utc": utc_now(),
+        "repo": str(case_dir),
+        "source_sha": source_sha or "synthetic-control-source",
+        "source_dirty_paths": source_dirty_paths or [],
+        "runner": {
+            "os": "synthetic",
+            "architecture": "synthetic",
+            "cpu": "synthetic",
+            "go_version": "not-used",
+        },
+        "go": {"executable": sys.executable, "version": "not-used", "env": {}},
+        "flags": {
+            "cgo_enabled": "0",
+            "tags": ["nomicrophone"],
+            "count": 1,
+            "gomaxprocs": 1,
+            "go_test_p": 1,
+            "general_timeout_seconds": 5,
+            "agent_cli_timeout_seconds": 5,
+        },
+        "cache_paths": {
+            "root": str((root / "cache").resolve()),
+            "gocache": str((root / "cache" / "gocache").resolve()),
+            "gomodcache": str((root / "cache" / "gomodcache").resolve()),
+        },
+        "paths": {"manifest": str((root / "manifest.json").resolve())},
+        "inventory_status": "PASS",
+        "metadata_command_ids": [],
+        "inventory_command_ids": [],
+        "commands": [],
+        "modules": [
+            {
+                "name": "synthetic",
+                "path": str(case_dir.resolve()),
+                "relative": ".",
+                "packages": packages,
+                "package_count": len(packages),
+                "test_package_count": sum(
+                    1 for package in packages if package.get("has_tests")
+                ),
+                "no_test_package_count": sum(
+                    1 for package in packages if not package.get("has_tests")
+                ),
+                "command": [
+                    sys.executable,
+                    str(FIXTURE),
+                    "--scenario",
+                    scenario,
+                    "--delay",
+                    "0.005",
+                ],
+            }
+        ],
+        "warm": {"status": "NOT_RUN", "command_ids": [], "test_binaries": []},
+        "measurement_status": "UNMEASURED",
+    }
+    if source_repo is not None:
+        manifest["source_repo"] = str(source_repo.resolve())
+    manifest_path = root / "manifest.json"
+    write_json(manifest_path, manifest)
+    return manifest_path, quiet
+
+
+def hermetic_lifecycle_manifest(
+    case_dir: Path,
+    *,
+    package_modules: set[str],
+    full_records: list[dict[str, Any]],
+) -> tuple[Path, Path]:
+    """Build a minimal hermetic-shaped manifest that must fail before Go runs."""
+
+    root = case_dir / "run"
+    root.mkdir(parents=True, exist_ok=True)
+    quiet = root / "quiet-evidence.json"
+    write_json(
+        quiet,
+        {
+            "schema": QUIET_SCHEMA,
+            "valid": True,
+            "isolation": "dedicated",
+            "captured_at_utc": utc_now(),
+            "valid_until_utc": (
+                _datetime.datetime.now(_datetime.timezone.utc)
+                + _datetime.timedelta(minutes=10)
+            ).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "runner": {
+                "os": "synthetic-dedicated",
+                "architecture": "synthetic",
+                "cpu": "synthetic",
+                "go_version": "not-used",
+            },
+            "before": {"active_work": [], "processes": [], "load": "synthetic"},
+            "after": {"active_work": [], "processes": [], "load": "synthetic"},
+        },
+    )
+    inventory_id = "inventory-agent-cli"
+    warm_id = "warm-download-agent-cli"
+    phase_records = [
+        {
+            "record_id": inventory_id,
+            "phase": "inventory",
+            "status": "PASS",
+            "exit_status": 0,
+            "timed_out": False,
+            "spawn_error": None,
+        },
+        {
+            "record_id": warm_id,
+            "phase": "warm",
+            "status": "PASS",
+            "exit_status": 0,
+            "timed_out": False,
+            "spawn_error": None,
+        },
+    ]
+    modules = []
+    for name in HERMETIC_MODULES:
+        packages = []
+        if name in package_modules:
+            packages = [
+                {
+                    "import_path": f"example/{name}",
+                    "package_arg": ".",
+                    "has_tests": True,
+                }
+            ]
+        modules.append(
+            {
+                "name": name,
+                "path": str(case_dir.resolve()),
+                "relative": name,
+                "packages": packages,
+            }
+        )
+    manifest = {
+        "schema": SCHEMA,
+        "project": "audio-runtime",
+        "work": "audio-runtime-c11-hermetic-package-profile-controls",
+        "mode": "hermetic",
+        "created_at_utc": utc_now(),
+        "repo": str(case_dir.resolve()),
+        "source_sha": "synthetic-control-source",
+        "source_dirty_paths": [],
+        "runner": {
+            "os": "synthetic-dedicated",
+            "architecture": "synthetic",
+            "cpu": "synthetic",
+            "go_version": "not-used",
+        },
+        "go": {"executable": sys.executable, "version": "not-used", "env": {}},
+        "flags": {
+            "cgo_enabled": "0",
+            "tags": ["nomicrophone"],
+            "count": 1,
+            "gomaxprocs": 1,
+            "go_test_p": 1,
+            "general_timeout_seconds": 5,
+            "agent_cli_timeout_seconds": 5,
+        },
+        "cache_paths": {
+            "root": str((root / "cache").resolve()),
+            "gocache": str((root / "cache" / "gocache").resolve()),
+            "gomodcache": str((root / "cache" / "gomodcache").resolve()),
+        },
+        "paths": {"manifest": str((root / "manifest.json").resolve())},
+        "inventory_status": "PASS",
+        "metadata_command_ids": [],
+        "inventory_command_ids": [inventory_id],
+        "commands": phase_records + full_records,
+        "modules": modules,
+        "warm": {
+            "status": "PASS",
+            "command_ids": [warm_id],
+            "test_binaries": [],
+        },
+        "measurement_status": "INVENTORIED",
+    }
+    manifest_path = root / "manifest.json"
+    write_json(manifest_path, manifest)
+    return manifest_path, quiet
+
+
+def hermetic_analyzer_fixture(case_dir: Path) -> tuple[Path, Path, Path]:
+    """Build a complete offline hermetic capture for analyzer tamper controls."""
+
+    root = case_dir / "run"
+    root.mkdir(parents=True, exist_ok=True)
+    repo = str(case_dir.resolve())
+    source_sha = "a" * 40
+    go = sys.executable
+    cache_root = root / "cache"
+    cache_paths = {
+        "root": str(cache_root.resolve()),
+        "gocache": str((cache_root / "gocache").resolve()),
+        "gomodcache": str((cache_root / "gomodcache").resolve()),
+    }
+    env = {
+        "CGO_ENABLED": "0",
+        "GOMAXPROCS": "1",
+        "GOCACHE": cache_paths["gocache"],
+        "GOMODCACHE": cache_paths["gomodcache"],
+    }
+    captured = _datetime.datetime.now(_datetime.timezone.utc)
+    quiet_path = root / "quiet-evidence.json"
+    quiet_value = {
+        "schema": QUIET_SCHEMA,
+        "valid": True,
+        "isolation": "dedicated",
+        "captured_at_utc": captured.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "valid_until_utc": (captured + _datetime.timedelta(minutes=10)).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "runner": {
+            "os": "synthetic-dedicated",
+            "architecture": "synthetic",
+            "cpu": "synthetic",
+            "go_version": "not-used",
+        },
+        "before": {"active_work": [], "processes": [], "load": "synthetic"},
+        "after": {"active_work": [], "processes": [], "load": "synthetic"},
+    }
+    write_json(quiet_path, quiet_value)
+    quiet_ref = {
+        "active_work": [],
+        "captured_at_utc": quiet_value["captured_at_utc"],
+        "isolation": quiet_value["isolation"],
+        "path": str(quiet_path.resolve()),
+        "runner": quiet_value["runner"],
+        "sha256": sha256_file(quiet_path),
+        "valid_until_utc": quiet_value["valid_until_utc"],
+    }
+
+    commands: list[dict[str, Any]] = []
+    record_index = 0
+
+    def add_command(
+        record_id: str,
+        *,
+        phase: str,
+        module: str,
+        role: str,
+        scope: str,
+        trial: int | None,
+        selected_packages: list[str],
+        argv: list[str],
+        cwd: str,
+        env_overrides: dict[str, str],
+        stdout: bytes = b"",
+        package: str | None = None,
+        binary_path: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        nonlocal record_index
+        record_index += 1
+        stdout_path = root / "artifacts" / f"{record_id}.stdout"
+        stderr_path = root / "artifacts" / f"{record_id}.stderr"
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_bytes(stdout)
+        stderr_path.write_bytes(b"")
+        start_ns = 1_000_000_000 + record_index * 1_000_000
+        record: dict[str, Any] = {
+            "schema": "c11-command-record-v1",
+            "record_id": record_id,
+            "label": record_id,
+            "phase": phase,
+            "module": module,
+            "role": role,
+            "scope": scope,
+            "trial": trial,
+            "selected_packages": selected_packages,
+            "argv": argv,
+            "cwd": cwd,
+            "env_overrides": env_overrides,
+            "timeout_seconds": 5,
+            "started_at_utc": "2026-09-09T00:00:00.000Z",
+            "ended_at_utc": "2026-09-09T00:00:00.001Z",
+            "monotonic_start_ns": start_ns,
+            "monotonic_end_ns": start_ns + 1_000_000,
+            "wall_seconds": 0.001,
+            "timed_out": False,
+            "exit_status": 0,
+            "signal": None,
+            "spawn_error": None,
+            "stdout_path": str(stdout_path.relative_to(root)),
+            "stdout_sha256": sha256_file(stdout_path),
+            "stdout_bytes": len(stdout),
+            "stderr_path": str(stderr_path.relative_to(root)),
+            "stderr_sha256": sha256_file(stderr_path),
+            "stderr_bytes": 0,
+            "status": "PASS",
+        }
+        if package is not None:
+            record["package"] = package
+        if binary_path is not None:
+            record["binary_path"] = binary_path
+        if extra:
+            record.update(extra)
+        commands.append(record)
+        return record
+
+    packages = [
+        {
+            "import_path": "example/agent-cli",
+            "package_arg": ".",
+            "has_tests": True,
+        },
+        {
+            "import_path": "example/omitted",
+            "package_arg": ".",
+            "has_tests": False,
+        },
+    ]
+    modules = [
+        {
+            "name": name,
+            "path": repo,
+            "relative": name,
+            "packages": packages if name == "agent-cli" else [],
+        }
+        for name in HERMETIC_MODULES
+    ]
+    module_paths = {module["name"]: module["path"] for module in modules}
+
+    metadata_command_ids: list[str] = []
+    manifest_metadata = (
+        (
+            "manifest-source-head",
+            "source-rev-parse",
+            ["git", "-C", repo, "rev-parse", "HEAD"],
+            {},
+            f"{source_sha}\n".encode(),
+        ),
+        (
+            "manifest-source-status",
+            "source-status",
+            ["git", "-C", repo, "status", "--porcelain"],
+            {},
+            b"",
+        ),
+        (
+            "manifest-go-env",
+            "go-env",
+            [
+                go,
+                "env",
+                "-json",
+                "GOOS",
+                "GOARCH",
+                "GOVERSION",
+                "GOMODCACHE",
+                "GOCACHE",
+                "GOPATH",
+                "GOWORK",
+            ],
+            env,
+            b"{}\n",
+        ),
+        (
+            "manifest-go-version",
+            "go-version",
+            [go, "version"],
+            env,
+            b"go version synthetic\n",
+        ),
+    )
+    for record_id, role, argv, command_env, stdout in manifest_metadata:
+        add_command(
+            record_id,
+            phase="metadata",
+            module="manifest",
+            role=role,
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=argv,
+            cwd=repo,
+            env_overrides=command_env,
+            stdout=stdout,
+        )
+        metadata_command_ids.append(record_id)
+
+    inventory_command_ids: list[str] = []
+    for module in modules:
+        record_id = f"inventory-{module['name']}"
+        add_command(
+            record_id,
+            phase="inventory",
+            module=module["name"],
+            role="go-list",
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=[go, "list", "-json", "-tags=nomicrophone", "./..."],
+            cwd=module_paths[module["name"]],
+            env_overrides=env,
+            stdout=b"{}\n",
+        )
+        inventory_command_ids.append(record_id)
+
+    binary_path = root / "warm" / "test-binaries" / "agent-cli.test"
+    binary_path.parent.mkdir(parents=True, exist_ok=True)
+    binary_path.write_bytes(b"synthetic test binary\n")
+    binary_relative = str(binary_path.relative_to(root))
+    warm_command_ids: list[str] = []
+    for module in modules:
+        record_id = f"warm-download-{module['name']}"
+        add_command(
+            record_id,
+            phase="warm",
+            module=module["name"],
+            role="go-mod-download",
+            scope="manifest",
+            trial=1,
+            selected_packages=[],
+            argv=[go, "mod", "download"],
+            cwd=module_paths[module["name"]],
+            env_overrides=env,
+        )
+        warm_command_ids.append(record_id)
+    compile_record_id = "warm-compile-agent-cli-example-agent-cli"
+    add_command(
+        compile_record_id,
+        phase="warm",
+        module="agent-cli",
+        role="go-test-binary-compile",
+        scope="manifest",
+        trial=1,
+        selected_packages=["example/agent-cli"],
+        argv=[
+            go,
+            "test",
+            "-tags=nomicrophone",
+            "-run",
+            "^$",
+            "-count=1",
+            "-p",
+            "1",
+            "-timeout",
+            "5s",
+            "-c",
+            "-o",
+            str(binary_path.resolve()),
+            ".",
+        ],
+        cwd=repo,
+        env_overrides=env,
+        package="example/agent-cli",
+        binary_path=str(binary_path.resolve()),
+    )
+    warm_command_ids.append(compile_record_id)
+
+    full_output = (
+        b'{"Action":"start","Package":"example/agent-cli"}\n'
+        b'{"Action":"pass","Package":"example/agent-cli","Elapsed":0.02}\n'
+        b'{"Action":"start","Package":"example/omitted"}\n'
+        b'{"Action":"output","Package":"example/omitted","Output":"? [no test files]\\n"}\n'
+        b'{"Action":"skip","Package":"example/omitted","Elapsed":0.0}\n'
+    )
+    cohort_output = b'{"Action":"start","Package":"example/agent-cli"}\n{"Action":"pass","Package":"example/agent-cli","Elapsed":0.01}\n'
+
+    def add_run_metadata(module: str, trial: int, prefix: str) -> list[str]:
+        ids = [
+            f"{prefix}-source-head-{module}-{trial}",
+            f"{prefix}-source-status-{module}-{trial}",
+        ]
+        add_command(
+            ids[0],
+            phase="metadata",
+            module=module,
+            role="source-rev-parse",
+            scope="run",
+            trial=trial,
+            selected_packages=[],
+            argv=["git", "-C", repo, "rev-parse", "HEAD"],
+            cwd=repo,
+            env_overrides={},
+            stdout=f"{source_sha}\n".encode(),
+        )
+        add_command(
+            ids[1],
+            phase="metadata",
+            module=module,
+            role="source-status",
+            scope="run",
+            trial=trial,
+            selected_packages=[],
+            argv=["git", "-C", repo, "status", "--porcelain"],
+            cwd=repo,
+            env_overrides={},
+            stdout=b"",
+        )
+        return ids
+
+    full_group = "full-inventory"
+    full_metadata_ids = add_run_metadata("agent-cli", 1, "full")
+    add_command(
+        "full-agent-cli",
+        phase="full",
+        module="agent-cli",
+        role="go-test",
+        scope="run",
+        trial=1,
+        selected_packages=[package["import_path"] for package in packages],
+        argv=[
+            go,
+            "run",
+            "./cmd/testtimeout",
+            "--timeout",
+            "5s",
+            "--",
+            go,
+            "test",
+            "./...",
+            "-json",
+            "-count=1",
+            "-tags=nomicrophone",
+            "-p",
+            "1",
+            "-timeout",
+            "5s",
+        ],
+        cwd=repo,
+        env_overrides=env,
+        stdout=full_output,
+        extra={
+            "source_sha": source_sha,
+            "source_validation": {
+                "repo": repo,
+                "head": source_sha,
+                "expected_head": source_sha,
+                "dirty_paths": [],
+                "expected_dirty_paths": [],
+                "matches_manifest": True,
+                "metadata_record_ids": full_metadata_ids,
+            },
+            "run_group_id": full_group,
+            "repeat_index": 1,
+            "requested_repetitions": 1,
+            "cohort": False,
+            "expected_package_count": 2,
+            "test_result_cache_policy": "disabled-by--count=1",
+            "quiet_evidence": quiet_ref,
+        },
+    )
+
+    cohort_group = "cohort-agent-cli"
+    for trial in (1, 2):
+        metadata_ids = add_run_metadata("agent-cli", trial, "cohort")
+        add_command(
+            f"cohort-agent-cli-{trial}",
+            phase="cohort",
+            module="agent-cli",
+            role="go-test",
+            scope="run",
+            trial=trial,
+            selected_packages=["example/agent-cli"],
+            argv=[
+                go,
+                "run",
+                "./cmd/testtimeout",
+                "--timeout",
+                "5s",
+                "--",
+                go,
+                "test",
+                ".",
+                "-json",
+                "-count=1",
+                "-tags=nomicrophone",
+                "-p",
+                "1",
+                "-timeout",
+                "5s",
+            ],
+            cwd=repo,
+            env_overrides=env,
+            stdout=cohort_output,
+            extra={
+                "source_sha": source_sha,
+                "source_validation": {
+                    "repo": repo,
+                    "head": source_sha,
+                    "expected_head": source_sha,
+                    "dirty_paths": [],
+                    "expected_dirty_paths": [],
+                    "matches_manifest": True,
+                    "metadata_record_ids": metadata_ids,
+                },
+                "run_group_id": cohort_group,
+                "repeat_index": trial,
+                "requested_repetitions": 2,
+                "cohort": True,
+                "expected_package_count": 1,
+                "test_result_cache_policy": "disabled-by--count=1",
+                "quiet_evidence": quiet_ref,
+            },
+        )
+
+    manifest = {
+        "schema": SCHEMA,
+        "project": "audio-runtime",
+        "work": "audio-runtime-c11-hermetic-package-profile-controls",
+        "mode": "hermetic",
+        "created_at_utc": utc_now(),
+        "repo": repo,
+        "source_repo": repo,
+        "source_sha": source_sha,
+        "source_dirty_paths": [],
+        "runner": quiet_value["runner"],
+        "go": {"executable": go, "version": "go version synthetic", "env": {}},
+        "flags": {
+            "cgo_enabled": "0",
+            "tags": ["nomicrophone"],
+            "count": 1,
+            "gomaxprocs": 1,
+            "go_test_p": 1,
+            "general_timeout_seconds": 5,
+            "agent_cli_timeout_seconds": 5,
+        },
+        "cache_paths": cache_paths,
+        "paths": {"manifest": str((root / "manifest.json").resolve())},
+        "inventory_status": "PASS",
+        "metadata_command_ids": metadata_command_ids,
+        "inventory_command_ids": inventory_command_ids,
+        "commands": commands,
+        "modules": modules,
+        "warm": {
+            "status": "PASS",
+            "started_at_utc": quiet_value["captured_at_utc"],
+            "ended_at_utc": quiet_value["captured_at_utc"],
+            "quiet_evidence": quiet_ref,
+            "command_ids": warm_command_ids,
+            "test_binaries": [
+                {
+                    "module": "agent-cli",
+                    "package": "example/agent-cli",
+                    "status": "PASS",
+                    "command_id": compile_record_id,
+                    "path": binary_relative,
+                    "sha256": sha256_file(binary_path),
+                    "bytes": binary_path.stat().st_size,
+                },
+                {
+                    "module": "agent-cli",
+                    "package": "example/omitted",
+                    "status": "SKIPPED_NO_TEST_FILES",
+                    "reason": "inventory has no TestGoFiles or XTestGoFiles",
+                },
+            ],
+            "failures": [],
+        },
+        "measurement_status": "RUN_CAPTURED",
+    }
+    manifest_path = root / "manifest.json"
+    write_json(manifest_path, manifest)
+    return manifest_path, quiet_path, binary_path
+
+
+def parse_driver_json(record: dict[str, Any], label: str) -> dict[str, Any]:
+    if record["timed_out"]:
+        raise ControlError(f"{label} child timed out")
+    text = record["stdout"].strip()
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ControlError(f"{label} did not emit JSON summary: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ControlError(f"{label} summary is not an object")
+    return value
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ControlError(f"cannot read {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ControlError(f"{path} is not an object")
+    return value
+
+
+def run_command_indexes(manifest: dict[str, Any]) -> list[int]:
+    commands = manifest.get("commands", [])
+    if not isinstance(commands, list):
+        return []
+    return [
+        index
+        for index, command in enumerate(commands)
+        if isinstance(command, dict) and command.get("phase") in {"full", "cohort"}
+    ]
+
+
+def run_commands(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    commands = manifest.get("commands", [])
+    if not isinstance(commands, list):
+        return []
+    return [
+        command
+        for command in commands
+        if isinstance(command, dict) and command.get("phase") in {"full", "cohort"}
+    ]
+
+
+def first_run(manifest: dict[str, Any]) -> dict[str, Any]:
+    records = run_commands(manifest)
+    if not records:
+        raise ControlError("manifest contains no canonical run command")
+    return records[0]
+
+
+def group_run_commands(manifest: dict[str, Any], group_id: str) -> list[dict[str, Any]]:
+    return [
+        record for record in run_commands(manifest) if record.get("run_group_id") == group_id
+    ]
+
+
+def source_metadata(manifest: dict[str, Any], run: dict[str, Any]) -> list[dict[str, Any]]:
+    commands = manifest.get("commands", [])
+    by_id = {
+        command.get("record_id"): command
+        for command in commands
+        if isinstance(command, dict)
+    }
+    validation = run.get("source_validation")
+    if not isinstance(validation, dict):
+        return []
+    return [
+        by_id[item]
+        for item in validation.get("metadata_record_ids", [])
+        if item in by_id
+    ]
+
+
+def exercise_case(
+    output: Path,
+    *,
+    name: str,
+    scenario: str,
+    packages: list[dict[str, Any]],
+    run_status: int,
+    analysis_status: int,
+    expect_analysis: str,
+    repeat: int = 1,
+    expected_checks: dict[str, Any] | None = None,
+    remove_stdout_after_run: bool = False,
+) -> dict[str, Any]:
+    case_dir = output / "cases" / name
+    manifest, quiet = synthetic_manifest(case_dir, scenario, packages)
+    profile_args = [
+        sys.executable,
+        str(PROFILE),
+        "run",
+        "--manifest",
+        str(manifest),
+        "--allow-heavy",
+        "--quiet-evidence",
+        str(quiet),
+        "--repeat",
+        str(repeat),
+    ]
+    if repeat > 1:
+        profile_args.extend(["--cohort", "synthetic:."])
+    run_record = run_child(
+        profile_args,
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if run_record["exit_status"] != run_status:
+        raise ControlError(
+            f"{name}: run exit {run_record['exit_status']}, want {run_status}\n"
+            f"{run_record['stderr']}"
+        )
+    run_summary = parse_driver_json(run_record, f"{name} run")
+    if remove_stdout_after_run:
+        captured_manifest = read_json(manifest)
+        captured_records = run_commands(captured_manifest)
+        if not captured_records:
+            raise ControlError(f"{name}: run produced no command record to tamper")
+        stdout_path = captured_records[0].get("stdout_path")
+        if not isinstance(stdout_path, str):
+            raise ControlError(f"{name}: command record has no stdout path")
+        artifact = manifest.parent / stdout_path
+        try:
+            artifact.unlink()
+        except OSError as exc:
+            raise ControlError(
+                f"{name}: cannot remove raw stdout control artifact: {exc}"
+            ) from exc
+    analysis_dir = case_dir / "analysis"
+    analysis_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(manifest),
+            "--output",
+            str(analysis_dir),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="analyze",
+    )
+    if analysis_record["exit_status"] != analysis_status:
+        raise ControlError(
+            f"{name}: analyze exit {analysis_record['exit_status']}, want {analysis_status}\n"
+            f"{analysis_record['stderr']}"
+        )
+    analysis_summary = parse_driver_json(analysis_record, f"{name} analyze")
+    analysis = read_json(analysis_dir / "analysis.json")
+    if analysis.get("status") != expect_analysis:
+        raise ControlError(
+            f"{name}: analysis status {analysis.get('status')!r}, want {expect_analysis!r}"
+        )
+    for key, expected in (expected_checks or {}).items():
+        current: Any = analysis
+        for part in key.split("."):
+            if isinstance(current, list):
+                current = current[int(part)]
+            elif isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = None
+        if current != expected:
+            raise ControlError(
+                f"{name}: {key} = {current!r}, want {expected!r}"
+            )
+    return {
+        "name": name,
+        "scenario": scenario,
+        "run": run_record,
+        "run_summary": run_summary,
+        "analysis": analysis_record,
+        "analysis_summary": analysis_summary,
+        "analysis_artifact": str(analysis_dir / "analysis.json"),
+        "raw_artifacts_retained": not remove_stdout_after_run,
+    }
+
+
+def exercise_help_and_offline(output: Path) -> list[dict[str, Any]]:
+    sentinel_dir = output / "offline"
+    sentinel_dir.mkdir(parents=True, exist_ok=True)
+    fake_go = sentinel_dir / "go"
+    marker = sentinel_dir / "spawned.marker"
+    fake_go.write_text(
+        f"#!/bin/sh\nprintf spawned > {marker}\nexit 99\n",
+        encoding="utf-8",
+    )
+    fake_go.chmod(0o755)
+    environment = os.environ.copy()
+    environment["PATH"] = str(sentinel_dir) + os.pathsep + environment.get("PATH", "")
+    help_record = run_child(
+        [sys.executable, str(PROFILE), "--help"],
+        cwd=sentinel_dir,
+        output_dir=sentinel_dir,
+        name="help",
+        env=environment,
+    )
+    if help_record["exit_status"] != 0 or marker.exists():
+        raise ControlError("profile --help spawned a command or failed")
+
+    blocked_manifest = sentinel_dir / "blocked-manifest.json"
+    write_json(
+        blocked_manifest,
+        {
+            "schema": SCHEMA,
+            "mode": "hermetic",
+            "source_sha": "blocked-source",
+            "modules": [],
+            "fresh_timing_status": "BLOCKED",
+            "fresh_timing_reason": "control-only blocked fallback",
+            "ci_evidence": [{"source": "synthetic"}],
+            "failure_references": [],
+            "provenance": {"raw_logs": "not applicable"},
+        },
+    )
+    analysis_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(blocked_manifest),
+            "--output",
+            str(sentinel_dir / "blocked-analysis"),
+        ],
+        cwd=sentinel_dir,
+        output_dir=sentinel_dir,
+        name="offline-analyze",
+        env=environment,
+    )
+    if analysis_record["exit_status"] != 0 or marker.exists():
+        raise ControlError("offline analyze spawned a command or failed")
+    blocked = read_json(sentinel_dir / "blocked-analysis" / "analysis.json")
+    if blocked.get("status") != "BLOCKED":
+        raise ControlError("offline blocked analysis did not remain BLOCKED")
+    return [
+        {"name": "help-no-spawn", "record": help_record},
+        {"name": "offline-analyze-no-spawn", "record": analysis_record},
+    ]
+
+
+def exercise_fail_closed(output: Path) -> dict[str, Any]:
+    case_dir = output / "fail-closed"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    inventory_dir = case_dir / "inventory"
+    invalid_quiet = inventory_dir / "invalid-quiet.json"
+    write_json(
+        invalid_quiet,
+        {
+            "schema": QUIET_SCHEMA,
+            "valid": False,
+            "isolation": "shared-factory-host",
+            "reason": "C08 owns the shared host",
+        },
+    )
+    record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "inventory",
+            "--repo",
+            str(Path(__file__).resolve().parents[2]),
+            "--output",
+            str(inventory_dir),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(invalid_quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir,
+        name="inventory",
+    )
+    if record["exit_status"] != 2:
+        raise ControlError(
+            f"fail-closed inventory exit {record['exit_status']}, want 2"
+        )
+    if "not valid" not in record["stderr"] or "C08 owns the shared host" not in record["stderr"]:
+        raise ControlError(
+            "fail-closed error did not validate and explain the shared-host prerequisite"
+        )
+    return {"name": "heavy-without-admission", "record": record}
+
+
+def exercise_run_lifecycle(output: Path) -> dict[str, Any]:
+    """Prove the public runner cannot skip or overrun the hermetic schedule."""
+
+    results: list[dict[str, Any]] = []
+    repeat_case = output / "run-lifecycle" / "repeat-three"
+    manifest, quiet = synthetic_manifest(
+        repeat_case,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    repeat_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+            "--cohort",
+            "synthetic:.",
+            "--repeat",
+            "3",
+        ],
+        cwd=repeat_case,
+        output_dir=repeat_case / "driver",
+        name="repeat-three",
+    )
+    if repeat_record["exit_status"] != 2 or "exactly two" not in repeat_record["stderr"]:
+        raise ControlError(
+            "repeat-three: cohort repeat count was not rejected before execution\n"
+            + repeat_record["stderr"]
+        )
+    results.append({"name": "cohort-repeat-three-rejected", "record": repeat_record})
+
+    failed_full = {
+        "record_id": "full-failed",
+        "label": "full-failed",
+        "phase": "full",
+        "module": "agent-cli",
+        "role": "go-test",
+        "trial": 1,
+        "selected_packages": ["example/agent-cli"],
+        "run_group_id": "failed-full",
+        "repeat_index": 1,
+        "requested_repetitions": 1,
+        "cohort": False,
+        "status": "FAIL",
+        "exit_status": 1,
+        "timed_out": False,
+        "spawn_error": None,
+    }
+    partial_full = dict(failed_full)
+    partial_full.update(
+        {
+            "record_id": "full-partial",
+            "label": "full-partial",
+            "run_group_id": "partial-full",
+            "status": "PASS",
+            "exit_status": 0,
+        }
+    )
+    for name, records, package_modules in (
+        ("failed-full-authorizes-no-cohort", [failed_full], {"agent-cli"}),
+        ("partial-full-authorizes-no-cohort", [partial_full], {"agent-cli", "go-agent-loop"}),
+    ):
+        case_dir = output / "run-lifecycle" / name
+        manifest, quiet = hermetic_lifecycle_manifest(
+            case_dir,
+            package_modules=package_modules,
+            full_records=records,
+        )
+        run_record = run_child(
+            [
+                sys.executable,
+                str(PROFILE),
+                "run",
+                "--manifest",
+                str(manifest),
+                "--allow-heavy",
+                "--quiet-evidence",
+                str(quiet),
+                "--cohort",
+                "agent-cli:.",
+                "--repeat",
+                "2",
+            ],
+            cwd=case_dir,
+            output_dir=case_dir / "driver",
+            name="cohort-after-invalid-full",
+        )
+        if (
+            run_record["exit_status"] != 2
+            or "successful complete full inventory trial" not in run_record["stderr"]
+        ):
+            raise ControlError(
+                f"{name}: invalid full trial authorized cohort execution\n"
+                + run_record["stderr"]
+            )
+        results.append({"name": name, "record": run_record})
+    return {
+        "name": "run-lifecycle",
+        "scenarios": results,
+        "scenario_count": len(results),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_hermetic_validation_regressions(output: Path) -> dict[str, Any]:
+    """Keep hermetic inventory, artifact, and timing checks on the public analyzer path."""
+
+    results: list[dict[str, Any]] = []
+
+    omitted_case = output / "hermetic-validation" / "omitted-full-package"
+    omitted_manifest, _, _ = hermetic_analyzer_fixture(omitted_case)
+    baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(omitted_manifest),
+            "--output",
+            str(omitted_case / "baseline-analysis"),
+        ],
+        cwd=omitted_case,
+        output_dir=omitted_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if baseline["exit_status"] != 0 or read_json(omitted_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "hermetic-validation fixture did not produce a valid PASS baseline\n"
+            + baseline["stderr"]
+        )
+    omitted_value = read_json(omitted_manifest)
+    full_record = next(
+        record for record in omitted_value["commands"] if record.get("phase") == "full"
+    )
+    full_record["selected_packages"] = ["example/agent-cli"]
+    full_record["expected_package_count"] = 1
+    write_json(omitted_manifest, omitted_value)
+    results.append(
+        analyze_mutated_manifest(
+            omitted_case,
+            omitted_manifest,
+            "full-trial-must-cover-inventoried-packages",
+            {},
+            reason_contains="does not cover the complete module inventory",
+        )
+    )
+
+    binary_case = output / "hermetic-validation" / "missing-warm-binary"
+    binary_manifest, _, binary_path = hermetic_analyzer_fixture(binary_case)
+    binary_baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(binary_manifest),
+            "--output",
+            str(binary_case / "baseline-analysis"),
+        ],
+        cwd=binary_case,
+        output_dir=binary_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if binary_baseline["exit_status"] != 0 or read_json(binary_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "missing-warm-binary fixture did not produce a valid PASS baseline\n"
+            + binary_baseline["stderr"]
+        )
+    try:
+        binary_path.unlink()
+    except OSError as exc:
+        raise ControlError(f"missing-warm-binary: cannot remove fixture artifact: {exc}") from exc
+    results.append(
+        analyze_mutated_manifest(
+            binary_case,
+            binary_manifest,
+            "successful-warm-compile-requires-binary-artifact",
+            {},
+            reason_contains="test binary artifact is unreadable",
+        )
+    )
+
+    timing_case = output / "hermetic-validation" / "wall-matches-monotonic"
+    timing_manifest, _, _ = hermetic_analyzer_fixture(timing_case)
+    timing_baseline = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "analyze",
+            "--manifest",
+            str(timing_manifest),
+            "--output",
+            str(timing_case / "baseline-analysis"),
+        ],
+        cwd=timing_case,
+        output_dir=timing_case / "driver" / "baseline",
+        name="analyze",
+    )
+    if timing_baseline["exit_status"] != 0 or read_json(timing_case / "baseline-analysis" / "analysis.json").get("status") != "PASS":
+        raise ControlError(
+            "wall-time fixture did not produce a valid PASS baseline\n"
+            + timing_baseline["stderr"]
+        )
+    timing_value = read_json(timing_manifest)
+    timing_record = next(
+        record for record in timing_value["commands"] if record.get("phase") == "full"
+    )
+    timing_record["wall_seconds"] = 1.0
+    write_json(timing_manifest, timing_value)
+    results.append(
+        analyze_mutated_manifest(
+            timing_case,
+            timing_manifest,
+            "wall-time-must-match-monotonic-interval",
+            {},
+            reason_contains="wall_seconds does not match the monotonic interval",
+        )
+    )
+    return {
+        "name": "hermetic-validation-regressions",
+        "mutations": results,
+        "scenario_count": len(results),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_phase_command_failures(output: Path) -> dict[str, Any]:
+    """Prove failed inventory/warm commands cannot be hidden by PASS summaries."""
+
+    case_dir = output / "phase-command-failures"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    capture = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="capture",
+    )
+    if capture["exit_status"] != 0:
+        raise ControlError(
+            f"phase-command-failures: capture failed\n{capture['stderr']}"
+        )
+    baseline = read_json(manifest)
+    mutations: list[dict[str, Any]] = []
+    for phase in ("inventory", "warm"):
+        mutated = json.loads(json.dumps(baseline))
+        record = dict(first_run(mutated))
+        record.update(
+            {
+                "record_id": f"failed-{phase}",
+                "label": f"failed-{phase}",
+                "phase": phase,
+                "status": "FAIL",
+                "exit_status": 1,
+            }
+        )
+        mutated["commands"].insert(0, record)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                f"failed-{phase}-command",
+                {},
+                reason_contains=f"{phase} command",
+            )
+        )
+    write_json(manifest, baseline)
+    return {
+        "name": "phase-command-failures",
+        "capture": capture,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
+        "raw_artifacts_retained": True,
+    }
+
+
+def analyze_mutated_manifest(
+    case_dir: Path,
+    manifest: Path,
+    mutation_name: str,
+    expected_checks: dict[str, Any],
+    *,
+    seed_stale_analysis: bool = False,
+    group: str | None = None,
+    reason_contains: str | None = None,
+) -> dict[str, Any]:
+    analysis_dir = case_dir / "analysis" / mutation_name
+    if seed_stale_analysis:
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            analysis_dir / "analysis.json",
+            {"status": "PASS", "fresh_timing": "PASS", "stale": True},
+        )
+    argv = [
+        sys.executable,
+        str(PROFILE),
+        "analyze",
+        "--manifest",
+        str(manifest),
+        "--output",
+        str(analysis_dir),
+    ]
+    if group is not None:
+        argv.extend(["--group", group])
+    record = run_child(
+        argv,
+        cwd=case_dir,
+        output_dir=case_dir / "driver" / mutation_name,
+        name="analyze",
+    )
+    if record["exit_status"] != 1:
+        raise ControlError(
+            f"{mutation_name}: analyze exit {record['exit_status']}, want 1\n"
+            f"{record['stderr']}"
+        )
+    analysis = read_json(analysis_dir / "analysis.json")
+    if analysis.get("status") != "INVALID":
+        raise ControlError(
+            f"{mutation_name}: analysis status {analysis.get('status')!r}, want 'INVALID'"
+        )
+    if reason_contains is not None and reason_contains not in json.dumps(analysis):
+        raise ControlError(
+            f"{mutation_name}: analysis did not retain expected diagnostic "
+            f"{reason_contains!r}"
+        )
+    for key, expected in expected_checks.items():
+        current: Any = analysis
+        for part in key.split("."):
+            if isinstance(current, list):
+                current = current[int(part)]
+            elif isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = None
+        if current != expected:
+            raise ControlError(
+                f"{mutation_name}: {key} = {current!r}, want {expected!r}"
+            )
+    return {
+        "name": mutation_name,
+        "record": record,
+        "analysis_artifact": str(analysis_dir / "analysis.json"),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_provenance_tampering(output: Path) -> dict[str, Any]:
+    case_dir = output / "provenance-tampering"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "no-test",
+        [
+            {"import_path": "example/no-test", "package_arg": ".", "has_tests": False},
+            {"import_path": "example/pass", "package_arg": ".", "has_tests": True},
+        ],
+    )
+    run_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+            "--repeat",
+            "2",
+            "--cohort",
+            "example/no-test,example/pass",
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if run_record["exit_status"] != 0:
+        raise ControlError(
+            f"provenance-tampering: run exit {run_record['exit_status']}\n"
+            f"{run_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    quiet_baseline = read_json(quiet)
+    mutations: list[dict[str, Any]] = []
+
+    def append_unreferenced_invalid_group(value: dict[str, Any]) -> None:
+        invalid_record = json.loads(json.dumps(first_run(value)))
+        invalid_record.update(
+            {
+                "record_id": "unreferenced-invalid-record",
+                "label": "unreferenced-invalid-record",
+                "run_group_id": "unreferenced-invalid",
+                "requested_repetitions": 0,
+                "completed_repetitions": 0,
+            }
+        )
+        value["commands"].append(invalid_record)
+
+    for mutation_name, mutate, checks in (
+        (
+            "missing-record-source",
+            lambda value: first_run(value).pop("source_sha", None),
+            {
+                "source.source_identity.all_match": False,
+                "source.source_identity.missing_records": [
+                    first_run(baseline)["label"]
+                ],
+            },
+        ),
+        (
+            "missing-quiet-evidence",
+            lambda value: first_run(value).pop("quiet_evidence", None),
+            {"repetitions.0.validation.valid": False},
+        ),
+        (
+            "incomplete-repetition-count",
+            lambda value: (
+                first_run(value).update({"requested_repetitions": 3}),
+                value["commands"].pop(run_command_indexes(value)[-1]),
+            ),
+            {
+                "repetitions.0.validation.valid": False,
+                "repetitions.0.validation.requested_repetitions": 3,
+                "repetitions.0.validation.completed_repetitions": 1,
+            },
+        ),
+        (
+            "missing-run-timing",
+            lambda value: (
+                first_run(value).pop("monotonic_start_ns", None),
+                first_run(value).pop("monotonic_end_ns", None),
+                first_run(value).pop("wall_seconds", None),
+            ),
+            {
+                "failure_references.0.timing_errors.0": (
+                    "monotonic_start_ns must be a non-negative integer"
+                ),
+                "failure_references.0.timing_errors.2": (
+                    "wall_seconds is invalid: Elapsed must be a finite JSON number"
+                ),
+            },
+        ),
+        (
+            "malformed-run-record",
+            lambda value: value["commands"].__setitem__(run_command_indexes(value)[0], "not-a-run-record"),
+            {},
+        ),
+        (
+            "null-selected-packages",
+            lambda value: first_run(value).update({"selected_packages": None}),
+            {},
+        ),
+        (
+            "oversized-monotonic-timestamp",
+            lambda value: first_run(value).update(
+                {"monotonic_end_ns": 10**400}
+            ),
+            {
+                "failure_references.0.error": (
+                    "monotonic_end_ns exceeds signed 64-bit range"
+                ),
+            },
+        ),
+        (
+            "no-test-inventory-conflict",
+            lambda value: value["modules"][0]["packages"][0].update(
+                {"has_tests": True}
+            ),
+            {
+                "failure_references.0.no_test_classification_errors.0": (
+                    "no-test marker for 'example/no-test' conflicts with inventory "
+                "has_tests=true"
+                ),
+            },
+        ),
+        (
+            "incomplete-command-record-schema",
+            lambda value: [
+                first_run(value).pop(field, None)
+                for field in (
+                    "schema",
+                    "argv",
+                    "cwd",
+                    "env_overrides",
+                    "timeout_seconds",
+                    "stdout_bytes",
+                    "stderr_bytes",
+                )
+            ],
+            {},
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(case_dir, manifest, mutation_name, checks)
+        )
+    write_json(manifest, baseline)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "unmatched-run-group-filter",
+            {
+                "failure_references.0.record": "analysis:group-filter",
+                "failure_references.0.error": (
+                    "no captured runs match --group 'does-not-exist'"
+                ),
+            },
+            group="does-not-exist",
+        )
+    )
+    mutated = json.loads(json.dumps(baseline))
+    append_unreferenced_invalid_group(mutated)
+    write_json(manifest, mutated)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "unreferenced-invalid-run-group-filtered",
+            {
+                "failure_references.0.record": "unreferenced-invalid-record",
+                "repetitions.0.validation.valid": True,
+            },
+            group=first_run(baseline)["run_group_id"],
+        )
+    )
+    stale_manifest = json.loads(json.dumps(baseline))
+    first_run(stale_manifest)["selected_packages"] = None
+    write_json(manifest, stale_manifest)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "malformed-run-record-replaces-stale-analysis",
+            {
+                "status": "INVALID",
+                "fresh_timing": "INVALID",
+                "provenance.invalid_artifact_written_atomically": True,
+            },
+            seed_stale_analysis=True,
+        )
+    )
+    timed_out_manifest = json.loads(json.dumps(baseline))
+    first_run(timed_out_manifest)["timed_out"] = True
+    write_json(manifest, timed_out_manifest)
+    mutations.append(
+        analyze_mutated_manifest(
+            case_dir,
+            manifest,
+            "timed-out-pass-status-mismatch",
+            {},
+            reason_contains="timed_out=true requires status TIMEOUT",
+        )
+    )
+    write_json(manifest, baseline)
+    for mutation_name, mutate, expected_error in (
+        (
+            "missing-quiet-runner",
+            lambda value: value.pop("runner", None),
+            "quiet evidence is missing runner metadata",
+        ),
+        (
+            "missing-quiet-observations",
+            lambda value: (value.pop("before", None), value.pop("after", None)),
+            "quiet evidence must include before load/lease observations",
+        ),
+        (
+            "weak-quiet-observations",
+            lambda value: value.update(
+                {"before": {"active_work": []}, "after": {"active_work": []}}
+            ),
+            "quiet evidence before is missing observations: load, processes/process_activity",
+        ),
+        (
+            "expired-quiet-evidence",
+            lambda value: value.update({"valid_until_utc": "2000-01-01T00:00:00Z"}),
+            "quiet evidence has expired",
+        ),
+    ):
+        write_json(quiet, quiet_baseline)
+        tampered_quiet = json.loads(json.dumps(quiet_baseline))
+        mutate(tampered_quiet)
+        write_json(quiet, tampered_quiet)
+        mutated = json.loads(json.dumps(baseline))
+        first_run(mutated)["quiet_evidence"]["sha256"] = sha256_file(quiet)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "repetitions.0.validation.valid": False,
+                    "repetitions.0.validation.quiet_evidence.status": "INVALID",
+                    "repetitions.0.validation.quiet_evidence.error": expected_error,
+                },
+            )
+        )
+    write_json(quiet, quiet_baseline)
+    write_json(manifest, baseline)
+    return {
+        "name": "provenance-tampering",
+        "run": run_record,
+        "mutations": mutations,
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_cache_containment(output: Path) -> dict[str, Any]:
+    case_dir = output / "cache-containment"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    baseline = read_json(manifest)
+    outside_root = (case_dir / "outside-cache").resolve()
+    baseline["cache_paths"]["gocache"] = str(outside_root / "gocache")
+    baseline["cache_paths"]["gomodcache"] = str(outside_root / "gomodcache")
+    write_json(manifest, baseline)
+    record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    expected = "manifest GOCACHE must be contained within manifest output root"
+    if record["exit_status"] != 2 or expected not in record["stderr"]:
+        raise ControlError(
+            "cache-containment: out-of-root cache was not rejected\n"
+            + record["stderr"]
+        )
+    return {"name": "cache-containment", "record": record, "raw_artifacts_retained": True}
+
+
+def exercise_artifact_containment(output: Path) -> dict[str, Any]:
+    case_dir = output / "artifact-containment"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    run_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="run",
+    )
+    if run_record["exit_status"] != 0:
+        raise ControlError(
+            f"artifact-containment: run exit {run_record['exit_status']}\n"
+            f"{run_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    mutations: list[dict[str, Any]] = []
+    original = first_run(baseline)
+    for stream_name, path_field, hash_field, retained_field, suffix in (
+        ("stdout", "stdout_path", "stdout_sha256", "raw_stdout_retained", "jsonl"),
+        ("stderr", "stderr_path", "stderr_sha256", "raw_stderr_retained", "log"),
+    ):
+        original_path = manifest.parent / original[path_field]
+        redirected = case_dir / f"redirected.{stream_name}.{suffix}"
+        redirected.write_bytes(original_path.read_bytes())
+        redirected_sha = sha256_file(redirected)
+        for redirect_kind, redirected_path in (
+            ("absolute", str(redirected.resolve())),
+            ("traversal", f"../redirected.{stream_name}.{suffix}"),
+        ):
+            mutation_name = f"{stream_name}-{redirect_kind}-redirect"
+            mutated = json.loads(json.dumps(baseline))
+            first_run(mutated)[path_field] = redirected_path
+            first_run(mutated)[hash_field] = redirected_sha
+            write_json(manifest, mutated)
+            mutations.append(
+                analyze_mutated_manifest(
+                    case_dir,
+                    manifest,
+                    mutation_name,
+                    {
+                        "failure_references.0.error": (
+                            f"artifact path {redirected_path!r} resolves outside output root "
+                            f"{manifest.parent.resolve()}"
+                        ),
+                        f"provenance.{retained_field}": False,
+                    },
+                )
+            )
+
+    redirected_quiet = case_dir / "redirected.quiet.json"
+    redirected_quiet.write_bytes(quiet.read_bytes())
+    redirected_quiet_sha = sha256_file(redirected_quiet)
+    for redirect_kind, redirected_path in (
+        ("absolute", str(redirected_quiet.resolve())),
+        ("traversal", "../redirected.quiet.json"),
+    ):
+        mutation_name = f"quiet-{redirect_kind}-redirect"
+        mutated = json.loads(json.dumps(baseline))
+        quiet_record = first_run(mutated)["quiet_evidence"]
+        quiet_record["path"] = redirected_path
+        quiet_record["sha256"] = redirected_quiet_sha
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "repetitions.0.validation.valid": False,
+                    "repetitions.0.validation.quiet_evidence.status": "INVALID",
+                    "repetitions.0.validation.quiet_evidence.error": (
+                        f"artifact path {redirected_path!r} resolves outside output root "
+                        f"{manifest.parent.resolve()}"
+                    ),
+                },
+            )
+        )
+    return {
+        "name": "artifact-containment",
+        "run": run_record,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_source_identity(output: Path) -> dict[str, Any]:
+    case_dir = output / "source-identity"
+    source_repo = case_dir / "source-repo"
+    source_repo.mkdir(parents=True, exist_ok=True)
+    tracked = source_repo / "tracked.txt"
+    tracked.write_text("inventory\n", encoding="utf-8")
+    for argv in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "controls@example.invalid"],
+        ["git", "config", "user.name", "Hermetic Profile Controls"],
+        ["git", "add", "tracked.txt"],
+        ["git", "commit", "-qm", "initial source"],
+    ):
+        try:
+            subprocess.run(
+                argv,
+                cwd=str(source_repo),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            raise ControlError(f"source-identity: cannot prepare git fixture: {exc}") from exc
+    try:
+        source_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(source_repo),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            check=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise ControlError(f"source-identity: cannot read fixture SHA: {exc}") from exc
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+        source_repo=source_repo,
+        source_sha=source_sha,
+    )
+    capture_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="capture",
+    )
+    if capture_record["exit_status"] != 0:
+        raise ControlError(
+            f"source-identity: valid source capture failed\n{capture_record['stderr']}"
+        )
+    baseline = read_json(manifest)
+    captured_records = run_commands(baseline)
+    if not isinstance(captured_records, list) or not captured_records:
+        raise ControlError("source-identity: capture produced no run record")
+    captured = captured_records[0]
+    if not isinstance(captured, dict) or not isinstance(captured.get("label"), str):
+        raise ControlError("source-identity: capture produced an invalid run record")
+    if not isinstance(captured.get("source_validation"), dict):
+        raise ControlError("source-identity: capture omitted source validation")
+
+    mutations: list[dict[str, Any]] = []
+    for mutation_name, mutate in (
+        (
+            "forged-captured-head",
+            lambda value: first_run(value)["source_validation"].update(
+                {"head": "f" * 40}
+            ),
+        ),
+        (
+            "forged-captured-repository",
+            lambda value: first_run(value)["source_validation"].update(
+                {"repo": str(case_dir / "forged-source-repo")}
+            ),
+        ),
+        (
+            "forged-captured-dirty-paths",
+            lambda value: first_run(value)["source_validation"].update(
+                {"dirty_paths": ["forged.txt"]}
+            ),
+        ),
+        (
+            "forged-metadata-artifact-sha",
+            lambda value: source_metadata(value, first_run(value))[0].update(
+                {"stdout_sha256": "0" * 64}
+            ),
+        ),
+        (
+            "forged-git-command-argv",
+            lambda value: source_metadata(value, first_run(value))[0].update(
+                {"argv": ["echo", "forged"]}
+            ),
+        ),
+        (
+            "forged-source-output-identity",
+            lambda value: (
+                value.update({"source_sha": "f" * 40}),
+                first_run(value).update({"source_sha": "f" * 40}),
+                first_run(value)["source_validation"].update(
+                    {"head": "f" * 40, "expected_head": "f" * 40}
+                ),
+            ),
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(
+                case_dir,
+                manifest,
+                mutation_name,
+                {
+                    "source.source_identity.all_match": False,
+                    "source.source_identity.unvalidated_records": [
+                        captured["label"]
+                    ],
+                    "failure_references.0.source_status": "UNVALIDATED",
+                },
+            )
+        )
+
+    write_json(manifest, baseline)
+    tracked.write_text("changed after inventory\n", encoding="utf-8")
+    post_change_record = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="post-change-run",
+    )
+    if (
+        post_change_record["exit_status"] != 2
+        or "source changed since inventory" not in post_change_record["stderr"]
+    ):
+        raise ControlError(
+            "source-identity: post-inventory source change was not rejected\n"
+            + post_change_record["stderr"]
+        )
+    return {
+        "name": "source-identity",
+        "capture": capture_record,
+        "record": post_change_record,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
+        "source_sha": source_sha,
+        "raw_artifacts_retained": True,
+    }
+
+
+def exercise_canonical_phase_validation(output: Path) -> dict[str, Any]:
+    """Keep phase records on the single public command boundary."""
+
+    case_dir = output / "canonical-phase-validation"
+    manifest, quiet = synthetic_manifest(
+        case_dir,
+        "pass",
+        [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+    )
+    capture = run_child(
+        [
+            sys.executable,
+            str(PROFILE),
+            "run",
+            "--manifest",
+            str(manifest),
+            "--allow-heavy",
+            "--quiet-evidence",
+            str(quiet),
+        ],
+        cwd=case_dir,
+        output_dir=case_dir / "driver",
+        name="capture",
+    )
+    if capture["exit_status"] != 0:
+        raise ControlError(
+            f"canonical-phase-validation: capture failed\n{capture['stderr']}"
+        )
+    baseline = read_json(manifest)
+    mutations: list[dict[str, Any]] = []
+    for name, mutate in (
+        (
+            "malformed-inventory-record",
+            lambda value: value.update({"inventory_commands": ["not-a-command"]}),
+        ),
+        (
+            "malformed-warm-record",
+            lambda value: value["warm"].update({"commands": ["not-a-command"]}),
+        ),
+        (
+            "malformed-canonical-record",
+            lambda value: value["commands"].__setitem__(0, "not-a-command"),
+        ),
+        (
+            "canonical-inventory-record-rejected",
+            lambda value: first_run(value).update({"phase": "inventory"}),
+        ),
+        (
+            "canonical-warm-record-rejected",
+            lambda value: first_run(value).update({"phase": "warm"}),
+        ),
+        (
+            "malformed-warm-summary",
+            lambda value: value.update(
+                {"warm": {"status": "PASS", "command_ids": [], "test_binaries": []}}
+            ),
+        ),
+        (
+            "no-warm-hermetic-capture",
+            lambda value: (
+                value.update({"mode": "hermetic"}),
+                value["warm"].update({"status": "NOT_RUN"}),
+            ),
+        ),
+    ):
+        mutated = json.loads(json.dumps(baseline))
+        mutate(mutated)
+        write_json(manifest, mutated)
+        mutations.append(
+            analyze_mutated_manifest(case_dir, manifest, name, {})
+        )
+    write_json(manifest, baseline)
+    return {
+        "name": "canonical-phase-validation",
+        "capture": capture,
+        "mutations": mutations,
+        "scenario_count": len(mutations),
+        "raw_artifacts_retained": True,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Run bounded public-entry-point controls for the hermetic profiler."
+    )
+    parser.add_argument("--output", required=True, help="owned controls output directory")
+    args = parser.parse_args()
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+    failures: list[str] = []
+    case_count = 0
+    cases = [
+        (
+            "valid-pass-repeat",
+            "pass",
+            [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+            0,
+            0,
+            "PASS",
+            2,
+            {
+                "repetitions.0.completed_repetitions": 2,
+                "lane.invocation_count": 2,
+                "provenance.lane_wall_not_sum_of_packages": True,
+            },
+        ),
+        (
+            "package-fail-low-duration",
+            "fail",
+            [{"import_path": "example/fail", "package_arg": ".", "has_tests": True}],
+            1,
+            1,
+            "INVALID",
+            1,
+            {"failure_references.0.process_status": "FAIL"},
+        ),
+        (
+            "nonzero-apparent-pass",
+            "nonzero-pass",
+            [{"import_path": "example/pass", "package_arg": ".", "has_tests": True}],
+            1,
+            1,
+            "INVALID",
+            1,
+            {"failure_references.0.process_status": "FAIL"},
+        ),
+        (
+            "truncated-terminal",
+            "truncated",
+            [{"import_path": "example/truncated", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "malformed-stream",
+            "malformed",
+            [{"import_path": "example/malformed", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "empty-stream",
+            "empty",
+            [{"import_path": "example/empty", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "missing-package",
+            "missing",
+            [
+                {"import_path": "example/observed", "package_arg": ".", "has_tests": True},
+                {"import_path": "example/missing", "package_arg": ".", "has_tests": True},
+            ],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "cached-input",
+            "cached",
+            [{"import_path": "example/cached", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "no-test-classification",
+            "no-test",
+            [
+                {"import_path": "example/no-test", "package_arg": ".", "has_tests": False},
+                {"import_path": "example/pass", "package_arg": ".", "has_tests": True},
+            ],
+            0,
+            0,
+            "PASS",
+            1,
+            {"inventory.no_test_packages": ["example/no-test"]},
+        ),
+        (
+            "overlapping-subtests",
+            "overlap",
+            [{"import_path": "example/overlap", "package_arg": ".", "has_tests": True}],
+            0,
+            0,
+            "PASS",
+            1,
+            {"package_execution.subtest_overlap_count": 1},
+        ),
+        (
+            "cross-package-concurrency",
+            "cross-package",
+            [
+                {"import_path": "example/package-a", "package_arg": ".", "has_tests": True},
+                {"import_path": "example/package-b", "package_arg": ".", "has_tests": True},
+            ],
+            0,
+            0,
+            "PASS",
+            1,
+            {
+                "package_execution.subtest_overlap_count": 0,
+                "package_execution.subtest_overlap_records": [],
+            },
+        ),
+        (
+            "repeated-package-terminal",
+            "repeated-package",
+            [{"import_path": "example/repeated", "package_arg": ".", "has_tests": True}],
+            0,
+            0,
+            "PASS",
+            1,
+            {"package_execution.ranked_packages.0.observations": 2},
+        ),
+        (
+            "aggregate-duration-overflow",
+            "aggregate-overflow",
+            [
+                {
+                    "import_path": "example/overflow-a",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-b",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-c",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+                {
+                    "import_path": "example/overflow-d",
+                    "package_arg": ".",
+                    "has_tests": True,
+                },
+            ],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "oversized-duration",
+            "oversized-duration",
+            [{"import_path": "example/oversized", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+        (
+            "oversized-integer",
+            "oversized-integer",
+            [{"import_path": "example/oversized", "package_arg": ".", "has_tests": True}],
+            0,
+            1,
+            "INVALID",
+            1,
+            {},
+        ),
+    ]
+    for (
+        name,
+        scenario,
+        packages,
+        run_status,
+        analysis_status,
+        expected_analysis,
+        repeat,
+        expected_checks,
+    ) in cases:
+        case_count += 1
+        try:
+            results.append(
+                exercise_case(
+                    output,
+                    name=name,
+                    scenario=scenario,
+                    packages=packages,
+                    run_status=run_status,
+                    analysis_status=analysis_status,
+                    expect_analysis=expected_analysis,
+                    repeat=repeat,
+                    expected_checks=expected_checks,
+                )
+            )
+        except ControlError as exc:
+            failures.append(str(exc))
+    try:
+        help_results = exercise_help_and_offline(output)
+        results.extend(help_results)
+        case_count += len(help_results)
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        fail_closed_result = exercise_fail_closed(output)
+        results.append(fail_closed_result)
+        case_count += 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        lifecycle_result = exercise_run_lifecycle(output)
+        results.append(lifecycle_result)
+        case_count += lifecycle_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        hermetic_validation_result = exercise_hermetic_validation_regressions(output)
+        results.append(hermetic_validation_result)
+        case_count += hermetic_validation_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        provenance_result = exercise_provenance_tampering(output)
+        results.append(provenance_result)
+        case_count += len(provenance_result["mutations"])
+    except ControlError as exc:
+        failures.append(str(exc))
+    try:
+        artifact_result = exercise_artifact_containment(output)
+        results.append(artifact_result)
+        case_count += artifact_result["scenario_count"]
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        cache_result = exercise_cache_containment(output)
+        results.append(cache_result)
+        case_count += 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        source_identity_result = exercise_source_identity(output)
+        results.append(source_identity_result)
+        case_count += source_identity_result["scenario_count"] + 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        canonical_phase_result = exercise_canonical_phase_validation(output)
+        results.append(canonical_phase_result)
+        case_count += canonical_phase_result["scenario_count"] + 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        phase_failure_result = exercise_phase_command_failures(output)
+        results.append(phase_failure_result)
+        case_count += phase_failure_result["scenario_count"] + 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    try:
+        missing_raw_result = exercise_case(
+            output,
+            name="missing-raw-artifact",
+            scenario="pass",
+            packages=[
+                {"import_path": "example/missing-raw", "package_arg": ".", "has_tests": True}
+            ],
+            run_status=0,
+            analysis_status=1,
+            expect_analysis="INVALID",
+            expected_checks={
+                "provenance.raw_stdout_retained": False,
+                "provenance.raw_artifacts_retained": False,
+            },
+            remove_stdout_after_run=True,
+        )
+        results.append(missing_raw_result)
+        case_count += 1
+    except ControlError as exc:
+        failures.append(str(exc))
+
+    report = {
+        "schema": "c11-hermetic-profile-controls-v1",
+        "created_at_utc": utc_now(),
+        "profile": str(PROFILE),
+        "fixture": str(FIXTURE),
+        "go_invocations": 0,
+        "network_invocations": 0,
+        "build_invocations": 0,
+        "case_count": case_count,
+        "passed_control_count": len(results),
+        "failures": failures,
+        "results": results,
+        "raw_evidence_retained": not any(
+            result.get("raw_artifacts_retained") is False for result in results
+        ),
+        "raw_evidence_retention": {
+            "all_case_artifacts_retained": not any(
+                result.get("raw_artifacts_retained") is False for result in results
+            ),
+            "deliberately_removed_cases": [
+                result.get("name")
+                for result in results
+                if result.get("raw_artifacts_retained") is False
+            ],
+            "negative_control": "missing-raw-artifact",
+        },
+    }
+    write_json(output / "controls.json", report)
+    if failures:
+        print(
+            json.dumps(
+                {"status": "FAILED", "report": str(output / "controls.json"), "failures": failures},
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 1
+    print(
+        json.dumps(
+            {
+                "status": "PASS",
+                "report": str(output / "controls.json"),
+                "cases": case_count,
+                "go_invocations": 0,
+                "network_invocations": 0,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

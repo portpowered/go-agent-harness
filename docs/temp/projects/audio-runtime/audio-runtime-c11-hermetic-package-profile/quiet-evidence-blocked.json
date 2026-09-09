@@ -1,0 +1,38 @@
+{
+  "schema": "c11-quiet-evidence-v1",
+  "valid": false,
+  "isolation": "shared-factory-host",
+  "captured_at_utc": "2026-09-08T11:16:12Z",
+  "runner": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M1 Max",
+    "go_version": "go version go1.26.7 darwin/arm64"
+  },
+  "before": {
+    "active_work": [
+      "audio-runtime-c08-recorded-bundle-roundtrip/work-task-5",
+      "audio-runtime-c11-hermetic-package-profile/work-task-4"
+    ],
+    "worker_sessions": "pre-measurement-workers.json",
+    "board": "pre-measurement-board.json",
+    "process_activity": "pre-measurement-processes.txt",
+    "load": "pre-measurement-uptime.txt"
+  },
+  "after": {
+    "active_work": [
+      "audio-runtime-c08-recorded-bundle-roundtrip/work-task-5",
+      "audio-runtime-c11-hermetic-package-profile/work-task-4"
+    ],
+    "worker_sessions": "post-measurement-workers.json",
+    "board": "post-measurement-board.json",
+    "process_activity": "post-measurement-processes.txt",
+    "load": "post-measurement-uptime.txt"
+  },
+  "reason": "C08 owns the shared factory host; no dedicated runner or exclusive lease is available. Fresh inventory/warm/run remains BLOCKED. Elapsed time and a shared lock are not quiet evidence.",
+  "source": {
+    "current_main": "b01dbb573a15eb61d1cacfff11d37c2461167987",
+    "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/provenance-tampering/analysis/timed-out-pass-status-mismatch/analysis.json",
+  "failure_count": 2,
+  "fresh_timing": "INVALID",
+  "lane_wall_seconds": 0.15379275,
+  "ranked_package_count": 2,
+  "source_sha": "synthetic-control-source",
+  "status": "INVALID"
+}

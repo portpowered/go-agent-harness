@@ -1,0 +1,11 @@
+{
+  "fresh_timing": "INVALID",
+  "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/canonical-phase-validation/run/manifest.json",
+  "provenance": {
+    "analysis_input_valid": false,
+    "invalid_artifact_written_atomically": true
+  },
+  "reason": "ProfileError: command 0 is not a JSON object",
+  "schema": "c11-hermetic-profile-analysis-v1",
+  "status": "INVALID"
+}

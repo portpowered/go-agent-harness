@@ -1,0 +1,49 @@
+{
+  "schema": "c11-ci-rejection-evidence-v2",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "work_id": "work-task-4",
+  "pr": 403,
+  "rejected_head": "5bdb5123641caf123f0c809528bb7224004f6627",
+  "raw_run": {
+    "databaseId": 34227633235,
+    "headSha": "5bdb5123641caf123f0c809528bb7224004f6627",
+    "status": "completed",
+    "conclusion": "failure",
+    "createdAt": "2026-09-08T12:42:50Z",
+    "updatedAt": "2026-09-08T12:52:05Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34227633235"
+  },
+  "failed_job": {
+    "databaseId": 102065559982,
+    "name": "CI (Windows audio portable)",
+    "status": "completed",
+    "conclusion": "failure",
+    "startedAt": "2026-09-08T12:42:55Z",
+    "completedAt": "2026-09-08T12:43:08Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34227633235/job/102065559982",
+    "failed_step": "Check out repository",
+    "skipped_steps": [
+      "Set up Go",
+      "Run Windows audio queue regressions"
+    ]
+  },
+  "failure": {
+    "observed": "git checkout failed with Filename too long while creating committed control stdout/stderr artifacts",
+    "example": "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-review-repair/artifact-containment/run/runs/20260908T123837.796Z-397034b4b1/repeat-001/synthetic/run-20260908T123837.796Z-397034b4b1-001-synthetic.stderr.log",
+    "log_line": "error: unable to create file ...: Filename too long",
+    "c11_owned_paths_changed": true,
+    "go_tests_started": false,
+    "raw_log_command": "gh run view 34227633235 --job 102065559982 --log-failed"
+  },
+  "repair": {
+    "cause": "Generated control evidence used a deep cases/run/runs/timestamp/repeat/module/long-record layout; the longest tracked relative path was 255 characters.",
+    "changes": [
+      "Use a 12-hex run-group directory, rN repeat directory, and short record label.",
+      "Regenerate current controls under the compact ctrl evidence directory.",
+      "Remove only the superseded controls-review-repair generated tree; its prior checkpoint remains in Git history."
+    ],
+    "max_new_tracked_relative_path_before_commit": 184
+  },
+  "ci_claim": "NOT_GREEN_NOT_POLLED"
+}

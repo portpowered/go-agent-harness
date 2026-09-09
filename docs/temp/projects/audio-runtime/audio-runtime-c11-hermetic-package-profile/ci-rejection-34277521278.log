@@ -1,0 +1,367 @@
+﻿2026-09-08T20:54:38.0107335Z Current runner version: '2.337.0'
+2026-09-08T20:54:38.0132884Z ##[group]Runner Image Provisioner
+2026-09-08T20:54:38.0133801Z Hosted Compute Agent
+2026-09-08T20:54:38.0134444Z Version: 20260828.587
+2026-09-08T20:54:38.0135129Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-08T20:54:38.0135866Z Build Date: 2026-08-28T16:44:25Z
+2026-09-08T20:54:38.0136605Z Worker ID: {cbb81763-5493-409b-acd2-f28eda2c60d6}
+2026-09-08T20:54:38.0137318Z Azure Region: eastus
+2026-09-08T20:54:38.0137869Z ##[endgroup]
+2026-09-08T20:54:38.0139842Z ##[group]Operating System
+2026-09-08T20:54:38.0140526Z Ubuntu
+2026-09-08T20:54:38.0141140Z 24.04.4
+2026-09-08T20:54:38.0141699Z LTS
+2026-09-08T20:54:38.0142211Z ##[endgroup]
+2026-09-08T20:54:38.0142861Z ##[group]Runner Image
+2026-09-08T20:54:38.0143451Z Image: ubuntu-24.04
+2026-09-08T20:54:38.0144033Z Version: 20260831.293.1
+2026-09-08T20:54:38.0145305Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-08T20:54:38.0147001Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+2026-09-08T20:54:38.0147982Z ##[endgroup]
+2026-09-08T20:54:38.0149495Z ##[group]GITHUB_TOKEN Permissions
+2026-09-08T20:54:38.0151654Z Contents: read
+2026-09-08T20:54:38.0152366Z Metadata: read
+2026-09-08T20:54:38.0152935Z ##[endgroup]
+2026-09-08T20:54:38.0155041Z Secret source: Actions
+2026-09-08T20:54:38.0156489Z Prepare workflow directory
+2026-09-08T20:54:38.0495275Z Prepare all required actions
+2026-09-08T20:54:38.0544850Z Getting action download info
+2026-09-08T20:54:38.3235160Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-08T20:54:38.4334756Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+2026-09-08T20:54:38.7025699Z Complete job name: CI (coverage)
+2026-09-08T20:54:38.7862494Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T20:54:38.7871553Z ##[group]Run actions/checkout@v4
+2026-09-08T20:54:38.7872329Z with:
+2026-09-08T20:54:38.7872804Z   repository: portpowered/go-agent-harness
+2026-09-08T20:54:38.7876808Z   token: ***
+2026-09-08T20:54:38.7877242Z   ssh-strict: true
+2026-09-08T20:54:38.7877676Z   ssh-user: git
+2026-09-08T20:54:38.7878128Z   persist-credentials: true
+2026-09-08T20:54:38.7878892Z   clean: true
+2026-09-08T20:54:38.7879335Z   sparse-checkout-cone-mode: true
+2026-09-08T20:54:38.7879855Z   fetch-depth: 1
+2026-09-08T20:54:38.7880282Z   fetch-tags: false
+2026-09-08T20:54:38.7880722Z   show-progress: true
+2026-09-08T20:54:38.7881184Z   lfs: false
+2026-09-08T20:54:38.7881643Z   submodules: false
+2026-09-08T20:54:38.7882099Z   set-safe-directory: true
+2026-09-08T20:54:38.7882612Z   allow-unsafe-pr-checkout: false
+2026-09-08T20:54:38.7883413Z ##[endgroup]
+2026-09-08T20:54:38.8918438Z Syncing repository: portpowered/go-agent-harness
+2026-09-08T20:54:38.8920863Z ##[group]Getting Git version info
+2026-09-08T20:54:38.8921897Z Working directory is '/home/runner/work/go-agent-harness/go-agent-harness'
+2026-09-08T20:54:38.8923255Z [command]/usr/bin/git version
+2026-09-08T20:54:38.9081278Z git version 2.55.0
+2026-09-08T20:54:38.9111459Z ##[endgroup]
+2026-09-08T20:54:38.9120470Z Temporarily overriding HOME='/home/runner/work/_temp/2e33e087-ce1f-4749-9dcd-3bcb84f1eb7c' before making global git config changes
+2026-09-08T20:54:38.9122735Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-08T20:54:38.9124804Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-08T20:54:38.9187869Z Deleting the contents of '/home/runner/work/go-agent-harness/go-agent-harness'
+2026-09-08T20:54:38.9192244Z ##[group]Initializing the repository
+2026-09-08T20:54:38.9197374Z [command]/usr/bin/git init /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-08T20:54:38.9332872Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-08T20:54:38.9334512Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-08T20:54:38.9336324Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-08T20:54:38.9338437Z hint: call:
+2026-09-08T20:54:38.9339585Z hint:
+2026-09-08T20:54:38.9340951Z hint: 	git config --global init.defaultBranch <name>
+2026-09-08T20:54:38.9344754Z hint:
+2026-09-08T20:54:38.9347427Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-08T20:54:38.9351258Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-08T20:54:38.9353051Z hint:
+2026-09-08T20:54:38.9354215Z hint: 	git branch -m <name>
+2026-09-08T20:54:38.9355495Z hint:
+2026-09-08T20:54:38.9356938Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-08T20:54:38.9359579Z Initialized empty Git repository in /home/runner/work/go-agent-harness/go-agent-harness/.git/
+2026-09-08T20:54:38.9363258Z [command]/usr/bin/git remote add origin https://github.com/portpowered/go-agent-harness
+2026-09-08T20:54:38.9443372Z ##[endgroup]
+2026-09-08T20:54:38.9444714Z ##[group]Disabling automatic garbage collection
+2026-09-08T20:54:38.9447793Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-08T20:54:38.9483568Z ##[endgroup]
+2026-09-08T20:54:38.9484883Z ##[group]Setting up auth
+2026-09-08T20:54:38.9510585Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-08T20:54:38.9549422Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-08T20:54:39.0011017Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-08T20:54:39.0054695Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-08T20:54:39.0314829Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-08T20:54:39.0355370Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-08T20:54:39.0624848Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-08T20:54:39.0674419Z ##[endgroup]
+2026-09-08T20:54:39.0675686Z ##[group]Fetching the repository
+2026-09-08T20:54:39.0685386Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ac1d51c05a704f727491e7e3f26c4a01a723c94a:refs/remotes/pull/403/merge
+2026-09-08T20:54:40.5362323Z From https://github.com/portpowered/go-agent-harness
+2026-09-08T20:54:40.5365790Z  * [new ref]         ac1d51c05a704f727491e7e3f26c4a01a723c94a -> pull/403/merge
+2026-09-08T20:54:40.5370656Z ##[endgroup]
+2026-09-08T20:54:40.5372053Z ##[group]Determining the checkout info
+2026-09-08T20:54:40.5373820Z ##[endgroup]
+2026-09-08T20:54:40.5374823Z [command]/usr/bin/git sparse-checkout disable
+2026-09-08T20:54:40.5421274Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-08T20:54:40.5479251Z ##[group]Checking out the ref
+2026-09-08T20:54:40.5482630Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/403/merge
+2026-09-08T20:54:40.8968993Z Note: switching to 'refs/remotes/pull/403/merge'.
+2026-09-08T20:54:40.8969828Z 
+2026-09-08T20:54:40.8970305Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-08T20:54:40.8971345Z changes and commit them, and you can discard any commits you make in this
+2026-09-08T20:54:40.8972272Z state without impacting any branches by switching back to a branch.
+2026-09-08T20:54:40.8973156Z 
+2026-09-08T20:54:40.8973569Z If you want to create a new branch to retain commits you create, you may
+2026-09-08T20:54:40.8974159Z do so (now or later) by using -c with the switch command. Example:
+2026-09-08T20:54:40.8974463Z 
+2026-09-08T20:54:40.8974624Z   git switch -c <new-branch-name>
+2026-09-08T20:54:40.8974831Z 
+2026-09-08T20:54:40.8974997Z Or undo this operation with:
+2026-09-08T20:54:40.8975228Z 
+2026-09-08T20:54:40.8975349Z   git switch -
+2026-09-08T20:54:40.8975535Z 
+2026-09-08T20:54:40.8975798Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-08T20:54:40.8976159Z 
+2026-09-08T20:54:40.8976541Z HEAD is now at ac1d51c Merge 43519903572c4047bbb0068d9ed73e7027a257d7 into 668f2d8816beaa078d058b3f0bcc59600b71a023
+2026-09-08T20:54:40.8990043Z ##[endgroup]
+2026-09-08T20:54:40.9041386Z [command]/usr/bin/git log -1 --format=%H
+2026-09-08T20:54:40.9079122Z ac1d51c05a704f727491e7e3f26c4a01a723c94a
+2026-09-08T20:54:40.9354772Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T20:54:40.9356612Z ##[group]Run actions/setup-go@v5
+2026-09-08T20:54:40.9356923Z with:
+2026-09-08T20:54:40.9357171Z   go-version: 1.26.7
+2026-09-08T20:54:40.9357430Z   cache: true
+2026-09-08T20:54:40.9358550Z   cache-dependency-path: go.work.sum
+agent-cli/go.sum
+go-agent-loop/go.sum
+go-llm-gateway/go.sum
+go-audio/go.sum
+go-device-gateway/go.sum
+go-agent-runtime/go.sum
+tools/architecturegate/go.sum
+tests/embedding/go.sum
+
+2026-09-08T20:54:40.9359517Z   check-latest: false
+2026-09-08T20:54:40.9362076Z   token: ***
+2026-09-08T20:54:40.9362330Z ##[endgroup]
+2026-09-08T20:54:41.0697665Z Setup go version spec 1.26.7
+2026-09-08T20:54:41.0720998Z (node:2162) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-08T20:54:41.0925709Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-08T20:54:41.0928546Z Found in cache @ /opt/hostedtoolcache/go/1.26.7/x64
+2026-09-08T20:54:41.0961349Z Added go to the path
+2026-09-08T20:54:41.0962167Z Successfully set up Go version 1.26.7
+2026-09-08T20:54:41.8914699Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOMODCACHE
+2026-09-08T20:54:41.8951357Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOCACHE
+2026-09-08T20:54:41.9024534Z /home/runner/go/pkg/mod
+2026-09-08T20:54:41.9038086Z /home/runner/.cache/go-build
+2026-09-08T20:54:42.0033109Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+2026-09-08T20:54:42.0130088Z (node:2162) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-08T20:54:43.0423599Z Received 193794498 of 193794498 (100.0%), 185.0 MBs/sec
+2026-09-08T20:54:43.0424669Z Cache Size: ~185 MB (193794498 B)
+2026-09-08T20:54:43.0463828Z [command]/usr/bin/tar -xf /home/runner/work/_temp/8f0b39de-d73a-4bbd-b428-960f68a42eac/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+2026-09-08T20:54:44.6132906Z Cache restored successfully
+2026-09-08T20:54:44.6225703Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+2026-09-08T20:54:44.6250371Z go version go1.26.7 linux/amd64
+2026-09-08T20:54:44.6250616Z 
+2026-09-08T20:54:44.6250936Z ##[group]go env
+2026-09-08T20:54:44.7310308Z AR='ar'
+2026-09-08T20:54:44.7310783Z CC='gcc'
+2026-09-08T20:54:44.7311091Z CGO_CFLAGS='-O2 -g'
+2026-09-08T20:54:44.7311413Z CGO_CPPFLAGS=''
+2026-09-08T20:54:44.7311712Z CGO_CXXFLAGS='-O2 -g'
+2026-09-08T20:54:44.7312093Z CGO_ENABLED='1'
+2026-09-08T20:54:44.7312764Z CGO_FFLAGS='-O2 -g'
+2026-09-08T20:54:44.7313067Z CGO_LDFLAGS='-O2 -g'
+2026-09-08T20:54:44.7313355Z CXX='g++'
+2026-09-08T20:54:44.7313655Z GCCGO='gccgo'
+2026-09-08T20:54:44.7313925Z GO111MODULE=''
+2026-09-08T20:54:44.7314233Z GOAMD64='v1'
+2026-09-08T20:54:44.7314506Z GOARCH='amd64'
+2026-09-08T20:54:44.7314771Z GOAUTH='netrc'
+2026-09-08T20:54:44.7315032Z GOBIN=''
+2026-09-08T20:54:44.7315347Z GOCACHE='/home/runner/.cache/go-build'
+2026-09-08T20:54:44.7315753Z GOCACHEPROG=''
+2026-09-08T20:54:44.7316062Z GODEBUG=''
+2026-09-08T20:54:44.7316351Z GOENV='/home/runner/.config/go/env'
+2026-09-08T20:54:44.7316696Z GOEXE=''
+2026-09-08T20:54:44.7316963Z GOEXPERIMENT=''
+2026-09-08T20:54:44.7317241Z GOFIPS140='off'
+2026-09-08T20:54:44.7317506Z GOFLAGS=''
+2026-09-08T20:54:44.7318776Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build22344054=/tmp/go-build -gno-record-gcc-switches'
+2026-09-08T20:54:44.7320389Z GOHOSTARCH='amd64'
+2026-09-08T20:54:44.7320957Z GOHOSTOS='linux'
+2026-09-08T20:54:44.7321274Z GOINSECURE=''
+2026-09-08T20:54:44.7321644Z GOMOD='/dev/null'
+2026-09-08T20:54:44.7321958Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-09-08T20:54:44.7322294Z GONOPROXY=''
+2026-09-08T20:54:44.7322600Z GONOSUMDB=''
+2026-09-08T20:54:44.7322913Z GOOS='linux'
+2026-09-08T20:54:44.7323169Z GOPATH='/home/runner/go'
+2026-09-08T20:54:44.7323462Z GOPRIVATE=''
+2026-09-08T20:54:44.7323815Z GOPROXY='https://proxy.golang.org,direct'
+2026-09-08T20:54:44.7324247Z GOROOT='/opt/hostedtoolcache/go/1.26.7/x64'
+2026-09-08T20:54:44.7324619Z GOSUMDB='sum.golang.org'
+2026-09-08T20:54:44.7324928Z GOTELEMETRY='local'
+2026-09-08T20:54:44.7325263Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-09-08T20:54:44.7325650Z GOTMPDIR=''
+2026-09-08T20:54:44.7325950Z GOTOOLCHAIN='auto'
+2026-09-08T20:54:44.7326356Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.7/x64/pkg/tool/linux_amd64'
+2026-09-08T20:54:44.7326798Z GOVCS=''
+2026-09-08T20:54:44.7327063Z GOVERSION='go1.26.7'
+2026-09-08T20:54:44.7327481Z GOWORK='/home/runner/work/go-agent-harness/go-agent-harness/go.work'
+2026-09-08T20:54:44.7327962Z PKG_CONFIG='pkg-config'
+2026-09-08T20:54:44.7328414Z 
+2026-09-08T20:54:44.7328807Z ##[endgroup]
+2026-09-08T20:54:44.7534273Z ##[group]Run make coverage
+2026-09-08T20:54:44.7534652Z [36;1mmake coverage[0m
+2026-09-08T20:54:44.7578020Z shell: /usr/bin/bash -e {0}
+2026-09-08T20:54:44.7578612Z ##[endgroup]
+2026-09-08T20:54:44.7718612Z ==> coverage agent-cli (target-wide timeout for ./test/integration: 480s)
+2026-09-08T20:55:32.6425651Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/agent		coverage: 0.0% of statements
+2026-09-08T20:55:32.6431910Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/audio-device-server		coverage: 0.0% of statements
+2026-09-08T20:55:32.6442327Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/room-latency-report	0.226s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:32.6446063Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/session-timing-report	0.153s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:32.6681554Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout	0.243s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:32.7110810Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming		coverage: 0.0% of statements
+2026-09-08T20:55:32.9297961Z 	github.com/portpowered/go-agent-harness/agent-cli/cmd/yui		coverage: 0.0% of statements
+2026-09-08T20:55:34.1756536Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/acceptance	0.359s	coverage: 0.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:34.2226827Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/config	0.293s	coverage: 0.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:34.2390538Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/execctx		coverage: 0.0% of statements
+2026-09-08T20:55:34.3333136Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/flags		coverage: 0.0% of statements
+2026-09-08T20:55:34.9813247Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/input	0.169s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:35.0051265Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/logger	0.179s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:35.1600127Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/output	0.153s	coverage: 0.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:39.0227849Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe	1.538s	coverage: 6.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:39.0239628Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault	0.151s	coverage: 0.5% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:39.0242780Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet	0.149s	coverage: 0.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:41.4289410Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	3.783s	coverage: 1.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:41.4310338Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services	0.214s	coverage: 1.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:41.4340296Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime	0.138s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:41.4346967Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports	[no test files]
+2026-09-08T20:55:41.4380123Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession	0.121s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:55:41.4440581Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices	0.173s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3368640Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	73.480s	coverage: 30.9% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3371157Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession	0.133s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3373853Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices	0.904s	coverage: 0.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3376140Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay	0.151s	coverage: 0.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3378572Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools	0.154s	coverage: 0.8% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3380151Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes	[no test files]
+2026-09-08T20:57:14.3381247Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay		coverage: 0.0% of statements
+2026-09-08T20:57:14.3382651Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms	0.103s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3383935Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch		coverage: 0.0% of statements
+2026-09-08T20:57:14.3384793Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire		coverage: 0.0% of statements
+2026-09-08T20:57:14.3385582Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay		coverage: 0.0% of statements
+2026-09-08T20:57:14.3386321Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest	[no test files]
+2026-09-08T20:57:14.3387497Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools	0.198s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3389725Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/internal/runtimeadapter	0.285s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3391079Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire		coverage: 0.0% of statements
+2026-09-08T20:57:14.3391869Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire		coverage: 0.0% of statements
+2026-09-08T20:57:14.3393064Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming	0.300s	coverage: 0.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3394224Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/sight		coverage: 0.0% of statements
+2026-09-08T20:57:14.3395374Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/skills	0.240s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3396498Z 	github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo		coverage: 0.0% of statements
+2026-09-08T20:57:14.3397656Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout	9.939s	coverage: 0.2% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3399479Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming	0.245s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3401041Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/tools	0.208s	coverage: 0.7% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3402795Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	17.605s	coverage: 31.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3404465Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events	10.356s	coverage: 3.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3406201Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost	0.440s	coverage: 0.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3407839Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp	3.248s	coverage: 6.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3409680Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome	4.446s	coverage: 3.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3411329Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery	0.247s	coverage: 3.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3412963Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter	0.172s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3414743Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit	0.155s	coverage: 7.6% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3416351Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools	2.365s	coverage: 5.4% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3417910Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/wire	0.481s	coverage: 6.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3419587Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/workspace	0.123s	coverage: 0.3% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3421152Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional	0.142s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T20:57:14.3422939Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional/parity	0.148s	coverage: 0.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T21:00:27.5425648Z Error: replay interaction fixture "/tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError1832120087/001/invalid.interaction.json": /tmp/TestInteractionReplay_InvalidFixtureReturnsActionableError1832120087/001/invalid.interaction.json: events[0].textDelta: is required for text.delta events
+2026-09-08T21:00:27.5430111Z Usage:
+2026-09-08T21:00:27.5430547Z   yui interaction replay <fixture-path> [flags]
+2026-09-08T21:00:27.5430862Z 
+2026-09-08T21:00:27.5430986Z Examples:
+2026-09-08T21:00:27.5431702Z   yui interaction replay ./fixtures/example.interaction.json
+2026-09-08T21:00:27.5432073Z 
+2026-09-08T21:00:27.5432215Z Flags:
+2026-09-08T21:00:27.5432510Z   -h, --help   help for replay
+2026-09-08T21:00:27.5432728Z 
+2026-09-08T21:00:27.5432830Z Global Flags:
+2026-09-08T21:00:27.5433501Z       --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)
+2026-09-08T21:00:27.5434313Z   -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)
+2026-09-08T21:00:27.5435254Z       --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
+2026-09-08T21:00:27.5436035Z   -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
+2026-09-08T21:00:27.5436873Z       --workdir string           Filesystem-tool workdir (default: the process current directory)
+2026-09-08T21:00:27.5437291Z 
+2026-09-08T21:00:27.5438696Z Error: replay session capture : run session loop: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+2026-09-08T21:00:27.5440033Z replay mismatch
+2026-09-08T21:00:27.5441197Z session transport: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+2026-09-08T21:00:27.5442368Z replay mismatch
+2026-09-08T21:00:27.5443911Z replay session capture : replay session capture /tmp/TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay613141607/001/vision-describe.session.json: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "input_audio_buffer.append" at sequence 3: JSON pointer /audio: expected <missing>, actual "NAATABsAEAALAAoA5f8PABQ...(truncated)
+2026-09-08T21:00:27.5445429Z replay mismatch
+2026-09-08T21:00:27.5446687Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+2026-09-08T21:00:27.5447767Z replay mismatch
+2026-09-08T21:00:27.5448968Z replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected "PROBE_TOOL_MARKER_9182\n...(truncated), actual "tool \"exec\" is not ava...(truncated)
+2026-09-08T21:00:27.5449973Z replay mismatch
+2026-09-08T21:00:27.5451085Z Error: replay session capture /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError1932613079/001/missing.json: read session capture file: open /tmp/TestSessionCommand_ReplayMissingFileReturnsActionableError1932613079/001/missing.json: no such file or directory
+2026-09-08T21:00:27.5452310Z Error: --record path "capture.txt" must end with .json
+2026-09-08T21:00:27.5452985Z Error: openai realtime api key is missing (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure the provider in config.yaml)
+2026-09-08T21:00:27.5453977Z Error: grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in config.yaml)
+2026-09-08T21:00:27.5455040Z Error: OpenAI model "gpt-4o" is not realtime-capable for agent session; supported realtime models: gpt-realtime, gpt-realtime-2.1-mini, gpt-realtime-2.1
+2026-09-08T21:00:27.5455996Z Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+2026-09-08T21:00:27.5457298Z session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+2026-09-08T21:00:27.5476496Z replay mismatch
+2026-09-08T21:00:27.5477458Z replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+2026-09-08T21:00:27.5478705Z replay mismatch
+2026-09-08T21:00:27.5479303Z scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2 (status=transport; detail=provider_closed)
+2026-09-08T21:00:27.5480177Z capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+2026-09-08T21:00:27.5481001Z Error: invalid OpenAI Realtime voice "not-a-voice"; supported voices: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse
+2026-09-08T21:00:27.5481956Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+2026-09-08T21:00:27.5483431Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+2026-09-08T21:00:27.5484497Z Tools: none
+2026-09-08T21:00:27.5485036Z [session terminal: classification=terminal_failure terminal_reason=terminal_failure terminal_provenance=session output_state=none]
+2026-09-08T21:00:27.5485759Z live session terminated: session error: Realtime fixture rejected request
+2026-09-08T21:00:27.5486209Z Error: session error: Realtime fixture rejected request
+2026-09-08T21:00:27.5486896Z Filesystem scope: workdir=/home/runner/work/go-agent-harness/go-agent-harness/agent-cli/test/integration; additional_allowed_roots=none
+2026-09-08T21:00:27.5488603Z Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+2026-09-08T21:00:27.5489684Z Tools: none
+2026-09-08T21:00:27.5489794Z 
+2026-09-08T21:00:27.5490082Z [session closed: provider_closed]
+2026-09-08T21:00:27.5490671Z [session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=none]
+2026-09-08T21:00:27.5492068Z live session terminated: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+2026-09-08T21:00:27.5493105Z replay mismatch
+2026-09-08T21:00:27.5493976Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+2026-09-08T21:00:27.5494871Z replay mismatch
+2026-09-08T21:00:27.5495825Z Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+2026-09-08T21:00:27.5496790Z replay mismatch
+2026-09-08T21:00:27.5497653Z replay mismatch: expected event type "conversation.item.create" at sequence 3, actual event type "conversation.item.create" at sequence 3: JSON pointer /item/content/0/text: expected "run the smoke replay", actual "wrong prompt"
+2026-09-08T21:00:27.5498793Z replay mismatch
+2026-09-08T21:00:27.5499179Z --- FAIL: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl (2.01s)
+2026-09-08T21:00:27.5501682Z     session_duplex_overlap_test.go:66: multi-turn negative-control baseline failed before mutation: multi-turn harness A CLI failed after 2.001884707s: replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl2554102964/001/harness-a-multiturn.session.json: run session loop: session cancelled while awaiting model response after end-of-turn: context deadline exceeded
+2026-09-08T21:00:27.5503473Z         context deadline exceeded
+2026-09-08T21:00:27.5503963Z         --audio-out "-": audio write "-" (raw PCM16): context canceled
+2026-09-08T21:00:27.5506531Z         replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl2554102964/001/harness-a-multiturn.session.json: context deadline exceeded; harness A err=replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl2554102964/001/harness-a-multiturn.session.json: run session loop: session cancelled while awaiting model response after end-of-turn: context deadline exceeded
+2026-09-08T21:00:27.5508582Z         context deadline exceeded
+2026-09-08T21:00:27.5509047Z         --audio-out "-": audio write "-" (raw PCM16): context canceled
+2026-09-08T21:00:27.5518568Z         replay session capture /tmp/TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl2554102964/001/harness-a-multiturn.session.json: context deadline exceeded elapsed=2.001884707s runtime=[audio_output@7/t0/c0 audio_input@7/t0/c0 input_commit@8/t0/c1 response_create@8/t0/c0 audio_output@8/t0/c0 turn_completed@8/t1/c0 audio_input@8/t0/c0 input_commit@8/t0/c2 response_create@8/t0/c0 audio_output@9/t0/c0 turn_completed@10/t2/c0 audio_input@10/t0/c0 input_commit@10/t0/c3 response_create@10/t0/c0 terminal@10/t2/c0] stream=[{SESSION.OPEN } {TEXT.DELTA A transcript turn 1} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA A transcript turn 2} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA A transcript turn 3}] terminal={Clean:false Turns:2 FinalTick:10 FinalTimestamp:2026-08-26 12:00:00.1 +0000 UTC InputEOF:true OutputFrame:true Error:}; harness B err=<nil> elapsed=260.956031ms runtime=[audio_output@7/t0/c0 audio_input@7/t0/c0 input_commit@8/t0/c1 response_create@8/t0/c0 audio_output@8/t0/c0 turn_completed@8/t1/c0 audio_input@8/t0/c0 input_commit@9/t0/c2 response_create@9/t0/c0 audio_input@9/t0/c0 input_commit@10/t0/c3 response_create@10/t0/c0 audio_output@10/t0/c0 turn_completed@10/t2/c0 turn_completed@10/t3/c0 terminal@10/t3/c0] stream=[{SESSION.OPEN } {TEXT.DELTA B transcript turn 1} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA B transcript turn 2} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {TEXT.DELTA B transcript turn 3} {AUDIO.DELTA } {AUDIO.END } {MESSAGE.END } {SESSION.CLOSE }] terminal={Clean:true Turns:3 FinalTick:10 FinalTimestamp:2026-08-26 12:00:00.1 +0000 UTC InputEOF:false OutputFrame:true Error:}; crossings=6/[1:A-to-B/A-turn-1@7 2:B-to-A/B-turn-1@7 3:A-to-B/A-turn-2@8 4:B-to-A/B-turn-2@8 5:A-to-B/A-turn-3@9 6:B-to-A/B-turn-3@10] final_tick=10
+2026-09-08T21:00:27.5524619Z FAIL
+2026-09-08T21:00:27.5525225Z coverage: 27.0% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T21:00:27.5526049Z FAIL	github.com/portpowered/go-agent-harness/agent-cli/test/integration	246.193s
+2026-09-08T21:00:27.5527317Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent	0.425s	coverage: 0.1% of statements in github.com/portpowered/go-agent-harness/agent-cli/..., github.com/portpowered/go-agent-harness/go-agent-runtime/...
+2026-09-08T21:00:27.5528508Z FAIL
+2026-09-08T21:00:27.7722895Z agent-cli coverage exited with status 1: command=go "test" "./..." "-tags=nomicrophone" "-timeout" "480s" "-coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/..." "-coverprofile=../coverage/agent-cli.out" pid=2289
+2026-09-08T21:00:27.7724534Z Agent CLI coverage budget summary
+2026-09-08T21:00:27.7724860Z Elapsed: 5m39.836s
+2026-09-08T21:00:27.7725126Z Configured timeout: 8m0s
+2026-09-08T21:00:27.7725525Z Consumed: 70.8%
+2026-09-08T21:00:27.7725804Z Remaining headroom: 2m20.164s (29.2%)
+2026-09-08T21:00:27.7726205Z Classification: test failure (non-timeout command exit)
+2026-09-08T21:00:27.7727363Z exit status 1
+2026-09-08T21:00:27.7744258Z make: *** [Makefile:303: coverage] Error 1
+2026-09-08T21:00:27.7764033Z ##[error]Process completed with exit code 2.
+2026-09-08T21:00:27.7912855Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:00:27.7914123Z Post job cleanup.
+2026-09-08T21:00:27.8868470Z [command]/usr/bin/git version
+2026-09-08T21:00:27.8917593Z git version 2.55.0
+2026-09-08T21:00:27.8962593Z Temporarily overriding HOME='/home/runner/work/_temp/98e8b6f4-5ce0-4685-89c0-947970895261' before making global git config changes
+2026-09-08T21:00:27.8964095Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-08T21:00:27.8969258Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-08T21:00:27.9017363Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-08T21:00:27.9080401Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-08T21:00:27.9441333Z fatal: No url found for submodule path 'docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo' in .gitmodules
+2026-09-08T21:00:27.9511861Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+2026-09-08T21:00:27.9711245Z Cleaning up orphan processes
+2026-09-08T21:00:28.0134707Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-go@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

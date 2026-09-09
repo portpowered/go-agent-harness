@@ -1,0 +1,141 @@
+{
+  "failure_references": [],
+  "fresh_timing": "PASS",
+  "inventory": {
+    "coverage": 1.0,
+    "expected_package_paths": [
+      "example/pass"
+    ],
+    "expected_packages": 1,
+    "missing_package_paths": [],
+    "no_test_packages": [],
+    "notes": "No-test packages are retained as a separate inventory class; they do not make a missing or failed test stream pass.",
+    "observed_package_paths": [
+      "example/pass"
+    ],
+    "observed_terminal_packages": 1,
+    "unexpected_package_paths": []
+  },
+  "lane": {
+    "definition": "max(monotonic_end)-min(monotonic_start); the sum is retained only as a diagnostic and is never reported as lane wall",
+    "invocation_count": 2,
+    "lane_wall_seconds": 0.137635791,
+    "sum_invocation_wall_seconds": 0.136380374
+  },
+  "package_execution": {
+    "package_budget_policy": {
+      "budget_seconds": 60,
+      "note": "The canonical PR-tier package-budget evaluator remains in tools/timingate; offline analysis does not duplicate or execute that policy.",
+      "status": "REFERENCE_ONLY",
+      "tool": "tools/timingate"
+    },
+    "package_time_total_seconds": 0.04,
+    "ranked_packages": [
+      {
+        "durations_seconds": [
+          0.02,
+          0.02
+        ],
+        "failure_kinds": [],
+        "max_seconds": 0.02,
+        "mean_seconds": 0.02,
+        "min_seconds": 0.02,
+        "observations": 2,
+        "package": "example/pass",
+        "spread_seconds": 0.0
+      }
+    ],
+    "subtest_overlap_count": 0,
+    "subtest_overlap_records": []
+  },
+  "provenance": {
+    "analysis_artifact_written_atomically": true,
+    "cached_output_is_invalid": true,
+    "fresh_timing_requires_quiet_evidence": true,
+    "invalid_artifact_written_atomically": false,
+    "lane_wall_not_sum_of_packages": true,
+    "quiet_evidence_provenance_validated": true,
+    "raw_artifacts_retained": true,
+    "raw_stderr_retained": true,
+    "raw_stdout_retained": true,
+    "run_group_repetition_counts_validated": true,
+    "source_identity_required_per_record": true,
+    "test_result_cache_policy": "every run command contains -count=1"
+  },
+  "repetitions": [
+    {
+      "cohort": true,
+      "completed_repetitions": 2,
+      "records": [
+        "run-2e300d-r1-synthetic",
+        "run-2e300d-r2-synthetic"
+      ],
+      "requested_repetitions": 2,
+      "run_group_id": "2e300dd26886",
+      "status": "CAPTURED",
+      "validation": {
+        "actual_records": 2,
+        "completed_repetitions": 2,
+        "errors": [],
+        "expected_records": 2,
+        "quiet_evidence": {
+          "isolation": "synthetic-control",
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-canonical-v2/cases/valid-pass-repeat/run/quiet-evidence.json",
+          "sha256": "462b0040ff9bfa51cb57fc83a5547a53a43f123b0e1f0b3c43b1d56a8fe748f2",
+          "status": "PASS"
+        },
+        "requested_repetitions": 2,
+        "run_group_id": "2e300dd26886",
+        "status": "PASS",
+        "valid": true
+      }
+    }
+  ],
+  "schema": "c11-hermetic-profile-analysis-v1",
+  "setup_and_build": {
+    "dependency_download_seconds": 0.0,
+    "inventory_cold_setup_seconds": 0.0,
+    "test_binary_compile_seconds": 0.0,
+    "test_build_attribution": "RESIDUAL_ESTIMATE: go test execution can include package/test binary builds; warm compile timings are separate evidence and are not subtracted from lane wall.",
+    "warm_status": "NOT_RUN"
+  },
+  "source": {
+    "flags": {
+      "agent_cli_timeout_seconds": 5,
+      "cgo_enabled": "0",
+      "count": 1,
+      "general_timeout_seconds": 5,
+      "go_test_p": 1,
+      "gomaxprocs": 1,
+      "tags": [
+        "nomicrophone"
+      ]
+    },
+    "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-canonical-v2/cases/valid-pass-repeat",
+    "runner": {
+      "architecture": "synthetic",
+      "cpu": "synthetic",
+      "go_version": "not-used",
+      "os": "synthetic"
+    },
+    "sha": "synthetic-control-source",
+    "source_identity": {
+      "all_match": true,
+      "manifest": "synthetic-control-source",
+      "mismatched_records": [],
+      "missing_records": [],
+      "record_values": [
+        "synthetic-control-source"
+      ],
+      "unvalidated_records": [],
+      "validation_required": false
+    }
+  },
+  "status": "PASS",
+  "target_comparison": {
+    "lane_wall_seconds": 0.137635791,
+    "observed_under_target": true,
+    "status": "OBSERVATION_ONLY_NOT_A_GATE",
+    "target_seconds": 180.0
+  }
+}

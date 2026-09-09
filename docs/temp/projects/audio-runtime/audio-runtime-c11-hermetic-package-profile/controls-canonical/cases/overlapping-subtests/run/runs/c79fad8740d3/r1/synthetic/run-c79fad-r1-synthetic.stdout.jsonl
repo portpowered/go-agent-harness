@@ -1,0 +1,6 @@
+{"Action": "start", "Package": "example/overlap"}
+{"Action": "run", "Package": "example/overlap", "Test": "TestOverlap/a"}
+{"Action": "run", "Package": "example/overlap", "Test": "TestOverlap/b"}
+{"Action": "pass", "Elapsed": 0.01, "Package": "example/overlap", "Test": "TestOverlap/b"}
+{"Action": "pass", "Elapsed": 0.01, "Package": "example/overlap", "Test": "TestOverlap/a"}
+{"Action": "pass", "Elapsed": 0.03, "Package": "example/overlap"}

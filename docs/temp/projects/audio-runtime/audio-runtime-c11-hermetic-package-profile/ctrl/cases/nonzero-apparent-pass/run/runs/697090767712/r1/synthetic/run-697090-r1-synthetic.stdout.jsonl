@@ -1,0 +1,4 @@
+{"Action": "start", "Package": "example/pass"}
+{"Action": "run", "Package": "example/pass", "Test": "TestPass"}
+{"Action": "pass", "Elapsed": 0.01, "Package": "example/pass", "Test": "TestPass"}
+{"Action": "pass", "Elapsed": 0.02, "Package": "example/pass"}

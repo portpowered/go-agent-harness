@@ -1,0 +1,9 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl/provenance-tampering/analysis/missing-quiet-observations/analysis.json",
+  "failure_count": 3,
+  "fresh_timing": "INVALID",
+  "lane_wall_seconds": 0.135573209,
+  "ranked_package_count": 1,
+  "source_sha": "synthetic-control-source",
+  "status": "INVALID"
+}

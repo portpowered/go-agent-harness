@@ -1,0 +1,1 @@
+profile.py: error: cohort timing requires a successful complete full inventory trial first: full inventory trial record 'full-failed' did not complete with PASS/exit 0 (status='FAIL', exit=1)

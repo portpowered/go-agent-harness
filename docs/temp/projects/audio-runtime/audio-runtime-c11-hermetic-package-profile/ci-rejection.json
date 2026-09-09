@@ -1,0 +1,37 @@
+{
+  "schema": "c11-ci-rejection-evidence-v1",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "work_id": "work-task-4",
+  "pr": 403,
+  "rejected_head": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
+  "raw_board_feedback": "CI checks failed for PR #403 at head 5c6d24ac2fc2740014280f51797086c25e5f8bc6: required checks failed on current head 5c6d24ac2fc2740014280f51797086c25e5f8bc6: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34220749840/job/102043028609). Return this task to the executor with the listed failures.",
+  "ci": {
+    "run_id": 34220749840,
+    "job_id": 102043028609,
+    "check": "CI (hermetic)",
+    "status": "completed",
+    "conclusion": "failure",
+    "started_at": "2026-09-08T11:27:05Z",
+    "completed_at": "2026-09-08T11:32:06Z",
+    "head_sha": "5c6d24ac2fc2740014280f51797086c25e5f8bc6",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34220749840/job/102043028609"
+  },
+  "failure": {
+    "module": "agent-cli",
+    "package": "./agent-cli/internal/services/internal/agentruntime",
+    "test": "TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress",
+    "observed": "closed-target room result reported receive fan out PCM from alice: PCM16 mixer is closed; expected participant-scoped rejection with a clean room stop",
+    "process_exit": 1,
+    "c11_owned_paths_changed": false
+  },
+  "causal_recheck": {
+    "rebase_base": "02e54e6a89a7a2d7ad1ce2fa0619145c16400339",
+    "candidate_head": "76d8c27c6bb3928178542c454c3cd2a29846156b",
+    "command": "go test ./agent-cli/internal/services/internal/agentruntime -count=1 -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s",
+    "status": "PASS",
+    "conclusion": "The rejected runtime test did not reproduce after the required rebase. No C11-owned implementation repair is justified; submit the same task with current-main ancestry to script CI."
+  },
+  "next_action": "PUSH_AND_SUBMIT_SAME_PR_TO_SCRIPT_CI",
+  "ci_claim": "NOT_GREEN_NOT_POLLED"
+}

@@ -1,0 +1,4 @@
+{"Action": "start", "Package": "example/fail"}
+{"Action": "run", "Package": "example/fail", "Test": "TestFailure"}
+{"Action": "fail", "Elapsed": 0.01, "Package": "example/fail", "Test": "TestFailure"}
+{"Action": "fail", "Elapsed": 0.02, "Package": "example/fail"}

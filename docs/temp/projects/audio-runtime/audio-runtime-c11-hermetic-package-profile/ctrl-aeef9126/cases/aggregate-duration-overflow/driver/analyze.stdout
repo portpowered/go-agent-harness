@@ -1,0 +1,6 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/aggregate-duration-overflow/analysis/analysis.json",
+  "error": "package execution duration total exceeds time.Duration",
+  "fresh_timing": "INVALID",
+  "status": "INVALID"
+}

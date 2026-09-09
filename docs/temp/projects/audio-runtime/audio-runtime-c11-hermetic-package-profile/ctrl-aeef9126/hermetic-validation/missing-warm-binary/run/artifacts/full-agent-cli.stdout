@@ -1,0 +1,5 @@
+{"Action":"start","Package":"example/agent-cli"}
+{"Action":"pass","Package":"example/agent-cli","Elapsed":0.02}
+{"Action":"start","Package":"example/omitted"}
+{"Action":"output","Package":"example/omitted","Output":"? [no test files]\n"}
+{"Action":"skip","Package":"example/omitted","Elapsed":0.0}

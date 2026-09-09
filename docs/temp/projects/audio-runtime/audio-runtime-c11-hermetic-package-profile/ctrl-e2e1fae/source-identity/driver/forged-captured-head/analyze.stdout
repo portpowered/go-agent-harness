@@ -1,0 +1,9 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-e2e1fae/source-identity/analysis/forged-captured-head/analysis.json",
+  "failure_count": 1,
+  "fresh_timing": "INVALID",
+  "lane_wall_seconds": 0.066291458,
+  "ranked_package_count": 1,
+  "source_sha": "813c7bc9a1dfb63d27d0977f50092273b387b4fb",
+  "status": "INVALID"
+}

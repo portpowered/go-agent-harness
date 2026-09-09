@@ -1,0 +1,41 @@
+{
+  "ci_evidence": [
+    {
+      "limitations": "Historical PR398 coverage run; integration failure; not current C11 source and not raw uncached go test JSON.",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/ci-34132278337-failed.log",
+      "runner": "linux/amd64 Go 1.26.7; hosted cache paths recorded in assessment.md",
+      "sha256": "8715136ba2c199229e01771abd686e3ad869297803ba906dd72a2baa18516593",
+      "source_sha": "c849c9a1fe9ae399290bad389472d60e1d26b2eb"
+    },
+    {
+      "limitations": "Hosted hermetic log lacks complete checkout and runner identity; integration failure; not current C11 source and not raw uncached go test JSON.",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/ci-34154917253-failed.log",
+      "runner": null,
+      "sha256": "268ace28829689cdb4c100960be39714ccb3a51c97c3d5a0944e7c23e601e091",
+      "source_sha": null
+    }
+  ],
+  "failure_references": [],
+  "fresh_timing": "BLOCKED",
+  "inventory": {
+    "coverage": "UNKNOWN",
+    "expected_packages": 0,
+    "observed_packages": null
+  },
+  "lane": {
+    "definition": "No fresh run was authorized.",
+    "lane_wall_seconds": null,
+    "sum_invocation_wall_seconds": null
+  },
+  "provenance": {
+    "after_snapshot": "post-measurement-*",
+    "before_snapshot": "pre-measurement-*",
+    "fresh_timing_is_not_inferred_from_elapsed": true,
+    "quiet_evidence": "quiet-evidence-blocked.json",
+    "raw_logs_retained": true
+  },
+  "reason": "C08 owns the shared factory host at the before and after snapshots; no dedicated runner or exclusive lease is available. No heavy Go command was launched.",
+  "schema": "c11-hermetic-profile-analysis-v1",
+  "source_sha": "b01dbb573a15eb61d1cacfff11d37c2461167987",
+  "status": "BLOCKED"
+}
