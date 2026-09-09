@@ -520,14 +520,12 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 
 // writePlayback is the single producer boundary for device-rate PCM.
 //
-// The pacing lock serializes provider and hold-tone producers.
-// Capacity admission happens before playback state is locked.
-// That ordering lets a callback or interruption continue draining.
-// The generation check linearizes a queued frame with interruption.
-// Correlation reserves metadata only after that check succeeds.
-// The device write is the admission edge; render callbacks consume it later.
-// Observer delivery remains a nonblocking pull-side diagnostic operation.
-// The caller owns the context used for capacity and device writes.
+// The pacing lock serializes producer capacity admission and enqueue. It
+// lets callbacks and interruption continue draining while a queued frame is
+// revalidated by generation.
+// Correlation reserves metadata only after that check succeeds; render
+// callbacks consume the device write later, while observer delivery remains
+// a nonblocking pull-side diagnostic operation.
 func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
@@ -620,9 +618,11 @@ func (s *RTCDeviceSink) Close() error {
 			s.commands.Close()
 			<-s.commandDone
 		}
-		s.playbackMu.Lock()
-		s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
-		s.playbackMu.Unlock()
+		if s.renderBoundarySupported.Load() {
+			s.playbackMu.Lock()
+			s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+			s.playbackMu.Unlock()
+		}
 		s.closeErr = s.sink.Close()
 		s.renderStopOnce.Do(func() { close(s.renderStop) })
 		<-s.renderDone
