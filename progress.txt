@@ -449,3 +449,41 @@ C18 coverage rejection repair checkpoint
   repair on the same branch, update PR #410, and return `ACCEPTED` to the
   script-owned CI gate without polling; retain ownership for any exact
   same-head rejection.
+
+C18 CI rejection resolution checkpoint
+
+- The canonical task rejection for PR #410 at head `62f37731d78aad7a6cef7118fcd06ce3c03ee66b` is preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34323462820.json`.
+  The complete coverage job log was read through the job-log API. It reports
+  only `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  failing at `session_tool_audio_remote_e2e_test.go:182` after `30.03s` without
+  reaching the final remote-device PCM marker; the other error lines are
+  expected negative-control diagnostics.
+- The failure is not reproduced: candidate normal and race runs pass in
+  `18.12s` and `21.32s`; the candidate's coverage-instrumented parallel test
+  function passes all 12 non-skipped test45/test46/test47/test48 cases,
+  including `test46/slow_device` in `17.45s`; exact `origin/main`
+  `3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84` passes the same control in
+  `18.18s`. C18 does not change that integration test or its live/provider/
+  device implementation path, so no speculative out-of-lease repair, timeout
+  change, assertion weakening, or acceptance waiver is justified.
+- Post-rejection C18 focused validation passes: runtime replay normal/race,
+  independent `GOWORK=off` embedding consumer normal/race, focused CLI and
+  integration replay/PCM/audio-interrupt controls, and
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` in normal,
+  coverage, and race modes. Expected replay, mismatch, missing-tool and
+  invalid-input controls remain asserted. No CI-green or project-acceptance
+  claim is made; no C18 review row or C18-specific review finding exists.
+- Current root quality checks remain green after the evidence update:
+  `make wire-check` leaves generated files unchanged, architecture-size
+  reports `182` packages, `1868` files and `27134` functions, and `make vet`,
+  pinned `make lint` (`0 issues`), `make staticcheck`, JSON validation and
+  `git diff --check` pass. The additional evidence JSON is ignored by the
+  repository's `docs/temp/` rule and will be force-added as an owned audit
+  record; no architecture baseline or quality policy is changed by this
+  rejection resolution.
+- Next action: commit this evidence checkpoint, push the same admitted branch,
+  update PR #410 with the exact CI failure and bounded candidate-vs-main
+  evidence, then return `ACCEPTED` to the script-owned CI gate. Retain this
+  task for any exact current-head rejection; do not self-review or claim CI
+  green.
