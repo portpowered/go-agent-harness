@@ -1,1 +1,1 @@
-{"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay", "minimum": 80.00}
+{"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay", "exception": "Compatibility aliases only; strict replay implementation and coverage live in go-agent-runtime/services/replay."}

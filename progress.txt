@@ -424,3 +424,28 @@ C18 script-CI handoff checkpoint
   CI status was polled or represented as green. The exact next action is for
   script CI to evaluate this same PR head. Retain ownership for any exact CI
   rejection and repair/resubmit the same task; do not self-review.
+
+C18 coverage rejection repair checkpoint
+
+- The canonical board returned the same task after PR #410 head
+  `d9211ec594ae9a899d8baa8d87b8f9ebd1d5671e` and CI run `34321690774`, job
+  `102369544184`. The complete failed job log was read with `gh run view
+  34321690774 --job 102369544184 --log-failed` and the raw job API response,
+  board feedback, and extracted failure are preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34321690774.json`.
+  All coverage package tests completed successfully; the gate failed only on
+  the stale alias-package registration with no measured coverage and the new
+  public replay package's `95.00%` floor versus `80.00%` measured coverage.
+- The repair changes the CLI compatibility manifest entry to an explicit
+  alias-only exception and adds the public `StrictPrepared.ValidateComplete`
+  unprepared-value regression, preserving the existing `95.00%` runtime floor.
+  Focused runtime coverage is now `100.00%`; `make coverage-registration`
+  passes all `172` workspace packages.
+- Focused normal/race runtime replay (`76` each), public embedding strict
+  replay (`4` each), CLI replay (`146` each), and the two named integration
+  controls (`5`) pass. Accumulated session regressions pass once in normal,
+  coverage, and race modes, including expected negative-control diagnostics.
+  No CI result is claimed green. Next action: commit and push this causal
+  repair on the same branch, update PR #410, and return `ACCEPTED` to the
+  script-owned CI gate without polling; retain ownership for any exact
+  same-head rejection.
