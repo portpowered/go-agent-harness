@@ -1113,3 +1113,50 @@ C18 coverage rejection reconciliation and same-owner handoff checkpoint
   exact non-waived failure evidence, and return `ACCEPTED` to the
   script-owned current-head CI gate without polling. Retain ownership through
   `CONTINUE` for any exact-head actionable C18 rejection; do not self-review.
+
+C18 current-head coverage rejection reconciliation and same-owner handoff checkpoint
+
+- Reverified the admitted `work-task-24` with `factory/scripts/project-control.py
+  verify-work --type task --name audio-runtime-c18-public-strict-replay`;
+  admission returned `admitted`. The isolated branch remains
+  `codex/audio-runtime-c18-public-strict-replay`, exactly matching
+  `prd.json.branchName`. Fetched `origin/main=e4137eba6a6499142f50701609c1149afc71db84`;
+  startup integration `8bdafc7f`, original baseline `3194edd9`, planning main
+  `3bbd052b`, and current main remain ancestors. The worktree and predecessor
+  checkpoints were preserved; no host checkout was reset or edited.
+- Read the complete current rejection for PR #410, run `34375435975`, coverage
+  job `102546927663`, at candidate `cac1910e12c41ab9a5967522bc8f5b56dc8e0c97`.
+  The full 380-line log is recorded by
+  `ci-rejection-34375435975.json` with SHA256
+  `7ac235bd2b23c25609bfeae03576fce345d3bc67d2af5e4ea63557dbdd70ec68`.
+  Its sole failed control is
+  `agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_cancel_test.go:283`,
+  `TestRTCDeviceSinkInterruptionTimerSurvives24kTo16kConversion`, reporting
+  `mixed-rate playback cursor = 0 ms, want two 30 ms device callbacks`.
+  The file is not in the C18 diff; this is an unrelated RTC device timing
+  failure, not a replay/Wire/embedding defect. It remains non-waived CI
+  evidence and is not repaired by this task.
+- The exact named control was run with the hosted lane's `nomicrophone` tag
+  and bound 20 times: `20/20` passed in one package. No C18 production defect
+  reproduced, and no unrelated audio/device path was changed.
+- Accumulated C18 causal checks are green on this exact source: strict replay
+  normal/race each pass `84` tests across four packages; the separate
+  `tests/embedding` public strict regressions pass normal/race; replay
+  integration passes `2`; architecture-size passes with `182` packages,
+  `1870` files and `27216` functions; Wire regeneration/check and
+  `git diff --check` pass. Review43 controls cover forged completion,
+  mismatched nested `ToolCallID`, finalized relative/absolute bundles, and
+  strict/provider declared-PCM mutation rejection.
+- Refreshed exact current-source public artifacts pass all owned cases. The
+  yui SHA256 is `e9aedbed55057492d5904a9926960f79396e54773a4887fe0e206762fc30b66b`;
+  the separate GOWORK=off consumer SHA256 is
+  `22fe6f1cc5e1929f7623411d0615e98bf4012fba3502458aa3d5d3765edfc7a8`.
+  Reports for external/strict/provider/interruption/ask all record source
+  revision `cac1910e`, status `passed`, and respectively `2/5/7/4/2` cases.
+- No CI success, independent review, merge, vertical acceptance, or project
+  acceptance is claimed. Exact next action: commit this raw current-head
+  rejection and non-waived causal reconciliation, push the same PR #410,
+  update its evidence, and return `ACCEPTED` to the script-owned CI gate
+  without polling. Retain ownership through `CONTINUE` for any exact-head
+  actionable C18 rejection; do not self-review or broaden scope to the
+  unrelated RTC failure.
