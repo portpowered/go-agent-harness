@@ -451,57 +451,57 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 	if parent == nil {
 		parent = context.Background()
 	}
-	child := newDeadlineContext(parent, deadline)
+	// Let the standard cancel context own parent propagation and cancellation
+	// cause inheritance, including the synchronous cancelCtx fast path. The
+	// wrapper below only adds a deadline from this scheduler's time domain.
+	// Timer completion records DeadlineExceeded as the child cause; explicit
+	// cancellation records Canceled; an already-canceled parent keeps its cause.
+	// The timer goroutine observes the child so parent and explicit cancellation
+	// both stop the scheduler timer and release its heap entry.
+	// Keeping one cancellation owner also makes cleanup idempotent when the
+	// virtual timer and parent cancellation become ready at the same instant.
+	// No wall-clock wait is introduced, so deterministic callers retain their
+	// existing explicit-advance contract.
 	if err := parent.Err(); err != nil {
-		child.finish(contextCause(parent))
-		return child, func() { child.finish(context.Canceled) }
+		child, cancelCause := context.WithCancelCause(parent)
+		cancelCause(contextCause(parent))
+		return &deadlineContext{Context: child, deadline: deadline}, func() { cancelCause(context.Canceled) }
 	}
+	child, cancelCause := context.WithCancelCause(parent)
 	timer := source.NewTimer(deadline.Sub(source.Now()))
-	stop := make(chan struct{})
-	var stopOnce sync.Once
 	cancel := func() {
-		stopOnce.Do(func() { close(stop) })
-		child.finish(context.Canceled)
+		cancelCause(context.Canceled)
 	}
 	go func() {
 		defer timer.Stop()
 		select {
-		case <-parent.Done():
-			child.finish(contextCause(parent))
 		case <-timer.C():
-			child.finish(context.DeadlineExceeded)
-		case <-stop:
+			cancelCause(context.DeadlineExceeded)
+		case <-child.Done():
 		}
 	}()
-	return child, cancel
+	return &deadlineContext{Context: child, deadline: deadline}, cancel
 }
 
 type deadlineContext struct {
-	parent   context.Context
+	context.Context
 	deadline time.Time
-	done     chan struct{}
-	mu       sync.Mutex
-	err      error
-	once     sync.Once
 }
 
-func newDeadlineContext(parent context.Context, deadline time.Time) *deadlineContext {
-	return &deadlineContext{parent: parent, deadline: deadline, done: make(chan struct{})}
-}
 func (c *deadlineContext) Deadline() (time.Time, bool) {
-	parentDeadline, ok := c.parent.Deadline()
+	parentDeadline, ok := c.Context.Deadline()
 	if ok && parentDeadline.Before(c.deadline) {
 		return parentDeadline, true
 	}
 	return c.deadline, true
 }
-func (c *deadlineContext) Done() <-chan struct{} { return c.done }
-func (c *deadlineContext) Err() error            { c.mu.Lock(); err := c.err; c.mu.Unlock(); return err }
-func (c *deadlineContext) Value(key any) any     { return c.parent.Value(key) }
-func (c *deadlineContext) Cause() error          { return c.Err() }
-func (c *deadlineContext) finish(err error) {
-	c.once.Do(func() { c.mu.Lock(); c.err = err; c.mu.Unlock(); close(c.done) })
+func (c *deadlineContext) Err() error {
+	if cause := context.Cause(c.Context); cause != nil {
+		return cause
+	}
+	return c.Context.Err()
 }
+func (c *deadlineContext) Cause() error { return context.Cause(c.Context) }
 func contextCause(ctx context.Context) error {
 	if cause := context.Cause(ctx); cause != nil {
 		return cause
