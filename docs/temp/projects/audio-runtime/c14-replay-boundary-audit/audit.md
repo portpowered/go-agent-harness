@@ -144,6 +144,8 @@ root router
           (sequence, nonnegative elapsed_ns, nonempty timeline)
        -> timelineOrigin -> injected ClockFactory -> clock.Deterministic
        -> go-audio/pkg/recording.OpenReplay
+          (loads canonical audio-trace evidence and supplies Prepared.Audio;
+           production packet input is derived separately from provider wires)
        -> deriveEvidence
           (provider send/receive, initial session.update, model, close/terminal,
            tool call/result shape and exact recorded-tool executor)
@@ -159,6 +161,8 @@ root router
        -> deriveInputActions
        -> coreRuntime.Run
             -> wait for SessionOpen
+            -> deriveInputActions decodes captured provider-wire
+               input_audio_buffer.append payloads via go-audio/codec
             -> send captured text/PCM actions through AgentLoop ordered ingress
             -> send MessageEnd boundaries
             -> count provider response.done terminals
@@ -181,6 +185,19 @@ recorded-tool methods. The strict runtime factory begins at
 `coreRuntime.Run` and `deriveInputActions` are the actual provider/AgentLoop
 construction and action driver. `media.go:1-54` claims and drains inbound
 media and supplies a virtual playback controller; it does not open hardware.
+
+`agent-cli/internal/services/internal/replay/service.go:75-96` opens the
+canonical `audio-trace` with `recording.OpenReplay`, attaches the deterministic
+clock, and stores that evidence reader as `Prepared.Audio`. This is evidence
+loading and scope accounting; the production strict factory does not consume
+that reader. `runtime.go:31-70` uses `Prepared.Capture`, `Dialer`, and
+`ToolExecutor`, while `deriveInputActions` at `:241-315` decodes the captured
+provider-wire `input_audio_buffer.append` payloads and sends those PCM chunks
+through `AgentLoop`. The only current `Prepared.Audio` packet consumer is the
+test fake in `agent-cli/internal/services/internal/replay/service_test.go:260-270`.
+The future extraction must keep these as separate evidence-loading and
+runtime-packet-consumption contracts; a non-nil audio reader or a
+`RecordedPCM` scope flag is not proof that production replay consumed it.
 
 The strict path is produced by the generated CLI graph:
 
@@ -305,8 +322,12 @@ loop installation. `start.go:70-122` installs the duplex AgentLoop and keeps
 the session config event out of a self-driving replay that already owns a
 replay plan. `replay.go:295-345` drives bounded chunks and commits. The
 ordered-control edge is `control.go:Send`; the interruption and readiness
-edges are `replay.go:waitReplayReady`, `observation.go:observeOpeningPolicies`,
-and `interruption.go`/capture planning. Terminal cleanup is
+edges are `replay.go:waitReplayReady` and
+`observation.go:observeOpeningPolicies`. The interruption terminal
+classification is `go-agent-runtime/services/session/internal/live/control.go:324-341`
+(`finiteResponseWasInterrupted`), while replay replacement detection is
+`go-agent-runtime/services/replay/internal/plan/interruption.go`.
+Terminal cleanup is
 `lifecycle.go:finishOnceBody` and `finishMedia`.
 
 ### Route C: legacy turn/passive replay
@@ -374,11 +395,15 @@ replay is retained below.
 
 The principal gap is not merely directory placement. The strict service's
 `Prepared` contains a private validation closure, a strict transport, a
-recorded tool executor, a deterministic clock, an audio replay, and a runtime
-factory. Moving only `service.go` would leave the external caller without the
-actual `RuntimeFactory`/media/completion graph. Moving only the provider
-factory would expose credentials/device/CLI composition. The cohesive unit is
-the entire strict `Prepare`/`Run`/validation boundary.
+recorded tool executor, a deterministic clock, an audio-evidence reader, and a
+runtime factory. The audio reader is loaded for trace evidence and scope; the
+production runtime currently consumes input packets from `Capture` provider
+wires, not from that reader. Moving only `service.go` would leave the external
+caller without the actual `RuntimeFactory`/media/completion graph. Moving only
+the provider factory would expose credentials/device/CLI composition. The
+cohesive unit is the entire strict `Prepare`/`Run`/validation boundary, with
+audio-evidence loading and packet consumption kept as distinct internal
+responsibilities.
 
 ## Smallest future extraction
 
@@ -413,7 +438,6 @@ type StrictPrepared struct {
     Capture    testing.SessionCapture
     Dialer     transport.Dialer
     ToolExecutor messages.ToolExecutor
-    Audio      *recording.Replay
     Clock      clock.Scheduler
     Scope      StrictEvidenceScope
     WireEvents int
@@ -443,13 +467,23 @@ type StrictService interface {
 ```
 
 The imports above are existing runtime-module dependencies
-(`go-agent-loop/pkg/messages`, `go-audio/pkg/{clock,recording}`, and
+(`go-agent-loop/pkg/messages`, `go-audio/pkg/clock`, and
 `go-llm-gateway/pkg/{testing,transport}`); no CLI package, config, flags,
 terminal, credential vault, device registry, or executable tool factory is
 part of this public contract. The existing CLI-internal `Request`, `Prepared`,
 `EvidenceScope`, `Runtime`, `RuntimeFactory`, and `Result` are the source shape
 to migrate, with names made explicit because runtime `Service` already means
 admission.
+
+The proposed public `StrictPrepared` intentionally does not expose the current
+`*recording.Replay` field as a runtime input. The pinned `Prepare` path still
+opens that reader to validate/load canonical trace evidence and derive scope,
+but `agent-cli/internal/services/internal/replay/runtime.go:31-70` does not
+read it; production packet consumption is the `Capture` provider-wire path
+described above. If a later consumer needs to inspect recorded PCM, it should
+use a separately named, read-only evidence API with its own assertions. A
+`RecordedPCM` scope bit alone must not be presented as runtime audio-consumption
+parity.
 
 ### Private implementation files
 
@@ -458,12 +492,12 @@ service boundary:
 
 | current symbol/file | future exact path and owner | required behavior |
 | --- | --- | --- |
-| `internal/replay.Service`, `Dependencies`, `ClockFactory`, `Run`, `Prepare` | `go-agent-runtime/services/replay/internal/strict/service.go`, private `strict.Service` | Own bundle admission handoff, origin/deterministic clock, `recording.OpenReplay`, strict prepared state, `Run` then `ValidateComplete`. |
+| `internal/replay.Service`, `Dependencies`, `ClockFactory`, `Run`, `Prepare` | `go-agent-runtime/services/replay/internal/strict/service.go`, private `strict.Service` | Own bundle admission handoff, origin/deterministic clock, `recording.OpenReplay` for audio evidence/scope (not production packet input), strict prepared state, `Run` then `ValidateComplete`. |
 | `recording_directory.go:validateRecordingBundle`, `prepareTraceDirectory`, `resolveTraceDirectory` | `go-agent-runtime/services/replay/internal/strict/directory.go` | Keep root-manifest Lstat/nonregular/symlink rejection, absent-manifest legacy trace compatibility, trace path selection, and runtime admission dependency. |
 | `readTimeline`, `timelineOrigin`, event decoding and `deriveEvidence` | `go-agent-runtime/services/replay/internal/strict/evidence.go` | Keep bounded JSONL parsing, exact sequence/elapsed checks, initial handshake/model/terminal validation, provider send/receive projection, and tool shape validation. |
 | `trackingDialer`, `trackingConn`, replay state | `go-agent-runtime/services/replay/internal/strict/transport.go` | Keep one-connection, ordered message type/count/write/read validation and bounded divergence errors. |
 | `recordedToolExecutor` and tool decoders | `go-agent-runtime/services/replay/internal/strict/tools.go` | Keep exact call ID/name/arguments, result matching, exact-once consumption, and unconsumed/missing-result failures. |
-| `NewOpenAIRuntimeFactory`, `openAIRuntimeFactory`, `coreRuntime`, `deriveInputActions`, initial-update wrapper | `go-agent-runtime/services/replay/internal/strict/runtime.go` | Keep offline OpenAI gateway + AgentLoop construction, explicit input action boundaries, provider terminal counting, cancellation drain, and no live credentials. |
+| `NewOpenAIRuntimeFactory`, `openAIRuntimeFactory`, `coreRuntime`, `deriveInputActions`, initial-update wrapper | `go-agent-runtime/services/replay/internal/strict/runtime.go` | Keep offline OpenAI gateway + AgentLoop construction, decode PCM from captured provider-wire input actions (not `Prepared.Audio`), explicit input action boundaries, provider terminal counting, cancellation drain, and no live credentials. |
 | `replayMediaInferencer`, virtual playback controller, inbound drain | `go-agent-runtime/services/replay/internal/strict/media.go` | Keep headless media claim needed for provider-owned truncate/interruption and explicitly report no device execution. |
 | `NewReplayClockFactory` behavior | `go-agent-runtime/services/replay/internal/strict/clock.go` or a constructor in `strict/service.go` | Build one fresh `clock.Deterministic` from the trace origin per preparation; never fall back to wall time. |
 
@@ -550,10 +584,14 @@ The migration must add or move the following tests in the future slice:
 
 The external test must execute the public `StrictService` end to end against a
 valid fixture and assert the returned scope is protocol/tools plus recorded
-PCM evidence, while asserting `DeviceExecution == false`. It must also cover
-the negative controls below through the public Wire constructor, not through a
-private implementation. This is the proof needed to close EMBED/SERVICE for a
-future slice; C14 does not claim it.
+PCM evidence, while asserting `DeviceExecution == false`. That scope assertion
+is evidence availability, not proof that production consumed `Prepared.Audio`.
+The future test must separately verify that the strict runtime sends the exact
+PCM encoded in captured provider-wire `input_audio_buffer.append` records,
+while the evidence-loader test verifies trace PCM availability and scope. It
+must also cover the negative controls below through the public Wire constructor,
+not through a private implementation. This is the proof needed to close
+EMBED/SERVICE for a future slice; C14 does not claim it.
 
 ## Behavioral parity and negative-control matrix
 
@@ -577,7 +615,8 @@ The exact historical source and artifact references are:
 | control | route and exact control | evidence status and required future assertion |
 | --- | --- | --- |
 | Valid finalized bundle, provider wire and tool | `session replay <bundle>` and `session --replay <bundle> --audio-out <file>` over C13 artifact-2; strict reported 18 wire events/1 tool call, flag route emitted `PROBE_TOOL_MARKER_9182`, continuation and clean terminal | **Historical software proof.** Future public runtime test must preserve both route results and exact tool count; no credential/device claim. |
-| Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. |
+| Audio evidence loading versus strict input packets | Strict `Prepare` opens `audio-trace` with `recording.OpenReplay` and reports `RecordedPCM`; production `runtime.go:31-70` instead uses `Capture` and `deriveInputActions` to decode provider-wire `input_audio_buffer.append` records, while only the test fake calls `Prepared.Audio.Next()` | **Source-proved / C14-unrun.** Future extraction must test these separately: validate/read trace evidence and scope, then compare the runtime's encoded input writes with the captured provider-wire PCM. Do not infer packet-consumption parity from a non-nil audio reader or scope bit. |
+| Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. These hashes prove fixture/output bytes, not production consumption of `Prepared.Audio`. |
 | Ordered handshake and turns | strict `trackingConn` validates exact message type/order; live `LiveReplayPlan.WaitForSessionUpdated`, `runReplay`, and `waitForResponse` keep PCM/commit behind the provider boundary | **Source-proved / C14-unrun.** Add public positive and reordered/early-append negatives. |
 | Clean shutdown and explicit terminal | strict `deriveEvidence`/`coreRuntime.Run` plus `ValidateComplete`; live `finishOnceBody`, `finishMedia`, `TerminalReasonReplayComplete` | **Historical software proof** for C13 clean close and **source-proved / C14-unrun** for the boundary map. Future test must reject success before terminal/close evidence. |
 | Interruption followed by healthy replacement | C13 artifact-3: cancelled `resp-c07-interrupted`, later healthy `resp-c07-healthy`; healthy tail 2,400 bytes, SHA-256 `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`; strict replay reported 15 wire events/0 tools | **Historical software proof.** Future external test must preserve replacement identity, healthy tail, cancellation, and clean completion. No C14 rerun. |
@@ -608,6 +647,49 @@ first invokes runtime admission when a root manifest exists, then
 Changing provider-only behavior would be a producer/schema and route-contract
 change outside C14, not a justified documentation fix.
 
+## Review-39 strict boundary repair reconciliation
+
+The refreshed canonical board was read before this repair. It retains the same
+admitted task `work-task-34`, the concluded provenance review `work-review-36`,
+and the latest concluded review `work-review-39`; no replacement task, second
+project, acceptance waiver, or ownership transfer exists. Review-36's finding
+remains resolved by the corrected baseline token at the admission section:
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` is the manifest/PRD/source-plan
+object, and the recorded object and ancestry checks were rerun.
+
+Review-39 reported two documentation defects on PR #406 head `5824a495`:
+
+1. The route graph cited a nonexistent live `interruption.go`. The actual live
+   terminal classifier is `go-agent-runtime/services/session/internal/live/control.go:324-341`,
+   specifically `finiteResponseWasInterrupted`; the replay-plan replacement
+   detector is `go-agent-runtime/services/replay/internal/plan/interruption.go`.
+   The route graph and interruption section now cite those exact owners.
+2. The proposed strict boundary implied that production replay consumed
+   `Prepared.Audio`. The pinned source instead opens the trace in
+   `agent-cli/internal/services/internal/replay/service.go:75-96`, while
+   `agent-cli/internal/services/internal/replay/runtime.go:31-70` never reads
+   that field. Production input PCM is decoded from captured provider-wire
+   `input_audio_buffer.append` records by `deriveInputActions`; only the test
+   fake at `service_test.go:260-270` iterates `Prepared.Audio`. The proposed
+   contract, implementation map, external-consumer requirements, parity matrix,
+   and audio-boundary audit now distinguish evidence loading from packet
+   consumption and require separate future controls for each.
+
+Bounded validation after this repair passed without changing runtime source:
+
+- `agent-cli`: `go test ./internal/services/internal/replay ./internal/services/replay ./internal/transport/cli -count=1` — `719` tests in `3` packages.
+- `go-agent-runtime`: `go test ./services/replay/... -count=1` — `43` tests in `3` packages; `go test ./services/session/internal/live -count=1` — `68` tests in `1` package.
+- Accumulated C13 controls from `agent-cli/test/integration` — `5` tests passed for `TestSessionRecordedPCMIntegrity` and `TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact`.
+- Source/path controls confirmed `control.go:324` and `plan/interruption.go:10`, no live `interruption.go`, the production `runtime.go` provider-wire input branch, the corrected baseline/startup/source ancestry, matching PRD/branch identity, nonempty audit, and `git diff --check`.
+
+These are focused source and baseline regressions only; no product build,
+provider/device invocation, broad local CI, or CI polling is claimed.
+
+This is a documentation repair against the pinned source, not a runtime change.
+The prior C13 root-manifest, undeclared-trace, and historical audio/interruption
+findings remain explicitly preserved as resolved predecessor evidence or known
+residuals; none is silently converted into a current C14 pass.
+
 ## Audio, clock, buffer, and device boundary audit
 
 The replay graphs cross the following existing boundaries; none is a reason to
@@ -630,6 +712,10 @@ claim AUDIO or DEVICE completion.
    `go-audio/pkg/codec.EncodePCM16`. The replay/live path separately encodes
    `int16` chunks in `services/session/internal/live/replay.go:247-260` and
    decodes bounded PCM chunks in `services/replay/internal/plan/audio.go`.
+   Strict directory replay's production runtime instead decodes provider-wire
+   `input_audio_buffer.append` records in
+   `agent-cli/internal/services/internal/replay/runtime.go:241-315`; it does
+   not read the `Prepared.Audio` trace reader opened by `service.go:75-96`.
    The codec implementation is centralized in go-audio, but callers still
    choose when to encode; this is a migration observation, not proof that one
    independently testable audio subsystem owns all formats/sample timing/DSP.
