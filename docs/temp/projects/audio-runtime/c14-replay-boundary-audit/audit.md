@@ -729,6 +729,46 @@ Git-object and ancestry checks PASS, `origin/main`
 `codex/audio-runtime-c14-replay-boundary-audit`, and a non-empty audit file.
 The local branch was one commit ahead of the remote PR branch pending push.
 
+## CI coverage rejection reconciliation
+
+The live task row returned this same admitted Work after PR #406 head
+`24c0710224d90a840caab8202882fb59b978e027` was rejected by the script-owned
+current-head CI gate. The exact completed run was `34293404249`; only
+`CI (coverage)` failed, in job `102284678555`. Its `make coverage` log names
+one test failure:
+
+```text
+agent-cli/internal/transport/cli/internal/events:
+TestRoomUsesLiveLivenessForPeerFilteredEventsAndEvidence
+room_live_liveness_test.go:41: read SSE payload: context deadline exceeded
+```
+
+The other eight required checks on that exact head passed: static, unit,
+integration, race, hermetic, WebMCP Chrome, macOS audio release, and Windows
+audio portable. The failing package and test are outside the C14 evidence
+lease. `git diff --name-only origin/main...HEAD` contains only the three
+owned evidence files, and the failed package has no candidate diff; C14 has no
+runtime implementation change that could cause or repair this room/SSE timing
+failure.
+
+One bounded local reproduction of the exact reported test passed:
+
+```text
+rtk go test ./internal/transport/cli/internal/events -tags=nomicrophone \\
+  -run '^TestRoomUsesLiveLivenessForPeerFilteredEventsAndEvidence$' \\
+  -count=1 -timeout=30s
+Go test: 1 passed in 1 packages
+```
+
+The C14-focused and accumulated review regressions also passed after the
+rejection: the three replay/CLI packages reported `719` tests, runtime replay
+reported `43` tests, and the selected C13 integrity controls reported `5`
+tests. This is recorded as a bounded non-reproduction of an unrelated CI
+timing failure, not as a runtime repair or an acceptance waiver. The next
+action is an evidence-only checkpoint and same-task resubmission; if the
+coverage test fails again, inspect the new exact log rather than changing
+out-of-lease room code.
+
 ## Immutable acceptance criteria and later gates
 
 All nine criteria remain `OPEN`. C14 is an audit/extraction decision and cannot
@@ -752,9 +792,11 @@ Missing proof never sets `passes:true`.
 
 ## Verification performed and handoff state
 
-The following bounded checks were performed without building the product
-executable, using a provider or device, profiling, duplicating broad local CI,
-or polling CI, as required by the C14 audit execution policy:
+The following bounded source and local checks were performed without building
+the product executable, using a provider or device, profiling, duplicating
+broad local CI, or polling a new CI run, as required by the C14 audit execution
+policy. The prior gate rejection was inspected only after the script reported
+the completed failure; its exact reconciliation is recorded above.
 
 - Read `factory/docs/operating-policy.md`,
   `factory/docs/implementation-handoff.md`,
@@ -827,8 +869,10 @@ Delivery record:
   post-push metadata check immediately after `7184993fd76acec1e432179bc942ac5890cec392`
   reported that exact head and no merge SHA. The later audit-only record commit
   `215973992d4f3a7f147afbd7fd4f4073aad86714` was pushed on the same branch.
-- CI was not polled and no CI result is claimed. The next factory action is
-  the script-owned current-head CI gate, followed by independent review if the
+- The prior script-owned gate was rejected only for the unrelated coverage
+  timing failure recorded above; no new CI run is being polled or claimed
+  green. The next factory action after this evidence checkpoint is the
+  script-owned current-head CI gate, followed by independent review if that
   gate succeeds.
 
 After the review repair checkpoint, push this same branch and update its PR
