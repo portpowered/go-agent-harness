@@ -66,3 +66,53 @@ controls passed 10 normal and 5 race repetitions; C21 gateway controls passed
 three normal and two race repetitions, and focused vet plus `git diff --check`
 passed. CI, independent review, merge and post-merge validation remain
 unclaimed until the script-owned gate runs on the pushed head.
+
+## Static rejection repair checkpoint
+
+The complete static job log for PR #414 head `a2fa99c8` is retained at
+`/tmp/audio-runtime-c21-ci-static-job-102562722561.api.log`. Its only failed
+step was `make architecture-size-check`, reporting four findings on
+`TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress`: cognitive and
+cyclomatic baseline drift (`35`/`38` over the preserved `26` values), plus
+`129 > 120` physical lines and `94 > 80` statements. The same four findings
+reproduced locally; lint, vet and staticcheck completed successfully in the
+job.
+
+Repair commit `99428c75` moves only the added rejection/failure synchronization
+into a bounded helper in the owned `session_room_audio_diagnostics_test.go`.
+The existing test assertions, participant-scoped failure check, two-second
+context and cancellation/join path remain intact; the named test is back at
+its preserved `26`/`26` complexity baseline without editing the architecture
+baseline. The repaired architecture gate reports `181` packages, `1860`
+files and `27204` functions.
+
+Focused causal evidence from the clean pushed head:
+
+- normal and race `^TestC21` gateway tests passed;
+- normal and race `TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress`
+  passed;
+- `TestDeviceSinkSampleOnly*` and targeted runtime/room vet passed;
+- `verify.py --mode all` was `ACCEPTED` in run
+  `runs/verify-20260909T171841Z-51805`;
+- `verify.py --mode public-consumer` was `ACCEPTED` in run
+  `runs/verify-20260909T171910Z-52518`;
+- `verify.py --mode parity` was `ACCEPTED` in run
+  `runs/verify-20260909T171911Z-52529`, with `PROBE_TOOL_MARKER_9182`,
+  `strict replay continuation`, `replay_complete`, and clean shutdown.
+
+The exact source revision is `99428c75dd28ecc7a07c5d11ca7bc2a4144472cc`.
+The consumer and YUI SHA-256 hashes are respectively
+`10c457070b8e0722361465ef79e9862b0a3a60a094d1155552d04f16c537e511` and
+`2739decfc2537dc3a90aae6a99e72424b8408fa788189e9424a45cd6117c0382`.
+The fixture hashes are `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`
+(`c16-audio-tool`),
+`154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`
+(`c16-interruption`), and
+`d7df42a198b9efd18be8fe3ce9b5cd329489a5087c589ab22d29ba2194b7a323`
+(`expected`). Parity preserved `4800`-byte PCM SHA-256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502` and
+`3840`-byte PCM SHA-256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`.
+
+No CI success, independent review, merge or vertical/project acceptance is
+claimed; the same task remains responsible for any exact script-CI rejection.
