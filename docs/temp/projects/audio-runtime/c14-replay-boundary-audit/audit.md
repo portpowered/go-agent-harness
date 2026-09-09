@@ -70,9 +70,11 @@ rtk proxy you --server "$FACTORY_SERVER_URL" --json work list --session "~defaul
 
 The original raw board snapshot was
 `dd635d054164e644fc6c8d6a502394c597f3f49392f6c501b976be151b5ce7c7` at the
-initial checkpoint. The refreshed recovery board now in `canonical-board.json`
-has SHA-256
+initial checkpoint. The refreshed recovery board snapshot in
+`canonical-board.json` has SHA-256
 `2bb5e77cc4d1d1d5ebf396aa1509ca9e0e50f81829082c13674beed671c9b323`. The
+later live re-read after the current CI rejection is recorded separately below
+with its stream hash; it does not rewrite this preserved recovery snapshot. The
 full extracted rejection inbox is `canonical-rejection-feedback.json`,
 SHA-256 `6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9`,
 and contains 17 JSON rows. The board was saved as raw JSON even though one
@@ -987,6 +989,72 @@ the new head must be pushed and sent through script CI and independent review
 again. No CI result for the repaired candidate, merge, vertical acceptance, or
 project acceptance is claimed here.
 
+## Current CI coverage rejection on `71a0e491`
+
+The current executor admission re-read the complete live board with the
+required `--session "~default" --max-results 500 --all` command. Its raw stream
+hash was
+`0bd7c84d3538310833255529da113b7bc0148171c60926c563e403d8b3ed7ba1`.
+The exact C14 row is `work-task-4` in `init`/`PROCESSING`; its full
+`_rejection_feedback` names PR #406 at head
+`71a0e4914f63e4a2a19a09b511ca644e0937fe44`, with only `CI (coverage)` failed.
+The saved recovery board and the 17-row historical rejection inbox remain
+unchanged so Review-44 provenance is not silently rewritten or dropped.
+
+The complete GitHub run/job metadata was inspected with
+`rtk proxy gh run view 34307899376 --json databaseId,headSha,status,conclusion,event,workflowName,url,jobs`
+and the complete failed-step log with
+`rtk proxy gh run view 34307899376 --job 102328306832 --log-failed`, for run
+`34307899376` and job `102328306832`
+([run](https://github.com/portpowered/go-agent-harness/actions/runs/34307899376),
+[job](https://github.com/portpowered/go-agent-harness/actions/runs/34307899376/job/102328306832)).
+The run was a `pull_request` for the exact head
+`71a0e4914f63e4a2a19a09b511ca644e0937fe44`, and the job's only failing step
+was `Run coverage profiles and coverage gate` (`make coverage`). The other
+eight required jobs were terminal-successful: integration, macOS audio
+release, race, static, WebMCP Chrome, unit, hermetic, and Windows audio
+portable. The complete failed-job log identifies the sole test failure:
+
+```text
+--- FAIL: TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer (0.00s)
+    runner_test.go:226: room run error = silent_provider_empty_response: provider response produced no observable output
+FAIL github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle
+make: *** [Makefile:303: coverage] Error 1
+```
+
+The failure is outside the C14 lease. The candidate diff against fetched
+`origin/main` contains only C14 evidence files, and the failing package has no
+candidate diff or changed caller. The exact test was run locally with the same
+coverage instrumentation ten times and passed every time:
+
+```text
+rtk go test ./services/rooms/internal/lifecycle -cover -run '^TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer$' -count=10 -timeout=60s
+Go test: 10 passed in 1 packages
+```
+
+The complete affected package was then run once under coverage and also passed:
+
+```text
+rtk go test ./services/rooms/internal/lifecycle -cover -count=1 -timeout=60s
+Go test: 20 passed in 1 packages
+```
+
+After this evidence-only edit, the accumulated C14 and predecessor regressions
+were rerun with the following bounded results: the three CLI replay packages
+passed `719` tests; runtime replay passed `43` tests; runtime live passed `68`
+tests; the selected C13 integrity controls passed `5` tests; and the affected
+room lifecycle coverage package passed `20` tests. No source package was
+changed by this checkpoint.
+
+This is a bounded non-reproduction of an ownership-isolated CI timing/test
+failure, not a waiver, a claim of green CI, or a reason to edit room lifecycle
+code outside C14. The evidence update is a changed same-task checkpoint; after
+it is committed and pushed, PR #406 must be updated and returned to the
+script-owned CI gate. If the same out-of-lease failure recurs, report the exact
+repeat as an ownership prerequisite for meta inspection rather than modifying
+unowned runtime code. No merge, independent review, vertical acceptance, or
+project acceptance is claimed.
+
 ## Audio, clock, buffer, and device boundary audit
 
 The replay graphs cross the following existing boundaries; none is a reason to
@@ -1281,13 +1349,23 @@ Delivery record:
   from that exact head; its final PR SHA is checked after commit/push and is
   the candidate handed to script CI.
 - The prior script-owned gate on `d91bea83` had nine successful checks; no
-  check result for the repaired candidate is being polled or called green.
-  The next factory action after this evidence checkpoint is push/update of
+  check result for the Review-44 repaired candidate was claimed green.
+- The current same-task candidate is
+  `71a0e4914f63e4a2a19a09b511ca644e0937fe44`, pushed on
+  `codex/audio-runtime-c14-replay-boundary-audit`; PR #406 is OPEN at that
+  exact head with base `main` at
+  `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. Fetched `origin/main` is
+  separately `f8e0863222da1bdbf296e2220fcbc081461cc877`. Run `34307899376`
+  is the current script-owned result: coverage failed only on the out-of-lease
+  lifecycle test recorded above, so this candidate is not yet reviewable or
+  mergeable.
+- The next factory action after this evidence checkpoint is push/update of
   PR #406, then the script-owned current-head CI gate, followed by independent
   review if that gate succeeds.
 
-After the Review-44 repair checkpoint, push this same branch and update PR #406
-against `main`, then return `ACCEPTED` to the script-owned current-head CI gate.
+After this current-CI evidence checkpoint, push this same branch and update
+PR #406 against `main`, then return `ACCEPTED` to the script-owned current-head
+CI gate.
 `ACCEPTED` means submitted to CI; it does not mean CI is green. Do not poll
 CI. If the script returns an exact rejection, retain this task, inspect the
 full same-head logs/feedback, repair only the actionable issue within the C14
