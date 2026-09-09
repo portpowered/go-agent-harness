@@ -330,11 +330,12 @@ type fixtureSession struct {
 	cancelSent    bool
 	healthySent   bool
 	advance       func()
+	pace          func()
 	queueError    error
 }
 
-func newFixtureSession(mode string, turns int, advance func()) *fixtureSession {
-	return &fixtureSession{receive: messages.NewTypedBuffer[messages.StreamMessage](16384), done: make(chan struct{}), mode: mode, turns: turns, pendingTurn: -1, advance: advance}
+func newFixtureSession(mode string, turns int, advance func(), pace func()) *fixtureSession {
+	return &fixtureSession{receive: messages.NewTypedBuffer[messages.StreamMessage](16384), done: make(chan struct{}), mode: mode, turns: turns, pendingTurn: -1, advance: advance, pace: pace}
 }
 
 func (s *fixtureSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -436,6 +437,9 @@ func (s *fixtureSession) queue(ctx context.Context, messagesToQueue ...messages.
 			}
 			s.mu.Unlock()
 			return
+		}
+		if s.pace != nil {
+			s.pace()
 		}
 	}
 }
@@ -591,7 +595,11 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string) (*repo
 	reportValue := &report{Schema: "c23.v1", Scenario: "tool-matrix", Turns: turns, Recording: recordingEnabled, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service+public-recording-wire", TraceComplete: true}
 	base := clock.NewDeterministic(time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC), time.Millisecond)
 	advance := func() { base.Advance() }
-	provider := newFixtureSession("matrix", turns, advance)
+	var pace func()
+	if recordingEnabled {
+		pace = func() { time.Sleep(500 * time.Microsecond) }
+	}
+	provider := newFixtureSession("matrix", turns, advance, pace)
 	toolExecutor := &fixtureToolExecutor{}
 	collector := newEventCollector()
 	providerPath := filepath.Join(artifactRoot, "provider.session.json")
@@ -715,7 +723,7 @@ func runInterruption(artifactRoot string) (*report, error) {
 	}
 	result := &report{Schema: "c23.v1", Scenario: "interruption", SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service", TraceComplete: true}
 	base := clock.NewDeterministic(time.Date(2026, time.January, 2, 3, 5, 5, 0, time.UTC), time.Millisecond)
-	provider := newFixtureSession("interruption", 1, func() { base.Advance() })
+	provider := newFixtureSession("interruption", 1, func() { base.Advance() }, nil)
 	collector := newEventCollector()
 	service := sessionwire.NewLiveService(sessionwire.LiveDependencies{InferencerFactory: func(_ context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
 		provider.queue(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(request.SessionID, "audio_inference")})
