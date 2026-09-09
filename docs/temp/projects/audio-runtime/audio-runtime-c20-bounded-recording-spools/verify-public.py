@@ -76,7 +76,7 @@ def build_and_run(source_root, case_name, args):
         binary = module_root / "consumer"
         env = dict(os.environ)
         env["GOWORK"] = "off"
-        run_bounded(["go", "build", "-mod=mod", "-o", str(binary), "consumer.go"], module_root, 60, env)
+        run_bounded(["go", "build", "-trimpath", "-mod=mod", "-o", str(binary), "consumer.go"], module_root, 60, env)
         output_root = temp_root / "outputs"
         output_root.mkdir()
         destination = output_root / "capture"
