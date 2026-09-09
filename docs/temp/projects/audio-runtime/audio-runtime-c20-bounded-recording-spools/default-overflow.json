@@ -4,8 +4,8 @@
   "result": {
     "case": "default-overflow",
     "file_bytes": {
-      "agent.transcript.jsonl": 26743253,
-      "client.transcript.jsonl": 26743253,
+      "agent.transcript.jsonl": 26743252,
+      "client.transcript.jsonl": 26743252,
       "manifest.json": 1034,
       "provider.json": 439
     },
@@ -20,9 +20,9 @@
     },
     "provider_bytes": 439,
     "sidecar_bytes": 448,
-    "source_revision": "7f38135540b58078412bbbd32d3908c90adf2477",
+    "source_revision": "254a18b00505c00ec80038b760b3906c45400009",
     "status": "partial",
-    "total_bytes": 53487979,
+    "total_bytes": 53487977,
     "transcript_lines": {
       "agent.transcript.jsonl": 19,
       "client.transcript.jsonl": 19
