@@ -327,7 +327,11 @@ func newSampleOnlySink(t *testing.T, handle OpenedDevice) *DeviceSink {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = sink.Close() })
+	t.Cleanup(func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("sample-only sink cleanup: %v", err)
+		}
+	})
 	return sink
 }
 
