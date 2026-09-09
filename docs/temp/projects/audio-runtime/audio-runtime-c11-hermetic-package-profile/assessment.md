@@ -24,11 +24,11 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated the latest `origin/main`:
   `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `e2e1faebe7610c18edea672e493f973fc6981425`.
+  `6079ce29b98e553514c2aeb82e78a762f0131faa`.
 - The implementation and exact-head control evidence are committed against
-  that candidate. The evidence report is generated from that exact
-  implementation SHA and packaged separately so the record does not make a
-  self-referential future-commit claim. This checkpoint consolidates metadata, inventory, warm-up,
+  that candidate. The evidence report is generated from that exact candidate
+  SHA and packaged separately in a later evidence commit so the record does not
+  make a self-referential future-commit claim. This checkpoint consolidates metadata, inventory, warm-up,
   full-lane, and cohort command records into one `manifest.commands` array,
   validates the whole input before `--group` display filtering, binds Git/test
   command identity, enforces warm/full/cohort scheduling, and records the
@@ -39,6 +39,13 @@ not a waiver, and not a claim that the under-three-minute target is met.
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 - Preserved baseline ancestor:
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
+- Fresh current-head focused evidence is
+  `ctrl-6079ce2/controls.json`: 64 declared cases, 26 result groups, zero
+  Go/network/build invocations, SHA-256
+  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
+- The post-CI canonical board is
+  `canonical-board-after-ci-20260909.json` (SHA-256
+  `30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07`).
 - `progress.txt` remains the inherited historical C07 checkpoint and was not
   rewritten. C08 paths, the parent checkout, and factory configuration remain
   outside this candidate.
@@ -94,10 +101,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-e2e1fae`:
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-6079ce2`:
   PASS; 64 declared cases and 26 result groups, zero Go, network, or build
   invocations. The report hash is
-  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`.
+  `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -125,10 +132,10 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `e2e1faeb` passed: 64 public cases/26
+- Fresh exact-head recheck from `6079ce29` passed: 64 public cases/26
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`),
-  `profile.py --help`, AST parsing of all three Python files, and
+  SHA-256 `d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8`),
+  `profile.py --help`, recursive AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
 The latest prior current-head CI rejection was inspected in full from run
@@ -156,6 +163,20 @@ are retained in `ci-rejection-34277521278.log` and
 directories, so no runtime repair is authorized here. The new C11 checkpoint
 changes the script-owned surface and is being submitted to script CI without a
 waiver; this is not a claim that hosted CI is green.
+
+The latest inspected current-head rejection is run `34294562855`, job
+`102288251336` (`CI (coverage)`) at submitted head
+`6079ce29b98e553514c2aeb82e78a762f0131faa`. Eight required jobs passed; the
+coverage job failed the existing
+`TestAskRecordsAndReplaysThroughProviderService/stream=true` at
+`agent-cli/test/integration/ask_capture_test.go:58` because
+`failed to flush captures: HTTP capture has an active response body`. The exact
+metadata and 82-line log are retained in
+`ci-rejection-34294562855.json` and `ci-rejection-34294562855.log`, with
+SHA-256 values recorded in `assessment.json`. This is an out-of-scope C12
+runtime/coverage path; no C11 repair is authorized. The candidate remains
+NOT_GREEN and is handed to the script-owned gate after this evidence
+checkpoint.
 
 The controls deliberately prove that a low-duration package failure, a nonzero
 process with passing-looking JSON, truncated/malformed/empty streams, missing
@@ -236,8 +257,8 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls remain pinned to
-`e2e1faebe7610c18edea672e493f973fc6981425`; the tracked
-`ctrl-e2e1fae/controls.json` report is recorded above. The canonical
+`6079ce29b98e553514c2aeb82e78a762f0131faa`; the tracked
+`ctrl-6079ce2/controls.json` report is recorded above. The canonical
 review findings through review 37 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, stale head/evidence references, and

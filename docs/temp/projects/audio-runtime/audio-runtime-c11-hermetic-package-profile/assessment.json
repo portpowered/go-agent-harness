@@ -3,12 +3,12 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "e2e1faebe7610c18edea672e493f973fc6981425",
-  "current_branch_head_at_handoff": "e2e1faebe7610c18edea672e493f973fc6981425",
-  "implementation_checkpoint": "e2e1faebe7610c18edea672e493f973fc6981425",
-  "evidence_checkpoint": "e2e1faebe7610c18edea672e493f973fc6981425",
-  "evidence_generated_from_sha": "e2e1faebe7610c18edea672e493f973fc6981425",
-  "evidence_packaging_note": "The implementation SHA above is the exact tested code tree; evidence is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
+  "candidate_head": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "current_branch_head_at_handoff": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "implementation_checkpoint": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "evidence_checkpoint": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "evidence_generated_from_sha": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+  "evidence_packaging_note": "The candidate SHA above is the exact tree used for the current focused recheck; evidence is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
   "base_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -33,25 +33,28 @@
     "next_gate": "SCRIPT_CI_NOT_POLLED"
   },
   "latest_ci_rejection": {
-    "path": "ci-rejection-34277521278.json",
-    "log_path": "ci-rejection-34277521278.log",
-    "run_id": 34277521278,
-    "job_id": 102234088178,
+    "path": "ci-rejection-34294562855.json",
+    "log_path": "ci-rejection-34294562855.log",
+    "run_id": 34294562855,
+    "job_id": 102288251336,
     "check": "CI (coverage)",
-    "head_sha": "43519903572c4047bbb0068d9ed73e7027a257d7",
-    "failure_step": "agent-cli coverage test command",
-    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl failed because its positive harness-A baseline exceeded the two-second response deadline with context deadline exceeded",
-    "owned_path": "agent-cli/test/integration/session_duplex_overlap_test.go",
-    "owner": "out-of-scope runtime integration test; no C11 implementation path is authorized",
+    "head_sha": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+    "failure_step": "Run coverage profiles and coverage gate",
+    "failure": "agent-cli/test/integration TestAskRecordsAndReplaysThroughProviderService/stream=true failed because failed to flush captures: HTTP capture has an active response body",
+    "owned_path": "agent-cli/test/integration/ask_capture_test.go",
+    "owner": "out-of-scope C12/runtime coverage failure; no C11 implementation path is authorized",
     "go_tests_started": true,
-    "ci_claim": "NOT_GREEN; full log preserved; candidate changed after this rejection",
-    "metadata_sha256": "34a8a8e7f839811418bc8caf4f75a20772ca1e360450dedb3bbb5145bfa169ab",
-    "log_sha256": "9d0a885aaa8fc40ccbd266fef9fbf1bf78ada462cd38821f9f1f3eb162116aa9",
+    "ci_claim": "NOT_GREEN; current-head rejection read in full; no waiver",
+    "metadata_sha256": "7d6a26ce15623a5c9e99a49a35654749035dc6848399f3350e7a5fe6813b3bbd",
+    "log_sha256": "8f40682f176a630c59b36d625f654b185024a9000d40e06257118fb027d70c10",
     "local_rechecks": []
   },
   "canonical_board_snapshot": {
-    "path": "canonical-board-recheck-20260908.json",
-    "sha256": "2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6"
+    "path": "canonical-board-after-ci-20260909.json",
+    "sha256": "30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07",
+    "command": "rtk proxy you --server \"$FACTORY_SERVER_URL\" --json work list --session \"~default\" --max-results 500 --all",
+    "task_work_id": "work-task-4",
+    "rejection_rows": 10
   },
   "continuation_board_snapshot": {
     "path": "canonical-board-executor-20260909.json",
@@ -83,8 +86,8 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-e2e1fae/controls.json",
-    "sha256": "4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274",
+    "path": "ctrl-6079ce2/controls.json",
+    "sha256": "d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8",
     "status": "PASS",
     "cases": 64,
     "result_groups": 26,
@@ -100,12 +103,12 @@
   },
   "schema_control_mapping": "schema-control-mapping.md",
   "fresh_focused_recheck": {
-      "checked_at_utc": "2026-09-09T00:09:52Z",
-      "tested_head": "e2e1faebe7610c18edea672e493f973fc6981425",
-      "controls_report_sha256": "4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274",
+      "checked_at_utc": "2026-09-09T00:36:56Z",
+      "tested_head": "6079ce29b98e553514c2aeb82e78a762f0131faa",
+      "controls_report_sha256": "d658cc4128b424abce070c1dd04c18352c99dcfc1a4b8f3e74ab039b567e58a8",
       "controls": "PASS: 64 cases, 26 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
-    "python_ast": "PASS: 3 files",
+    "python_ast": "PASS: 3 files (recursive scripts/hermetic-profile/**/*.py)",
     "timingate": "PASS: GOWORK=off go test . -count=1",
     "diff_check": "PASS"
   },
@@ -163,7 +166,7 @@
       "status": "PASS"
     },
     {
-      "command": "python3 -B AST parse of scripts/hermetic-profile/*.py",
+      "command": "python3 -B AST parse of scripts/hermetic-profile/**/*.py",
       "status": "PASS"
     },
     {
