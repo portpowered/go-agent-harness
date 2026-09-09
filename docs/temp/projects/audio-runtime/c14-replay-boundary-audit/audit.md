@@ -1416,21 +1416,64 @@ Delivery record:
   the candidate handed to script CI.
 - The prior script-owned gate on `d91bea83` had nine successful checks; no
   check result for the Review-44 repaired candidate was claimed green.
-- The current same-task candidate is pushed at
+- The prior same-task evidence candidate was pushed at
   `ec1e9e9f417d3161635b5dd06d990af7126ca1a4`, with merge parent
-  `8e5546fdab0702726de33724aa58245576f085db`. It integrates fetched
-  `origin/main` at `f8e0863222da1bdbf296e2220fcbc081461cc877`, preserves the
-  pinned C14 source and required startup ancestry, and leaves only the owned
-  evidence paths in `git diff origin/main...HEAD`. PR #406 is OPEN at this
-  head with current base `main` at `f8e0863222da1bdbf296e2220fcbc081461cc877`;
-  no CI result exists for this new candidate.
-- The next factory action is the script-owned current-head CI gate. This
-  executor returns `ACCEPTED` to that gate without polling it; independent
-  review follows only after successful script CI.
+  `8e5546fdab0702726de33724aa58245576f085db`. It integrated fetched
+  `origin/main` at `f8e0863222da1bdbf296e2220fcbc081461cc877`, preserved the
+  pinned C14 source and required startup ancestry, and left only the owned
+  evidence paths in `git diff origin/main...HEAD` at that checkpoint.
+- The subsequent pushed PR head was `219c3f2c8f15fdf18dfecd53ffb8c1e97112cd67`
+  on the same branch and PR, with current base `main` at
+  `f8e0863222da1bdbf296e2220fcbc081461cc877`. The script-owned run
+  `34310772182` for that exact head completed all nine required checks
+  successfully. Independent review still returned the stale-head finding
+  recorded in the next section; those checks and that review are historical
+  evidence for `219c3f2c`, not a result for the repair now being prepared.
+- This admission's documentation-only repair is the changed candidate for the
+  next script-owned current-head CI gate. After the repair is committed and
+  pushed, the PR handoff will record the exact new head and this prior
+  `34310772182` result; no new CI result, independent review, merge, vertical
+  acceptance, or project acceptance is claimed here.
 
-After this current-CI evidence checkpoint, push this same branch and update
-PR #406 against `main`, then return `ACCEPTED` to the script-owned current-head
-CI gate.
+## Current exact-head review reconciliation
+
+At this admission, before this repair, the live `~default` board returned the
+same admitted C14 task (`work-task-4`) with this complete executor feedback:
+
+```text
+Stale exact-head evidence remains: audit.md:1419-1426 names ec1e9e9f as PR
+#406's current candidate and says no CI exists, but the actual HEAD/PR head is
+219c3f2c, with all nine checks successful in run 34310772182. This repeats the
+prior stale-head defect. Independently verified strict replay exited 0 with 18
+wire events/1 tool; provider replay failed closed on the documented cwd
+boundary. Update audit.md and PR handoff provenance to 219c3f2c/current CI,
+rerun bounded evidence checks, and resubmit through script CI and review. Do
+not merge.
+```
+
+The repair above makes the handoff history exact without rewriting historical
+review evidence: `ec1e9e9f` is now labeled the prior evidence candidate,
+`219c3f2c8f15fdf18dfecd53ffb8c1e97112cd67` is the last reviewed PR head, and
+run `34310772182` is identified as its nine-check result. The strict result
+and the provider cwd failure remain correctly classified by the matrix at
+rows 755-756 and 772-774: strict replay is historical software proof, while
+provider replay requires the evidence-root working directory and fails closed
+when that prerequisite is absent. No runtime repair or acceptance waiver is
+implied.
+
+The bounded recheck on the unchanged source passed: CLI replay/CLI `719`
+tests, runtime replay `43` tests, runtime live `68` tests, and the accumulated
+C13 controls `5` tests. The rendered PCM and 17-row inbox hashes remain
+`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` and
+`6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9`.
+Required baseline/startup/source/current-main objects and ancestry, the exact
+branch/PRD identity, and `git diff --check` also passed. These are bounded
+evidence checks only; no product build, live provider/device run, CI polling,
+merge, vertical acceptance, or project acceptance was performed.
+
+After this exact-head evidence repair, push this same branch and update PR #406
+against `main` with the exact new head and the prior `34310772182` provenance,
+then return `ACCEPTED` to the script-owned current-head CI gate.
 `ACCEPTED` means submitted to CI; it does not mean CI is green. Do not poll
 CI. If the script returns an exact rejection, retain this task, inspect the
 full same-head logs/feedback, repair only the actionable issue within the C14
