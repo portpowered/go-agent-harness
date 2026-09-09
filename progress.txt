@@ -799,3 +799,54 @@ C18 latest CI rejection reconciliation and handoff checkpoint
   the non-waived unrelated failure reconciliation, then return `ACCEPTED` to
   the script-owned current-head CI gate without polling it. Retain ownership
   through `CONTINUE` for any exact-head rejection; do not self-review.
+
+C18 strict terminal completion repair and public evidence harness checkpoint
+
+- Reconciled the canonical current task feedback at prior head `b31fe3fc`:
+  the GOWORK=off public replay fixture ended without its final
+  `response.done`, while `NewStrictService().Run` and the runtime input path
+  accepted the missing terminal boundary. This was the exact actionable
+  same-task repair; no production limit, mutable global, baseline policy, or
+  acceptance rule was broadened.
+- The causal repair is committed as `e2e7bbff4d410842519ef4290cd78e56676c80b8`:
+  strict evidence now requires a terminal provider `response.done` after the
+  last provider send, and both input derivation and runtime execution reject a
+  final action without that boundary using typed `replay.ErrBundleIncomplete`
+  diagnostics. Internal tests cover missing terminal events and missing final
+  response boundaries; the independent public embedding test mutates the
+  final event and proves the same rejection at the public Wire boundary.
+- Added the owned `verify-public.py` evidence runner. It bounds child process
+  groups and covers external GOWORK=off relative/absolute replay, strict
+  replay, provider replay with wrong-cwd rejection, interruption replay,
+  and a stopped-server ask record/replay parity check. Rebuilt yui SHA256 is
+  `9bd93bffa7060e19d482af1d7954287a0c164ee5aa7315c6ef817ae4e90182d1` and
+  the independent consumer SHA256 is
+  `8697331cef46a62196ac59f1f7ffdc5c1a477453343e3879306b74103bc3d5e3`.
+  All five routes pass: external `2`, strict `2`, provider `2`, interruption
+  `3`, and ask `2` results. The provider evidence asserts rendered PCM
+  `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`,
+  interruption PCM `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`,
+  and healthy-tail PCM
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`.
+- Final causal gates are green: replay normal and race each report `84`
+  tests in four packages; the named C18 replay-integrity and live
+  replay/interruption controls report `5` and `14` tests; independent
+  embedding normal/race, CLI replay normal/race, focused vet, architecture
+  and size checks, Wire regeneration, pinned Staticcheck, coverage
+  registration, formatting, and diff checks pass. The accumulated
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` matrix passes in
+  normal, coverage, and race modes with its expected negative controls.
+- Admission remains verified for `audio-runtime-c18-public-strict-replay`;
+  `prd.branchName` exactly matches
+  `codex/audio-runtime-c18-public-strict-replay`. Fetched `origin/main` is
+  `e4137eba6a6499142f50701609c1149afc71db84`; required predecessor ancestry
+  remains intact, and the authorized scope is still only the 14 stale
+  baseline-entry deletions plus the external consumer `cmd` allowlist. No
+  CI, independent review, merge, vertical probe, or project acceptance is
+  claimed.
+- Next action: commit the owned evidence runner, corrected extraction
+  inventory and this checkpoint, push the same admitted branch, update PR
+  #410 with both revisions and the exact local gate evidence, then return
+  `ACCEPTED` to the script-owned CI gate without polling. Retain ownership
+  through `CONTINUE` for any exact-head CI rejection and repair that same
+  task; do not self-review.
