@@ -2,11 +2,11 @@ package subsystems
 
 import (
 	"context"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // PingPong responds to ping control plane messages with PONG stream events.
@@ -14,14 +14,22 @@ import (
 type PingPong struct {
 	kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest]
 	logger           logging.Logger
+	timeSource       clock.Source
 }
 
 // NewPingPong creates a PingPong subsystem that writes pong events to the
 // given kernel delta inbox.
 func NewPingPong(kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger) *PingPong {
+	return NewPingPongWithClock(kernelDeltaInbox, logger, nil)
+}
+
+// NewPingPongWithClock creates a PingPong subsystem using the supplied time
+// source. A nil source retains the historical host-wall-time behavior.
+func NewPingPongWithClock(kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger, source clock.Source) *PingPong {
 	return &PingPong{
 		kernelDeltaInbox: kernelDeltaInbox,
 		logger:           logger,
+		timeSource:       clock.Ensure(source),
 	}
 }
 
@@ -48,7 +56,7 @@ func (p *PingPong) Execute(ctx context.Context, curr *state.LoopState) error {
 			Source: messages.System,
 			Delta: messages.StreamMessage{
 				Type:  messages.StreamTypePong,
-				Value: messages.NewPongValue(time.Now().UnixMilli()),
+				Value: messages.NewPongValue(p.timeSource.Now().UnixMilli()),
 			},
 		})
 	}
