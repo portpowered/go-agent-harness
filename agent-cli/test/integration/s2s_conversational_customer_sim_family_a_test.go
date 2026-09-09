@@ -102,6 +102,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	if runErr != nil || observation.ProtocolError != "" {
 		t.Fatalf("Family A shipped-process run failed: run=%v provider=%+v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, result, result.Stdout, result.Stderr)
 	}
+	assertFamilyAFinalCloseOrder(t, observation.EventTrace)
 	if observation.ConnectionCount != 1 || observation.SessionUpdates != 1 {
 		t.Fatalf("provider lifecycle = connections:%d session_updates:%d, want one open session and one update", observation.ConnectionCount, observation.SessionUpdates)
 	}
@@ -136,7 +137,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 		t.Fatalf("input frame evidence = %d, want speech and silence for all four turns", len(result.Input))
 	}
 	if len(result.Output) == 0 || len(result.Stdout) < 16 {
-		t.Fatalf("output evidence reads=%d bytes=%d, want four streamed confirmation audio markers", len(result.Output), len(result.Stdout))
+		t.Fatalf("output evidence reads=%d bytes=%d, want four streamed confirmation audio markers; event_trace=%v", len(result.Output), len(result.Stdout), observation.EventTrace)
 	}
 	for marker := byte(1); marker <= 4; marker++ {
 		if !bytes.Contains(result.Stdout, []byte{marker, 0x41, 0x52, 0x50}) {
@@ -215,6 +216,7 @@ type familyAFunctionCall struct {
 type familyAProviderObservation struct {
 	ConnectionCount    int
 	SessionUpdates     int
+	EventTrace         []string
 	FunctionCalls      []familyAFunctionCall
 	ToolObservations   []probe.ToolObservation
 	CustomerTranscript []probe.TranscriptEvent
@@ -228,20 +230,22 @@ type familyAProviderFixture struct {
 	upgrader websocket.Upgrader
 	scenario probe.CustomerScenario
 
-	mu                 sync.Mutex
-	startedAt          time.Time
-	connectionCount    int
-	sessionUpdates     int
-	functionCalls      []familyAFunctionCall
-	toolObservations   []probe.ToolObservation
-	customerTranscript []probe.TranscriptEvent
-	productTranscript  []probe.TranscriptEvent
-	finalSummary       string
-	protocolError      string
-	actionIndex        int
-	pendingCall        *familyAFunctionCall
-	pendingCallStarted time.Duration
-	pendingResult      bool
+	mu                   sync.Mutex
+	startedAt            time.Time
+	connectionCount      int
+	sessionUpdates       int
+	eventTrace           []string
+	functionCalls        []familyAFunctionCall
+	toolObservations     []probe.ToolObservation
+	customerTranscript   []probe.TranscriptEvent
+	productTranscript    []probe.TranscriptEvent
+	finalSummary         string
+	protocolError        string
+	actionIndex          int
+	pendingCall          *familyAFunctionCall
+	pendingCallStarted   time.Duration
+	pendingResult        bool
+	awaitingFinalSilence bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -275,6 +279,7 @@ func (f *familyAProviderFixture) Snapshot() familyAProviderObservation {
 	return familyAProviderObservation{
 		ConnectionCount:    f.connectionCount,
 		SessionUpdates:     f.sessionUpdates,
+		EventTrace:         append([]string(nil), f.eventTrace...),
 		FunctionCalls:      append([]familyAFunctionCall(nil), f.functionCalls...),
 		ToolObservations:   append([]probe.ToolObservation(nil), f.toolObservations...),
 		CustomerTranscript: append([]probe.TranscriptEvent(nil), f.customerTranscript...),
@@ -318,6 +323,7 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 			f.failProtocol("decode client event: " + err.Error())
 			return
 		}
+		f.recordEvent("client", event.Type)
 		switch event.Type {
 		case "session.update":
 			f.mu.Lock()
@@ -338,6 +344,17 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 				}
 				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
 					return
+				}
+				f.mu.Lock()
+				closeAfterFinalSilence := f.awaitingFinalSilence
+				if closeAfterFinalSilence {
+					f.awaitingFinalSilence = false
+				}
+				f.mu.Unlock()
+				if closeAfterFinalSilence {
+					if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
+						return
+					}
 				}
 				continue
 			}
@@ -533,16 +550,59 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		return err
 	}
 	if marker == 4 {
-		// Give the final input pump enough time to deliver its last silence
-		// frame and close stdin before the provider closes the session.
-		time.Sleep(25 * time.Millisecond)
-		return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"})
+		// The provider closes only after the final input boundary has arrived.
+		// This is a protocol ordering edge, not a timing allowance: the live
+		// owner must retain the final response while the input pump completes.
+		f.mu.Lock()
+		f.awaitingFinalSilence = true
+		f.mu.Unlock()
 	}
 	return nil
 }
 
 func (f *familyAProviderFixture) send(connection *websocket.Conn, event any) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return err
+	}
+	f.recordEvent("server", envelope.Type)
 	return connection.WriteJSON(event)
+}
+
+func (f *familyAProviderFixture) recordEvent(direction, eventType string) {
+	if eventType == "" {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.eventTrace) < 128 {
+		f.eventTrace = append(f.eventTrace, direction+":"+eventType)
+	}
+}
+
+func assertFamilyAFinalCloseOrder(t *testing.T, trace []string) {
+	t.Helper()
+	appendCount := 0
+	finalAppendIndex := -1
+	closeIndex := -1
+	for index, event := range trace {
+		switch event {
+		case "client:input_audio_buffer.append":
+			appendCount++
+			finalAppendIndex = index
+		case "server:session.closed":
+			closeIndex = index
+		}
+	}
+	if appendCount != 8 || finalAppendIndex < 0 || closeIndex <= finalAppendIndex {
+		t.Fatalf("Family A provider terminal ordering = appends:%d final_append:%d session_closed:%d trace:%v; want session.closed after the eighth input append", appendCount, finalAppendIndex, closeIndex, trace)
+	}
 }
 
 func (f *familyAProviderFixture) recordCustomerTranscript(event probe.TranscriptEvent) {
