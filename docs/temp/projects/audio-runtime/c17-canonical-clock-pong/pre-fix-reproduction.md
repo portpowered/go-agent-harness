@@ -48,6 +48,14 @@ c17 public-loop clock reproduction passed
 - Post-repair consumer source SHA256: `7b0954a36e5b57d0d0f41e7d6ecab14029bb2c9ba33fd9342706febab4ac579d`
 - Post-repair consumer executable SHA256: `632bc6f2498f47baa48bd605d38d0fa694f37e005ff2ae2d91f9a03b8072e7a3`
 
+Current-main integration checkpoint:
+
+- Fresh `origin/main`: `49ca32eb6e3fba5fe95a993324d0b3d27f18c324`
+- Candidate merge commit: `4c63cfef72f37d2a7c1de60c77b63baa83b1ef8e`
+- Candidate parent: `f5bfca25ab16850019f5ab65319b64ac582c097b`
+- Mainline parent: `49ca32eb6e3fba5fe95a993324d0b3d27f18c324`
+- `origin/main` is an ancestor of the candidate; the running host checkout was not touched.
+
 Final local validation on the formatted candidate:
 
 ```text
@@ -64,9 +72,9 @@ status=0
 rtk go vet ./pkg/subsystems ./pkg/agentloop
 status=0
 rtk make architecture-check
-status=0; 181 packages, 1859 files, 27078 functions
+status=0; 181 packages, 1859 files, 27084 functions
 rtk make size-check
-status=0; 181 packages, 1859 files, 27078 functions
+status=0; 181 packages, 1859 files, 27084 functions
 rtk git diff --check
 status=0
 ```
