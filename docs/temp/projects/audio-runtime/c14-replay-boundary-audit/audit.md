@@ -823,9 +823,10 @@ Delivery record:
   (`docs: record C14 pushed head`).
 - Pushed branch: `codex/audio-runtime-c14-replay-boundary-audit`.
 - Pull request: [#406](https://github.com/portpowered/go-agent-harness/pull/406),
-  base `main` at `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, state OPEN, current
-  head `7184993fd76acec1e432179bc942ac5890cec392`. The pushed head has no merge
-  SHA at this executor handoff.
+  base `main` at `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, state OPEN. The
+  post-push metadata check immediately after `7184993fd76acec1e432179bc942ac5890cec392`
+  reported that exact head and no merge SHA. The later audit-only record commit
+  `215973992d4f3a7f147afbd7fd4f4073aad86714` was pushed on the same branch.
 - CI was not polled and no CI result is claimed. The next factory action is
   the script-owned current-head CI gate, followed by independent review if the
   gate succeeds.
