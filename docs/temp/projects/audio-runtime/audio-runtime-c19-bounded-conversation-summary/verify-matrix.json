@@ -1,27 +1,42 @@
 {
-  "case": "overflow",
+  "case": "matrix",
   "consumer": "docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
   "execution": {
     "command": [
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c19-bounded-conversation-summary/docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
       "--case",
-      "overflow",
+      "matrix",
       "--output",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-_1mf3p3n/overflow.json"
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-j9nmp8ir/matrix.json"
     ],
     "report": {
-      "case": "overflow",
+      "case": "matrix",
       "clean_shutdown": true,
       "finalization": {
         "first_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
-        "heap_after_finalize_bytes": 527176,
-        "heap_live_bytes": 498056,
+        "heap_after_finalize_bytes": 548616,
+        "heap_live_bytes": 547848,
         "second_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
-        "shutdown_elapsed_ms": 70,
-        "shutdown_total_alloc_bytes": 253506816,
+        "shutdown_elapsed_ms": 54,
+        "shutdown_total_alloc_bytes": 236062056,
         "stable": true
       },
       "lock_released": true,
+      "normal": {
+        "complete_summary": true,
+        "expected_turns": 24,
+        "late_audio_attributed": true,
+        "pcm_bytes": 48,
+        "tool_result_exact_once": true,
+        "transcript_snapshots": true
+      },
+      "normal_finalization": {
+        "heap_after_finalize_bytes": 543656,
+        "heap_live_bytes": 505608,
+        "shutdown_elapsed_ms": 30,
+        "shutdown_total_alloc_bytes": 5312392,
+        "stable": true
+      },
       "overflow": {
         "accepted_turns": 2,
         "partial_status": true,
@@ -29,6 +44,15 @@
         "raw_tail_present": true,
         "silent_success": false,
         "terminal_preserved": true
+      },
+      "overflow_finalization": {
+        "first_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+        "heap_after_finalize_bytes": 548616,
+        "heap_live_bytes": 547848,
+        "second_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
+        "shutdown_elapsed_ms": 54,
+        "shutdown_total_alloc_bytes": 236062056,
+        "stable": true
       },
       "queue": {
         "capacity_bytes": 16777216,

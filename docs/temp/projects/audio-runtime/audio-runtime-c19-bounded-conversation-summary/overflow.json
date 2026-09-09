@@ -1,6 +1,6 @@
 {
   "case": "overflow",
-  "source": "e15fcf231764a2688e9c414f1823d2e65987f66d; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "source": "150fffd9cbbe06e9fd884937e73df6a8fee68426; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
   "summary_budget": {
     "max_bytes": 2097152,
     "max_items": 4096,
@@ -16,10 +16,10 @@
     "first_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
     "second_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
     "stable": true,
-    "heap_live_bytes": 492736,
-    "heap_after_finalize_bytes": 531360,
-    "shutdown_total_alloc_bytes": 247906984,
-    "shutdown_elapsed_ms": 71
+    "heap_live_bytes": 492480,
+    "heap_after_finalize_bytes": 527176,
+    "shutdown_total_alloc_bytes": 256247624,
+    "shutdown_elapsed_ms": 70
   },
   "overflow": {
     "partial_status": true,

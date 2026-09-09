@@ -7,16 +7,16 @@
       "--case",
       "normal",
       "--output",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-r0fjyhmf/normal.json"
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-bz2gt745/normal.json"
     ],
     "report": {
       "case": "normal",
       "clean_shutdown": true,
       "finalization": {
-        "heap_after_finalize_bytes": 543376,
-        "heap_live_bytes": 515264,
-        "shutdown_elapsed_ms": 32,
-        "shutdown_total_alloc_bytes": 5312384,
+        "heap_after_finalize_bytes": 537408,
+        "heap_live_bytes": 504344,
+        "shutdown_elapsed_ms": 31,
+        "shutdown_total_alloc_bytes": 5306144,
         "stable": true
       },
       "lock_released": true,
@@ -36,7 +36,7 @@
       },
       "session_log_bytes": 6812,
       "session_log_turns": 24,
-      "source": "e15fcf231764a2688e9c414f1823d2e65987f66d; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+      "source": "150fffd9cbbe06e9fd884937e73df6a8fee68426; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
       "summary_budget": {
         "max_bytes": 2097152,
         "max_items": 4096,

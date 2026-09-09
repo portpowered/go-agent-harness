@@ -61,7 +61,11 @@ characterization checkpoints plus no-recording controls:
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/verify-public.py --case normal --consumer docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/verify-public.py --case overflow --consumer docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/verify-public.py --case characterize --consumer docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/verify-public.py --case matrix --consumer docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer
 ```
+
+The matrix case runs the normal and overflow scenarios with independent recorder
+lifecycle/finalization state, so each contract is checked against its own result.
 
 The pre-fix and candidate runs use the same public source, finite checkpoints
 of 16/64/128/256/512 completed turns, deterministic clock and fixture, drained
