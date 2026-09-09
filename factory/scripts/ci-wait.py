@@ -44,7 +44,9 @@ PR_LOOKUP_INFRASTRUCTURE_MAX_BACKOFF_SECONDS = 60
 NO_CHECKS_GRACE_SECONDS = 10 * 60
 CONVERGENCE_OBSERVATIONS = 2
 
-PR_VIEW_JSON_FIELDS = "number,state,headRefOid,statusCheckRollup"
+PR_VIEW_JSON_FIELDS = (
+    "number,state,headRefOid,statusCheckRollup,mergeable,mergeStateStatus"
+)
 PR_CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 REQUIRED_CHECKS_POLICY_PATH = (
     Path(__file__).resolve().parents[1] / "docs" / "required-checks.json"
@@ -71,6 +73,17 @@ TERMINAL_STATES = {
     "STARTUP_FAILURE",
     "SUCCESS",
     "TIMED_OUT",
+}
+MERGEABLE_STATES = {"CONFLICTING", "MERGEABLE", "UNKNOWN"}
+MERGE_STATE_STATUSES = {
+    "BEHIND",
+    "BLOCKED",
+    "CLEAN",
+    "DIRTY",
+    "DRAFT",
+    "HAS_HOOKS",
+    "UNKNOWN",
+    "UNSTABLE",
 }
 KNOWN_CHECK_BUCKETS = {"cancel", "fail", "pass", "pending", "skipping"}
 PR_STATE_PREFERENCE = ("OPEN", "MERGED", "CLOSED")
@@ -114,12 +127,14 @@ class SnapshotStatus(Enum):
     EMPTY = "empty"
     UNCERTAIN = "uncertain"
     MERGED = "merged"
+    CONFLICTING = "conflicting"
 
 
 class CIWaitFailureKind(Enum):
     """Classify failures for callers that need to route the gate result."""
 
     CHECKS_FAILED = "checks-failed"
+    CONFLICTING = "conflicting"
     INFRASTRUCTURE = "infrastructure"
 
 
@@ -158,11 +173,15 @@ class CurrentHeadSnapshot:
     head_ref_oid: str = ""
     checks: tuple = ()
     observed_heads: tuple = ()
+    mergeable: str = ""
+    merge_state_status: str = ""
 
     def fingerprint(self):
         """Return only stable fields used for convergence."""
         return (
             self.head_ref_oid,
+            self.mergeable,
+            self.merge_state_status,
             tuple(
                 (
                     check["identity"],
@@ -715,6 +734,33 @@ def _enforced_checks(rollup, all_checks, github_required, policy_names):
     return enforced, None
 
 
+def _mergeability_parts(view):
+    """Validate the explicit mergeability fields used by conflict routing."""
+    mergeable = _non_empty_text(view.get("mergeable"))
+    if mergeable is None:
+        return None, None, "missing-mergeable"
+    mergeable = mergeable.upper()
+    if mergeable not in MERGEABLE_STATES:
+        return None, None, "unknown-mergeable"
+    if mergeable == "UNKNOWN":
+        return None, None, "unknown-mergeable"
+
+    merge_state_status = ""
+    if "mergeStateStatus" in view:
+        merge_state_status = _non_empty_text(view.get("mergeStateStatus"))
+        if merge_state_status is None:
+            return None, None, "malformed-merge-state-status"
+        merge_state_status = merge_state_status.upper()
+        if merge_state_status not in MERGE_STATE_STATUSES:
+            return None, None, "unknown-merge-state-status"
+        if merge_state_status == "UNKNOWN":
+            return None, None, "unknown-merge-state-status"
+
+    if mergeable == "CONFLICTING" and merge_state_status not in {"", "DIRTY"}:
+        return None, None, "inconsistent-mergeability"
+    return mergeable, merge_state_status, None
+
+
 def _view_parts(read, pr_number):
     """Validate and unpack an open PR view response."""
     if read.status != JSONReadStatus.OK:
@@ -731,7 +777,10 @@ def _view_parts(read, pr_number):
     rollup = read.value.get("statusCheckRollup")
     if not isinstance(rollup, list):
         return None, "malformed-status-check-rollup"
-    return (head_ref_oid, rollup), None
+    mergeable, merge_state_status, mergeability_reason = _mergeability_parts(read.value)
+    if mergeability_reason is not None:
+        return None, mergeability_reason
+    return (head_ref_oid, rollup, mergeable, merge_state_status), None
 
 
 def _head_hint(read):
@@ -801,6 +850,24 @@ def observe_current_head(pr_number, policy_names=None):
             "head-changed-during-observation",
             after_head,
             observed_heads=heads,
+        )
+
+    if before[2] != after[2] or before[3] != after[3]:
+        return CurrentHeadSnapshot(
+            SnapshotStatus.UNCERTAIN,
+            "mergeability-changed-during-observation",
+            head_ref_oid,
+            observed_heads=heads,
+        )
+
+    if before[2] == "CONFLICTING":
+        return CurrentHeadSnapshot(
+            SnapshotStatus.CONFLICTING,
+            "open-pr-head-conflicting",
+            head_ref_oid,
+            observed_heads=heads,
+            mergeable=before[2],
+            merge_state_status=before[3],
         )
 
     if required_read.status == JSONReadStatus.UNAVAILABLE:
@@ -955,6 +1022,8 @@ def observe_current_head(pr_number, policy_names=None):
         head_ref_oid,
         checks=tuple(reconciled[identity] for identity in sorted(reconciled)),
         observed_heads=heads,
+        mergeable=before[2],
+        merge_state_status=before[3],
     )
 
 
@@ -996,6 +1065,8 @@ def snapshot_fields(snapshot):
         "checks": len(snapshot.checks),
         "headRefOid": snapshot.head_ref_oid or None,
         "checkIdentities": list(snapshot.checks),
+        "mergeable": snapshot.mergeable or None,
+        "mergeStateStatus": snapshot.merge_state_status or None,
     }
     pending = non_terminal_checks(snapshot.checks)
     if pending:
@@ -1062,6 +1133,15 @@ def main():
             log(f"PR #{pr_number} became MERGED while waiting")
             emit_result(pr=pr_number, prState="MERGED", reason="pr-merged")
             return
+
+        if snapshot.status == SnapshotStatus.CONFLICTING:
+            fail(
+                f"open PR #{pr_number} current head {snapshot.head_ref_oid or 'unknown'} "
+                "is explicitly mergeable=CONFLICTING",
+                kind=CIWaitFailureKind.CONFLICTING,
+                head_ref_oid=snapshot.head_ref_oid,
+                pr=pr_number,
+            )
 
         if snapshot.status == SnapshotStatus.VALID:
             pending = non_terminal_checks(snapshot.checks)

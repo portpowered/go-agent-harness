@@ -88,6 +88,96 @@ class CIGateTests(unittest.TestCase):
         self.assertNotIn("password=raw-secret", feedback)
         self.assertNotIn("log dump", feedback)
 
+    def test_current_head_conflict_routes_to_same_executor_with_exact_repair(self):
+        failure = types.SimpleNamespace(
+            kind="conflicting",
+            reason="open PR current head is explicitly mergeable=CONFLICTING",
+            head_ref_oid=HEAD,
+            pr=412,
+            checks=(),
+        )
+        run = self.module.CIWaitRun(1, "", "", failure)
+
+        with patch.object(self.module, "run_ci_wait", return_value=run), patch.object(
+            self.module, "_git_output", return_value=HEAD
+        ):
+            decision, feedback = self.module.evaluate(
+                Path("/managed/worktree"), "sample-work", HEAD
+            )
+
+        self.assertEqual(decision, "REJECTED")
+        self.assertIn("PR #412", feedback)
+        self.assertIn(HEAD, feedback)
+        self.assertIn("mergeable=CONFLICTING", feedback)
+        self.assertIn("fetch origin main", feedback)
+        self.assertIn("merge main", feedback)
+        self.assertIn("preserving both sides", feedback)
+        self.assertIn("focused regressions", feedback)
+        self.assertIn("changed head", feedback)
+        self.assertIn("same PR", feedback)
+
+    def test_stale_conflict_head_is_rejected_without_claiming_current_conflict(self):
+        failure = types.SimpleNamespace(
+            kind="conflicting",
+            reason="open PR current head is explicitly mergeable=CONFLICTING",
+            head_ref_oid=NEXT_HEAD,
+            pr=412,
+            checks=(),
+        )
+        run = self.module.CIWaitRun(1, "", "", failure)
+
+        with patch.object(self.module, "run_ci_wait", return_value=run), patch.object(
+            self.module, "_git_output", return_value=HEAD
+        ):
+            decision, feedback = self.module.evaluate(
+                Path("/managed/worktree"), "sample-work", HEAD
+            )
+
+        self.assertEqual(decision, "REJECTED")
+        self.assertIn("stale", feedback)
+        self.assertIn(NEXT_HEAD, feedback)
+        self.assertIn(HEAD, feedback)
+        self.assertNotIn("current candidate head is explicitly", feedback)
+        self.assertNotIn("fetch origin main", feedback)
+
+    def test_unvalidated_conflict_evidence_fails_closed(self):
+        failure = types.SimpleNamespace(
+            kind="conflicting",
+            reason="untrusted conflict",
+            head_ref_oid="short-head",
+            pr=412,
+            checks=(),
+        )
+        run = self.module.CIWaitRun(1, "", "", failure)
+
+        with patch.object(self.module, "run_ci_wait", return_value=run), patch.object(
+            self.module, "_git_output", return_value=HEAD
+        ):
+            with self.assertRaises(self.module.GateError):
+                self.module.evaluate(Path("/managed/worktree"), "sample-work", HEAD)
+
+    def test_local_candidate_drift_does_not_confirm_old_conflict(self):
+        failure = types.SimpleNamespace(
+            kind="conflicting",
+            reason="open PR current head is explicitly mergeable=CONFLICTING",
+            head_ref_oid=HEAD,
+            pr=412,
+            checks=(),
+        )
+        run = self.module.CIWaitRun(1, "", "", failure)
+
+        with patch.object(self.module, "run_ci_wait", return_value=run), patch.object(
+            self.module, "_git_output", return_value=NEXT_HEAD
+        ):
+            decision, feedback = self.module.evaluate(
+                Path("/managed/worktree"), "sample-work", HEAD
+            )
+
+        self.assertEqual(decision, "REJECTED")
+        self.assertIn("changed during conflict observation", feedback)
+        self.assertIn("not treated as current", feedback)
+        self.assertNotIn("fetch origin main", feedback)
+
     def test_terminal_success_requires_current_local_head(self):
         run = self.module.CIWaitRun(0, json.dumps(_success()), "", None)
 

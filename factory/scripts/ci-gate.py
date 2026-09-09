@@ -217,6 +217,33 @@ def _format_check(check):
     return detail
 
 
+def _conflict_feedback(failure, pinned_head):
+    """Route only a validated current-head conflict back to its executor."""
+    pr = getattr(failure, "pr", None)
+    head = getattr(failure, "head_ref_oid", "")
+    if not isinstance(pr, int) or isinstance(pr, bool) or pr <= 0:
+        raise GateError("conflict evidence has no valid PR number")
+    if not _valid_sha(head):
+        raise GateError("conflict evidence has no complete PR head SHA")
+    head = head.lower()
+    if head != pinned_head:
+        return _safe_text(
+            f"Conflict evidence for PR #{pr} is stale: remote head {head} does not "
+            f"match the managed candidate {pinned_head}. This is not treated as a "
+            "current-head conflict; return this task to the executor to update the "
+            "candidate and restart CI.",
+            MAX_FEEDBACK_LENGTH,
+        )
+    return _safe_text(
+        f"PR #{pr} current candidate head {head} is explicitly "
+        "mergeable=CONFLICTING. Return this task to the same executor: fetch "
+        "origin main, merge main into the task branch, resolve the actual conflicts "
+        "preserving both sides, run focused regressions, and push a changed head on "
+        "the same PR.",
+        MAX_FEEDBACK_LENGTH,
+    )
+
+
 def _failure_feedback(failure):
     """Build bounded routing feedback without forwarding waiter diagnostics."""
     kind = _failure_kind(failure)
@@ -297,7 +324,19 @@ def evaluate(worktree, work_name, pinned_head):
                     "reason": "CI waiter exited without classified evidence",
                 },
             )()
-        decision = "REJECTED" if _failure_kind(failure) == "checks-failed" else "FAILED"
+        kind = _failure_kind(failure)
+        if kind == "conflicting":
+            current_head = _git_output(worktree, "rev-parse", "HEAD").lower()
+            if current_head != pinned_head:
+                return "REJECTED", _safe_text(
+                    f"The managed worktree changed during conflict observation from "
+                    f"{pinned_head} to {current_head}. The conflict evidence is not "
+                    "treated as current; return this task to the executor to restart "
+                    "CI for the new candidate.",
+                    MAX_FEEDBACK_LENGTH,
+                )
+            return "REJECTED", _conflict_feedback(failure, pinned_head)
+        decision = "REJECTED" if kind == "checks-failed" else "FAILED"
         return decision, _failure_feedback(failure)
 
     try:
