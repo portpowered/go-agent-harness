@@ -1212,6 +1212,12 @@ Delivery record:
   extraction; PR #406 is OPEN at this exact head. The PR body was updated with
   the finding map and bounded validation evidence. No new CI result is being
   polled or claimed.
+- Review-42 repair commit `0246e05fd705ed8547558f8bb4184fa8a70d75b4`
+  (`docs: reconcile C14 clock boundary finding`) records the current limitation
+  and exact future `Prepared.Clock` -> `agentloop.WithClock` wiring, appends the
+  full latest feedback, and records the bounded validation above. It is the
+  current local candidate; it has not yet been pushed or submitted to a new CI
+  run.
 - The prior script-owned gate was rejected only for the unrelated coverage
   timing failure recorded above; no new CI run is being polled or claimed
   green. The next factory action after this evidence checkpoint is the
