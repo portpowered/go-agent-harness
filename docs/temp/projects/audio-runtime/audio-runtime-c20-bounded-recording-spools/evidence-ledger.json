@@ -1,7 +1,7 @@
 {
   "task": "audio-runtime-c20-bounded-recording-spools",
   "project": "audio-runtime",
-  "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+  "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd",
   "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
   "requiredAncestry": {
     "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -17,7 +17,7 @@
   "consumerBuild": {
     "command": "go build -trimpath -mod=mod -o consumer consumer.go",
     "candidateSHA256": "496fd6bc3bae7b4722de5982668a6677201f9f950755832ed22bf593aa4d307e",
-    "baselineSHA256": "99bd08a2111244d440b52d6c7d966e4ffdecda373cbc382640d40ac28741473c",
+    "baselineSHA256": "4ccb4e17665db598054a88acbe19016418e0c5cf614d07a299ca16ee56f41dff",
     "surface": "recording Wire, LiveRecorder, ProviderCaptureSink; no CLI or recording internals",
     "processLimitSeconds": 60
   },
@@ -35,31 +35,31 @@
       "case": "many-small",
       "pacedEvents": 512,
       "status": "complete",
-      "totalBytes": 277997,
+      "totalBytes": 278013,
       "transcriptLines": 513,
       "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
     },
     "candidateBaselinePair": {
       "case": "many-small",
       "status": "partial",
-      "totalBytes": 38295,
+      "totalBytes": 38301,
       "transcriptLines": 66,
       "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
       "candidateProviderBytes": 433,
       "terminalSidecarBytes": 448,
-      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7"
+      "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd"
     },
     "normal": {
-      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+      "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd",
       "status": "complete",
-      "totalBytes": 5238,
+      "totalBytes": 5240,
       "pcmBytes": 8,
       "providerBytes": 429,
       "sidecarBytes": 447,
       "transcriptLinesPerSide": 3
     },
     "largeRecord": {
-      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+      "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd",
       "status": "partial",
       "totalBytes": 3276,
       "transcriptLinesPerSide": 1,
@@ -67,13 +67,13 @@
       "terminalPreserved": true
     },
     "providerOverflow": {
-      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+      "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd",
       "providerError": "provider capture cumulative budget exceeded",
       "publishedProviderBytes": 0,
       "normalEnvelopePublished": false
     },
     "defaultOverflow": {
-      "sourceRevision": "face4716028d5295336ad451ec3caa5d7dd382f7",
+      "sourceRevision": "81cf8888c6076a389c07f6547abe34637c7db8dd",
       "case": "default-overflow",
       "requestedLimits": {
         "transcriptBytes": 0,
@@ -85,7 +85,7 @@
       },
       "pacedRecords": 48,
       "status": "partial",
-      "totalBytes": 53487973,
+      "totalBytes": 53487981,
       "transcriptBytesPerSide": 26743250,
       "transcriptLinesPerSide": 19,
       "providerBytes": 439,
@@ -94,7 +94,7 @@
       "terminalPreserved": true,
       "recordedOutput": {
         "path": "default-overflow.json",
-        "sha256": "783a54800d8db6e217b9daf889e2e26ef4506a426a1afa74b10dcd4d08a447e9"
+        "sha256": "b3d8f8213255a15fc14ff8b9a7855e471e7992400a64d84dcbaeb3c0af66e648"
       }
     }
   },
