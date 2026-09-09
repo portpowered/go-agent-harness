@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -43,6 +44,89 @@ func writeProviderCaptureLine(file *os.File, encoded []byte) error {
 		return err
 	}
 	return writeAll(file, []byte{'\n'})
+}
+
+const providerCaptureDigestHexLength = 64
+
+func providerCaptureEnvelopeOverhead(capture gatewaytesting.SessionCapture) (int64, error) {
+	version := capture.Version
+	if version == 0 {
+		version = gatewaytesting.SessionCaptureVersion
+	}
+	versionJSON, err := json.Marshal(version)
+	if err != nil {
+		return 0, err
+	}
+	providerJSON, err := json.Marshal(capture.Provider)
+	if err != nil {
+		return 0, err
+	}
+	sessionJSON, err := json.Marshal(capture.Session)
+	if err != nil {
+		return 0, err
+	}
+	integrityJSON, err := json.Marshal(gatewaytesting.SessionCaptureIntegrity{
+		Algorithm: gatewaytesting.SessionCaptureIntegrityAlgorithm,
+		Coverage:  gatewaytesting.SessionCaptureIntegrityCoverage,
+		Digest:    strings.Repeat("0", providerCaptureDigestHexLength),
+	})
+	if err != nil {
+		return 0, err
+	}
+	parts := [][]byte{
+		[]byte(`{"version":`), versionJSON,
+		[]byte(`,"provider":`), providerJSON,
+		[]byte(`,"session":`), sessionJSON,
+		[]byte(`,"records":[`), []byte(`]`),
+		[]byte(`,"integrity":`), integrityJSON,
+	}
+	if capture.EndsWithDisconnect {
+		parts = append(parts, []byte(`,"ends_with_disconnect":true`))
+	}
+	parts = append(parts, []byte(`}`))
+	var total int64
+	for _, part := range parts {
+		total += int64(len(part))
+	}
+	return total, nil
+}
+
+func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, reader gatewaytesting.SessionCaptureRecordReader) (returnErr error) {
+	directory := filepath.Dir(path)
+	base := filepath.Base(path)
+	placeholder, err := os.CreateTemp(directory, "."+base+".provider-publish-")
+	if err != nil {
+		return fmt.Errorf("create provider capture publish path: %w", err)
+	}
+	stagePath := placeholder.Name()
+	if err := placeholder.Close(); err != nil {
+		return errors.Join(fmt.Errorf("close provider capture publish path: %w", err), os.Remove(stagePath))
+	}
+	if err := os.Remove(stagePath); err != nil {
+		return fmt.Errorf("reserve provider capture publish path: %w", err)
+	}
+	removeStage := true
+	defer func() {
+		if removeStage {
+			if removeErr := os.Remove(stagePath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				returnErr = errors.Join(returnErr, fmt.Errorf("remove provider capture publish path: %w", removeErr))
+			}
+		}
+	}()
+	if err := gatewaytesting.WriteSessionCaptureFromReader(stagePath, capture, reader); err != nil {
+		return err
+	}
+	if err := os.Link(stagePath, path); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return errProviderCaptureDestination
+		}
+		return fmt.Errorf("publish provider capture: %w", err)
+	}
+	if err := os.Remove(stagePath); err != nil {
+		return fmt.Errorf("remove provider capture publish path: %w", err)
+	}
+	removeStage = false
+	return nil
 }
 
 func encodeProviderCaptureEvent(event gatewaytesting.CapturedSessionEvent) ([]byte, error) {

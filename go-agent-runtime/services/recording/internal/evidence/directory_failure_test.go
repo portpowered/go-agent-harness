@@ -385,6 +385,73 @@ func TestSemanticSidecarBoundsOversizedPublicTerminal(t *testing.T) {
 	}
 }
 
+func TestDirectoryRecorderBoundsManifestMetadata(t *testing.T) {
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination:   filepath.Join(t.TempDir(), "capture"),
+		Provider:      strings.Repeat("provider-", 1<<16),
+		Model:         strings.Repeat("model-", 1<<16),
+		SessionID:     strings.Repeat("session-", 1<<16),
+		ParticipantID: strings.Repeat("participant-", 1<<16),
+		ClockBase:     evidenceTime(), WallClockStart: evidenceTime(),
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceText(t, r, "metadata remains bounded")
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	manifest := evidenceManifest(t, r)
+	if len(manifest.Model) > recordingMetadataFieldLimit || len(manifest.Configuration["provider"]) > recordingMetadataFieldLimit || len(manifest.Configuration["session_id"]) > recordingMetadataFieldLimit || len(manifest.Configuration["participant_id"]) > recordingMetadataFieldLimit {
+		t.Fatalf("manifest metadata was not bounded: model=%d provider=%d session=%d participant=%d", len(manifest.Model), len(manifest.Configuration["provider"]), len(manifest.Configuration["session_id"]), len(manifest.Configuration["participant_id"]))
+	}
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int64(len(encoded)+1) > recording.DefaultMetadataBytes {
+		t.Fatalf("manifest bytes = %d, want <= %d", len(encoded)+1, recording.DefaultMetadataBytes)
+	}
+}
+
+func TestDirectoryRecorderRollsBackPartialTranscriptLines(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	writes := 0
+	r.writeSpool = func(file *os.File, data []byte) error {
+		writes++
+		if writes == 4 {
+			n := len(data) / 2
+			if n == 0 {
+				n = 1
+			}
+			if _, err := file.Write(data[:n]); err != nil {
+				return err
+			}
+			return io.ErrShortWrite
+		}
+		return writeAll(file, data)
+	}
+	recordEvidenceText(t, r, "first complete")
+	recordEvidenceText(t, r, "second partially written")
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err == nil {
+		t.Fatal("partial transcript write reported complete")
+	}
+	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+		lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, name)), []byte{'\n'})
+		if len(lines) != 1 {
+			t.Fatalf("%s lines = %d, want one paired prefix", name, len(lines))
+		}
+		if _, err := transcript.Decode(lines[0]); err != nil {
+			t.Fatalf("%s retained invalid JSONL prefix: %v", name, err)
+		}
+	}
+}
+
 func newEvidenceRecorderWithProviderPath(t *testing.T) *directoryRecorder {
 	t.Helper()
 	root := t.TempDir()

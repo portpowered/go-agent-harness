@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -195,6 +196,55 @@ func TestProviderCaptureSpoolCopiesPayloadAndAbortRemovesTemporaryState(t *testi
 	}
 }
 
+func TestProviderCaptureSpoolProtectsExistingDestination(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	original := []byte(`{"protected":"bytes"}`)
+	if err := os.WriteFile(destination, original, evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	sink, err := NewProviderCapture(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := providerSpoolEvents()[0]
+	if err := sink.Append(event); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Commit(event.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); !errors.Is(err, errProviderCaptureDestination) {
+		t.Fatalf("existing destination flush = %v, want destination protection", err)
+	}
+	if got, err := os.ReadFile(destination); err != nil || !bytes.Equal(got, original) {
+		t.Fatalf("existing destination bytes = %q, %v; want %q", got, err, original)
+	}
+	if _, err := os.Stat(destination + ".lock"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("provider destination claim = %v, want released", err)
+	}
+}
+
+func TestProviderCaptureSpoolBoundsEnvelopeMetadata(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: 1024, ProviderItems: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Model: strings.Repeat("provider-metadata-", 1<<16)},
+	}
+	if err := sink.FlushToFile(destination, capture); !errors.Is(err, errProviderCaptureBudget) || !errors.Is(err, io.ErrShortBuffer) {
+		t.Fatalf("oversized provider envelope = %v, want bounded budget error", err)
+	}
+	if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oversized provider envelope destination = %v, want absent", err)
+	}
+	if _, err := os.Stat(destination + ".lock"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oversized provider envelope claim = %v, want released", err)
+	}
+}
+
 func TestProviderCaptureSpoolCumulativeBudgetAndControlSettlement(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	event := providerSpoolEvents()[0]
@@ -284,6 +334,11 @@ func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testi
 	if secondLimit := int64(len(second) + 1); secondLimit > limit {
 		limit = secondLimit
 	}
+	overhead, err := providerCaptureEnvelopeOverhead(gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit += overhead
 	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
 	if err != nil {
 		t.Fatal(err)

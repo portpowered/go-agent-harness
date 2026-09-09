@@ -18,11 +18,21 @@ The service defaults are finite and protected even when callers pass no limits:
 
 Transcript bytes are charged as the sum of both encoded JSONL peers for one
 logical observation. PCM bytes are charged after PCM16 encoding. Provider bytes
-are the exact `encoding/json` event bytes plus their newline. Queue admission is
-separate: draining releases queue backlog but never refunds cumulative evidence
-capacity. A provider append reserves its encoded bytes until commit/discard;
-discarded pending data is not published, while settlement controls retain a
-reserved queue capacity after data overflow.
+include the exact `encoding/json` event bytes plus their newline and the
+versioned envelope metadata/footer needed for final publication. Queue
+admission is separate: draining releases queue backlog but never refunds
+cumulative evidence capacity. A provider append reserves its encoded bytes
+until commit/discard; discarded pending data is not published, while settlement
+controls retain a reserved queue capacity after data overflow. Provider
+publication claims its destination and uses no-replace publication, preserving
+pre-existing bytes.
+
+Manifest metadata is bounded per field before finalization, and the serialized
+manifest plus session log are charged to the metadata budget. If that budget is
+exhausted, the recorder drops the optional session log and publishes a minimal
+partial manifest when it fits; it never emits an unbounded metadata envelope.
+Transcript, audio, and sidecar writes verify complete records and roll back a
+short write before a partial JSONL line can be published.
 
 For one normal directory capture, a conservative service-owned temporary bound
 is the sum of the live semantic budgets plus the bounded conversation projection

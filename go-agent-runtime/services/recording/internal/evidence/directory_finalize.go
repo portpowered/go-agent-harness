@@ -50,12 +50,6 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	}
 	logData, logErr := r.conversation.json()
 	result = errors.Join(result, logErr)
-	if logErr == nil && len(logData) > 0 {
-		if err := r.budget.reserveMetadata(int64(len(logData)), 1); err != nil {
-			result = errors.Join(result, recordingWriteError("admit session metadata", err))
-			logData = nil
-		}
-	}
 	config := r.bundleConfig(terminal, logData)
 	artifact, present, artifactErr := r.providerArtifact()
 	result = errors.Join(result, artifactErr)
@@ -64,14 +58,16 @@ func (r *directoryRecorder) finalize(runErr error) error {
 		config.AdditionalArtifacts = []transcript.RecordingArtifact{artifact}
 		config.Metadata.Configuration["provider_capture"] = "available"
 	}
-	if result != nil {
-		config.RecordingStatus = &transcript.RecordingStatus{State: transcript.RecordingStatusPartial, Reason: result.Error()}
-	}
+	var metadataErr error
+	config, metadataErr, publish := r.prepareBundleConfig(config, result)
+	result = errors.Join(result, metadataErr)
 	// A summary projection can be incomplete while the raw transcript/PCM
 	// artifacts remain useful. Publish the valid JSONL prefix even when its
 	// bounded finalization reports an error; the partial status prevents replay
 	// from certifying the convenience projection as complete.
-	result = errors.Join(result, transcript.WriteRecordingBundle(config))
+	if publish {
+		result = errors.Join(result, transcript.WriteRecordingBundle(config))
+	}
 	result = errors.Join(result, releaseEvidenceClaim(r.lock, r.lockPath))
 	if r.spool != "" {
 		result = errors.Join(result, os.RemoveAll(r.spool))

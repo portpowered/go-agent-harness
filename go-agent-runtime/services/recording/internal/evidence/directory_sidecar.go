@@ -65,7 +65,7 @@ func (r *directoryRecorder) writeDurationSidecarTerminal(timestamp time.Time, va
 		r.latch(recordingWriteError("admit duration sidecar", err))
 		return err
 	}
-	if err := r.writeSpool(r.sidecar, record); err != nil {
+	if err := r.writeCompleteSpool(r.sidecar, record); err != nil {
 		return recordingWriteError("write duration sidecar", err)
 	}
 	r.sidecarWritten = true
@@ -197,7 +197,7 @@ func (r *sidecarRecorder) process(event sidecarEvent) {
 		}
 		r.file = file
 	}
-	if err := r.writeSpool(r.file, record); err != nil {
+	if err := writeCompleteSpoolWithWriter(r.file, r.writeSpool, record); err != nil {
 		r.workerErr = recordingWriteError("write duration sidecar", err)
 		return
 	}

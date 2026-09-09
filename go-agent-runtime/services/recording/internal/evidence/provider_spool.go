@@ -66,12 +66,14 @@ type providerCapturePending struct {
 // mutations in order and the finalizer streams the spool into the protected
 // gateway envelope.
 type providerCaptureSpool struct {
-	destination string
-	spoolPath   string
-	file        *os.File
-	queue       chan providerCaptureMutation
-	done        chan struct{}
-	limits      recording.ResourceLimits
+	destination         string
+	spoolPath           string
+	file                *os.File
+	destinationLock     *os.File
+	destinationLockPath string
+	queue               chan providerCaptureMutation
+	done                chan struct{}
+	limits              recording.ResourceLimits
 
 	mu             sync.Mutex
 	queuedBytes    int64
@@ -110,6 +112,20 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 	if !info.IsDir() {
 		return nil, errors.New("provider capture destination directory is not a directory")
 	}
+	lockPath := destination + ".lock"
+	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("%w: %s", recording.ErrLiveEvidenceClaimed, destination)
+		}
+		return nil, fmt.Errorf("claim provider capture destination: %w", err)
+	}
+	removeClaim := true
+	defer func() {
+		if removeClaim {
+			returnErr = errors.Join(returnErr, releaseEvidenceClaim(lock, lockPath))
+		}
+	}()
 	base := filepath.Base(destination)
 	file, err := os.CreateTemp(directory, "."+base+".provider-spool-")
 	if err != nil {
@@ -125,15 +141,18 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 		return nil, fmt.Errorf("protect provider capture spool: %w", err)
 	}
 	spool := &providerCaptureSpool{
-		destination: destination,
-		spoolPath:   file.Name(),
-		file:        file,
-		queue:       make(chan providerCaptureMutation, providerCaptureQueueCapacity),
-		done:        make(chan struct{}),
-		limits:      budget.limits,
+		destination:         destination,
+		spoolPath:           file.Name(),
+		file:                file,
+		destinationLock:     lock,
+		destinationLockPath: lockPath,
+		queue:               make(chan providerCaptureMutation, providerCaptureQueueCapacity),
+		done:                make(chan struct{}),
+		limits:              budget.limits,
 	}
 	go spool.run()
 	remove = false
+	removeClaim = false
 	return spool, nil
 }
 
@@ -267,23 +286,28 @@ func (s *providerCaptureSpool) flush(path string, capture gatewaytesting.Session
 	s.closeAdmission()
 	<-s.done
 	if err := s.currentError(); err != nil {
-		return errors.Join(s.prefixDiagnostic(err), s.removeSpool())
+		return errors.Join(s.prefixDiagnostic(err), s.removeSpool(), s.releaseDestinationClaim())
+	}
+	if err := s.checkEnvelopeBudget(capture); err != nil {
+		s.latch(err)
+		return errors.Join(s.prefixDiagnostic(err), s.removeSpool(), s.releaseDestinationClaim())
 	}
 	file, err := os.Open(s.spoolPath)
 	if err != nil {
-		return errors.Join(fmt.Errorf("open provider capture spool for finalization: %w", err), s.removeSpool())
+		return errors.Join(fmt.Errorf("open provider capture spool for finalization: %w", err), s.removeSpool(), s.releaseDestinationClaim())
 	}
 	reader := &providerCaptureSpoolReader{decoder: json.NewDecoder(bufio.NewReader(file))}
-	writeErr := gatewaytesting.WriteSessionCaptureFromReader(path, capture, reader)
+	writeErr := publishProviderCapture(path, capture, reader)
 	closeErr := file.Close()
 	removeErr := s.removeSpool()
-	return errors.Join(writeErr, closeErr, removeErr)
+	claimErr := s.releaseDestinationClaim()
+	return errors.Join(writeErr, closeErr, removeErr, claimErr)
 }
 
 func (s *providerCaptureSpool) abort() error {
 	s.closeAdmission()
 	<-s.done
-	return s.removeSpool()
+	return errors.Join(s.removeSpool(), s.releaseDestinationClaim())
 }
 
 func (s *providerCaptureSpool) closeAdmission() {
@@ -308,6 +332,30 @@ func (s *providerCaptureSpool) prefixDiagnostic(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w: accepted provider prefix items=%d bytes=%d", err, s.committedItems, s.committedBytes)
+}
+
+func (s *providerCaptureSpool) checkEnvelopeBudget(capture gatewaytesting.SessionCapture) error {
+	overhead, err := providerCaptureEnvelopeOverhead(capture)
+	if err != nil {
+		return fmt.Errorf("encode provider capture envelope metadata: %w", err)
+	}
+	s.mu.Lock()
+	committedBytes := s.committedBytes
+	limit := s.limits.ProviderBytes
+	s.mu.Unlock()
+	if overhead > limit-committedBytes {
+		return errProviderCaptureBudget
+	}
+	return nil
+}
+
+func (s *providerCaptureSpool) releaseDestinationClaim() error {
+	if s == nil || s.destinationLock == nil {
+		return nil
+	}
+	lock := s.destinationLock
+	s.destinationLock = nil
+	return releaseEvidenceClaim(lock, s.destinationLockPath)
 }
 
 func (s *providerCaptureSpool) latch(err error) {

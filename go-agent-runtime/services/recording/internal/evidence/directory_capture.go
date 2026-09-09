@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -67,10 +69,23 @@ func (r *directoryRecorder) writeTranscriptRecords(client, agent []byte, sequenc
 	if err := r.ensureTranscriptFiles(); err != nil {
 		return err
 	}
-	if err := r.writeSpool(r.client, client); err != nil {
+	clientOffset, err := spoolOffset(r.client)
+	if err != nil {
+		return recordingWriteError("inspect client transcript", err)
+	}
+	if _, err := spoolOffset(r.agent); err != nil {
+		return recordingWriteError("inspect agent transcript", err)
+	}
+	if err := r.writeCompleteSpool(r.client, client); err != nil {
 		return recordingWriteError("write client transcript", err)
 	}
-	if err := r.writeSpool(r.agent, agent); err != nil {
+	if err := r.writeCompleteSpool(r.agent, agent); err != nil {
+		var writeFailure *spoolWriteError
+		if errors.As(err, &writeFailure) && writeFailure.partial {
+			if rollbackErr := rollbackSpoolFile(r.client, clientOffset); rollbackErr != nil {
+				return errors.Join(recordingWriteError("write agent transcript", err), rollbackErr)
+			}
+		}
 		return recordingWriteError("write agent transcript", err)
 	}
 	r.sequence = sequence
@@ -106,20 +121,34 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.latch(recordingWriteError("admit audio evidence", err))
 		return
 	}
+	var audioFile *os.File
+	var audioOffset *uint64
+	var audioStart uint64
+	var audioCreated bool
 	if len(data) > 0 {
-		file, _, audioOffset, fileErr := r.audioFile(item.direction)
+		pathCount := len(r.outputPaths)
+		if item.direction == session.LiveRecordClient {
+			pathCount = len(r.inputPaths)
+		}
+		file, _, offset, fileErr := r.audioFile(item.direction)
 		if fileErr != nil {
 			r.workerErr = fileErr
 			return
 		}
-		if err := r.writeSpool(file, data); err != nil {
-			r.workerErr = recordingWriteError("write audio evidence", err)
+		audioFile, audioOffset, audioStart = file, offset, *offset
+		if item.direction == session.LiveRecordClient {
+			audioCreated = len(r.inputPaths) > pathCount
+		} else {
+			audioCreated = len(r.outputPaths) > pathCount
+		}
+		if err := r.writeCompleteSpool(audioFile, data); err != nil {
+			r.workerErr = errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(item.direction, audioFile, audioOffset, audioStart, audioCreated))
 			return
 		}
 		*audioOffset += uint64(len(data))
 	}
 	if err := r.writeTranscriptRecords(client, agent, sequence); err != nil {
-		r.workerErr = err
+		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioFile, audioOffset, audioStart, audioCreated))
 		return
 	}
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
@@ -237,6 +266,106 @@ func writeAll(file *os.File, data []byte) error {
 		data = data[written:]
 	}
 	return nil
+}
+
+func (r *directoryRecorder) writeCompleteSpool(file *os.File, data []byte) error {
+	return writeCompleteSpoolWithWriter(file, r.writeSpool, data)
+}
+
+type spoolWriteError struct {
+	err     error
+	partial bool
+}
+
+func (e *spoolWriteError) Error() string {
+	if e == nil || e.err == nil {
+		return "recording spool write failed"
+	}
+	return e.err.Error()
+}
+
+func (e *spoolWriteError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func writeCompleteSpoolWithWriter(file *os.File, writer func(*os.File, []byte) error, data []byte) error {
+	start, err := spoolOffset(file)
+	if err != nil {
+		return err
+	}
+	if writer == nil {
+		return errors.New("recording spool writer is unavailable")
+	}
+	writeErr := writer(file, data)
+	end, endErr := spoolOffset(file)
+	if writeErr == nil && endErr == nil && end == start+int64(len(data)) {
+		return nil
+	}
+	if writeErr == nil && endErr == nil {
+		writeErr = io.ErrShortWrite
+	}
+	return &spoolWriteError{
+		err:     errors.Join(writeErr, endErr, rollbackSpoolFile(file, start)),
+		partial: endErr == nil && end > start,
+	}
+}
+
+func spoolOffset(file *os.File) (int64, error) {
+	if file == nil {
+		return 0, errors.New("recording spool is not open")
+	}
+	return file.Seek(0, io.SeekCurrent)
+}
+
+func rollbackSpoolFile(file *os.File, offset int64) error {
+	if file == nil {
+		return nil
+	}
+	if offset < 0 {
+		return errors.New("recording spool rollback offset is negative")
+	}
+	if err := file.Truncate(offset); err != nil {
+		return fmt.Errorf("truncate recording spool: %w", err)
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return fmt.Errorf("seek recording spool: %w", err)
+	}
+	return nil
+}
+
+func (r *directoryRecorder) rollbackAudioAttempt(direction session.LiveRecordDirection, file *os.File, offset *uint64, start uint64, created bool) error {
+	if file == nil || offset == nil {
+		return nil
+	}
+	result := rollbackSpoolFile(file, int64(start))
+	*offset = start
+	if !created || start != 0 {
+		return result
+	}
+	if err := file.Close(); err != nil {
+		result = errors.Join(result, err)
+	}
+	path := filepath.Join(r.spool, "out.pcm")
+	if direction == session.LiveRecordClient {
+		path = filepath.Join(r.spool, "in.pcm")
+		r.inputFile = nil
+		if len(r.inputPaths) > 0 {
+			r.inputPaths = r.inputPaths[:len(r.inputPaths)-1]
+		}
+	} else {
+		r.outputFile = nil
+		if len(r.outputPaths) > 0 {
+			r.outputPaths = r.outputPaths[:len(r.outputPaths)-1]
+		}
+	}
+	removeErr := os.Remove(path)
+	if errors.Is(removeErr, os.ErrNotExist) {
+		removeErr = nil
+	}
+	return errors.Join(result, removeErr)
 }
 
 func terminalSummary(value *messages.SessionCloseValue) *transcript.RecordingTerminalSummary {
