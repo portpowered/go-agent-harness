@@ -1241,8 +1241,6 @@ C18 current hermetic rejection reconciliation and same-owner handoff checkpoint
   script-owned current-head CI gate without polling. Retain ownership through
   `CONTINUE` for any exact-head actionable C18 rejection; do not self-review
   or broaden scope to the unrelated duplex test.
-=======
-
 C22 meta ownership recovery 2026-09-09T16:02:47.092355+00:00
 
 # C22 exact duplex failure ownership recovery
