@@ -1,0 +1,87 @@
+{
+  "task": "audio-runtime-c20-bounded-recording-spools",
+  "project": "audio-runtime",
+  "sourceRevision": "42624d62b4bb8bb153cd574377bbd50bd1518dd2",
+  "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
+  "requiredAncestry": {
+    "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningMain": "e4137eba6a6499142f50701609c1149afc71db84",
+    "fetchedMain": "e4137eba6a6499142f50701609c1149afc71db84"
+  },
+  "fixtureAndHarnessSHA256": {
+    "consumer.go": "92db363b429e7b60411b91ff3548cc3734212cf2a44d07ba5bd68a62c835e79f",
+    "verify-public.py": "01a8f1201ab7577e5084cf2218a8c2f45a4bbe8e52a0144d32d0ebf6ddec2601",
+    "README.md": "5de43fca1b1478c2d16818ef545d3357c8ded88b8bdbfd4406f6ca0f7d134563"
+  },
+  "consumerBuild": {
+    "command": "go build -trimpath -mod=mod -o consumer consumer.go",
+    "candidateSHA256": "5ddb1a4afdfdc10a4a9302373a15fdfcba7b34344d57f0c1c71aabdfeb778ff5",
+    "baselineSHA256": "547e78219c39d8e144281eecf630789165dde63dad62d6f8b3b0d9c551e6bb03",
+    "surface": "recording Wire, LiveRecorder, ProviderCaptureSink; no CLI or recording internals",
+    "processLimitSeconds": 60
+  },
+  "smallLimitOracle": {
+    "transcriptBytes": 32768,
+    "transcriptItems": 128,
+    "audioBytes": 32768,
+    "audioItems": 32,
+    "providerBytes": 4096,
+    "providerItems": 4
+  },
+  "runs": {
+    "baseline": {
+      "revision": "e4137eba6a6499142f50701609c1149afc71db84",
+      "case": "many-small",
+      "pacedEvents": 512,
+      "status": "complete",
+      "totalBytes": 277995,
+      "transcriptLines": 513,
+      "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
+    },
+    "candidateBaselinePair": {
+      "case": "many-small",
+      "status": "partial",
+      "totalBytes": 38303,
+      "transcriptLines": 66,
+      "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
+      "candidateProviderBytes": 433,
+      "terminalSidecarBytes": 448
+    },
+    "normal": {
+      "status": "complete",
+      "totalBytes": 5238,
+      "pcmBytes": 8,
+      "providerBytes": 429,
+      "sidecarBytes": 447,
+      "transcriptLinesPerSide": 3
+    },
+    "largeRecord": {
+      "status": "partial",
+      "totalBytes": 3276,
+      "transcriptLinesPerSide": 1,
+      "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
+      "terminalPreserved": true
+    },
+    "providerOverflow": {
+      "providerError": "provider capture cumulative budget exceeded",
+      "publishedProviderBytes": 0,
+      "normalEnvelopePublished": false
+    }
+  },
+  "focusedChecks": {
+    "goTestRecording": "70 passed in 4 packages",
+    "goTestRecordingRace": "70 passed in 4 packages",
+    "goVetRecording": "no issues",
+    "architectureSize": "passed: 181 packages, 1860 files, 27174 functions",
+    "diffCheck": "passed",
+    "ci": "not polled; script-owned gate remains external",
+    "review": "not performed by executor"
+  },
+  "limitsAndClaims": {
+    "defaultProtection": "finite defaults are applied when all ResourceLimits fields are zero; small public limits are only reductions",
+    "queueAccounting": "queue backlog is separate and draining never refunds cumulative committed evidence",
+    "providerPartialContract": "existing SessionCapture envelope cannot certify truncation, so overflow fails closed with bounded diagnostic evidence",
+    "notClaimed": ["external trace writers", "all long-conversation causes", "physical/acoustic device proof", "whole-project acceptance"]
+  }
+}
