@@ -956,10 +956,10 @@ Delivery record:
   reported that exact head and no merge SHA. The later audit-only record commit
   `215973992d4f3a7f147afbd7fd4f4073aad86714` was pushed on the same branch.
 - Review-39 repair commit `2fc38169` (`docs: repair C14 replay boundary audit`)
-  was pushed after the latest finding. The current PR head is
-  `2fc38169881ac5d95e5156d42fb416a7f63105a4`; the PR body was updated with the
-  same exact head, finding map, and bounded validation evidence. No merge SHA
-  exists and the new script-owned CI result has not been polled or claimed.
+  was pushed after the latest finding. The subsequent handoff-ledger commit is
+  on the same branch and PR; the PR body is updated with the exact latest head,
+  finding map, and bounded validation evidence. No merge SHA exists and the new
+  script-owned CI result has not been polled or claimed.
 - The prior script-owned gate was rejected only for the unrelated coverage
   timing failure recorded above; no new CI run is being polled or claimed
   green. The next factory action after this evidence checkpoint is the
