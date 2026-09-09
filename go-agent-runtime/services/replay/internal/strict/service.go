@@ -118,7 +118,7 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 	if err != nil {
 		return replay.Prepared{}, fmt.Errorf("%w: construct replay dialer: %w", replay.ErrBundleMismatch, err)
 	}
-	state := &replayState{expected: wireCount, messageTypes: wireTypes}
+	state := &replayState{messageTypes: wireTypes}
 	trackedDialer := transport.Dialer(&trackingDialer{inner: dialer, state: state})
 	return replay.StrictPreparedBuilder{}.Build(
 		capture,
@@ -129,12 +129,6 @@ func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.P
 		deriveScope(events),
 		wireCount,
 		toolCount,
-		func() error {
-			if err := state.validate(); err != nil {
-				return err
-			}
-			return toolExecutor.validateComplete()
-		},
 	), nil
 }
 

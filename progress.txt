@@ -646,3 +646,36 @@ C18 CI static rejection repair checkpoint
   script-owned current-head CI gate without polling. Retain the same task with
   `CONTINUE` for any exact-head rejection; do not claim CI, review, merge,
   vertical or project acceptance.
+
+C18 public completion-forgery repair checkpoint
+
+- The canonical task/review inbox was reread after the latest CI rejection. The
+  unresolved review37 finding was the exported `StrictPreparedBuilder.Build`
+  callback at `go-agent-runtime/services/replay/service.go:113-140`, which let
+  an external consumer return nil from an arbitrary validator without consuming
+  wire or tool evidence. The callback-bearing construction path is removed.
+- `StrictPreparedBuilder.Build` now creates an opaque operation tracker around
+  the public dialer and tool contracts; it has no caller-supplied validator and
+  completion requires one successful dial plus the exact expected wire/tool
+  operation counts. Transport/tool failures remain completion failures. The
+  strict implementation no longer carries duplicate dead final validators.
+  The external GOWORK=off regression checks the public method signature, public
+  composite-literal forgery, and an unconsumed builder result; prior nil-context,
+  exact packet/tool, integrity, and negative controls remain intact.
+- Focused runtime replay normal/race each pass `77` tests in four packages;
+  independent embedding normal/race pass; replay vet, Wire, coverage
+  registration (`172` packages), architecture-size (`182` packages, `1869`
+  files, `27188` functions), pinned Staticcheck 2026.1, pinned golangci-lint
+  2.9.0, and `git diff --check` pass. Accumulated
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` passes in normal,
+  coverage, and race modes with expected negative-control diagnostics.
+- Exact candidate consumer `/tmp/audio-runtime-c18-strict-replay-final` was
+  built from this source with `GOWORK=off`, passed relative and absolute
+  `testdata/replay`, printed the recorded continuation, `16` wire events, `1`
+  tool call and `Device execution: false`, and has SHA256
+  `00662b74d1835310300345f398c46595ba1ff17efc60fc872df02eed31381d55`.
+  No CI status, review, merge, vertical probe or project acceptance is claimed.
+- Exact next action: inspect the owned diff, commit and push the same admitted
+  task, update PR #410 with the callback-removal repair and causal evidence,
+  then return `ACCEPTED` to script-owned current-head CI without polling. Keep
+  ownership through `CONTINUE` for any exact-head rejection.

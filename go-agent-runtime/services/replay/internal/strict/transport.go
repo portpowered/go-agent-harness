@@ -10,10 +10,8 @@ import (
 
 type replayState struct {
 	mu           sync.Mutex
-	expected     int
 	consumed     int
 	dialed       bool
-	err          error
 	messageTypes []int
 }
 
@@ -22,18 +20,6 @@ func (s *replayState) expectedTypeLocked() int {
 		return 0
 	}
 	return s.messageTypes[s.consumed]
-}
-
-func (s *replayState) validate() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.err != nil {
-		return s.err
-	}
-	if !s.dialed || s.consumed != s.expected {
-		return fmt.Errorf("%w: provider wire consumed %d/%d", replay.ErrBundleIncomplete, s.consumed, s.expected)
-	}
-	return nil
 }
 
 type trackingDialer struct {
@@ -45,7 +31,6 @@ func (d *trackingDialer) Dial(endpoint string, headers map[string]string) (trans
 	d.state.mu.Lock()
 	if d.state.dialed {
 		err := fmt.Errorf("%w: replay bundle permits one session connection", replay.ErrBundleMismatch)
-		d.state.err = err
 		d.state.mu.Unlock()
 		return nil, err
 	}
@@ -53,9 +38,6 @@ func (d *trackingDialer) Dial(endpoint string, headers map[string]string) (trans
 	d.state.mu.Unlock()
 	conn, err := d.inner.Dial(endpoint, headers)
 	if err != nil {
-		d.state.mu.Lock()
-		d.state.err = err
-		d.state.mu.Unlock()
 		return nil, err
 	}
 	return &trackingConn{inner: conn, state: d.state}, nil
@@ -69,11 +51,6 @@ type trackingConn struct {
 func (c *trackingConn) ReadMessage() (int, []byte, error) {
 	messageType, payload, err := c.inner.ReadMessage()
 	if err != nil {
-		c.state.mu.Lock()
-		if c.state.consumed < c.state.expected {
-			c.state.err = fmt.Errorf("%w: %w", replay.ErrBundleIncomplete, err)
-		}
-		c.state.mu.Unlock()
 		return messageType, payload, err
 	}
 	c.state.mu.Lock()
@@ -82,7 +59,6 @@ func (c *trackingConn) ReadMessage() (int, []byte, error) {
 			messageType = expected
 		} else {
 			err := fmt.Errorf("%w: received message type %d, expected %d", replay.ErrBundleMismatch, messageType, expected)
-			c.state.err = err
 			c.state.mu.Unlock()
 			return messageType, payload, err
 		}
@@ -98,17 +74,10 @@ func (c *trackingConn) WriteMessage(messageType int, payload []byte) error {
 	c.state.mu.Unlock()
 	if expected != 0 && messageType != expected {
 		err := fmt.Errorf("%w: sent message type %d, expected %d", replay.ErrBundleMismatch, messageType, expected)
-		c.state.mu.Lock()
-		c.state.err = err
-		c.state.mu.Unlock()
 		return err
 	}
 	if err := c.inner.WriteMessage(messageType, payload); err != nil {
-		wrapped := fmt.Errorf("%w: %w", replay.ErrBundleMismatch, err)
-		c.state.mu.Lock()
-		c.state.err = wrapped
-		c.state.mu.Unlock()
-		return wrapped
+		return fmt.Errorf("%w: %w", replay.ErrBundleMismatch, err)
 	}
 	c.state.mu.Lock()
 	c.state.consumed++
@@ -117,11 +86,5 @@ func (c *trackingConn) WriteMessage(messageType int, payload []byte) error {
 }
 
 func (c *trackingConn) Close() error {
-	err := c.inner.Close()
-	if err != nil {
-		c.state.mu.Lock()
-		c.state.err = err
-		c.state.mu.Unlock()
-	}
-	return err
+	return c.inner.Close()
 }

@@ -87,17 +87,6 @@ func (e *recordedToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	return entry.response, nil
 }
 
-func (e *recordedToolExecutor) validateComplete() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	for id, entry := range e.calls {
-		if !entry.used {
-			return fmt.Errorf("%w: tool call %q was not consumed", replay.ErrBundleIncomplete, id)
-		}
-	}
-	return nil
-}
-
 func sameJSON(expected, actual string) bool {
 	var left, right any
 	return json.Unmarshal([]byte(expected), &left) == nil && json.Unmarshal([]byte(actual), &right) == nil && jsonEqual(left, right)

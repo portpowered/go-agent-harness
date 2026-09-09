@@ -108,6 +108,10 @@ func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
 	if _, ok := reflect.TypeOf(prepared).FieldByName("Complete"); ok {
 		t.Fatal("public prepared contract exposes mutable completion callback")
 	}
+	build, ok := reflect.TypeOf(runtimeReplay.StrictPreparedBuilder{}).MethodByName("Build")
+	if !ok || build.Type.NumIn() != 9 {
+		t.Fatalf("public builder signature=%v, want no caller-supplied validator", build.Type)
+	}
 	forged := runtimeReplay.StrictPrepared{
 		Capture:      prepared.Capture,
 		Dialer:       prepared.Dialer,
@@ -120,6 +124,19 @@ func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
 	}
 	if err := forged.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
 		t.Fatalf("forged completion error=%v, want incomplete evidence", err)
+	}
+	preparedWithoutEvidence := runtimeReplay.StrictPreparedBuilder{}.Build(
+		prepared.Capture,
+		prepared.Dialer,
+		prepared.ToolExecutor,
+		prepared.Audio,
+		prepared.Clock,
+		prepared.Scope,
+		prepared.WireEvents,
+		prepared.ToolCalls,
+	)
+	if err := preparedWithoutEvidence.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
+		t.Fatalf("public builder without consumed evidence error=%v, want incomplete evidence", err)
 	}
 }
 

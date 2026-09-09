@@ -3,7 +3,9 @@ package replay
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -107,16 +109,83 @@ type StrictPrepared struct {
 }
 
 type strictCompletion struct {
-	validate func() error
+	mu            sync.Mutex
+	expectedWire  int
+	consumedWire  int
+	expectedTools int
+	consumedTools int
+	dialed        bool
+	err           error
 }
 
-// StrictPreparedBuilder is the private implementation bridge for creating a
-// prepared value. It carries no state; the returned value remains incomplete
-// unless the builder supplies an implementation-owned validation witness.
+func (c *strictCompletion) beginDial() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.dialed {
+		c.err = fmt.Errorf("%w: replay bundle permits one session connection", ErrBundleMismatch)
+		return c.err
+	}
+	c.dialed = true
+	return nil
+}
+
+func (c *strictCompletion) fail(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.err == nil {
+		c.err = err
+	}
+	c.mu.Unlock()
+}
+
+func (c *strictCompletion) failWire(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.err == nil && c.consumedWire < c.expectedWire {
+		c.err = fmt.Errorf("%w: %w", ErrBundleIncomplete, err)
+	}
+	c.mu.Unlock()
+}
+
+func (c *strictCompletion) markWire() {
+	c.mu.Lock()
+	c.consumedWire++
+	c.mu.Unlock()
+}
+
+func (c *strictCompletion) markTool() {
+	c.mu.Lock()
+	c.consumedTools++
+	c.mu.Unlock()
+}
+
+func (c *strictCompletion) validate() error {
+	if c == nil {
+		return ErrBundleIncomplete
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return c.err
+	}
+	if !c.dialed || c.consumedWire != c.expectedWire || c.consumedTools != c.expectedTools {
+		return fmt.Errorf("%w: provider wire consumed %d/%d and tools consumed %d/%d", ErrBundleIncomplete, c.consumedWire, c.expectedWire, c.consumedTools, c.expectedTools)
+	}
+	return nil
+}
+
+// StrictPreparedBuilder tracks successful public dialer and tool operations
+// and is the only construction path for a prepared completion witness. It
+// accepts no caller-supplied validator; completion can succeed only after the
+// tracked dependencies report the expected evidence consumption.
 type StrictPreparedBuilder struct{}
 
-// Build creates one prepared replay with its implementation-owned completion
-// witness. Runtime hosts should obtain prepared values from StrictService.
+// Build creates one prepared replay with operation-based completion tracking.
+// Runtime hosts should obtain prepared values from StrictService.
 func (StrictPreparedBuilder) Build(
 	capture testing.SessionCapture,
 	dialer transport.Dialer,
@@ -125,20 +194,117 @@ func (StrictPreparedBuilder) Build(
 	scheduler clock.Scheduler,
 	scope StrictEvidenceScope,
 	wireEvents, toolCalls int,
-	validate func() error,
 ) StrictPrepared {
+	completion := &strictCompletion{expectedWire: wireEvents, expectedTools: toolCalls}
 	return StrictPrepared{
 		Capture:      capture,
-		Dialer:       dialer,
-		ToolExecutor: toolExecutor,
+		Dialer:       &completionDialer{inner: dialer, state: completion},
+		ToolExecutor: &completionToolExecutor{inner: toolExecutor, state: completion},
 		Audio:        audio,
 		Clock:        scheduler,
 		Scope:        scope,
 		WireEvents:   wireEvents,
 		ToolCalls:    toolCalls,
-		completion:   &strictCompletion{validate: validate},
+		completion:   completion,
 	}
 }
+
+type completionDialer struct {
+	inner transport.Dialer
+	state *strictCompletion
+}
+
+func (d *completionDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
+	if d == nil || d.state == nil || d.inner == nil {
+		return nil, fmt.Errorf("%w: replay dialer is unavailable", ErrBundleIncomplete)
+	}
+	if err := d.state.beginDial(); err != nil {
+		return nil, err
+	}
+	conn, err := d.inner.Dial(endpoint, headers)
+	if err != nil {
+		d.state.fail(err)
+		return nil, err
+	}
+	if conn == nil {
+		err := fmt.Errorf("%w: replay dialer returned a nil connection", ErrBundleIncomplete)
+		d.state.fail(err)
+		return nil, err
+	}
+	return &completionConn{inner: conn, state: d.state}, nil
+}
+
+type completionConn struct {
+	inner transport.Conn
+	state *strictCompletion
+}
+
+func (c *completionConn) ReadMessage() (int, []byte, error) {
+	if c == nil || c.inner == nil {
+		err := fmt.Errorf("%w: replay connection is unavailable", ErrBundleIncomplete)
+		if c != nil {
+			c.state.fail(err)
+		}
+		return 0, nil, err
+	}
+	messageType, payload, err := c.inner.ReadMessage()
+	if err == nil {
+		c.state.markWire()
+	} else {
+		c.state.failWire(err)
+	}
+	return messageType, payload, err
+}
+
+func (c *completionConn) WriteMessage(messageType int, payload []byte) error {
+	if c == nil || c.inner == nil {
+		err := fmt.Errorf("%w: replay connection is unavailable", ErrBundleIncomplete)
+		if c != nil {
+			c.state.fail(err)
+		}
+		return err
+	}
+	err := c.inner.WriteMessage(messageType, payload)
+	if err == nil {
+		c.state.markWire()
+	} else {
+		c.state.fail(err)
+	}
+	return err
+}
+
+func (c *completionConn) Close() error {
+	if c == nil || c.inner == nil {
+		return nil
+	}
+	err := c.inner.Close()
+	c.state.fail(err)
+	return err
+}
+
+type completionToolExecutor struct {
+	inner messages.ToolExecutor
+	state *strictCompletion
+}
+
+func (e *completionToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	if e == nil || e.inner == nil {
+		err := fmt.Errorf("%w: replay tool executor is unavailable", ErrToolFailure)
+		if e != nil {
+			e.state.fail(err)
+		}
+		return messages.ToolCallResponse{}, err
+	}
+	response, err := e.inner.Execute(ctx, call)
+	if err == nil {
+		e.state.markTool()
+	}
+	return response, err
+}
+
+var _ transport.Dialer = (*completionDialer)(nil)
+var _ transport.Conn = (*completionConn)(nil)
+var _ messages.ToolExecutor = (*completionToolExecutor)(nil)
 
 // StrictEvidenceScope describes what a credential-free headless run can
 // substantiate. Recorded PCM/render fields describe evidence availability, not
@@ -175,7 +341,7 @@ type StrictResult struct {
 // ValidateComplete verifies that every recorded wire and tool event was
 // consumed exactly once at the strict runtime's terminal boundary.
 func (p StrictPrepared) ValidateComplete() error {
-	if p.completion == nil || p.completion.validate == nil {
+	if p.completion == nil {
 		return ErrBundleIncomplete
 	}
 	return p.completion.validate()
