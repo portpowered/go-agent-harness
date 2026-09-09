@@ -186,6 +186,14 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 			}
 		}
 	}
+	// The source inferencer can publish its scripted audio as soon as its own
+	// SESSION.OPEN is observed. Hold that frame until every participant has
+	// crossed SESSION.OPEN so this fixture exercises the closed-mixer rejection
+	// after target connection/lifecycle registration, not before Bob can own a
+	// participant result.
+	openGate := newRoomParticipantOpenGate(len(inferencers))
+	options.onParticipantSessionOpen = openGate.observe
+	inferencers["alice"].audioGate = openGate.done()
 	sink := &diagnosticRecordSink{}
 	options.OnDiagnostic = func(_ string, record SessionDiagnosticRecord) {
 		sink.RecordSessionDiagnostic(record)
@@ -253,6 +261,38 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 	if _, hasPCMField := rejection.Fields["pcm"]; hasPCMField {
 		t.Fatalf("rejection diagnostic unexpectedly contains a raw PCM field: %v", rejection.Fields)
 	}
+}
+
+type roomParticipantOpenGate struct {
+	mu       sync.Mutex
+	expected int
+	opened   int
+	released chan struct{}
+	once     sync.Once
+}
+
+func newRoomParticipantOpenGate(expected int) *roomParticipantOpenGate {
+	return &roomParticipantOpenGate{expected: expected, released: make(chan struct{})}
+}
+
+func (g *roomParticipantOpenGate) observe(string) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.opened++
+	ready := g.opened >= g.expected
+	g.mu.Unlock()
+	if ready {
+		g.once.Do(func() { close(g.released) })
+	}
+}
+
+func (g *roomParticipantOpenGate) done() <-chan struct{} {
+	if g == nil {
+		return nil
+	}
+	return g.released
 }
 
 type closedTargetRoomLifecycle struct {
