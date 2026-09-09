@@ -75,7 +75,7 @@ func (s *providerCaptureSpool) run() {
 	if len(pending) > 0 {
 		s.latch(errProviderCaptureUnresolved)
 	}
-	if s.currentError() == nil {
+	if providerCaptureCanDrain(s.currentError()) {
 		if err := s.file.Sync(); err != nil {
 			s.latch(fmt.Errorf("sync provider capture spool: %w", err))
 		}
@@ -126,7 +126,7 @@ func (s *providerCaptureSpool) drainPending(pending map[int]providerCapturePendi
 			return
 		}
 		delete(pending, *nextSequence)
-		if entry.state == providerCaptureCommit && s.currentError() == nil {
+		if entry.state == providerCaptureCommit && providerCaptureCanDrain(s.currentError()) {
 			if err := writeProviderCaptureLine(s.file, entry.encoded); err != nil {
 				s.latch(fmt.Errorf("write provider capture spool: %w", err))
 			} else {
@@ -139,6 +139,13 @@ func (s *providerCaptureSpool) drainPending(pending map[int]providerCapturePendi
 		s.releaseBytes(entry.bytes)
 		(*nextSequence)++
 	}
+}
+
+func providerCaptureCanDrain(err error) bool {
+	return err == nil ||
+		errors.Is(err, errProviderCaptureBudget) ||
+		errors.Is(err, errProviderCaptureQueueFull) ||
+		errors.Is(err, errProviderCaptureEventTooLarge)
 }
 
 func (s *providerCaptureSpool) releaseBytes(bytes int64) {

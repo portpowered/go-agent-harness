@@ -267,7 +267,7 @@ func (s *providerCaptureSpool) flush(path string, capture gatewaytesting.Session
 	s.closeAdmission()
 	<-s.done
 	if err := s.currentError(); err != nil {
-		return errors.Join(err, s.removeSpool())
+		return errors.Join(s.prefixDiagnostic(err), s.removeSpool())
 	}
 	file, err := os.Open(s.spoolPath)
 	if err != nil {
@@ -299,6 +299,15 @@ func (s *providerCaptureSpool) currentError() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.err
+}
+
+func (s *providerCaptureSpool) prefixDiagnostic(err error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.committedItems == 0 {
+		return err
+	}
+	return fmt.Errorf("%w: accepted provider prefix items=%d bytes=%d", err, s.committedItems, s.committedBytes)
 }
 
 func (s *providerCaptureSpool) latch(err error) {

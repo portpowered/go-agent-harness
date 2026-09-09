@@ -225,6 +225,50 @@ func TestProviderCaptureSpoolCumulativeBudgetAndControlSettlement(t *testing.T) 
 	}
 }
 
+func TestProviderCaptureSpoolRetainsCommittedPrefixDiagnosticAfterBudgetOverflow(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	event := providerSpoolEvents()[0]
+	encoded, err := encodeProviderCaptureEvent(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{
+		ProviderBytes: int64(len(encoded) + 1), ProviderItems: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Append(event); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Append(providerSpoolEvents()[1]); !errors.Is(err, errProviderCaptureBudget) {
+		t.Fatalf("second append = %v, want budget error", err)
+	}
+	if err := sink.Commit(event.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	spool, ok := sink.(*providerCaptureSpool)
+	if !ok {
+		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
+	}
+	flushErr := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion})
+	if !errors.Is(flushErr, errProviderCaptureBudget) {
+		t.Fatalf("flush error = %v, want budget error", flushErr)
+	}
+	if !strings.Contains(flushErr.Error(), "accepted provider prefix items=1") {
+		t.Fatalf("flush error = %v, want bounded prefix diagnostic", flushErr)
+	}
+	spool.mu.Lock()
+	committedItems, committedBytes := spool.committedItems, spool.committedBytes
+	spool.mu.Unlock()
+	if committedItems != 1 || committedBytes != int64(len(encoded)+1) {
+		t.Fatalf("committed prefix = items %d bytes %d, want 1/%d", committedItems, committedBytes, len(encoded)+1)
+	}
+	if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("overflow published a normal capture: %v", err)
+	}
+}
+
 func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	events := providerSpoolEvents()

@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -40,7 +41,9 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	terminal := cloneTerminal(r.terminal)
 	if terminal == nil {
 		result = errors.Join(result, recordingWriteError("finalize terminal evidence", errors.New("terminal observation is unavailable")))
-		terminal = terminalForError(runErr)
+		var fallbackErr error
+		terminal, fallbackErr = r.fallbackTerminal(runErr)
+		result = errors.Join(result, fallbackErr)
 	}
 	if r.clientPath == "" || r.agentPath == "" {
 		result = errors.Join(result, recordingWriteError("finalize stream evidence", errors.New("stream observations are unavailable")))
@@ -114,12 +117,31 @@ func cloneTerminal(value *transcript.RecordingTerminalSummary) *transcript.Recor
 	return &copy
 }
 
+func (r *directoryRecorder) reserveFallbackTerminal(terminal *transcript.RecordingTerminalSummary) error {
+	encoded, err := json.Marshal(terminal)
+	if err != nil {
+		return err
+	}
+	return r.budget.reserveTranscript(int64(len(encoded)), 1, true)
+}
+
+func (r *directoryRecorder) fallbackTerminal(runErr error) (*transcript.RecordingTerminalSummary, error) {
+	terminal := terminalForError(runErr)
+	if terminal == nil {
+		return nil, nil
+	}
+	if err := r.reserveFallbackTerminal(terminal); err != nil {
+		return nil, recordingWriteError("admit fallback terminal evidence", err)
+	}
+	return terminal, nil
+}
+
 func terminalForError(err error) *transcript.RecordingTerminalSummary {
 	if err == nil {
 		return nil
 	}
 	return &transcript.RecordingTerminalSummary{
-		Reason: err.Error(), Classification: string(messages.TerminalReasonTerminalFailure),
+		Reason: boundedEventText(err.Error()), Classification: string(messages.TerminalReasonTerminalFailure),
 		TerminalReason:     messages.TerminalReasonTerminalFailure,
 		TerminalProvenance: messages.TerminalProvenanceSession,
 		OutputState:        messages.TerminalOutputNone,

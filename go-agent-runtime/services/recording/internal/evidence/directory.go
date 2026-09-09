@@ -260,9 +260,13 @@ func boundedTerminalValue(value *messages.SessionCloseValue) *messages.SessionCl
 		return nil
 	}
 	copy := *value
+	copy.Type = boundedEventText(copy.Type)
 	copy.SessionID = boundedEventText(copy.SessionID)
 	copy.Reason = boundedEventText(copy.Reason)
 	copy.Classification = boundedEventText(copy.Classification)
+	copy.TerminalReason = messages.TerminalReason(boundedEventText(string(copy.TerminalReason)))
+	copy.TerminalProvenance = messages.TerminalProvenance(boundedEventText(string(copy.TerminalProvenance)))
+	copy.OutputState = messages.TerminalOutputState(boundedEventText(string(copy.OutputState)))
 	return &copy
 }
 

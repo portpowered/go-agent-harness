@@ -332,6 +332,59 @@ func TestDirectoryRecorderBoundsOversizedTerminalRuntimeEvent(t *testing.T) {
 	}
 }
 
+func TestDirectoryRecorderBoundsFallbackTerminalError(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	recordEvidenceText(t, r, "observed before fallback")
+	runErr := errors.New(strings.Repeat("run failure: ", 30000))
+	if err := r.Finalize(t.Context(), runErr); err == nil {
+		t.Fatal("missing terminal fallback reported complete")
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.Terminal == nil {
+		t.Fatal("fallback terminal was not retained")
+	}
+	if len(manifest.Terminal.Reason) > 2048 {
+		t.Fatalf("fallback terminal reason bytes = %d, want <= 2048", len(manifest.Terminal.Reason))
+	}
+	if r.budget.terminalBytes <= 0 || r.budget.terminalBytes > recording.DefaultTerminalBytes {
+		t.Fatalf("fallback terminal budget = %d, want bounded reservation", r.budget.terminalBytes)
+	}
+}
+
+func TestSemanticSidecarBoundsOversizedPublicTerminal(t *testing.T) {
+	rawPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	r, err := NewSemanticSidecar(rawPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		strings.Repeat("session-", 50000), strings.Repeat("reason-", 50000), strings.Repeat("classification-", 50000),
+		messages.TerminalReason(strings.Repeat("terminal-", 50000)), messages.TerminalProvenance(strings.Repeat("provenance-", 50000)), messages.TerminalOutputState(strings.Repeat("output-", 50000)),
+	)
+	if err := r.RecordEvent(t.Context(), session.LiveEvent{Timestamp: evidenceTime(), Terminal: terminal}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatalf("finalize oversized terminal = %v", err)
+	}
+	sidecarPath := strings.TrimSuffix(rawPath, filepath.Ext(rawPath)) + ".jsonl"
+	info, err := os.Stat(sidecarPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() > recording.DefaultSidecarBytes {
+		t.Fatalf("sidecar bytes = %d, want <= %d", info.Size(), recording.DefaultSidecarBytes)
+	}
+	data, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok := decodeDurationSidecarTerminal(t, bytes.TrimSpace(data))
+	if !ok || len(value.Reason) > 2048 || len(value.Classification) > 2048 {
+		t.Fatalf("bounded sidecar terminal = %+v", value)
+	}
+}
+
 func newEvidenceRecorderWithProviderPath(t *testing.T) *directoryRecorder {
 	t.Helper()
 	root := t.TempDir()
