@@ -1,0 +1,13 @@
+{
+  "sourceRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "command": [
+    "go",
+    "run",
+    "-tags=nomicrophone",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go"
+  ],
+  "exitCode": 1,
+  "stdout": "open <nil>\nbackend samples 3\npartial <nil>\n",
+  "stderr": "panic: runtime error: invalid memory address or nil pointer dereference\n[signal SIGSEGV: segmentation violation code=0x2 addr=0x18 pc=0x104e06ff0]\n\ngoroutine 1 [running]:\ngithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices.(*DeviceSink).WriteFrame(0x473cf854c100, {0x104febe90?, 0x10505e980?}, {0x473cf851aab2, 0x1e0, 0x1e0})\n\t/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-merged-probe-source/go-device-gateway/pkg/devices/sink_device.go:158 +0x280\ngithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices.(*DeviceSink).WriteSamples(0x473cf854c100, {0x104febe90?, 0x10505e980?}, {0x473cf851aab2, 0x1e0, 0x1e0})\n\t/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-merged-probe-source/go-device-gateway/pkg/devices/sink_device.go:198 +0x2d4\nmain.main()\n\t/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go:10 +0x1ac\nexit status 2\n",
+  "sourceSHA256": "43aafecea72761c9b523c71a287fda8aef0ac3040aa28f4d4cc549989e8790b0"
+}

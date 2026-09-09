@@ -1,0 +1,155 @@
+{
+  "task": "audio-runtime-c16-sample-only-device-sink",
+  "baseRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "candidateSourceRevision": "fab89031ab00000c763bbb01d40835396aaed930",
+  "branch": "codex/audio-runtime-c16-sample-only-device-sink",
+  "originMain": "f98733864d9c46c691a1198d714943afbd52fbcb",
+  "integrationRevision": "cc592e28272260129d10d0ffb5d25067ac24b909",
+  "ancestry": {
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "baselineAncestor": true,
+    "startupIntegrationAncestor": true,
+    "recordedMainAncestor": true,
+    "fetchedMainAncestor": true
+  },
+  "negativeControl": {
+    "artifact": "reproduction.json",
+    "sourceRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+    "exitCode": 1,
+    "expected": "construction succeeds, 3-sample chunk reaches the sample-only backend, then the full-frame WriteSamples call panics through the pre-fix nil byteWriter",
+    "stdout": "open <nil>\nbackend samples 3\npartial <nil>\n"
+  },
+  "candidateReproducer": {
+    "command": "rtk proxy go run -tags=nomicrophone docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go",
+    "exitCode": 0,
+    "stdout": "open <nil>\nbackend samples 3\npartial <nil>\nbackend samples 480\nfull <nil>\ncalls 2\n"
+  },
+  "focusedChecks": [
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go test -race -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go vet -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go build -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk git diff --check",
+      "exitCode": 0,
+      "result": "PASS"
+    }
+  ],
+  "ciRejectionRepair": {
+    "pullRequest": 408,
+    "rejectedHead": "ffbce24d642b76c877878f1f21cccfef36e44124",
+    "run": "34313875871",
+    "job": "102345903861",
+    "check": "CI (static)",
+    "feedback": "Required CI (static) failed on the current head.",
+    "logRead": "The complete job log was read through the GitHub job-log API; the failed step was Verify service architecture and size budgets.",
+    "localReproduction": {
+      "command": "rtk proxy make architecture-size-check",
+      "exitCode": 2,
+      "finding": "baseline-drift github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices (53 > 52): the added sample-only test file increased the maintained file count above the immutable baseline"
+    },
+    "repairCommit": "fab89031ab00000c763bbb01d40835396aaed930",
+    "causalValidation": "The sample-only regressions were consolidated into the existing leased sink_device_test.go and the extra test file was removed; architecture-size-check now passes at 52 maintained device files and 600 test-file lines without changing the baseline."
+  },
+  "postIntegrationChecks": [
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run TestDeviceSinkSampleOnly -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -race -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go vet -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go build -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make lint",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make staticcheck",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make architecture-check",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make architecture-size-check",
+      "exitCode": 0
+    }
+  ],
+  "sourceHashes": [
+    {
+      "path": "go-device-gateway/pkg/devices/sink_device.go",
+      "sha256": "0c42a746fcc250e059fbef519ed8280d3dedc4b3c959ee9e3c9b35db7c9ed1d0"
+    },
+    {
+      "path": "go-device-gateway/pkg/devices/sink_device_test.go",
+      "sha256": "cb0ef75de6a6107d9313977890af8eede07d8dfb2eb5c36498ae37036cf6605e"
+    }
+  ],
+  "artifactHashes": [
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go",
+      "sha256": "43aafecea72761c9b523c71a287fda8aef0ac3040aa28f4d4cc549989e8790b0",
+      "matchesPlannerArtifact": true
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduction.json",
+      "sha256": "833a9fb56eeeb7194299f233b3cf89bf06e6ebdbb13b45a00f0735bc862d9fce",
+      "matchesPlannerArtifact": true
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/source-inspection.json",
+      "sha256": "4c5b1dfae286a815700a2bcf250d06a36b1234b8d3d1d2bce5af2e7e3bef24b4",
+      "matchesPlannerArtifact": true
+    }
+  ],
+  "canonicalInbox": {
+    "taskRowsRead": true,
+    "reviewRowsRead": true,
+    "priorCiRejection": true,
+    "priorReviewFindings": []
+  },
+  "scopeLimitations": [
+    "Software sample-backend receipt is proven; physical/acoustic consumption and live-provider evidence remain outside this repair and are not claimed.",
+    "Script-owned current-head CI, independent review, guarded merge and post-merge vertical validation remain open."
+  ]
+}
