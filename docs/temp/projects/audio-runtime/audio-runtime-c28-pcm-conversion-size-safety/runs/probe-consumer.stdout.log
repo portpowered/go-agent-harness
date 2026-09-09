@@ -1,11 +1,11 @@
 {
   "schema": "audio-runtime-c28-pcm-consumer.v1",
   "case": "verify",
-  "source": "822aed9850449e9854e351bd5f55349eff1949e3",
+  "source": "7d772d30e749f777440d7ad9f422b55d9d8e89b7",
   "goos": "darwin",
   "goarch": "arm64",
   "int_bits": 64,
-  "started_at": "2026-09-09T23:33:46.616098Z",
+  "started_at": "2026-09-09T23:53:05.66168Z",
   "duration_ms": 0,
   "cases": [
     {

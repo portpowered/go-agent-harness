@@ -1,8 +1,8 @@
 {
-  "consumer_sha256": "dae4a6c579e87400eb7de371c41b44a316afbed779f4c9a6069c4db0aec9ec89",
+  "consumer_sha256": "1e050f412e4aa40373b40c7236176e51b1a7296075422c893cc4c223e97e415e",
   "consumer_source_sha256": "a02d85d874153dea8948ea1fb35d0da9e0e69b1ecea9c2914dbd0df759559599",
-  "expected_effects_sha256": "0d7cee0ef0eb7e15436a202cf78cafb833f660b6cf64832be43d683880a99470",
+  "expected_effects_sha256": "b684878e1d2d2d8229ed4da239b4d0a13d5d082a89710fce3fd5d12b4f2b3705",
   "schema": "audio-runtime-c28-artifact-manifest.v1",
-  "source_revision": "822aed9850449e9854e351bd5f55349eff1949e3",
-  "yui_sha256": "4a3acb12d9a166c972e6ba2b4c4d280396f7998fccb416b354ada92017ba7141"
+  "source_revision": "7d772d30e749f777440d7ad9f422b55d9d8e89b7",
+  "yui_sha256": "6d5164ae4f6e81c5634baebf5efecbf000415f77405bea642fbd55b67cf6b37a"
 }
