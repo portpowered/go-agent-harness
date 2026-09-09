@@ -2,7 +2,10 @@
 
 Implementation commit: `bc48f8175ea0c13a37ec73447b1d522e38019e91`
 
-The final candidate source revision is the commit containing this ledger.
+Static-rejection repair commit: `fe9a5c40` (`test: use supported cwd isolation in replay regressions`).
+
+The final candidate source revision is the commit containing this ledger; the
+repair checkpoint is its immediate parent.
 
 ## Identity and ancestry
 
@@ -10,7 +13,36 @@ The final candidate source revision is the commit containing this ledger.
 - Branch: `codex/audio-runtime-c15-relative-bundle-path`.
 - Current `origin/main`: `f8e0863222da1bdbf296e2220fcbc081461cc877`.
 - Required startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors.
-- `prd.json.branchName` matches the isolated branch. The worktree is clean and one commit ahead of `origin/main`.
+- `prd.json.branchName` matches the isolated branch. The worktree was clean at
+  `fe9a5c40` before this ledger update; the final ledger commit remains on the
+  same branch and contains only this owned evidence file.
+
+## Rejected-head repair
+
+PR #407 at head `6915824da12971604a4255329c680e84a6e792a4` was rejected by the
+canonical task inbox for `CI (static)`. The completed job
+`102338796355` in run `34311456260` passed formatting, Wire, architecture/size,
+vet and staticcheck, then failed pinned golangci-lint at
+`agent-cli/internal/services/internal/replay/service_test.go:470:19`:
+`forbidigo: use of os.Getwd forbidden because inject the working directory
+through a host boundary`.
+
+The repair replaces `os.Getwd`/`os.Chdir` setup in both newly added
+cwd-sensitive replay tests with serial `testing.T.Chdir`, which owns cleanup and
+is the repository-supported process-cwd test boundary. The runtime-plan oracle
+also now expects the API's absolute lexical artifact path rather than applying
+`EvalSymlinks` to the expected value; containment still uses the resolved root
+inside production validation. No production security check or acceptance
+assertion was weakened.
+
+Repair validation: focused normal and race tests for
+`go-agent-runtime/services/replay/internal/plan` and
+`agent-cli/internal/services/internal/replay` pass; `rtk make lint` reports 0
+issues in all 15 modules; `rtk make architecture-check size-check wire-check`
+passes with 181 packages, 1859 files and 27061 functions, with no generated
+Wire diff; the accumulated `COUNT=1 YUI_AUDIO_STRESS=1` normal session
+regression script passes. The candidate source at the repair checkpoint is
+`fe9a5c40`.
 
 ## Causal proof
 
