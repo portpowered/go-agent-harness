@@ -3,11 +3,11 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
-  "current_branch_head_at_handoff": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
-  "implementation_checkpoint": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
-  "evidence_checkpoint": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
-  "evidence_generated_from_sha": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
+  "candidate_head": "e2e1faebe7610c18edea672e493f973fc6981425",
+  "current_branch_head_at_handoff": "e2e1faebe7610c18edea672e493f973fc6981425",
+  "implementation_checkpoint": "e2e1faebe7610c18edea672e493f973fc6981425",
+  "evidence_checkpoint": "e2e1faebe7610c18edea672e493f973fc6981425",
+  "evidence_generated_from_sha": "e2e1faebe7610c18edea672e493f973fc6981425",
   "evidence_packaging_note": "The implementation SHA above is the exact tested code tree; evidence is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
   "base_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -17,7 +17,7 @@
     "integrated_at_utc": "2026-09-08T22:39:37Z",
     "integration_method": "isolated-worktree rebase onto freshly fetched origin/main; running host checkout untouched",
     "integration_head": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
-    "repair_head": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
+    "repair_head": "e2e1faebe7610c18edea672e493f973fc6981425",
     "previous_submitted_head": "e2ebc23464ee34c27c419d47fe8e7ef415f927a1",
     "previous_ci_run": 34277521278,
     "previous_ci_job": 102234088178,
@@ -53,6 +53,12 @@
     "path": "canonical-board-recheck-20260908.json",
     "sha256": "2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6"
   },
+  "continuation_board_snapshot": {
+    "path": "canonical-board-executor-20260909.json",
+    "sha256": "3992a0a76ef15fcc5c409fad20a13710d74ce305a1b44ad254baaa8522639cad",
+    "findings_path": "canonical-findings-executor-20260909.txt",
+    "findings_sha256": "f796774f3dee3213f53b10a6cd285a997da1dc4a75dfc6fbbb1a2c0a68083e7b"
+  },
   "fresh_timing": {
     "status": "BLOCKED",
     "reason": "No isolated or dedicated runner evidence is available; the shared factory runner is not an admissible quiet runner",
@@ -77,10 +83,10 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-c11-repair/controls.json",
-    "sha256": "771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c",
+    "path": "ctrl-e2e1fae/controls.json",
+    "sha256": "4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274",
     "status": "PASS",
-    "cases": 63,
+    "cases": 64,
     "result_groups": 26,
     "go_invocations": 0,
     "network_invocations": 0,
@@ -94,10 +100,10 @@
   },
   "schema_control_mapping": "schema-control-mapping.md",
   "fresh_focused_recheck": {
-      "checked_at_utc": "2026-09-08T23:34:44.557Z",
-      "tested_head": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
-      "controls_report_sha256": "771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c",
-      "controls": "PASS: 63 cases, 26 result groups, zero Go/network/build invocations",
+      "checked_at_utc": "2026-09-09T00:09:52Z",
+      "tested_head": "e2e1faebe7610c18edea672e493f973fc6981425",
+      "controls_report_sha256": "4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274",
+      "controls": "PASS: 64 cases, 26 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files",
     "timingate": "PASS: GOWORK=off go test . -count=1",
@@ -112,6 +118,12 @@
       "review": 35,
       "reviewed_head": "7e468aa43a9838d4f49266d567c69d520779742c",
       "repair_commit": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_command_status_repair": {
+      "review": 37,
+      "reviewed_head": "d31122d2afbb4baa9436e3aad9c1abcfc7c036d2",
+      "repair_commit": "e2e1faebe7610c18edea672e493f973fc6981425",
       "status": "REPAIRED_AND_CAUSALLY_TESTED"
     },
     "items": [
@@ -140,7 +152,8 @@
       "whole-input group and record validation completes before --group display filtering, including unmatched filters",
       "cohort capture accepts exactly two invocations and rejects repeat 3",
       "hermetic cohort capture requires one complete successful full inventory trial before any Go command",
-      "inventory and warm phase commands must be PASS with exit status 0 before analysis or cohort launch"
+      "inventory and warm phase commands must be PASS with exit status 0 before analysis or cohort launch",
+      "timeout, exit, signal, spawn-error, and status consistency are validated; timed-out PASS/exit-0 mutations fail closed"
     ]
   },
   "focused_regressions": [
@@ -159,8 +172,8 @@
     }
   ],
   "source_files": {
-    "scripts/hermetic-profile/profile.py": "346482c4c2f482b7df2719c26eb5cde74aad5fe994ce2324f68aa37cfca15b47",
-    "scripts/hermetic-profile/controls.py": "70aca40d0a6d9f75ee5bc77cb264c79aa0a6f3f64a3b27bb437d12e9d2b39946",
+    "scripts/hermetic-profile/profile.py": "74cd27f8dd7b2889d2f01bb3374b279cafe0ef16e1be36a455a954109c21e96c",
+    "scripts/hermetic-profile/controls.py": "e376551bacb7889c5b0ad0ef40d0c748b2ca565da5e2cd6c3a3198fcf91b8232",
     "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a"
   },
   "immutable_ci_logs": [

@@ -20,6 +20,7 @@ never carry copies of command records.
 | Raw Go JSON and package timing | `parse_timing_stream` remains the single parser for retained stdout. Package/test failures, cache markers, malformed/truncated streams, no-test conflicts, overlap classification, and timing bounds remain observable. The existing `tools/timingate` 60-second policy is not reimplemented. |
 | Source and metadata provenance | `validate_source_state` records Git head/status command artifacts once in `commands` per run and retains IDs in the run record. Analysis verifies artifact containment, bytes, hashes, exact argv/cwd/env Git identity, captured output, repository identity, expected head, and dirty paths before fresh timing can pass. |
 | Quiet-runner evidence | Each group still carries its captured quiet-evidence reference. Analysis verifies the file hash, contained path, complete runner metadata, current validity window, before/after lease/process/load observations, isolation, and copied summary fields. |
+| Command process status | `command_process_status_errors` validates timeout/status, exit status, signal, and spawn-error consistency before phase admission or analysis. A `timed_out=true` record cannot be reported as PASS/exit 0; timeout classification takes precedence in parsed process status. |
 | Failure/stale-output controls | Every malformed or incomplete input reaches the atomic `INVALID` writer; a prior `PASS` is replaced. Existing pass/fail/truncated/empty/cached/missing-package/no-test/overlap/timeout/artifact/schema/provenance/overflow controls remain. |
 
 ## Public causal control
@@ -30,7 +31,8 @@ public lifecycle controls for rejected repeat counts plus failed and partial
 full-trial prerequisites. It also adds `unreferenced-invalid-run-group-filtered`, which appends a zero-request
 canonical run record, asks the public analyzer to display only the valid group,
 and asserts exit 1 and `status=INVALID`. Git command argv tampering is covered
-through the source-identity control. These controls prove that phase validation,
+through the source-identity control. The timed-out/PASS status mutation is also
+rejected before aggregation. These controls prove that phase validation,
 schedule validation, and display filtering cannot hide a whole-input defect.
 
 No failing assertion, timeout, timingate policy, runtime path, or acceptance

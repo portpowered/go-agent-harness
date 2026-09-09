@@ -7,7 +7,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 ## Latest canonical continuation
 
 The current exact-head implementation checkpoint is
-`ad73e05bd51d9e777be934c5ca4a82aec25b0068`, rebased in this isolated worktree
+`e2e1faebe7610c18edea672e493f973fc6981425`, rebased in this isolated worktree
 onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
 integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
 ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
@@ -23,13 +23,18 @@ and hermetic analysis requires PASS warm-up followed by one full trial and one
 two-repeat cohort schedule. Legacy duplicate arrays and nested command copies
 are rejected.
 
+The follow-up command-status repair validates timeout, exit, signal, spawn-error,
+and status consistency before aggregation. A timed-out record cannot retain a
+PASS/exit-0 declaration, and timeout classification takes precedence in the
+process-status summary.
+
 The exact board response is retained in
 `canonical-board-recheck-20260908.json` (SHA-256
 `2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
 current public control report is
-`ctrl-c11-repair/controls.json` (SHA-256
-`771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`): PASS,
-63 cases, 26 result groups, zero Go/network/build invocations. It was generated
+`ctrl-e2e1fae/controls.json` (SHA-256
+`4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`): PASS,
+64 cases, 26 result groups, zero Go/network/build invocations. It was generated
 from the exact implementation SHA above; evidence is packaged in a subsequent
 commit so the record does not make a self-referential future-commit claim. Raw retention is
 truthfully false only because the missing-raw-artifact negative control removes
@@ -61,7 +66,7 @@ claimed.
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
 - The isolated worktree was rebased onto the fetched `origin/main`; the running
   host checkout was not merged or reset. The current implementation checkpoint
-  `ad73e05bd51d9e777be934c5ca4a82aec25b0068` has that main as an ancestor.
+  `e2e1faebe7610c18edea672e493f973fc6981425` has that main as an ancestor.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, the C08
   predecessor worktree/PR400, the parent checkout, and factory configuration
@@ -152,12 +157,15 @@ The exact CI coverage rejection inspected before this repair is retained in
   `9b3f4ebc315fe8eb26af75148fd16629f2d5c58b`; the new controls cover both
   unmatched group selection and invalid unselected groups while retaining the
   intentional missing-raw-artifact negative-control truth.
-- Current exact implementation report `ctrl-c11-repair/controls.json`: PASS; 63
-  declared cases and 26 result groups, zero Go/network/build invocations; hash
-  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
+- Prior exact implementation report `ctrl-c11-repair/controls.json` remains
+  preserved as the 63-case predecessor checkpoint. The current report
+  `ctrl-e2e1fae/controls.json` is PASS; 64 declared cases and 26 result groups,
+  zero Go/network/build invocations; hash
+  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`.
   It was generated from implementation checkpoint
-  `ad73e05bd51d9e777be934c5ca4a82aec25b0068`; the lifecycle regressions reject
-  cohort repeat 3, failed full trials, partial full module coverage, and
+  `e2e1faebe7610c18edea672e493f973fc6981425`; the new public regression rejects
+  `timed_out=true` paired with PASS/exit 0, while the lifecycle regressions
+  reject cohort repeat 3, failed full trials, partial full module coverage, and
   non-PASS inventory/warm phase commands before Go work can start.
 - The review-27 regressions in that report reject unreferenced invalid and
   zero-request groups, incomplete command-record-v1 fields and artifacts,
@@ -196,10 +204,10 @@ The exact CI coverage rejection inspected before this repair is retained in
   C11's owned directories; no runtime edit is authorized, and this does not
   claim hosted CI green for the new checkpoint.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from implementation head `ad73e05b` passed: 63 public
+- Fresh exact-head recheck from implementation head `e2e1faeb` passed: 64 public
   cases and 26 result groups with zero Go/network/build invocations (tracked
   report SHA-256
-  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`),
+  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`),
   profiler help, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 - No broad hermetic/coverage suite was launched on the shared host. No
@@ -226,8 +234,12 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`ad73e05bd51d9e777be934c5ca4a82aec25b0068`; the current `origin/main`
-ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest review-35
+`e2e1faebe7610c18edea672e493f973fc6981425`; the current `origin/main`
+ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest review-37
+task rejection identified a command record whose `timed_out=true` declaration
+was accepted with PASS/exit 0. The repair adds the command-status consistency
+boundary and its public regression while retaining all prior controls. The
+latest review-35
 task rejection named stale exact-head evidence, cohort repeat overrun,
 failed/partial full-trial admission, non-PASS inventory/warm phase commands,
 unreferenced invalid groups, forged retained Git metadata, aggregate duration

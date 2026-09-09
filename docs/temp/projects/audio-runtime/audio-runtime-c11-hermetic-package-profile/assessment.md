@@ -24,7 +24,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated the latest `origin/main`:
   `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `ad73e05bd51d9e777be934c5ca4a82aec25b0068`.
+  `e2e1faebe7610c18edea672e493f973fc6981425`.
 - The implementation and exact-head control evidence are committed against
   that candidate. The evidence report is generated from that exact
   implementation SHA and packaged separately so the record does not make a
@@ -32,7 +32,8 @@ not a waiver, and not a claim that the under-three-minute target is met.
   full-lane, and cohort command records into one `manifest.commands` array,
   validates the whole input before `--group` display filtering, binds Git/test
   command identity, enforces warm/full/cohort scheduling, and records the
-  old-to-new mapping in `schema-control-mapping.md`.
+  old-to-new mapping in `schema-control-mapping.md`. It also rejects
+  contradictory timeout/status/exit/signal/spawn declarations before analysis.
 - Payload main observation: `7a3a5e8a93f05c2d2818b55aef7c4cf528e5cd8d`.
 - Preserved startup integration ancestor:
   `8bdafc7f947a3a2c9856220abdc539437035bd21`.
@@ -60,6 +61,11 @@ failed at head `43519903572c4047bbb0068d9ed73e7027a257d7` on the existing
 multi-turn duplex positive baseline. The new candidate is not claimed
 CI-green.
 This is a recheck and handoff record, not a claim that script CI is green.
+The exact raw board and findings responses read for this continuation are also
+retained in `canonical-board-executor-20260909.json` (SHA-256
+`3992a0a76ef15fcc5c409fad20a13710d74ce305a1b44ad254baaa8522639cad`) and
+`canonical-findings-executor-20260909.txt` (SHA-256
+`f796774f3dee3213f53b10a6cd285a997da1dc4a75dfc6fbbb1a2c0a68083e7b`).
 The exact current board response, including current task/review states and
 leases, is preserved in `canonical-board-recheck-20260908.json` as well as the
 historical snapshots; historical C08/C12
@@ -79,8 +85,8 @@ Heavy commands fail closed without explicit opt-in and valid isolated/dedicated
 evidence.
 
 Source file hashes at the current repair checkpoint are:
-`profile.py` `346482c4c2f482b7df2719c26eb5cde74aad5fe994ce2324f68aa37cfca15b47`,
-`controls.py` `70aca40d0a6d9f75ee5bc77cb264c79aa0a6f3f64a3b27bb437d12e9d2b39946`,
+`profile.py` `74cd27f8dd7b2889d2f01bb3374b279cafe0ef16e1be36a455a954109c21e96c`,
+`controls.py` `e376551bacb7889c5b0ad0ef40d0c748b2ca565da5e2cd6c3a3198fcf91b8232`,
 and `fixtures/emit_jsonl.py`
 `0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a`.
 
@@ -88,10 +94,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-c11-repair`:
-  PASS; 63 declared cases and 26 result groups, zero Go, network, or build
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-e2e1fae`:
+  PASS; 64 declared cases and 26 result groups, zero Go, network, or build
   invocations. The report hash is
-  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
+  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -101,6 +107,7 @@ Focused evidence:
   source-validation artifacts, forged source-output identity, and aggregate
   package-duration overflow, malformed canonical phase records, a malformed
   warm summary, and a hermetic capture that skips the required warm phase. The
+  new timed-out/PASS status mutation is rejected as INVALID before aggregation.
   lifecycle controls also reject `--cohort --repeat 3`, failed full trials,
   and partial full-trial module coverage before any Go command can start.
 - Review repair controls additionally prove that cross-package test activity is
@@ -118,9 +125,9 @@ Focused evidence:
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from `ad73e05b` passed: 63 public cases/26
+- Fresh exact-head recheck from `e2e1faeb` passed: 64 public cases/26
   result groups with zero Go/network/build invocations (tracked report
-  SHA-256 `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`),
+  SHA-256 `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`),
   `profile.py --help`, AST parsing of all three Python files, and
   `GOWORK=off go test . -count=1` in `tools/timingate`.
 
@@ -172,7 +179,7 @@ command-record-v1 schema, argv/cwd/environment/timeout, timing, status, output
 paths, hashes, and byte counts; retained source-validation command artifacts
 are checked against their actual captured Git output; and all package-duration
 sums are bounded by Go's `time.Duration` maximum. These are public synthetic
-regressions in the tracked 48-case report, not claims about hosted CI.
+regressions in the tracked control report, not claims about hosted CI.
 
 ## Immutable hosted evidence
 
@@ -229,9 +236,9 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls remain pinned to
-`ad73e05bd51d9e777be934c5ca4a82aec25b0068`; the tracked
-`ctrl-c11-repair/controls.json` report is recorded above. The canonical
-review findings through review 35 named
+`e2e1faebe7610c18edea672e493f973fc6981425`; the tracked
+`ctrl-e2e1fae/controls.json` report is recorded above. The canonical
+review findings through review 37 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, stale head/evidence references, and
 cohort lifecycle admission gaps. This repair closes those causes and the public

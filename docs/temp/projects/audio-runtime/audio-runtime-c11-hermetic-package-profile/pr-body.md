@@ -15,13 +15,15 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `ad73e05bd51d9e777be934c5ca4a82aec25b0068`.
+  `e2e1faebe7610c18edea672e493f973fc6981425`.
 - The implementation and exact-head controls are committed against that
   candidate; the evidence report is generated from that exact implementation
   SHA and packaged separately. This checkpoint consolidates all phase command records into one
   `manifest.commands` array, validates the whole input before `--group`
   display filtering, binds Git/test command identity, enforces warm/full/cohort
   scheduling, and records the old-to-new mapping in `schema-control-mapping.md`.
+  It also rejects contradictory timeout/status/exit/signal/spawn declarations
+  before analysis.
 - Integrated `origin/main`: `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Startup integration and baseline ancestors remain
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
@@ -44,14 +46,16 @@ met.
   oversized durations/integers, post-inventory source dirtiness, missing timing,
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The regenerated
-  `ctrl-c11-repair/controls.json` reports 63 declared cases, 26 result groups,
-  and zero Go/network/build invocations; its SHA-256 is
-  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
+  The preserved predecessor `ctrl-c11-repair/controls.json` reports 63 cases;
+  the current `ctrl-e2e1fae/controls.json` reports 64 declared cases, 26 result
+  groups, and zero Go/network/build invocations; its SHA-256 is
+  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
   source-validation output/identity, aggregate duration overflow, malformed
   canonical phase records and warm summaries, and hermetic captures that skip
-  warm-up. Lifecycle regressions reject cohort repeat 3, failed full trials,
+  warm-up. The new timed-out/PASS mutation is rejected before aggregation.
+  Lifecycle regressions reject cohort repeat 3, failed full trials,
   partial full-trial module coverage, and non-PASS inventory/warm commands
   before any Go command can start.
 - The offline analyzer keeps assessment-specific package ranking and lane-wall
@@ -62,10 +66,10 @@ met.
   were replaced by compact `ctrl` evidence; the longest new tracked relative
   path in this report is 209 characters.
 - `GOWORK=off go test . -count=1` in `tools/timingate`, Python AST parsing,
-  `profile.py --help`, the 63-case control suite, and `git diff --check` pass.
-- Fresh exact-head recheck from `ad73e05b` passed the same controls and focused
-  checks at `2026-09-08T23:34:44.557Z`; the tracked controls report SHA-256 is
-  `771b2db3678e4d3956b74616add9cb00d7e1910675d675433afed5a10675e57c`.
+  `profile.py --help`, the 64-case control suite, and `git diff --check` pass.
+- Fresh exact-head recheck from `e2e1faeb` passed the same controls and focused
+  checks; the tracked controls report SHA-256 is
+  `4d86a559f6b186b48b4b48511c0fc157968ff155c3f1801cc219b709e54ee274`.
 
 ## CI rejection disposition
 
@@ -93,12 +97,13 @@ in `ci-rejection-34277521278.json` and `ci-rejection-34277521278.log`. This
 path is outside C11's owned directories; this is not a claim that hosted CI is
 green or that C11 owns a runtime repair.
 
-The canonical review inbox through review attempt 35 named stale exact-head
-evidence, cohort repeat overrun, failed/partial full-trial admission, non-PASS
+The canonical review inbox through review attempt 37 named the timed-out/PASS
+process-status mismatch in addition to stale exact-head evidence, cohort repeat
+overrun, failed/partial full-trial admission, non-PASS
 inventory/warm phase commands, unreferenced invalid groups, forged retained Git
 metadata, aggregate duration overflow, incomplete command records, and the
 preceding timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`ad73e05b` repairs the remaining code causes, and the current public controls
+`e2e1faeb` repairs the remaining code causes, and the current public controls
 cover every finding.
 
 ## Handoff
