@@ -206,3 +206,48 @@ gate also passed. The architecture gate reports 181 packages, 1860 files, and
 evidence from `e7605d95` remains unchanged because this repair is limited to
 the admitted duplex fixture path. CI, independent review, guarded merge and
 post-merge validation remain external.
+
+## Current-head CI repair and final evidence checkpoint
+
+PR #414 at `fab1c65` was returned by the canonical board after completed CI
+run `34399783755`. Static failed at
+`go-device-gateway/pkg/runtime/rtc_device_sink_boundary_test.go:427` with
+SA1012 from the deliberate nil-context regression call. Coverage reported the
+C21 multi-turn negative-control baseline before mutation (`InputEOF=false`),
+and hermetic reported the separate C22 Test6 replacement-PCM failure (`got 0
+samples, want 800`).
+
+The static repair is `453e3d9`: it keeps the nil-context control but passes a
+typed nil `context.Context`. The EOF repair is `fae5d08`: final bridge paths
+retain the historical inline EOF sends and the reader waits for the actual
+queued packet after cancellation, so publication is never mistaken for an
+observed EOF. The architecture baseline remains byte-identical and inherited
+bridge metrics remain unchanged.
+
+The C22 Test6 failure reproduced locally on the current C21 head. Its cause
+was C21-owned runtime behavior: `RTCDeviceSink.Close` explicitly discarded a
+compatibility backend's queue even when that backend exposed no physical
+render boundary. `80829c5` limits explicit close-time native discard to
+supported render-boundary backends; unsupported backends defer queue release
+to their own `Close` policy. Supported backends retain the review-required
+native-discard/ledger ordering. The C22 fixture file was not modified.
+
+Post-repair focused evidence is green: Test6 passed 10/10 normal and 10/10
+under `-race`; C21 runtime passed three normal and two race repetitions;
+Staticcheck, targeted vet, `git diff --check`, and the architecture gate all
+passed. The multi-turn commit-control regression passed 5/5 normal after the
+EOF repair. The final committed `verify.py --mode all` run
+`runs/verify-20260909T204540Z-68067` returned `ACCEPTED` from source
+`80829c5492e590654d74ade0543b9059fc2186e7`. It preserved both fixture hashes,
+audio-tool PCM `4800` bytes /
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`,
+interruption PCM `3840` bytes /
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`, the
+`2400`-byte healthy tail, paused-device samples `0`, and clean EOF. The
+architecture gate reports 181 packages, 1860 files and 27280 functions.
+
+This remains an implementation candidate: script CI, independent review,
+guarded merge, post-merge validation and project acceptance are not claimed.
+Next action is to push the same task head, update PR #414 with this exact
+repair evidence, and return `ACCEPTED` to the script-owned CI gate without
+polling it.
