@@ -40,6 +40,7 @@ MAX_CHILD_OUTPUT_BYTES = 64 * 1024
 MAX_FIXTURE_BYTES = 2 * 1024 * 1024
 MAX_TRACE_EVENTS = 8192
 EXPECTED_TURNS = (16, 64, 128, 256)
+EXPECTED_RECORDING_MODES = ("off", "on")
 MAIN_REVISION = "5d5afcb14d7b269378020809f5a2418c499ac94d"
 SESSION_CAPTURE_INTEGRITY_COVERAGE = "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)"
 
@@ -385,6 +386,17 @@ def compare_recording_pair(off: dict[str, Any], on: dict[str, Any]) -> None:
     require(Path(semantic).is_dir() and Path(provider).is_file(), "recording-on evidence paths are not materialized")
 
 
+def matrix_spec(args: argparse.Namespace) -> tuple[tuple[int, ...], tuple[str, ...]]:
+    try:
+        turns = tuple(int(item.strip()) for item in args.turns.split(",") if item.strip())
+    except ValueError as error:
+        raise VerificationError(f"matrix --turns must be comma-separated integers: {args.turns}") from error
+    require(turns == EXPECTED_TURNS, f"matrix --turns must be exactly {','.join(str(turn) for turn in EXPECTED_TURNS)}; got {args.turns}")
+    recording_modes = tuple(item.strip() for item in args.recording.split(",") if item.strip())
+    require(recording_modes == EXPECTED_RECORDING_MODES, f"matrix --recording must be exactly off,on; got {args.recording}")
+    return turns, recording_modes
+
+
 def controls(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, Any]:
     source_revision = provenance["source_revision"]
     fixture_sha = provenance["fixture"]["sha256"]
@@ -411,14 +423,19 @@ def matrix(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, An
     runs: list[dict[str, Any]] = []
     pairs: list[dict[str, Any]] = []
     try:
-        for turns in EXPECTED_TURNS:
+        requested_turns, recording_modes = matrix_spec(args)
+        for turns in requested_turns:
             require(time.monotonic() - started <= args.total_timeout_seconds, "matrix exceeded its total timeout before the next pair")
-            off = run_consumer(source_revision, fixture_sha, turns, False, f"matrix-off-{turns}", args.child_timeout_seconds)
-            on = run_consumer(source_revision, fixture_sha, turns, True, f"matrix-on-{turns}", args.child_timeout_seconds)
+            mode_runs = {
+                mode: run_consumer(source_revision, fixture_sha, turns, mode == "on", f"matrix-{mode}-{turns}", args.child_timeout_seconds)
+                for mode in recording_modes
+            }
+            off = mode_runs["off"]
+            on = mode_runs["on"]
             compare_recording_pair(off, on)
             runs.extend([off, on])
             pairs.append({"turns": turns, "recording_off": off["report_path"], "recording_on": on["report_path"], "normalized_sha256": sha256_bytes(json.dumps(report_normalized(off["report"]), sort_keys=True, separators=(",", ":")).encode())})
-        result = {"schema": "audio-runtime.c23.matrix.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "turns": list(EXPECTED_TURNS), "runs": runs, "pairs": pairs, "bounds": {"child_timeout_seconds": args.child_timeout_seconds, "total_timeout_seconds": args.total_timeout_seconds}}
+        result = {"schema": "audio-runtime.c23.matrix.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "turns": list(requested_turns), "recording_modes": list(recording_modes), "runs": runs, "pairs": pairs, "bounds": {"child_timeout_seconds": args.child_timeout_seconds, "total_timeout_seconds": args.total_timeout_seconds}}
         write_json(OWNED_ROOT / "matrix.json", result)
         return result
     except Exception as error:
@@ -549,6 +566,7 @@ def final_report(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[s
     shipped = load_json(OWNED_ROOT / "shipped-regressions.json")
     require(verify.get("passed") is True and controls_result.get("passed") is True and matrix_result.get("passed") is True and shipped.get("passed") is True, "one required gate artifact is not passed")
     require(matrix_result.get("turns") == list(EXPECTED_TURNS), "matrix does not contain the required long-session turns")
+    require(matrix_result.get("recording_modes") == list(EXPECTED_RECORDING_MODES), "matrix does not contain both required recording modes")
     result = {"schema": "audio-runtime.c23.final-report.v1", "passed": True, "ready_for_script_ci": True, "candidate_revision": provenance["candidate_revision"], "source_revision": provenance["source_revision"], "branch": provenance["branch"], "provenance": relative_owned(PROVENANCE_PATH), "gate_evidence": {"verify_provenance": relative_owned(OWNED_ROOT / "verify-provenance.json"), "controls": relative_owned(OWNED_ROOT / "controls.json"), "matrix": relative_owned(OWNED_ROOT / "matrix.json"), "shipped_regressions": relative_owned(OWNED_ROOT / "shipped-regressions.json")}, "criteria_classification": {"deterministic_tool_overlap": "proved", "recording_off_on_semantic_parity": "proved", "pcm_format_frame_byte_sha_parity": "proved", "interruption_recovery": "proved_simulated_provider", "process_bounds": "proved", "heap_goroutine_observations": "reported", "physical_acoustic": "not_attempted", "quiet_180s": "not_claimed"}, "ci_handoff": "ACCEPTED means submit this candidate to script CI; this report does not claim CI green."}
     write_json(OWNED_ROOT / "report.json", result)
     return result
@@ -571,6 +589,8 @@ def main() -> int:
     controls_parser.add_argument("--child-timeout-seconds", type=float, default=60)
     controls_parser.add_argument("--total-timeout-seconds", type=float, default=600)
     matrix_parser = subparsers.add_parser("matrix", help="run 16/64/128/256 recording parity matrix")
+    matrix_parser.add_argument("--turns", default=",".join(str(turn) for turn in EXPECTED_TURNS), help="required comma-separated turn checkpoints")
+    matrix_parser.add_argument("--recording", default=",".join(EXPECTED_RECORDING_MODES), help="required comma-separated recording modes")
     matrix_parser.add_argument("--child-timeout-seconds", type=float, default=60)
     matrix_parser.add_argument("--total-timeout-seconds", type=float, default=600)
     shipped_parser = subparsers.add_parser("shipped-regressions", help="run credential-free shipped yui replay")
