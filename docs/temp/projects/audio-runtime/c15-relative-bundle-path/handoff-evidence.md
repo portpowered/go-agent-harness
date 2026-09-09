@@ -4,8 +4,8 @@ Implementation commit: `bc48f8175ea0c13a37ec73447b1d522e38019e91`
 
 Static-rejection repair commit: `fe9a5c40` (`test: use supported cwd isolation in replay regressions`).
 
-The final candidate source revision is the commit containing this ledger; the
-repair checkpoint is its immediate parent.
+Candidate checkout revision: `f78d16ee` (ledger-only commit; implementation
+content is unchanged from repair checkpoint `fe9a5c40`).
 
 ## Identity and ancestry
 
@@ -14,8 +14,8 @@ repair checkpoint is its immediate parent.
 - Current `origin/main`: `f8e0863222da1bdbf296e2220fcbc081461cc877`.
 - Required startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors.
 - `prd.json.branchName` matches the isolated branch. The worktree was clean at
-  `fe9a5c40` before this ledger update; the final ledger commit remains on the
-  same branch and contains only this owned evidence file.
+  `f78d16ee`; the final candidate contains only owned task code/tests and this
+  evidence file relative to `origin/main`.
 
 ## Rejected-head repair
 
