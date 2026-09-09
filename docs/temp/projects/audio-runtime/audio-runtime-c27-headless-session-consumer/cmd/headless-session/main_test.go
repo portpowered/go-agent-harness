@@ -178,4 +178,24 @@ func TestIsolationCancellationWaitsForObservedPartialDelta(t *testing.T) {
 	}
 }
 
+func TestCancellationWaitsForObservedPartialDelta(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		root := t.TempDir()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		result, runErr := runCancellation(ctx, config{
+			Scenario:           "cancellation",
+			StoreDirectory:     root + "/store",
+			WorkspaceDirectory: root + "/workspace",
+			Input:              "cancellation probe",
+		})
+		cancel()
+		if runErr != nil {
+			t.Fatalf("attempt %d cancellation failed: %v", attempt, runErr)
+		}
+		if result.DuringCancel == nil || !result.DuringCancel.Stream.Partial {
+			t.Fatalf("attempt %d did not retain a partial cancellation: %+v", attempt, result.DuringCancel)
+		}
+	}
+}
+
 var _ session.SessionHandle = (*closeErrorHandle)(nil)

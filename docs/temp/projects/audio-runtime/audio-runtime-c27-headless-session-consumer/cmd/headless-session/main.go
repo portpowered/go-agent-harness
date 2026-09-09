@@ -590,10 +590,21 @@ func runCancellation(ctx context.Context, cfg config) (report, error) {
 		stream, openErr = handle.Stream(turnCtx, agentloop.ExecuteInput{Message: duringCfg.Input})
 	}
 	streamDone := make(chan streamReport, 1)
+	partialObserved := make(chan struct{})
+	var partialOnce sync.Once
 	if openErr == nil {
-		go func() { streamDone <- collectStream(stream) }()
+		go func() {
+			streamDone <- collectStreamObserved(stream, func() {
+				partialOnce.Do(func() { close(partialObserved) })
+			})
+		}()
 		select {
 		case <-entry:
+			select {
+			case <-partialObserved:
+			case <-time.After(5 * time.Second):
+				openErr = errors.New("during-cancel oracle: partial delta was not observed before cancellation")
+			}
 		case <-time.After(5 * time.Second):
 			openErr = errors.New("during-cancel oracle: provider entry was not observed")
 		}
