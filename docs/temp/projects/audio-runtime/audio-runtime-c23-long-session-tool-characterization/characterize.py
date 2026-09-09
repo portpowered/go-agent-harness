@@ -41,6 +41,7 @@ MAX_FIXTURE_BYTES = 2 * 1024 * 1024
 MAX_TRACE_EVENTS = 8192
 EXPECTED_TURNS = (16, 64, 128, 256)
 MAIN_REVISION = "5d5afcb14d7b269378020809f5a2418c499ac94d"
+SESSION_CAPTURE_INTEGRITY_COVERAGE = "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)"
 
 
 class VerificationError(RuntimeError):
@@ -62,9 +63,9 @@ def load_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def write_json(path: Path, value: Any) -> None:
+def write_json(path: Path, value: Any, *, sort_keys: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(value, indent=2, sort_keys=sort_keys) + "\n")
 
 
 def relative_owned(path: Path) -> str:
@@ -91,6 +92,25 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def seal_session_capture(capture: dict[str, Any]) -> dict[str, Any]:
+    coverage = {
+        "version": capture["version"],
+        "provider": capture["provider"],
+        "session": capture["session"],
+        "records": capture["records"],
+    }
+    if capture.get("ends_with_disconnect"):
+        coverage["ends_with_disconnect"] = True
+    digest = sha256_bytes(json.dumps(coverage, ensure_ascii=False, separators=(",", ":")).encode())
+    sealed = dict(capture)
+    sealed["integrity"] = {
+        "algorithm": "sha256",
+        "coverage": SESSION_CAPTURE_INTEGRITY_COVERAGE,
+        "digest": digest,
+    }
+    return sealed
 
 
 def fixture_hash() -> str:
@@ -436,9 +456,9 @@ def test6_capture(path: Path) -> dict[str, Any]:
     add(s2c, {"type": "response.output_audio.delta", "response_id": "resp-test6-new-assistant", "item_id": "item-test6-new-assistant", "output_index": 0, "content_index": 0, "delta": base64.b64encode(segments[1]).decode()})
     add(s2c, {"type": "response.output_audio.done", "response_id": "resp-test6-new-assistant", "item_id": "item-test6-new-assistant", "output_index": 0, "content_index": 0})
     add(s2c, {"type": "response.done", "response": {"id": "resp-test6-new-assistant", "status": "completed"}})
-    capture = {"version": 2, "provider": {"name": "openai", "model": "gpt-realtime-2.1-mini"}, "session": {"id": "sess-test6-barge-in", "started_at_utc": "2026-09-02T18:49:17.635745Z", "fixture_provenance": "shipped-test6-derived"}, "records": records}
-    write_json(path, capture)
-    return {"path": relative_owned(path), "source_audio": relative_owned(audio_source), "source_audio_sha256": sha256_file(audio_source), "segment_bytes": [len(segment) for segment in segments], "healthy_segment_sha256": sha256_bytes(segments[1]), "record_count": len(records), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant"}
+    capture = seal_session_capture({"version": 2, "provider": {"name": "openai", "model": "gpt-realtime-2.1-mini"}, "session": {"id": "sess-test6-barge-in", "started_at_utc": "2026-09-02T18:49:17.635745Z", "fixture_provenance": "shipped-test6-derived"}, "records": records})
+    write_json(path, capture, sort_keys=False)
+    return {"path": relative_owned(path), "source_audio": relative_repo(audio_source), "source_audio_sha256": sha256_file(audio_source), "segment_bytes": [len(segment) for segment in segments], "healthy_segment_sha256": sha256_bytes(segments[1]), "record_count": len(records), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant"}
 
 
 def shipped_regressions(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, Any]:
