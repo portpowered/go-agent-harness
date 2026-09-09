@@ -128,18 +128,8 @@ func (s *RTCDeviceSink) startHoldToneChecked(ctx context.Context) (func(), error
 			case now := <-timer.C():
 				timer.Stop()
 				if s.holdToneFeedbackConfirmed() {
-					// Local hardware has already demonstrated real
-					// speaker->mic coupling from this cue (see
-					// rtcDevicePlaybackObserver.FeedbackConfirmed). Stop
-					// generating more of it permanently for this Pump
-					// lifetime: another pulse would only hand the feedback
-					// gate another self-correlated event to reclassify
-					// against, which can otherwise keep discarding a
-					// genuinely independent, concurrent customer utterance
-					// before it accumulates enough evidence to release (see
-					// classifySuppressedCaptureLocked). The customer is
-					// better served by silence again than by a cue that
-					// risks masking their own barge-in.
+					// The cue already demonstrated speaker-to-microphone
+					// coupling; another pulse could mask a barge-in.
 					return
 				}
 				s.tickHoldTone(ctx, now, rate, tick)
@@ -187,7 +177,9 @@ func (s *RTCDeviceSink) tickHoldTone(ctx context.Context, now time.Time, rate in
 		return
 	}
 	generation, blocked := s.playbackState()
-	_ = s.observedWritePlayback(ctx, frame, generation, blocked, false)
+	if err := s.observedWriteHoldTone(ctx, frame, generation, blocked); err != nil {
+		return
+	}
 }
 
 // holdToneMu-guarded accessors below serialize every interaction with the
@@ -245,7 +237,47 @@ func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation
 	if len(tail) == 0 {
 		return nil
 	}
-	return s.observedWritePlayback(ctx, tail, generation, blocked, false)
+	return s.observedWriteHoldTone(ctx, tail, generation, blocked)
+}
+
+func (s *RTCDeviceSink) playbackSpanForInterruptionLocked(current uint64, requested rtcDevicePlaybackIdentity, requireRequested bool) (rtcDevicePlaybackSpan, bool) {
+	var boundary rtcDevicePlaybackSpan
+	boundaryFound := false
+	for _, span := range s.playbackSpans {
+		if requireRequested {
+			if span.response.equal(requested) && current > span.start && (!span.complete || current < span.end) {
+				return span, true
+			}
+			continue
+		}
+		if current < span.end {
+			return span, true
+		}
+		// An open response can be fully consumed at the interruption boundary.
+		// Prefer a later span above when its audio has actually started.
+		if current == span.end && !span.complete {
+			boundary, boundaryFound = span, true
+		}
+	}
+	return boundary, boundaryFound
+}
+
+func (s *RTCDeviceSink) playbackFallbackSpanLocked(current uint64) (rtcDevicePlaybackSpan, bool) {
+	if active, found := s.playbackSpanForInterruptionLocked(current, rtcDevicePlaybackIdentity{}, false); found {
+		return active, true
+	}
+	if s.playbackResponse.hasItem() {
+		return rtcDevicePlaybackSpan{response: s.playbackResponse}, true
+	}
+	return rtcDevicePlaybackSpan{}, false
+}
+
+func (s *RTCDeviceSink) blockPlaybackLocked() {
+	s.playbackBlocked = true
+	s.playbackGeneration++
+	s.snapshotEpoch.Store(s.playbackGeneration)
+	s.playbackResponse = rtcDevicePlaybackIdentity{}
+	s.playbackSpans = nil
 }
 
 // SetHoldToneConfig updates the filler profile used by subsequent hold-tone
