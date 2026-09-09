@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -27,10 +26,15 @@ type PlaybackObserver interface {
 var _ CaptureFilter = (*audio.PCM16FeedbackGate)(nil)
 var _ PlaybackObserver = (*audio.PCM16FeedbackGate)(nil)
 
-var (
-	ErrRTCDevicePlaybackObservationUnsupported     = errors.New("RTC device playback consumption observation is unsupported")
-	ErrRTCDevicePlaybackObservationClosed          = errors.New("RTC device playback observation is closed")
-	ErrInvalidRTCDevicePlaybackObservationCapacity = errors.New("invalid RTC device playback observation capacity")
+type rtcDevicePlaybackObservationError string
+
+func (e rtcDevicePlaybackObservationError) Error() string { return string(e) }
+
+const (
+	ErrRTCDevicePlaybackObservationUnsupported     = rtcDevicePlaybackObservationError("RTC device playback consumption observation is unsupported")
+	ErrRTCDevicePlaybackObservationClosed          = rtcDevicePlaybackObservationError("RTC device playback observation is closed")
+	ErrInvalidRTCDevicePlaybackObservationCapacity = rtcDevicePlaybackObservationError("invalid RTC device playback observation capacity")
+	ErrInvalidRTCDevicePlaybackObservationContext  = rtcDevicePlaybackObservationError("RTC device playback observation context is nil")
 )
 
 const (
@@ -131,7 +135,7 @@ func (s *RTCDevicePlaybackObservationSubscription) Next(ctx context.Context) (RT
 		return RTCDevicePlaybackObservation{}, ErrRTCDevicePlaybackObservationClosed
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return RTCDevicePlaybackObservation{}, ErrInvalidRTCDevicePlaybackObservationContext
 	}
 	for {
 		select {
@@ -296,38 +300,14 @@ func (s *rtcDevicePlaybackObservationState) render(deviceID devicegw.DeviceID, r
 }
 
 func (s *rtcDevicePlaybackObservationState) consumeModelLocked(deviceID devicegw.DeviceID, rate int, start uint64, samples []int16, count int) {
-	if count < 0 || count > len(samples) {
-		count = 0
-	}
+	count = boundedObservationCount(count, len(samples))
 	offset := 0
-	remaining := count
-	for remaining > 0 {
-		if len(s.segments) == 0 {
-			take := minInt(remaining, int(s.pendingSamples))
-			if take <= 0 {
-				return
-			}
-			s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnattributed, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, start+uint64(offset), samples[offset:offset+take], true, false, "device consumed samples without retained admission metadata")
-			s.pendingSamples -= uint64(take)
+	for remaining := count - offset; remaining > 0; remaining = count - offset {
+		take := s.consumeModelChunkLocked(deviceID, rate, start, samples, offset, remaining)
+		if take == 0 {
 			return
 		}
-		segment := &s.segments[0]
-		take := minInt(segment.remaining, remaining)
-		kind := RTCDevicePlaybackConsumed
-		if segment.kind == RTCDevicePlaybackHoldTone || segment.kind == RTCDevicePlaybackCue {
-			kind = segment.kind
-		} else if segment.kind == RTCDevicePlaybackUnattributed || !segment.precise {
-			kind = RTCDevicePlaybackUnattributed
-		}
-		response := segment.response
-		s.publishRangeLocked(deviceID, rate, kind, segment.kind, response, segment.generation, start+uint64(offset), samples[offset:offset+take], true, segment.precise && kind == RTCDevicePlaybackConsumed, "")
-		segment.remaining -= take
-		remaining -= take
 		offset += take
-		s.pendingSamples -= uint64(take)
-		if segment.remaining == 0 {
-			s.segments = s.segments[1:]
-		}
 	}
 }
 

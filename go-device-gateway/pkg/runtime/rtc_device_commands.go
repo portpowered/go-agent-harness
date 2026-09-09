@@ -39,8 +39,20 @@ type rtcDevicePlaybackObservationState struct {
 	sequence            uint64
 	nextSegmentID       uint64
 	metadataLostSamples uint64
-	lastRendered        uint64
-	lastUnderflow       uint64
+}
+
+func playbackResponseForFrame(current, frame audio.PlaybackResponse, modelAudio bool) audio.PlaybackResponse {
+	if modelAudio && frame.ItemID == "" {
+		return current
+	}
+	return frame
+}
+
+func (s *RTCDeviceSink) writeDeviceSamples(ctx context.Context, samples []int16) error {
+	if len(samples) == audio.FrameSize {
+		return s.sink.WriteFrame(ctx, samples)
+	}
+	return s.sink.WriteSamples(ctx, samples)
 }
 
 func (s *rtcDevicePlaybackObservationState) detach(subscription *RTCDevicePlaybackObservationSubscription) {
@@ -166,7 +178,9 @@ func (s *RTCDeviceSink) SubscribePlaybackObservations(capacity ...int) (*RTCDevi
 	s.playbackObservations.subscription = subscription
 	s.playbackObservations.mu.Unlock()
 	if previous != nil {
-		_ = previous.Close()
+		if err := previous.Close(); err != nil {
+			return nil, fmt.Errorf("close previous playback observation subscription: %w", err)
+		}
 	}
 	return subscription, nil
 }

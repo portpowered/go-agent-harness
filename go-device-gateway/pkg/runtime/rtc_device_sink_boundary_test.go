@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -164,7 +165,13 @@ func boundaryTestResample(t *testing.T, samples []int16) []int16 {
 }
 
 func TestC21ConsumptionBoundary(t *testing.T) {
+	testC21ConsumptionBoundaryResponses(t)
+	testC21ConsumptionBoundaryHoldTone(t)
+}
+
+func testC21ConsumptionBoundaryResponses(t *testing.T) {
 	registry, sink := newC21SimulatedSink(t, 16000, 5)
+	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(64)
 	if err != nil {
 		t.Fatalf("subscribe playback observations: %v", err)
@@ -174,13 +181,9 @@ func TestC21ConsumptionBoundary(t *testing.T) {
 	first := []int16{101, 102, 103}
 	second := []int16{201, 202, 203}
 	sink.StartPlayback(firstResponse)
-	if err := sink.WritePlayback(context.Background(), first); err != nil {
-		t.Fatalf("write first response: %v", err)
-	}
+	c21WritePlayback(t, sink, "write first response", first)
 	sink.StartPlayback(secondResponse)
-	if err := sink.WritePlayback(context.Background(), second); err != nil {
-		t.Fatalf("write second response: %v", err)
-	}
+	c21WritePlayback(t, sink, "write second response", second)
 	if got := sink.PlaybackObservationStats().DeviceSamples; got != 0 {
 		t.Fatalf("paused callback device samples = %d, want zero", got)
 	}
@@ -193,36 +196,44 @@ func TestC21ConsumptionBoundary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	_, err = sub.Next(ctx)
 	cancel()
-	if err != context.DeadlineExceeded {
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("observation before callback error = %v, want deadline", err)
 	}
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance first callback: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance first callback")
 	firstConsumed := c21NextObservation(t, sub)
 	assertC21Consumed(t, firstConsumed, firstResponse, 16000, 0, first)
 	secondPrefix := c21NextObservation(t, sub)
 	assertC21Consumed(t, secondPrefix, secondResponse, 16000, 3, second[:2])
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance second callback: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance second callback")
 	secondTail := c21NextObservation(t, sub)
 	assertC21Consumed(t, secondTail, secondResponse, 16000, 5, second[2:])
 	underflow := c21NextObservation(t, sub)
 	if underflow.Kind != RTCDevicePlaybackUnderflow || underflow.ResponseID != "" || underflow.SampleRate != 16000 || underflow.StartSample != 6 || underflow.EndSample != 10 || underflow.SampleCount != 4 || !underflow.Consumed || underflow.Precise || !reflect.DeepEqual(underflow.Samples, []int16{0, 0, 0, 0}) {
 		t.Fatalf("underflow = %+v, want four zero-filled device samples", underflow)
 	}
-	holdTone := []int16{7, 8}
-	if err := sink.WritePlaybackHoldTone(context.Background(), holdTone); err != nil {
-		t.Fatalf("write hold tone: %v", err)
+}
+
+func testC21ConsumptionBoundaryHoldTone(t *testing.T) {
+	registry, sink := newC21SimulatedSink(t, 16000, 5)
+	sub, err := sink.SubscribePlaybackObservations(16)
+	if err != nil {
+		t.Fatalf("subscribe hold-tone observations: %v", err)
 	}
+	response := audio.PlaybackResponse{ResponseID: "c21-hold-response", ItemID: "c21-hold-item"}
+	samples := []int16{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	sink.StartPlayback(response)
+	c21WritePlayback(t, sink, "write model audio before hold tone", samples)
+	_ = c21NextObservation(t, sub)
+	c21Advance(t, registry, 2, "advance model audio before hold tone")
+	_ = c21NextObservation(t, sub)
+	_ = c21NextObservation(t, sub)
+	holdTone := []int16{7, 8}
+	c21WriteHoldTone(t, sink, holdTone)
 	holdAdmission := c21NextObservation(t, sub)
 	if holdAdmission.Kind != RTCDevicePlaybackAdmission || holdAdmission.ContentKind != RTCDevicePlaybackHoldTone || holdAdmission.ResponseID != "" || holdAdmission.Precise {
 		t.Fatalf("hold-tone admission = %+v", holdAdmission)
 	}
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance hold-tone callback: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance hold-tone callback")
 	holdConsumed := c21NextObservation(t, sub)
 	if holdConsumed.Kind != RTCDevicePlaybackHoldTone || holdConsumed.ContentKind != RTCDevicePlaybackHoldTone || holdConsumed.StartSample != 10 || holdConsumed.EndSample != 12 || holdConsumed.SampleCount != 2 || !holdConsumed.Consumed || holdConsumed.Precise || !reflect.DeepEqual(holdConsumed.Samples, holdTone) {
 		t.Fatalf("hold-tone observation = %+v", holdConsumed)
@@ -234,14 +245,19 @@ func TestC21ConsumptionBoundary(t *testing.T) {
 	if err := sink.Close(); err != nil {
 		t.Fatalf("close sink: %v", err)
 	}
-	if _, err := sub.Next(context.Background()); err != io.EOF {
+	if _, err := sub.Next(context.Background()); !errors.Is(err, io.EOF) {
 		t.Fatalf("closed observation stream error = %v, want EOF", err)
 	}
 }
 
 func TestC21ConsumptionInterruptionAndRate(t *testing.T) {
+	testC21ConsumptionInterruption(t)
+	testC21ConsumptionRate(t)
+}
+
+func testC21ConsumptionInterruption(t *testing.T) {
 	registry, sink := newC21SimulatedSink(t, 24000, 2000)
-	defer func() { _ = sink.Close() }()
+	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(32)
 	if err != nil {
 		t.Fatalf("subscribe playback observations: %v", err)
@@ -251,17 +267,11 @@ func TestC21ConsumptionInterruptionAndRate(t *testing.T) {
 	first := boundaryTestPCM(2000, 301)
 	second := boundaryTestPCM(2000, 701)
 	sink.StartPlayback(firstResponse)
-	if err := sink.WritePlayback(context.Background(), first); err != nil {
-		t.Fatalf("write first interrupted chunk: %v", err)
-	}
-	if err := sink.WritePlayback(context.Background(), second); err != nil {
-		t.Fatalf("write second interrupted chunk: %v", err)
-	}
+	c21WritePlayback(t, sink, "write first interrupted chunk", first)
+	c21WritePlayback(t, sink, "write second interrupted chunk", second)
 	_ = c21NextObservation(t, sub)
 	_ = c21NextObservation(t, sub)
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance interrupted response: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance interrupted response")
 	heard := c21NextObservation(t, sub)
 	assertC21Consumed(t, heard, firstResponse, 24000, 0, first)
 	interruption, ok := sink.InterruptActivePlayback()
@@ -273,16 +283,12 @@ func TestC21ConsumptionInterruptionAndRate(t *testing.T) {
 		t.Fatalf("discard = %+v, want unconsumed first-response tail", discard)
 	}
 	sink.StartPlayback(secondResponse)
-	if err := sink.WritePlayback(context.Background(), second); err != nil {
-		t.Fatalf("write healthy response: %v", err)
-	}
+	c21WritePlayback(t, sink, "write healthy response", second)
 	admission := c21NextObservation(t, sub)
 	if admission.Kind != RTCDevicePlaybackAdmission || admission.PlaybackResponse != secondResponse || admission.Generation == heard.Generation {
 		t.Fatalf("healthy admission = %+v, want new generation", admission)
 	}
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance healthy response: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance healthy response")
 	healthy := c21NextObservation(t, sub)
 	assertC21Consumed(t, healthy, secondResponse, 24000, 2000, second)
 	if got := sink.PlaybackObservationStats().DeviceSamples; got != 4000 {
@@ -290,9 +296,9 @@ func TestC21ConsumptionInterruptionAndRate(t *testing.T) {
 	}
 }
 
-func TestC21ConsumptionDeviceRate(t *testing.T) {
+func testC21ConsumptionRate(t *testing.T) {
 	registry, sink := newC21SimulatedSink(t, 16000, 320)
-	defer func() { _ = sink.Close() }()
+	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(16)
 	if err != nil {
 		t.Fatalf("subscribe playback observations: %v", err)
@@ -308,23 +314,19 @@ func TestC21ConsumptionDeviceRate(t *testing.T) {
 	}
 	response := audio.PlaybackResponse{ResponseID: "c21-rate-response", ItemID: "c21-rate-item"}
 	sink.StartPlayback(response)
-	if err := sink.WritePlayback(context.Background(), deviceSamples); err != nil {
-		t.Fatalf("write converted device samples: %v", err)
-	}
+	c21WritePlayback(t, sink, "write converted device samples", deviceSamples)
 	admission := c21NextObservation(t, sub)
 	if admission.SampleRate != 16000 || admission.SampleCount != len(deviceSamples) || !reflect.DeepEqual(admission.Samples, deviceSamples) {
 		t.Fatalf("rate admission = %+v, want exact %d-sample 16k PCM", admission, len(deviceSamples))
 	}
-	if err := registry.Advance(1); err != nil {
-		t.Fatalf("advance converted callback: %v", err)
-	}
+	c21Advance(t, registry, 1, "advance converted callback")
 	consumed := c21NextObservation(t, sub)
 	assertC21Consumed(t, consumed, response, 16000, 0, deviceSamples)
 }
 
 func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	registry, sink := newC21SimulatedSink(t, 24000, 1)
-	defer func() { _ = sink.Close() }()
+	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(1)
 	if err != nil {
 		t.Fatalf("subscribe bounded observations: %v", err)
@@ -332,13 +334,9 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	for index := 0; index < 300; index++ {
 		response := audio.PlaybackResponse{ResponseID: "c21-many-response", ItemID: "c21-item-" + fmt.Sprint(index)}
 		sink.StartPlayback(response)
-		if err := sink.WritePlayback(context.Background(), []int16{int16(index + 1)}); err != nil {
-			t.Fatalf("write response %d: %v", index, err)
-		}
+		c21WritePlayback(t, sink, fmt.Sprintf("write response %d", index), []int16{int16(index + 1)})
 	}
-	if err := registry.Advance(300); err != nil {
-		t.Fatalf("advance stalled-consumer callbacks: %v", err)
-	}
+	c21Advance(t, registry, 300, "advance stalled-consumer callbacks")
 	stats := sub.Stats()
 	if stats.DroppedObservations == 0 || stats.DroppedSamples == 0 || stats.MetadataLostSamples == 0 || stats.DeviceSamples != 300 || stats.LastSequence <= stats.PublishedObservations {
 		t.Fatalf("bounded observation stats = %+v, want explicit finite delivery and metadata loss", stats)
@@ -351,6 +349,34 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	}
 	if err := sub.Close(); err != nil {
 		t.Fatalf("repeat close stalled subscription: %v", err)
+	}
+}
+
+func closeC21Sink(t *testing.T, sink *RTCDeviceSink) {
+	t.Helper()
+	if err := sink.Close(); err != nil {
+		t.Errorf("close C21 sink: %v", err)
+	}
+}
+
+func c21WritePlayback(t *testing.T, sink *RTCDeviceSink, label string, samples []int16) {
+	t.Helper()
+	if err := sink.WritePlayback(context.Background(), samples); err != nil {
+		t.Fatalf("%s: %v", label, err)
+	}
+}
+
+func c21WriteHoldTone(t *testing.T, sink *RTCDeviceSink, samples []int16) {
+	t.Helper()
+	if err := sink.WritePlaybackHoldTone(context.Background(), samples); err != nil {
+		t.Fatalf("write hold tone: %v", err)
+	}
+}
+
+func c21Advance(t *testing.T, registry *devicegw.SimulatedDuplexRegistry, callbacks int, label string) {
+	t.Helper()
+	if err := registry.Advance(callbacks); err != nil {
+		t.Fatalf("%s: %v", label, err)
 	}
 }
 

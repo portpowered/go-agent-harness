@@ -275,16 +275,6 @@ func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 	return stats
 }
 
-func (s *RTCDeviceSink) setRenderedSamplesObserver(observer RTCDeviceRenderedSamplesObserver) bool {
-	if s == nil || observer == nil {
-		return false
-	}
-	s.renderObserverMu.Lock()
-	s.renderedSamplesObserver = observer
-	s.renderObserverMu.Unlock()
-	return s.renderBoundarySupported.Load()
-}
-
 // DiscardPlayback removes only queued local speaker samples that have not
 // reached a device callback yet. It is safe to race with Pump and Close.
 func (s *RTCDeviceSink) DiscardPlayback() int {
@@ -529,6 +519,16 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 	return s.playbackGeneration, s.playbackBlocked
 }
 
+// writePlayback is the single producer boundary for device-rate PCM.
+//
+// The pacing lock serializes provider and hold-tone producers.
+// Capacity admission happens before playback state is locked.
+// That ordering lets a callback or interruption continue draining.
+// The generation check linearizes a queued frame with interruption.
+// Correlation reserves metadata only after that check succeeds.
+// The device write is the admission edge; render callbacks consume it later.
+// Observer delivery remains a nonblocking pull-side diagnostic operation.
+// The caller owns the context used for capacity and device writes.
 func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
@@ -544,37 +544,37 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		return err
 	}
 	s.playbackMu.Lock()
-	response := frameResponse
-	if modelAudio && response.ItemID == "" {
-		response = s.playbackResponse
-	}
-	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
+	if !s.playbackWriteAllowedLocked(generation, blocked) {
 		s.playbackMu.Unlock()
 		return nil
 	}
-	statsBefore := s.PlaybackStats()
-	reservation := s.playbackObservations.reserve(kind, response, generation, len(samples))
-	var err error
-	if len(samples) == audio.FrameSize {
-		err = s.sink.WriteFrame(ctx, samples)
-	} else {
-		err = s.sink.WriteSamples(ctx, samples)
-	}
-	if err != nil {
-		s.playbackObservations.cancel(reservation)
-	} else if modelAudio && response.ItemID != "" {
-		s.recordPlaybackSpanLocked(response, consumedPlaybackSamples(statsBefore)+uint64(statsBefore.QueuedSamples), len(samples))
-	}
-	if err == nil {
-		statsAfter := s.PlaybackStats()
-		s.reconcilePlaybackObservationDrops(statsBefore, statsAfter)
-		s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
-	}
-	if err == nil && s.playbackSamplesObserver != nil {
-		err = s.playbackSamplesObserver(ctx, s.deviceRate, samples)
-	}
+	err := s.writeAdmittedPlaybackLocked(ctx, samples, generation, modelAudio, frameResponse, kind)
 	s.playbackMu.Unlock()
 	return err
+}
+
+func (s *RTCDeviceSink) playbackWriteAllowedLocked(generation uint64, blocked bool) bool {
+	return !blocked && !s.playbackBlocked && generation == s.playbackGeneration
+}
+
+func (s *RTCDeviceSink) writeAdmittedPlaybackLocked(ctx context.Context, samples []int16, generation uint64, modelAudio bool, frameResponse audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
+	response := playbackResponseForFrame(s.playbackResponse, frameResponse, modelAudio)
+	statsBefore := s.PlaybackStats()
+	reservation := s.playbackObservations.reserve(kind, response, generation, len(samples))
+	if err := s.writeDeviceSamples(ctx, samples); err != nil {
+		s.playbackObservations.cancel(reservation)
+		return err
+	}
+	if modelAudio && response.ItemID != "" {
+		s.recordPlaybackSpanLocked(response, consumedPlaybackSamples(statsBefore)+uint64(statsBefore.QueuedSamples), len(samples))
+	}
+	statsAfter := s.PlaybackStats()
+	s.reconcilePlaybackObservationDrops(statsBefore, statsAfter)
+	s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
+	if s.playbackSamplesObserver == nil {
+		return nil
+	}
+	return s.playbackSamplesObserver(ctx, s.deviceRate, samples)
 }
 
 func (s *RTCDeviceSink) recordPlaybackSpanLocked(response audio.PlaybackResponse, start uint64, samples int) {

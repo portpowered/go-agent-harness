@@ -1,6 +1,52 @@
 package runtime
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+import (
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+)
+
+func boundedObservationCount(count, available int) int {
+	if count < 0 || count > available {
+		return 0
+	}
+	return count
+}
+
+func (s *rtcDevicePlaybackObservationState) consumeModelChunkLocked(deviceID devicegw.DeviceID, rate int, start uint64, samples []int16, offset, remaining int) int {
+	if len(s.segments) == 0 {
+		return s.consumeUnattributedChunkLocked(deviceID, rate, start, samples, offset, remaining)
+	}
+	segment := &s.segments[0]
+	take := minInt(segment.remaining, remaining)
+	kind := playbackObservationKind(segment)
+	s.publishRangeLocked(deviceID, rate, kind, segment.kind, segment.response, segment.generation, start+uint64(offset), samples[offset:offset+take], true, segment.precise && kind == RTCDevicePlaybackConsumed, "")
+	segment.remaining -= take
+	s.pendingSamples -= uint64(take)
+	if segment.remaining == 0 {
+		s.segments = s.segments[1:]
+	}
+	return take
+}
+
+func (s *rtcDevicePlaybackObservationState) consumeUnattributedChunkLocked(deviceID devicegw.DeviceID, rate int, start uint64, samples []int16, offset, remaining int) int {
+	take := minInt(remaining, int(s.pendingSamples))
+	if take <= 0 {
+		return 0
+	}
+	s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnattributed, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, start+uint64(offset), samples[offset:offset+take], true, false, "device consumed samples without retained admission metadata")
+	s.pendingSamples -= uint64(take)
+	return take
+}
+
+func playbackObservationKind(segment *rtcDevicePlaybackSegment) RTCDevicePlaybackObservationKind {
+	if segment.kind == RTCDevicePlaybackHoldTone || segment.kind == RTCDevicePlaybackCue {
+		return segment.kind
+	}
+	if segment.kind == RTCDevicePlaybackUnattributed || !segment.precise {
+		return RTCDevicePlaybackUnattributed
+	}
+	return RTCDevicePlaybackConsumed
+}
 
 // PlaybackBufferPort is the observation-only capability for a sink's live
 // queue. It is intentionally separate from RTCDeviceSink so loop code cannot
