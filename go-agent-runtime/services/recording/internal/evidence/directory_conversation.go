@@ -1,8 +1,6 @@
 package evidence
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -58,25 +56,6 @@ type evidenceToolEvent struct {
 	// of the public JSON shape and lets a result delta be re-accounted without
 	// retaining a second copy of the complete event.
 	retainedBytes int64
-}
-
-type evidenceLogEntry struct {
-	TurnIndex int `json:"turn_index"`
-	Input     struct {
-		Text             string   `json:"text"`
-		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
-		AudioBytes       uint64   `json:"audio_bytes"`
-		Committed        bool     `json:"committed"`
-		AudioSegments    []string `json:"audio_segments,omitempty"`
-	} `json:"input"`
-	Response struct {
-		Text             string   `json:"text"`
-		Complete         bool     `json:"complete"`
-		AudioOffsetBytes uint64   `json:"audio_offset_bytes"`
-		AudioBytes       uint64   `json:"audio_bytes"`
-		AudioSegments    []string `json:"audio_segments,omitempty"`
-	} `json:"response"`
-	ToolEvents []evidenceToolEvent `json:"tool_events,omitempty"`
 }
 
 func newEvidenceConversation() evidenceConversation {
@@ -221,40 +200,52 @@ func (c *evidenceConversation) observeToolResult(msg messages.StreamMessage, _ u
 	if callID == "" {
 		return
 	}
+	c.ensureToolResultIndex()
+	index, exists := c.toolResultEventByID[callID]
+	if !exists {
+		var ok bool
+		index, ok = c.startToolResult(callID)
+		if !ok {
+			return
+		}
+	}
+	c.updateToolResult(&c.turn.toolEvents[index], callID, msg)
+}
+
+func (c *evidenceConversation) ensureToolResultIndex() {
 	if c.toolResultEventByID == nil {
 		c.toolResultEventByID = make(map[string]int)
 	}
-	index, exists := c.toolResultEventByID[callID]
-	if !exists {
-		if !c.ensureTurn() {
-			return
-		}
-		c.nextToolSequence++
-		event := evidenceToolEvent{
-			Sequence: c.nextToolSequence, Type: "tool_result", ToolCallID: callID,
-			ToolName: c.toolNames[callID], Status: "completed",
-		}
-		entryCost := summaryMapEntryBytes + summaryCost(callID) + toolEventCost(event)
-		if !c.reserve(entryCost, 2) {
-			return
-		}
-		event.retainedBytes = toolEventCost(event)
-		c.turn.toolEvents = append(c.turn.toolEvents, event)
-		index = len(c.turn.toolEvents) - 1
-		c.toolResultEventByID[callID] = index
+}
+
+func (c *evidenceConversation) startToolResult(callID string) (int, bool) {
+	if !c.ensureTurn() {
+		return 0, false
 	}
-	event := &c.turn.toolEvents[index]
+	c.nextToolSequence++
+	event := evidenceToolEvent{
+		Sequence: c.nextToolSequence, Type: "tool_result", ToolCallID: callID,
+		ToolName: c.toolNames[callID], Status: "completed",
+	}
+	entryCost := summaryMapEntryBytes + summaryCost(callID) + toolEventCost(event)
+	if !c.reserve(entryCost, 2) {
+		return 0, false
+	}
+	event.retainedBytes = toolEventCost(event)
+	c.turn.toolEvents = append(c.turn.toolEvents, event)
+	index := len(c.turn.toolEvents) - 1
+	c.toolResultEventByID[callID] = index
+	return index, true
+}
+
+func (c *evidenceConversation) updateToolResult(event *evidenceToolEvent, callID string, msg messages.StreamMessage) {
 	if event.ToolName == "" {
 		if name := c.toolNames[callID]; name != "" {
-			if !c.updateToolEvent(event, name, event.Arguments, event.Content) {
-				return
-			}
+			c.updateToolEvent(event, name, event.Arguments, event.Content)
 		}
 	}
 	if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil && value.Content != "" {
-		if !c.updateToolEvent(event, event.ToolName, event.Arguments, event.Content+value.Content) {
-			return
-		}
+		c.updateToolEvent(event, event.ToolName, event.Arguments, event.Content+value.Content)
 	}
 	if event.Status == "" {
 		c.updateToolEvent(event, event.ToolName, event.Arguments, event.Content)
@@ -309,54 +300,6 @@ func (c *evidenceConversation) replaceRetained(oldBytes, newBytes int64) bool {
 		c.budget.release(oldBytes-newBytes, 0)
 	}
 	return true
-}
-
-func (c *evidenceConversation) observeText(msg messages.StreamMessage, outbound bool) {
-	if c == nil || c.summaryFull {
-		return
-	}
-	switch value := msg.Value.(type) {
-	case *messages.TextDeltaValue:
-		if value != nil && msg.Type == messages.StreamTypeTextDelta {
-			c.appendText(outbound, value.Content)
-		}
-	case *messages.TranscriptDeltaValue:
-		if value != nil && !outbound && msg.Type == messages.StreamTypeTranscriptDelta {
-			c.appendTranscript(msg.Role == messages.RoleUser, value.ItemID, value.Text, false)
-		}
-	case *messages.TranscriptEndValue:
-		if value != nil && !outbound && msg.Type == messages.StreamTypeTranscriptEnd {
-			c.appendTranscript(msg.Role == messages.RoleUser, value.ItemID, value.FullText, true)
-		}
-	}
-}
-
-func (c *evidenceConversation) appendText(input bool, text string) {
-	if c == nil || c.summaryFull || text == "" || !c.ensureTurn() {
-		return
-	}
-	target := &c.turn.responseText
-	if input {
-		target = &c.turn.inputText
-	}
-	needBytes, needItems, ok := target.append(text)
-	if !ok {
-		c.failBudget(needBytes, needItems)
-	}
-}
-
-func (c *evidenceConversation) appendTranscript(input bool, itemID, text string, complete bool) {
-	if c == nil || c.summaryFull || !c.ensureTurn() {
-		return
-	}
-	target := &c.turn.responseText
-	if input {
-		target = &c.turn.inputText
-	}
-	needBytes, needItems, ok := target.observeTranscript(itemID, text, complete)
-	if !ok {
-		c.failBudget(needBytes, needItems)
-	}
 }
 
 func (c *evidenceConversation) endMessage(outbound bool) {
@@ -423,213 +366,4 @@ func (c *evidenceConversation) observeAudio(input bool, bytes int, offset uint64
 		}
 		c.turn.outputSegments = []string{segment}
 	}
-}
-
-func (t evidenceTurn) observed() bool {
-	return len(t.responseIDs) > 0 || t.inputText.Len() > 0 || t.responseText.Len() > 0 || t.inputAudio > 0 || t.outputAudio > 0 || len(t.toolEvents) > 0
-}
-
-func (c evidenceConversation) json() ([]byte, error) {
-	turns := len(c.closed)
-	if c.turn.observed() {
-		turns++
-	}
-	if turns == 0 {
-		return nil, nil
-	}
-	// A fixed-capacity buffer prevents append growth from doubling a large
-	// summary during finalization. The normalized bundle writer makes one
-	// bounded copy; both copies are bounded by this explicit limit.
-	data := make([]byte, 0, int(directorySummaryMaxBytes))
-	writeTurn := func(index int, turn evidenceTurn) error {
-		entry := evidenceLogEntry{TurnIndex: index + 1, ToolEvents: turn.toolEvents}
-		entry.Input.Text = turn.inputText.String()
-		entry.Input.AudioBytes = turn.inputAudio
-		entry.Input.AudioOffsetBytes = turn.inputOffset
-		entry.Input.Committed = turn.committed
-		entry.Input.AudioSegments = append([]string(nil), turn.inputSegments...)
-		entry.Response.Text = turn.responseText.String()
-		entry.Response.Complete = turn.complete
-		entry.Response.AudioBytes = turn.outputAudio
-		entry.Response.AudioOffsetBytes = turn.outputOffset
-		entry.Response.AudioSegments = append([]string(nil), turn.outputSegments...)
-		for _, id := range turn.responseIDs {
-			audio := c.responseAudio[id]
-			if audio.bytes == 0 {
-				continue
-			}
-			if entry.Response.AudioBytes == 0 || audio.offset < entry.Response.AudioOffsetBytes {
-				entry.Response.AudioOffsetBytes = audio.offset
-			}
-			entry.Response.AudioBytes += audio.bytes
-			if !containsString(entry.Response.AudioSegments, audio.segment) {
-				entry.Response.AudioSegments = append(entry.Response.AudioSegments, audio.segment)
-			}
-		}
-		line, err := json.Marshal(entry)
-		if err != nil {
-			return fmt.Errorf("encode session log entry %d: %w", index+1, err)
-		}
-		if len(data) > int(directorySummaryMaxBytes)-len(line)-1 {
-			return summaryBudgetError(false)
-		}
-		data = append(data, line...)
-		data = append(data, '\n')
-		return nil
-	}
-	for index, turn := range c.closed {
-		if err := writeTurn(index, turn); err != nil {
-			return data, err
-		}
-	}
-	if c.turn.observed() {
-		if err := writeTurn(len(c.closed), c.turn); err != nil {
-			return data, err
-		}
-	}
-	return data, nil
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-// Full transcripts replace deltas for the same item; they are snapshots, not
-// another fragment. Distinct items remain distinct within a turn projection.
-// The typed transcript is authoritative for asynchronous cross-turn
-// attribution.
-type evidenceText struct {
-	budget        *summaryBudget
-	fragments     []string
-	transcripts   []evidenceTranscript
-	bytes         int64
-	items         int
-	retainedBytes int64
-}
-
-type evidenceTranscript struct {
-	itemID        string
-	text          evidenceText
-	retainedBytes int64
-}
-
-func (t *evidenceText) append(text string) (int64, int, bool) {
-	if t == nil || text == "" {
-		return 0, 0, true
-	}
-	if t.budget == nil {
-		t.budget = &summaryBudget{}
-	}
-	needBytes := summarySliceEntryBytes + summaryStringBytes(text)
-	if !t.budget.reserve(needBytes, 1) {
-		return needBytes, 1, false
-	}
-	t.fragments = append(t.fragments, text)
-	t.bytes += int64(len(text))
-	t.items++
-	t.retainedBytes += needBytes
-	return needBytes, 1, true
-}
-
-func (t *evidenceText) observeTranscript(itemID, text string, complete bool) (int64, int, bool) {
-	if t == nil {
-		return 0, 0, false
-	}
-	if t.budget == nil {
-		t.budget = &summaryBudget{}
-	}
-	for index := range t.transcripts {
-		if t.transcripts[index].itemID != itemID {
-			continue
-		}
-		if complete {
-			return t.transcripts[index].text.replace(text)
-		}
-		return t.transcripts[index].text.append(text)
-	}
-	entryBytes := summarySliceEntryBytes + summaryCost(itemID)
-	if !t.budget.reserve(entryBytes, 1) {
-		return entryBytes, 1, false
-	}
-	transcript := evidenceTranscript{itemID: itemID, text: evidenceText{budget: t.budget}, retainedBytes: entryBytes}
-	textBytes, textItems, ok := transcript.text.append(text)
-	if !ok {
-		t.budget.release(entryBytes, 1)
-		return entryBytes + textBytes, 1 + textItems, false
-	}
-	t.transcripts = append(t.transcripts, transcript)
-	return 0, 0, true
-}
-
-func (t *evidenceText) replace(text string) (int64, int, bool) {
-	if t == nil {
-		return 0, 0, false
-	}
-	if t.budget == nil {
-		t.budget = &summaryBudget{}
-	}
-	newBytes, newItems := int64(0), 0
-	if text != "" {
-		newBytes = summarySliceEntryBytes + summaryStringBytes(text)
-		newItems = 1
-	}
-	byteDelta, itemDelta := newBytes-t.retainedBytes, newItems-t.items
-	if byteDelta > 0 || itemDelta > 0 {
-		if !t.budget.reserve(maxInt64(byteDelta, 0), maxInt(itemDelta, 0)) {
-			return maxInt64(byteDelta, 0), maxInt(itemDelta, 0), false
-		}
-	}
-	if byteDelta < 0 || itemDelta < 0 {
-		t.budget.release(maxInt64(-byteDelta, 0), maxInt(-itemDelta, 0))
-	}
-	t.fragments = nil
-	if text != "" {
-		t.fragments = []string{text}
-	}
-	t.bytes = int64(len(text))
-	t.items = newItems
-	t.retainedBytes = newBytes
-	return 0, 0, true
-}
-
-func (t evidenceText) String() string {
-	if t.bytes == 0 && len(t.transcripts) == 0 {
-		return ""
-	}
-	var value strings.Builder
-	value.Grow(int(t.bytes))
-	for _, fragment := range t.fragments {
-		value.WriteString(fragment)
-	}
-	for _, item := range t.transcripts {
-		value.WriteString(item.text.String())
-	}
-	return value.String()
-}
-
-func (t evidenceText) Len() int {
-	size := int(t.bytes)
-	for _, item := range t.transcripts {
-		size += item.text.Len()
-	}
-	return size
-}
-
-func maxInt64(value, floor int64) int64 {
-	if value < floor {
-		return floor
-	}
-	return value
-}
-
-func maxInt(value, floor int) int {
-	if value < floor {
-		return floor
-	}
-	return value
 }

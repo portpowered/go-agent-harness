@@ -34,6 +34,8 @@ type report struct {
 	SummaryBudget         budgetReport         `json:"summary_budget"`
 	Queue                 queueReport          `json:"queue"`
 	Finalization          finalizationReport   `json:"finalization"`
+	NormalFinalization    *finalizationReport  `json:"normal_finalization,omitempty"`
+	OverflowFinalization  *finalizationReport  `json:"overflow_finalization,omitempty"`
 	Normal                *normalReport        `json:"normal,omitempty"`
 	Overflow              *overflowReport      `json:"overflow,omitempty"`
 	Measurements          []measurement        `json:"measurements,omitempty"`
@@ -191,13 +193,35 @@ func runCase(name string) (*report, error) {
 	case "characterize":
 		return result, runCharacterize(result)
 	case "matrix":
-		if err := runNormal(result); err != nil {
-			return result, err
-		}
-		return result, runOverflow(result)
+		return result, runMatrix(result)
 	default:
 		return result, fmt.Errorf("unsupported case %q", name)
 	}
+}
+
+func runMatrix(result *report) error {
+	normal := *result
+	normal.Case = "normal"
+	if err := runNormal(&normal); err != nil {
+		return err
+	}
+	overflow := *result
+	overflow.Case = "overflow"
+	if err := runOverflow(&overflow); err != nil {
+		return err
+	}
+	result.Normal = normal.Normal
+	result.Overflow = overflow.Overflow
+	result.NormalFinalization = &normal.Finalization
+	result.OverflowFinalization = &overflow.Finalization
+	result.Finalization = overflow.Finalization
+	result.Queue = overflow.Queue
+	result.RawEvidenceAfterLimit = overflow.RawEvidenceAfterLimit
+	result.CleanShutdown = normal.CleanShutdown && overflow.CleanShutdown
+	result.LockReleased = normal.LockReleased && overflow.LockReleased
+	result.SessionLogBytes = overflow.SessionLogBytes
+	result.SessionLogTurns = overflow.SessionLogTurns
+	return nil
 }
 
 func newRun() (*runState, func(), error) {

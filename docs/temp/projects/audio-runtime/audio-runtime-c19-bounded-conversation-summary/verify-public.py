@@ -129,6 +129,15 @@ def verify_characterize(report: dict) -> None:
         require(measurement.get("shutdown_elapsed_ms", 0) >= 0, "shutdown elapsed time is invalid")
 
 
+def verify_matrix(report: dict) -> None:
+    normal = dict(report)
+    normal["finalization"] = report.get("normal_finalization", {})
+    verify_normal(normal)
+    overflow = dict(report)
+    overflow["finalization"] = report.get("overflow_finalization", {})
+    verify_overflow(overflow)
+
+
 def verify(case: str, execution: dict) -> None:
     report = execution["report"]
     require(report.get("case") == case, f"consumer case mismatch: {report.get('case')!r}")
@@ -139,8 +148,7 @@ def verify(case: str, execution: dict) -> None:
     elif case == "characterize":
         verify_characterize(report)
     elif case == "matrix":
-        verify_normal(report)
-        verify_overflow(report)
+        verify_matrix(report)
     else:
         raise VerificationError(f"unsupported case {case!r}")
 
