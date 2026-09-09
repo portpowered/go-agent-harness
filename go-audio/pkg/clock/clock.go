@@ -429,7 +429,6 @@ func WithTimeout(parent context.Context, source Source, timeout time.Duration) (
 	ctx, cancel := withDeadline(parent, timerSource, timerSource.Now().Add(timeout))
 	return ctx, cancel, nil
 }
-
 func wait(ctx context.Context, source TimerSource, duration time.Duration) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -446,7 +445,6 @@ func wait(ctx context.Context, source TimerSource, duration time.Duration) error
 		return nil
 	}
 }
-
 func withDeadline(parent context.Context, source TimerSource, deadline time.Time) (context.Context, context.CancelFunc) {
 	if parent == nil {
 		parent = context.Background()
@@ -457,8 +455,10 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 		return child, func() { child.finish(context.Canceled) }
 	}
 	timer := source.NewTimer(deadline.Sub(source.Now()))
-	// The child channel also terminates the timer goroutine after explicit cancel.
+	stop := make(chan struct{})
+	var stopOnce sync.Once
 	cancel := func() {
+		stopOnce.Do(func() { close(stop) })
 		child.finish(context.Canceled)
 	}
 	go func() {
@@ -468,7 +468,7 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 			child.finish(contextCause(parent))
 		case <-timer.C():
 			child.finish(context.DeadlineExceeded)
-		case <-child.Done():
+		case <-stop:
 		}
 	}()
 	return child, cancel
