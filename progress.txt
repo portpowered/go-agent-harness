@@ -509,3 +509,63 @@ C19 CI static rejection repair and exact-head evidence checkpoint
 - Focused causal validation after repair: recording normal and race suites each pass `66` tests in `4` packages; recording vet passes; `make architecture-size-check` passes with `181` packages / `1860` files / `27144` functions; pinned Staticcheck `2026.1` passes all modules; `git diff --check` passes. Fresh public consumer/verifier normal, overflow, characterization, and matrix cases all pass from source `150fffd9`; normal preserves `24` turns/48 PCM bytes, overflow preserves partial status/raw tail/6-byte PCM/terminal with stable budget+short-buffer error, and characterization remains at 16/64/128/256/512 turns with separate queue/no-recording controls and max live heap `768952` bytes.
 - Updated evidence manifest/report hashes and README are under `docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/`; candidate consumer SHA256 is `e10e289df132df14ca30e8a334b66304e2ab9b7974b91bc18b1d37f9d8e71262`, pre-fix binary and fixture hashes are preserved. CI has not been polled or called green; independent review, guarded merge, fresh vertical proof and project acceptance remain external.
 - Next action: commit this exact-head evidence/ledger update, push the same branch, update PR #411 with head `150fffd9` and exact repair/evidence, verify script-gate submission without polling terminal CI, and return `ACCEPTED`; retain ownership for any exact rejection and repair the same task with `CONTINUE`.
+
+C18 current review repair and gate checkpoint
+
+- Admission remains `admitted` for `audio-runtime-c18-public-strict-replay`.
+  `prd.json` branchName is `codex/audio-runtime-c18-public-strict-replay`,
+  matching this isolated worktree. The factory operating policy,
+  implementation handoff, project manifest/request/acceptance/source plan,
+  PRD, progress ledger, and canonical task/review inbox were read before
+  action. The task remains `work-task-24`; review row `work-review-30` is the
+  current source of the actionable findings.
+- Fetched `origin/main` at `e4137eba6a6499142f50701609c1149afc71db84` and
+  integrated it on this isolated branch with merge commit `87f33e51`, keeping
+  the C18 ledger and incoming C19 ledger blocks. Required startup ancestor
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` and original baseline ancestor
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The running
+  host checkout and unrelated C05/PR365 work remain untouched.
+- Review repair commit `087d30c5` restores
+  `docs/architecture/architecture-policy.json` and
+  `docs/architecture/architecture-size-baseline.json` exactly from
+  `origin/main`; the candidate diff contains no architecture policy,
+  baseline, Makefile, workflow, factory, or acceptance changes. Repair commit
+  `0df3e912` makes replay error sentinels immutable typed constants, moves
+  strict completion behind a private witness so a public composite literal
+  cannot forge `ValidateComplete`/`Close`, and rejects nil context before
+  manifested bundle work can reach `context.Cause(nil)`. External embedding
+  regressions cover the completion-forgery and nil-context cases.
+- Current-head focused evidence is green: runtime replay normal and race each
+  report `77` passed tests in `4` packages; independent `GOWORK=off`
+  embedding strict tests pass in normal and race; CLI replay normal and race
+  each report `146` passed tests in `2` packages; architecture fixture tests
+  pass; `make fmt`, `make wire-check`, focused `go vet`, `git diff --check`,
+  and `make coverage-registration` pass (`173` workspace packages). The
+  accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
+  matrix completed successfully in normal, coverage, and race modes, with
+  expected negative-control diagnostics still asserted.
+- The independently built public consumer binary ran successfully with both
+  relative and absolute fixture paths, returning the recorded continuation,
+  `16` wire events, `1` recorded tool call, and `Device execution: false`;
+  the executable-tool marker remained absent. The current evidence hashes are
+  binary `f40ff95030013e3bcf6f6e8d23a8efc1fb57fde14a737db2c5359a64eeef7b8b`
+  and timeline fixture
+  `8ef3adc1fc59a8b686cb7c6f8d0a224e5d65b2eb65eb3e6b446ca05be665da88`.
+- `make architecture-size-check` is the only unresolved local gate and
+  reports exactly `15` issues across `182` packages: fourteen stale baseline
+  entries for the removed `agent-cli/internal/services/internal/replay`
+  implementation and one `module-root-shape` issue because the required
+  `tests/embedding/cmd/strict-replay` path is absent from the shared
+  allowlist. The review explicitly requires restoring, not editing, the
+  shared policy/baseline, and the admitted PRD forbids baseline/policy changes;
+  moving the required consumer or restoring duplicate legacy implementation
+  would violate the same PRD. No code-only in-scope resolution remains.
+- The candidate is not being sent to script CI while this known manifest
+  conflict remains. No CI result is claimed green; historical rejection
+  `34323462820` remains preserved as contention-sensitive evidence. The exact
+  next action requires the project/meta owner to resolve the admitted
+  architecture manifest/path decision (authorize an admitted policy/baseline
+  update or provide a compliant consumer/layout decision), then rerun the
+  architecture gate and resubmit this same task. Until that prerequisite is
+  supplied, this task must escalate as `FAILED`, not use a waiver or second
+  project.
