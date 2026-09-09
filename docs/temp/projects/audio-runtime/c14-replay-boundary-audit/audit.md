@@ -73,14 +73,25 @@ The original raw board snapshot was
 initial checkpoint. The refreshed recovery board snapshot in
 `canonical-board.json` has SHA-256
 `2bb5e77cc4d1d1d5ebf396aa1509ca9e0e50f81829082c13674beed671c9b323`. The
-later live re-read after the current CI rejection is recorded separately below
-with its stream hash; it does not rewrite this preserved recovery snapshot. The
-full extracted rejection inbox is `canonical-rejection-feedback.json`,
-SHA-256 `6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9`,
-and contains 17 JSON rows. The board was saved as raw JSON even though one
-historical feedback string contains unescaped control characters; the
-extraction used a permissive JSON reader solely to preserve that full feedback
-verbatim rather than clipping or discarding it.
+later live re-read after the current CI rejection is preserved in
+`canonical-board-after-ci-34309378555.json`, SHA-256
+`623432ad099d360bc5216bd95547abec73080b684957abdb83b1ad0128e6e3f6`. The
+exact current task-row extraction is
+`canonical-feedback-after-ci-34309378555.json`, SHA-256
+`d833977e2c130c2eab32787c417954b78bad27dca23ca0d4a3e28d6e222ccbb5`, and the
+full rejected job metadata/log are preserved in
+`ci-rejection-34309378555.json` (SHA-256
+`99d76c9f11498a694a978edfc5cb94a9562c1183888f14547f60c80915bdf334`) and
+the exact compressed log
+`ci-rejection-34309378555-job102332669048.log.gz` (SHA-256
+`9ad231f3dbe232a6c00cee6e92981fada8736b9e5da5c227604acbd1f532ebaf`). The
+full historical extracted rejection inbox remains
+`canonical-rejection-feedback.json`, SHA-256
+`6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9`, with
+17 JSON rows. The board was saved as raw JSON even though one historical
+feedback string contains unescaped control characters; the extraction used a
+permissive JSON reader solely to preserve that full feedback verbatim rather
+than clipping or discarding it.
 
 The task packet is `prd.json` at the worktree root. Its authority hashes are:
 
@@ -104,22 +115,24 @@ prd.branchName: codex/audio-runtime-c14-replay-boundary-audit
 The recovery candidate was still clean at
 `d91bea8337a17aae9a1a88fed8491e533268465b` when Review-44 was recorded. The
 recovery fetch then advanced the local `origin/main` ref to
-`f8e0863222da1bdbf296e2220fcbc081461cc877`, the reviewed C11 merge. The PR's
-base ref remains `main` at the historical
-`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; the pinned C14 source and C13
-historical evidence remain `c3bb663e`, while current main is recorded
-separately rather than substituted for that source. The candidate retains the
-required startup/source ancestry and its diff against fetched `origin/main`
-contains only the C14 evidence lease.
+`f8e0863222da1bdbf296e2220fcbc081461cc877`, the reviewed C11 merge. The pinned
+C14 source and C13 historical evidence remain `c3bb663e`; current main is
+recorded separately rather than substituted for that source. As the required
+baseline-integration step, this isolated worktree then merged fetched
+`origin/main` with `--no-ff`, producing `8e5546fdab0702726de33724aa58245576f085db`.
+The merge preserved the C14 evidence lease as the only diff against current
+main and did not touch the running host checkout. The candidate retains the
+required startup/source/current-main ancestry.
 
-`rtk git fetch origin main` was run in this isolated worktree. No merge or
-reset was performed, and the running host checkout was not touched. The
-required ancestry checks passed:
+`rtk git fetch origin main` was run in this isolated worktree, followed by the
+required `--no-ff` merge of `origin/main`. No reset was performed, and the
+running host checkout was not touched. The required ancestry checks passed:
 
 ```text
 rtk git cat-file -e c3bb663e118de9e73ea3eb211b381e8f86c4f480^{commit}: PASS
 rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD: PASS
 rtk git merge-base --is-ancestor c3bb663e118de9e73ea3eb211b381e8f86c4f480 HEAD: PASS
+rtk git merge-base --is-ancestor f8e0863222da1bdbf296e2220fcbc081461cc877 HEAD: PASS
 ```
 
 The startup/bootstrap integration pin is
@@ -128,7 +141,9 @@ is `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. The inspected audit source and
 C13 accepted vertical are pinned to
 `c3bb663e118de9e73ea3eb211b381e8f86c4f480`; the fetched current main is
 `f8e0863222da1bdbf296e2220fcbc081461cc877` and contains the reviewed C11
-merge. The C13 accepted vertical is a read-only predecessor dependency;
+merge, and the current candidate integrates it at merge commit
+`8e5546fdab0702726de33724aa58245576f085db`. The C13 accepted vertical is a
+read-only predecessor dependency;
 C11/task4 and its scripts/evidence are disjoint and untouched.
 
 The canonical predecessor validation is explicit: Work
@@ -1055,6 +1070,48 @@ repeat as an ownership prerequisite for meta inspection rather than modifying
 unowned runtime code. No merge, independent review, vertical acceptance, or
 project acceptance is claimed.
 
+## Current CI integration rejection and baseline integration
+
+The next script-owned result returned the same task after PR #406 head
+`654dae862841574a22feab33ace99bfa774bf30a` was rejected by run
+`34309378555`, job `102332669048`. The raw job log and run metadata are
+preserved in the owned evidence files named above. The only failing required
+check was `CI (integration)`; static, unit, coverage, race, hermetic, WebMCP
+Chrome, macOS audio release, and Windows audio portable were successful on that
+head. The complete integration log names one failing subtest:
+
+```text
+--- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (0.00s)
+    --- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst (30.03s)
+        session_tool_audio_remote_e2e_test.go:182: remote playback did not reach final PCM marker before the scenario deadline
+```
+
+This is the previously characterized remote-tool/audio timing signature. The
+pre-merge candidate diff against fetched `origin/main` contained only C14
+evidence files, and the failed test is in an unowned integration path. The
+required current-main integration was then performed in this isolated
+worktree: `origin/main=f8e0863222da1bdbf296e2220fcbc081461cc877` was merged by
+`8e5546fdab0702726de33724aa58245576f085db`. No C14 runtime source was edited,
+and no host checkout or predecessor worktree was changed.
+
+The exact rejected subtest was rerun once after that merge with the same
+bounded local test path:
+
+```text
+cd agent-cli
+rtk go test ./test/integration -count=1 -timeout=90s \
+  -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/test46/provider_burst$' -v
+=== RUN   TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst
+--- PASS: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst (12.38s)
+PASS
+ok   github.com/portpowered/go-agent-harness/agent-cli/test/integration 21.787s
+```
+
+This is a bounded post-integration pass and not a claim that the historical
+timing failure is fixed across all remote-tool/audio scenarios. The prior CI
+rejection remains recorded as historical evidence; no unchanged implementation
+was resubmitted and no CI result for the new candidate is claimed.
+
 ## Audio, clock, buffer, and device boundary audit
 
 The replay graphs cross the following existing boundaries; none is a reason to
@@ -1285,12 +1342,16 @@ the completed failure; its exact reconciliation is recorded above.
   `TestSessionRecordedPCMIntegrity` plus
   `TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact`
   reported `Go test: 5 passed in 1 packages` from `agent-cli/test/integration`.
+- After integrating fetched current main, the exact rejected integration
+  subtest `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+  passed once in `12.38s` with the bounded `-timeout=90s` command recorded in
+  the CI-rejection section below.
 - No product executable build, provider invocation, device invocation,
   profiling run, broad regression suite, or runtime vertical replay was run by
   C14. There is no implementation diff whose causal behavior could be newly
-  changed; the focused tests validate the pinned baseline and the exact C13
-  review controls. The future extraction test inventory above remains
-  proposed/unrun.
+  changed relative to fetched current main; the focused tests validate the
+  pinned source behavior and the exact C13 review controls. The future
+  extraction test inventory above remains proposed/unrun.
 
 Before delivery, the candidate-level checks are:
 
@@ -1300,6 +1361,7 @@ rtk git diff --name-only origin/main...HEAD
 rtk git status --short
 rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD
 rtk git merge-base --is-ancestor c3bb663e118de9e73ea3eb211b381e8f86c4f480 HEAD
+rtk git merge-base --is-ancestor f8e0863222da1bdbf296e2220fcbc081461cc877 HEAD
 rtk proxy test -s docs/temp/projects/audio-runtime/c14-replay-boundary-audit/audit.md
 ```
 
@@ -1309,6 +1371,10 @@ The expected changed-path set is only:
 docs/temp/projects/audio-runtime/c14-replay-boundary-audit/audit.md
 docs/temp/projects/audio-runtime/c14-replay-boundary-audit/canonical-board.json
 docs/temp/projects/audio-runtime/c14-replay-boundary-audit/canonical-rejection-feedback.json
+docs/temp/projects/audio-runtime/c14-replay-boundary-audit/canonical-board-after-ci-34309378555.json
+docs/temp/projects/audio-runtime/c14-replay-boundary-audit/canonical-feedback-after-ci-34309378555.json
+docs/temp/projects/audio-runtime/c14-replay-boundary-audit/ci-rejection-34309378555.json
+docs/temp/projects/audio-runtime/c14-replay-boundary-audit/ci-rejection-34309378555-job102332669048.log.gz
 ```
 
 Delivery record:
@@ -1350,18 +1416,17 @@ Delivery record:
   the candidate handed to script CI.
 - The prior script-owned gate on `d91bea83` had nine successful checks; no
   check result for the Review-44 repaired candidate was claimed green.
-- The current same-task candidate is
-  `71a0e4914f63e4a2a19a09b511ca644e0937fe44`, pushed on
-  `codex/audio-runtime-c14-replay-boundary-audit`; PR #406 is OPEN at that
-  exact head with base `main` at
-  `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. Fetched `origin/main` is
-  separately `f8e0863222da1bdbf296e2220fcbc081461cc877`. Run `34307899376`
-  is the current script-owned result: coverage failed only on the out-of-lease
-  lifecycle test recorded above, so this candidate is not yet reviewable or
-  mergeable.
-- The next factory action after this evidence checkpoint is push/update of
-  PR #406, then the script-owned current-head CI gate, followed by independent
-  review if that gate succeeds.
+- The current same-task candidate is the unpushed merge/evidence checkpoint
+  `8e5546fdab0702726de33724aa58245576f085db` plus the audit/evidence edits
+  recorded in this delivery. It integrates fetched `origin/main` at
+  `f8e0863222da1bdbf296e2220fcbc081461cc877`, preserves the pinned C14 source
+  and required startup ancestry, and leaves only the owned evidence paths in
+  `git diff origin/main...HEAD`. PR #406 remains the same open PR; no CI result
+  exists for this new candidate.
+- The next factory action is commit the audit/evidence checkpoint, push the
+  same branch, update PR #406 against `main`, and submit it to the
+  script-owned current-head CI gate. Independent review follows only after
+  successful script CI.
 
 After this current-CI evidence checkpoint, push this same branch and update
 PR #406 against `main`, then return `ACCEPTED` to the script-owned current-head
@@ -1386,6 +1451,12 @@ Owned C14 evidence:
 - `canonical-rejection-feedback.json` — full untruncated feedback extracted
   from every task/review row with prior rejection feedback, including terminal
   rows.
+- `canonical-board-after-ci-34309378555.json` and
+  `canonical-feedback-after-ci-34309378555.json` — raw current-board and exact
+  current task-row rejection snapshots after the latest CI return.
+- `ci-rejection-34309378555.json` and
+  `ci-rejection-34309378555-job102332669048.log.gz` — raw run metadata and the
+  full failed integration-job log (compressed without changing its bytes).
 
 Read-only predecessor evidence:
 
