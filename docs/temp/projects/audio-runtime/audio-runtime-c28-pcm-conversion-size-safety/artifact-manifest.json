@@ -1,0 +1,8 @@
+{
+  "consumer_sha256": "2473903ecbc62d85f20015b460ffd2a06cd20450369356c8088a7111ce5cd3ba",
+  "consumer_source_sha256": "a02d85d874153dea8948ea1fb35d0da9e0e69b1ecea9c2914dbd0df759559599",
+  "expected_effects_sha256": "2824c6914fac1739e7ccb50cb8fde9eeeb260ea832b2df8fe10934237d1e947f",
+  "schema": "audio-runtime-c28-artifact-manifest.v1",
+  "source_revision": "51dfaa95ee19ce70693a083c8084c55e3750212f",
+  "yui_sha256": "e8f410fa6eee0083665354344fc1f19f20d445171708e1a8058009108d36bd0a"
+}

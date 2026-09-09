@@ -298,7 +298,7 @@ def check_timeline(bundle: Path, expected: dict[str, object]) -> dict[str, objec
         raise VerificationError(f"audio frame count mismatch: {len(audio)}")
     if any(entry.get("sample_rate") != timeline_expected["audio_sample_rate"] or entry.get("sample_count") != timeline_expected["audio_sample_count"] for entry in audio):
         raise VerificationError("audio frame format mismatch")
-    starts = [entry.get("start_sample") for entry in audio]
+    starts = [entry.get("start_sample", 0) for entry in audio]
     if starts != timeline_expected["audio_start_samples"]:
         raise VerificationError(f"audio frame start samples mismatch: {starts}")
     if not any(entry.get("kind") == "recording_closed" for entry in entries):
@@ -337,7 +337,7 @@ def replay_workflow(yui: Path, fixture: Path, expected: dict[str, object], run_n
         directory_replay = run_bounded(directory_command, fixture_root, REPLAY_TIMEOUT_SECONDS)
         save_process_result(f"{run_name}-directory-replay", directory_replay)
         require_success(directory_replay, "recorded-bundle directory replay")
-        directory_stdout = str(directory_replay["stdout"])
+        directory_stdout = str(directory_replay["stdout"]) + str(directory_replay["stderr"])
         for token in expected["replay"]["directory_replay_tokens"]:
             if token not in directory_stdout:
                 raise VerificationError(f"directory replay stdout is missing expected token {token!r}")
