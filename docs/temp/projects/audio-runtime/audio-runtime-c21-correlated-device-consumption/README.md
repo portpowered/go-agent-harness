@@ -276,3 +276,24 @@ and project acceptance are external. The separate full integration
 `provider_burst` failure remains C20-owned and was not changed. Next action is
 to push the same task head, update PR #414, submit to the script-owned CI gate
 and return `ACCEPTED` without polling.
+
+## Exact-head architecture-fit checkpoint
+
+The final mixed-rate interruption repair is committed as
+`9d0d80efb02ab3c27dab8af08691a99768bb2075`. Exact-endpoint/open-span
+selection, continuation-prefix retention, and supported zero-sample logical
+discard behavior remain in the owned gateway runtime; the immutable
+architecture baseline and unrelated/C20/C18 paths are unchanged.
+
+`make architecture-size-check` passes at 181 packages, 1860 files and 27284
+functions; the sink remains exactly 757 lines and changed Go files are
+gofmt-clean. The boundary regression passed 50 normal and 20 race repetitions;
+the mixed-rate agent-runtime interruption regression passed 50 normal and 50
+race repetitions. Exact-head `verify.py --mode all` returned `ACCEPTED` in
+`runs/verify-20260909T213519Z-8268`, with paused-device samples `0`, audio-tool
+PCM `4800` bytes, interruption PCM `3840` bytes, and the preserved `2400`-byte
+healthy-tail hash. The separate `provider_burst` failure remains C20-owned.
+
+This is handoff evidence, not CI/review/merge/post-merge/project acceptance.
+Next action: push the same task head, update PR #414, and return `ACCEPTED` to
+the script-owned CI gate without polling.
