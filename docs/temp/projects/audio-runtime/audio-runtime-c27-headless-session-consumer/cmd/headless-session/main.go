@@ -23,7 +23,11 @@ import (
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 )
 
-const reportSchema = "audio-runtime-c27-headless-session-consumer/v1"
+const (
+	reportSchema        = "audio-runtime-c27-headless-session-consumer/v1"
+	historyOracleMarker = "history oracle:"
+	closeAttempts       = 2
+)
 
 type config struct {
 	Scenario string `json:"scenario"`
@@ -352,9 +356,9 @@ func runTurn(ctx context.Context, cfg config, runtimeInstance runtimeInstance, p
 		result.Errors = append(result.Errors, "stream: "+err.Error())
 	} else {
 		result.Stream = collectStream(stream)
-		result.StreamCloseCalls = 2
-		_ = stream.Close()
-		_ = stream.Close()
+		if closeErr := closeStreamTwice(stream, &result.StreamCloseCalls); closeErr != nil {
+			result.Errors = append(result.Errors, closeErr.Error())
+		}
 	}
 
 	if err == nil && result.Stream.Error == "" && save {
@@ -364,11 +368,9 @@ func runTurn(ctx context.Context, cfg config, runtimeInstance runtimeInstance, p
 			result.Saved = true
 		}
 	}
-	result.HandleCloseCalls = 2
-	if closeErr := handle.Close(); closeErr != nil {
-		result.Errors = append(result.Errors, "close: "+closeErr.Error())
+	if closeErr := closeHandleTwice(handle, &result.HandleCloseCalls); closeErr != nil {
+		result.Errors = append(result.Errors, closeErr.Error())
 	}
-	_ = handle.Close()
 
 	result.ProviderRequests, result.ProviderCalls = provider.snapshot()
 	if len(result.ProviderRequests) > 0 {
@@ -411,6 +413,31 @@ func runTurn(ctx context.Context, cfg config, runtimeInstance runtimeInstance, p
 		result.Errors = append(result.Errors, "persistence oracle: Save did not create readable history")
 	}
 	return result, errors.Join(errorFromStrings(result.Errors)...)
+}
+
+func closeTwice(name string, closeFunc func() error, calls *int) error {
+	var closeErrors []error
+	for attempt := 1; attempt <= closeAttempts; attempt++ {
+		*calls = *calls + 1
+		if err := closeFunc(); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("%s close #%d: %w", name, attempt, err))
+		}
+	}
+	return errors.Join(closeErrors...)
+}
+
+func closeStreamTwice(stream agentloop.Stream, calls *int) error {
+	if stream == nil {
+		return nil
+	}
+	return closeTwice("stream", stream.Close, calls)
+}
+
+func closeHandleTwice(handle session.SessionHandle, calls *int) error {
+	if handle == nil {
+		return nil
+	}
+	return closeTwice("handle", handle.Close, calls)
 }
 
 func providerCount(provider *deterministicProvider) int {
@@ -568,18 +595,16 @@ func runCancellation(ctx context.Context, cfg config) (report, error) {
 		case <-time.After(5 * time.Second):
 			openErr = errors.Join(openErr, errors.New("during-cancel oracle: stream did not terminate after cancellation"))
 		}
-		turn.StreamCloseCalls = 2
-		_ = stream.Close()
-		_ = stream.Close()
+		if closeErr := closeStreamTwice(stream, &turn.StreamCloseCalls); closeErr != nil {
+			openErr = errors.Join(openErr, closeErr)
+		}
 	} else {
 		cancelTurn()
 	}
 	if handle != nil {
-		turn.HandleCloseCalls = 2
-		if closeErr := handle.Close(); closeErr != nil {
+		if closeErr := closeHandleTwice(handle, &turn.HandleCloseCalls); closeErr != nil {
 			openErr = errors.Join(openErr, closeErr)
 		}
-		_ = handle.Close()
 	}
 	joined := providerJoined(duringProvider, ctx, 5*time.Second)
 	if !joined {
@@ -650,16 +675,23 @@ func runIsolation(ctx context.Context, cfg config) (report, error) {
 	if openAErr != nil || openBErr != nil {
 		cancelA()
 		cancelB()
-		return report{Schema: reportSchema, Scenario: cfg.Scenario, Status: "failed", Isolation: &isolationReport{InitialA: &initialA, InitialB: &initialB}}, errors.Join(openAErr, openBErr)
+		var cleanupCalls int
+		cleanupErr := errors.Join(closeHandleTwice(handleA, &cleanupCalls), closeHandleTwice(handleB, &cleanupCalls))
+		return report{Schema: reportSchema, Scenario: cfg.Scenario, Status: "failed", Isolation: &isolationReport{InitialA: &initialA, InitialB: &initialB}}, errors.Join(openAErr, openBErr, cleanupErr)
 	}
 	streamA, streamAErr := handleA.Stream(ctxA, agentloop.ExecuteInput{Message: "A concurrent"})
 	streamB, streamBErr := handleB.Stream(ctxB, agentloop.ExecuteInput{Message: "B concurrent"})
 	if streamAErr != nil || streamBErr != nil {
 		cancelA()
 		cancelB()
-		_ = handleA.Close()
-		_ = handleB.Close()
-		return report{Schema: reportSchema, Scenario: cfg.Scenario, Status: "failed", Isolation: &isolationReport{InitialA: &initialA, InitialB: &initialB}}, errors.Join(streamAErr, streamBErr)
+		var cleanupCalls int
+		cleanupErr := errors.Join(
+			closeStreamTwice(streamA, &cleanupCalls),
+			closeStreamTwice(streamB, &cleanupCalls),
+			closeHandleTwice(handleA, &cleanupCalls),
+			closeHandleTwice(handleB, &cleanupCalls),
+		)
+		return report{Schema: reportSchema, Scenario: cfg.Scenario, Status: "failed", Isolation: &isolationReport{InitialA: &initialA, InitialB: &initialB}}, errors.Join(streamAErr, streamBErr, cleanupErr)
 	}
 	resultA := make(chan streamReport, 1)
 	resultB := make(chan streamReport, 1)
@@ -694,25 +726,19 @@ func runIsolation(ctx context.Context, cfg config) (report, error) {
 	case <-time.After(5 * time.Second):
 		entryErr = errors.Join(entryErr, errors.New("isolation oracle: B did not complete after A cancellation"))
 	}
-	_ = streamA.Close()
-	_ = streamA.Close()
-	_ = streamB.Close()
-	_ = streamB.Close()
+	canceledA := turnReport{Label: "canceled-a", SessionID: initialA.SessionID, Input: "A concurrent", Stream: canceledStream}
+	completedB := turnReport{Label: "completed-b", SessionID: initialB.SessionID, Input: "B concurrent", Stream: completedStream}
+	entryErr = errors.Join(entryErr, closeStreamTwice(streamA, &canceledA.StreamCloseCalls))
+	entryErr = errors.Join(entryErr, closeStreamTwice(streamB, &completedB.StreamCloseCalls))
 	if saveErr := handleB.Save(); saveErr != nil {
 		entryErr = errors.Join(entryErr, saveErr)
+	} else {
+		completedB.Saved = true
 	}
-	if closeErr := handleA.Close(); closeErr != nil {
-		entryErr = errors.Join(entryErr, closeErr)
-	}
-	if closeErr := handleB.Close(); closeErr != nil {
-		entryErr = errors.Join(entryErr, closeErr)
-	}
-	_ = handleA.Close()
-	_ = handleB.Close()
+	entryErr = errors.Join(entryErr, closeHandleTwice(handleA, &canceledA.HandleCloseCalls))
+	entryErr = errors.Join(entryErr, closeHandleTwice(handleB, &completedB.HandleCloseCalls))
 	cancelB()
 
-	canceledA := turnReport{Label: "canceled-a", SessionID: initialA.SessionID, Input: "A concurrent", Stream: canceledStream, StreamCloseCalls: 2, HandleCloseCalls: 2}
-	completedB := turnReport{Label: "completed-b", SessionID: initialB.SessionID, Input: "B concurrent", Stream: completedStream, StreamCloseCalls: 2, HandleCloseCalls: 2, Saved: true}
 	canceledA.ProviderRequests, canceledA.ProviderCalls = concurrentA.snapshot()
 	completedB.ProviderRequests, completedB.ProviderCalls = concurrentB.snapshot()
 	if persisted, loadErr := storeA.Load(ctx, initialA.SessionID); loadErr == nil {
@@ -788,7 +814,7 @@ func runNegativeControls(ctx context.Context, cfg config) (report, error) {
 		missingCfg := cfg
 		missingCfg.SessionID, missingCfg.Input, missingCfg.RequireHistory = initial.SessionID, "after missing file", true
 		turn, runErr := runTurn(ctx, missingCfg, newRuntime(cfg, missingProvider, baseStore, baseStore), missingProvider, expected, false, false, "missing-saved-file")
-		controls["missing_saved_file"] = closedControl(runErr, "history oracle")
+		controls["missing_saved_file"] = closedControl(runErr, historyOracleMarker)
 		if runErr == nil {
 			controls["missing_saved_file"] = controlReport{Diagnostic: "missing saved file was accepted"}
 		}
@@ -813,7 +839,7 @@ func runNegativeControls(ctx context.Context, cfg config) (report, error) {
 		noOpContinuationCfg := noOpCfg
 		noOpContinuationCfg.SessionID, noOpContinuationCfg.Input, noOpContinuationCfg.RequireHistory = noOpInitial.SessionID, "after no-op save", true
 		_, continuationErr := runTurn(ctx, noOpContinuationCfg, newRuntime(noOpCfg, noOpContinuationProvider, noOpStoreAdmin, noOpStoreAdmin), noOpContinuationProvider, []messageRecord{{Role: string(messages.RoleUser), Text: noOpCfg.Input}, {Role: string(messages.RoleAssistant), Text: noOpInitial.Stream.Text}}, false, false, "no-op-save")
-		controls["no_op_save"] = closedControl(continuationErr, "history oracle")
+		controls["no_op_save"] = closedControl(continuationErr, historyOracleMarker)
 	}
 
 	crossAConfig := cfg
@@ -842,13 +868,13 @@ func runNegativeControls(ctx context.Context, cfg config) (report, error) {
 	crossOutputCfg := crossAConfig
 	crossOutputCfg.SessionID, crossOutputCfg.Input, crossOutputCfg.RequireHistory = crossATurn.SessionID, "A output checked against B", true
 	_, crossOutputErr := runTurn(ctx, crossOutputCfg, newRuntime(crossAConfig, crossOutputProvider, crossAStore, crossAStore), crossOutputProvider, crossBTurn.PersistedHistory.Items, false, false, "crossed-output-history")
-	controls["crossed_output_history"] = closedControl(crossOutputErr, "history oracle")
+	controls["crossed_output_history"] = closedControl(crossOutputErr, historyOracleMarker)
 
 	crossStoreProvider := newDeterministicProvider("B-cross-store", providerOptions{})
 	crossStoreCfg := crossBConfig
 	crossStoreCfg.SessionID, crossStoreCfg.Input, crossStoreCfg.RequireHistory = crossATurn.SessionID, "B store checked against A", true
 	_, crossStoreErr := runTurn(ctx, crossStoreCfg, newRuntime(crossBConfig, crossStoreProvider, crossBStore, crossBStore), crossStoreProvider, crossATurn.PersistedHistory.Items, false, false, "crossed-store-history")
-	controls["crossed_store_history"] = closedControl(crossStoreErr, "crossed stores/history")
+	controls["crossed_store_history"] = closedControl(crossStoreErr, historyOracleMarker)
 
 	result := report{Schema: reportSchema, Scenario: cfg.Scenario, Status: "expected_negative_controls", Controls: controls, Notes: []string{"each control must fail closed with an observable history or cross-boundary diagnostic"}}
 	var failed []string
@@ -872,10 +898,14 @@ func closedControl(err error, marker string) controlReport {
 	if err == nil {
 		return controlReport{FailedClosed: false, Diagnostic: "invalid setup was accepted"}
 	}
-	if marker == "" || strings.Contains(strings.ToLower(err.Error()), strings.ToLower(marker)) || strings.Contains(strings.ToLower(err.Error()), "oracle") {
-		return controlReport{FailedClosed: true, Diagnostic: err.Error()}
+	diagnostic := err.Error()
+	if marker == "" {
+		return controlReport{FailedClosed: false, Diagnostic: "control did not declare a diagnostic marker"}
 	}
-	return controlReport{FailedClosed: true, Diagnostic: err.Error()}
+	if !strings.Contains(diagnostic, marker) {
+		return controlReport{FailedClosed: false, Diagnostic: fmt.Sprintf("diagnostic %q did not contain required marker %q", diagnostic, marker)}
+	}
+	return controlReport{FailedClosed: true, Diagnostic: diagnostic}
 }
 
 func defaultInstance(cfg config, fallback string) string {

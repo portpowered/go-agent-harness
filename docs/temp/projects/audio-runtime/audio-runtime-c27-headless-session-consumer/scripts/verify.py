@@ -34,6 +34,7 @@ FIXTURE_DIR = EVIDENCE_DIR / "fixtures"
 BINARY = MODULE_DIR / "bin" / "headless-session"
 MODULE_PATH = "example.com/audio-runtime-c27-headless-session-consumer"
 MODULE_REL = Path("docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer")
+MAX_CHILD_TIMEOUT_SECONDS = 60.0
 
 STARTUP_COMMIT = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE_COMMIT = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
@@ -145,8 +146,13 @@ def run_command(
     *,
     input_data: bytes = b"",
     environment: dict[str, str] | None = None,
-    timeout: float = 60.0,
+    timeout: float = MAX_CHILD_TIMEOUT_SECONDS,
 ) -> CommandResult:
+    require(timeout > 0, f"child timeout must be positive: {timeout}")
+    require(
+        timeout <= MAX_CHILD_TIMEOUT_SECONDS,
+        f"child timeout {timeout}s exceeds hard limit {MAX_CHILD_TIMEOUT_SECONDS}s",
+    )
     command = [str(item) for item in argv]
     started = time.monotonic()
     process = subprocess.Popen(
@@ -207,13 +213,13 @@ def go_environment(root: Path) -> dict[str, str]:
     return environment
 
 
-def run_go(args: list[str], cwd: Path, *, timeout: float = 120.0, root: Path | None = None) -> CommandResult:
+def run_go(args: list[str], cwd: Path, *, timeout: float = MAX_CHILD_TIMEOUT_SECONDS, root: Path | None = None) -> CommandResult:
     build_root = root or Path(tempfile.gettempdir()) / f"audio-runtime-c27-go-{os.getpid()}"
     build_root.mkdir(parents=True, exist_ok=True)
     return run_command(["go", *args], cwd, environment=go_environment(build_root), timeout=timeout)
 
 
-def run_git(args: list[str], *, timeout: float = 60.0) -> CommandResult:
+def run_git(args: list[str], *, timeout: float = MAX_CHILD_TIMEOUT_SECONDS) -> CommandResult:
     return run_command(["git", *args], REPO_ROOT, environment=base_environment(Path(tempfile.gettempdir()) / f"audio-runtime-c27-git-{os.getpid()}"), timeout=timeout)
 
 
@@ -273,7 +279,7 @@ def run_child(config: dict[str, Any], root: Path, *, expected_exit: int = 0) -> 
         root / "cwd",
         input_data=(json.dumps(config, sort_keys=True) + "\n").encode("utf-8"),
         environment=base_environment(root),
-        timeout=60.0,
+        timeout=MAX_CHILD_TIMEOUT_SECONDS,
     )
     require(result.exit_code == expected_exit, f"child exit={result.exit_code}, expected {expected_exit}: {result.as_dict()}")
     require(result.reaped and not result.process_group_alive, f"child cleanup failed: {result.as_dict()}")
@@ -285,7 +291,7 @@ def ensure_binary() -> dict[str, Any]:
     result = run_go(
         ["build", "-trimpath", "-o", str(BINARY), "./cmd/headless-session"],
         MODULE_DIR,
-        timeout=180.0,
+        timeout=MAX_CHILD_TIMEOUT_SECONDS,
     )
     command_or_fail(result, "consumer build")
     require(BINARY.is_file(), "consumer build produced no executable")
@@ -346,7 +352,7 @@ def verify_admission() -> dict[str, Any]:
     owned_paths = [str(path).rstrip("/") for path in manifest.get("ownedPaths", [])]
     require(MODULE_REL.as_posix() in owned_paths, "consumer path is not the manifest-owned path")
 
-    fetch = run_git(["fetch", "origin", "main"], timeout=120.0)
+    fetch = run_git(["fetch", "origin", "main"], timeout=MAX_CHILD_TIMEOUT_SECONDS)
     command_or_fail(fetch, "fresh main fetch")
     branch = command_or_fail(run_git(["branch", "--show-current"]), "branch query").stdout.strip()
     head = command_or_fail(run_git(["rev-parse", "HEAD"]), "HEAD query").stdout.strip()
@@ -433,12 +439,12 @@ def validate_module_graph(modules: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def graph_boundary() -> dict[str, Any]:
-    dependency_listing = run_go(["list", "-deps", "-json", "./cmd/headless-session"], MODULE_DIR, timeout=180.0)
+    dependency_listing = run_go(["list", "-deps", "-json", "./cmd/headless-session"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS)
     command_or_fail(dependency_listing, "go list -deps -json")
     packages = parse_json_objects(dependency_listing.stdout, "go list -deps -json")
     dependency_summary = validate_dependency_graph(packages)
 
-    module_listing = run_go(["list", "-m", "-json", "all"], MODULE_DIR, timeout=180.0)
+    module_listing = run_go(["list", "-m", "-json", "all"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS)
     command_or_fail(module_listing, "go list -m -json all")
     modules = parse_json_objects(module_listing.stdout, "go list -m -json all")
     module_summary = validate_module_graph(modules)
@@ -484,6 +490,10 @@ def graph_boundary() -> dict[str, Any]:
     expect_rejection("empty_dependency_listing", lambda: validate_dependency_graph([]))
     expect_rejection("malformed_dependency_listing", lambda: parse_json_objects("{\"ImportPath\":", "synthetic malformed go list"))
     expect_rejection("failed_command_listing", lambda: command_or_fail(CommandResult(["go", "list"], str(MODULE_DIR), 1, "", "synthetic failure", 0.0, False, True, False), "synthetic go list"))
+    expect_rejection(
+        "child_timeout_over_limit",
+        lambda: run_command(["true"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS + 1),
+    )
     return {
         "dependency_command": dependency_listing.as_dict(),
         "dependency_summary": dependency_summary,
@@ -670,7 +680,7 @@ def run_quality() -> dict[str, Any]:
         (["vet", "./..."], MODULE_DIR, "consumer vet"),
         (["test", "./..."], REPO_ROOT / "tests/embedding", "accumulated embedding consumer regression"),
     ):
-        result = run_go(args, cwd, timeout=180.0)
+        result = run_go(args, cwd, timeout=MAX_CHILD_TIMEOUT_SECONDS)
         command_or_fail(result, label)
         commands.append({"label": label, "result": result.as_dict()})
     evidence = {"status": "verified", "commands": commands, "scope": "focused consumer plus accumulated tests/embedding regression", "full_ci_polled": False}
@@ -781,7 +791,7 @@ def run_package() -> dict[str, Any]:
         consumer_build = run_go(
             ["build", "-trimpath", "-o", str(archive_consumer_binary), "./cmd/headless-session"],
             archive_module,
-            timeout=240.0,
+            timeout=MAX_CHILD_TIMEOUT_SECONDS,
             root=extracted / "consumer-build-runtime",
         )
         command_or_fail(consumer_build, "extracted consumer build")
@@ -790,7 +800,7 @@ def run_package() -> dict[str, Any]:
         yui_build = run_go(
             ["build", "-trimpath", "-o", str(archive_yui), "./cmd/yui"],
             archive_source / "agent-cli",
-            timeout=300.0,
+            timeout=MAX_CHILD_TIMEOUT_SECONDS,
             root=extracted / "yui-build-runtime",
         )
         command_or_fail(yui_build, "same-source yui build")
@@ -859,6 +869,23 @@ def descriptor_path(value: str, root: Path = MODULE_DIR) -> Path:
 
 
 def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[str, Any]:
+    source_revision = value.get("source_revision")
+    require(isinstance(source_revision, str) and source_revision, "artifact descriptor omitted source revision")
+    current_head = command_or_fail(run_git(["rev-parse", "HEAD"]), "descriptor HEAD query").stdout.strip()
+    current_branch = command_or_fail(run_git(["branch", "--show-current"]), "descriptor branch query").stdout.strip()
+    require(value.get("branch") == current_branch, f"artifact branch {value.get('branch')!r} does not match current branch {current_branch!r}")
+    source_changes: list[str] = []
+    if source_revision != current_head:
+        changed = command_or_fail(
+            run_git(["diff", "--name-only", f"{source_revision}..{current_head}", "--", MODULE_REL.as_posix()]),
+            "descriptor source comparison",
+        )
+        evidence_prefix = MODULE_REL.as_posix() + "/evidence/"
+        source_changes = [path for path in changed.stdout.splitlines() if path and not path.startswith(evidence_prefix)]
+        require(
+            not source_changes,
+            f"artifact source revision {source_revision} is stale; source files changed through {current_head}: {source_changes}",
+        )
     checked: list[dict[str, Any]] = []
     artifact_values: list[dict[str, Any]] = []
     artifact_values.append(value["source_archive"])
@@ -875,7 +902,17 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
         require(actual_size == artifact["size"], f"artifact size mismatch: {artifact['path']}")
         require(actual_sha == artifact["sha256"], f"artifact digest mismatch: {artifact['path']}")
         checked.append({"path": artifact["path"], "size": actual_size, "sha256": actual_sha})
-    return {"checked": checked, "all_digests_match": True}
+    return {
+        "checked": checked,
+        "all_digests_match": True,
+        "provenance": {
+            "source_revision": source_revision,
+            "current_head": current_head,
+            "current_branch": current_branch,
+            "source_revision_matches_current_head": source_revision == current_head,
+            "source_changes_since_source_revision": source_changes,
+        },
+    }
 
 
 def run_verify_artifacts() -> dict[str, Any]:
@@ -939,7 +976,7 @@ def run_regression() -> dict[str, Any]:
             str(bundle),
             "--trace-audio",
         ]
-        replay = run_command(replay_command, root, environment=base_environment(root), timeout=60.0)
+        replay = run_command(replay_command, root, environment=base_environment(root), timeout=MAX_CHILD_TIMEOUT_SECONDS)
         command_or_fail(replay, "same-source credential-free yui replay")
         combined = replay.stdout + "\n" + replay.stderr
         for marker in ("PROBE_TOOL_MARKER_9182", "strict replay continuation", "fixture_complete", "provider_close"):
@@ -948,7 +985,7 @@ def run_regression() -> dict[str, Any]:
         require(sha256_file(audio) == PCM_SHA256, "rendered PCM digest mismatch")
         require((root / "evidence" / "runs" / "exec-invocations-v4.log").is_file(), "tool invocation evidence was not written")
         strict_command = [str(yui), "-C", str(config), "session", "replay", str(bundle)]
-        strict = run_command(strict_command, root, environment=base_environment(root), timeout=60.0)
+        strict = run_command(strict_command, root, environment=base_environment(root), timeout=MAX_CHILD_TIMEOUT_SECONDS)
         command_or_fail(strict, "strict recorded-bundle replay")
         strict_combined = strict.stdout + "\n" + strict.stderr
         require("Replay verified: 18 wire events, 1 tool calls" in strict_combined, "strict replay did not verify wire/tool counts")
