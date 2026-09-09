@@ -116,3 +116,58 @@ The fixture hashes are `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384
 
 No CI success, independent review, merge or vertical/project acceptance is
 claimed; the same task remains responsible for any exact script-CI rejection.
+
+## Current-head CI repair checkpoint
+
+The canonical board was captured in `/tmp/audio-runtime-c21-board.json` before
+this visit. It records task `work-task-46` on PR #414 at `cc0c172a`; no
+concluded C21 review row was present. The complete CI rejection was inspected
+with run `34382309620`: hermetic first failed on
+`TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress`, and also reported the
+separate C20-owned remote `test46/provider_burst` final-PCM deadline; the
+integration job reported the separate C22-owned
+`TestSessionCLI_DuplexPCMMultiTurnSchedule` deadline. Those paths remain
+separate ownership, not waived failures or reasons to mutate this lease.
+
+The branch fetched `origin/main=5d5afcb1` and integrated it as merge
+`17cc09a8`, preserving the required baseline ancestry and the C21 predecessor
+checkpoints. Repair commit `e7605d95` adds a deterministic session-open gate
+to the owned closed-target room fixture. Alice's scripted PCM cannot reach the
+closed Bob mixer until both participants have registered `SESSION.OPEN`, so
+the rejection tests participant-scoped cleanup rather than racing Bob's
+connection/observer lifecycle registration. The original assertions,
+participant-scoped error, two-second context, cancellation, and cleanup
+budgets are unchanged; the architecture baseline was not edited.
+
+Exact-head causal checks from `e7605d95442d53021a77c6976fc968d06f885420`:
+
+- closed-target room: 20 normal and 10 race repetitions passed;
+- provider-input rejection, ingress ledger, and room cleanup regressions: 3
+  normal and 2 race repetitions passed;
+- gateway `^TestC21`: 3 normal and 2 race repetitions passed;
+- sample-only/runtime DeviceSink regressions passed;
+- `go vet -tags=nomicrophone` for gateway/runtime and room passed;
+- `make architecture-size-check` passed at 181 packages, 1860 files, and
+  27215 functions;
+- `verify.py --mode all` was `ACCEPTED` in
+  `runs/verify-20260909T174016Z-65947`; every child stayed below its 60-second
+  process-group deadline and the runner recorded exact stdout/stderr, argv,
+  cwd, environment, exit code, and elapsed time.
+
+The exact-head public evidence reports zero samples while callbacks are
+paused, native device rate 16000, primary `LastSequence=13` and
+`DeviceSamples=16`, plus stalled-consumer `DroppedObservations=599`,
+`DroppedSamples=599`, `MetadataLostSamples=45`, `LastSequence=600`, and clean
+close. The same-source consumer/YUI hashes are
+`10c457070b8e0722361465ef79e9862b0a3a60a094d1155552d04f16c537e511` and
+`2739decfc2537dc3a90aae6a99e72424b8408fa788189e9424a45cd6117c0382`.
+Parity retained the C16 fixture hashes and exact PCM hashes: audio-tool
+`4800` bytes / `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`
+and interruption `3840` bytes /
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`.
+
+This is a repaired implementation candidate, not CI/review/merge or
+post-merge vertical/project acceptance. Next action: commit this evidence
+checkpoint, push the same branch, update PR #414 with exact head/base and
+repair evidence, and return `ACCEPTED` to the script-owned CI gate without
+polling it. Retain this task for any exact C21-owned rejection.
