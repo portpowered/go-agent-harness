@@ -1416,17 +1416,17 @@ Delivery record:
   the candidate handed to script CI.
 - The prior script-owned gate on `d91bea83` had nine successful checks; no
   check result for the Review-44 repaired candidate was claimed green.
-- The current same-task candidate is the unpushed merge/evidence checkpoint
-  `8e5546fdab0702726de33724aa58245576f085db` plus the audit/evidence edits
-  recorded in this delivery. It integrates fetched `origin/main` at
-  `f8e0863222da1bdbf296e2220fcbc081461cc877`, preserves the pinned C14 source
-  and required startup ancestry, and leaves only the owned evidence paths in
-  `git diff origin/main...HEAD`. PR #406 remains the same open PR; no CI result
-  exists for this new candidate.
-- The next factory action is commit the audit/evidence checkpoint, push the
-  same branch, update PR #406 against `main`, and submit it to the
-  script-owned current-head CI gate. Independent review follows only after
-  successful script CI.
+- The current same-task candidate is pushed at
+  `ec1e9e9f417d3161635b5dd06d990af7126ca1a4`, with merge parent
+  `8e5546fdab0702726de33724aa58245576f085db`. It integrates fetched
+  `origin/main` at `f8e0863222da1bdbf296e2220fcbc081461cc877`, preserves the
+  pinned C14 source and required startup ancestry, and leaves only the owned
+  evidence paths in `git diff origin/main...HEAD`. PR #406 is OPEN at this
+  head with current base `main` at `f8e0863222da1bdbf296e2220fcbc081461cc877`;
+  no CI result exists for this new candidate.
+- The next factory action is the script-owned current-head CI gate. This
+  executor returns `ACCEPTED` to that gate without polling it; independent
+  review follows only after successful script CI.
 
 After this current-CI evidence checkpoint, push this same branch and update
 PR #406 against `main`, then return `ACCEPTED` to the script-owned current-head
