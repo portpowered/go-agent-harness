@@ -1315,37 +1315,38 @@ C18 current-main integration and clock repair checkpoint
 
 C18 final-source public evidence checkpoint 2026-09-09
 
-- Final clock repair commit `ab5c7dae77bff15f95ddde80193901d618cfb6ad` passes
-  the exact parent-cancellation control `100/100` normal and `50/50` race,
-  the full clock package (`22` tests), strict replay normal/race (`84` tests
-  in four packages each), the independent embedding strict controls
-  normal/race, and the focused shipped CLI replay controls normal/race. The
-  clock source remains exactly `547` lines; architecture-size passes with
-  `182` packages, `1871` files and `27223` functions; Wire regeneration and
-  focused vet are clean.
-- Fresh final-source builds from the same revision produced the independent
-  consumer SHA256 `d6cfcf4e8587508905a7a128737f6146311e78421a40c6a73d0397eb460b9378`
-  and yui SHA256
-  `661d296042d4d2ef1869347b2cfb47255084c0297343a8353bfd13771914a0a6`.
-  `verify-public.py` recorded source revision
-  `ab5c7dae77bff15f95ddde80193901d618cfb6ad` and all five bounded cases
-  passed: external `2/2`, strict `5/5`, provider `7/7`, interruption `4/4`,
-  and ask `2/2`. Strict/provider relative and absolute finalized-directory
-  positives passed; missing/corrupt/path-escape mutations and provider wrong
-  cwd rejected with no successful marker/output. The provider render oracle
-  remained the required `3200` bytes / SHA256
-  `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`; the
-  interruption oracle remained `3360` bytes / SHA256
-  `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff` with
-  the preserved healthy-tail SHA256
-  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`.
+- Intermediate clock repair commit `ab5c7dae77bff15f95ddde80193901d618cfb6ad`
+  passed the exact parent-cancellation control but exposed intermittent
+  interruption timing. Ordering repair `ae882d6` restores the dedicated stop
+  channel for explicit cancellation while retaining eager late-parent
+  observation. It passes the exact parent-cancellation control `100/100`
+  normal and `50/50` race, the full clock package (`22` tests), and an
+  isolated interruption verifier matrix `12/12`. The clock source remains
+  exactly `547` lines; architecture-size passes with `182` packages, `1871`
+  files and `27224` functions; Wire regeneration and focused vet are clean.
+- The earlier ab5c7da public artifacts are superseded by the ordering repair;
+  a fresh final-source build and five-case verifier run are recorded in the
+  following checkpoint.
 - The accumulated session regression command still has one retained C22
   coverage-only failure before mutation (`InputEOF:false` in
   `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl`); the
   exact outside-scope control passed `20/20` with original deadlines and no
   C22 path was edited. This is not an acceptance waiver or a C18 red test.
-- This is implementation and handoff evidence only. Script CI, independent
-  review, guarded merge, fresh post-merge vertical validation and project
-  acceptance remain external; CI was not polled or claimed green. Next action:
-  push this same task head, update PR410 with the evidence, and return
-  `ACCEPTED` to the script-owned CI gate.
+- This checkpoint is implementation evidence only and is superseded by the
+  ordering repair below. Script CI, independent review, guarded merge, fresh
+  post-merge vertical validation and project acceptance remain external; CI
+  was not polled or claimed green.
+
+C18 ordering-repair handoff checkpoint 2026-09-09
+
+- `ae882d6` is the final causal clock repair on top of `ab5c7da`: it keeps the
+  custom scheduler context, eagerly finishes `Done()` for a parent already
+  canceled when observed, and retains the dedicated stop channel so explicit
+  cancellation preserves the prior timer-goroutine ordering. The new causal
+  test retains parent-cause and timer-cleanup assertions. No other owner path,
+  baseline, policy, deadline or assertion was changed.
+- The focused clock and architecture evidence is green as listed above. The
+  final-source public build/probe and exact hashes must be appended after the
+  post-checkpoint build. Next action: commit this ledger checkpoint, rebuild
+  both public binaries, rerun all five bounded public cases, then push/update
+  PR410 and return `ACCEPTED` to script-owned CI without polling.
