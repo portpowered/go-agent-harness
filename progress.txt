@@ -1353,7 +1353,7 @@ C18 ordering-repair handoff checkpoint 2026-09-09
 
 C18 final-source handoff evidence 2026-09-09
 
-- From source revision `f311225cfca5746a44fd393c0c547b82feeddfcc`, fresh builds
+- From source revision `10d84f2b7449d3a06e44e251ff8797bc9ae67dbe`, fresh builds
   produced the independent `GOWORK=off` consumer SHA256
   `fca5d806fad37c63a814e25c7eac778adeb07a397b3beb59051239f5c1f02b6b` and
   yui SHA256
