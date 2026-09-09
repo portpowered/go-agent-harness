@@ -16,7 +16,6 @@ import (
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 	toolservice "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	toolswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestEmptyToolCapabilityDoesNotDiscoverHostWorkspace(t *testing.T) {
@@ -83,10 +82,10 @@ func TestPublicStrictReplayExposesPreparedEvidenceAndRejectsIncompleteBundle(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Clock == nil || prepared.Dialer == nil || prepared.ToolExecutor == nil {
+	if prepared.Clock() == nil || prepared.Dialer() == nil || prepared.ToolExecutor() == nil {
 		t.Fatalf("prepared=%+v, want deterministic clock and hermetic dependencies", prepared)
 	}
-	if prepared.Scope.DeviceExecution {
+	if prepared.Scope().DeviceExecution {
 		t.Fatal("prepared strict replay advertises device execution")
 	}
 	if err := prepared.Close(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
@@ -107,42 +106,21 @@ func TestPublicStrictPreparedCompletionCannotBeForged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := reflect.TypeOf(prepared).FieldByName("Complete"); ok {
-		t.Fatal("public prepared contract exposes mutable completion callback")
+	preparedType := reflect.TypeOf((*runtimeReplay.StrictPrepared)(nil)).Elem()
+	if preparedType.Kind() != reflect.Interface {
+		t.Fatalf("public prepared contract kind=%s, want opaque interface", preparedType.Kind())
 	}
-	build, ok := reflect.TypeOf(runtimeReplay.StrictPreparedBuilder{}).MethodByName("Build")
-	if !ok || build.Type.NumIn() != 7 {
-		t.Fatalf("public builder signature=%v, want no caller-supplied evidence counts", build.Type)
+	for _, method := range []string{"ValidateComplete", "Close"} {
+		if _, ok := preparedType.MethodByName(method); !ok {
+			t.Fatalf("public prepared contract has no %s method", method)
+		}
 	}
-	forged := runtimeReplay.StrictPrepared{
-		Capture:      prepared.Capture,
-		Dialer:       prepared.Dialer,
-		ToolExecutor: prepared.ToolExecutor,
-		Audio:        prepared.Audio,
-		Clock:        prepared.Clock,
-		Scope:        prepared.Scope,
-		WireEvents:   prepared.WireEvents,
-		ToolCalls:    prepared.ToolCalls,
+	concrete := reflect.TypeOf(prepared)
+	if concrete == nil || concrete.Kind() != reflect.Pointer || !strings.Contains(concrete.Elem().PkgPath(), "/services/replay/internal/strict") {
+		t.Fatalf("prepared concrete type=%v, want private strict implementation", concrete)
 	}
-	if err := forged.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
-		t.Fatalf("forged completion error=%v, want incomplete evidence", err)
-	}
-	preparedWithoutEvidence := runtimeReplay.StrictPreparedBuilder{}.Build(
-		prepared.Capture,
-		prepared.Dialer,
-		prepared.ToolExecutor,
-		prepared.Audio,
-		prepared.Clock,
-		prepared.Scope,
-	)
-	if err := preparedWithoutEvidence.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
-		t.Fatalf("public builder without consumed evidence error=%v, want incomplete evidence", err)
-	}
-	zeroEvidence := runtimeReplay.StrictPreparedBuilder{}.Build(
-		gwtesting.SessionCapture{}, nil, nil, nil, nil, runtimeReplay.StrictEvidenceScope{},
-	)
-	if err := zeroEvidence.ValidateComplete(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
-		t.Fatalf("zero-evidence public construction error=%v, want incomplete evidence", err)
+	if err := prepared.Close(); !errors.Is(err, runtimeReplay.ErrBundleIncomplete) {
+		t.Fatalf("prepared completion before evidence error=%v, want incomplete evidence", err)
 	}
 }
 
@@ -160,13 +138,13 @@ func TestPublicStrictReplayPreparedDialerPreservesInputPacketOrder(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := prepared.Dialer.Dial("offline", nil)
+	conn, err := prepared.Dialer().Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var sentTypes []string
 	var audioPayload string
-	for _, record := range prepared.Capture.Records {
+	for _, record := range prepared.Capture().Records {
 		if record.Direction == "client_to_server" {
 			if err := conn.WriteMessage(1, record.Payload); err != nil {
 				t.Fatal(err)
@@ -187,7 +165,7 @@ func TestPublicStrictReplayPreparedDialerPreservesInputPacketOrder(t *testing.T)
 	if want := `{"type":"input_audio_buffer.append","audio":"AQD+/wMA"}`; audioPayload != want {
 		t.Fatalf("sent input audio payload=%q, want %q", audioPayload, want)
 	}
-	if _, err := prepared.ToolExecutor.Execute(t.Context(), messages.ToolCall{ID: "call-embed-1", Name: "exec", Arguments: `{"path":"tests/embedding/testdata/replay/exec-marker"}`}); err != nil {
+	if _, err := prepared.ToolExecutor().Execute(t.Context(), messages.ToolCall{ID: "call-embed-1", Name: "exec", Arguments: `{"path":"tests/embedding/testdata/replay/exec-marker"}`}); err != nil {
 		t.Fatal(err)
 	}
 	if err := prepared.ValidateComplete(); err != nil {
@@ -214,6 +192,75 @@ func TestPublicStrictReplayRejectsMissingRecordedToolResult(t *testing.T) {
 	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "has no result") {
 		t.Fatalf("missing tool result error=%v, want causal incomplete diagnostic", err)
 	}
+}
+
+func TestPublicStrictReplayRejectsMismatchedNestedToolCallID(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "replay", "timeline.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := replaceNestedToolCallID(t, data)
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "timeline.jsonl"), mutated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var output bytes.Buffer
+	_, err = runtimeReplayWire.NewStrictService().Run(t.Context(), &output, runtimeReplay.StrictRequest{BundlePath: directory})
+	if !errors.Is(err, runtimeReplay.ErrBundleMismatch) || !strings.Contains(err.Error(), "nested response ToolCallID") {
+		t.Fatalf("mismatched nested tool ID error=%v, want causal mismatch", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("mismatched nested tool ID replay produced %d bytes of success output", output.Len())
+	}
+}
+
+func replaceNestedToolCallID(t *testing.T, data []byte) []byte {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		var event map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(lines[index]), &event); err != nil {
+			t.Fatal(err)
+		}
+		rawRuntimeKind, ok := event["runtime_kind"]
+		if !ok {
+			continue
+		}
+		var runtimeKind string
+		if err := json.Unmarshal(rawRuntimeKind, &runtimeKind); err != nil {
+			t.Fatal(err)
+		}
+		if runtimeKind != "tool_result" {
+			continue
+		}
+		var payload []byte
+		if err := json.Unmarshal(event["payload"], &payload); err != nil {
+			t.Fatal(err)
+		}
+		var result map[string]json.RawMessage
+		if err := json.Unmarshal(payload, &result); err != nil {
+			t.Fatal(err)
+		}
+		result["response"] = json.RawMessage(`{"ToolCallID":"forged-call-id"}`)
+		payload, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eventPayload, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event["payload"] = eventPayload
+		line, err := json.Marshal(event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines[index] = string(line)
+		return []byte(strings.Join(lines, "\n") + "\n")
+	}
+	t.Fatal("fixture has no tool_result event")
+	return nil
 }
 
 func TestPublicStrictReplayRejectsMissingFinalResponseDone(t *testing.T) {

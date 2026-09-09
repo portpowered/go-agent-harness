@@ -26,14 +26,14 @@ func TestServicePrepareAndRecordedToolExactOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.WireEvents != 3 || prepared.ToolCalls != 1 || prepared.Dialer == nil || prepared.Audio == nil {
+	if prepared.WireEvents() != 3 || prepared.ToolCalls() != 1 || prepared.Dialer() == nil || prepared.Audio() == nil {
 		t.Fatalf("prepared=%+v", prepared)
 	}
-	conn, err := prepared.Dialer.Dial("offline", nil)
+	conn, err := prepared.Dialer().Dial("offline", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, event := range prepared.Capture.Records {
+	for _, event := range prepared.Capture().Records {
 		if event.Direction == "client_to_server" {
 			if err := conn.WriteMessage(1, event.Payload); err != nil {
 				t.Fatal(err)
@@ -45,11 +45,11 @@ func TestServicePrepareAndRecordedToolExactOnce(t *testing.T) {
 		}
 	}
 	call := messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`}
-	response, err := prepared.ToolExecutor.Execute(context.Background(), call)
+	response, err := prepared.ToolExecutor().Execute(context.Background(), call)
 	if err != nil || response.ToolCallID != call.ID || response.Content != "answer" {
 		t.Fatalf("response=%+v err=%v", response, err)
 	}
-	if _, err := prepared.ToolExecutor.Execute(context.Background(), call); !errors.Is(err, publicreplay.ErrToolMismatch) {
+	if _, err := prepared.ToolExecutor().Execute(context.Background(), call); !errors.Is(err, publicreplay.ErrToolMismatch) {
 		t.Fatalf("duplicate execution err=%v", err)
 	}
 	if err := prepared.ValidateComplete(); err != nil {
@@ -77,7 +77,7 @@ func TestServiceAcceptsCanonicalRecordDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Audio == nil {
+	if prepared.Audio() == nil {
 		t.Fatal("canonical record directory did not prepare audio replay")
 	}
 }
@@ -95,11 +95,11 @@ func TestServiceCreatesIndependentClocksPerPreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Clock == second.Clock {
+	if first.Clock() == second.Clock() {
 		t.Fatal("preparations share mutable deterministic clock")
 	}
-	first.Audio.Clock.AdvanceBy(time.Second)
-	if got := second.Clock.Now(); got != second.Audio.Clock.Now() {
+	first.Audio().Clock.AdvanceBy(time.Second)
+	if got := second.Clock().Now(); got != second.Audio().Clock.Now() {
 		t.Fatalf("second clock changed with first: %v", got)
 	}
 }
@@ -199,9 +199,9 @@ func TestOpenAIRuntimeFactoryRejectsUnsupportedProvider(t *testing.T) {
 }
 
 func TestOpenAIRuntimeFactoryRejectsMissingClock(t *testing.T) {
-	_, err := NewOpenAIRuntimeFactory().New(publicreplay.Prepared{})
-	if !errors.Is(err, publicreplay.ErrDeterministicClockRequired) {
-		t.Fatalf("err=%v, want deterministic clock error", err)
+	_, err := NewOpenAIRuntimeFactory().New(nil)
+	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
+		t.Fatalf("err=%v, want incomplete prepared error", err)
 	}
 }
 
@@ -211,7 +211,7 @@ func TestRecordedToolRejectsMismatchedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = prepared.ToolExecutor.Execute(context.Background(), messages.ToolCall{ID: "call-1", Name: "other", Arguments: `{}`})
+	_, err = prepared.ToolExecutor().Execute(context.Background(), messages.ToolCall{ID: "call-1", Name: "other", Arguments: `{}`})
 	if !errors.Is(err, publicreplay.ErrToolMismatch) {
 		t.Fatalf("err=%v, want tool mismatch", err)
 	}
@@ -248,7 +248,7 @@ func (r bundleReplayRuntime) Run(ctx context.Context, out io.Writer) error {
 	if err := consumeCapturedWire(r.prepared); err != nil {
 		return err
 	}
-	if _, err := r.prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`}); err != nil {
+	if _, err := r.prepared.ToolExecutor().Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`}); err != nil {
 		return err
 	}
 	_, err := io.WriteString(out, "replayed")
@@ -270,7 +270,7 @@ type audioReplayRuntime struct {
 
 func (r audioReplayRuntime) Run(ctx context.Context, _ io.Writer) error {
 	for {
-		_, frame, err := r.prepared.Audio.Next()
+		_, frame, err := r.prepared.Audio().Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -284,16 +284,16 @@ func (r audioReplayRuntime) Run(ctx context.Context, _ io.Writer) error {
 	if err := consumeCapturedWire(r.prepared); err != nil {
 		return err
 	}
-	_, err := r.prepared.ToolExecutor.Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`})
+	_, err := r.prepared.ToolExecutor().Execute(ctx, messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{"q":"value"}`})
 	return err
 }
 
 func consumeCapturedWire(prepared publicreplay.Prepared) error {
-	conn, err := prepared.Dialer.Dial("offline", nil)
+	conn, err := prepared.Dialer().Dial("offline", nil)
 	if err != nil {
 		return err
 	}
-	for _, event := range prepared.Capture.Records {
+	for _, event := range prepared.Capture().Records {
 		if event.Direction == "client_to_server" {
 			if err := conn.WriteMessage(1, event.Payload); err != nil {
 				return err
@@ -329,7 +329,7 @@ func TestServiceRunRejectsChangedOutbound(t *testing.T) {
 		ClockFactory: func(origin time.Time) *clock.Deterministic { return clock.NewDeterministic(origin, time.Millisecond) },
 		Runtime: runtimeFactoryFunc(func(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
 			return replayRuntimeFunc(func(context.Context, io.Writer) error {
-				conn, err := prepared.Dialer.Dial("offline", nil)
+				conn, err := prepared.Dialer().Dial("offline", nil)
 				if err != nil {
 					return err
 				}
@@ -559,7 +559,7 @@ func TestRelativeBundlePathServicePrepare(t *testing.T) {
 			if err != nil {
 				t.Fatalf("prepare %q from %q: %v", test.bundle, test.cwd, err)
 			}
-			if prepared.Audio == nil || prepared.WireEvents != 3 {
+			if prepared.Audio() == nil || prepared.WireEvents() != 3 {
 				t.Fatalf("prepared=%+v, want audio and three wire events", prepared)
 			}
 		})

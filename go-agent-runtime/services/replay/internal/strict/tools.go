@@ -50,7 +50,12 @@ func (e *recordedToolExecutor) addResult(result decodedToolResult) error {
 	if result.name != entry.call.Name {
 		return fmt.Errorf("%w: call %q name %q != %q", replay.ErrBundleMismatch, result.callID, result.name, entry.call.Name)
 	}
-	result.response.ToolCallID = result.callID
+	if result.response.ToolCallID != "" && result.response.ToolCallID != result.callID {
+		return fmt.Errorf("%w: result call_id %q does not match nested response ToolCallID %q", replay.ErrBundleMismatch, result.callID, result.response.ToolCallID)
+	}
+	if result.response.ToolCallID == "" {
+		result.response.ToolCallID = result.callID
+	}
 	if result.response.Name == "" {
 		result.response.Name = result.name
 	}
@@ -163,8 +168,14 @@ func decodeToolResult(payload []byte) (decodedToolResult, error) {
 	if raw.CallID == "" {
 		return decodedToolResult{}, errors.New("call_id is empty")
 	}
+	if raw.Response.ToolCallID != "" && raw.Response.LowerToolCallID != "" && raw.Response.ToolCallID != raw.Response.LowerToolCallID {
+		return decodedToolResult{}, fmt.Errorf("%w: nested response ToolCallID fields disagree", replay.ErrBundleMismatch)
+	}
 	if raw.Response.ToolCallID == "" {
 		raw.Response.ToolCallID = raw.Response.LowerToolCallID
+	}
+	if raw.Response.ToolCallID != "" && raw.Response.ToolCallID != raw.CallID {
+		return decodedToolResult{}, fmt.Errorf("%w: result call_id %q does not match nested response ToolCallID %q", replay.ErrBundleMismatch, raw.CallID, raw.Response.ToolCallID)
 	}
 	if raw.Response.Name == "" {
 		raw.Response.Name = raw.Response.LowerName

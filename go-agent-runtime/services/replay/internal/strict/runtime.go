@@ -26,22 +26,26 @@ func NewOpenAIRuntimeFactory() publicreplay.RuntimeFactory { return openAIRuntim
 type openAIRuntimeFactory struct{}
 
 func (openAIRuntimeFactory) New(prepared publicreplay.Prepared) (publicreplay.Runtime, error) {
-	if prepared.Clock == nil {
+	if prepared == nil {
+		return nil, publicreplay.ErrBundleIncomplete
+	}
+	if prepared.Clock() == nil {
 		return nil, publicreplay.ErrDeterministicClockRequired
 	}
-	providerName := strings.TrimSpace(prepared.Capture.Provider.Name)
+	capture := prepared.Capture()
+	providerName := strings.TrimSpace(capture.Provider.Name)
 	if providerName != "" && !strings.EqualFold(providerName, "openai") {
 		return nil, fmt.Errorf("%w: production offline replay factory supports provider %q, got %q", publicreplay.ErrBundleMismatch, "openai", providerName)
 	}
-	model := strings.TrimSpace(prepared.Capture.Provider.Model)
+	model := strings.TrimSpace(capture.Provider.Model)
 	if model == "" {
 		return nil, fmt.Errorf("%w: replay handshake has no model", publicreplay.ErrBundleMismatch)
 	}
-	initialUpdate, err := initialSessionUpdate(prepared.Capture)
+	initialUpdate, err := initialSessionUpdate(capture)
 	if err != nil {
 		return nil, err
 	}
-	dialer := &initialUpdateDialer{inner: prepared.Dialer, payload: initialUpdate}
+	dialer := &initialUpdateDialer{inner: prepared.Dialer(), payload: initialUpdate}
 	provider := oaiprovider.New(
 		oaiprovider.WithAPIKey("offline-replay"),
 		oaiprovider.WithModel(model),
@@ -56,15 +60,15 @@ func (openAIRuntimeFactory) New(prepared publicreplay.Prepared) (publicreplay.Ru
 	loop, err := agentloop.New(
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(inferencer),
-		agentloop.WithToolExecutor(prepared.ToolExecutor),
-		agentloop.WithTools(replayToolDefinitions(prepared.Capture)),
-		agentloop.WithClock(prepared.Clock),
+		agentloop.WithToolExecutor(prepared.ToolExecutor()),
+		agentloop.WithTools(replayToolDefinitions(capture)),
+		agentloop.WithClock(prepared.Clock()),
 		agentloop.WithBufferCapacity(replayBufferCapacity),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("construct offline agent loop: %w", err)
 	}
-	actions, err := deriveInputActions(prepared.Capture)
+	actions, err := deriveInputActions(capture)
 	if err != nil {
 		return nil, err
 	}

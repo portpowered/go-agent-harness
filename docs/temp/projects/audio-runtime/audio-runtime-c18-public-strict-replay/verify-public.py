@@ -207,6 +207,96 @@ def fixture_hashes(root: Path) -> dict[str, str]:
     return hashes
 
 
+def mutate_declared_pcm(bundle: Path, mutation: str) -> None:
+    pcm = bundle / "audio" / "out-000.pcm"
+    if not pcm.is_file():
+        raise ProbeBlocked(f"declared PCM fixture is unavailable: {pcm}")
+    if mutation == "missing":
+        pcm.unlink()
+        return
+    if mutation == "corrupt":
+        data = bytearray(pcm.read_bytes())
+        if not data:
+            raise ProbeBlocked(f"declared PCM fixture is empty: {pcm}")
+        data[0] ^= 1
+        pcm.write_bytes(data)
+        return
+    if mutation == "path-escape":
+        manifest_path = bundle / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        for artifact in manifest.get("artifacts", []):
+            if artifact.get("path") == "audio/out-000.pcm":
+                artifact["path"] = "../c18-escaped.pcm"
+                manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+                return
+        raise ProbeBlocked("manifest has no declared audio/out-000.pcm artifact")
+    raise ProbeFailure(f"unknown declared PCM mutation: {mutation}")
+
+
+def expect_rejected_bundle(result: dict[str, Any], output: Path, marker: Path) -> None:
+    combined = result["stdout"] + result["stderr"]
+    if result["timed_out"] or result["exit_code"] == 0:
+        raise ProbeFailure(
+            f"bundle mutation unexpectedly succeeded: exit={result['exit_code']} "
+            f"timed_out={result['timed_out']} stdout={result['stdout']!r} stderr={result['stderr']!r}"
+        )
+    if "Replay verified:" in combined:
+        raise ProbeFailure("bundle mutation emitted a success verification")
+    if marker.exists():
+        raise ProbeFailure(f"bundle mutation executed the recorded tool: {marker}")
+    if output.exists() and output.stat().st_size != 0:
+        raise ProbeFailure(f"bundle mutation produced nonempty output: {output}")
+
+
+def bundle_mutation_case(
+    binary: Path,
+    source: Path,
+    results: list[dict[str, Any]],
+    timeout: float,
+    route: str,
+) -> None:
+    for mutation in ("missing", "corrupt", "path-escape"):
+        with tempfile.TemporaryDirectory(prefix=f"audio-runtime-c18-{route}-{mutation}-") as temporary:
+            fixture = copy_fixture(source, Path(temporary) / "fixture")
+            bundle = fixture / "run" / "bundle"
+            mutate_declared_pcm(bundle, mutation)
+            output = fixture / "run" / "mutated-output.pcm"
+            marker = fixture / "evidence" / "runs" / "exec-invocations-v4.log"
+            if route == "strict":
+                argv = [
+                    "--workdir",
+                    str(fixture),
+                    "-C",
+                    "config",
+                    "session",
+                    "replay",
+                    "run/bundle",
+                ]
+            else:
+                argv = [
+                    "--workdir",
+                    str(fixture),
+                    "--allow-path",
+                    "evidence",
+                    "-C",
+                    "config",
+                    "session",
+                    "--replay",
+                    "run/bundle",
+                    "--audio-out",
+                    "run/mutated-output.pcm",
+                ]
+            run_checked(
+                results,
+                f"{route}/{mutation}",
+                binary,
+                argv,
+                fixture,
+                timeout,
+                lambda result, output=output, marker=marker: expect_rejected_bundle(result, output, marker),
+            )
+
+
 def strict_case(binary: Path, source: Path, results: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-strict-") as temporary:
         fixture = copy_fixture(source, Path(temporary) / "fixture")
@@ -233,7 +323,8 @@ def strict_case(binary: Path, source: Path, results: list[dict[str, Any]], timeo
         manifest = json.loads((bundle / "manifest.json").read_text())
         if manifest.get("terminal", {}).get("reason") != "fixture_complete":
             raise ProbeFailure("strict fixture terminal reason is not fixture_complete")
-        return {"fixture_root": str(source), "fixture_hashes": fixture_hashes(source)}
+    bundle_mutation_case(binary, source, results, timeout, "strict")
+    return {"fixture_root": str(source), "fixture_hashes": fixture_hashes(source)}
 
 
 def provider_case(
@@ -243,59 +334,111 @@ def provider_case(
     timeout: float,
     interruption: bool = False,
 ) -> dict[str, Any]:
-    with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-provider-") as temporary:
-        fixture = copy_fixture(source, Path(temporary) / "fixture")
-        config = fixture / "config"
-        bundle = fixture / "run" / "bundle"
-        output = fixture / "run" / "provider-output.pcm"
-        run_checked(
-            results,
-            "provider/relative-bundle" if not interruption else "interruption/provider",
-            binary,
-            [
-                "--workdir",
-                str(fixture),
-                "--allow-path",
-                ".",
-                "-C",
-                "config",
-                "session",
-                "--replay",
-                "run/bundle/provider.json",
-                "--audio-out",
-                "run/provider-output.pcm",
-            ],
-            fixture,
-            timeout,
-            expect_interruption_provider if interruption else expect_provider,
-        )
-        if not interruption:
+    if not interruption:
+        with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-provider-raw-") as temporary:
+            fixture = copy_fixture(source, Path(temporary) / "fixture")
+            output = fixture / "run" / "provider-raw-output.pcm"
+            run_checked(
+                results,
+                "provider/raw-capture-legacy",
+                binary,
+                [
+                    "--workdir",
+                    str(fixture),
+                    "--allow-path",
+                    "evidence",
+                    "-C",
+                    "config",
+                    "session",
+                    "--replay",
+                    "run/bundle/provider.json",
+                    "--audio-out",
+                    "run/provider-raw-output.pcm",
+                ],
+                fixture,
+                timeout,
+                expect_provider,
+            )
             marker = fixture / "evidence" / "runs" / "exec-invocations-v4.log"
             if not marker.is_file() or "PROBE_TOOL_MARKER_9182" not in marker.read_text():
-                raise ProbeFailure("provider did not retain the expected exec side effect")
+                raise ProbeFailure("raw provider replay did not retain the expected exec side effect")
             if output.stat().st_size != 3200 or sha256_file(output) != RENDERED_PCM_SHA256:
-                raise ProbeFailure("provider PCM is not the exact 3200-byte C18 oracle")
-        else:
-            data = output.read_bytes()
-            if len(data) != 3360:
-                raise ProbeFailure(f"interruption rendered PCM length={len(data)}, want 3360")
-            if sha256_file(output) != "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff":
-                raise ProbeFailure("interruption rendered PCM does not match the preserved bundle")
-            if hashlib.sha256(data[-2400:]).hexdigest() != HEALTHY_TAIL_SHA256:
-                raise ProbeFailure("interruption healthy tail hash does not match the oracle")
-            records = json.loads((bundle / "provider.json").read_text())["records"]
-            responses = {
-                record["payload"]["response"]["id"]: record["payload"]["response"].get("status")
-                for record in records
-                if record.get("type") == "response.done"
-            }
-            if responses != {"resp-c07-interrupted": "cancelled", "resp-c07-healthy": "completed"}:
-                raise ProbeFailure(f"interruption response statuses={responses!r}")
+                raise ProbeFailure("raw provider replay PCM is not the exact 3200-byte C18 oracle")
 
-        if not interruption:
-            with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-wrong-cwd-") as wrong:
-                wrong_root = Path(wrong)
-                wrong_output = fixture / "run" / "wrong-cwd.pcm"
+    for label, bundle_argument, config_argument, allow_path in (
+        (
+            "interruption/provider-relative-bundle" if interruption else "provider/relative-bundle",
+            "run/bundle",
+            "config",
+            "evidence",
+        ),
+        (
+            "interruption/provider-absolute-bundle" if interruption else "provider/absolute-bundle",
+            None,
+            None,
+            None,
+        ),
+    ):
+        with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-provider-") as temporary:
+            fixture = copy_fixture(source, Path(temporary) / "fixture")
+            config = fixture / "config"
+            bundle = fixture / "run" / "bundle"
+            output = fixture / "run" / "provider-output.pcm"
+            absolute_bundle = bundle_argument or str(bundle)
+            absolute_config = config_argument or str(config)
+            absolute_allow_path = allow_path or str(fixture / "evidence")
+            run_checked(
+                results,
+                label,
+                binary,
+                [
+                    "--workdir",
+                    str(fixture),
+                    "--allow-path",
+                    absolute_allow_path,
+                    "-C",
+                    absolute_config,
+                    "session",
+                    "--replay",
+                    absolute_bundle,
+                    "--audio-out",
+                    "run/provider-output.pcm",
+                ],
+                fixture,
+                timeout,
+                expect_interruption_provider if interruption else expect_provider,
+            )
+            if not interruption:
+                marker = fixture / "evidence" / "runs" / "exec-invocations-v4.log"
+                if not marker.is_file() or "PROBE_TOOL_MARKER_9182" not in marker.read_text():
+                    raise ProbeFailure("provider did not retain the expected exec side effect")
+                if output.stat().st_size != 3200 or sha256_file(output) != RENDERED_PCM_SHA256:
+                    raise ProbeFailure("provider PCM is not the exact 3200-byte C18 oracle")
+            else:
+                data = output.read_bytes()
+                if len(data) != 3360:
+                    raise ProbeFailure(f"interruption rendered PCM length={len(data)}, want 3360")
+                if sha256_file(output) != "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff":
+                    raise ProbeFailure("interruption rendered PCM does not match the preserved bundle")
+                if hashlib.sha256(data[-2400:]).hexdigest() != HEALTHY_TAIL_SHA256:
+                    raise ProbeFailure("interruption healthy tail hash does not match the oracle")
+                records = json.loads((bundle / "provider.json").read_text())["records"]
+                responses = {
+                    record["payload"]["response"]["id"]: record["payload"]["response"].get("status")
+                    for record in records
+                    if record.get("type") == "response.done"
+                }
+                if responses != {"resp-c07-interrupted": "cancelled", "resp-c07-healthy": "completed"}:
+                    raise ProbeFailure(f"interruption response statuses={responses!r}")
+
+    if not interruption:
+        with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-wrong-cwd-") as temporary:
+            fixture = copy_fixture(source, Path(temporary) / "fixture")
+            config = fixture / "config"
+            bundle = fixture / "run" / "bundle"
+            wrong_root = Path(tempfile.mkdtemp(prefix="audio-runtime-c18-wrong-root-"))
+            try:
+                wrong_output = wrong_root / "provider-output.pcm"
                 result = run_process(
                     binary,
                     [
@@ -307,7 +450,7 @@ def provider_case(
                         str(config),
                         "session",
                         "--replay",
-                        str(bundle / "provider.json"),
+                        str(bundle),
                         "--audio-out",
                         str(wrong_output),
                     ],
@@ -329,7 +472,10 @@ def provider_case(
                     results.append(result)
                     raise ProbeFailure(f"{result['label']}: {result['failure']}")
                 results.append(result)
-        return {"fixture_root": str(source), "fixture_hashes": fixture_hashes(source)}
+            finally:
+                shutil.rmtree(wrong_root, ignore_errors=True)
+        bundle_mutation_case(binary, source, results, timeout, "provider")
+    return {"fixture_root": str(source), "fixture_hashes": fixture_hashes(source)}
 
 
 class _SSEHandler(BaseHTTPRequestHandler):

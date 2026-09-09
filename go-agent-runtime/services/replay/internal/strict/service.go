@@ -75,53 +75,53 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request replay.Request
 	}
 	runErr := runtime.Run(ctx, out)
 	validationErr := prepared.ValidateComplete()
-	result := replay.Result{Capture: prepared.Capture, Scope: prepared.Scope, WireEvents: prepared.WireEvents, ToolCalls: prepared.ToolCalls}
+	result := replay.Result{Capture: prepared.Capture(), Scope: prepared.Scope(), WireEvents: prepared.WireEvents(), ToolCalls: prepared.ToolCalls()}
 	return result, errors.Join(runErr, validationErr)
 }
 
 func (s *Service) Prepare(ctx context.Context, request replay.Request) (replay.Prepared, error) {
 	if err := contextError(ctx); err != nil {
-		return replay.Prepared{}, err
+		return nil, err
 	}
 	if s == nil || s.clockFactory == nil {
-		return replay.Prepared{}, replay.ErrDeterministicClockRequired
+		return nil, replay.ErrDeterministicClockRequired
 	}
 	bundlePath := strings.TrimSpace(request.BundlePath)
 	if bundlePath == "" {
-		return replay.Prepared{}, fmt.Errorf("%w: bundle path is empty", replay.ErrBundleIncomplete)
+		return nil, fmt.Errorf("%w: bundle path is empty", replay.ErrBundleIncomplete)
 	}
 	tracePath, err := prepareTraceDirectory(ctx, bundlePath, s.admission)
 	if err != nil {
-		return replay.Prepared{}, err
+		return nil, err
 	}
 	events, err := readTimeline(tracePath)
 	if err != nil {
-		return replay.Prepared{}, err
+		return nil, err
 	}
 	origin, err := timelineOrigin(events)
 	if err != nil {
-		return replay.Prepared{}, err
+		return nil, err
 	}
 	deterministic := s.clockFactory(origin)
 	if deterministic == nil {
-		return replay.Prepared{}, replay.ErrDeterministicClockRequired
+		return nil, replay.ErrDeterministicClockRequired
 	}
 	audioReplay, err := recording.OpenReplay(tracePath)
 	if err != nil {
-		return replay.Prepared{}, fmt.Errorf("%w: open audio trace: %w", replay.ErrBundleIncomplete, err)
+		return nil, fmt.Errorf("%w: open audio trace: %w", replay.ErrBundleIncomplete, err)
 	}
 	audioReplay.Clock = deterministic
 	capture, toolExecutor, wireTypes, _, _, err := deriveEvidence(events, request)
 	if err != nil {
-		return replay.Prepared{}, err
+		return nil, err
 	}
 	dialer, err := gwtesting.NewReplayWebSocketDialerFromCapture(capture)
 	if err != nil {
-		return replay.Prepared{}, fmt.Errorf("%w: construct replay dialer: %w", replay.ErrBundleMismatch, err)
+		return nil, fmt.Errorf("%w: construct replay dialer: %w", replay.ErrBundleMismatch, err)
 	}
 	state := &replayState{messageTypes: wireTypes}
 	trackedDialer := transport.Dialer(&trackingDialer{inner: dialer, state: state})
-	return replay.StrictPreparedBuilder{}.Build(
+	return newPrepared(
 		capture,
 		trackedDialer,
 		toolExecutor,
