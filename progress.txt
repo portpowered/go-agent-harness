@@ -1521,3 +1521,33 @@ Bound each focused command to60s, retain existing2s scenario limits, use normal/
   `codex/audio-runtime-c18-public-strict-replay`, update PR #410, and return
   `ACCEPTED` to the script CI gate. This is a handoff to CI, not a claim that
   CI is green; inspect and repair the same task if the gate rejects again.
+
+# C18 post-repair validation and owner-dependency checkpoint 2026-09-09
+
+- Reverified admission for `work-task-24` and the exact branch match with
+  `prd.json`; the isolated worktree is clean at `fd314b888e960eebd89b1a6ffb5fba0af9e2b315`.
+  Fetched `origin/main=5d5afcb14d7b269378020809f5a2418c499ac94d`; it, the
+  startup integration revision, original baseline and planning-main revision
+  remain ancestors. No host checkout or predecessor worktree was changed.
+- Fresh focused causal validation passes: forced room connection failure,
+  lifecycle terminal precedence and negative controls pass `20/20` in normal
+  and `-race` `nomicrophone` runs; replay packages pass normal and race;
+  separate `GOWORK=off` embedding consumer passes normal and race; CLI replay
+  and deterministic clock controls pass normal and race.
+- Accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all` was
+  executed against this candidate; captured normal and race scenario output
+  remained passing and the process completed without a C18 failure. The
+  bounded source gates pass: `make wire-check`,
+  `make architecture-size-check` (`182` packages, `1871` files, `27225`
+  functions), focused `go vet`, and `git diff --check`.
+- The complete non-waived CI rejection remains
+  `ci-rejection-34393224331.json`: C20-owned Family-A streamed output reported
+  three reads/12 bytes instead of four markers, and C21-owned duplex
+  `cross-attributed_commit` reported `InputEOF=false`. Current C20/C21
+  reviewed repairs are not yet merged to `main`; no C18 source defect
+  reproduced and no unrelated owner path was changed.
+- Next action: retain this task while C20/C21 deliver their reviewed repairs;
+  then fetch and integrate the accepted `main`, rerun the focused C18 checks,
+  commit/push the changed candidate, update PR #410, and submit `ACCEPTED` to
+  script CI without polling. Do not resubmit this unchanged source or claim
+  CI, review, merge, vertical acceptance or project completion.
