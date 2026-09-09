@@ -173,8 +173,10 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 			if err := b.waitForEOF(); err != nil {
 				return 0, err
 			}
-			if err := b.publishEOF(); err != nil {
-				return 0, err
+			select {
+			case b.packets <- b.eofPacket():
+			case <-b.coordinator.abort:
+				return 0, context.Canceled
 			}
 			select {
 			case <-b.eofSeen:
@@ -224,8 +226,10 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 		if err := b.waitForEOF(); err != nil {
 			return 0, err
 		}
-		if err := b.publishEOF(); err != nil {
-			return 0, err
+		select {
+		case b.packets <- b.eofPacket():
+		case <-b.coordinator.abort:
+			return 0, context.Canceled
 		}
 		select {
 		case <-b.eofSeen:
@@ -292,6 +296,11 @@ func (b *v8MultiTurnBridge) publishEOF() error {
 	case <-b.coordinator.abort:
 		return context.Canceled
 	}
+}
+
+func (b *v8MultiTurnBridge) eofPacket() v8MultiTurnBridgePacket {
+	b.eofPublishOnce.Do(func() { close(b.eofPublished) })
+	return v8MultiTurnBridgePacket{eof: true}
 }
 
 func (b *v8MultiTurnBridge) tryReadPacket(destination []byte) (int, error, bool) {

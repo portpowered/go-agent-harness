@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -337,6 +338,7 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 		c21WritePlayback(t, sink, fmt.Sprintf("write response %d", index), []int16{int16(index + 1)})
 	}
 	c21Advance(t, registry, 300, "advance stalled-consumer callbacks")
+	c21WaitForDeviceSamples(t, sub, 300)
 	stats := sub.Stats()
 	if stats.DroppedObservations == 0 || stats.DroppedSamples == 0 || stats.MetadataLostSamples == 0 || stats.DeviceSamples != 300 || stats.LastSequence <= stats.PublishedObservations {
 		t.Fatalf("bounded observation stats = %+v, want explicit finite delivery and metadata loss", stats)
@@ -349,6 +351,128 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	}
 	if err := sub.Close(); err != nil {
 		t.Fatalf("repeat close stalled subscription: %v", err)
+	}
+}
+
+// TestC21DelayedRenderObservationDoesNotDoubleCountDiscardedPCM models the
+// native queue's callback handoff: RenderInto has removed the first samples,
+// but its observer is delayed while interruption discards the remaining tail.
+// The callback-owned prefix must be consumed once, and only the native tail
+// may be reported as discarded.
+func TestC21DelayedRenderObservationDoesNotDoubleCountDiscardedPCM(t *testing.T) {
+	handle := newC21DelayedPlaybackHandle(t, audio.SampleRate)
+	registry := newC21DelayedPlaybackRegistry(t, handle)
+	sink, err := NewRTCDeviceSink(registry, handle.deviceID)
+	if err != nil {
+		t.Fatalf("open delayed callback sink: %v", err)
+	}
+	defer closeC21Sink(t, sink)
+	sub, err := sink.SubscribePlaybackObservations(16)
+	if err != nil {
+		t.Fatalf("subscribe delayed callback observations: %v", err)
+	}
+	response := audio.PlaybackResponse{ResponseID: "c21-race-response", ItemID: "c21-race-item"}
+	samples := []int16{1, 2, 3, 4, 5, 6, 7, 8}
+	sink.StartPlayback(response)
+	c21WritePlayback(t, sink, "write delayed callback response", samples)
+	_ = c21NextObservation(t, sub)
+	c21AssertDelayedRenderLinearization(t, handle, sink, sub, response, samples)
+}
+
+func TestC21ObservationIdentityAndLifecycleControls(t *testing.T) {
+	registry, sink := newC21SimulatedSink(t, audio.SampleRate, 3)
+	defer closeC21Sink(t, sink)
+	second := c21ReplaceObservationSubscription(t, sink)
+	c21AssertBoundedIdentity(t, registry, sink, second)
+	if _, err := second.Next(context.Background()); !errors.Is(err, io.EOF) {
+		t.Fatalf("closed replacement subscription error = %v, want EOF", err)
+	}
+	if _, err := sink.SubscribePlaybackObservations(1); !errors.Is(err, ErrRTCDevicePlaybackObservationClosed) {
+		t.Fatalf("subscribe after sink close error = %v", err)
+	}
+}
+
+func c21AssertDelayedRenderLinearization(t *testing.T, handle *c21DelayedPlaybackHandle, sink *RTCDeviceSink, sub *RTCDevicePlaybackObservationSubscription, response audio.PlaybackResponse, samples []int16) {
+	t.Helper()
+	renderDone := c21StartDelayedRender(handle)
+	c21WaitDelayedCallback(t, handle)
+	interruption, ok := sink.InterruptActivePlayback()
+	if !ok || interruption.PlaybackResponse != response || interruption.AudioEndMS != 0 {
+		t.Fatalf("delayed callback interruption = %+v, ok=%v", interruption, ok)
+	}
+	handle.releaseObserver()
+	c21WaitDelayedRender(t, renderDone)
+	consumed := c21NextObservation(t, sub)
+	assertC21DelayedConsumed(t, consumed, response, samples)
+	discard := c21NextObservation(t, sub)
+	assertC21DelayedDiscard(t, discard, response)
+	assertC21NoDelayedDuplicate(t, sub)
+}
+
+func c21ReplaceObservationSubscription(t *testing.T, sink *RTCDeviceSink) *RTCDevicePlaybackObservationSubscription {
+	t.Helper()
+	if _, err := sink.SubscribePlaybackObservations(0); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationCapacity) {
+		t.Fatalf("zero observation capacity error = %v", err)
+	}
+	if _, err := sink.SubscribePlaybackObservations(MaxRTCDevicePlaybackObservationCapacity + 1); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationCapacity) {
+		t.Fatalf("oversized observation capacity error = %v", err)
+	}
+	if _, err := sink.SubscribePlaybackObservations(1, 2); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationCapacity) {
+		t.Fatalf("multiple observation capacities error = %v", err)
+	}
+	first, err := sink.SubscribePlaybackObservations(8)
+	if err != nil {
+		t.Fatalf("first lifecycle subscription: %v", err)
+	}
+	if _, err := first.Next(nil); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationContext) {
+		t.Fatalf("nil observation context error = %v", err)
+	}
+	second, err := sink.SubscribePlaybackObservations(8)
+	if err != nil {
+		t.Fatalf("replacement lifecycle subscription: %v", err)
+	}
+	if _, err := first.Next(context.Background()); !errors.Is(err, io.EOF) {
+		t.Fatalf("replaced subscription error = %v, want EOF", err)
+	}
+	return second
+}
+
+func c21AssertBoundedIdentity(t *testing.T, registry *devicegw.SimulatedDuplexRegistry, sink *RTCDeviceSink, sub *RTCDevicePlaybackObservationSubscription) {
+	t.Helper()
+	longResponse := audio.PlaybackResponse{
+		ResponseID: strings.Repeat("r", maxRTCDevicePlaybackIdentityBytes+17),
+		ItemID:     strings.Repeat("i", maxRTCDevicePlaybackIdentityBytes+31),
+	}
+	sink.StartPlayback(longResponse)
+	c21WritePlayback(t, sink, "write bounded identity response", []int16{21, 22, 23})
+	admission := c21NextObservation(t, sub)
+	if admission.Precise || len(admission.ResponseID) > maxRTCDevicePlaybackIdentityBytes || len(admission.ItemID) > maxRTCDevicePlaybackIdentityBytes || !strings.HasPrefix(admission.ResponseID, "sha256:") || !strings.HasPrefix(admission.ItemID, "sha256:") || !strings.Contains(admission.Reason, rtcDevicePlaybackIdentityOverflowReason) {
+		t.Fatalf("bounded identity admission = %+v", admission)
+	}
+	c21Advance(t, registry, 1, "advance bounded identity callback")
+	consumed := c21NextObservation(t, sub)
+	if consumed.Precise || len(consumed.PlaybackResponse.ResponseID) > maxRTCDevicePlaybackIdentityBytes || len(consumed.PlaybackResponse.ItemID) > maxRTCDevicePlaybackIdentityBytes || !strings.Contains(consumed.Reason, rtcDevicePlaybackIdentityOverflowReason) {
+		t.Fatalf("bounded identity consumed = %+v", consumed)
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("close lifecycle sink: %v", err)
+	}
+}
+
+func TestC21ObservationUnsupportedBackendControl(t *testing.T) {
+	handle := &adversarialCapacityHandle{release: make(chan struct{})}
+	registry := newAdversarialCapacityRegistry(t, handle)
+	sink, err := NewRTCDeviceSink(registry, "adversarial:output")
+	if err != nil {
+		t.Fatalf("open unsupported observation sink: %v", err)
+	}
+	defer closeC21Sink(t, sink)
+	if sink.PlaybackConsumptionSupported() {
+		t.Fatal("backend without render observer advertised consumption support")
+	}
+	if _, err := sink.SubscribePlaybackObservations(1); !errors.Is(err, ErrRTCDevicePlaybackObservationUnsupported) {
+		t.Fatalf("unsupported observation error = %v", err)
 	}
 }
 

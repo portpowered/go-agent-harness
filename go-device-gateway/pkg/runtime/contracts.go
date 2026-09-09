@@ -226,19 +226,19 @@ func (s *rtcDevicePlaybackObservationState) cancel(reservation rtcDevicePlayback
 	}
 }
 
-func (s *rtcDevicePlaybackObservationState) reserve(kind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, samples int) rtcDevicePlaybackReservation {
+func (s *rtcDevicePlaybackObservationState) reserve(kind RTCDevicePlaybackObservationKind, response rtcDevicePlaybackIdentity, generation uint64, samples int) rtcDevicePlaybackReservation {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if samples <= 0 {
 		return rtcDevicePlaybackReservation{}
 	}
 	s.nextSegmentID++
-	reservation := rtcDevicePlaybackReservation{id: s.nextSegmentID, kind: kind, response: response, generation: generation, start: s.deviceClock + s.pendingSamples, length: samples, precise: kind != RTCDevicePlaybackUnattributed && response.ItemID != ""}
+	reservation := rtcDevicePlaybackReservation{id: s.nextSegmentID, kind: kind, response: response, generation: generation, start: s.deviceClock + s.pendingSamples, length: samples, precise: kind != RTCDevicePlaybackUnattributed && response.hasItem() && response.precise}
 	lossy := len(s.segments) >= maxRTCDevicePlaybackObservationSegments || s.pendingSamples+uint64(samples) > maxRTCDevicePlaybackRetainedSamples
 	if !lossy {
 		s.segments = append(s.segments, rtcDevicePlaybackSegment{id: reservation.id, kind: kind, response: response, generation: generation, remaining: samples, precise: reservation.precise})
 	} else {
-		reservation.id, reservation.kind, reservation.response, reservation.precise = s.nextSegmentID, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, false
+		reservation.id, reservation.kind, reservation.response, reservation.precise = s.nextSegmentID, RTCDevicePlaybackUnattributed, rtcDevicePlaybackIdentity{}, false
 		s.metadataLostSamples += uint64(samples)
 		if len(s.segments) > 0 && s.segments[len(s.segments)-1].kind == RTCDevicePlaybackUnattributed {
 			tail := &s.segments[len(s.segments)-1]
@@ -250,7 +250,7 @@ func (s *rtcDevicePlaybackObservationState) reserve(kind RTCDevicePlaybackObserv
 		} else {
 			tail := &s.segments[len(s.segments)-1]
 			s.metadataLostSamples += uint64(tail.remaining)
-			tail.kind, tail.response, tail.generation, tail.precise = RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, false
+			tail.kind, tail.response, tail.generation, tail.precise = RTCDevicePlaybackUnattributed, rtcDevicePlaybackIdentity{}, 0, false
 			tail.remaining += samples
 			reservation.id = tail.id
 		}
@@ -283,65 +283,32 @@ func (s *rtcDevicePlaybackObservationState) dropQueued(samples int) {
 	}
 }
 
-func (s *rtcDevicePlaybackObservationState) render(deviceID devicegw.DeviceID, rate int, samples []int16) {
+func (s *rtcDevicePlaybackObservationState) accountUntrackedRender(deviceID devicegw.DeviceID, rate int, samples []int16) {
 	if len(samples) == 0 {
 		return
 	}
 	s.mu.Lock()
-	modelSamples := minInt(len(samples), int(s.pendingSamples))
+	defer s.mu.Unlock()
 	start := s.deviceClock
+	modelSamples := minInt(len(samples), int(s.pendingSamples))
 	s.deviceClock += uint64(len(samples))
-	s.consumeModelLocked(deviceID, rate, start, samples, modelSamples)
+	s.consumeModelLocked(deviceID, rate, start, samples, len(samples), modelSamples)
 	if modelSamples < len(samples) {
-		offset := modelSamples
-		s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(offset), samples[offset:], true, false, "device callback zero-filled an unavailable queue range")
+		s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(modelSamples), len(samples)-modelSamples, observationPCM(samples, len(samples), modelSamples, len(samples)-modelSamples), true, false, "device callback correlation queue saturated; remaining range was zero-filled")
 	}
-	s.mu.Unlock()
+	s.flushPendingDiscardsLocked()
 }
 
-func (s *rtcDevicePlaybackObservationState) consumeModelLocked(deviceID devicegw.DeviceID, rate int, start uint64, samples []int16, count int) {
-	count = boundedObservationCount(count, len(samples))
-	offset := 0
-	for remaining := count - offset; remaining > 0; remaining = count - offset {
-		take := s.consumeModelChunkLocked(deviceID, rate, start, samples, offset, remaining)
-		if take == 0 {
-			return
-		}
-		offset += take
-	}
-}
-
-func (s *rtcDevicePlaybackObservationState) publishRangeLocked(deviceID devicegw.DeviceID, rate int, kind, contentKind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, start uint64, samples []int16, actual, precise bool, reason string) {
+func (s *rtcDevicePlaybackObservationState) publishRangeLocked(deviceID devicegw.DeviceID, rate int, kind, contentKind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, start uint64, sampleCount int, samples []int16, actual, precise bool, reason string) {
 	event := RTCDevicePlaybackObservation{
 		Kind: kind, ContentKind: contentKind, DeviceID: deviceID,
 		PlaybackResponse: response, Generation: generation, SampleRate: rate,
-		StartSample: start, EndSample: start + uint64(len(samples)),
-		SampleCount: len(samples), Consumed: actual, Precise: precise, Reason: reason,
+		StartSample: start, EndSample: start + uint64(sampleCount),
+		SampleCount: sampleCount, Consumed: actual, Precise: precise, Reason: reason,
 	}
-	event.Samples = copyObservationSamples(samples, &event.Precise, &event.Reason)
+	event.Samples = copyObservationSamplesForCount(samples, sampleCount, &event.Precise, &event.Reason)
 	event.PCM = event.Samples
 	s.publishLocked(event)
-}
-
-func (s *rtcDevicePlaybackObservationState) discard(deviceID devicegw.DeviceID, rate int, generation uint64, reason string) {
-	s.mu.Lock()
-	offset := uint64(0)
-	for _, segment := range s.segments {
-		start := s.deviceClock + offset
-		event := RTCDevicePlaybackObservation{
-			Kind: RTCDevicePlaybackDiscard, ContentKind: segment.kind,
-			DeviceID: deviceID, PlaybackResponse: segment.response,
-			Generation: segment.generation, SampleRate: rate,
-			StartSample: start, EndSample: start + uint64(segment.remaining),
-			SampleCount: segment.remaining, Precise: segment.precise,
-			Reason: reason,
-		}
-		s.publishLocked(event)
-		offset += uint64(segment.remaining)
-	}
-	s.segments = nil
-	s.pendingSamples = 0
-	s.mu.Unlock()
 }
 
 func copyObservationSamples(samples []int16, precise *bool, reason *string) []int16 {
@@ -354,6 +321,18 @@ func copyObservationSamples(samples []int16, precise *bool, reason *string) []in
 		return nil
 	}
 	return append([]int16(nil), samples...)
+}
+
+func copyObservationSamplesForCount(samples []int16, sampleCount int, precise *bool, reason *string) []int16 {
+	if sampleCount <= 0 {
+		return nil
+	}
+	if len(samples) != sampleCount {
+		*precise = false
+		*reason = appendReason(*reason, "PCM omitted after callback-size bound")
+		return nil
+	}
+	return copyObservationSamples(samples, precise, reason)
 }
 
 func appendReason(current, addition string) string {

@@ -12,7 +12,7 @@ import (
 type rtcDevicePlaybackSegment struct {
 	id         uint64
 	kind       RTCDevicePlaybackObservationKind
-	response   audio.PlaybackResponse
+	response   rtcDevicePlaybackIdentity
 	generation uint64
 	remaining  int
 	precise    bool
@@ -21,7 +21,7 @@ type rtcDevicePlaybackSegment struct {
 type rtcDevicePlaybackReservation struct {
 	id         uint64
 	kind       RTCDevicePlaybackObservationKind
-	response   audio.PlaybackResponse
+	response   rtcDevicePlaybackIdentity
 	generation uint64
 	start      uint64
 	length     int
@@ -29,23 +29,39 @@ type rtcDevicePlaybackReservation struct {
 }
 
 type rtcDevicePlaybackObservationState struct {
-	mu                  sync.Mutex
-	supported           bool
-	closed              bool
-	subscription        *RTCDevicePlaybackObservationSubscription
-	segments            []rtcDevicePlaybackSegment
-	pendingSamples      uint64
-	deviceClock         uint64
-	sequence            uint64
-	nextSegmentID       uint64
-	metadataLostSamples uint64
+	mu                   sync.Mutex
+	supported            bool
+	closed               bool
+	subscription         *RTCDevicePlaybackObservationSubscription
+	segments             []rtcDevicePlaybackSegment
+	pendingSamples       uint64
+	deviceClock          uint64
+	sequence             uint64
+	nextSegmentID        uint64
+	metadataLostSamples  uint64
+	lastRenderedSamples  uint64
+	lastUnderflowSamples uint64
+	pendingDiscards      []rtcDevicePlaybackPendingDiscard
+	nextRenderID         uint64
+	renderEpoch          uint64
+	pendingRenders       []rtcDevicePlaybackRender
 }
 
-func playbackResponseForFrame(current, frame audio.PlaybackResponse, modelAudio bool) audio.PlaybackResponse {
-	if modelAudio && frame.ItemID == "" {
-		return current
-	}
-	return frame
+type rtcDevicePlaybackPendingDiscard struct {
+	deviceID devicegw.DeviceID
+	rate     int
+	segments []rtcDevicePlaybackSegment
+	cutover  uint64
+	reason   string
+}
+
+type rtcDevicePlaybackRender struct {
+	id          uint64
+	deviceID    devicegw.DeviceID
+	rate        int
+	samples     []int16
+	sampleCount int
+	epoch       uint64
 }
 
 func (s *RTCDeviceSink) writeDeviceSamples(ctx context.Context, samples []int16) error {
@@ -113,26 +129,34 @@ func (s *rtcDevicePlaybackObservationState) commit(reservation rtcDevicePlayback
 	s.mu.Lock()
 	event := RTCDevicePlaybackObservation{
 		Kind: RTCDevicePlaybackAdmission, ContentKind: reservation.kind,
-		DeviceID: deviceID, PlaybackResponse: reservation.response, Generation: reservation.generation, SampleRate: rate,
+		DeviceID: deviceID, PlaybackResponse: reservation.response.asPlaybackResponse(), Generation: reservation.generation, SampleRate: rate,
 		StartSample: reservation.start,
 		EndSample:   reservation.start + uint64(reservation.length),
 		SampleCount: reservation.length, Accepted: true, Precise: reservation.precise,
 	}
+	event.Reason = reservation.response.reason()
 	event.Samples = copyObservationSamples(samples, &event.Precise, &event.Reason)
 	event.PCM = event.Samples
 	s.publishLocked(event)
 	s.mu.Unlock()
 }
 
-// observeDeviceRender is installed once on construction. It fans the actual
-// callback into the bounded correlation port before invoking the legacy raw
-// observer, preserving the old API while keeping the new pull consumer out of
-// native callback execution.
 func (s *RTCDeviceSink) observeDeviceRender(rate int, samples []int16) {
 	if s == nil {
 		return
 	}
-	s.playbackObservations.render(s.id, rate, samples)
+	renderID := s.playbackObservations.beginRender(s.id, rate, samples)
+	if renderID == 0 {
+		s.playbackObservations.accountUntrackedRender(s.id, rate, samples)
+	} else {
+		select {
+		case <-s.renderStop:
+			s.playbackObservations.dropRender(renderID)
+		case s.renderWork <- renderID:
+		default:
+			s.playbackObservations.dropRender(renderID)
+		}
+	}
 	s.renderObserverMu.RLock()
 	observer := s.renderedSamplesObserver
 	s.renderObserverMu.RUnlock()
@@ -141,15 +165,35 @@ func (s *RTCDeviceSink) observeDeviceRender(rate int, samples []int16) {
 	}
 }
 
-// PlaybackConsumptionSupported reports whether this sink is attached to a
-// backend that exposes the physical callback/consumption edge.
+func (s *RTCDeviceSink) runRenderObservations() {
+	defer close(s.renderDone)
+	process := func(renderID uint64) {
+		stats := s.sink.PlaybackStats()
+		s.playbackBoundaryMu.Lock()
+		s.playbackObservations.completeRender(renderID, stats)
+		s.playbackBoundaryMu.Unlock()
+	}
+	for {
+		select {
+		case renderID := <-s.renderWork:
+			process(renderID)
+		case <-s.renderStop:
+			for {
+				select {
+				case renderID := <-s.renderWork:
+					process(renderID)
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
 func (s *RTCDeviceSink) PlaybackConsumptionSupported() bool {
 	return s != nil && s.renderBoundarySupported.Load()
 }
 
-// SubscribePlaybackObservations creates the one bounded pull subscription for
-// this sink. A replacement closes the prior subscription without waiting for
-// its caller. No user callback is run by the device callback.
 func (s *RTCDeviceSink) SubscribePlaybackObservations(capacity ...int) (*RTCDevicePlaybackObservationSubscription, error) {
 	if s == nil || !s.PlaybackConsumptionSupported() {
 		return nil, ErrRTCDevicePlaybackObservationUnsupported
@@ -185,8 +229,6 @@ func (s *RTCDeviceSink) SubscribePlaybackObservations(capacity ...int) (*RTCDevi
 	return subscription, nil
 }
 
-// PlaybackObservationStats returns aggregate correlation/device-clock state
-// even when no subscription is currently attached.
 func (s *RTCDeviceSink) PlaybackObservationStats() RTCDevicePlaybackObservationStats {
 	if s == nil {
 		return RTCDevicePlaybackObservationStats{Closed: true}
@@ -214,10 +256,17 @@ func (s *RTCDeviceSink) closePlaybackObservations() {
 	}
 }
 
-func (s *RTCDeviceSink) discardPlaybackObservations(reason string, generation uint64) {
-	if s != nil {
-		s.playbackObservations.discard(s.id, s.deviceRate, generation, reason)
+func (s *RTCDeviceSink) discardPlaybackObservations(reason string, generation uint64) int {
+	if s == nil || s.sink == nil {
+		return 0
 	}
+	s.playbackBoundaryMu.Lock()
+	defer s.playbackBoundaryMu.Unlock()
+	before := s.sink.PlaybackStats()
+	discarded := s.sink.DiscardPlayback()
+	after := s.sink.PlaybackStats()
+	s.playbackObservations.discard(s.id, s.deviceRate, generation, reason, discarded, before, after)
+	return discarded
 }
 
 func (s *RTCDeviceSink) reconcilePlaybackObservationDrops(before, after audio.PlaybackQueueStats) {
@@ -232,8 +281,6 @@ func (s *RTCDeviceSink) reconcilePlaybackObservationDrops(before, after audio.Pl
 	s.playbackObservations.dropQueued(int(delta))
 }
 
-// runPlaybackCommands is a device worker separate from the PCM pump. An
-// interrupt can therefore discard a full output queue and wake its producer.
 func (s *RTCDeviceSink) runPlaybackCommands() {
 	defer close(s.commandDone)
 	for {
@@ -269,8 +316,6 @@ func (s *RTCDeviceSink) runPlaybackCommands() {
 	}
 }
 
-// PlaybackCommand applies one ordered playback control operation and waits
-// for its receipt. PCM pumping remains independent from this command worker.
 func (s *RTCDeviceSink) PlaybackCommand(ctx context.Context, operation audio.PlaybackOperation) error {
 	if s == nil || s.commands == nil {
 		return ErrRTCDeviceSinkClosed
@@ -278,26 +323,20 @@ func (s *RTCDeviceSink) PlaybackCommand(ctx context.Context, operation audio.Pla
 	return s.commands.Exchange(ctx, operation, audio.PlaybackResponse{}).Err
 }
 
-// rtcDevicePlaybackSpan maps one provider response onto the monotonic count
-// of complete samples consumed by the physical device, including underflow
-// silence. Multiple spans may be queued at once so a tool continuation stays
-// gapless without confusing the latest response with audible speech.
 type rtcDevicePlaybackSpan struct {
-	response audio.PlaybackResponse
+	response rtcDevicePlaybackIdentity
 	start    uint64
 	end      uint64
 	complete bool
 }
 
-// StartPlayback opens a provider response on the local device clock. The
-// consumed-sample baseline is captured immediately before the first model
-// frame is admitted, so idle underflow and hold-tone samples are excluded.
 func (s *RTCDeviceSink) StartPlayback(response audio.PlaybackResponse) {
 	if s == nil || s.sink == nil || response.ItemID == "" {
 		return
 	}
+	identity := newRTCDevicePlaybackIdentity(response)
 	s.playbackMu.Lock()
-	if s.playbackResponse == response && !s.playbackBlocked {
+	if s.playbackResponse.equal(identity) && !s.playbackBlocked {
 		s.playbackMu.Unlock()
 		return
 	}
@@ -306,13 +345,10 @@ func (s *RTCDeviceSink) StartPlayback(response audio.PlaybackResponse) {
 		s.playbackGeneration++
 		s.snapshotEpoch.Store(s.playbackGeneration)
 	}
-	s.playbackResponse = response
+	s.playbackResponse = identity
 	s.playbackMu.Unlock()
 }
 
-// PlaybackController exposes the sink's device-clocked interruption state to
-// an owning live session. Callers that only need ordinary PCM pumping can
-// ignore this optional capability.
 func (s *RTCDeviceSink) PlaybackController() audio.PlaybackController {
 	if s == nil {
 		return nil
@@ -320,33 +356,25 @@ func (s *RTCDeviceSink) PlaybackController() audio.PlaybackController {
 	return s
 }
 
-// finishPlayback retires a fully drained provider response from the device
-// clock. A later server-VAD event belongs to a new user turn and must not
-// truncate the completed response, even if local hold-tone audio played during
-// the intervening silence.
 func (s *RTCDeviceSink) finishPlayback(response audio.PlaybackResponse) {
 	if s == nil || response.ItemID == "" {
 		return
 	}
+	identity := newRTCDevicePlaybackIdentity(response)
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
 	for index := len(s.playbackSpans) - 1; index >= 0; index-- {
-		if s.playbackSpans[index].response == response {
+		if s.playbackSpans[index].response.equal(identity) {
 			s.playbackSpans[index].complete = true
 			break
 		}
 	}
-	// A continuation may already be the latest prefetched response when the
-	// preceding response reaches its provider boundary. Retire only the
-	// response that is currently active; completing an older span must not
-	// advance the shared generation and invalidate the continuation's queued
-	// frames.
-	if s.playbackResponse != response {
+	if !s.playbackResponse.equal(identity) {
 		return
 	}
 	s.playbackGeneration++
 	s.snapshotEpoch.Store(s.playbackGeneration)
-	s.playbackResponse = audio.PlaybackResponse{}
+	s.playbackResponse = rtcDevicePlaybackIdentity{}
 }
 
 func consumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
@@ -356,19 +384,11 @@ func consumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
 	return stats.RenderedSamples - stats.UnderflowSamples
 }
 
-// resumePlayback opens a new local response boundary. Frames read under a
-// prior generation remain stale even if they race with this transition.
 func (s *RTCDeviceSink) resumePlayback() {
 	if s == nil || s.sink == nil {
 		return
 	}
 	s.playbackMu.Lock()
-	// A normal tool-result continuation can request another response while the
-	// preceding response is still draining to the physical device. Playback is
-	// already open in that case: advancing the generation would make a frame
-	// read just before response.create stale and discard its samples. Only a
-	// prior accepted cancellation sets playbackBlocked and requires a new
-	// generation boundary.
 	if !s.playbackBlocked {
 		s.playbackMu.Unlock()
 		return

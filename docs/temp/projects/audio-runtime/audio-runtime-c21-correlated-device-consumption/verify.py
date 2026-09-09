@@ -25,6 +25,71 @@ CONSUMER = ARTIFACTS / "consumption-consumer"
 YUI = ARTIFACTS / "yui"
 DEADLINE_SECONDS = 60
 
+PARITY_EXPECTATIONS: dict[str, dict[str, Any]] = {
+    "audio-tool": {
+        "pcm_bytes": 4800,
+        "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+        "terminal": {
+            "reason": "fixture_complete",
+            "classification": "provider_close",
+            "terminal_reason": "provider_close",
+            "terminal_provenance": "provider",
+            "output_state": "not_applicable",
+        },
+        "fixture_types": [
+            "session.update",
+            "session.created",
+            "conversation.item.create",
+            "response.create",
+            "response.created",
+            "response.output_item.added",
+            "response.function_call_arguments.done",
+            "response.done",
+            "conversation.item.create",
+            "response.create",
+            "response.created",
+            "response.output_audio.delta",
+            "response.output_audio.delta",
+            "response.output_audio.done",
+            "response.output_text.delta",
+            "response.output_text.done",
+            "response.done",
+            "session.closed",
+        ],
+    },
+    "interruption": {
+        "pcm_bytes": 3840,
+        "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+        "healthy_tail_offset_bytes": 1440,
+        "healthy_tail_bytes": 2400,
+        "healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+        "terminal": {
+            "reason": "replay_complete",
+            "classification": "replay_complete",
+            "terminal_reason": "replay_complete",
+            "terminal_provenance": "replay",
+            "output_state": "complete",
+        },
+        "fixture_types": [
+            "session.update",
+            "session.created",
+            "conversation.item.create",
+            "response.create",
+            "response.created",
+            "response.output_audio.delta",
+            "input_audio_buffer.speech_started",
+            "conversation.item.truncate",
+            "conversation.item.truncated",
+            "response.output_audio.done",
+            "response.done",
+            "response.created",
+            "response.output_audio.delta",
+            "response.output_audio.done",
+            "response.done",
+        ],
+    },
+}
+
 
 class EvidenceFailure(RuntimeError):
     pass
@@ -132,6 +197,115 @@ def load_json(path: pathlib.Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise EvidenceFailure(f"missing JSONL artifact: {path}")
+    records: list[dict[str, Any]] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise EvidenceFailure(f"invalid JSONL at {path}:{line_number}: {exc}") from exc
+        if not isinstance(record, dict):
+            raise EvidenceFailure(f"non-object JSONL record at {path}:{line_number}")
+        records.append(record)
+    if not records:
+        raise EvidenceFailure(f"empty JSONL artifact: {path}")
+    return records
+
+
+def validate_transcript(path: pathlib.Path, label: str) -> None:
+    records = load_jsonl(path)
+    ticks = [record.get("tick") for record in records]
+    if any(not isinstance(tick, int) for tick in ticks) or ticks != list(range(1, len(ticks) + 1)):
+        raise EvidenceFailure(f"{label} transcript order is not contiguous: {ticks[:5]}...{ticks[-5:]}")
+
+
+def validate_session_log(label: str, path: pathlib.Path, expect_tool: bool) -> None:
+    turns = load_jsonl(path)
+    if expect_tool:
+        expected = [
+            {
+                "turn_index": 1,
+                "input": {"text": "probe PROBE_TOOL_MARKER_9182", "audio_offset_bytes": 0, "audio_bytes": 0, "committed": False},
+                "response": {"text": "strict replay continuation", "complete": True, "audio_offset_bytes": 0, "audio_bytes": 4800, "audio_segments": ["audio/out-000.pcm"]},
+            }
+        ]
+    else:
+        expected = [
+            {
+                "turn_index": 1,
+                "input": {"text": "c07 interruption", "audio_offset_bytes": 0, "audio_bytes": 0, "committed": False},
+                "response": {"text": "", "complete": True, "audio_offset_bytes": 0, "audio_bytes": 1440, "audio_segments": ["audio/out-000.pcm"]},
+            },
+            {
+                "turn_index": 2,
+                "input": {"text": "", "audio_offset_bytes": 0, "audio_bytes": 0, "committed": False},
+                "response": {"text": "", "complete": True, "audio_offset_bytes": 1440, "audio_bytes": 2400, "audio_segments": ["audio/out-000.pcm"]},
+            },
+        ]
+    if len(turns) != len(expected):
+        raise EvidenceFailure(f"{label} session-log turn count = {len(turns)}, want {len(expected)}")
+    for actual, want in zip(turns, expected):
+        for key, value in want.items():
+            if actual.get(key) != value:
+                raise EvidenceFailure(f"{label} session-log {key} changed: {actual.get(key)!r}")
+    if expect_tool:
+        tool_events = turns[0].get("tool_events")
+        if not isinstance(tool_events, list) or len(tool_events) != 2:
+            raise EvidenceFailure(f"{label} tool event sequence missing: {tool_events!r}")
+        metadata = [
+            {key: event.get(key) for key in ("sequence", "type", "tool_call_id", "tool_name", "status", "content")}
+            for event in tool_events
+        ]
+        if metadata != [
+            {"sequence": 1, "type": "tool_call", "tool_call_id": "call-c07-tool", "tool_name": "exec", "status": None, "content": None},
+            {"sequence": 2, "type": "tool_result", "tool_call_id": "call-c07-tool", "tool_name": "exec", "status": "completed", "content": "PROBE_TOOL_MARKER_9182\n"},
+        ]:
+            raise EvidenceFailure(f"{label} tool event order/content changed: {metadata!r}")
+        try:
+            arguments = json.loads(tool_events[0]["arguments"])
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise EvidenceFailure(f"{label} tool call arguments are not valid JSON") from exc
+        expected_command = 'echo PROBE_TOOL_MARKER_9182 >> "evidence/runs/exec-invocations-v4.log"; echo PROBE_TOOL_MARKER_9182'
+        if arguments != {"command": expected_command}:
+            raise EvidenceFailure(f"{label} tool command changed: {arguments!r}")
+    elif any(turn.get("tool_events") is not None for turn in turns):
+        raise EvidenceFailure(f"{label} interruption unexpectedly contains tool events")
+
+
+def validate_parity_artifacts(label: str, fixture: pathlib.Path, record_dir: pathlib.Path, pcm: pathlib.Path, manifest: pathlib.Path, expect_tool: bool) -> dict[str, Any]:
+    expectation = PARITY_EXPECTATIONS[label]
+    manifest_data = load_json(manifest)
+    if manifest_data.get("terminal") != expectation["terminal"]:
+        raise EvidenceFailure(f"{label} terminal state changed: {manifest_data.get('terminal')!r}")
+    artifacts = {artifact.get("path"): artifact.get("sha256") for artifact in manifest_data.get("artifacts", [])}
+    expected_paths = {"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm", "provider.json"}
+    if set(artifacts) != expected_paths:
+        raise EvidenceFailure(f"{label} manifest artifact set changed: {sorted(artifacts)}")
+    for relative in expected_paths:
+        artifact_path = record_dir / relative
+        if not artifact_path.is_file() or artifacts[relative] != sha256(artifact_path):
+            raise EvidenceFailure(f"{label} manifest hash does not match {relative}")
+    validate_transcript(record_dir / "client.transcript.jsonl", f"{label} client")
+    validate_transcript(record_dir / "agent.transcript.jsonl", f"{label} agent")
+    validate_session_log(label, record_dir / "session-log.jsonl", expect_tool)
+    provider = record_dir / "provider.json"
+    if sha256(provider) != sha256(fixture) or [record.get("type") for record in load_json(fixture).get("records", [])] != expectation["fixture_types"]:
+        raise EvidenceFailure(f"{label} provider fixture order or bytes changed")
+    pcm_bytes = pcm.read_bytes()
+    if len(pcm_bytes) != expectation["pcm_bytes"] or sha256(pcm) != expectation["pcm_sha256"]:
+        raise EvidenceFailure(f"{label} exact PCM parity changed: bytes={len(pcm_bytes)} sha256={sha256(pcm)}")
+    healthy_tail: dict[str, Any] = {}
+    if "healthy_tail_offset_bytes" in expectation:
+        offset = expectation["healthy_tail_offset_bytes"]
+        tail = pcm_bytes[offset:]
+        healthy_tail = {"offset_bytes": offset, "bytes": len(tail), "sha256": hashlib.sha256(tail).hexdigest()}
+        if healthy_tail["bytes"] != expectation["healthy_tail_bytes"] or healthy_tail["sha256"] != expectation["healthy_tail_sha256"]:
+            raise EvidenceFailure(f"{label} healthy tail parity changed: {healthy_tail}")
+    return {"terminal": manifest_data["terminal"], "session_log": str(record_dir / "session-log.jsonl"), "healthy_tail": healthy_tail}
+
+
 def validate_consumer(run_dir: pathlib.Path) -> dict[str, Any]:
     result = run_process("run-public-consumer", ["rtk", "proxy", str(CONSUMER)], ROOT, run_dir)
     require_ok(result)
@@ -225,6 +399,7 @@ def parity_run(label: str, fixture: pathlib.Path, run_dir: pathlib.Path, expect_
     pcm = record_dir / "audio" / "out-000.pcm"
     if not manifest.exists() or not pcm.exists() or pcm.stat().st_size == 0:
         raise EvidenceFailure(f"{label} replay did not produce a complete recording")
+    parity = validate_parity_artifacts(label, fixture, record_dir, pcm, manifest, expect_tool)
     summary = {
         "label": label,
         "fixture": str(fixture),
@@ -239,6 +414,9 @@ def parity_run(label: str, fixture: pathlib.Path, run_dir: pathlib.Path, expect_
         "audio_out": str(audio_out),
         "audio_out_bytes": audio_out.stat().st_size if audio_out.exists() else 0,
         "audio_out_sha256": sha256(audio_out) if audio_out.exists() else "",
+        "terminal": parity["terminal"],
+        "session_log": parity["session_log"],
+        "healthy_tail": parity["healthy_tail"],
     }
     (case_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return summary
@@ -251,19 +429,36 @@ def run_parity(run_dir: pathlib.Path) -> list[dict[str, Any]]:
     ]
 
 
+def require_test_events(result: dict[str, Any], expected_prefixes: tuple[str, ...]) -> None:
+    stdout = pathlib.Path(result["stdout_path"]).read_text(encoding="utf-8")
+    test_names: set[str] = set()
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        test_name = event.get("Test")
+        if isinstance(test_name, str) and test_name:
+            test_names.add(test_name)
+    if not any(any(name.startswith(prefix) for prefix in expected_prefixes) for name in test_names):
+        raise EvidenceFailure(f"{result['label']} matched no expected tests; observed {sorted(test_names)!r}; see {result['stdout_path']}")
+
+
 def run_controls(run_dir: pathlib.Path) -> list[dict[str, Any]]:
     commands = [
-        ("c21-focused", ["rtk", "proxy", "go", "test", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "^TestC21", "-count=1", "-timeout=45s"]),
-        ("c21-race", ["rtk", "proxy", "go", "test", "-race", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "^TestC21", "-count=1", "-timeout=45s"]),
-        ("runtime-regressions", ["rtk", "proxy", "go", "test", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "TestRTCDeviceSink|TestPlaybackBufferSnapshot", "-count=1", "-timeout=45s"]),
-        ("device-sink-regressions", ["rtk", "proxy", "go", "test", "-tags=nomicrophone", "./go-device-gateway/pkg/devices", "-run", "TestDeviceSink", "-count=1", "-timeout=45s"]),
-        ("runtime-vet", ["rtk", "proxy", "go", "vet", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime"]),
-        ("diff-check", ["rtk", "proxy", "git", "diff", "--check"]),
+        ("c21-focused", ["rtk", "proxy", "go", "test", "-json", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "^TestC21", "-count=1", "-timeout=45s"], ("TestC21",)),
+        ("c21-race", ["rtk", "proxy", "go", "test", "-json", "-race", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "^TestC21", "-count=1", "-timeout=45s"], ("TestC21",)),
+        ("runtime-regressions", ["rtk", "proxy", "go", "test", "-json", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime", "-run", "TestRTCDeviceSink|TestPlaybackBufferSnapshot", "-count=1", "-timeout=45s"], ("TestRTCDeviceSink", "TestPlaybackBufferSnapshot")),
+        ("device-sink-regressions", ["rtk", "proxy", "go", "test", "-json", "-tags=nomicrophone", "./go-device-gateway/pkg/devices", "-run", "TestDeviceSink", "-count=1", "-timeout=45s"], ("TestDeviceSink",)),
+        ("runtime-vet", ["rtk", "proxy", "go", "vet", "-tags=nomicrophone", "./go-device-gateway/pkg/runtime"], None),
+        ("diff-check", ["rtk", "proxy", "git", "diff", "--check"], None),
     ]
     results = []
-    for label, argv in commands:
+    for label, argv, expected_prefixes in commands:
         result = run_process(label, argv, ROOT, run_dir)
         require_ok(result)
+        if expected_prefixes is not None:
+            require_test_events(result, expected_prefixes)
         results.append(result)
     return results
 
