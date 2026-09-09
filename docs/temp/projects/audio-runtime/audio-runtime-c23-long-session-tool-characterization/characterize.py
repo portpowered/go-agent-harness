@@ -275,7 +275,17 @@ def expected_pcm(turns: int) -> bytes:
 
 
 def report_normalized(report: dict[str, Any]) -> dict[str, Any]:
-    return {key: report.get(key) for key in ("schema", "scenario", "turns", "fixture_sha256", "consumer_surface", "responses", "tool_calls", "tool_results", "pcm", "events", "latency", "terminal", "clean_shutdown", "trace_complete")}
+    normalized = {key: report.get(key) for key in ("schema", "scenario", "turns", "fixture_sha256", "consumer_surface", "responses", "tool_calls", "tool_results", "pcm", "events", "terminal", "clean_shutdown", "trace_complete")}
+    normalized["tool_calls"] = sorted(normalized["tool_calls"] or [], key=lambda item: item.get("id", ""))
+    normalized["tool_results"] = sorted(normalized["tool_results"] or [], key=lambda item: item.get("id", ""))
+    # The injected timestamp domain and missing-sample classification are
+    # semantic evidence. Wall-clock pacing used to keep the recording worker's
+    # bounded queue below its admission limit is intentionally not parity data.
+    normalized["latency"] = [
+        {key: item.get(key) for key in ("turn", "clock_domain", "missing_request", "missing_first_pcm", "missing_terminal")}
+        for item in report.get("latency", [])
+    ]
+    return normalized
 
 
 def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -> None:
