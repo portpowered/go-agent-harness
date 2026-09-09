@@ -13,11 +13,11 @@
         "-count=1",
         "-timeout=90s"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-k32gptal/source",
-      "elapsed_seconds": 0.589,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-qvwgbral/source",
+      "elapsed_seconds": 0.585,
       "exit_status": 0,
       "stderr": "",
-      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.05s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.225s\n",
+      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.04s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.208s\n",
       "timed_out": false,
       "umask": "022"
     },
@@ -33,11 +33,11 @@
         "-count=1",
         "-timeout=90s"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-k32gptal/source",
-      "elapsed_seconds": 0.45,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-permission-qvwgbral/source",
+      "elapsed_seconds": 0.453,
       "exit_status": 0,
       "stderr": "",
-      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.02s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.198s\n",
+      "stdout": "=== RUN   TestC22PermissionDiagnostic\nC22_DIAGNOSTIC [{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"\",\"name\":\"raw_requested_0640\",\"requested_mode\":\"640\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"640\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"640\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"640\",\"name\":\"explicit_0640\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"bytes\":7,\"exists\":true,\"mode\":\"600\",\"sha256\":\"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"},\"established_mode\":\"600\",\"name\":\"explicit_0600\",\"requested_mode\":\"600\"},{\"after\":{\"bytes\":6,\"exists\":true,\"mode\":\"600\",\"sha256\":\"7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919\"},\"before\":{\"exists\":false},\"established_mode\":\"\",\"name\":\"absent_default\",\"requested_mode\":\"000\"}]\n--- PASS: TestC22PermissionDiagnostic (0.02s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.197s\n",
       "timed_out": false,
       "umask": "077"
     }
@@ -182,7 +182,7 @@
       "umask": "077"
     }
   ],
-  "elapsed_seconds": 17.627,
+  "elapsed_seconds": 18.308,
   "exact_test": [
     {
       "command": [
@@ -196,10 +196,10 @@
         "-timeout=90s"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
-      "elapsed_seconds": 11.965,
+      "elapsed_seconds": 12.505,
       "exit_status": 0,
-      "stderr": "go: downloading go1.26.7 (darwin/arm64)\ngo: downloading github.com/knadh/koanf/v2 v2.3.2\ngo: downloading github.com/knadh/koanf/parsers/yaml v1.1.0\ngo: downloading github.com/knadh/koanf/providers/env v1.1.0\ngo: downloading github.com/knadh/koanf/providers/file v1.2.1\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading github.com/knadh/koanf/providers/structs v1.0.0\ngo: downloading github.com/fsnotify/fsnotify v1.9.0\ngo: downloading go.yaml.in/yaml/v3 v3.0.3\ngo: downloading github.com/go-viper/mapstructure/v2 v2.4.0\ngo: downloading github.com/mitchellh/copystructure v1.2.0\ngo: downloading github.com/knadh/koanf/maps v0.1.2\ngo: downloading github.com/fatih/structs v1.1.0\ngo: downloading github.com/mitchellh/reflectwalk v1.0.2\ngo: downloading golang.org/x/sys v0.47.0\n",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.180s\n",
+      "stderr": "go: downloading go1.26.7 (darwin/arm64)\ngo: downloading github.com/knadh/koanf/v2 v2.3.2\ngo: downloading github.com/knadh/koanf/providers/env v1.1.0\ngo: downloading github.com/knadh/koanf/parsers/yaml v1.1.0\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading github.com/knadh/koanf/providers/file v1.2.1\ngo: downloading github.com/knadh/koanf/providers/structs v1.0.0\ngo: downloading github.com/knadh/koanf/maps v0.1.2\ngo: downloading github.com/go-viper/mapstructure/v2 v2.4.0\ngo: downloading github.com/mitchellh/copystructure v1.2.0\ngo: downloading github.com/fsnotify/fsnotify v1.9.0\ngo: downloading go.yaml.in/yaml/v3 v3.0.3\ngo: downloading github.com/fatih/structs v1.1.0\ngo: downloading github.com/mitchellh/reflectwalk v1.0.2\ngo: downloading golang.org/x/sys v0.47.0\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.176s\n",
       "timed_out": false,
       "umask": "022"
     },
@@ -215,10 +215,10 @@
         "-timeout=90s"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
-      "elapsed_seconds": 0.539,
+      "elapsed_seconds": 0.528,
       "exit_status": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.194s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/config\t0.192s\n",
       "timed_out": false,
       "umask": "077"
     }
@@ -227,6 +227,6 @@
   "phase": "candidate",
   "schema": "audio-runtime-c22-permission-matrix-v1",
   "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair",
-  "source_revision": "e927682a8e7da9912d3ea9fd2cfb2b01db50c653",
+  "source_revision": "6560f06e0794115cc454548344e41ef9e088ec5f",
   "status": "passed"
 }

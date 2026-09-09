@@ -3,7 +3,8 @@
 - Work: `audio-runtime-c22-config-permission-causal-repair`
 - Branch/worktree: `codex/audio-runtime-c22-config-permission-causal-repair`
 - Fetched `origin/main`: `e4137eba6a6499142f50701609c1149afc71db84`
-- Candidate source: `e927682a8e7da9912d3ea9fd2cfb2b01db50c653`
+- Implementation checkpoint: `e927682a8e7da9912d3ea9fd2cfb2b01db50c653`
+- Exact evidence HEAD: `6560f06e0794115cc454548344e41ef9e088ec5f`
 - Required startup and baseline pins are ancestors of the candidate:
   `8bdafc7f947a3a2c9856220abdc539437035bd21` and
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
