@@ -411,3 +411,16 @@ C18 final local validation checkpoint
 - Next action: stage and inspect the exact owned diff, commit/push the same
   admitted branch, open/update its PR, and return `ACCEPTED` to script CI
   without polling terminal checks. Keep the task for any exact rejection.
+
+C18 script-CI handoff checkpoint
+
+- Admission remains `admitted` for `audio-runtime-c18-public-strict-replay`;
+  branch `codex/audio-runtime-c18-public-strict-replay` matches `prd.json` and
+  preserves the startup, baseline, and current `origin/main` ancestry.
+- Candidate commit `191ac0a99acef9744a3e88df49260a945f8e7e9f` is pushed at the
+  same remote head. PR #410 is open against `main`:
+  `https://github.com/portpowered/go-agent-harness/pull/410`.
+- The local evidence recorded above remains the candidate gate evidence; no
+  CI status was polled or represented as green. The exact next action is for
+  script CI to evaluate this same PR head. Retain ownership for any exact CI
+  rejection and repair/resubmit the same task; do not self-review.
