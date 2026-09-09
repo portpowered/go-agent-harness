@@ -281,27 +281,6 @@ func (h *handle) observationPort() *observations.Observer {
 	return h.observer
 }
 
-func (h *handle) setProviderMediaAttached(attached bool) {
-	h.observationPort().SetMediaAttached(attached)
-}
-
-// mediaUnavailable preserves a missing provider media capability when the
-// admitted invocation owns a media direction. The media gate still latches
-// ErrMediaUnavailable for endpoint consumers, but its generic error reporter
-// intentionally suppresses that sentinel; keeping the causal failure on the
-// handle makes it survive an immediate provider terminal and pump teardown.
-func (h *handle) mediaUnavailable(err error) {
-	if h == nil || err == nil {
-		return
-	}
-	h.mu.Lock()
-	required := h.mediaRequired
-	h.mu.Unlock()
-	if required {
-		h.mediaFailure(err)
-	}
-}
-
 func (h *handle) now() time.Time {
 	if h == nil || h.clock == nil {
 		return time.Time{}

@@ -11,7 +11,21 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 )
+
+func (h *handle) setProviderMediaAttached(attached bool) {
+	h.observationPort().SetMediaAttached(attached)
+	if attached {
+		return
+	}
+	h.mu.Lock()
+	required := h.mediaRequired
+	h.mu.Unlock()
+	if required {
+		h.mediaFailure(mediagate.ErrMediaUnavailable)
+	}
+}
 
 func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 	if h == nil {

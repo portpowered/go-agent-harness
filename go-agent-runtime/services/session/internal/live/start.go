@@ -69,17 +69,16 @@ func (h *handle) prepareStart(runCtx context.Context) (messages.ToolExecutor, []
 
 func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, toolDefinitions []messages.ToolDefinition) (*agentloop.AgentLoop, error) {
 	capturing := &capturingInferencer{
-		inner:              inferencer,
-		media:              h.media,
-		continuous:         h.request.OutputAudioContinuous,
-		flushOutbound:      h.request.FinishAfterResponse,
-		onDispatch:         h.observeProviderDispatch,
-		onToolResult:       h.beginToolResultAdmission,
-		onContinuation:     h.beginContinuationAdmission,
-		onOpeningAdmitted:  func() { h.markOpeningAdmitted(nil) },
-		onProviderDone:     h.providerDone,
-		onMediaAttached:    h.setProviderMediaAttached,
-		onMediaUnavailable: h.mediaUnavailable,
+		inner:             inferencer,
+		media:             h.media,
+		continuous:        h.request.OutputAudioContinuous,
+		flushOutbound:     h.request.FinishAfterResponse,
+		onDispatch:        h.observeProviderDispatch,
+		onToolResult:      h.beginToolResultAdmission,
+		onContinuation:    h.beginContinuationAdmission,
+		onOpeningAdmitted: func() { h.markOpeningAdmitted(nil) },
+		onProviderDone:    h.providerDone,
+		onMediaAttached:   h.setProviderMediaAttached,
 	}
 	h.providerTerminalError = capturing.TerminalError
 	options := []agentloop.Option{

@@ -1,13 +1,81 @@
 package integration
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
+
+func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64) (devicegw.DeviceServerSnapshot, error) {
+	// Keep the external callback clock alive until the expected PCM suffix crosses
+	// the device edge; a fixed callback budget races coverage-instrumented agents.
+	markerSamples := audio.FrameSize
+	if markerSamples > len(want) {
+		markerSamples = len(want)
+	}
+	finalMarker := want[len(want)-markerSamples:]
+	const callbacksPerSnapshot = 32
+	ticker := time.NewTicker(callbackInterval)
+	defer ticker.Stop()
+	callbacksSinceSnapshot := callbacksPerSnapshot
+	for {
+		if callbacksSinceSnapshot >= callbacksPerSnapshot {
+			snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+			if err != nil {
+				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("read remote device evidence: %w", err)
+			}
+			got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
+			if remoteToolAudioHasSuffix(got, finalMarker) && snapshot.Playback.QueuedSamples == 0 {
+				return snapshot, nil
+			}
+			callbacksSinceSnapshot = 0
+		}
+		select {
+		case <-ticker.C:
+			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
+				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("advance remote playback while awaiting final marker: %w", err)
+			}
+			callbackAdvances.Add(1)
+			callbacksSinceSnapshot++
+		case <-ctx.Done():
+			return devicegw.DeviceServerSnapshot{}, fmt.Errorf("remote playback did not reach final PCM marker before the scenario deadline: %w", ctx.Err())
+		}
+	}
+}
+
+func requireRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64, provider *remoteToolAudioProvider, expectedToolCalls int, expected []int16, done <-chan error, stderr *remoteToolAudioBuffer) devicegw.DeviceServerSnapshot {
+	t.Helper()
+	snapshot, err := waitForRemoteToolAudio(ctx, endpoint, want, callbackInterval, callbackAdvances)
+	if err != nil {
+		t.Fatalf("remote playback wait failed: %v; %s", err, remoteToolAudioFailureEvidence(endpoint, provider, expectedToolCalls, expected, done, stderr, callbackAdvances))
+	}
+	return snapshot
+}
+
+type remoteToolAudioBuffer struct {
+	mu               sync.Mutex
+	buf              bytes.Buffer
+	callbackAdvances atomic.Uint64
+}
+
+func (b *remoteToolAudioBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(data)
+}
+
+func (b *remoteToolAudioBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func remoteToolAudioEnvironment(base []string, fixturePath string, holdToneControl bool) []string {
 	environment := append(base,

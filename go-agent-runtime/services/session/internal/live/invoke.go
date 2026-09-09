@@ -128,6 +128,16 @@ func installCaptureBoundary(options *session.LiveRunOptions, handle session.Live
 func deviceRequestHasDirection(request devices.Request) bool {
 	return request.CaptureEnabled || request.PlaybackEnabled
 }
+
+func (h *handle) configureMediaRequirement(required bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.mediaRequired = required
+	h.mu.Unlock()
+}
+
 func (i *liveInvocation) attachRecorder() {
 	if i == nil || i.options.Recorder == nil {
 		return

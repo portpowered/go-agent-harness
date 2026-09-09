@@ -308,9 +308,8 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 
 	clockCtx, stopClock := context.WithCancel(ctx)
-	var callbackAdvances atomic.Uint64
 	clockDone := make(chan error, 1)
-	go driveRemoteToolAudioClock(clockCtx, endpoint, provider.firstAudioSent, callbackInterval, &callbackAdvances, clockDone)
+	go driveRemoteToolAudioClock(clockCtx, endpoint, provider.firstAudioSent, callbackInterval, &stdout.callbackAdvances, clockDone)
 
 	select {
 	case <-provider.allResponsesSent:
@@ -350,11 +349,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		var waitErr error
-		snapshot, waitErr = waitForRemoteToolAudio(ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval, &callbackAdvances)
-		if waitErr != nil {
-			t.Fatalf("remote playback wait failed: %v; %s", waitErr, remoteToolAudioFailureEvidence(endpoint, provider, len(calls), want, done, &stderr, &callbackAdvances))
-		}
+		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval, &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
@@ -526,68 +521,13 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 	}
 }
 
-func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64) (devicegw.DeviceServerSnapshot, error) {
-	// The provider having written all WebSocket events does not mean the agent's
-	// media pump has consumed them yet. Keep the external callback clock alive
-	// until every expected sample reaches the device or the unique tail of the
-	// final response proves that all earlier FIFO audio has crossed the device
-	// edge. A fixed callback budget or wall-clock quiescence can race ahead of a
-	// coverage/race-instrumented agent and mistake audio still in transit for
-	// dropped audio.
-	markerSamples := audio.FrameSize
-	if markerSamples > len(want) {
-		markerSamples = len(want)
-	}
-	finalMarker := want[len(want)-markerSamples:]
-	const callbacksPerSnapshot = 32
-	ticker := time.NewTicker(callbackInterval)
-	defer ticker.Stop()
-	callbacksSinceSnapshot := callbacksPerSnapshot
-	for {
-		if callbacksSinceSnapshot >= callbacksPerSnapshot {
-			snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
-			if err != nil {
-				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("read remote device evidence: %w", err)
-			}
-			got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
-			if remoteToolAudioHasSuffix(got, finalMarker) && snapshot.Playback.QueuedSamples == 0 {
-				return snapshot, nil
-			}
-			callbacksSinceSnapshot = 0
-		}
-		select {
-		case <-ticker.C:
-			// The background callback driver is stopped before this loop. Advance
-			// and snapshot sequentially so a large evidence response cannot race
-			// another HTTP request against the deterministic device server.
-			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
-				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("advance remote playback while awaiting final marker: %w", err)
-			}
-			callbackAdvances.Add(1)
-			callbacksSinceSnapshot++
-		case <-ctx.Done():
-			return devicegw.DeviceServerSnapshot{}, fmt.Errorf("remote playback did not reach final PCM marker before the scenario deadline: %w", ctx.Err())
-		}
-	}
+func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
+	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
 }
 
-type remoteToolAudioBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *remoteToolAudioBuffer) Write(data []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(data)
-}
-
-func (b *remoteToolAudioBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
-}
-
+// Timeout diagnostics stay on the scenario path so a failure preserves the
+// bounded device, provider, child, and callback evidence needed to repair it.
+// Keep this evidence beside the scenario's deadline and cleanup logic.
 func remoteToolAudioFailureEvidence(endpoint string, provider *remoteToolAudioProvider, expectedToolCalls int, want []int16, done <-chan error, stderr *remoteToolAudioBuffer, callbackAdvances *atomic.Uint64) string {
 	childStatus := "still running at timeout"
 	childExited := false
@@ -626,10 +566,6 @@ func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) str
 		}
 	}
 	return "none"
-}
-
-func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
-	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
 }
 
 // trimRemoteToolAudioEdgeSilence removes only callbacks before playback began

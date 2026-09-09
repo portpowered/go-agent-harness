@@ -53,7 +53,6 @@ func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
 		t.Fatalf("Wait = %v, want ErrLiveFirstTurnTimeout", err)
 	}
 }
-
 func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(500, 0), time.Millisecond)
 	scheduler := &observingScheduler{Scheduler: clock, timerCreated: make(chan struct{})}
@@ -100,7 +99,6 @@ func TestLiveRateLimitRetryUsesInjectedScheduler(t *testing.T) {
 			t.Fatal("timed out waiting for rate-limit terminal")
 		}
 	}
-
 rateLimitObserved:
 	select {
 	case <-scheduler.timerCreated:
@@ -123,7 +121,6 @@ rateLimitObserved:
 		t.Fatalf("Wait = %v, want cancellation cause", err)
 	}
 }
-
 func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
 	unscheduled := &handle{}
 	for index := 0; index < 128; index++ {
@@ -140,7 +137,6 @@ func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
 	if ordinaryCount != 0 || ordinaryIDs != nil {
 		t.Fatalf("ordinary response ledger retained state: count=%d ids=%d", ordinaryCount, len(ordinaryIDs))
 	}
-
 	scheduled := &handle{scheduledAudioCount: 2}
 	message := messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
@@ -162,7 +158,6 @@ func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
 		t.Fatalf("scheduled response ledger did not deduplicate and release: count=%d ids=%d", scheduledCount, len(scheduledIDs))
 	}
 }
-
 func TestProviderCloseBlocksUndispatchedFiniteTurnAndRetainsMetadata(t *testing.T) {
 	h := &handle{
 		request:                   session.LiveRequest{SessionID: "finite-close"},
@@ -192,7 +187,6 @@ func TestProviderCloseBlocksUndispatchedFiniteTurnAndRetainsMetadata(t *testing.
 		Role:  messages.RoleAssistant,
 		Value: &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonProviderAuthoredCompletion},
 	})
-
 	h.mu.Lock()
 	observed := h.providerCloseObserved
 	terminal := cloneLiveTerminalValue(h.terminalValue)
@@ -206,7 +200,6 @@ func TestProviderCloseBlocksUndispatchedFiniteTurnAndRetainsMetadata(t *testing.
 		t.Fatalf("finite admission error = %v, want completed=2 dispatched=2 scheduled=3", err)
 	}
 }
-
 func TestScheduledAudioErrorRequiresEveryTurnDispatched(t *testing.T) {
 	h := &handle{
 		scheduledAudioCount:       2,
@@ -219,7 +212,6 @@ func TestScheduledAudioErrorRequiresEveryTurnDispatched(t *testing.T) {
 		t.Fatalf("scheduled audio error = %v, want completed=2 dispatched=1 scheduled=2", err)
 	}
 }
-
 func TestTimedToolExecutorUsesSchedulerDeadline(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(600, 0), time.Millisecond)
 	tool := blockingTool{started: make(chan struct{})}
@@ -246,7 +238,6 @@ func TestTimedToolExecutorUsesSchedulerDeadline(t *testing.T) {
 }
 
 type blockingTool struct{ started chan struct{} }
-
 type observingScheduler struct {
 	platformclock.Scheduler
 	timerCreated chan struct{}
@@ -258,7 +249,6 @@ func (scheduler *observingScheduler) NewTimer(duration time.Duration) platformcl
 	scheduler.once.Do(func() { close(scheduler.timerCreated) })
 	return timer
 }
-
 func (s *testSession) hasType(kind messages.StreamMessageType) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -269,7 +259,6 @@ func (s *testSession) hasType(kind messages.StreamMessageType) bool {
 	}
 	return false
 }
-
 func (tool blockingTool) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	if tool.started != nil {
 		close(tool.started)
@@ -277,7 +266,6 @@ func (tool blockingTool) Execute(ctx context.Context, call messages.ToolCall) (m
 	<-ctx.Done()
 	return messages.ToolCallResponse{ToolCallID: call.ID}, ctx.Err()
 }
-
 func TestCapabilityAdmissionPreservesCleanupFailures(t *testing.T) {
 	for _, phase := range []string{"initialize", "refresh", "closed"} {
 		t.Run(phase, func(t *testing.T) {
@@ -302,8 +290,6 @@ func TestCapabilityAdmissionPreservesCleanupFailures(t *testing.T) {
 	}
 }
 
-// This recorder observes the same source sequence as the public event stream,
-// including observations that a slow presentation consumer cannot retain.
 type eventSequenceRecorder struct{ events []session.LiveEvent }
 
 func (r *eventSequenceRecorder) RecordMessage(context.Context, session.LiveRecord) error { return nil }
@@ -315,7 +301,6 @@ func (r *eventSequenceRecorder) RecordEvent(_ context.Context, event session.Liv
 	r.events = append(r.events, event)
 	return nil
 }
-
 func TestLiveEvidenceAndPresentationShareSequenceIncludingOverflow(t *testing.T) {
 	recorder := &eventSequenceRecorder{}
 	h := &handle{events: make(chan session.LiveEvent, 4), parentCtx: t.Context(), clock: func() time.Time { return time.Unix(700, 0) }}
@@ -346,7 +331,6 @@ func TestLiveEvidenceAndPresentationShareSequenceIncludingOverflow(t *testing.T)
 		t.Fatalf("overflow = %d, want three rejected plus one evicted", overflow)
 	}
 }
-
 func TestFinalizationFailureCannotRetainSuccessfulTerminalClassification(t *testing.T) {
 	observed := messages.NewSessionCloseValueWithTerminal("fixture", "finished", "completed", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
 	cause := errors.New("provider capture could not be flushed")
@@ -358,7 +342,6 @@ func TestFinalizationFailureCannotRetainSuccessfulTerminalClassification(t *test
 		t.Fatal("original provider observation mutated")
 	}
 }
-
 func TestMaxDurationRetainsPartialTerminalClassification(t *testing.T) {
 	observed := messages.NewSessionCloseValueWithTerminal(
 		"fixture",
@@ -389,7 +372,6 @@ type terminalFailureRecorder struct {
 func (r *terminalFailureRecorder) RecordEvent(context.Context, session.LiveEvent) error {
 	return r.cause
 }
-
 func TestTerminalRecorderFailureChangesWaitCauseAndDeliveredTerminal(t *testing.T) {
 	cause := errors.New("terminal evidence write failed")
 	h := &handle{events: make(chan session.LiveEvent, 4), parentCtx: t.Context()}
@@ -404,7 +386,6 @@ func TestTerminalRecorderFailureChangesWaitCauseAndDeliveredTerminal(t *testing.
 		t.Fatalf("failed terminal recorded as success: %+v", event.Terminal)
 	}
 }
-
 func TestLiveRecorderFailureBecomesInvocationCause(t *testing.T) {
 	provider := newTestSession()
 	if !provider.receive.Write(context.Background(), messages.StreamMessage{
@@ -450,9 +431,6 @@ func TestLiveRecorderFailureBecomesInvocationCause(t *testing.T) {
 		t.Fatal("recorder was not finalized")
 	}
 }
-
-// A provider may signal application completion before its transport closes.
-// The live owner must initiate cleanup rather than waiting for peer EOF first.
 func TestLiveSessionCloseInitiatesProviderCleanup(t *testing.T) {
 	provider := newTestSession()
 	terminal := messages.NewSessionCloseValue("provider-session", "complete")
@@ -498,7 +476,6 @@ func TestLiveSessionCloseInitiatesProviderCleanup(t *testing.T) {
 		t.Fatalf("Close after Wait: %v", err)
 	}
 }
-
 func TestLateCaptureCompletionRespectsOutstandingResponseWork(t *testing.T) {
 	for _, test := range []struct {
 		name         string
@@ -526,7 +503,6 @@ func TestLateCaptureCompletionRespectsOutstandingResponseWork(t *testing.T) {
 		})
 	}
 }
-
 func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 	unfinished := &handle{
 		request:             session.LiveRequest{FinishAfterResponse: true},
@@ -562,7 +538,6 @@ func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 		t.Fatal("persistent finite audio did not retain ErrLiveAudioResponseIncomplete")
 	}
 }
-
 func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	err := errors.Join(errors.New("device write"), session.ErrLiveClosed)
 	if !isExpectedMediaPumpError(err) {
@@ -575,7 +550,6 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 		t.Fatal("unrelated device failure was classified as an expected stop")
 	}
 }
-
 func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
 	tests := []struct {
 		name string
@@ -596,5 +570,31 @@ func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
 				t.Fatalf("error = %v requested a second cancellation", test.err)
 			}
 		})
+	}
+}
+
+func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
+	for _, providerDoneBeforeCheck := range []bool{true, false} {
+		provider := newTestSession()
+		if providerDoneBeforeCheck {
+			provider.close.Do(func() { close(provider.done) })
+		} else {
+			provider.closeDoneOnDoneCall = true
+		}
+		service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			return &testInferencer{session: provider}, nil
+		}})
+		opened, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "missing-media"})
+		if err != nil {
+			t.Fatalf("OpenLive: %v", err)
+		}
+		h := opened.(*handle)
+		h.configureMediaRequirement(true)
+		if err := h.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		if err := h.Wait(); !errors.Is(err, session.ErrLiveMediaUnavailable) {
+			t.Fatalf("Wait = %v, want ErrLiveMediaUnavailable", err)
+		}
 	}
 }

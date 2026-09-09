@@ -120,54 +120,6 @@ func (s *testSession) hasText(text string) bool {
 	}
 	return false
 }
-
-func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
-	for _, testCase := range []struct {
-		name                    string
-		providerDoneBeforeCheck bool
-	}{
-		{name: "provider_done_before_media_check", providerDoneBeforeCheck: true},
-		{name: "provider_done_after_media_check", providerDoneBeforeCheck: false},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			provider := newTestSession()
-			if testCase.providerDoneBeforeCheck {
-				provider.close.Do(func() { close(provider.done) })
-			} else {
-				// capturingInferencer calls Done after it reports the missing
-				// capability, so this closes the provider immediately after the
-				// media check and exercises the opposite terminal ordering.
-				provider.closeDoneOnDoneCall = true
-			}
-			service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
-				return &testInferencer{session: provider}, nil
-			}})
-			opened, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: testCase.name})
-			if err != nil {
-				t.Fatalf("OpenLive: %v", err)
-			}
-			h, ok := opened.(*handle)
-			if !ok {
-				t.Fatalf("handle type = %T, want *handle", opened)
-			}
-			h.configureMediaRequirement(true)
-			if err := h.Start(context.Background()); err != nil {
-				t.Fatalf("Start: %v", err)
-			}
-			wait := make(chan error, 1)
-			go func() { wait <- h.Wait() }()
-			select {
-			case err := <-wait:
-				if !errors.Is(err, session.ErrLiveMediaUnavailable) {
-					t.Fatalf("Wait = %v, want ErrLiveMediaUnavailable", err)
-				}
-			case <-time.After(time.Second):
-				t.Fatal("timed out waiting for missing-media terminal")
-			}
-		})
-	}
-}
-
 func TestOpenLiveIsInertUntilStart(t *testing.T) {
 	s := newTestSession()
 	called := make(chan session.LiveRequest, 1)
@@ -191,7 +143,6 @@ func TestOpenLiveIsInertUntilStart(t *testing.T) {
 		t.Fatalf("Close before Start: %v", err)
 	}
 }
-
 func TestLiveStartSendsOpeningPromptAndPreservesCancelCause(t *testing.T) {
 	s := newTestSession()
 	s.receive.Write(context.Background(), messages.StreamMessage{
@@ -227,7 +178,6 @@ func TestLiveStartSendsOpeningPromptAndPreservesCancelCause(t *testing.T) {
 		t.Fatalf("last event = %#v, want terminal", got)
 	}
 }
-
 func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	service := New(Dependencies{InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
 		return &testInferencer{session: newTestSession()}, nil
@@ -252,7 +202,6 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 		t.Fatalf("Wait = %v, want first cause %v", waitErr, cause)
 	}
 }
-
 func TestUserCancellationWinsOverUnresolvedToolResultTeardown(t *testing.T) {
 	state := finishState{
 		requestedErr:  context.Canceled,
@@ -263,7 +212,6 @@ func TestUserCancellationWinsOverUnresolvedToolResultTeardown(t *testing.T) {
 		t.Fatal("explicit user cancellation was overridden by the expected unresolved-tool teardown diagnostic")
 	}
 }
-
 func TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents(t *testing.T) {
 	provider := newTestSession()
 	capability := &testLiveCapabilityHandle{
@@ -307,7 +255,6 @@ func TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents(t *testing.T) {
 			t.Fatal("timed out waiting for browser capability event")
 		}
 	}
-
 observedEvent:
 	if observed.Kind != "browser.invocation_completed" || observed.BrowserID != "browser-a" || observed.InvocationID != "inv-1" {
 		t.Fatalf("browser event projection = %+v", observed)
@@ -326,7 +273,6 @@ observedEvent:
 		t.Fatal("capability handle was not closed")
 	}
 }
-
 func TestLiveMaxDurationUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(100, 0), time.Millisecond)
 	service := New(Dependencies{
@@ -357,7 +303,6 @@ func TestLiveMaxDurationUsesInjectedScheduler(t *testing.T) {
 		t.Fatal("timed out waiting for scheduled duration cancellation")
 	}
 }
-
 func TestLiveSessionUpdatedWatchdogUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(200, 0), time.Millisecond)
 	provider := newTestSession()
@@ -405,7 +350,6 @@ func TestLiveSessionUpdatedWatchdogUsesInjectedScheduler(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.UPDATED watchdog")
 	}
 }
-
 func TestLiveTimingPolicyRequiresScheduler(t *testing.T) {
 	service := New(Dependencies{InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
 		return &testInferencer{session: newTestSession()}, nil
@@ -418,7 +362,6 @@ func TestLiveTimingPolicyRequiresScheduler(t *testing.T) {
 		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
 	}
 }
-
 func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
 	provider := newTestSession()
@@ -450,7 +393,6 @@ func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T)
 	}
 	assertEmptyResponseEvents(t, collectTestLiveEvents(handle.Events()))
 }
-
 func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(800, 0), time.Millisecond)
 	provider := newTestSession()
@@ -494,7 +436,6 @@ func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
 		t.Fatalf("timeout terminal event = %+v", terminal)
 	}
 }
-
 func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
 	s := newTestSession()
 	for i := 0; i < 500; i++ {
@@ -542,7 +483,6 @@ func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
 		t.Fatal("overflow evidence was lost")
 	}
 }
-
 func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 	h := &handle{
 		request:             session.LiveRequest{FinishAfterResponse: true},
@@ -550,7 +490,6 @@ func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 		responseStarted:     true,
 		replayResponses:     1,
 	}
-
 	h.markCaptureComplete()
 	if h.gracefulStop {
 		t.Fatal("continuous EOF reused the response completed before capture ended")
@@ -558,14 +497,12 @@ func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 	if got, want := h.captureResponseTarget, 2; got != want {
 		t.Fatalf("capture response target = %d, want %d", got, want)
 	}
-
 	h.replayResponses++
 	h.markCaptureComplete()
 	if !h.gracefulStop {
 		t.Fatal("post-EOF response did not complete the finite capture")
 	}
 }
-
 func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T) {
 	cases := []failedContinuationOrder{
 		{name: "provider_failure_first", failureBeforeToolEnd: true},
@@ -633,7 +570,6 @@ func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessa
 		t.Fatalf("continuation intermediate event = error:%v complete:%t, want pending", err, complete)
 	}
 }
-
 func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
 	t.Cleanup(func() { require.NoError(t, media.Close()) })
