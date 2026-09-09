@@ -264,7 +264,11 @@ func validateRecordingArtifactPath(directory, artifactPath, declaredPath string,
 		return fmt.Errorf("%w: recording artifact %q is empty", replay.ErrCaptureUnavailable, declaredPath)
 	}
 
-	root, err := filepath.EvalSymlinks(directory)
+	root, err := filepath.Abs(directory)
+	if err != nil {
+		return fmt.Errorf("%w: resolve recording directory for artifact %q: %w", replay.ErrCaptureUnavailable, declaredPath, err)
+	}
+	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return fmt.Errorf("%w: resolve recording directory for artifact %q: %w", replay.ErrCaptureUnavailable, declaredPath, err)
 	}

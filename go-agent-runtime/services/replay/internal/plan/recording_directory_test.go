@@ -34,6 +34,48 @@ func TestResolveRecordingDirectoryValidatesEveryDeclaredArtifactAndAllowsEmptyNo
 	}
 }
 
+func TestRelativeBundlePathResolvesFromNestedWorkingDirectories(t *testing.T) {
+	root := writeManifestedBundle(t, []recordingTestArtifact{
+		{path: "client.transcript.jsonl", data: []byte("client\n")},
+		{path: "agent.transcript.jsonl", data: []byte("agent\n")},
+		{path: "provider.json", data: []byte(`{"records":[]}`)},
+		{path: "audio/out-000.pcm", data: []byte{1, 2, 3, 4}},
+	})
+
+	parent := filepath.Dir(root)
+	nested := filepath.Join(parent, "nested-working-directory")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	expectedRoot, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Base(root)
+	for _, test := range []struct {
+		name   string
+		cwd    string
+		bundle string
+	}{
+		{name: "parent-relative", cwd: parent, bundle: base},
+		{name: "parent-dot", cwd: parent, bundle: filepath.Join(".", base)},
+		{name: "nested-dot-dot", cwd: nested, bundle: filepath.Join("..", base)},
+		{name: "nested-normalized-dot-dot", cwd: nested, bundle: filepath.Join("..", filepath.Base(nested), "..", base)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Chdir(test.cwd)
+			resolved, err := New().ResolveCapturePath(t.Context(), test.bundle)
+			if err != nil {
+				t.Fatalf("resolve %q from %q: %v", test.bundle, test.cwd, err)
+			}
+			want := filepath.Join(expectedRoot, "provider.json")
+			if resolved != want {
+				t.Fatalf("resolved provider = %q, want %q", resolved, want)
+			}
+		})
+	}
+}
+
 func TestResolveRecordingDirectoryRejectsMutatedDeclaredPCMWithArtifactDiagnostic(t *testing.T) {
 	root := writeManifestedBundle(t, []recordingTestArtifact{
 		{path: "client.transcript.jsonl", data: []byte("client\n")},
@@ -203,6 +245,37 @@ func TestResolveRecordingDirectoryRejectsUnsafeManifestArtifactPath(t *testing.T
 	}
 	if !strings.Contains(err.Error(), "../audio/out-000.pcm") {
 		t.Fatalf("unsafe artifact error = %q, want declared path", err)
+	}
+}
+
+func TestResolveRecordingDirectoryRejectsResolvedParentSymlinkEscape(t *testing.T) {
+	root := writeManifestedBundle(t, []recordingTestArtifact{
+		{path: "client.transcript.jsonl", data: []byte("client\n")},
+		{path: "agent.transcript.jsonl", data: []byte("agent\n")},
+		{path: "provider.json", data: []byte(`{"records":[]}`)},
+		{path: "audio/out-000.pcm", data: []byte{1, 2, 3, 4}},
+	})
+	audioPath := filepath.Join(root, "audio")
+	if err := os.RemoveAll(audioPath); err != nil {
+		t.Fatal(err)
+	}
+	outsideAudio := filepath.Join(t.TempDir(), "audio")
+	if err := os.MkdirAll(outsideAudio, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideAudio, "out-000.pcm"), []byte{1, 2, 3, 4}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideAudio, audioPath); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := resolveRecordingDirectory(t.Context(), root)
+	if !errors.Is(err, publicreplay.ErrCaptureUnavailable) {
+		t.Fatalf("parent symlink error = %v, want ErrCaptureUnavailable", err)
+	}
+	if !strings.Contains(err.Error(), "audio/out-000.pcm") || !strings.Contains(err.Error(), "resolves outside recording directory") {
+		t.Fatalf("parent symlink error = %q, want artifact escape diagnostic", err)
 	}
 }
 
