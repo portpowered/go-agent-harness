@@ -38,6 +38,24 @@ MAX_CHECK_NAME_LENGTH = 120
 MAX_REASON_LENGTH = 320
 GIT_CALL_TIMEOUT_SECONDS = 30
 GH_CALL_TIMEOUT_SECONDS = 30
+ANSI_ESCAPE_PATTERN = re.compile(
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-_])"
+)
+CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
+    r"(?ix)"
+    r"(?P<key>\b(?:authorization|proxy-authorization|"
+    r"token|access[_-]?token|refresh[_-]?token|password|passwd|secret|"
+    r"api[_-]?key|client[_-]?secret|private[_-]?key|credential(?:s)?)\b)"
+    r"(?P<quote>['\"]?)"
+    r"(?:\s*(?:[:=]\s*|\s+))"
+    r"(?:(?:bearer|basic)\s+)?"
+    r"(?:['\"][^'\"]*['\"]|[^\s,;)\]}]+)"
+)
+STANDALONE_CREDENTIAL_PATTERN = re.compile(
+    r"(?i)\b(?P<scheme>bearer|basic)(?:\s*[:=]\s*|\s+)"
+    r"[^\s,;)\]}]+"
+)
 
 
 class GateError(RuntimeError):
@@ -61,12 +79,20 @@ def _factory_root():
 
 def _safe_text(value, limit=MAX_REASON_LENGTH):
     """Return bounded single-line text with credential-like values redacted."""
-    text = " ".join(str(value or "").split())
-    text = re.sub(
-        r"(?i)(token|password|passwd|secret|authorization|bearer|api[_-]?key)"
-        r"\s*[:=]\s*[^\s,;]+",
-        r"\1=[redacted]",
-        text,
+    text = "" if value is None else str(value)
+    # Replace terminal escape sequences and all C0/C1 bytes with whitespace
+    # before collapsing it.  Keeping a separator prevents a control byte from
+    # joining a credential scheme and its value into an unredactable token.
+    text = ANSI_ESCAPE_PATTERN.sub(" ", text)
+    text = CONTROL_CHARACTER_PATTERN.sub(" ", text)
+    text = " ".join(text.split())
+
+    def redact_assignment(match):
+        return f"{match.group('key')}{match.group('quote')}=[redacted]"
+
+    text = SENSITIVE_ASSIGNMENT_PATTERN.sub(redact_assignment, text)
+    text = STANDALONE_CREDENTIAL_PATTERN.sub(
+        lambda match: f"{match.group('scheme')} [redacted]", text
     )
     return text[:limit]
 

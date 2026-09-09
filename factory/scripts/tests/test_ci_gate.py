@@ -40,6 +40,34 @@ class CIGateTests(unittest.TestCase):
     def setUp(self):
         self.module = _load_module()
 
+    def test_safe_text_strips_terminal_controls_and_redacts_separated_credentials(self):
+        unsafe = (
+            "\x1b[31mAuthorization: Bearer TOPSECRET\x1b[0m "
+            "token=SECONDSECRET api_key: THIRDSECRET\x80"
+        )
+
+        safe = self.module._safe_text(unsafe)
+
+        self.assertNotIn("TOPSECRET", safe)
+        self.assertNotIn("SECONDSECRET", safe)
+        self.assertNotIn("THIRDSECRET", safe)
+        self.assertNotIn("\x1b", safe)
+        self.assertFalse(any(0 <= ord(character) < 32 for character in safe))
+        self.assertFalse(any(0x7F <= ord(character) <= 0x9F for character in safe))
+        self.assertIn("Authorization=[redacted]", safe)
+        self.assertIn("token=[redacted]", safe)
+        self.assertIn("api_key=[redacted]", safe)
+
+    def test_safe_text_redacts_standalone_bearer_and_quoted_secret_values(self):
+        safe = self.module._safe_text(
+            'request Bearer STANDALONESECRET and "token": "QUOTEDSECRET"'
+        )
+
+        self.assertNotIn("STANDALONESECRET", safe)
+        self.assertNotIn("QUOTEDSECRET", safe)
+        self.assertIn("Bearer [redacted]", safe)
+        self.assertIn('"token"=[redacted]', safe)
+
     def test_failed_checks_route_to_executor_with_bounded_safe_evidence(self):
         failure = types.SimpleNamespace(
             kind="checks-failed",
