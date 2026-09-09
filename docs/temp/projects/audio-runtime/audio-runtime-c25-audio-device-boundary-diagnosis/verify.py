@@ -76,6 +76,95 @@ FIXTURE_PATHS = [
 ]
 SOURCE_ARCHIVE_NAME = "source.tar"
 FIXTURE_MANIFEST_NAME = "fixtures/manifest.json"
+CANONICAL_FIXTURE_IMPORTS = {
+    "context",
+    "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+    "github.com/portpowered/go-agent-harness/go-audio/pkg/clock",
+    "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+}
+FORBIDDEN_FIXTURE_IMPORTS = {
+    "time",
+    "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
+    "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+}
+CANONICAL_FIXTURE_CALLS = {"mixer.New", "graph.AddInput"}
+FORBIDDEN_FIXTURE_CALLS = {
+    "time.NewTicker",
+    "codec.EncodePCM16",
+    "devicegw.NewDeviceSink",
+}
+AST_ORACLE_SOURCE = r'''package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"sort"
+	"strconv"
+)
+
+type report struct {
+	Path          string   `json:"path"`
+	Imports       []string `json:"imports"`
+	SelectorCalls []string `json:"selector_calls"`
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "at least one Go source path is required")
+		os.Exit(2)
+	}
+	reports := make([]report, 0, len(os.Args)-1)
+	for _, path := range os.Args[1:] {
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+			os.Exit(1)
+		}
+		imports := map[string]bool{}
+		calls := map[string]bool{}
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			switch current := node.(type) {
+			case *ast.ImportSpec:
+				value, err := strconv.Unquote(current.Path.Value)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%s: invalid import: %v\n", path, err)
+					os.Exit(1)
+				}
+				imports[value] = true
+			case *ast.CallExpr:
+				selector, ok := current.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				identifier, ok := selector.X.(*ast.Ident)
+				if ok {
+					calls[identifier.Name+"."+selector.Sel.Name] = true
+				}
+			}
+			return true
+		})
+		importsList := make([]string, 0, len(imports))
+		for value := range imports {
+			importsList = append(importsList, value)
+		}
+		callsList := make([]string, 0, len(calls))
+		for value := range calls {
+			callsList = append(callsList, value)
+		}
+		sort.Strings(importsList)
+		sort.Strings(callsList)
+		reports = append(reports, report{Path: path, Imports: importsList, SelectorCalls: callsList})
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(reports); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+'''
 
 
 def rel(path: str) -> Path:
@@ -283,6 +372,20 @@ def source_gap() -> dict[str, Any]:
     wire_gen = rel(PUBLIC_ROUTE_PATHS[2]).read_text(encoding="utf-8")
     service_test = rel(SERVICE_TEST_PATH).read_text(encoding="utf-8")
     lifecycle_mixer_field = line_hits(lifecycle, r"^\s*mixer\s+\*room\.PCM16Mixer\b")
+    public_route_sources = {
+        path: rel(path).read_text(encoding="utf-8") for path in PUBLIC_ROUTE_PATHS
+    }
+    public_route_legacy_imports = {
+        path: line_hits(text, r"internal/services/internal/agentruntime")
+        for path, text in public_route_sources.items()
+    }
+    public_route_legacy_entrypoints = {
+        path: line_hits(text, r"\bRunRoom(?:WithResult)?\s*\(")
+        for path, text in public_route_sources.items()
+    }
+    service_test_run_room_exports = line_hits(
+        service_test, r"^\s*(?:func|var)\s+RunRoom(?:WithResult)?\b"
+    )
 
     findings = [
         {
@@ -358,11 +461,13 @@ def source_gap() -> dict[str, Any]:
             "wire_room_provider": line_hits(wire, r"NewRoomServiceWithDevices"),
             "generated_room_service": line_hits(wire_gen, r"NewRoomServiceWithDevices"),
             "service_test_legacy_import": line_hits(service_test, r"^import impl .*internal/agentruntime"),
-            "service_test_run_room_exports": line_hits(
-                service_test, r"^\s*(?:func|var)\s+RunRoom(?:WithResult)?\b"
+            "public_route_legacy_imports": public_route_legacy_imports,
+            "public_route_legacy_entrypoints": public_route_legacy_entrypoints,
+            "service_test_run_room_exports": service_test_run_room_exports,
+            "legacy_entrypoint_imported_by_public_cli": any(
+                bool(hits) for hits in public_route_legacy_entrypoints.values()
             ),
-            "legacy_entrypoint_imported_by_public_cli": False,
-            "legacy_entrypoint_exposed_by_service_test": False,
+            "legacy_entrypoint_exposed_by_service_test": bool(service_test_run_room_exports),
             "interpretation": "The current yui room run command is wired to go-agent-runtime/services/rooms. servicetest imports the legacy package for other session seams, but runtime.go does not export RunRoom; the old RunRoom path is compiled and exercised by its own internal package tests, not exposed by the service-test API. It is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.",
         },
             "smallest_bypass": "agent-cli/internal/room/mixer.go plus its legacy agentruntime callers: host ticker + local PCM codec + direct device sink write in one room path.",
@@ -421,10 +526,10 @@ def runner_controls(runner: Runner) -> dict[str, Any]:
             "-run",
             "^TestC25NoSuchTest$",
             "-count=1",
-            "-timeout=10s",
+            "-timeout=45s",
         ],
         rel("agent-cli"),
-        timeout=10,
+        timeout=CHILD_TIMEOUT_SECONDS,
         expect_failure=True,
         require_tests=True,
     )
@@ -613,42 +718,170 @@ def changed_path_allowlist(runner: Runner) -> dict[str, Any]:
     return result
 
 
-def dependency_controls() -> dict[str, Any]:
-    canonical_mixer = rel("go-audio/pkg/mixer/mixer.go").read_text(encoding="utf-8")
-    canonical_input = rel("go-audio/pkg/mixer/input.go").read_text(encoding="utf-8")
-    room_contract = rel("go-agent-runtime/services/rooms/contract.go").read_text(encoding="utf-8")
-    room_graph = rel("go-agent-runtime/services/rooms/internal/lifecycle/graph.go").read_text(encoding="utf-8")
-    device_runtime = rel("go-device-gateway/pkg/runtime/rtc_device_sink.go").read_text(encoding="utf-8")
-    allowed = (OWNED / FIXTURE_PATHS[0]).read_text(encoding="utf-8")
-    forbidden = (OWNED / FIXTURE_PATHS[1]).read_text(encoding="utf-8")
-    fixture_manifest = fixture_manifest_check()
+def dependency_ast_oracle(runner: Runner, paths: list[Path]) -> dict[str, Any]:
+    helper_path = runner.tmp_dir / "dependency-oracle.go"
+    binary_path = runner.tmp_dir / "dependency-oracle"
+    helper_path.write_text(AST_ORACLE_SOURCE, encoding="utf-8")
+    build_result = runner.run(
+        "dependency-ast-oracle-build",
+        [
+            "env",
+            "GO111MODULE=off",
+            "GOWORK=off",
+            "go", "build", "-o", str(binary_path), str(helper_path),
+        ],
+        REPO,
+    )
+    command_result = runner.run(
+        "dependency-ast-oracle",
+        [str(binary_path), *[str(path) for path in paths]],
+        REPO,
+    ) if build_result["returncode"] == 0 else build_result
+    result: dict[str, Any] = {
+        "build_result": build_result,
+        "command_result": command_result,
+        "reports": [],
+        "verdict": "FAILED",
+    }
+    if build_result["returncode"] != 0 or command_result["returncode"] != 0 or command_result.get("timed_out"):
+        result["error"] = "AST dependency oracle failed or timed out"
+        return result
+    try:
+        reports = json.loads(command_result.get("stdout", ""))
+    except json.JSONDecodeError as exc:
+        result["error"] = f"AST dependency oracle returned invalid JSON: {exc}"
+        return result
+    if not isinstance(reports, list) or len(reports) != len(paths):
+        result["error"] = "AST dependency oracle returned an empty or incomplete report"
+        return result
+    if any(
+        not isinstance(report, dict)
+        or not isinstance(report.get("path"), str)
+        or not isinstance(report.get("imports"), list)
+        or not isinstance(report.get("selector_calls"), list)
+        for report in reports
+    ):
+        result["error"] = "AST dependency oracle returned a malformed report"
+        return result
+    result["reports"] = reports
+    result["verdict"] = "ACCEPTED"
+    return result
 
-    allowed_required = {
-        "canonical_mixer_clock": line_hits(canonical_mixer, r"go-audio/pkg/clock"),
-        "canonical_mixer_frame_buffer": line_hits(canonical_input, r"audio\.NewFrameBuffer"),
-        "canonical_input_pcm_frame": line_hits(canonical_input, r"audio\.PCMFrame"),
-        "room_media_factory": line_hits(room_contract, r"type MediaFactory interface"),
-        "room_media_ports": line_hits(room_contract, r"type MediaPorts struct"),
-        "room_graph_mixer": line_hits(room_graph, r"mixer\.New\("),
-        "room_graph_clock": line_hits(room_graph, r"clock\.TimerSource"),
-        "device_queue": line_hits(device_runtime, r"PlaybackQueue"),
-        "fixture_audio": line_hits(allowed, r"go-audio/pkg/audio"),
-        "fixture_clock": line_hits(allowed, r"go-audio/pkg/clock"),
-        "fixture_mixer": line_hits(allowed, r"go-audio/pkg/mixer"),
-    }
-    forbidden_hits = {
-        "host_ticker": line_hits(forbidden, r"time\.NewTicker"),
-        "local_codec": line_hits(forbidden, r"go-audio/pkg/codec"),
-        "direct_device": line_hits(forbidden, r"go-device-gateway/pkg/devices"),
-    }
-    positive_ok = all(isinstance(value, list) and bool(value) for value in allowed_required.values()) and fixture_manifest["verdict"] == "ACCEPTED"
-    negative_ok = all(isinstance(value, list) and bool(value) for value in forbidden_hits.values())
+
+def evaluate_fixture_report(
+    report: dict[str, Any],
+    *,
+    expected_imports: set[str] | None = None,
+    required_imports: set[str] | None = None,
+    required_calls: set[str] | None = None,
+    require_forbidden: bool = False,
+) -> dict[str, Any]:
+    imports = set(report.get("imports", []))
+    calls = set(report.get("selector_calls", []))
+    forbidden_imports = sorted(imports & FORBIDDEN_FIXTURE_IMPORTS)
+    forbidden_calls = sorted(calls & FORBIDDEN_FIXTURE_CALLS)
+    missing_imports = sorted((required_imports or set()) - imports)
+    missing_calls = sorted((required_calls or set()) - calls)
+    unexpected_imports = sorted(imports - (expected_imports or imports))
+    if require_forbidden:
+        accepted = bool(forbidden_imports) and bool(forbidden_calls) and not missing_imports and not missing_calls
+        verdict = "REJECTED_AS_FORBIDDEN" if accepted else "FAILED"
+    else:
+        accepted = (
+            not forbidden_imports
+            and not forbidden_calls
+            and not missing_imports
+            and not missing_calls
+            and not unexpected_imports
+        )
+        verdict = "ACCEPTED" if accepted else "FAILED"
     return {
-        "verdict": "ACCEPTED" if positive_ok and negative_ok else "FAILED",
-        "fixture_manifest": fixture_manifest,
-        "positive_control": {"verdict": "ACCEPTED" if positive_ok else "FAILED", "evidence": allowed_required},
-        "negative_control": {"verdict": "REJECTED_AS_FORBIDDEN" if negative_ok else "FAILED", "evidence": forbidden_hits},
-        "interpretation": "The dependency oracle accepts the canonical injected-clock/buffer/media-port graph and rejects the legacy bypass shape. This is a source dependency check, not device playback evidence.",
+        "path": report.get("path"),
+        "imports": sorted(imports),
+        "selector_calls": sorted(calls),
+        "forbidden_imports": forbidden_imports,
+        "forbidden_calls": forbidden_calls,
+        "missing_imports": missing_imports,
+        "missing_calls": missing_calls,
+        "unexpected_imports": unexpected_imports,
+        "verdict": verdict,
+    }
+
+
+def dependency_controls(runner: Runner) -> dict[str, Any]:
+    allowed_path = OWNED / FIXTURE_PATHS[0]
+    forbidden_path = OWNED / FIXTURE_PATHS[1]
+    allowed = allowed_path.read_text(encoding="utf-8")
+    mutation_dir = runner.tmp_dir / "dependency-fixtures"
+    mutation_dir.mkdir(parents=True, exist_ok=True)
+    allowed_with_forbidden_edge = mutation_dir / "allowed-with-forbidden-edge.go"
+    allowed_with_forbidden_edge.write_text(
+        allowed.replace("\n)", '\n\t"time"\n)', 1)
+        + '\nfunc AllowedWithForbiddenEdge() { _ = time.NewTicker(time.Millisecond) }\n',
+        encoding="utf-8",
+    )
+    allowed_comment_only = mutation_dir / "allowed-comment-only.go"
+    allowed_comment_only.write_text(
+        allowed + "\n// time.NewTicker, codec.EncodePCM16, and devicegw.NewDeviceSink are forbidden tokens only.\n",
+        encoding="utf-8",
+    )
+    oracle_paths = [allowed_path, forbidden_path, allowed_with_forbidden_edge, allowed_comment_only]
+    oracle = dependency_ast_oracle(runner, oracle_paths)
+    reports_by_path = {report.get("path"): report for report in oracle.get("reports", [])}
+
+    def report_for(path: Path) -> dict[str, Any]:
+        report = reports_by_path.get(str(path))
+        return report if isinstance(report, dict) else {}
+
+    positive = evaluate_fixture_report(
+        report_for(allowed_path),
+        expected_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_calls=CANONICAL_FIXTURE_CALLS,
+    )
+    negative = evaluate_fixture_report(
+        report_for(forbidden_path),
+        required_imports=FORBIDDEN_FIXTURE_IMPORTS,
+        required_calls=FORBIDDEN_FIXTURE_CALLS,
+        require_forbidden=True,
+    )
+    mutation = evaluate_fixture_report(
+        report_for(allowed_with_forbidden_edge),
+        expected_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_calls=CANONICAL_FIXTURE_CALLS,
+    )
+    comment_only = evaluate_fixture_report(
+        report_for(allowed_comment_only),
+        expected_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_imports=CANONICAL_FIXTURE_IMPORTS,
+        required_calls=CANONICAL_FIXTURE_CALLS,
+    )
+    mutation["verdict"] = (
+        "REJECTED_AS_FORBIDDEN"
+        if mutation["forbidden_imports"] and mutation["forbidden_calls"]
+        else "FAILED"
+    )
+    manifest = fixture_manifest_check()
+    positive_ok = oracle["verdict"] == "ACCEPTED" and positive["verdict"] == "ACCEPTED" and manifest["verdict"] == "ACCEPTED"
+    negative_ok = negative["verdict"] == "REJECTED_AS_FORBIDDEN"
+    mutation_ok = mutation["verdict"] == "REJECTED_AS_FORBIDDEN"
+    comment_ok = comment_only["verdict"] == "ACCEPTED"
+    if not (positive_ok and negative_ok and mutation_ok and comment_ok):
+        runner.failure = runner.failure or {
+            "label": "dependency-controls",
+            "returncode": 1,
+            "stderr": "AST dependency oracle or one of its positive/negative/comment mutation controls failed",
+        }
+    return {
+        "verdict": "ACCEPTED" if positive_ok and negative_ok and mutation_ok and comment_ok else "FAILED",
+        "ast_oracle": oracle,
+        "fixture_manifest": manifest,
+        "positive_control": positive,
+        "negative_control": negative,
+        "mutation_control": mutation,
+        "comment_only_control": comment_only,
+        "interpretation": "The AST dependency oracle derives imports and selector calls from parsed Go declarations, so comments cannot create edges and an allowed fixture containing a forbidden edge is rejected. This is a source dependency check, not device playback evidence.",
     }
 
 
@@ -782,7 +1015,7 @@ def run(mode: str) -> int:
             }
 
     if mode in ("controls", "all"):
-        diagnosis["dependency_controls"] = dependency_controls()
+        diagnosis["dependency_controls"] = dependency_controls(runner)
         if diagnosis["dependency_controls"].get("verdict") != "ACCEPTED":
             runner.failure = runner.failure or {
                 "label": "dependency-controls",
