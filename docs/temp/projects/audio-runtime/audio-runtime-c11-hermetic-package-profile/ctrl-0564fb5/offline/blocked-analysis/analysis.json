@@ -1,0 +1,26 @@
+{
+  "ci_evidence": [
+    {
+      "source": "synthetic"
+    }
+  ],
+  "failure_references": [],
+  "fresh_timing": "BLOCKED",
+  "inventory": {
+    "coverage": "UNKNOWN",
+    "expected_packages": 0,
+    "observed_packages": null
+  },
+  "lane": {
+    "definition": "No fresh run was authorized.",
+    "lane_wall_seconds": null,
+    "sum_invocation_wall_seconds": null
+  },
+  "provenance": {
+    "raw_logs": "not applicable"
+  },
+  "reason": "control-only blocked fallback",
+  "schema": "c11-hermetic-profile-analysis-v1",
+  "source_sha": "blocked-source",
+  "status": "BLOCKED"
+}

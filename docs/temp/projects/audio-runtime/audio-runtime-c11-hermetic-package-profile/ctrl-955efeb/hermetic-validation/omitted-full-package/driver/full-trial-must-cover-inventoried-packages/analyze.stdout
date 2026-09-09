@@ -1,0 +1,9 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/hermetic-validation/omitted-full-package/analysis/full-trial-must-cover-inventoried-packages/analysis.json",
+  "failure_count": 2,
+  "fresh_timing": "INVALID",
+  "lane_wall_seconds": 0.007,
+  "ranked_package_count": 2,
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "INVALID"
+}

@@ -1,0 +1,9 @@
+{
+  "analysis": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/cases/no-test-classification/analysis/analysis.json",
+  "failure_count": 0,
+  "fresh_timing": "PASS",
+  "lane_wall_seconds": 0.0771355,
+  "ranked_package_count": 2,
+  "source_sha": "synthetic-control-source",
+  "status": "PASS"
+}

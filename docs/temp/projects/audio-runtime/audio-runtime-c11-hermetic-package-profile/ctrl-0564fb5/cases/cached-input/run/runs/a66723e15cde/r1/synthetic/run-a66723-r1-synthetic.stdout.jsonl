@@ -1,0 +1,3 @@
+{"Action": "start", "Package": "example/cached"}
+{"Action": "output", "Output": "ok (cached)\n", "Package": "example/cached"}
+{"Action": "pass", "Elapsed": 0.02, "Package": "example/cached"}

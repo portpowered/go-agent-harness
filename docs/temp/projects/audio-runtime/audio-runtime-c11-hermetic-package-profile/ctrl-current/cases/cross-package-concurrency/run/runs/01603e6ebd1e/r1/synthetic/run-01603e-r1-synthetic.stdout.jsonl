@@ -1,0 +1,8 @@
+{"Action": "start", "Package": "example/package-a"}
+{"Action": "run", "Package": "example/package-a", "Test": "TestPackageA"}
+{"Action": "start", "Package": "example/package-b"}
+{"Action": "run", "Package": "example/package-b", "Test": "TestPackageB"}
+{"Action": "pass", "Elapsed": 0.01, "Package": "example/package-b", "Test": "TestPackageB"}
+{"Action": "pass", "Elapsed": 0.01, "Package": "example/package-a", "Test": "TestPackageA"}
+{"Action": "pass", "Elapsed": 0.02, "Package": "example/package-a"}
+{"Action": "pass", "Elapsed": 0.02, "Package": "example/package-b"}

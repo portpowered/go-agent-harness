@@ -29,7 +29,9 @@ const (
 // It parses SSE data lines, decodes JSON chunks, and maps them to typed events:
 // MESSAGE.START, TEXT.*, AUDIO.*, REASONING.*, TOOLCALL.*, USAGE_INFO, MESSAGE.END.
 // Supports delta.reasoning for OpenRouter/DeepInfra thinking tokens and delta.audio for audio output.
-func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
+// When closeBody is provided, it must complete before MESSAGE.END so callers
+// can flush a recorder only after the HTTP response body is inactive.
+func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage, closeBody ...func() error) {
 	const defaultIndex = 0
 
 	ch <- messages.StreamMessage{
@@ -256,12 +258,12 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 			}
 		}
 	}
-	sendMessageEnd()
-
-	if err := scanner.Err(); err != nil {
-		streamErr := gateway.NewTransportError("openai", "chat completions stream", err)
+	scanErr := scanner.Err()
+	closeResponseBody(closeBody, ch, sendMessageEnd)
+	if scanErr != nil {
+		streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
 		classification := providers.ErrorClassTransport
-		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", scanErr); cancellationErr != nil {
 			streamErr = cancellationErr
 			classification = providers.ErrorClassCancellation
 		}
@@ -273,4 +275,20 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 			Value:              errValue,
 		}
 	}
+}
+
+func closeResponseBody(closeBody []func() error, ch chan<- messages.StreamMessage, sendMessageEnd func()) {
+	if len(closeBody) == 0 || closeBody[0] == nil {
+		sendMessageEnd()
+		return
+	}
+	if err := closeBody[0](); err != nil {
+		ch <- messages.StreamMessage{
+			Type:               messages.StreamTypeError,
+			ActorProvidedIndex: 0,
+			Value:              providers.NewStreamTransportErrorValue(err),
+		}
+		return
+	}
+	sendMessageEnd()
 }

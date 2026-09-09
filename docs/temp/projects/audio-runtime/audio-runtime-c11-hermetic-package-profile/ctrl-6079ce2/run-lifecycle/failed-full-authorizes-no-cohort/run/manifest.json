@@ -1,0 +1,134 @@
+{
+  "cache_paths": {
+    "gocache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort/run/cache/gocache",
+    "gomodcache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort/run/cache/gomodcache",
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort/run/cache"
+  },
+  "commands": [
+    {
+      "exit_status": 0,
+      "phase": "inventory",
+      "record_id": "inventory-agent-cli",
+      "spawn_error": null,
+      "status": "PASS",
+      "timed_out": false
+    },
+    {
+      "exit_status": 0,
+      "phase": "warm",
+      "record_id": "warm-download-agent-cli",
+      "spawn_error": null,
+      "status": "PASS",
+      "timed_out": false
+    },
+    {
+      "cohort": false,
+      "exit_status": 1,
+      "label": "full-failed",
+      "module": "agent-cli",
+      "phase": "full",
+      "record_id": "full-failed",
+      "repeat_index": 1,
+      "requested_repetitions": 1,
+      "role": "go-test",
+      "run_group_id": "failed-full",
+      "selected_packages": [
+        "example/agent-cli"
+      ],
+      "spawn_error": null,
+      "status": "FAIL",
+      "timed_out": false,
+      "trial": 1
+    }
+  ],
+  "created_at_utc": "2026-09-09T00:35:05.286Z",
+  "flags": {
+    "agent_cli_timeout_seconds": 5,
+    "cgo_enabled": "0",
+    "count": 1,
+    "general_timeout_seconds": 5,
+    "go_test_p": 1,
+    "gomaxprocs": 1,
+    "tags": [
+      "nomicrophone"
+    ]
+  },
+  "go": {
+    "env": {},
+    "executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "version": "not-used"
+  },
+  "inventory_command_ids": [
+    "inventory-agent-cli"
+  ],
+  "inventory_status": "PASS",
+  "measurement_status": "INVENTORIED",
+  "metadata_command_ids": [],
+  "mode": "hermetic",
+  "modules": [
+    {
+      "name": "agent-cli",
+      "packages": [
+        {
+          "has_tests": true,
+          "import_path": "example/agent-cli",
+          "package_arg": "."
+        }
+      ],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "agent-cli"
+    },
+    {
+      "name": "go-agent-loop",
+      "packages": [],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "go-agent-loop"
+    },
+    {
+      "name": "go-llm-gateway",
+      "packages": [],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "go-llm-gateway"
+    },
+    {
+      "name": "go-audio",
+      "packages": [],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "go-audio"
+    },
+    {
+      "name": "go-device-gateway",
+      "packages": [],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "go-device-gateway"
+    },
+    {
+      "name": "go-agent-runtime",
+      "packages": [],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+      "relative": "go-agent-runtime"
+    }
+  ],
+  "paths": {
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort/run/manifest.json"
+  },
+  "project": "audio-runtime",
+  "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-6079ce2/run-lifecycle/failed-full-authorizes-no-cohort",
+  "runner": {
+    "architecture": "synthetic",
+    "cpu": "synthetic",
+    "go_version": "not-used",
+    "os": "synthetic-dedicated"
+  },
+  "schema": "c11-hermetic-profile-manifest-v1",
+  "source_dirty_paths": [],
+  "source_sha": "synthetic-control-source",
+  "warm": {
+    "command_ids": [
+      "warm-download-agent-cli"
+    ],
+    "status": "PASS",
+    "test_binaries": []
+  },
+  "work": "audio-runtime-c11-hermetic-package-profile-controls"
+}

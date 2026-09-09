@@ -1,0 +1,803 @@
+﻿2026-09-09T01:47:13.0218196Z Current runner version: '2.337.0'
+2026-09-09T01:47:13.0246913Z ##[group]Runner Image Provisioner
+2026-09-09T01:47:13.0248537Z Hosted Compute Agent
+2026-09-09T01:47:13.0249318Z Version: 20260828.587
+2026-09-09T01:47:13.0250004Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-09T01:47:13.0250759Z Build Date: 2026-08-28T16:44:25Z
+2026-09-09T01:47:13.0251571Z Worker ID: {acc0d586-e514-4a23-aad1-e6756bd82f48}
+2026-09-09T01:47:13.0252329Z Azure Region: eastus2
+2026-09-09T01:47:13.0253082Z ##[endgroup]
+2026-09-09T01:47:13.0254589Z ##[group]Operating System
+2026-09-09T01:47:13.0255243Z Ubuntu
+2026-09-09T01:47:13.0255900Z 24.04.5
+2026-09-09T01:47:13.0256453Z LTS
+2026-09-09T01:47:13.0257238Z ##[endgroup]
+2026-09-09T01:47:13.0257845Z ##[group]Runner Image
+2026-09-09T01:47:13.0258501Z Image: ubuntu-24.04
+2026-09-09T01:47:13.0259167Z Version: 20260907.300.1
+2026-09-09T01:47:13.0260573Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-09T01:47:13.0262182Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-09T01:47:13.0263197Z ##[endgroup]
+2026-09-09T01:47:13.0264436Z ##[group]GITHUB_TOKEN Permissions
+2026-09-09T01:47:13.0267014Z Contents: read
+2026-09-09T01:47:13.0267959Z Metadata: read
+2026-09-09T01:47:13.0268565Z ##[endgroup]
+2026-09-09T01:47:13.0270849Z Secret source: Actions
+2026-09-09T01:47:13.0272239Z Prepare workflow directory
+2026-09-09T01:47:13.0608576Z Prepare all required actions
+2026-09-09T01:47:13.0658479Z Getting action download info
+2026-09-09T01:47:13.2926214Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-09T01:47:13.4098281Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+2026-09-09T01:47:13.6722398Z Download action repository 'actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809' (SHA:0400d5f644dc74513175e3cd8d07132dd4860809)
+2026-09-09T01:47:13.9329885Z Complete job name: CI (static)
+2026-09-09T01:47:14.0207627Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-09T01:47:14.0217433Z ##[group]Run actions/checkout@v4
+2026-09-09T01:47:14.0218453Z with:
+2026-09-09T01:47:14.0219018Z   fetch-depth: 0
+2026-09-09T01:47:14.0219680Z   repository: portpowered/go-agent-harness
+2026-09-09T01:47:14.0223801Z   token: ***
+2026-09-09T01:47:14.0224390Z   ssh-strict: true
+2026-09-09T01:47:14.0225417Z   ssh-user: git
+2026-09-09T01:47:14.0226036Z   persist-credentials: true
+2026-09-09T01:47:14.0226955Z   clean: true
+2026-09-09T01:47:14.0227642Z   sparse-checkout-cone-mode: true
+2026-09-09T01:47:14.0228338Z   fetch-tags: false
+2026-09-09T01:47:14.0228996Z   show-progress: true
+2026-09-09T01:47:14.0229685Z   lfs: false
+2026-09-09T01:47:14.0230414Z   submodules: false
+2026-09-09T01:47:14.0231044Z   set-safe-directory: true
+2026-09-09T01:47:14.0231771Z   allow-unsafe-pr-checkout: false
+2026-09-09T01:47:14.0232828Z ##[endgroup]
+2026-09-09T01:47:14.1334223Z Syncing repository: portpowered/go-agent-harness
+2026-09-09T01:47:14.1337474Z ##[group]Getting Git version info
+2026-09-09T01:47:14.1339082Z Working directory is '/home/runner/work/go-agent-harness/go-agent-harness'
+2026-09-09T01:47:14.1341351Z [command]/usr/bin/git version
+2026-09-09T01:47:14.1364125Z git version 2.55.0
+2026-09-09T01:47:14.1385646Z ##[endgroup]
+2026-09-09T01:47:14.1400910Z Temporarily overriding HOME='/home/runner/work/_temp/11abeddd-0f1e-4a9b-8e3d-8e99c40c9d58' before making global git config changes
+2026-09-09T01:47:14.1403546Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-09T01:47:14.1406344Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-09T01:47:14.1453026Z Deleting the contents of '/home/runner/work/go-agent-harness/go-agent-harness'
+2026-09-09T01:47:14.1456899Z ##[group]Initializing the repository
+2026-09-09T01:47:14.1469962Z [command]/usr/bin/git init /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-09T01:47:14.1562909Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-09T01:47:14.1566405Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-09T01:47:14.1568895Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-09T01:47:14.1571161Z hint: call:
+2026-09-09T01:47:14.1572726Z hint:
+2026-09-09T01:47:14.1574258Z hint: 	git config --global init.defaultBranch <name>
+2026-09-09T01:47:14.1576008Z hint:
+2026-09-09T01:47:14.1577673Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-09T01:47:14.1581092Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-09T01:47:14.1584514Z hint:
+2026-09-09T01:47:14.1586580Z hint: 	git branch -m <name>
+2026-09-09T01:47:14.1588408Z hint:
+2026-09-09T01:47:14.1590093Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-09T01:47:14.1592505Z Initialized empty Git repository in /home/runner/work/go-agent-harness/go-agent-harness/.git/
+2026-09-09T01:47:14.1600069Z [command]/usr/bin/git remote add origin https://github.com/portpowered/go-agent-harness
+2026-09-09T01:47:14.1648243Z ##[endgroup]
+2026-09-09T01:47:14.1649923Z ##[group]Disabling automatic garbage collection
+2026-09-09T01:47:14.1651254Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-09T01:47:14.1685237Z ##[endgroup]
+2026-09-09T01:47:14.1686855Z ##[group]Setting up auth
+2026-09-09T01:47:14.1691731Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-09T01:47:14.1726948Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-09T01:47:14.2088566Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-09T01:47:14.2112816Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-09T01:47:14.2370623Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-09T01:47:14.2409121Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-09T01:47:14.2655459Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-09T01:47:14.2697876Z ##[endgroup]
+2026-09-09T01:47:14.2698986Z ##[group]Fetching the repository
+2026-09-09T01:47:14.2710160Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +c6e59e38d02a5ecb2a2b981edaac92fb1a7747da:refs/remotes/pull/403/merge
+2026-09-09T01:47:15.7244434Z From https://github.com/portpowered/go-agent-harness
+2026-09-09T01:47:15.7247238Z  * [new branch]        audio-input-rate-24k                     -> origin/audio-input-rate-24k
+2026-09-09T01:47:15.7249570Z  * [new branch]        ci-coverage-gate-ergonomics              -> origin/ci-coverage-gate-ergonomics
+2026-09-09T01:47:15.7251809Z  * [new branch]        ci-executable-prepush-gate               -> origin/ci-executable-prepush-gate
+2026-09-09T01:47:15.7253937Z  * [new branch]        ci-parallelize-jobs                      -> origin/ci-parallelize-jobs
+2026-09-09T01:47:15.7256554Z  * [new branch]        ci-single-coverage-pass-and-fast-tools   -> origin/ci-single-coverage-pass-and-fast-tools
+2026-09-09T01:47:15.7259069Z  * [new branch]        codex/audio-runtime-c01-baseline         -> origin/codex/audio-runtime-c01-baseline
+2026-09-09T01:47:15.7262666Z  * [new branch]        codex/audio-runtime-c04-baseline-publish-recovery -> origin/codex/audio-runtime-c04-baseline-publish-recovery
+2026-09-09T01:47:15.7267114Z  * [new branch]        codex/audio-runtime-c07-session-update-feedback-recovery -> origin/codex/audio-runtime-c07-session-update-feedback-recovery
+2026-09-09T01:47:15.7271116Z  * [new branch]        codex/audio-runtime-c08-recorded-bundle-roundtrip -> origin/codex/audio-runtime-c08-recorded-bundle-roundtrip
+2026-09-09T01:47:15.7275325Z  * [new branch]        codex/audio-runtime-c09-baseline-history-continuity -> origin/codex/audio-runtime-c09-baseline-history-continuity
+2026-09-09T01:47:15.7279571Z  * [new branch]        codex/audio-runtime-c10-preserve-rename-validation -> origin/codex/audio-runtime-c10-preserve-rename-validation
+2026-09-09T01:47:15.7283559Z  * [new branch]        codex/audio-runtime-c11-hermetic-package-profile -> origin/codex/audio-runtime-c11-hermetic-package-profile
+2026-09-09T01:47:15.7287800Z  * [new branch]        codex/audio-runtime-c12-interruption-replay-progress -> origin/codex/audio-runtime-c12-interruption-replay-progress
+2026-09-09T01:47:15.7291624Z  * [new branch]        codex/audio-runtime-c13-recorded-pcm-integrity -> origin/codex/audio-runtime-c13-recorded-pcm-integrity
+2026-09-09T01:47:15.7295427Z  * [new branch]        codex/audio-runtime-c14-replay-boundary-audit -> origin/codex/audio-runtime-c14-replay-boundary-audit
+2026-09-09T01:47:15.7299597Z  * [new branch]        codex/audio-subsystem-device-gateway     -> origin/codex/audio-subsystem-device-gateway
+2026-09-09T01:47:15.7303342Z  * [new branch]        codex/audio-timing-coordination          -> origin/codex/audio-timing-coordination
+2026-09-09T01:47:15.7306228Z  * [new branch]        codex/browser-audio-regressions          -> origin/codex/browser-audio-regressions
+2026-09-09T01:47:15.7308967Z  * [new branch]        codex/fifo-tool-audio-playback           -> origin/codex/fifo-tool-audio-playback
+2026-09-09T01:47:15.7311711Z  * [new branch]        codex/fix-audio-out-live-session         -> origin/codex/fix-audio-out-live-session
+2026-09-09T01:47:15.7314618Z  * [new branch]        codex/fix-realtime-hold-tone-truncation  -> origin/codex/fix-realtime-hold-tone-truncation
+2026-09-09T01:47:15.7317804Z  * [new branch]        codex/live-playback-drain                -> origin/codex/live-playback-drain
+2026-09-09T01:47:15.7320538Z  * [new branch]        codex/managed-browser-stale-recovery     -> origin/codex/managed-browser-stale-recovery
+2026-09-09T01:47:15.7323911Z  * [new branch]        codex/realtime-2-1-lossless              -> origin/codex/realtime-2-1-lossless
+2026-09-09T01:47:15.7326547Z  * [new branch]        codex/realtime-timing-harness            -> origin/codex/realtime-timing-harness
+2026-09-09T01:47:15.7330190Z  * [new branch]        codex/test42-echo-vad-install-versions   -> origin/codex/test42-echo-vad-install-versions
+2026-09-09T01:47:15.7332999Z  * [new branch]        codex/test46-high-rate-audit             -> origin/codex/test46-high-rate-audit
+2026-09-09T01:47:15.7336032Z  * [new branch]        factory-setup-worktree-prep-hardening    -> origin/factory-setup-worktree-prep-hardening
+2026-09-09T01:47:15.7339096Z  * [new branch]        feat/x-webmcp-video                      -> origin/feat/x-webmcp-video
+2026-09-09T01:47:15.7341921Z  * [new branch]        fix/room-playback-diagnostics-wiring     -> origin/fix/room-playback-diagnostics-wiring
+2026-09-09T01:47:15.7344770Z  * [new branch]        fix/rtc-feedback-actually-suppress       -> origin/fix/rtc-feedback-actually-suppress
+2026-09-09T01:47:15.7347690Z  * [new branch]        fix/s2s-dead-air-hold-tone               -> origin/fix/s2s-dead-air-hold-tone
+2026-09-09T01:47:15.7350343Z  * [new branch]        fix/session-optional-record-replay       -> origin/fix/session-optional-record-replay
+2026-09-09T01:47:15.7353046Z  * [new branch]        main                                     -> origin/main
+2026-09-09T01:47:15.7355964Z  * [new branch]        phase-1-authoritative-checkout-convergence-validator -> origin/phase-1-authoritative-checkout-convergence-validator
+2026-09-09T01:47:15.7360230Z  * [new branch]        phase-1-authoritative-checkout-reconciliation -> origin/phase-1-authoritative-checkout-reconciliation
+2026-09-09T01:47:15.7364241Z  * [new branch]        phase-1-authoritative-workspace-convergence -> origin/phase-1-authoritative-workspace-convergence
+2026-09-09T01:47:15.7368177Z  * [new branch]        phase-1-dependency-contracts-and-api-gap-audit -> origin/phase-1-dependency-contracts-and-api-gap-audit
+2026-09-09T01:47:15.7371496Z  * [new branch]        phase-1-land-workspace-validation-baseline -> origin/phase-1-land-workspace-validation-baseline
+2026-09-09T01:47:15.7374967Z  * [new branch]        phase-1-readme-package-map-getting-started -> origin/phase-1-readme-package-map-getting-started
+2026-09-09T01:47:15.7378244Z  * [new branch]        phase-1-workspace-validation-entrypoints -> origin/phase-1-workspace-validation-entrypoints
+2026-09-09T01:47:15.7381371Z  * [new branch]        phase-2-constructor-ownership-boundaries -> origin/phase-2-constructor-ownership-boundaries
+2026-09-09T01:47:15.7384388Z  * [new branch]        phase-2-constructor-ownership-validator  -> origin/phase-2-constructor-ownership-validator
+2026-09-09T01:47:15.7387641Z  * [new branch]        phase-2-factory-worktree-hygiene-repair  -> origin/phase-2-factory-worktree-hygiene-repair
+2026-09-09T01:47:15.7390655Z  * [new branch]        phase-2-factory-worktree-hygiene-validator -> origin/phase-2-factory-worktree-hygiene-validator
+2026-09-09T01:47:15.7393748Z  * [new branch]        phase-2-session-fixture-ownership-boundary -> origin/phase-2-session-fixture-ownership-boundary
+2026-09-09T01:47:15.7396982Z  * [new branch]        phase-2-session-fixture-ownership-validator -> origin/phase-2-session-fixture-ownership-validator
+2026-09-09T01:47:15.7400068Z  * [new branch]        phase-2-session-runtime-ownership-repair -> origin/phase-2-session-runtime-ownership-repair
+2026-09-09T01:47:15.7403352Z  * [new branch]        phase-2-session-runtime-ownership-validator -> origin/phase-2-session-runtime-ownership-validator
+2026-09-09T01:47:15.7406320Z  * [new branch]        phase-3-authoritative-checkout-sync      -> origin/phase-3-authoritative-checkout-sync
+2026-09-09T01:47:15.7409155Z  * [new branch]        phase-3-gateway-runtime-decoupling       -> origin/phase-3-gateway-runtime-decoupling
+2026-09-09T01:47:15.7411847Z  * [new branch]        phase-3-library-independence-proof       -> origin/phase-3-library-independence-proof
+2026-09-09T01:47:15.7414632Z  * [new branch]        phase-3-library-independence-validator   -> origin/phase-3-library-independence-validator
+2026-09-09T01:47:15.7417980Z  * [new branch]        phase-3-library-independence-validator-landing -> origin/phase-3-library-independence-validator-landing
+2026-09-09T01:47:15.7420930Z  * [new branch]        phase-3-shared-contract-decision         -> origin/phase-3-shared-contract-decision
+2026-09-09T01:47:15.7423637Z  * [new branch]        phase-3-shared-contract-validator        -> origin/phase-3-shared-contract-validator
+2026-09-09T01:47:15.7426440Z  * [new branch]        phase-3-shared-contract-validator-landing -> origin/phase-3-shared-contract-validator-landing
+2026-09-09T01:47:15.7429492Z  * [new branch]        phase-4-api-audit-reconciliation         -> origin/phase-4-api-audit-reconciliation
+2026-09-09T01:47:15.7432141Z  * [new branch]        phase-4-api-contract-repair-validator    -> origin/phase-4-api-contract-repair-validator
+2026-09-09T01:47:15.7434747Z  * [new branch]        phase-4-api-contract-validator           -> origin/phase-4-api-contract-validator
+2026-09-09T01:47:15.7437664Z  * [new branch]        phase-4-audit-validator-015-reconciliation -> origin/phase-4-audit-validator-015-reconciliation
+2026-09-09T01:47:15.7440510Z  * [new branch]        phase-4-authoritative-baseline-sync      -> origin/phase-4-authoritative-baseline-sync
+2026-09-09T01:47:15.7443693Z  * [new branch]        phase-4-dependency-result-context-lifecycle-contract -> origin/phase-4-dependency-result-context-lifecycle-contract
+2026-09-09T01:47:15.7447298Z  * [new branch]        phase-4-dependency-result-contract-repair -> origin/phase-4-dependency-result-contract-repair
+2026-09-09T01:47:15.7450164Z  * [new branch]        phase-4-exported-api-contract-audit      -> origin/phase-4-exported-api-contract-audit
+2026-09-09T01:47:15.7452842Z  * [new branch]        phase-4-gateway-error-taxonomy           -> origin/phase-4-gateway-error-taxonomy
+2026-09-09T01:47:15.7455986Z  * [new branch]        phase-4-provider-capabilities-local-validation-contract -> origin/phase-4-provider-capabilities-local-validation-contract
+2026-09-09T01:47:15.7459492Z  * [new branch]        phase-4-provider-capabilities-validation -> origin/phase-4-provider-capabilities-validation
+2026-09-09T01:47:15.7462604Z  * [new branch]        phase-4-provider-capability-validation-repair -> origin/phase-4-provider-capability-validation-repair
+2026-09-09T01:47:15.7465534Z  * [new branch]        phase-4-typed-errors-stream-repair       -> origin/phase-4-typed-errors-stream-repair
+2026-09-09T01:47:15.7468728Z  * [new branch]        phase-4-typed-errors-stream-terminal-contract -> origin/phase-4-typed-errors-stream-terminal-contract
+2026-09-09T01:47:15.7472101Z  * [new branch]        phase-4-typed-terminal-authoritative-reconciliation -> origin/phase-4-typed-terminal-authoritative-reconciliation
+2026-09-09T01:47:15.7474709Z  * [new branch]        pnig                                     -> origin/pnig
+2026-09-09T01:47:15.7477010Z  * [new branch]        room-participant-browser-tools           -> origin/room-participant-browser-tools
+2026-09-09T01:47:15.7479291Z  * [new branch]        s2s-acc-fleet-gate                       -> origin/s2s-acc-fleet-gate
+2026-09-09T01:47:15.7481551Z  * [new branch]        s2s-acc-probe-friction-report            -> origin/s2s-acc-probe-friction-report
+2026-09-09T01:47:15.7483902Z  * [new branch]        s2s-acc-probe-goal-catalog               -> origin/s2s-acc-probe-goal-catalog
+2026-09-09T01:47:15.7486429Z  * [new branch]        s2s-acc-probe-stuck-detection            -> origin/s2s-acc-probe-stuck-detection
+2026-09-09T01:47:15.7489705Z  * [new branch]        s2s-agent-cli-suite-is-at-80-percent-of-its-ci-timeout-budget -> origin/s2s-agent-cli-suite-is-at-80-percent-of-its-ci-timeout-budget
+2026-09-09T01:47:15.7493157Z  * [new branch]        s2s-artifact-integrity-and-write-conflicts -> origin/s2s-artifact-integrity-and-write-conflicts
+2026-09-09T01:47:15.7496120Z  * [new branch]        s2s-audio-in-turn-detection-null-vad-20260901 -> origin/s2s-audio-in-turn-detection-null-vad-20260901
+2026-09-09T01:47:15.7499290Z  * [new branch]        s2s-audio-interrupt-on-tool-never-releases -> origin/s2s-audio-interrupt-on-tool-never-releases
+2026-09-09T01:47:15.7503527Z  * [new branch]        s2s-audio-out-and-audio-out-device-cannot-be-combined-so-device-output-is-unverifiable -> origin/s2s-audio-out-and-audio-out-device-cannot-be-combined-so-device-output-is-unverifiable
+2026-09-09T01:47:15.7508151Z  * [new branch]        s2s-audio-property-assertions-and-golden-fixtures -> origin/s2s-audio-property-assertions-and-golden-fixtures
+2026-09-09T01:47:15.7511190Z  * [new branch]        s2s-audio-turn-tool-loop-never-completes -> origin/s2s-audio-turn-tool-loop-never-completes
+2026-09-09T01:47:15.7513771Z  * [new branch]        s2s-b0-realtime-model-allowlist          -> origin/s2s-b0-realtime-model-allowlist
+2026-09-09T01:47:15.7516127Z  * [new branch]        s2s-b1-cov-agent-executor-core           -> origin/s2s-b1-cov-agent-executor-core
+2026-09-09T01:47:15.7518796Z  * [new branch]        s2s-b1-cov-cli-ask-and-tool-commands     -> origin/s2s-b1-cov-cli-ask-and-tool-commands
+2026-09-09T01:47:15.7521171Z  * [new branch]        s2s-b1-cov-cli-chat-command              -> origin/s2s-b1-cov-cli-chat-command
+2026-09-09T01:47:15.7523570Z  * [new branch]        s2s-b1-cov-cli-config-and-interaction    -> origin/s2s-b1-cov-cli-config-and-interaction
+2026-09-09T01:47:15.7526029Z  * [new branch]        s2s-b1-cov-cli-root-and-routes           -> origin/s2s-b1-cov-cli-root-and-routes
+2026-09-09T01:47:15.7528519Z  * [new branch]        s2s-b1-cov-logger-routing                -> origin/s2s-b1-cov-logger-routing
+2026-09-09T01:47:15.7530906Z  * [new branch]        s2s-b1-cov-messages-buffers-property     -> origin/s2s-b1-cov-messages-buffers-property
+2026-09-09T01:47:15.7533577Z  * [new branch]        s2s-b1-cov-messages-reconstruction-golden -> origin/s2s-b1-cov-messages-reconstruction-golden
+2026-09-09T01:47:15.7537112Z  * [new branch]        s2s-b1-cov-models-session-contract       -> origin/s2s-b1-cov-models-session-contract
+2026-09-09T01:47:15.7540830Z  * [new branch]        s2s-b1-cov-providers-error-taxonomy      -> origin/s2s-b1-cov-providers-error-taxonomy
+2026-09-09T01:47:15.7544355Z  * [new branch]        s2s-b1-cov-services-ask-and-autocomplete -> origin/s2s-b1-cov-services-ask-and-autocomplete
+2026-09-09T01:47:15.7548406Z  * [new branch]        s2s-b1-cov-services-chat-core            -> origin/s2s-b1-cov-services-chat-core
+2026-09-09T01:47:15.7551287Z  * [new branch]        s2s-b1-cov-session-storage               -> origin/s2s-b1-cov-session-storage
+2026-09-09T01:47:15.7553666Z  * [new branch]        s2s-b1-cov-tools-filesystem-and-edit     -> origin/s2s-b1-cov-tools-filesystem-and-edit
+2026-09-09T01:47:15.7556166Z  * [new branch]        s2s-b1-cov-tools-registry-contract       -> origin/s2s-b1-cov-tools-registry-contract
+2026-09-09T01:47:15.7559059Z  * [new branch]        s2s-b1-cov-tools-screen-and-mouse-platform -> origin/s2s-b1-cov-tools-screen-and-mouse-platform
+2026-09-09T01:47:15.7561777Z  * [new branch]        s2s-b1-cov-tools-shell-injected-process  -> origin/s2s-b1-cov-tools-shell-injected-process
+2026-09-09T01:47:15.7564223Z  * [new branch]        s2s-b1-cov-workspace-agents-md           -> origin/s2s-b1-cov-workspace-agents-md
+2026-09-09T01:47:15.7566471Z  * [new branch]        s2s-b1-coverage-manifest-gate            -> origin/s2s-b1-coverage-manifest-gate
+2026-09-09T01:47:15.7569034Z  * [new branch]        s2s-b1-file-and-func-size-lint           -> origin/s2s-b1-file-and-func-size-lint
+2026-09-09T01:47:15.7571318Z  * [new branch]        s2s-b1-hermetic-test-target              -> origin/s2s-b1-hermetic-test-target
+2026-09-09T01:47:15.7573495Z  * [new branch]        s2s-b1-split-agent-executor              -> origin/s2s-b1-split-agent-executor
+2026-09-09T01:47:15.7575846Z  * [new branch]        s2s-b1-split-messages-agent-messages     -> origin/s2s-b1-split-messages-agent-messages
+2026-09-09T01:47:15.7578411Z  * [new branch]        s2s-b1-split-openai-session              -> origin/s2s-b1-split-openai-session
+2026-09-09T01:47:15.7580556Z  * [new branch]        s2s-b1-split-services-chat               -> origin/s2s-b1-split-services-chat
+2026-09-09T01:47:15.7582750Z  * [new branch]        s2s-b1-split-services-session            -> origin/s2s-b1-split-services-session
+2026-09-09T01:47:15.7585154Z  * [new branch]        s2s-b1-split-services-session-runtime    -> origin/s2s-b1-split-services-session-runtime
+2026-09-09T01:47:15.7587677Z  * [new branch]        s2s-b1-wallclock-budget-gate             -> origin/s2s-b1-wallclock-budget-gate
+2026-09-09T01:47:15.7589970Z  * [new branch]        s2s-b1-wire-composition-boundary         -> origin/s2s-b1-wire-composition-boundary
+2026-09-09T01:47:15.7592283Z  * [new branch]        s2s-b2-audio-corpus-generator            -> origin/s2s-b2-audio-corpus-generator
+2026-09-09T01:47:15.7594742Z  * [new branch]        s2s-b2-audio-device-source-and-sink      -> origin/s2s-b2-audio-device-source-and-sink
+2026-09-09T01:47:15.7597835Z  * [new branch]        s2s-b2-audio-resampler                   -> origin/s2s-b2-audio-resampler
+2026-09-09T01:47:15.7599952Z  * [new branch]        s2s-b2-audio-source-and-sink             -> origin/s2s-b2-audio-source-and-sink
+2026-09-09T01:47:15.7602136Z  * [new branch]        s2s-b2-audiofixture-loader               -> origin/s2s-b2-audiofixture-loader
+2026-09-09T01:47:15.7604282Z  * [new branch]        s2s-b2-buffer-crossing-logs              -> origin/s2s-b2-buffer-crossing-logs
+2026-09-09T01:47:15.7606791Z  * [new branch]        s2s-b2-device-linux-alsa-pulse           -> origin/s2s-b2-device-linux-alsa-pulse
+2026-09-09T01:47:15.7609067Z  * [new branch]        s2s-b2-device-macos-coreaudio            -> origin/s2s-b2-device-macos-coreaudio
+2026-09-09T01:47:15.7611320Z  * [new branch]        s2s-b2-device-registry-contract          -> origin/s2s-b2-device-registry-contract
+2026-09-09T01:47:15.7613721Z  * [new branch]        s2s-b2-device-selection-and-fallback     -> origin/s2s-b2-device-selection-and-fallback
+2026-09-09T01:47:15.7616067Z  * [new branch]        s2s-b2-device-virtual-loopback           -> origin/s2s-b2-device-virtual-loopback
+2026-09-09T01:47:15.7618409Z  * [new branch]        s2s-b2-device-windows-wasapi             -> origin/s2s-b2-device-windows-wasapi
+2026-09-09T01:47:15.7620632Z  * [new branch]        s2s-b2-fixture-validator-shapes          -> origin/s2s-b2-fixture-validator-shapes
+2026-09-09T01:47:15.7622901Z  * [new branch]        s2s-b2-functional-time-harness           -> origin/s2s-b2-functional-time-harness
+2026-09-09T01:47:15.7625064Z  * [new branch]        s2s-b2-logging-alloc-gate                -> origin/s2s-b2-logging-alloc-gate
+2026-09-09T01:47:15.7627206Z  * [new branch]        s2s-b2-metrics-package                   -> origin/s2s-b2-metrics-package
+2026-09-09T01:47:15.7629220Z  * [new branch]        s2s-b2-platform-clock                    -> origin/s2s-b2-platform-clock
+2026-09-09T01:47:15.7631294Z  * [new branch]        s2s-b2-transcript-agent-side             -> origin/s2s-b2-transcript-agent-side
+2026-09-09T01:47:15.7633502Z  * [new branch]        s2s-b2-transcript-client-side            -> origin/s2s-b2-transcript-client-side
+2026-09-09T01:47:15.7635739Z  * [new branch]        s2s-b2-transcript-frame-format           -> origin/s2s-b2-transcript-frame-format
+2026-09-09T01:47:15.7638368Z  * [new branch]        s2s-b2-transcript-manifest-and-artifacts -> origin/s2s-b2-transcript-manifest-and-artifacts
+2026-09-09T01:47:15.7640991Z  * [new branch]        s2s-b2-transcript-writer-and-tee         -> origin/s2s-b2-transcript-writer-and-tee
+2026-09-09T01:47:15.7643249Z  * [new branch]        s2s-b2-transport-grok-retype             -> origin/s2s-b2-transport-grok-retype
+2026-09-09T01:47:15.7645392Z  * [new branch]        s2s-b2-transport-interface               -> origin/s2s-b2-transport-interface
+2026-09-09T01:47:15.7647849Z  * [new branch]        s2s-b2-transport-openai-retype           -> origin/s2s-b2-transport-openai-retype
+2026-09-09T01:47:15.7649961Z  * [new branch]        s2s-b2-wavio-package                     -> origin/s2s-b2-wavio-package
+2026-09-09T01:47:15.7651985Z  * [new branch]        s2s-b2-wire-mock-injection               -> origin/s2s-b2-wire-mock-injection
+2026-09-09T01:47:15.7654041Z  * [new branch]        s2s-b2-wire-ports-audio                  -> origin/s2s-b2-wire-ports-audio
+2026-09-09T01:47:15.7656119Z  * [new branch]        s2s-b2-wire-ports-transport              -> origin/s2s-b2-wire-ports-transport
+2026-09-09T01:47:15.7658434Z  * [new branch]        s2s-b3-agents-md-profiles                -> origin/s2s-b3-agents-md-profiles
+2026-09-09T01:47:15.7660464Z  * [new branch]        s2s-b3-audioin-truthing                  -> origin/s2s-b3-audioin-truthing
+2026-09-09T01:47:15.7662510Z  * [new branch]        s2s-b3-devices-list-command              -> origin/s2s-b3-devices-list-command
+2026-09-09T01:47:15.7664818Z  * [new branch]        s2s-b3-duplex-functional-time-fixture    -> origin/s2s-b3-duplex-functional-time-fixture
+2026-09-09T01:47:15.7667438Z  * [new branch]        s2s-b3-functional-layout-and-quarantine  -> origin/s2s-b3-functional-layout-and-quarantine
+2026-09-09T01:47:15.7669855Z  * [new branch]        s2s-b3-parity-compare-and-report         -> origin/s2s-b3-parity-compare-and-report
+2026-09-09T01:47:15.7672096Z  * [new branch]        s2s-b3-parity-normalize-agent            -> origin/s2s-b3-parity-normalize-agent
+2026-09-09T01:47:15.7674319Z  * [new branch]        s2s-b3-parity-normalize-client           -> origin/s2s-b3-parity-normalize-client
+2026-09-09T01:47:15.7676641Z  * [new branch]        s2s-b3-parity-projection                 -> origin/s2s-b3-parity-projection
+2026-09-09T01:47:15.7678838Z  * [new branch]        s2s-b3-probe-cli-surface                 -> origin/s2s-b3-probe-cli-surface
+2026-09-09T01:47:15.7680981Z  * [new branch]        s2s-b3-probe-dead-session-guard          -> origin/s2s-b3-probe-dead-session-guard
+2026-09-09T01:47:15.7683149Z  * [new branch]        s2s-b3-probe-expectations                -> origin/s2s-b3-probe-expectations
+2026-09-09T01:47:15.7685399Z  * [new branch]        s2s-b3-probe-logical-time-sequencing     -> origin/s2s-b3-probe-logical-time-sequencing
+2026-09-09T01:47:15.7687802Z  * [new branch]        s2s-b3-probe-replay-transport            -> origin/s2s-b3-probe-replay-transport
+2026-09-09T01:47:15.7689918Z  * [new branch]        s2s-b3-probe-runner-jsonl                -> origin/s2s-b3-probe-runner-jsonl
+2026-09-09T01:47:15.7692044Z  * [new branch]        s2s-b3-probe-scenario-model              -> origin/s2s-b3-probe-scenario-model
+2026-09-09T01:47:15.7694120Z  * [new branch]        s2s-b3-session-agents-md                 -> origin/s2s-b3-session-agents-md
+2026-09-09T01:47:15.7696191Z  * [new branch]        s2s-b3-session-audio-out-file            -> origin/s2s-b3-session-audio-out-file
+2026-09-09T01:47:15.7698572Z  * [new branch]        s2s-b3-session-harness-extension         -> origin/s2s-b3-session-harness-extension
+2026-09-09T01:47:15.7700748Z  * [new branch]        s2s-b3-session-image-input               -> origin/s2s-b3-session-image-input
+2026-09-09T01:47:15.7702830Z  * [new branch]        s2s-b3-session-max-duration              -> origin/s2s-b3-session-max-duration
+2026-09-09T01:47:15.7704965Z  * [new branch]        s2s-b3-session-recording-flags           -> origin/s2s-b3-session-recording-flags
+2026-09-09T01:47:15.7707262Z  * [new branch]        s2s-b3-session-text-prompt               -> origin/s2s-b3-session-text-prompt
+2026-09-09T01:47:15.7709694Z  * [new branch]        s2s-b3-session-tool-executor-wiring      -> origin/s2s-b3-session-tool-executor-wiring
+2026-09-09T01:47:15.7712057Z  * [new branch]        s2s-b3-session-turn-management           -> origin/s2s-b3-session-turn-management
+2026-09-09T01:47:15.7714173Z  * [new branch]        s2s-b4-fault-injection                   -> origin/s2s-b4-fault-injection
+2026-09-09T01:47:15.7716130Z  * [new branch]        s2s-b4-fleet-composer                    -> origin/s2s-b4-fleet-composer
+2026-09-09T01:47:15.7718329Z  * [new branch]        s2s-b4-rtc-audio-track-egress            -> origin/s2s-b4-rtc-audio-track-egress
+2026-09-09T01:47:15.7720503Z  * [new branch]        s2s-b4-rtc-audio-track-ingress           -> origin/s2s-b4-rtc-audio-track-ingress
+2026-09-09T01:47:15.7722578Z  * [new branch]        s2s-b4-rtc-cli-surface                   -> origin/s2s-b4-rtc-cli-surface
+2026-09-09T01:47:15.7724580Z  * [new branch]        s2s-b4-rtc-device-binding                -> origin/s2s-b4-rtc-device-binding
+2026-09-09T01:47:15.7726851Z  * [new branch]        s2s-b4-rtc-external-media-source         -> origin/s2s-b4-rtc-external-media-source
+2026-09-09T01:47:15.7729222Z  * [new branch]        s2s-b4-rtc-peerconnection-lifecycle      -> origin/s2s-b4-rtc-peerconnection-lifecycle
+2026-09-09T01:47:15.7731370Z  * [new branch]        s2s-b4-rtc-signaling                     -> origin/s2s-b4-rtc-signaling
+2026-09-09T01:47:15.7733404Z  * [new branch]        s2s-b4-rtc-transport-contract            -> origin/s2s-b4-rtc-transport-contract
+2026-09-09T01:47:15.7735553Z  * [new branch]        s2s-b4-rtc-transport-parity              -> origin/s2s-b4-rtc-transport-parity
+2026-09-09T01:47:15.7737903Z  * [new branch]        s2s-bare-room-run-default-devices        -> origin/s2s-bare-room-run-default-devices
+2026-09-09T01:47:15.7740233Z  * [new branch]        s2s-bare-session-default-devices         -> origin/s2s-bare-session-default-devices
+2026-09-09T01:47:15.7742768Z  * [new branch]        s2s-barge-in-audio-interrupt-actually-fires -> origin/s2s-barge-in-audio-interrupt-actually-fires
+2026-09-09T01:47:15.7745693Z  * [new branch]        s2s-browser-selection-ask-vs-act-calibration -> origin/s2s-browser-selection-ask-vs-act-calibration
+2026-09-09T01:47:15.7748446Z  * [new branch]        s2s-chat-hangs-and-silent-input-drops    -> origin/s2s-chat-hangs-and-silent-input-drops
+2026-09-09T01:47:15.7751013Z  * [new branch]        s2s-chatcore-typed-slash-command-contract -> origin/s2s-chatcore-typed-slash-command-contract
+2026-09-09T01:47:15.7753296Z  * [new branch]        s2s-cli-polish-batch                     -> origin/s2s-cli-polish-batch
+2026-09-09T01:47:15.7755542Z  * [new branch]        s2s-conversational-customer-sim-harness  -> origin/s2s-conversational-customer-sim-harness
+2026-09-09T01:47:15.7758251Z  * [new branch]        s2s-deflake-active-scheduled-bargein-test -> origin/s2s-deflake-active-scheduled-bargein-test
+2026-09-09T01:47:15.7760877Z  * [new branch]        s2s-deflake-corrupt-audio-delta-rejected -> origin/s2s-deflake-corrupt-audio-delta-rejected
+2026-09-09T01:47:15.7763445Z  * [new branch]        s2s-deflake-room-speech-overlap-cancel   -> origin/s2s-deflake-room-speech-overlap-cancel
+2026-09-09T01:47:15.7765923Z  * [new branch]        s2s-deflake-rtc-media-source-deadline    -> origin/s2s-deflake-rtc-media-source-deadline
+2026-09-09T01:47:15.7768349Z  * [new branch]        s2s-e2e-audio-roundtrip-proof            -> origin/s2s-e2e-audio-roundtrip-proof
+2026-09-09T01:47:15.7770615Z  * [new branch]        s2s-e2e-conversation-observability       -> origin/s2s-e2e-conversation-observability
+2026-09-09T01:47:15.7773007Z  * [new branch]        s2s-e2e-customer-acceptance-probe        -> origin/s2s-e2e-customer-acceptance-probe
+2026-09-09T01:47:15.7775259Z  * [new branch]        s2s-e2e-multiturn-conversation           -> origin/s2s-e2e-multiturn-conversation
+2026-09-09T01:47:15.7777579Z  * [new branch]        s2s-e2e-tool-call-conversation           -> origin/s2s-e2e-tool-call-conversation
+2026-09-09T01:47:15.7779850Z  * [new branch]        s2s-e2e-vision-describe                  -> origin/s2s-e2e-vision-describe
+2026-09-09T01:47:15.7782107Z  * [new branch]        s2s-enable-input-audio-transcription     -> origin/s2s-enable-input-audio-transcription
+2026-09-09T01:47:15.7785067Z  * [new branch]        s2s-errored-session-discards-recording-and-drops-the-error -> origin/s2s-errored-session-discards-recording-and-drops-the-error
+2026-09-09T01:47:15.7788234Z  * [new branch]        s2s-exit-code-must-mean-the-work-happened -> origin/s2s-exit-code-must-mean-the-work-happened
+2026-09-09T01:47:15.7790640Z  * [new branch]        s2s-file-tools-session-coverage          -> origin/s2s-file-tools-session-coverage
+2026-09-09T01:47:15.7792879Z  * [new branch]        s2s-fix-read-image-itemid-length         -> origin/s2s-fix-read-image-itemid-length
+2026-09-09T01:47:15.7795361Z  * [new branch]        s2s-frontier-grok-transport-retype-widened -> origin/s2s-frontier-grok-transport-retype-widened
+2026-09-09T01:47:15.7798028Z  * [new branch]        s2s-goal-concurrent-session-capacity     -> origin/s2s-goal-concurrent-session-capacity
+2026-09-09T01:47:15.7800417Z  * [new branch]        s2s-goal-land-session-audio-in-file      -> origin/s2s-goal-land-session-audio-in-file
+2026-09-09T01:47:15.7802858Z  * [new branch]        s2s-goal-session-failure-diagnosability  -> origin/s2s-goal-session-failure-diagnosability
+2026-09-09T01:47:15.7805205Z  * [new branch]        s2s-goal-tts-test-audio-corpus           -> origin/s2s-goal-tts-test-audio-corpus
+2026-09-09T01:47:15.7807632Z  * [new branch]        s2s-hygiene-prd-scaffolding-gitignore    -> origin/s2s-hygiene-prd-scaffolding-gitignore
+2026-09-09T01:47:15.7810153Z  * [new branch]        s2s-input-transcription-turn-attribution -> origin/s2s-input-transcription-turn-attribution
+2026-09-09T01:47:15.7812817Z  * [new branch]        s2s-integration-suite-intermittent-failures -> origin/s2s-integration-suite-intermittent-failures
+2026-09-09T01:47:15.7815356Z  * [new branch]        s2s-interactive-tool-timeout-budget      -> origin/s2s-interactive-tool-timeout-budget
+2026-09-09T01:47:15.7817954Z  * [new branch]        s2s-lai-gateway-localai-provider         -> origin/s2s-lai-gateway-localai-provider
+2026-09-09T01:47:15.7820193Z  * [new branch]        s2s-lai-local-tier-conformance           -> origin/s2s-lai-local-tier-conformance
+2026-09-09T01:47:15.7822485Z  * [new branch]        s2s-lai-realtime-client-lib-decision     -> origin/s2s-lai-realtime-client-lib-decision
+2026-09-09T01:47:15.7824798Z  * [new branch]        s2s-lai-realtime-server-fixture          -> origin/s2s-lai-realtime-server-fixture
+2026-09-09T01:47:15.7827103Z  * [new branch]        s2s-lai-tts-gguf-format-check            -> origin/s2s-lai-tts-gguf-format-check
+2026-09-09T01:47:15.7829235Z  * [new branch]        s2s-live-barge-in-proof-v3               -> origin/s2s-live-barge-in-proof-v3
+2026-09-09T01:47:15.7831664Z  * [new branch]        s2s-live-max-duration-artifact-inconsistency -> origin/s2s-live-max-duration-artifact-inconsistency
+2026-09-09T01:47:15.7835228Z  * [new branch]        s2s-live-max-duration-record-dir-bundle-missing-terminal-classification -> origin/s2s-live-max-duration-record-dir-bundle-missing-terminal-classification
+2026-09-09T01:47:15.7839860Z  * [new branch]        s2s-live-mic-and-speaker-session-feeds-back-into-itself-with-no-gating-or-warning -> origin/s2s-live-mic-and-speaker-session-feeds-back-into-itself-with-no-gating-or-warning
+2026-09-09T01:47:15.7844253Z  * [new branch]        s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off -> origin/s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off
+2026-09-09T01:47:15.7848066Z  * [new branch]        s2s-live-record-dir-audio-in-turn-zero-segments -> origin/s2s-live-record-dir-audio-in-turn-zero-segments
+2026-09-09T01:47:15.7851657Z  * [new branch]        s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz -> origin/s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz
+2026-09-09T01:47:15.7855175Z  * [new branch]        s2s-live-session-no-tool-definitions     -> origin/s2s-live-session-no-tool-definitions
+2026-09-09T01:47:15.7857921Z  * [new branch]        s2s-live-tool-result-orphaned-on-session-close -> origin/s2s-live-tool-result-orphaned-on-session-close
+2026-09-09T01:47:15.7860504Z  * [new branch]        s2s-live-turn-boundary-commit-races      -> origin/s2s-live-turn-boundary-commit-races
+2026-09-09T01:47:15.7863084Z  * [new branch]        s2s-live-vad-auto-commit-still-races-after-228 -> origin/s2s-live-vad-auto-commit-still-races-after-228
+2026-09-09T01:47:15.7865683Z  * [new branch]        s2s-mixed-modality-residual-plumbing     -> origin/s2s-mixed-modality-residual-plumbing
+2026-09-09T01:47:15.7868191Z  * [new branch]        s2s-mixed-modality-voice-plus-image      -> origin/s2s-mixed-modality-voice-plus-image
+2026-09-09T01:47:15.7871272Z  * [new branch]        s2s-no-liveness-detector-for-a-provider-that-goes-silent-midturn -> origin/s2s-no-liveness-detector-for-a-provider-that-goes-silent-midturn
+2026-09-09T01:47:15.7874364Z  * [new branch]        s2s-normalize-loudness-across-voices     -> origin/s2s-normalize-loudness-across-voices
+2026-09-09T01:47:15.7876953Z  * [new branch]        s2s-normalize-loudness-across-voices-fix -> origin/s2s-normalize-loudness-across-voices-fix
+2026-09-09T01:47:15.7879707Z  * [new branch]        s2s-one-participant-failure-kills-the-entire-room -> origin/s2s-one-participant-failure-kills-the-entire-room
+2026-09-09T01:47:15.7882737Z  * [new branch]        s2s-page-tool-schema-anyof-must-not-kill-the-session -> origin/s2s-page-tool-schema-anyof-must-not-kill-the-session
+2026-09-09T01:47:15.7886145Z  * [new branch]        s2s-participant-dies-in-tool-continuation-seconds-into-a-room -> origin/s2s-participant-dies-in-tool-continuation-seconds-into-a-room
+2026-09-09T01:47:15.7890476Z  * [new branch]        s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap -> origin/s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap
+2026-09-09T01:47:15.7894296Z  * [new branch]        s2s-playback-overflow-diagnostics-unwired -> origin/s2s-playback-overflow-diagnostics-unwired
+2026-09-09T01:47:15.7896872Z  * [new branch]        s2s-post-barge-turn-dispatch-gap         -> origin/s2s-post-barge-turn-dispatch-gap
+2026-09-09T01:47:15.7899482Z  * [new branch]        s2s-postdrain-pr-closure-and-status-doc-reconcile -> origin/s2s-postdrain-pr-closure-and-status-doc-reconcile
+2026-09-09T01:47:15.7902148Z  * [new branch]        s2s-prereq-media-root-look-contract      -> origin/s2s-prereq-media-root-look-contract
+2026-09-09T01:47:15.7904497Z  * [new branch]        s2s-prereq-session-config-tool-filter    -> origin/s2s-prereq-session-config-tool-filter
+2026-09-09T01:47:15.7907155Z  * [new branch]        s2s-prereq-session-final-metrics-observation -> origin/s2s-prereq-session-final-metrics-observation
+2026-09-09T01:47:15.7909754Z  * [new branch]        s2s-prereq-session-rtc-runtime-consumer  -> origin/s2s-prereq-session-rtc-runtime-consumer
+2026-09-09T01:47:15.7912227Z  * [new branch]        s2s-provider-wire-tool-result-delivery   -> origin/s2s-provider-wire-tool-result-delivery
+2026-09-09T01:47:15.7914435Z  * [new branch]        s2s-rate-limit-turn-retry                -> origin/s2s-rate-limit-turn-retry
+2026-09-09T01:47:15.7916553Z  * [new branch]        s2s-record-replay-diagnosis-loop         -> origin/s2s-record-replay-diagnosis-loop
+2026-09-09T01:47:15.7918960Z  * [new branch]        s2s-recut-tool-executor-wiring-pr83      -> origin/s2s-recut-tool-executor-wiring-pr83
+2026-09-09T01:47:15.7921337Z  * [new branch]        s2s-repair-audioin-elicits-no-response   -> origin/s2s-repair-audioin-elicits-no-response
+2026-09-09T01:47:15.7923680Z  * [new branch]        s2s-repair-audioin-hermetic-race         -> origin/s2s-repair-audioin-hermetic-race
+2026-09-09T01:47:15.7926054Z  * [new branch]        s2s-repair-audioin-still-broken-after-152 -> origin/s2s-repair-audioin-still-broken-after-152
+2026-09-09T01:47:15.7929142Z  * [new branch]        s2s-repair-audioin-stream-truncates-before-eof -> origin/s2s-repair-audioin-stream-truncates-before-eof
+2026-09-09T01:47:15.7932081Z  * [new branch]        s2s-repair-coveragegate-manifest-fixture-invariants -> origin/s2s-repair-coveragegate-manifest-fixture-invariants
+2026-09-09T01:47:15.7934896Z  * [new branch]        s2s-repair-factory-script-test-invocation -> origin/s2s-repair-factory-script-test-invocation
+2026-09-09T01:47:15.7937436Z  * [new branch]        s2s-repair-fixture-manifest-158          -> origin/s2s-repair-fixture-manifest-158
+2026-09-09T01:47:15.7939962Z  * [new branch]        s2s-repair-main-red-fixture-manifest-recurrence -> origin/s2s-repair-main-red-fixture-manifest-recurrence
+2026-09-09T01:47:15.7942467Z  * [new branch]        s2s-repair-main-timeharness-red          -> origin/s2s-repair-main-timeharness-red
+2026-09-09T01:47:15.7944990Z  * [new branch]        s2s-repair-media-probe-go2rtc-frame-observation -> origin/s2s-repair-media-probe-go2rtc-frame-observation
+2026-09-09T01:47:15.7947769Z  * [new branch]        s2s-repair-participants-coverage-floor   -> origin/s2s-repair-participants-coverage-floor
+2026-09-09T01:47:15.7950475Z  * [new branch]        s2s-repair-production-cli-rtc-runtime-composition -> origin/s2s-repair-production-cli-rtc-runtime-composition
+2026-09-09T01:47:15.7953028Z  * [new branch]        s2s-repair-rtc-opus-codec-owner          -> origin/s2s-repair-rtc-opus-codec-owner
+2026-09-09T01:47:15.7955261Z  * [new branch]        s2s-repair-rtc-supported-race-gate       -> origin/s2s-repair-rtc-supported-race-gate
+2026-09-09T01:47:15.7957604Z  * [new branch]        s2s-repair-text-seed-wire-leak           -> origin/s2s-repair-text-seed-wire-leak
+2026-09-09T01:47:15.7959855Z  * [new branch]        s2s-repair-v3b-bargein-pr164-conflict    -> origin/s2s-repair-v3b-bargein-pr164-conflict
+2026-09-09T01:47:15.7962275Z  * [new branch]        s2s-replay-audio-turn-self-completion    -> origin/s2s-replay-audio-turn-self-completion
+2026-09-09T01:47:15.7964763Z  * [new branch]        s2s-replay-selfdriving-wire-order-mismatch -> origin/s2s-replay-selfdriving-wire-order-mismatch
+2026-09-09T01:47:15.7968273Z  * [new branch]        s2s-restore-participant-isolation-for-synthesized-terminal-errors -> origin/s2s-restore-participant-isolation-for-synthesized-terminal-errors
+2026-09-09T01:47:15.7971255Z  * [new branch]        s2s-restore-recordreplay-retype          -> origin/s2s-restore-recordreplay-retype
+2026-09-09T01:47:15.7973432Z  * [new branch]        s2s-room-cancel-not-active-race          -> origin/s2s-room-cancel-not-active-race
+2026-09-09T01:47:15.7975638Z  * [new branch]        s2s-room-empty-response-regression       -> origin/s2s-room-empty-response-regression
+2026-09-09T01:47:15.7978028Z  * [new branch]        s2s-room-fix-modalities-rejection        -> origin/s2s-room-fix-modalities-rejection
+2026-09-09T01:47:15.7980779Z  * [new branch]        s2s-room-participant-ends-in-error-on-long-conversations -> origin/s2s-room-participant-ends-in-error-on-long-conversations
+2026-09-09T01:47:15.7983755Z  * [new branch]        s2s-room-participant-tool-selection-collides -> origin/s2s-room-participant-tool-selection-collides
+2026-09-09T01:47:15.7986360Z  * [new branch]        s2s-room-participants-deaf-while-speaking -> origin/s2s-room-participants-deaf-while-speaking
+2026-09-09T01:47:15.7988992Z  * [new branch]        s2s-room-pcm-mixer-input-buffer-overflow -> origin/s2s-room-pcm-mixer-input-buffer-overflow
+2026-09-09T01:47:15.7991331Z  * [new branch]        s2s-room-realtime-replay-harness         -> origin/s2s-room-realtime-replay-harness
+2026-09-09T01:47:15.7993373Z  * [new branch]        s2s-room-record-replay                   -> origin/s2s-room-record-replay
+2026-09-09T01:47:15.7995403Z  * [new branch]        s2s-room-recording-completeness          -> origin/s2s-room-recording-completeness
+2026-09-09T01:47:15.7998060Z  * [new branch]        s2s-room-replay-recorder-emits-events-and-capture -> origin/s2s-room-replay-recorder-emits-events-and-capture
+2026-09-09T01:47:15.8001014Z  * [new branch]        s2s-room-run-replay-roundtrip-schema-mismatch -> origin/s2s-room-run-replay-roundtrip-schema-mismatch
+2026-09-09T01:47:15.8003534Z  * [new branch]        s2s-room-tool-wielding-participants      -> origin/s2s-room-tool-wielding-participants
+2026-09-09T01:47:15.8005621Z  * [new branch]        s2s-room-vision-tool                     -> origin/s2s-room-vision-tool
+2026-09-09T01:47:15.8007678Z  * [new branch]        s2s-room-voice-configuration             -> origin/s2s-room-voice-configuration
+2026-09-09T01:47:15.8009978Z  * [new branch]        s2s-scheduled-turn-continuation-crediting -> origin/s2s-scheduled-turn-continuation-crediting
+2026-09-09T01:47:15.8012553Z  * [new branch]        s2s-scheduled-turns-cannot-express-barge-in -> origin/s2s-scheduled-turns-cannot-express-barge-in
+2026-09-09T01:47:15.8014954Z  * [new branch]        s2s-screen-permission-preflight          -> origin/s2s-screen-permission-preflight
+2026-09-09T01:47:15.8017262Z  * [new branch]        s2s-screen-show-actually-works           -> origin/s2s-screen-show-actually-works
+2026-09-09T01:47:15.8020664Z  * [new branch]        s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech -> origin/s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech
+2026-09-09T01:47:15.8025414Z  * [new branch]        s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output -> origin/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output
+2026-09-09T01:47:15.8030371Z  * [new branch]        s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths -> origin/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths
+2026-09-09T01:47:15.8034072Z  * [new branch]        s2s-session-silent-stop-and-prompt-path-fixes -> origin/s2s-session-silent-stop-and-prompt-path-fixes
+2026-09-09T01:47:15.8036949Z  * [new branch]        s2s-show-always-advertised-preflight-at-invoke -> origin/s2s-show-always-advertised-preflight-at-invoke
+2026-09-09T01:47:15.8039734Z  * [new branch]        s2s-sigint-clean-cancel-during-tool-work -> origin/s2s-sigint-clean-cancel-during-tool-work
+2026-09-09T01:47:15.8042364Z  * [new branch]        s2s-silent-all-agent-room-reports-false-success -> origin/s2s-silent-all-agent-room-reports-false-success
+2026-09-09T01:47:15.8044882Z  * [new branch]        s2s-split-high-churn-session-files       -> origin/s2s-split-high-churn-session-files
+2026-09-09T01:47:15.8047691Z  * [new branch]        s2s-stabilize-agent-cli-integration-ci-budget -> origin/s2s-stabilize-agent-cli-integration-ci-budget
+2026-09-09T01:47:15.8050352Z  * [new branch]        s2s-stabilize-room-mesh-done-close-ordering -> origin/s2s-stabilize-room-mesh-done-close-ordering
+2026-09-09T01:47:15.8053090Z  * [new branch]        s2s-stabilize-room-startup-and-terminal-ordering -> origin/s2s-stabilize-room-startup-and-terminal-ordering
+2026-09-09T01:47:15.8055828Z  * [new branch]        s2s-stabilize-selfplay-turn-target-counting -> origin/s2s-stabilize-selfplay-turn-target-counting
+2026-09-09T01:47:15.8058901Z  * [new branch]        s2s-terminal-announcement-regressions-from-the-drain-fix -> origin/s2s-terminal-announcement-regressions-from-the-drain-fix
+2026-09-09T01:47:15.8061555Z  * [new branch]        s2s-terminal-display-honesty             -> origin/s2s-terminal-display-honesty
+2026-09-09T01:47:15.8064443Z  * [new branch]        s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly -> origin/s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly
+2026-09-09T01:47:15.8068299Z  * [new branch]        s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory -> origin/s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory
+2026-09-09T01:47:15.8071468Z  * [new branch]        s2s-tool-path-confinement-and-cwd-semantics -> origin/s2s-tool-path-confinement-and-cwd-semantics
+2026-09-09T01:47:15.8074494Z  * [new branch]        s2s-tool-results-computed-but-never-delivered-to-model -> origin/s2s-tool-results-computed-but-never-delivered-to-model
+2026-09-09T01:47:15.8077166Z  * [new branch]        s2s-turn-to-turn-dead-air                -> origin/s2s-turn-to-turn-dead-air
+2026-09-09T01:47:15.8079325Z  * [new branch]        s2s-two-agent-selfplay-harness-phase1    -> origin/s2s-two-agent-selfplay-harness-phase1
+2026-09-09T01:47:15.8081450Z  * [new branch]        s2s-v1-text-in-audio-out                 -> origin/s2s-v1-text-in-audio-out
+2026-09-09T01:47:15.8083446Z  * [new branch]        s2s-v10-webrtc-external-source           -> origin/s2s-v10-webrtc-external-source
+2026-09-09T01:47:15.8085433Z  * [new branch]        s2s-v2a-audio-in-basic                   -> origin/s2s-v2a-audio-in-basic
+2026-09-09T01:47:15.8087383Z  * [new branch]        s2s-v2b-audio-in-long                    -> origin/s2s-v2b-audio-in-long
+2026-09-09T01:47:15.8089253Z  * [new branch]        s2s-v2c-audio-in-silence                 -> origin/s2s-v2c-audio-in-silence
+2026-09-09T01:47:15.8091269Z  * [new branch]        s2s-v2c-audio-in-silence-recut           -> origin/s2s-v2c-audio-in-silence-recut
+2026-09-09T01:47:15.8093389Z  * [new branch]        s2s-v2d-audio-in-multi-utterance         -> origin/s2s-v2d-audio-in-multi-utterance
+2026-09-09T01:47:15.8095490Z  * [new branch]        s2s-v2d-multi-utterance-recut            -> origin/s2s-v2d-multi-utterance-recut
+2026-09-09T01:47:15.8097629Z  * [new branch]        s2s-v2e-audio-in-truncated               -> origin/s2s-v2e-audio-in-truncated
+2026-09-09T01:47:15.8099690Z  * [new branch]        s2s-v2e-audio-in-truncated-recut         -> origin/s2s-v2e-audio-in-truncated-recut
+2026-09-09T01:47:15.8101675Z  * [new branch]        s2s-v3a-barge-in-basic                   -> origin/s2s-v3a-barge-in-basic
+2026-09-09T01:47:15.8103679Z  * [new branch]        s2s-v3b-barge-in-during-tool-call        -> origin/s2s-v3b-barge-in-during-tool-call
+2026-09-09T01:47:15.8105742Z  * [new branch]        s2s-v3c-barge-in-repeated                -> origin/s2s-v3c-barge-in-repeated
+2026-09-09T01:47:15.8107964Z  * [new branch]        s2s-v4a-tool-single-call                 -> origin/s2s-v4a-tool-single-call
+2026-09-09T01:47:15.8109946Z  * [new branch]        s2s-v4b-tool-parallel-calls              -> origin/s2s-v4b-tool-parallel-calls
+2026-09-09T01:47:15.8111821Z  * [new branch]        s2s-v4c-tool-error                       -> origin/s2s-v4c-tool-error
+2026-09-09T01:47:15.8113592Z  * [new branch]        s2s-v4d-tool-timeout                     -> origin/s2s-v4d-tool-timeout
+2026-09-09T01:47:15.8115402Z  * [new branch]        s2s-v4e-tool-unknown                     -> origin/s2s-v4e-tool-unknown
+2026-09-09T01:47:15.8117381Z  * [new branch]        s2s-v4f-tool-during-audio                -> origin/s2s-v4f-tool-during-audio
+2026-09-09T01:47:15.8119411Z  * [new branch]        s2s-v5a-default-toolset-active           -> origin/s2s-v5a-default-toolset-active
+2026-09-09T01:47:15.8121386Z  * [new branch]        s2s-v5b-toolset-subset                   -> origin/s2s-v5b-toolset-subset
+2026-09-09T01:47:15.8123229Z  * [new branch]        s2s-v5c-toolset-none                     -> origin/s2s-v5c-toolset-none
+2026-09-09T01:47:15.8124993Z  * [new branch]        s2s-v6a-error-auth                       -> origin/s2s-v6a-error-auth
+2026-09-09T01:47:15.8126918Z  * [new branch]        s2s-v6b-error-disconnect                 -> origin/s2s-v6b-error-disconnect
+2026-09-09T01:47:15.8128867Z  * [new branch]        s2s-v6c-error-rate-limit                 -> origin/s2s-v6c-error-rate-limit
+2026-09-09T01:47:15.8130850Z  * [new branch]        s2s-v6d-error-malformed-recut            -> origin/s2s-v6d-error-malformed-recut
+2026-09-09T01:47:15.8132968Z  * [new branch]        s2s-v6d-error-malformed-response         -> origin/s2s-v6d-error-malformed-response
+2026-09-09T01:47:15.8134994Z  * [new branch]        s2s-v7a-metrics-modality                 -> origin/s2s-v7a-metrics-modality
+2026-09-09T01:47:15.8136968Z  * [new branch]        s2s-v7b-buffer-logs                      -> origin/s2s-v7b-buffer-logs
+2026-09-09T01:47:15.8138987Z  * [new branch]        s2s-v7c-metrics-reconcile                -> origin/s2s-v7c-metrics-reconcile
+2026-09-09T01:47:15.8140881Z  * [new branch]        s2s-v8-duplex-overlap                    -> origin/s2s-v8-duplex-overlap
+2026-09-09T01:47:15.8142857Z  * [new branch]        s2s-v9-webrtc-device-roundtrip           -> origin/s2s-v9-webrtc-device-roundtrip
+2026-09-09T01:47:15.8145310Z  * [new branch]        s2s-validate-async-tool-result-interrupts-speech -> origin/s2s-validate-async-tool-result-interrupts-speech
+2026-09-09T01:47:15.8147976Z  * [new branch]        s2s-validate-live-shaped-barge-in-v2     -> origin/s2s-validate-live-shaped-barge-in-v2
+2026-09-09T01:47:15.8150325Z  * [new branch]        s2s-validate-multiturn-duplex-multiplex  -> origin/s2s-validate-multiturn-duplex-multiplex
+2026-09-09T01:47:15.8152639Z  * [new branch]        s2s-vertical-pr-disposition-triage       -> origin/s2s-vertical-pr-disposition-triage
+2026-09-09T01:47:15.8155048Z  * [new branch]        s2s-vision-tool-continuation-token-overflow -> origin/s2s-vision-tool-continuation-token-overflow
+2026-09-09T01:47:15.8157547Z  * [new branch]        s2s-voice-honest-failure-grounding       -> origin/s2s-voice-honest-failure-grounding
+2026-09-09T01:47:15.8159651Z  * [new branch]        s2s-voice-tool-grounding-v2              -> origin/s2s-voice-tool-grounding-v2
+2026-09-09T01:47:15.8162823Z  * [new branch]        s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace -> origin/s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace
+2026-09-09T01:47:15.8166059Z  * [new branch]        s2s-webrtc-customer-audio-path           -> origin/s2s-webrtc-customer-audio-path
+2026-09-09T01:47:15.8169254Z  * [new branch]        s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error -> origin/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error
+2026-09-09T01:47:15.8172379Z  * [new branch]        virtual-device-loopback-harness          -> origin/virtual-device-loopback-harness
+2026-09-09T01:47:15.8175056Z  * [new branch]        webmcp-ambiguous-tab-exact-id-rejected-and-silent -> origin/webmcp-ambiguous-tab-exact-id-rejected-and-silent
+2026-09-09T01:47:15.8178156Z  * [new branch]        webmcp-ambiguous-tab-hides-page-tools-agent-fabricates -> origin/webmcp-ambiguous-tab-hides-page-tools-agent-fabricates
+2026-09-09T01:47:15.8180715Z  * [new branch]        webmcp-c0-contract-freeze                -> origin/webmcp-c0-contract-freeze
+2026-09-09T01:47:15.8182965Z  * [new branch]        webmcp-classification-contract-conformance -> origin/webmcp-classification-contract-conformance
+2026-09-09T01:47:15.8185359Z  * [new branch]        webmcp-conversational-customer-sim       -> origin/webmcp-conversational-customer-sim
+2026-09-09T01:47:15.8187801Z  * [new branch]        webmcp-cross-process-cancel-real-chrome  -> origin/webmcp-cross-process-cancel-real-chrome
+2026-09-09T01:47:15.8190008Z  * [new branch]        webmcp-diagnostics-honesty               -> origin/webmcp-diagnostics-honesty
+2026-09-09T01:47:15.8192016Z  * [new branch]        webmcp-i1-production-wiring              -> origin/webmcp-i1-production-wiring
+2026-09-09T01:47:15.8193984Z  * [new branch]        webmcp-in-session-attach                 -> origin/webmcp-in-session-attach
+2026-09-09T01:47:15.8196208Z  * [new branch]        webmcp-invoke-error-envelope-and-cancel-ux -> origin/webmcp-invoke-error-envelope-and-cancel-ux
+2026-09-09T01:47:15.8198751Z  * [new branch]        webmcp-lane-a-go126-workspace-upgrade    -> origin/webmcp-lane-a-go126-workspace-upgrade
+2026-09-09T01:47:15.8201004Z  * [new branch]        webmcp-lane-b-discovery-selection        -> origin/webmcp-lane-b-discovery-selection
+2026-09-09T01:47:15.8203062Z  * [new branch]        webmcp-lane-c-broker-core                -> origin/webmcp-lane-c-broker-core
+2026-09-09T01:47:15.8205045Z  * [new branch]        webmcp-lane-d-chrome-adapter             -> origin/webmcp-lane-d-chrome-adapter
+2026-09-09T01:47:15.8207820Z  * [new branch]        webmcp-lane-f-testkit-fixture-replay     -> origin/webmcp-lane-f-testkit-fixture-replay
+2026-09-09T01:47:15.8210228Z  * [new branch]        webmcp-lane-g-cli-config-composition     -> origin/webmcp-lane-g-cli-config-composition
+2026-09-09T01:47:15.8212464Z  * [new branch]        webmcp-lane-h-topology-recovery          -> origin/webmcp-lane-h-topology-recovery
+2026-09-09T01:47:15.8214802Z  * [new branch]        webmcp-lane-i-realtime-session-integration -> origin/webmcp-lane-i-realtime-session-integration
+2026-09-09T01:47:15.8217240Z  * [new branch]        webmcp-lane-k-probe-evidence             -> origin/webmcp-lane-k-probe-evidence
+2026-09-09T01:47:15.8219343Z  * [new branch]        webmcp-late-catalog-reevaluation         -> origin/webmcp-late-catalog-reevaluation
+2026-09-09T01:47:15.8222202Z  * [new branch]        webmcp-live-session-tool-invocation-returns-stale-empty-result -> origin/webmcp-live-session-tool-invocation-returns-stale-empty-result
+2026-09-09T01:47:15.8225026Z  * [new branch]        webmcp-managed-default-browser           -> origin/webmcp-managed-default-browser
+2026-09-09T01:47:15.8227285Z  * [new branch]        webmcp-mid-session-tab-switch            -> origin/webmcp-mid-session-tab-switch
+2026-09-09T01:47:15.8229275Z  * [new branch]        webmcp-o0-toolchain-gate                 -> origin/webmcp-o0-toolchain-gate
+2026-09-09T01:47:15.8231263Z  * [new branch]        webmcp-page-tools-first-class            -> origin/webmcp-page-tools-first-class
+2026-09-09T01:47:15.8233432Z  * [new branch]        webmcp-pagetool-timeout-cold-attach      -> origin/webmcp-pagetool-timeout-cold-attach
+2026-09-09T01:47:15.8235712Z  * [new branch]        webmcp-prereq-go126-vet-slice-format     -> origin/webmcp-prereq-go126-vet-slice-format
+2026-09-09T01:47:15.8237957Z  * [new branch]        webmcp-residual-stub-paths               -> origin/webmcp-residual-stub-paths
+2026-09-09T01:47:15.8240086Z  * [new branch]        webmcp-select-hang-on-browser-death      -> origin/webmcp-select-hang-on-browser-death
+2026-09-09T01:47:15.8242604Z  * [new branch]        webmcp-selection-connectivity-voice-path -> origin/webmcp-selection-connectivity-voice-path
+2026-09-09T01:47:15.8245095Z  * [new branch]        webmcp-session-update-missing-session-type -> origin/webmcp-session-update-missing-session-type
+2026-09-09T01:47:15.8247919Z  * [new branch]        webmcp-stale-persisted-selection-hides-page-tools -> origin/webmcp-stale-persisted-selection-hides-page-tools
+2026-09-09T01:47:15.8250474Z  * [new branch]        webmcp-watch-cross-process-events        -> origin/webmcp-watch-cross-process-events
+2026-09-09T01:47:15.8252354Z  * [new tag]           agent-cli/v0.0.1                         -> agent-cli/v0.0.1
+2026-09-09T01:47:15.8253876Z  * [new tag]           agent-cli/v0.0.2                         -> agent-cli/v0.0.2
+2026-09-09T01:47:15.8255391Z  * [new tag]           agent-cli/v0.0.3                         -> agent-cli/v0.0.3
+2026-09-09T01:47:15.8257012Z  * [new tag]           agent-cli/v0.0.4                         -> agent-cli/v0.0.4
+2026-09-09T01:47:15.8258597Z  * [new tag]           go-agent-loop/v0.0.1                     -> go-agent-loop/v0.0.1
+2026-09-09T01:47:15.8260207Z  * [new tag]           go-agent-loop/v0.0.2                     -> go-agent-loop/v0.0.2
+2026-09-09T01:47:15.8261852Z  * [new tag]           go-agent-loop/v0.0.3                     -> go-agent-loop/v0.0.3
+2026-09-09T01:47:15.8263458Z  * [new tag]           go-agent-loop/v0.0.4                     -> go-agent-loop/v0.0.4
+2026-09-09T01:47:15.8265086Z  * [new tag]           go-llm-gateway/v0.0.1                    -> go-llm-gateway/v0.0.1
+2026-09-09T01:47:15.8266855Z  * [new tag]           go-llm-gateway/v0.0.2                    -> go-llm-gateway/v0.0.2
+2026-09-09T01:47:15.8268491Z  * [new tag]           go-llm-gateway/v0.0.3                    -> go-llm-gateway/v0.0.3
+2026-09-09T01:47:15.8270119Z  * [new tag]           go-llm-gateway/v0.0.4                    -> go-llm-gateway/v0.0.4
+2026-09-09T01:47:15.8271584Z  * [new tag]           v0.0.1                                   -> v0.0.1
+2026-09-09T01:47:15.8273046Z  * [new tag]           v0.0.2                                   -> v0.0.2
+2026-09-09T01:47:15.8274375Z  * [new tag]           v0.0.3                                   -> v0.0.3
+2026-09-09T01:47:15.8275693Z  * [new tag]           v0.0.4                                   -> v0.0.4
+2026-09-09T01:47:15.8277298Z  * [new ref]           c6e59e38d02a5ecb2a2b981edaac92fb1a7747da -> pull/403/merge
+2026-09-09T01:47:15.8281001Z ##[endgroup]
+2026-09-09T01:47:15.8282416Z ##[group]Determining the checkout info
+2026-09-09T01:47:15.8283947Z ##[endgroup]
+2026-09-09T01:47:15.8284883Z [command]/usr/bin/git sparse-checkout disable
+2026-09-09T01:47:15.8287432Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-09T01:47:15.8290503Z ##[group]Checking out the ref
+2026-09-09T01:47:15.8291809Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/403/merge
+2026-09-09T01:47:16.2455899Z Note: switching to 'refs/remotes/pull/403/merge'.
+2026-09-09T01:47:16.2467980Z 
+2026-09-09T01:47:16.2468563Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-09T01:47:16.2469445Z changes and commit them, and you can discard any commits you make in this
+2026-09-09T01:47:16.2470243Z state without impacting any branches by switching back to a branch.
+2026-09-09T01:47:16.2470718Z 
+2026-09-09T01:47:16.2471029Z If you want to create a new branch to retain commits you create, you may
+2026-09-09T01:47:16.2471787Z do so (now or later) by using -c with the switch command. Example:
+2026-09-09T01:47:16.2472210Z 
+2026-09-09T01:47:16.2472393Z   git switch -c <new-branch-name>
+2026-09-09T01:47:16.2472697Z 
+2026-09-09T01:47:16.2472870Z Or undo this operation with:
+2026-09-09T01:47:16.2473143Z 
+2026-09-09T01:47:16.2473291Z   git switch -
+2026-09-09T01:47:16.2473491Z 
+2026-09-09T01:47:16.2473836Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-09T01:47:16.2474369Z 
+2026-09-09T01:47:16.2474953Z HEAD is now at c6e59e38 Merge 177eda027ed2712211f8d44c313bbe2c103f596e into c3bb663e118de9e73ea3eb211b381e8f86c4f480
+2026-09-09T01:47:16.2489484Z ##[endgroup]
+2026-09-09T01:47:16.2539754Z [command]/usr/bin/git log -1 --format=%H
+2026-09-09T01:47:16.2569057Z c6e59e38d02a5ecb2a2b981edaac92fb1a7747da
+2026-09-09T01:47:16.2823590Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-09T01:47:16.2825633Z ##[group]Run actions/setup-go@v5
+2026-09-09T01:47:16.2825900Z with:
+2026-09-09T01:47:16.2826113Z   go-version: 1.26.7
+2026-09-09T01:47:16.2826339Z   cache: true
+2026-09-09T01:47:16.2827450Z   cache-dependency-path: go.work.sum
+agent-cli/go.sum
+go-agent-loop/go.sum
+go-llm-gateway/go.sum
+go-audio/go.sum
+go-device-gateway/go.sum
+go-agent-runtime/go.sum
+tools/architecturegate/go.sum
+tests/embedding/go.sum
+
+2026-09-09T01:47:16.2828344Z   check-latest: false
+2026-09-09T01:47:16.2830779Z   token: ***
+2026-09-09T01:47:16.2830999Z ##[endgroup]
+2026-09-09T01:47:16.4132458Z Setup go version spec 1.26.7
+2026-09-09T01:47:16.4141586Z Attempting to download 1.26.7...
+2026-09-09T01:47:16.4249616Z (node:2251) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-09T01:47:16.4250777Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-09T01:47:17.0367824Z matching 1.26.7...
+2026-09-09T01:47:17.0474548Z Acquiring 1.26.7 from https://github.com/actions/go-versions/releases/download/1.26.7-32325178046/go-1.26.7-linux-x64.tar.gz
+2026-09-09T01:47:17.5682732Z Extracting Go...
+2026-09-09T01:47:17.5793336Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/76ad821c-8fff-41ab-b577-a11d1c53144b -f /home/runner/work/_temp/758b8226-d110-466a-aa70-e4480326773c
+2026-09-09T01:47:19.4388019Z Successfully extracted go to /home/runner/work/_temp/76ad821c-8fff-41ab-b577-a11d1c53144b
+2026-09-09T01:47:19.4388537Z Adding to the cache ...
+2026-09-09T01:47:25.0637296Z Successfully cached go to /opt/hostedtoolcache/go/1.26.7/x64
+2026-09-09T01:47:25.0639306Z Added go to the path
+2026-09-09T01:47:25.0642013Z Successfully set up Go version 1.26.7
+2026-09-09T01:47:25.0868602Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOMODCACHE
+2026-09-09T01:47:25.0911853Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOCACHE
+2026-09-09T01:47:25.0954200Z /home/runner/go/pkg/mod
+2026-09-09T01:47:25.0970922Z /home/runner/.cache/go-build
+2026-09-09T01:47:25.1988896Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+2026-09-09T01:47:25.2074634Z (node:2251) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-09T01:47:26.2237534Z Received 193794498 of 193794498 (100.0%), 190.1 MBs/sec
+2026-09-09T01:47:26.2238419Z Cache Size: ~185 MB (193794498 B)
+2026-09-09T01:47:26.2271133Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e23836b1-f06f-4a73-9cb0-6d0abc7c512d/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+2026-09-09T01:47:27.7602984Z Cache restored successfully
+2026-09-09T01:47:27.7704912Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+2026-09-09T01:47:27.7729104Z go version go1.26.7 linux/amd64
+2026-09-09T01:47:27.7729384Z 
+2026-09-09T01:47:27.7729811Z ##[group]go env
+2026-09-09T01:47:27.7864515Z AR='ar'
+2026-09-09T01:47:27.7864870Z CC='gcc'
+2026-09-09T01:47:27.7865114Z CGO_CFLAGS='-O2 -g'
+2026-09-09T01:47:27.7865378Z CGO_CPPFLAGS=''
+2026-09-09T01:47:27.7865621Z CGO_CXXFLAGS='-O2 -g'
+2026-09-09T01:47:27.7865871Z CGO_ENABLED='1'
+2026-09-09T01:47:27.7866366Z CGO_FFLAGS='-O2 -g'
+2026-09-09T01:47:27.7866638Z CGO_LDFLAGS='-O2 -g'
+2026-09-09T01:47:27.7867110Z CXX='g++'
+2026-09-09T01:47:27.7867327Z GCCGO='gccgo'
+2026-09-09T01:47:27.7867545Z GO111MODULE=''
+2026-09-09T01:47:27.7867764Z GOAMD64='v1'
+2026-09-09T01:47:27.7868213Z GOARCH='amd64'
+2026-09-09T01:47:27.7868421Z GOAUTH='netrc'
+2026-09-09T01:47:27.7868628Z GOBIN=''
+2026-09-09T01:47:27.7868862Z GOCACHE='/home/runner/.cache/go-build'
+2026-09-09T01:47:27.7869159Z GOCACHEPROG=''
+2026-09-09T01:47:27.7869367Z GODEBUG=''
+2026-09-09T01:47:27.7869585Z GOENV='/home/runner/.config/go/env'
+2026-09-09T01:47:27.7869849Z GOEXE=''
+2026-09-09T01:47:27.7870063Z GOEXPERIMENT=''
+2026-09-09T01:47:27.7870280Z GOFIPS140='off'
+2026-09-09T01:47:27.7870481Z GOFLAGS=''
+2026-09-09T01:47:27.7871138Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2654322158=/tmp/go-build -gno-record-gcc-switches'
+2026-09-09T01:47:27.7871807Z GOHOSTARCH='amd64'
+2026-09-09T01:47:27.7872052Z GOHOSTOS='linux'
+2026-09-09T01:47:27.7872265Z GOINSECURE=''
+2026-09-09T01:47:27.7872475Z GOMOD='/dev/null'
+2026-09-09T01:47:27.7872729Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-09-09T01:47:27.7873008Z GONOPROXY=''
+2026-09-09T01:47:27.7873214Z GONOSUMDB=''
+2026-09-09T01:47:27.7873427Z GOOS='linux'
+2026-09-09T01:47:27.7873646Z GOPATH='/home/runner/go'
+2026-09-09T01:47:27.7873903Z GOPRIVATE=''
+2026-09-09T01:47:27.7874197Z GOPROXY='https://proxy.golang.org,direct'
+2026-09-09T01:47:27.7874539Z GOROOT='/opt/hostedtoolcache/go/1.26.7/x64'
+2026-09-09T01:47:27.7874848Z GOSUMDB='sum.golang.org'
+2026-09-09T01:47:27.7875099Z GOTELEMETRY='local'
+2026-09-09T01:47:27.7875380Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-09-09T01:47:27.7875701Z GOTMPDIR=''
+2026-09-09T01:47:27.7875918Z GOTOOLCHAIN='auto'
+2026-09-09T01:47:27.7876280Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.7/x64/pkg/tool/linux_amd64'
+2026-09-09T01:47:27.7876642Z GOVCS=''
+2026-09-09T01:47:27.7877026Z GOVERSION='go1.26.7'
+2026-09-09T01:47:27.7877384Z GOWORK='/home/runner/work/go-agent-harness/go-agent-harness/go.work'
+2026-09-09T01:47:27.7877777Z PKG_CONFIG='pkg-config'
+2026-09-09T01:47:27.7877924Z 
+2026-09-09T01:47:27.7878232Z ##[endgroup]
+2026-09-09T01:47:27.8169465Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-09T01:47:27.8170777Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+2026-09-09T01:47:27.8171144Z with:
+2026-09-09T01:47:27.8171416Z   path: ~/.cache/go-agent-harness/ci-analyzers
+2026-09-09T01:47:27.8171863Z   key: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+2026-09-09T01:47:27.8172286Z   enableCrossOsArchive: false
+2026-09-09T01:47:27.8172565Z   fail-on-cache-miss: false
+2026-09-09T01:47:27.8172833Z   lookup-only: false
+2026-09-09T01:47:27.8173091Z   save-always: false
+2026-09-09T01:47:27.8173320Z ##[endgroup]
+2026-09-09T01:47:27.9246503Z (node:2315) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-09T01:47:27.9247478Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-09T01:47:27.9949912Z Cache hit for: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+2026-09-09T01:47:28.0062212Z (node:2315) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-09T01:47:28.1892284Z Received 23445110 of 23445110 (100.0%), 139.7 MBs/sec
+2026-09-09T01:47:28.1917159Z Cache Size: ~22 MB (23445110 B)
+2026-09-09T01:47:28.1918494Z [command]/usr/bin/tar -xf /home/runner/work/_temp/aeee4139-802c-4008-90d1-b8f93412b66e/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+2026-09-09T01:47:28.2862961Z Cache restored successfully
+2026-09-09T01:47:28.2954020Z Cache restored from key: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+2026-09-09T01:47:28.3101382Z ##[group]Run bash scripts/install-ci-analyzer.sh golangci-lint
+2026-09-09T01:47:28.3101931Z [36;1mbash scripts/install-ci-analyzer.sh golangci-lint[0m
+2026-09-09T01:47:28.3147655Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:47:28.3147961Z env:
+2026-09-09T01:47:28.3148205Z   GOLANGCI_LINT_VERSION: v2.9.0
+2026-09-09T01:47:28.3148484Z ##[endgroup]
+2026-09-09T01:47:28.3268961Z install-ci-analyzer: using cached golangci-lint at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint
+2026-09-09T01:47:28.4257335Z golangci-lint has version 2.9.0 built with go1.26.0 from 72798d34 on 2026-02-10T23:13:22Z
+2026-09-09T01:47:28.4258590Z install-ci-analyzer: golangci-lint v2.9.0 is ready at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint
+2026-09-09T01:47:28.4300031Z ##[group]Run bash scripts/install-ci-analyzer.sh staticcheck
+2026-09-09T01:47:28.4300503Z [36;1mbash scripts/install-ci-analyzer.sh staticcheck[0m
+2026-09-09T01:47:28.4342721Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:47:28.4342990Z env:
+2026-09-09T01:47:28.4343217Z   STATICCHECK_VERSION: 2026.1
+2026-09-09T01:47:28.4343477Z ##[endgroup]
+2026-09-09T01:47:28.4438822Z install-ci-analyzer: using cached staticcheck at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck
+2026-09-09T01:47:28.4500847Z staticcheck 2026.1 (v0.7.0)
+2026-09-09T01:47:28.4501925Z install-ci-analyzer: staticcheck 2026.1 is ready at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck
+2026-09-09T01:47:28.4535778Z ##[group]Run make fmt
+2026-09-09T01:47:28.4536049Z [36;1mmake fmt[0m
+2026-09-09T01:47:28.4574941Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:47:28.4575228Z ##[endgroup]
+2026-09-09T01:47:28.4940282Z ==> fmt agent-cli
+2026-09-09T01:47:29.0846040Z ==> fmt go-agent-loop
+2026-09-09T01:47:29.1981244Z ==> fmt go-llm-gateway
+2026-09-09T01:47:29.2848356Z ==> fmt go-audio
+2026-09-09T01:47:29.3400438Z ==> fmt go-device-gateway
+2026-09-09T01:47:29.3753873Z ==> fmt go-agent-runtime
+2026-09-09T01:47:29.4759682Z ==> fmt tests/embedding
+2026-09-09T01:47:29.4853258Z ==> fmt tools/architecturegate
+2026-09-09T01:47:29.4962157Z ==> fmt tools/analyzergate
+2026-09-09T01:47:29.5017251Z ==> fmt tools/coveragegate
+2026-09-09T01:47:29.5098416Z ==> fmt tools/rtc-race-gate
+2026-09-09T01:47:29.5145980Z ==> fmt tools/session-race-gate
+2026-09-09T01:47:29.5196179Z ==> fmt tools/timingate
+2026-09-09T01:47:29.5246884Z ==> fmt scripts/webmcp-o0
+2026-09-09T01:47:29.5324182Z ==> fmt test/localai
+2026-09-09T01:47:29.5438239Z ##[group]Run make wire-check
+2026-09-09T01:47:29.5438565Z [36;1mmake wire-check[0m
+2026-09-09T01:47:29.5479379Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:47:29.5479660Z ##[endgroup]
+2026-09-09T01:47:29.6020764Z ==> Wire agent-cli/internal/wire
+2026-09-09T01:47:29.6687644Z go: downloading github.com/gen2brain/malgo v0.11.24
+2026-09-09T01:47:29.8394464Z go: downloading golang.org/x/tools v0.41.0
+2026-09-09T01:47:29.8420051Z go: downloading github.com/google/subcommands v1.2.0
+2026-09-09T01:47:30.2653790Z go: downloading golang.org/x/sync v0.19.0
+2026-09-09T01:47:30.2654315Z go: downloading golang.org/x/mod v0.32.0
+2026-09-09T01:47:52.8732292Z wire: github.com/portpowered/go-agent-harness/agent-cli/internal/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/agent-cli/internal/wire/wire_gen.go
+2026-09-09T01:47:52.8969078Z ==> Wire go-agent-runtime/services/devices/wire
+2026-09-09T01:47:54.3787025Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/devices/wire/wire_gen.go
+2026-09-09T01:47:54.3845288Z ==> Wire go-agent-runtime/services/providers/wire
+2026-09-09T01:47:55.5783293Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/providers/wire/wire_gen.go
+2026-09-09T01:47:55.5836540Z ==> Wire go-agent-runtime/services/session/wire
+2026-09-09T01:47:56.8080695Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/session/wire/wire_gen.go
+2026-09-09T01:47:56.8200774Z ==> Wire go-agent-runtime/services/rooms/wire
+2026-09-09T01:47:57.6737131Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/rooms/wire/wire_gen.go
+2026-09-09T01:47:57.6777855Z ==> Wire go-agent-runtime/services/tools/wire
+2026-09-09T01:47:58.8608777Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/tools/wire/wire_gen.go
+2026-09-09T01:47:58.8662160Z ==> Wire go-agent-runtime/services/replay/wire
+2026-09-09T01:48:00.0185668Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/replay/wire/wire_gen.go
+2026-09-09T01:48:00.0239799Z ==> Wire go-agent-runtime/services/recording/wire
+2026-09-09T01:48:01.2149211Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/recording/wire/wire_gen.go
+2026-09-09T01:48:01.2439675Z ##[group]Run make architecture-size-check
+2026-09-09T01:48:01.2440282Z [36;1mmake architecture-size-check[0m
+2026-09-09T01:48:01.2491728Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:48:01.2492026Z ##[endgroup]
+2026-09-09T01:48:01.2655901Z go: downloading github.com/uudashr/gocognit v1.2.1
+2026-09-09T01:48:01.2657100Z go: downloading github.com/fzipp/gocyclo v0.6.0
+2026-09-09T01:48:01.2657675Z go: downloading golang.org/x/tools v0.42.0
+2026-09-09T01:48:01.6698116Z go: downloading golang.org/x/mod v0.33.0
+2026-09-09T01:48:42.8407271Z architecture gate failed with 8 issue(s)
+2026-09-09T01:48:42.8407835Z architecture gate found 8 issue(s) across 181 package(s):
+2026-09-09T01:48:42.8419835Z - baseline-stale pkg/providers/openai/stream.go:streamSSEToGateway: baseline entry "cognitive-complexity\x00github.com/portpowered/go-agent-harness/go-llm-gateway\x00github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai\x00pkg/providers/openai/stream.go\x00streamSSEToGateway" no longer describes a current violation; delete it
+2026-09-09T01:48:42.8424287Z - baseline-stale pkg/providers/openai/stream.go:streamSSEToGateway: baseline entry "cyclomatic-complexity\x00github.com/portpowered/go-agent-harness/go-llm-gateway\x00github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai\x00pkg/providers/openai/stream.go\x00streamSSEToGateway" no longer describes a current violation; delete it
+2026-09-09T01:48:42.8428656Z - baseline-stale pkg/providers/openai/stream.go:streamSSEToGateway: baseline entry "function-lines\x00github.com/portpowered/go-agent-harness/go-llm-gateway\x00github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai\x00pkg/providers/openai/stream.go\x00streamSSEToGateway" no longer describes a current violation; delete it
+2026-09-09T01:48:42.8432850Z - baseline-stale pkg/providers/openai/stream.go:streamSSEToGateway: baseline entry "function-statements\x00github.com/portpowered/go-agent-harness/go-llm-gateway\x00github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai\x00pkg/providers/openai/stream.go\x00streamSSEToGateway" no longer describes a current violation; delete it
+2026-09-09T01:48:42.8435750Z - cognitive-complexity pkg/providers/openai/stream.go:streamSSEToGatewayWithClose (75 > 15): function exceeds its cognitive complexity budget
+2026-09-09T01:48:42.8437592Z - cyclomatic-complexity pkg/providers/openai/stream.go:streamSSEToGatewayWithClose (43 > 15): function exceeds its cyclomatic complexity budget
+2026-09-09T01:48:42.8439723Z - function-lines pkg/providers/openai/stream.go:streamSSEToGatewayWithClose (257 > 80): function exceeds its physical line budget
+2026-09-09T01:48:42.8441308Z - function-statements pkg/providers/openai/stream.go:streamSSEToGatewayWithClose (104 > 50): function exceeds its statement budget
+2026-09-09T01:48:42.8921627Z exit status 1
+2026-09-09T01:48:42.9012022Z make: *** [Makefile:185: architecture-size-check] Error 1
+2026-09-09T01:48:42.9030729Z ##[error]Process completed with exit code 2.
+2026-09-09T01:48:42.9083730Z ##[group]Run make vet
+2026-09-09T01:48:42.9084026Z [36;1mmake vet[0m
+2026-09-09T01:48:42.9125720Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:48:42.9126012Z ##[endgroup]
+2026-09-09T01:48:42.9218181Z ==> vet agent-cli
+2026-09-09T01:49:36.9638551Z ==> vet go-agent-loop
+2026-09-09T01:49:38.6563357Z ==> vet go-llm-gateway
+2026-09-09T01:49:51.8500669Z ==> vet go-audio
+2026-09-09T01:49:52.4730682Z ==> vet go-device-gateway
+2026-09-09T01:49:53.3687786Z ==> vet go-agent-runtime
+2026-09-09T01:49:54.1423953Z ==> vet tests/embedding
+2026-09-09T01:49:54.3476493Z ==> vet tools/architecturegate
+2026-09-09T01:49:55.6204081Z ==> vet tools/analyzergate
+2026-09-09T01:49:55.6991284Z ==> vet tools/coveragegate
+2026-09-09T01:49:55.7878068Z ==> vet tools/rtc-race-gate
+2026-09-09T01:49:55.8561783Z ==> vet tools/session-race-gate
+2026-09-09T01:49:55.9294778Z ==> vet tools/timingate
+2026-09-09T01:49:56.0014335Z ==> vet scripts/webmcp-o0
+2026-09-09T01:49:56.1610066Z ==> vet test/localai
+2026-09-09T01:49:56.2829137Z ##[group]Run make lint
+2026-09-09T01:49:56.2829418Z [36;1mmake lint[0m
+2026-09-09T01:49:56.2870667Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:49:56.2870948Z ##[endgroup]
+2026-09-09T01:49:56.5354960Z ==> lint using /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint (pinned v2.9.0)
+2026-09-09T01:49:56.5355534Z ==> lint agent-cli
+2026-09-09T01:50:21.2409283Z 0 issues.
+2026-09-09T01:50:21.2447736Z ==> lint go-agent-loop
+2026-09-09T01:50:27.7401130Z 0 issues.
+2026-09-09T01:50:27.7437870Z ==> lint go-llm-gateway
+2026-09-09T01:50:35.1925081Z 0 issues.
+2026-09-09T01:50:35.1961558Z ==> lint go-audio
+2026-09-09T01:50:37.8470288Z 0 issues.
+2026-09-09T01:50:37.8505560Z ==> lint go-device-gateway
+2026-09-09T01:50:41.1332173Z 0 issues.
+2026-09-09T01:50:41.1368933Z ==> lint go-agent-runtime
+2026-09-09T01:50:48.6405922Z 0 issues.
+2026-09-09T01:50:48.6442435Z ==> lint tests/embedding
+2026-09-09T01:50:52.2722361Z 0 issues.
+2026-09-09T01:50:52.2758763Z ==> lint tools/architecturegate
+2026-09-09T01:50:54.9762897Z 0 issues.
+2026-09-09T01:50:54.9798592Z ==> lint tools/analyzergate
+2026-09-09T01:50:56.5520493Z 0 issues.
+2026-09-09T01:50:56.5555710Z ==> lint tools/coveragegate
+2026-09-09T01:50:58.2858148Z 0 issues.
+2026-09-09T01:50:58.2893469Z ==> lint tools/rtc-race-gate
+2026-09-09T01:50:59.8077356Z 0 issues.
+2026-09-09T01:50:59.8112507Z ==> lint tools/session-race-gate
+2026-09-09T01:51:01.4002747Z 0 issues.
+2026-09-09T01:51:01.4037853Z ==> lint tools/timingate
+2026-09-09T01:51:02.9338223Z 0 issues.
+2026-09-09T01:51:02.9373798Z ==> lint scripts/webmcp-o0
+2026-09-09T01:51:06.0048747Z 0 issues.
+2026-09-09T01:51:06.0083483Z ==> lint test/localai
+2026-09-09T01:51:08.5801290Z 0 issues.
+2026-09-09T01:51:08.5884221Z ##[group]Run make staticcheck
+2026-09-09T01:51:08.5884771Z [36;1mmake staticcheck[0m
+2026-09-09T01:51:08.5940376Z shell: /usr/bin/bash -e {0}
+2026-09-09T01:51:08.5940806Z ##[endgroup]
+2026-09-09T01:51:08.6534396Z ==> staticcheck using /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck (pinned 2026.1)
+2026-09-09T01:51:08.6535312Z ==> staticcheck agent-cli
+2026-09-09T01:51:28.9203926Z ==> staticcheck go-agent-loop
+2026-09-09T01:51:31.2092665Z ==> staticcheck go-llm-gateway
+2026-09-09T01:51:35.7278323Z ==> staticcheck go-audio
+2026-09-09T01:51:36.7485775Z ==> staticcheck go-device-gateway
+2026-09-09T01:51:37.5090876Z ==> staticcheck go-agent-runtime
+2026-09-09T01:51:40.5733608Z ==> staticcheck tests/embedding
+2026-09-09T01:51:40.9469165Z ==> staticcheck tools/architecturegate
+2026-09-09T01:51:43.9175573Z ==> staticcheck tools/analyzergate
+2026-09-09T01:51:44.1378962Z ==> staticcheck tools/coveragegate
+2026-09-09T01:51:44.4789862Z ==> staticcheck tools/rtc-race-gate
+2026-09-09T01:51:44.6829923Z ==> staticcheck tools/session-race-gate
+2026-09-09T01:51:44.9181394Z ==> staticcheck tools/timingate
+2026-09-09T01:51:45.1260319Z ==> staticcheck scripts/webmcp-o0
+2026-09-09T01:51:45.6726863Z ==> staticcheck test/localai
+2026-09-09T01:51:45.9281170Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-09T01:51:45.9282382Z Post job cleanup.
+2026-09-09T01:51:46.0145332Z [command]/usr/bin/git version
+2026-09-09T01:51:46.0188226Z git version 2.55.0
+2026-09-09T01:51:46.0223764Z Temporarily overriding HOME='/home/runner/work/_temp/27cf31ba-f372-47fa-a202-9ce425c17f98' before making global git config changes
+2026-09-09T01:51:46.0225195Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-09T01:51:46.0229920Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+2026-09-09T01:51:46.0269373Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-09T01:51:46.0305912Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-09T01:51:46.0582208Z fatal: No url found for submodule path 'docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo' in .gitmodules
+2026-09-09T01:51:46.0621929Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+2026-09-09T01:51:46.0751143Z Cleaning up orphan processes
+2026-09-09T01:51:46.1059662Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809, actions/checkout@v4, actions/setup-go@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -285,6 +285,9 @@ func (c *AskCommand) renderStreamingAsk(ctx context.Context, cmd *cobra.Command,
 		return fmt.Errorf("write output: %w", err)
 	}
 	if err := stream.Err(); err != nil {
+		return errors.Join(err, stream.Close())
+	}
+	if err := stream.Close(); err != nil {
 		return err
 	}
 	if err := handle.Save(); err != nil {

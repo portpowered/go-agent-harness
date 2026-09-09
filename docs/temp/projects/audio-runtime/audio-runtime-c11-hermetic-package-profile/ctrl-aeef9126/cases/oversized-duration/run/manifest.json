@@ -1,0 +1,144 @@
+{
+  "cache_paths": {
+    "gocache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/cache/gocache",
+    "gomodcache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/cache/gomodcache",
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/cache"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/fixtures/emit_jsonl.py",
+        "--scenario",
+        "oversized-duration",
+        "--delay",
+        "0.005"
+      ],
+      "cohort": false,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration",
+      "ended_at_utc": "2026-09-09T01:37:35.037Z",
+      "env_overrides": {
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/cache/gocache",
+        "GOMAXPROCS": "1",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/cache/gomodcache"
+      },
+      "exit_status": 0,
+      "expected_package_count": 1,
+      "label": "run-fc7a0f-r1-synthetic",
+      "module": "synthetic",
+      "monotonic_end_ns": 2169653940403125,
+      "monotonic_start_ns": 2169653886375333,
+      "phase": "full",
+      "quiet_evidence": {
+        "active_work": [],
+        "captured_at_utc": "2026-09-09T01:37:34.918Z",
+        "isolation": "synthetic-control",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/quiet-evidence.json",
+        "runner": {
+          "architecture": "synthetic",
+          "cpu": "synthetic",
+          "go_version": "not-used",
+          "os": "synthetic"
+        },
+        "sha256": "078849f76ece737bf568a7dcf273b22202c7b47199572d52562f5cf2d915bfb5",
+        "valid_until_utc": "2026-09-09T01:47:34.918Z"
+      },
+      "record_id": "run-fc7a0f-r1-synthetic",
+      "repeat_index": 1,
+      "requested_repetitions": 1,
+      "role": "synthetic-test",
+      "run_group_id": "fc7a0f61c5dc",
+      "schema": "c11-command-record-v1",
+      "scope": "run",
+      "selected_packages": [
+        "example/oversized"
+      ],
+      "signal": null,
+      "source_sha": "synthetic-control-source",
+      "source_validation": null,
+      "spawn_error": null,
+      "started_at_utc": "2026-09-09T01:37:34.983Z",
+      "status": "PASS",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/fc7a0f61c5dc/r1/synthetic/run-fc7a0f-r1-synthetic.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 129,
+      "stdout_path": "runs/fc7a0f61c5dc/r1/synthetic/run-fc7a0f-r1-synthetic.stdout.jsonl",
+      "stdout_sha256": "d43c84e53f20eaf0e09a1ebe4da1375ed8f5240c64c3395c3edca11f9dfe43fd",
+      "test_result_cache_policy": "disabled-by--count=1",
+      "timed_out": false,
+      "timeout_seconds": 5,
+      "trial": 1,
+      "wall_seconds": 0.054027792
+    }
+  ],
+  "created_at_utc": "2026-09-09T01:37:34.918Z",
+  "flags": {
+    "agent_cli_timeout_seconds": 5,
+    "cgo_enabled": "0",
+    "count": 1,
+    "general_timeout_seconds": 5,
+    "go_test_p": 1,
+    "gomaxprocs": 1,
+    "tags": [
+      "nomicrophone"
+    ]
+  },
+  "go": {
+    "env": {},
+    "executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "version": "not-used"
+  },
+  "inventory_command_ids": [],
+  "inventory_status": "PASS",
+  "measurement_status": "RUN_CAPTURED",
+  "metadata_command_ids": [],
+  "mode": "synthetic",
+  "modules": [
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/fixtures/emit_jsonl.py",
+        "--scenario",
+        "oversized-duration",
+        "--delay",
+        "0.005"
+      ],
+      "name": "synthetic",
+      "no_test_package_count": 0,
+      "package_count": 1,
+      "packages": [
+        {
+          "has_tests": true,
+          "import_path": "example/oversized",
+          "package_arg": "."
+        }
+      ],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration",
+      "relative": ".",
+      "test_package_count": 1
+    }
+  ],
+  "paths": {
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration/run/manifest.json"
+  },
+  "project": "audio-runtime",
+  "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-aeef9126/cases/oversized-duration",
+  "runner": {
+    "architecture": "synthetic",
+    "cpu": "synthetic",
+    "go_version": "not-used",
+    "os": "synthetic"
+  },
+  "schema": "c11-hermetic-profile-manifest-v1",
+  "source_dirty_paths": [],
+  "source_sha": "synthetic-control-source",
+  "updated_at_utc": "2026-09-09T01:37:35.038Z",
+  "warm": {
+    "command_ids": [],
+    "status": "NOT_RUN",
+    "test_binaries": []
+  },
+  "work": "audio-runtime-c11-hermetic-package-profile-controls"
+}

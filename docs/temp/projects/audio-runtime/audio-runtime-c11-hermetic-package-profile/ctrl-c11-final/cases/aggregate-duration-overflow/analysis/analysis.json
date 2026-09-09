@@ -1,0 +1,11 @@
+{
+  "fresh_timing": "INVALID",
+  "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-c11-final/cases/aggregate-duration-overflow/run/manifest.json",
+  "provenance": {
+    "analysis_input_valid": false,
+    "invalid_artifact_written_atomically": true
+  },
+  "reason": "ValueError: package execution duration total exceeds time.Duration",
+  "schema": "c11-hermetic-profile-analysis-v1",
+  "status": "INVALID"
+}

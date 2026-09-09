@@ -1,0 +1,1 @@
+profile.py: error: source changed since inventory: expected HEAD 'ddc4e843507cbd860089bc2c7826127204b3fea8', current 'ddc4e843507cbd860089bc2c7826127204b3fea8'; expected dirty paths [], current ['tracked.txt']

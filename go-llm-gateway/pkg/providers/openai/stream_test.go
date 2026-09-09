@@ -191,6 +191,46 @@ func TestStreamSSEToGateway_ReaderErrorClassification(t *testing.T) {
 	t.Fatal("expected ERROR event")
 }
 
+func TestStreamSSEToGateway_ReportsBodyCloseFailureBeforeTerminal(t *testing.T) {
+	closeErr := errors.New("response body close failed")
+	closed := false
+	ch := make(chan messages.StreamMessage, 64)
+	streamSSEToGateway(
+		strings.NewReader(sseData(
+			`{"id":"c1","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":"stop"}]}`,
+		)),
+		ch,
+		func() error {
+			closed = true
+			return closeErr
+		},
+	)
+	close(ch)
+
+	var gotErr *messages.ErrorValue
+	for _, msg := range collectOpenAIStream(ch) {
+		if msg.Type == messages.StreamTypeMessageEnd {
+			t.Fatal("body close failure was followed by MESSAGE.END")
+		}
+		if msg.Type == messages.StreamTypeError {
+			value, ok := msg.Value.(*messages.ErrorValue)
+			if !ok {
+				t.Fatalf("ERROR value = %T, want *messages.ErrorValue", msg.Value)
+			}
+			gotErr = value
+		}
+	}
+	if !closed {
+		t.Fatal("response body close callback was not invoked")
+	}
+	if gotErr == nil || !errors.Is(gotErr.Err, closeErr) {
+		t.Fatalf("body close failure = %#v, want cause %v", gotErr, closeErr)
+	}
+	if gotErr.Classification != providers.ErrorClassTransport {
+		t.Fatalf("body close classification = %q, want %q", gotErr.Classification, providers.ErrorClassTransport)
+	}
+}
+
 func TestOpenAIProvider_InferStream_HTTPErrorClassification(t *testing.T) {
 	transport := &streamMockTransport{
 		statusCode: http.StatusUnauthorized,

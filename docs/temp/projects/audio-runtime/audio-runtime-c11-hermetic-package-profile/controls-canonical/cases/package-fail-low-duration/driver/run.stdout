@@ -1,0 +1,10 @@
+{
+  "completed_repetitions": 0,
+  "failure_count": 1,
+  "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/controls-canonical/cases/package-fail-low-duration/run/manifest.json",
+  "record_count": 1,
+  "requested_repetitions": 1,
+  "run_group_id": "d66fa5155c35",
+  "source_sha": "synthetic-control-source",
+  "status": "FAILED"
+}

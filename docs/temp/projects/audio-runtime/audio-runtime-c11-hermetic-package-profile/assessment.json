@@ -1,0 +1,232 @@
+{
+  "schema": "c11-hermetic-profile-assessment-v1",
+  "project": "audio-runtime",
+  "work": "audio-runtime-c11-hermetic-package-profile",
+  "factory_session": "~default",
+  "candidate_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "current_branch_head_at_handoff": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "implementation_checkpoint": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_checkpoint": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_generated_from_sha": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_packaging_note": "The candidate SHA above is the exact source tree used for the current focused recheck; the evidence bundle is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
+  "base_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
+  "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "delivery_rebase": {
+    "fetched_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
+    "integrated_at_utc": "2026-09-08T22:39:37Z",
+    "integration_method": "isolated-worktree rebase onto freshly fetched origin/main; running host checkout untouched",
+    "integration_head": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
+    "repair_head": "e2e1faebe7610c18edea672e493f973fc6981425",
+    "previous_submitted_head": "e2ebc23464ee34c27c419d47fe8e7ef415f927a1",
+    "previous_ci_run": 34277521278,
+    "previous_ci_job": 102234088178,
+    "previous_ci_check": "CI (coverage)",
+    "previous_ci_conclusion": "FAILURE",
+    "recheck": {
+      "test": "TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress",
+      "package": "./agent-cli/internal/services/internal/agentruntime",
+      "command": "go test ./agent-cli/internal/services/internal/agentruntime -count=1 -run ^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$ -timeout 30s",
+      "status": "PASS",
+      "interpretation": "The rejected runtime test did not reproduce after rebasing; no C11-owned implementation path is implicated."
+    },
+    "next_gate": "SCRIPT_CI_NOT_POLLED"
+  },
+  "latest_ci_rejection": {
+    "path": "ci-rejection-34300581145.json",
+    "log_path": "ci-rejection-34300581145.log",
+    "run_id": 34300581145,
+    "job_id": 102306427035,
+    "check": "CI (static)",
+    "head_sha": "177eda027ed2712211f8d44c313bbe2c103f596e",
+    "failure_step": "Run make architecture-size-check",
+    "failure": "architecture-size-check reported four stale baseline entries for streamSSEToGateway and four oversized/over-budget metrics for streamSSEToGatewayWithClose after the response-body cleanup repair duplicated the parser",
+    "owned_path": "go-llm-gateway/pkg/providers/openai/stream.go",
+    "owner": "C11 capture repair; consolidated into the existing parser at 955efeb; hosted CI remains unclaimed",
+    "go_tests_started": true,
+    "ci_claim": "NOT_GREEN; current-head rejection read in full; no waiver",
+    "metadata_sha256": "5269c3adc0095a381c8c8ea95da3cb0a28044b2dd06de23c49f4a3e881fbd928",
+    "log_sha256": "a1d159d420031e368bc76430fab1ae97285d68e45f9477f6fe7562bb36969997",
+    "local_rechecks": [
+      "architecture-size-check PASS at 955efeb",
+      "focused and race capture/provider tests PASS at 955efeb"
+    ]
+  },
+  "canonical_board_snapshot": {
+    "path": "canonical-board-955efeb.json",
+    "sha256": "918672c9b796990c327de91086e070a30b3b407dd4be6e093ef5fdbcb2264e88",
+    "command": "rtk proxy you --server \"$FACTORY_SERVER_URL\" --json work list --session \"~default\" --max-results 500 --all",
+    "task_work_id": "work-task-4",
+    "rejection_rows": 10
+  },
+  "continuation_board_snapshot": {
+    "path": "canonical-board-executor-20260909.json",
+    "sha256": "3992a0a76ef15fcc5c409fad20a13710d74ce305a1b44ad254baaa8522639cad",
+    "findings_path": "canonical-findings-executor-20260909.txt",
+    "findings_sha256": "f796774f3dee3213f53b10a6cd285a997da1dc4a75dfc6fbbb1a2c0a68083e7b"
+  },
+  "fresh_timing": {
+    "status": "BLOCKED",
+    "reason": "No isolated or dedicated runner evidence is available; the shared factory runner is not an admissible quiet runner",
+    "quiet_evidence": {
+      "path": "quiet-evidence-blocked.json",
+      "sha256": "d26582e4050135b1a1291b3c4ec318646274a4e1230e337bc0fc5b90a73133d0"
+    },
+    "analysis": {
+      "path": "blocked-analysis/analysis.json",
+      "sha256": "677d7e17ab6bba7b4a5f18e19ad6b854f884dd21e69f65d81d849ee77a815152"
+    }
+  },
+  "runner_observed_without_heavy_commands": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M1 Max",
+    "go_version": "go version go1.26.7 darwin/arm64",
+    "gomaxprocs": 10,
+    "go_test_p": 10,
+    "cgo_enabled": "0",
+    "tags": ["nomicrophone"],
+    "count": 1
+  },
+  "controls": {
+    "path": "ctrl-955efeb/controls.json",
+    "sha256": "38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567",
+    "status": "PASS",
+    "cases": 67,
+    "result_groups": 27,
+    "go_invocations": 0,
+    "network_invocations": 0,
+    "build_invocations": 0,
+    "raw_evidence_retained": false,
+    "raw_evidence_retention": {
+      "all_case_artifacts_retained": false,
+      "deliberately_removed_cases": ["missing-raw-artifact"],
+      "negative_control": "missing-raw-artifact"
+    }
+  },
+  "schema_control_mapping": "schema-control-mapping.md",
+  "fresh_focused_recheck": {
+      "checked_at_utc": "2026-09-09T02:09:06Z",
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+      "controls_report_sha256": "38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567",
+      "controls": "PASS: 67 cases, 27 result groups, zero Go/network/build invocations",
+    "profile_help": "PASS",
+    "python_ast": "PASS: 3 files (recursive scripts/hermetic-profile/**/*.py)",
+    "timingate": "PASS: GOWORK=off go test . -count=1",
+    "diff_check": "PASS",
+    "affected_packages": "PASS: go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai -count=1",
+    "race_packages": "PASS: go test -race ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai -count=1 -run capture/provider regressions",
+    "architecture_size": "PASS: 181 packages, 1859 files, 27055 functions",
+    "lint": "PASS: pinned golangci-lint 2.9.0",
+    "staticcheck": "PASS: pinned staticcheck 2026.1"
+  },
+  "review_repairs": {
+    "reviewed_head": "5d153a533fd881afb268860d98692bb00d560c9d",
+    "repair_commit": "6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb",
+    "validated_after_main_integration": "6b7af043b7011bd1a4b5d59e857e6ef065c9f8bb",
+    "status": "REPAIRED_AND_CAUSALLY_TESTED",
+    "current_lifecycle_repair": {
+      "review": 35,
+      "reviewed_head": "7e468aa43a9838d4f49266d567c69d520779742c",
+      "repair_commit": "ad73e05bd51d9e777be934c5ca4a82aec25b0068",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_command_status_repair": {
+      "review": 37,
+      "reviewed_head": "d31122d2afbb4baa9436e3aad9c1abcfc7c036d2",
+      "repair_commit": "e2e1faebe7610c18edea672e493f973fc6981425",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_c11_profile_repair": {
+      "review": 40,
+      "reviewed_head": "b7f70f2f7c877ccb9aea51683ab8980b79946c68",
+      "repair_commit": "aeef9126ae54ea925dabb260818082db8675b324",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "current_capture_shutdown_repair": {
+      "trigger": "ci-rejection-34294562855 and ci-rejection-34300581145",
+      "repair_commit": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+      "status": "REPAIRED_AND_CAUSALLY_TESTED"
+    },
+    "items": [
+      "subtest overlap is scoped per package and cross-package concurrency is covered",
+      "invalid shared-host evidence is checked with --allow-heavy and rejected",
+      "missing raw-artifact retention is reported truthfully per case and at top level",
+      "stdout/stderr and quiet-evidence artifact paths are contained under the manifest output root",
+      "per-record source identity, quiet-evidence provenance, and repetition completeness are required",
+      "quiet evidence requires runner/load metadata and a current validity window",
+      "repeated package terminals follow tools/timingate state transitions",
+      "Elapsed values are bounded by Go time.Duration and huge integers fail closed",
+      "run records validate current source HEAD and dirty paths before capture",
+      "offline analysis retains package ranking/wall evidence while referencing, not duplicating, tools/timingate",
+      "lane timing metadata is required before fresh timing can pass",
+      "quiet before/after observations require active work, process, and load fields",
+      "GOCACHE and GOMODCACHE must remain under the manifest output root",
+      "no-test markers must agree with inventory has_tests classification",
+      "malformed run records produce bounded INVALID analysis instead of a traceback",
+      "captured source-validation head, repository, and dirty paths are cross-checked",
+      "malformed analysis replaces stale PASS output with an atomic INVALID artifact",
+      "unreferenced invalid and zero-request run groups cannot be omitted from execution validity",
+      "command-record v1 schema, retained stdout/stderr bytes, hashes, and paths are validated",
+      "retained source-validation command artifacts are checked against actual Git output",
+      "aggregate package durations reject sums beyond Go time.Duration before ranking",
+      "new captures keep manifest.commands as the only command-record authority and reject duplicated phase/group records/source validations",
+      "whole-input group and record validation completes before --group display filtering, including unmatched filters",
+      "cohort capture accepts exactly two invocations and rejects repeat 3",
+      "hermetic cohort capture requires one complete successful full inventory trial before any Go command",
+      "inventory and warm phase commands must be PASS with exit status 0 before analysis or cohort launch",
+      "timeout, exit, signal, spawn-error, and status consistency are validated; timed-out PASS/exit-0 mutations fail closed",
+      "hermetic full records must cover every package in the inventoried module",
+      "successful warm test binaries are contained, present, and hash/byte verified",
+      "declared wall_seconds must match the monotonic interval",
+      "streaming capture closes response bodies before Save/Flush and preserves cleanup errors"
+    ]
+  },
+  "focused_regressions": [
+    {
+      "command": "GOWORK=off go test . -count=1",
+      "cwd": "tools/timingate",
+      "status": "PASS"
+    },
+    {
+      "command": "python3 -B AST parse of scripts/hermetic-profile/**/*.py",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "command": "go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/testing ./go-agent-runtime/services/providers/internal/service ./go-agent-runtime/services/session/internal/service ./go-agent-loop/pkg/agentloop -count=1 -timeout 180s",
+      "status": "PASS",
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f"
+    },
+    {
+      "command": "go test ./agent-cli/internal/acceptance -run '^TestAskRecordsAndReplaysThroughProviderService$|^TestAskStreamingCaptureJoinsResponseBodyBeforeFlush$' -count=10 -timeout 180s",
+      "status": "PASS",
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f"
+    }
+  ],
+  "source_files": {
+    "scripts/hermetic-profile/profile.py": "fe740adc0333033bf526a935d9b91e5ff84508bcb15eedbb14adea4a78ab3f75",
+    "scripts/hermetic-profile/controls.py": "cf8800c34306eea85fcacaf0e86e1115661f36cb504f58dfe120a17a70adeb5a",
+    "scripts/hermetic-profile/fixtures/emit_jsonl.py": "0bba10cf4e37fa0203146172f44ee5c0ea1c1fd22bfb9e948f4d74cc113fb12a"
+  },
+  "immutable_ci_logs": [
+    {
+      "path": "$FACTORY_ROOT/docs/temp/projects/audio-runtime/ci-34132278337-failed.log",
+      "sha256": "8715136ba2c199229e01771abd686e3ad869297803ba906dd72a2baa18516593",
+      "source_sha": "c849c9a1fe9ae399290bad389472d60e1d26b2eb",
+      "status": "historical-diagnostic-only"
+    },
+    {
+      "path": "$FACTORY_ROOT/docs/temp/projects/audio-runtime/ci-34154917253-failed.log",
+      "sha256": "268ace28829689cdb4c100960be39714ccb3a51c97c3d5a0944e7c23e601e091",
+      "source_sha": null,
+      "status": "historical-diagnostic-only"
+    }
+  ],
+  "fresh_run_hashes": [],
+  "ci_status": "READY_FOR_SCRIPT_CI_NOT_POLLED",
+  "review_status": "NOT_SELF_REVIEWED"
+}
