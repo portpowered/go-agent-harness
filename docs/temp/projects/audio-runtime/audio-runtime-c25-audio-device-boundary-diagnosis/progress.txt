@@ -9,7 +9,7 @@ Admission and preservation
 - Initial source worktree was clean; no predecessor or unrelated changes were touched.
 
 Board/review context
-- Canonical task row: work-task-71; plan work-plan-70 complete; no C25 review/rejection finding existed.
+- Canonical task row: work-task-71; plan work-plan-70 complete; no C25 review row; the task row later returned the PR417 CI rejection recorded below.
 - Read accepted C15/C16/C17 evidence and current C18/C20/C21/C23 findings. Their owned paths and actionable review repairs remain outside this packet.
 
 Diagnosis
@@ -21,12 +21,17 @@ Diagnosis
 - This is a concrete source/ownership migration hazard, not runtime/acoustic proof.
 
 Verifier checkpoint
-- verify.py --mode all: ACCEPTED.
+- verify.py --mode all at candidate 1040f92478bd1da6450f0f9a1fc1f4532ff34937: ACCEPTED in 9.493s; nine focused children, package probes, positive/negative dependency controls, stale/false-success/truncated-output controls, and intentional child-hang cleanup all passed; no child survived and shutdown was clean.
 - Source gap: SOURCE_GAP_CONFIRMED.
 - Positive canonical graph: ACCEPTED.
 - Negative bypass graph: REJECTED_AS_FORBIDDEN.
-- go list probes and all four focused checks returned 0.
-- Aggregate 3.552s; child cap 55s; aggregate cap 600s; clean shutdown.
+- go list probes and all selected canonical/legacy focused checks returned 0; native return codes and harness verdicts are captured in diagnosis.json.
+- Pinned source 5d5afcb14d7b269378020809f5a2418c499ac94d is an ancestor and all audited production paths are unchanged; aggregate 4.008s; child cap 55s; aggregate cap 600s; clean shutdown.
+
+Current-head CI rejection characterization
+- PR417 head 1040f92478bd1da6450f0f9a1fc1f4532ff34937, run34397773527/job102621627290, failed TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst while waitForRemoteToolAudio requested the full remote /v1/audio-device/control/snapshot after provider completion and callback-clock shutdown; the existing 30s scenario context expired at 30.04s.
+- The production-binary audio-device replay and committed regression package in the same job passed. C25 read-only source tracing cannot distinguish server-lock starvation from snapshot serialization/client scheduling; no production cause is claimed.
+- Local exact single-subtest passed in 12.38s and the full 12-subtest matrix passed in 29.362s. C20 owns the production/fixture repair; C25 owns only evidence and verifier paths.
 
 Next action
-- Checkpoint owned evidence files, commit and push this diagnosis branch, then open/update the PR for script CI handoff. Do not poll CI; if the gate later rejects, inspect the exact check and repair this same task.
+- Commit and push the verifier/evidence repair and update PR417 with the exact rejection and ownership handoff. Do not poll CI. Retain C25 ownership until C20's reviewed repair (if any) is integrated, then refresh exact-source evidence and submit the changed same task through script CI.

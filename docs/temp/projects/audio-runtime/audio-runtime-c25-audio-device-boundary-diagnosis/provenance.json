@@ -1,8 +1,31 @@
 {
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "candidate_revision": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
   "generated_by": "verify.py",
   "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "origin_main": "5d5afcb14d7b269378020809f5a2418c499ac94d",
+  "source_ancestry": {
+    "argv": [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      "5d5afcb14d7b269378020809f5a2418c499ac94d",
+      "HEAD"
+    ],
+    "children_alive": false,
+    "command": "git merge-base --is-ancestor 5d5afcb14d7b269378020809f5a2418c499ac94d HEAD",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+    "duration_seconds": 0.017,
+    "finished_at": "2026-09-09T20:34:03.145199Z",
+    "harness_verdict": "ACCEPTED",
+    "label": "source-ancestry",
+    "native_returncode": 0,
+    "returncode": 0,
+    "started_at": "2026-09-09T20:34:03.128047Z",
+    "stderr": "",
+    "stdout": "",
+    "timed_out": false
+  },
   "source_archive_sha256": "0bebedbf449193683267220769084393f0c3e175d59d7e6dc7ba0992c06364ac",
   "source_files": {
     "agent-cli/internal/room/mixer.go": {
@@ -55,10 +78,30 @@
       "lines": 322,
       "sha256": "c2da83c98e0c8b28156072cd418bcbb3397dec72ecea217eb6d855ee0152f5a4"
     },
+    "go-agent-runtime/services/rooms/internal/lifecycle/media.go": {
+      "bytes": 1699,
+      "lines": 77,
+      "sha256": "bddab43c48070a3c0c79674c745f531b3993d651d1f248ebef0d735ca8d50f38"
+    },
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant.go": {
+      "bytes": 7636,
+      "lines": 195,
+      "sha256": "5242e946f5697b01b794a16a105f8371e2b3493a7a986e1dbcc80ddf87a45910"
+    },
     "go-audio/pkg/audio/buffer.go": {
       "bytes": 6517,
       "lines": 225,
       "sha256": "9257dbba4086d849a2167821ab412fac71aac2b120c12872e6df95246ac90934"
+    },
+    "go-audio/pkg/audio/device_playback.go": {
+      "bytes": 13680,
+      "lines": 440,
+      "sha256": "863cdb9411dab4c5d608f08e98b874b58823afd15559ba688e6cbf63a800e14b"
+    },
+    "go-audio/pkg/audio/device_playback_test.go": {
+      "bytes": 10036,
+      "lines": 269,
+      "sha256": "f7d91c81817b98c8fbb6ea8757de7f842690c4d753baa76144e663da2f096e8b"
     },
     "go-audio/pkg/audio/media_contract.go": {
       "bytes": 7156,
@@ -69,6 +112,16 @@
       "bytes": 16407,
       "lines": 550,
       "sha256": "61ffe922cbcc2a7387cb75b529b2512019d4f5f18f8340329ddab7e005f95b08"
+    },
+    "go-audio/pkg/clock/clock.go": {
+      "bytes": 16470,
+      "lines": 547,
+      "sha256": "b05ce92f0c17d19b7ed0b06bd388b848e2f607c55c92169f283bc0c8efd5fff9"
+    },
+    "go-audio/pkg/clock/clock_test.go": {
+      "bytes": 15517,
+      "lines": 553,
+      "sha256": "d9880610df09e8fd5dd3693b220f1053969099dc27edd9b767cbe5ec82221627"
     },
     "go-audio/pkg/mixer/input.go": {
       "bytes": 4780,
@@ -90,6 +143,51 @@
       "lines": 757,
       "sha256": "0ff0c39c55708ae7403c50f5f1b8d57ab84cd95de8b359fceff141992a0cdf54"
     }
+  },
+  "source_path_diff": {
+    "argv": [
+      "git",
+      "diff",
+      "--quiet",
+      "5d5afcb14d7b269378020809f5a2418c499ac94d",
+      "--",
+      "agent-cli/internal/room/mixer.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+      "go-audio/pkg/audio/media_contract.go",
+      "go-audio/pkg/audio/buffer.go",
+      "go-audio/pkg/audio/session_media.go",
+      "go-audio/pkg/audio/device_playback.go",
+      "go-audio/pkg/audio/device_playback_test.go",
+      "go-audio/pkg/clock/clock.go",
+      "go-audio/pkg/clock/clock_test.go",
+      "go-audio/pkg/mixer/mixer.go",
+      "go-audio/pkg/mixer/input.go",
+      "go-agent-runtime/services/rooms/contract.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/graph.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/media.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+      "go-device-gateway/pkg/runtime/rtc_device.go",
+      "go-device-gateway/pkg/runtime/rtc_device_sink.go",
+      "go-agent-loop/pkg/agentloop/architecture_import_test.go",
+      "agent-cli/internal/transport/cli/room.go",
+      "agent-cli/internal/services/wire/wire.go",
+      "agent-cli/internal/wire/wire_gen.go"
+    ],
+    "children_alive": false,
+    "command": "git diff --quiet 5d5afcb14d7b269378020809f5a2418c499ac94d -- agent-cli/internal/room/mixer.go agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go agent-cli/internal/services/internal/agentruntime/session_room_run.go agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go go-audio/pkg/audio/media_contract.go go-audio/pkg/audio/buffer.go go-audio/pkg/audio/session_media.go go-audio/pkg/audio/device_playback.go go-audio/pkg/audio/device_playback_test.go go-audio/pkg/clock/clock.go go-audio/pkg/clock/clock_test.go go-audio/pkg/mixer/mixer.go go-audio/pkg/mixer/input.go go-agent-runtime/services/rooms/contract.go go-agent-runtime/services/rooms/internal/lifecycle/graph.go go-agent-runtime/services/rooms/internal/lifecycle/media.go go-agent-runtime/services/rooms/internal/lifecycle/participant.go go-device-gateway/pkg/runtime/rtc_device.go go-device-gateway/pkg/runtime/rtc_device_sink.go go-agent-loop/pkg/agentloop/architecture_import_test.go agent-cli/internal/transport/cli/room.go agent-cli/internal/services/wire/wire.go agent-cli/internal/wire/wire_gen.go",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+    "duration_seconds": 0.018,
+    "finished_at": "2026-09-09T20:34:03.163289Z",
+    "harness_verdict": "ACCEPTED",
+    "label": "source-path-diff",
+    "native_returncode": 0,
+    "returncode": 0,
+    "started_at": "2026-09-09T20:34:03.145263Z",
+    "stderr": "",
+    "stdout": "",
+    "timed_out": false
   },
   "source_revision": "5d5afcb14d7b269378020809f5a2418c499ac94d",
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis"

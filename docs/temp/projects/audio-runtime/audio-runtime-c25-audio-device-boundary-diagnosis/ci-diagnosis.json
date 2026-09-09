@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
+  "candidate_revision": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
+  "ci": {
+    "run": "34397773527",
+    "job": "102621627290",
+    "pr": 417,
+    "head": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
+    "check": "CI (integration)",
+    "raw_log": "/tmp/factory-c25-ci-integration-34397773527.log",
+    "raw_log_bytes": 43401,
+    "raw_log_sha256": "22092c58d28a21040259b7317c695c94d4bbd8b18fe38ef31aa9c22bda580b02",
+    "make_target": "test-integration",
+    "job_started_at": "2026-09-09T19:53:55.8886012Z",
+    "failure_at": "2026-09-09T19:59:03.6943356Z"
+  },
+  "failure": {
+    "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+    "source": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+    "reported_line": 182,
+    "phase": "waitForRemoteToolAudio",
+    "operation": "ReadRemoteDeviceServerSnapshot",
+    "endpoint": "/v1/audio-device/control/snapshot",
+    "error": "context deadline exceeded",
+    "scenario_deadline_seconds": 30,
+    "observed_duration_seconds": 30.04,
+    "first_failed_control": "snapshot evidence request did not return before the existing scenario context expired"
+  },
+  "source_order": [
+    {
+      "event": "provider allResponsesSent",
+      "source": "session_tool_audio_remote_e2e_test.go:301-304",
+      "meaning": "all provider responses are written before the evidence phase"
+    },
+    {
+      "event": "callback clock stop and join",
+      "source": "session_tool_audio_remote_e2e_test.go:334-341",
+      "meaning": "the background callback driver is stopped and joined before the non-closing snapshot path"
+    },
+    {
+      "event": "snapshot request",
+      "source": "session_tool_audio_remote_e2e_test.go:350-352 and :522-545",
+      "meaning": "the test advances callbacks and requests the full remote snapshot before validating the final marker"
+    },
+    {
+      "event": "provider close and child shutdown",
+      "source": "session_tool_audio_remote_e2e_test.go:366-376",
+      "meaning": "for provider_burst, ReleaseClose and the final child wait occur after snapshot validation; the hosted failure did not reach this normal close assertion"
+    }
+  ],
+  "adjacent_ci_controls": {
+    "production_binary_audio_device_replay": {
+      "verdict": "PASS",
+      "duration_seconds": 80.567
+    },
+    "committed_replay_fixture_regressions": {
+      "verdict": "PASS",
+      "duration_seconds": 9.617
+    }
+  },
+  "local_controls": [
+    {
+      "command": "go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/^test46/provider_burst$' -count=1 -timeout=90s -v",
+      "verdict": "PASS",
+      "subtest_duration_seconds": 12.38,
+      "package_duration_seconds": 21.896,
+      "raw_log": "/tmp/factory-c25-local-test46-provider-burst-raw.log",
+      "raw_log_bytes": 602,
+      "raw_log_sha256": "1bf92f54005fa0eb4d32fea0288b409ade41d8267dc2978385ae4858f9fa695f"
+    },
+    {
+      "command": "go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$' -count=1 -timeout=90s -v",
+      "verdict": "PASS",
+      "subtest": "12-subtest test45/test46 plus matched healthy controls",
+      "test46_provider_burst_seconds": 12.44,
+      "package_duration_seconds": 29.362,
+      "raw_log": "/tmp/factory-c25-local-test45-48-matrix-raw.log",
+      "raw_log_bytes": 5046,
+      "raw_log_sha256": "7460f44f141f64518282d7dbf90bb5d0a73dda88ef3e0f411727d7149d1023cf"
+    }
+  ],
+  "interpretation": "The hosted failure is localized to the remote snapshot evidence phase after provider completion and callback-clock shutdown. Local focused controls do not reproduce it. The evidence does not distinguish server-lock starvation, snapshot serialization, or client scheduling, and does not prove PCM loss or EOF loss.",
+  "ownership": {
+    "c25": "read-only diagnosis and verifier/evidence folder",
+    "c20": "production and fixture repair for session_tool_audio_remote_e2e_test.go/live-session path",
+    "next_action": "C20 captures bounded server/snapshot phase timing on its same task; primary resumes C25 after any reviewed main change to refresh exact-source evidence and submit a changed head through script CI."
+  }
+}

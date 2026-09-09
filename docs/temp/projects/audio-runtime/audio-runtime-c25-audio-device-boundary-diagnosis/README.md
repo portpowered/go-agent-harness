@@ -20,20 +20,22 @@ Run from the repository root:
 python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all
 ```
 
-The verifier enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
+The verifier pins source revision `5d5afcb14d7b269378020809f5a2418c499ac94d` separately from the docs candidate, requires that source to be an ancestor, verifies every audited production path is unchanged from the pin, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
 
 - canonical `go-audio/pkg/mixer` mixer/accumulator tests;
+- canonical playback queue/callback-boundary tests;
+- canonical deterministic-clock boundary tests;
+- canonical room lifecycle graph/media-bridge tests;
 - the go-agent-loop production ownership guard;
 - one legacy mixer behavior test;
-- compile-only legacy `agentruntime` package check.
+- one legacy agent-runtime behavior test, its race run, and focused vet.
 
-The last successful run at the admitted baseline completed in 3.552 seconds with clean shutdown. See `diagnosis.json`, `diagnosis.md`, and `provenance.json` for machine-readable output and exact file hashes.
+The exact candidate-head run completed in 4.008 seconds before the verifier expansion; the refreshed run is recorded in `diagnosis.json`, `diagnosis.md`, and `provenance.json` with exact file hashes, timestamps, native exits, and harness verdicts. Every child is bounded to 55 seconds and the aggregate to 600 seconds with process-group cleanup.
+
+The current-head CI rejection was separately characterized read-only. Run `34397773527` / job `102621627290` failed only in the hosted integration matrix at `test46/provider_burst`: after all provider responses and callback-clock shutdown, the full `/v1/audio-device/control/snapshot` evidence request exceeded the existing 30-second scenario context at `session_tool_audio_remote_e2e_test.go:182`. The production-binary device replay and committed regression suite in that job passed. The exact production/fixture owner is C20; C25 makes no repair outside this evidence folder. Local single and full-matrix focused runs passed, so this remains an intermittent hosted diagnosis rather than a claimed fix.
 
 ## Extraction plan
 
-1. Keep the public room service as the only room-run entrypoint and have the legacy package owner migrate or delete `RunRoom` and its `PCM16Mixer` callers; do not edit C18/C21-owned files without their primary task.
-2. Replace `room.PCM16Mixer` with `go-audio/pkg/mixer`, `audio.PCMFrame`, and bounded buffer contracts, injecting `clock.TimerSource` instead of constructing `time.Ticker` in room code.
-3. Move human capture/output adaptation behind `RTCDeviceSource`/`RTCDeviceSink` and `MediaPorts`, retaining the distinction between queue admission and callback consumption.
-4. Add one external public-consumer regression for frame/epoch/end-of-response ordering, cancellation/close, and partial-vs-full device consumption, plus a dependency guard rejecting host ticker, local codec, and direct gateway imports from room orchestration.
+The single chosen dependency is the legacy room-owned PCM16 cadence/mixer boundary. The exact current/proposed paths, APIs, callers, ownership, wire sequence, trigger, executable regression, and AUDIO/DEVICE/SERVICE/QUALITY gate map are in [`extraction-plan.md`](extraction-plan.md) and [`extraction-plan.json`](extraction-plan.json).
 
 Accepted C15/C16/C17 evidence proves software replay, software sink lifecycle, and canonical PONG-clock behavior only. Physical playback, microphone capture, live provider behavior, and acoustics remain unproved.
