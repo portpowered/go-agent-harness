@@ -70,10 +70,11 @@
     }
   },
   "focusedChecks": {
-    "goTestRecording": "70 passed in 4 packages",
-    "goTestRecordingRace": "70 passed in 4 packages",
+    "goTestRecording": "71 passed in 4 packages",
+    "goTestRecordingRace": "71 passed in 4 packages",
     "goVetRecording": "no issues",
-    "architectureSize": "passed: 181 packages, 1860 files, 27174 functions",
+    "coverageRecordingEvidence": "62 passed; 80.3% focused package coverage (939/1170 statements covered after repair)",
+    "architectureSize": "passed: 181 packages, 1860 files, 27175 functions",
     "diffCheck": "passed",
     "ci": "not polled; script-owned gate remains external",
     "review": "not performed by executor"

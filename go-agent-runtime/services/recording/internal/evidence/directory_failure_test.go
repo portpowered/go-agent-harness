@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,6 +275,60 @@ func TestDirectoryRecorderPairsAudioBudgetWithTranscriptBoundary(t *testing.T) {
 	}
 	if status := evidenceManifest(t, r).RecordingStatus; status == nil || status.State != transcript.RecordingStatusPartial {
 		t.Fatalf("audio overflow status = %+v, want partial", status)
+	}
+}
+
+func TestDirectoryRecorderBoundsOversizedTerminalRuntimeEvent(t *testing.T) {
+	const wantMaxEventTextBytes = 2048
+
+	r := newEvidenceRecorder(t)
+	terminal := messages.NewSessionCloseValueWithTerminal(
+		strings.Repeat("session-", 1024), strings.Repeat("reason-", 1024), strings.Repeat("classification-", 1024),
+		messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceSession, messages.TerminalOutputPartial,
+	)
+	if err := r.RecordEvent(t.Context(), session.LiveEvent{
+		Kind:      "oversized.runtime.event",
+		Timestamp: evidenceTime(),
+		Text:      strings.Repeat("x", directoryEvidenceQueueMaxBytes/2),
+		Reason:    strings.Repeat("y", directoryEvidenceQueueMaxBytes/2),
+		Terminal:  terminal,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatalf("oversized terminal event = %v", err)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.Terminal == nil || manifest.Terminal.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("terminal evidence = %+v, want bounded terminal", manifest.Terminal)
+	}
+	found := false
+	for _, line := range bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, "agent.transcript.jsonl")), []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		record, err := transcript.Decode(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Stream != transcript.StreamRuntimeEvent {
+			continue
+		}
+		var payload struct {
+			Event struct {
+				Text string `json:"text"`
+			} `json:"event"`
+		}
+		if err := json.Unmarshal(record.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if len(payload.Event.Text) != wantMaxEventTextBytes {
+			t.Fatalf("runtime event text bytes = %d, want %d", len(payload.Event.Text), wantMaxEventTextBytes)
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("bounded runtime event was not preserved")
 	}
 }
 
