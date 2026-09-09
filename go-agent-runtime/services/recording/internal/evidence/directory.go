@@ -106,17 +106,15 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 	}
 
 	recorder := &directoryRecorder{
-		options:     cloneEvidenceOptions(options),
-		writeSpool:  writeAll,
-		destination: destination,
-		lockPath:    destination + ".lock",
-		lock:        lock,
-		spool:       spool,
-		queue:       make(chan directoryEvidenceItem, directoryEvidenceQueueCapacity),
-		done:        make(chan struct{}),
-		conversation: evidenceConversation{
-			turn: evidenceTurn{toolEvents: make([]evidenceToolEvent, 0)},
-		},
+		options:      cloneEvidenceOptions(options),
+		writeSpool:   writeAll,
+		destination:  destination,
+		lockPath:     destination + ".lock",
+		lock:         lock,
+		spool:        spool,
+		queue:        make(chan directoryEvidenceItem, directoryEvidenceQueueCapacity),
+		done:         make(chan struct{}),
+		conversation: newEvidenceConversation(),
 	}
 	go recorder.run()
 	return recorder, nil
