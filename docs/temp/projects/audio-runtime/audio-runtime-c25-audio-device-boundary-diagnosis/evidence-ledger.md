@@ -58,14 +58,14 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 
 ## Exact current-head refresh
 
-- At current HEAD `ff00c0375a25a98c5d9398c8ffb5e26ccd70151b`, the bounded
-  `verify.py --mode all` rerun completed in `10.059` seconds with `19`
+- At current HEAD `209afd4ceca417fdca7964e3c0301ad4d3d1c250`, the bounded
+  `verify.py --mode all` rerun completed in `10.263` seconds with `19`
   commands, decision `ACCEPTED`, no unexpected failure, clean source ancestry
   and audited-path diff checks, and `children_alive=false` for every child.
   The source-only diagnosis and all focused regressions remain unchanged; the
   generated `diagnosis.json`, `diagnosis.md`, and `provenance.json` now align
-  with this exact pushed candidate head. The prior dab5c373 and 3c2aea55
-  refreshes remain preserved as predecessor checkpoints.
+  with this exact pushed candidate head. The prior ff00c037, dab5c373, and
+  3c2aea55 refreshes remain preserved as predecessor checkpoints.
 - The known CI rejection remains historical and externally owned: C20 owns the
   `test46/provider_burst` remote snapshot phase. No C25 production or fixture
   repair is authorized, and no CI result is claimed from this local refresh.

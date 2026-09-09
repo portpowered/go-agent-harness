@@ -46,5 +46,9 @@ Current-head verifier refresh
 - This refresh changes only owned evidence metadata and generated verifier outputs. The source-only legacy-room gap, positive/negative dependency controls, focused causal regressions, and C20 ownership of the hosted snapshot timeout are unchanged. Next action remains C20 reviewed repair/main integration, then a same-task C25 refresh and script-gate submission; no CI-green claim is made.
 
 Exact-head provenance refresh
-- After the evidence checkpoint commit `ff00c0375a25a98c5d9398c8ffb5e26ccd70151`, reran `verify.py --mode all`: ACCEPTED in `10.059s` with `19` bounded commands, clean source/path checks, and no surviving child process. Generated diagnosis/provenance now identify `ff00c037`; the prior dab5c373 evidence remains preserved.
-- This is an exact-head evidence successor only; no production or shared path changed, and the hosted C20-owned snapshot timeout remains unresolved and unclaimed as CI green. Update PR417 with this head, then hand the same task to script CI without polling.
+- After the evidence checkpoint commit `ff00c0375a25a98c5d9398c8ffb5e26ccd70151b`, reran `verify.py --mode all`: ACCEPTED in `10.059s` with `19` bounded commands, clean source/path checks, and no surviving child process. Generated diagnosis/provenance now identify `ff00c037`; the prior dab5c373 evidence remains preserved.
+- This is an exact-head evidence successor only; no production or shared path changed, and the hosted C20-owned snapshot timeout remains unresolved and unclaimed as CI green.
+
+Final exact-head verifier refresh
+- At candidate source checkpoint `209afd4ceca417fdca7964e3c0301ad4d3d1c250`, reran `verify.py --mode all`: ACCEPTED in `10.263s` with `19` bounded commands, clean source/path checks, and no surviving child process. Generated diagnosis/provenance now identify `209afd4c`.
+- The final evidence commit will be a documentation-only successor to this verified checkpoint; the audited production paths remain unchanged. Update PR417 with the successor head and submit the same task to script CI without polling; C20's hosted snapshot timeout remains the only unclaimed red check.
