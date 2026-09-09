@@ -932,3 +932,43 @@ C18 hermetic rejection reconciliation and current candidate checkpoint
   failure reconciliation, then return `ACCEPTED` to the script-owned current-
   head CI gate without polling. Retain ownership through `CONTINUE` for any
   exact-head rejection; do not self-review.
+
+C18 integration rejection reconciliation and script-gate handoff checkpoint
+
+- Reverified admission with `project-control.py verify-work --type task
+  --name audio-runtime-c18-public-strict-replay`, returning `admitted`; the
+  task remains `work-task-24`, branch `codex/audio-runtime-c18-public-strict-replay`
+  matches `prd.json.branchName`, and freshly fetched `origin/main` is
+  `e4137eba6a6499142f50701609c1149afc71db84`, an ancestor of HEAD. Required
+  startup, original-baseline and planning-main ancestry remains intact. The
+  isolated worktree is clean before this checkpoint; the host checkout,
+  predecessor checkpoints and unrelated leases remain untouched.
+- Read the complete latest CI rejection for PR #410, run `34352603865`, job
+  `102469298198`, and saved its raw job metadata, board feedback and full-log
+  extraction in `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34352603865.json`.
+  The 338-line log (SHA256
+  `fe6a34d004682bf973c5c3ee99e9fe5cd01dfe8f38ab9e981274878fa9040df5`) has
+  one failed broad integration negative control,
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl`, where
+  harness A timed out after 2.001392443s before its third response. The
+  production-binary audio-device replay and committed replay regression steps
+  passed; all listed fixture/provider/scope errors are expected controls.
+- Reproduced the exact named test under `-tags=nomicrophone` 20/20 with the
+  90-second bound. It is outside C18's owned replay/Wire/embedding paths and
+  does not traverse the extracted strict service, so no C18 repair is
+  demonstrated or authorized; the hosted failure remains non-waived evidence.
+- Focused causal validation is green on this candidate: runtime replay normal
+  and race each report 84 tests across four packages; the separate
+  `GOWORK=off` embedding strict suite passes; CLI replay tests report 146
+  passes across two packages; the rejected integration control passes 20/20;
+  architecture-size passes with 182 packages/1869 files/27204 functions;
+  Wire check, focused vet and `git diff --check` pass. Review30/37/40 repairs
+  remain mapped to `087d30c5`, `0df3e912`, `02478f63`, `e2e7bbff` and
+  `cf663a66`; the authorized delta remains exactly 14 stale baseline-entry
+  deletions plus the external consumer `cmd` allowlist.
+- Exact next action: commit this raw rejection/evidence checkpoint, push the
+  same admitted branch, update PR #410 with HEAD and the non-waived failure
+  reconciliation, and return `ACCEPTED` to the script-owned current-head CI
+  gate without polling. Retain ownership through `CONTINUE` for any exact
+  same-head rejection; do not self-review or claim CI, merge, vertical or
+  project acceptance.
