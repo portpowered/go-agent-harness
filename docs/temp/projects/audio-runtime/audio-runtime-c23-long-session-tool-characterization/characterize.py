@@ -74,6 +74,13 @@ def relative_owned(path: Path) -> str:
         raise VerificationError(f"artifact escaped owned C23 path: {path}") from error
 
 
+def relative_repo(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT.resolve()))
+    except ValueError as error:
+        raise VerificationError(f"path escaped repository root: {path}") from error
+
+
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -129,7 +136,7 @@ def assert_admission(source_revision: str) -> dict[str, str]:
 
 
 def source_files() -> list[dict[str, Any]]:
-    files = run_capture(["git", "ls-files", relative_owned(OWNED_ROOT)]).stdout.splitlines()
+    files = run_capture(["git", "ls-files", "--", relative_repo(OWNED_ROOT)]).stdout.splitlines()
     result: list[dict[str, Any]] = []
     for relative in files:
         path = REPO_ROOT / relative
