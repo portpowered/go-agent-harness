@@ -1,15 +1,17 @@
 {
   "task": "audio-runtime-c16-sample-only-device-sink",
   "baseRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
-  "candidateSourceRevision": "6f261cf9820feb8ae9fa19aaf5e57e96b473e04f",
+  "candidateSourceRevision": "18cc82b5ca2eb342ca050b03d9411bfc108c933d",
   "branch": "codex/audio-runtime-c16-sample-only-device-sink",
-  "originMain": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "originMain": "49ca32eb6e3fba5fe95a993324d0b3d27f18c324",
+  "integrationRevision": "b15eba330ef4b7bf1df04676c38fa89ead04c4c1",
   "ancestry": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "baselineAncestor": true,
     "startupIntegrationAncestor": true,
-    "recordedMainAncestor": true
+    "recordedMainAncestor": true,
+    "fetchedMainAncestor": true
   },
   "negativeControl": {
     "artifact": "reproduction.json",
@@ -55,6 +57,56 @@
       "result": "PASS"
     }
   ],
+  "ciRejectionRepair": {
+    "pullRequest": 408,
+    "rejectedHead": "ad986f7aa3c125fef43587bcf8466255c110b57c",
+    "run": "34312993226",
+    "job": "102343318163",
+    "check": "CI (static)",
+    "feedback": "Required CI (static) failed on the current head.",
+    "logRead": "gh run view reported the run still in progress and returned no log; the exact lint defect was reproduced locally with the pinned analyzer.",
+    "localReproduction": {
+      "command": "rtk proxy make lint",
+      "exitCode": 2,
+      "finding": "go-device-gateway/pkg/devices/sink_device_sample_only_test.go:330:21: Error return value of sink.Close is not checked (errcheck)"
+    },
+    "repairCommit": "18cc82b5ca2eb342ca050b03d9411bfc108c933d",
+    "causalValidation": "The cleanup callback now reports sink.Close errors; the pinned make lint sweep passes with 0 issues, including go-device-gateway."
+  },
+  "postIntegrationChecks": [
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run TestDeviceSinkSampleOnly -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -race -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -count=1 -timeout=60s",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go vet -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy go build -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make lint",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make staticcheck",
+      "exitCode": 0
+    }
+  ],
   "sourceHashes": [
     {
       "path": "go-device-gateway/pkg/devices/sink_device.go",
@@ -62,7 +114,7 @@
     },
     {
       "path": "go-device-gateway/pkg/devices/sink_device_sample_only_test.go",
-      "sha256": "8e73970b8eeff906ecfb3aab33e0402893cf972f2e7530871aeb72f6f3bfefce"
+      "sha256": "3e08b24cecdd3e359b7210c7c364612b7f47df72acd74f691115650aaacc53ce"
     }
   ],
   "artifactHashes": [
@@ -85,7 +137,7 @@
   "canonicalInbox": {
     "taskRowsRead": true,
     "reviewRowsRead": true,
-    "priorCiRejection": false,
+    "priorCiRejection": true,
     "priorReviewFindings": []
   },
   "scopeLimitations": [
