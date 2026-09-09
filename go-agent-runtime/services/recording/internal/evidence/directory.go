@@ -26,6 +26,7 @@ const (
 
 type directoryRecorder struct {
 	options     recording.LiveEvidenceOptions
+	budget      evidenceResourceBudget
 	destination string
 	lockPath    string
 	lock        *os.File
@@ -89,6 +90,11 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 	if source == nil {
 		return nil, errors.New("recording clock is required")
 	}
+	budget, err := newEvidenceResourceBudget(options.Limits)
+	if err != nil {
+		return nil, err
+	}
+	options.Limits = budget.limits
 	observed := source.Now()
 	if options.ClockBase.IsZero() {
 		options.ClockBase = observed
@@ -107,6 +113,7 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 
 	recorder := &directoryRecorder{
 		options:      cloneEvidenceOptions(options),
+		budget:       budget,
 		writeSpool:   writeAll,
 		destination:  destination,
 		lockPath:     destination + ".lock",
@@ -189,6 +196,7 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		r.latch(recordingWriteError("observe runtime events", fmt.Errorf("runtime dropped %d observations", event.Dropped)))
 	}
 	if event.Terminal != nil {
+		event.Terminal = boundedTerminalValue(event.Terminal)
 		r.retainTerminal(terminalSummary(event.Terminal))
 	}
 	errorText := ""
@@ -196,10 +204,7 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		errorText = event.Error.Error()
 	}
 	event.Error = nil
-	payload, err := json.Marshal(struct {
-		Event session.LiveEvent `json:"event"`
-		Error string            `json:"error,omitempty"`
-	}{Event: event, Error: errorText})
+	payload, err := encodeRuntimeEvent(event, errorText)
 	if err != nil {
 		r.latch(recordingWriteError("encode runtime event", err))
 		return nil
@@ -210,6 +215,55 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		item.terminal = &terminal
 	}
 	return r.enqueue(item)
+}
+
+func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {
+	payload, err := json.Marshal(struct {
+		Event session.LiveEvent `json:"event"`
+		Error string            `json:"error,omitempty"`
+	}{Event: event, Error: errorText})
+	if err != nil || int64(len(payload))*2 <= directoryEvidenceQueueMaxBytes {
+		return payload, err
+	}
+	if event.Terminal == nil {
+		return nil, io.ErrShortBuffer
+	}
+	event.Terminal = boundedTerminalValue(event.Terminal)
+	event.Message = nil
+	event.Capability = nil
+	event.Liveness = nil
+	event.Text = boundedEventText(event.Text)
+	event.Reason = boundedEventText(event.Reason)
+	payload, err = json.Marshal(struct {
+		Event session.LiveEvent `json:"event"`
+		Error string            `json:"error,omitempty"`
+	}{Event: event, Error: boundedEventText(errorText)})
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload))*2 > directoryEvidenceQueueMaxBytes {
+		return nil, io.ErrShortBuffer
+	}
+	return payload, nil
+}
+
+func boundedEventText(value string) string {
+	const maxEventTextBytes = 2048
+	if len(value) <= maxEventTextBytes {
+		return value
+	}
+	return value[:maxEventTextBytes]
+}
+
+func boundedTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	copy.SessionID = boundedEventText(copy.SessionID)
+	copy.Reason = boundedEventText(copy.Reason)
+	copy.Classification = boundedEventText(copy.Classification)
+	return &copy
 }
 
 func (r *directoryRecorder) retainTerminal(summary *transcript.RecordingTerminalSummary) {
@@ -254,23 +308,39 @@ func (r *directoryRecorder) enqueue(item directoryEvidenceItem) error {
 func (r *directoryRecorder) run() {
 	defer close(r.done)
 	for item := range r.queue {
-		switch item.kind {
-		case evidenceMessage:
-			r.processMessage(item)
-		case evidenceAudio:
-			r.processAudio(item)
-		case evidenceEvent:
-			if r.workerErr == nil {
-				r.workerErr = r.writeTranscript(item, transcript.StreamRuntimeEvent, item.payload)
-			}
-			if r.workerErr == nil && item.terminal != nil {
-				r.workerErr = r.writeDurationSidecarTerminal(item.timestamp, item.terminal)
-			}
-		}
-		r.mu.Lock()
-		r.queuedBytes -= item.bytes
-		r.mu.Unlock()
+		r.processItem(item)
+		r.releaseQueueItem(item)
 	}
+}
+
+func (r *directoryRecorder) processItem(item directoryEvidenceItem) {
+	switch item.kind {
+	case evidenceMessage:
+		r.processMessage(item)
+	case evidenceAudio:
+		r.processAudio(item)
+	case evidenceEvent:
+		r.processEvent(item)
+	}
+}
+
+func (r *directoryRecorder) processEvent(item directoryEvidenceItem) {
+	if r.workerErr == nil {
+		if err := r.writeTranscript(item, transcript.StreamRuntimeEvent, item.payload); err != nil && !isEvidenceBudgetError(err) {
+			r.workerErr = err
+		}
+	}
+	if item.terminal != nil {
+		if err := r.writeDurationSidecarTerminal(item.timestamp, item.terminal); err != nil && r.workerErr == nil && !isEvidenceBudgetError(err) {
+			r.workerErr = err
+		}
+	}
+}
+
+func (r *directoryRecorder) releaseQueueItem(item directoryEvidenceItem) {
+	r.mu.Lock()
+	r.queuedBytes -= item.bytes
+	r.mu.Unlock()
 }
 
 var _ session.LiveRecorder = (*directoryRecorder)(nil)

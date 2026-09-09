@@ -47,6 +47,12 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	}
 	logData, logErr := r.conversation.json()
 	result = errors.Join(result, logErr)
+	if logErr == nil && len(logData) > 0 {
+		if err := r.budget.reserveMetadata(int64(len(logData)), 1); err != nil {
+			result = errors.Join(result, recordingWriteError("admit session metadata", err))
+			logData = nil
+		}
+	}
 	config := r.bundleConfig(terminal, logData)
 	artifact, present, artifactErr := r.providerArtifact()
 	result = errors.Join(result, artifactErr)

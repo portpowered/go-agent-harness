@@ -61,6 +61,10 @@ func (r *directoryRecorder) writeDurationSidecarTerminal(timestamp time.Time, va
 	if err != nil {
 		return recordingWriteError("encode duration sidecar record", err)
 	}
+	if err := r.budget.reserveSidecar(int64(len(record)), 1); err != nil {
+		r.latch(recordingWriteError("admit duration sidecar", err))
+		return err
+	}
 	if err := r.writeSpool(r.sidecar, record); err != nil {
 		return recordingWriteError("write duration sidecar", err)
 	}

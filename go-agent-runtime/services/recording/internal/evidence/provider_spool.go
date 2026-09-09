@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,20 +16,25 @@ import (
 )
 
 const (
-	providerCaptureQueueCapacity = 256
-	providerCaptureQueueMaxBytes = 16 << 20
-	providerCaptureQueueMaxItems = 4096
-	providerCaptureMaxEventBytes = 4 << 20
-	providerCaptureEventOverhead = 128
+	providerCaptureQueueCapacity  = 256
+	providerCaptureControlReserve = 16
+	providerCaptureQueueMaxBytes  = 16 << 20
+	providerCaptureQueueMaxItems  = 4096
+	providerCaptureMaxEventBytes  = 4 << 20
 )
 
 type providerCaptureError string
 
 func (e providerCaptureError) Error() string { return string(e) }
 
+func (e providerCaptureError) Is(target error) bool {
+	return e == errProviderCaptureBudget && target == io.ErrShortBuffer
+}
+
 const (
 	errProviderCaptureClosed        providerCaptureError = "provider capture is closed"
 	errProviderCaptureQueueFull     providerCaptureError = "provider capture queue is full"
+	errProviderCaptureBudget        providerCaptureError = "provider capture cumulative budget exceeded"
 	errProviderCaptureEventTooLarge providerCaptureError = "provider capture event is too large"
 	errProviderCaptureDestination   providerCaptureError = "provider capture destination changed"
 	errProviderCaptureUnresolved    providerCaptureError = "provider capture has unsettled events"
@@ -45,14 +51,14 @@ const (
 type providerCaptureMutation struct {
 	kind     providerCaptureMutationKind
 	sequence int
-	event    gatewaytesting.CapturedSessionEvent
+	encoded  []byte
 	bytes    int64
 }
 
 type providerCapturePending struct {
-	event gatewaytesting.CapturedSessionEvent
-	state providerCaptureMutationKind
-	bytes int64
+	encoded []byte
+	state   providerCaptureMutationKind
+	bytes   int64
 }
 
 // providerCaptureSpool owns the only provider-capture queue and file writer.
@@ -65,12 +71,16 @@ type providerCaptureSpool struct {
 	file        *os.File
 	queue       chan providerCaptureMutation
 	done        chan struct{}
+	limits      recording.ResourceLimits
 
-	mu          sync.Mutex
-	queuedBytes int64
-	queuedItems int
-	closed      bool
-	err         error
+	mu             sync.Mutex
+	queuedBytes    int64
+	queuedItems    int
+	queueItems     int
+	committedBytes int64
+	committedItems int64
+	closed         bool
+	err            error
 
 	finishOnce sync.Once
 	finishErr  error
@@ -80,9 +90,17 @@ type providerCaptureSpool struct {
 // destination directory must already exist; host composition owns directory
 // creation and path policy before admission.
 func NewProviderCapture(destination string) (sink recording.ProviderCaptureSink, returnErr error) {
+	return NewProviderCaptureWithLimits(destination, recording.ResourceLimits{})
+}
+
+func NewProviderCaptureWithLimits(destination string, input recording.ResourceLimits) (sink recording.ProviderCaptureSink, returnErr error) {
 	destination = strings.TrimSpace(destination)
 	if destination == "" {
 		return nil, errors.New("provider capture destination is required")
+	}
+	budget, err := newEvidenceResourceBudget(input)
+	if err != nil {
+		return nil, err
 	}
 	directory := filepath.Dir(destination)
 	info, err := os.Stat(directory)
@@ -112,6 +130,7 @@ func NewProviderCapture(destination string) (sink recording.ProviderCaptureSink,
 		file:        file,
 		queue:       make(chan providerCaptureMutation, providerCaptureQueueCapacity),
 		done:        make(chan struct{}),
+		limits:      budget.limits,
 	}
 	go spool.run()
 	remove = false
@@ -122,7 +141,16 @@ func (s *providerCaptureSpool) Append(event gatewaytesting.CapturedSessionEvent)
 	if s == nil {
 		return errProviderCaptureClosed
 	}
-	bytes := providerCaptureEventBytes(event)
+	if int64(len(event.Payload)+len(event.Data)) > providerCaptureMaxEventBytes {
+		s.latch(errProviderCaptureEventTooLarge)
+		return errProviderCaptureEventTooLarge
+	}
+	encoded, err := encodeProviderCaptureEvent(event)
+	if err != nil {
+		s.latch(fmt.Errorf("encode provider capture event: %w", err))
+		return err
+	}
+	bytes := int64(len(encoded) + 1)
 	if bytes > providerCaptureMaxEventBytes {
 		s.latch(errProviderCaptureEventTooLarge)
 		return errProviderCaptureEventTooLarge
@@ -130,8 +158,7 @@ func (s *providerCaptureSpool) Append(event gatewaytesting.CapturedSessionEvent)
 	if err := s.reserve(bytes); err != nil {
 		return err
 	}
-	event = cloneProviderCaptureEvent(event)
-	return s.enqueueReserved(providerCaptureMutation{kind: providerCaptureAppend, sequence: event.Sequence, event: event, bytes: bytes})
+	return s.enqueueReserved(providerCaptureMutation{kind: providerCaptureAppend, sequence: event.Sequence, encoded: encoded, bytes: bytes})
 }
 
 func (s *providerCaptureSpool) Commit(sequence int) error {
@@ -161,6 +188,10 @@ func (s *providerCaptureSpool) reserve(bytes int64) error {
 		s.latchLocked(errProviderCaptureQueueFull)
 		return errProviderCaptureQueueFull
 	}
+	if bytes > s.limits.ProviderBytes-s.committedBytes-s.queuedBytes || s.committedItems+int64(s.queuedItems) >= s.limits.ProviderItems {
+		s.latchLocked(errProviderCaptureBudget)
+		return errProviderCaptureBudget
+	}
 	s.queuedBytes += bytes
 	s.queuedItems++
 	return nil
@@ -177,8 +208,14 @@ func (s *providerCaptureSpool) enqueueReserved(mutation providerCaptureMutation)
 		s.releaseLocked(mutation.bytes)
 		return s.err
 	}
+	if s.queueItems >= providerCaptureQueueCapacity-providerCaptureControlReserve {
+		s.releaseLocked(mutation.bytes)
+		s.latchLocked(errProviderCaptureQueueFull)
+		return errProviderCaptureQueueFull
+	}
 	select {
 	case s.queue <- mutation:
+		s.queueItems++
 		return nil
 	default:
 		s.releaseLocked(mutation.bytes)
@@ -193,11 +230,13 @@ func (s *providerCaptureSpool) admitControl(kind providerCaptureMutationKind, se
 	if s.closed {
 		return errProviderCaptureClosed
 	}
-	if s.err != nil {
-		return s.err
+	if s.queueItems >= providerCaptureQueueCapacity {
+		s.latchLocked(errProviderCaptureQueueFull)
+		return errProviderCaptureQueueFull
 	}
 	select {
 	case s.queue <- providerCaptureMutation{kind: kind, sequence: sequence}:
+		s.queueItems++
 		return nil
 	default:
 		s.latchLocked(errProviderCaptureQueueFull)
@@ -271,93 +310,5 @@ func (s *providerCaptureSpool) latch(err error) {
 func (s *providerCaptureSpool) latchLocked(err error) {
 	if s.err == nil && err != nil {
 		s.err = err
-	}
-}
-
-func (s *providerCaptureSpool) run() {
-	defer close(s.done)
-	pending := make(map[int]providerCapturePending)
-	nextSequence := 0
-	for mutation := range s.queue {
-		s.applyMutation(pending, &nextSequence, mutation)
-		s.drainPending(pending, &nextSequence)
-	}
-	if len(pending) > 0 {
-		s.latch(errProviderCaptureUnresolved)
-	}
-	if s.currentError() == nil {
-		if err := s.file.Sync(); err != nil {
-			s.latch(fmt.Errorf("sync provider capture spool: %w", err))
-		}
-	}
-	if err := s.file.Close(); err != nil {
-		s.latch(fmt.Errorf("close provider capture spool: %w", err))
-	}
-}
-
-func (s *providerCaptureSpool) applyMutation(pending map[int]providerCapturePending, nextSequence *int, mutation providerCaptureMutation) {
-	switch mutation.kind {
-	case providerCaptureAppend:
-		if mutation.sequence <= 0 || (*nextSequence != 0 && mutation.sequence < *nextSequence) {
-			s.releaseBytes(mutation.bytes)
-			s.latch(errProviderCaptureUnresolved)
-			return
-		}
-		if _, exists := pending[mutation.sequence]; exists {
-			s.releaseBytes(mutation.bytes)
-			s.latch(errProviderCaptureUnresolved)
-			return
-		}
-		if *nextSequence == 0 {
-			*nextSequence = mutation.sequence
-		}
-		pending[mutation.sequence] = providerCapturePending{event: mutation.event, state: providerCaptureAppend, bytes: mutation.bytes}
-	case providerCaptureCommit, providerCaptureDiscard:
-		entry, ok := pending[mutation.sequence]
-		if !ok {
-			s.latch(errProviderCaptureUnresolved)
-			return
-		}
-		if entry.state != providerCaptureAppend {
-			s.latch(errProviderCaptureUnresolved)
-			return
-		}
-		entry.state = mutation.kind
-		pending[mutation.sequence] = entry
-	default:
-		s.latch(errProviderCaptureUnresolved)
-	}
-}
-
-func (s *providerCaptureSpool) drainPending(pending map[int]providerCapturePending, nextSequence *int) {
-	for *nextSequence != 0 {
-		entry, ok := pending[*nextSequence]
-		if !ok || entry.state == providerCaptureAppend {
-			return
-		}
-		delete(pending, *nextSequence)
-		if entry.state == providerCaptureCommit && s.currentError() == nil {
-			encoded, err := json.Marshal(entry.event)
-			if err != nil {
-				s.latch(fmt.Errorf("encode provider capture event: %w", err))
-			} else if err := writeProviderCaptureLine(s.file, encoded); err != nil {
-				s.latch(fmt.Errorf("write provider capture spool: %w", err))
-			}
-		}
-		s.releaseBytes(entry.bytes)
-		(*nextSequence)++
-	}
-}
-
-func (s *providerCaptureSpool) releaseBytes(bytes int64) {
-	s.mu.Lock()
-	s.releaseLocked(bytes)
-	s.mu.Unlock()
-}
-
-func (s *providerCaptureSpool) releaseLocked(bytes int64) {
-	s.queuedBytes -= bytes
-	if s.queuedItems > 0 {
-		s.queuedItems--
 	}
 }

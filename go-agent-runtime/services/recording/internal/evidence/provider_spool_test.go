@@ -9,7 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -65,6 +67,17 @@ func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(
 	}
 	if err := sink.Discard(events[0].Sequence); err != nil {
 		t.Fatal(err)
+	}
+	spool := sink.(*providerCaptureSpool)
+	deadline := time.Now().Add(time.Second)
+	for {
+		spool.mu.Lock()
+		pending := spool.queuedItems
+		spool.mu.Unlock()
+		if pending == 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if err := sink.Append(events[1]); err != nil {
 		t.Fatal(err)
@@ -176,6 +189,90 @@ func TestProviderCaptureSpoolCopiesPayloadAndAbortRemovesTemporaryState(t *testi
 	}
 	if _, err := os.Stat(abortDestination); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("aborted destination = %v, want absent", err)
+	}
+}
+
+func TestProviderCaptureSpoolCumulativeBudgetAndControlSettlement(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	event := providerSpoolEvents()[0]
+	encoded, err := encodeProviderCaptureEvent(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{
+		ProviderBytes: int64(len(encoded) + 1), ProviderItems: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Append(event); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Append(providerSpoolEvents()[1]); !errors.Is(err, errProviderCaptureBudget) {
+		t.Fatalf("cumulative provider overflow = %v, want budget error", err)
+	}
+	if err := sink.Commit(event.Sequence); err != nil {
+		t.Fatalf("control settlement after overflow = %v", err)
+	}
+	if err := sink.Abort(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("overflow published a normal capture: %v", err)
+	}
+}
+
+func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	events := providerSpoolEvents()
+	first, err := encodeProviderCaptureEvent(events[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := encodeProviderCaptureEvent(events[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := int64(len(first) + 1)
+	if secondLimit := int64(len(second) + 1); secondLimit > limit {
+		limit = secondLimit
+	}
+	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Append(events[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Discard(events[0].Sequence); err != nil {
+		t.Fatal(err)
+	}
+	spool := sink.(*providerCaptureSpool)
+	deadline := time.Now().Add(time.Second)
+	for {
+		spool.mu.Lock()
+		pending := spool.queuedItems
+		spool.mu.Unlock()
+		if pending == 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err := sink.Append(events[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Commit(events[1].Sequence); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := gatewaytesting.LoadSessionCapture(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Records) != 1 || loaded.Records[0].Sequence != events[1].Sequence {
+		t.Fatalf("records after discard = %#v, want only %d", loaded.Records, events[1].Sequence)
 	}
 }
 

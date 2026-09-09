@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestDirectoryRecorderValidatesDestinationAndInjectedClockBeforeAdmission(t *testing.T) {
@@ -240,6 +242,38 @@ func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
 		if status := evidenceManifest(t, r).RecordingStatus; status == nil || status.State != transcript.RecordingStatusPartial {
 			t.Fatal("unavailable provider source not marked partial")
 		}
+	}
+}
+
+func TestDirectoryRecorderPairsAudioBudgetWithTranscriptBoundary(t *testing.T) {
+	root := t.TempDir()
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{Destination: filepath.Join(root, "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime(), Limits: recording.ResourceLimits{AudioBytes: 2, AudioItems: 1}}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := r.Finalize(t.Context(), nil); err != nil {
+			t.Logf("recording cleanup: %v", err)
+		}
+	})
+	frame := sharedaudio.PCMFrame{Samples: []int16{7}, Format: sharedaudio.PCM16DeviceFormat(24000)}
+	for i := 0; i < 2; i++ {
+		if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); !errors.Is(err, io.ErrShortBuffer) {
+		t.Fatalf("cumulative audio overflow = %v, want short buffer", err)
+	}
+	if got := readEvidenceFile(t, r, "audio/out-000.pcm"); !bytes.Equal(got, codec.EncodePCM16([]int16{7})) {
+		t.Fatalf("audio prefix = %v, want one accepted frame", got)
+	}
+	if status := evidenceManifest(t, r).RecordingStatus; status == nil || status.State != transcript.RecordingStatusPartial {
+		t.Fatalf("audio overflow status = %+v, want partial", status)
 	}
 }
 

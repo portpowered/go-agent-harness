@@ -19,6 +19,44 @@ var (
 	ErrLiveEvidenceClaimed = errors.New("live recording destination is already claimed")
 )
 
+// ResourceLimits bounds cumulative evidence retained by one recording
+// invocation. Zero keeps the protected service default; positive values may
+// only make a budget smaller. Queue limits remain separate admission
+// controls, so draining a queue never refunds committed recording capacity.
+// Byte limits include the encoded on-disk representation and its framing.
+type ResourceLimits struct {
+	TranscriptBytes int64
+	TranscriptItems int64
+	AudioBytes      int64
+	AudioItems      int64
+	SidecarBytes    int64
+	SidecarItems    int64
+	MetadataBytes   int64
+	MetadataItems   int64
+	TerminalBytes   int64
+	TerminalItems   int64
+	ProviderBytes   int64
+	ProviderItems   int64
+}
+
+// The defaults are intentionally finite on the public constructors. The
+// terminal budget is independent from data budgets and preserves bounded
+// lifecycle evidence after a data budget is exhausted.
+const (
+	DefaultTranscriptBytes int64 = 64 << 20
+	DefaultTranscriptItems int64 = 1 << 20
+	DefaultAudioBytes      int64 = 64 << 20
+	DefaultAudioItems      int64 = 1 << 20
+	DefaultSidecarBytes    int64 = 256 << 10
+	DefaultSidecarItems    int64 = 64
+	DefaultMetadataBytes   int64 = 4 << 20
+	DefaultMetadataItems   int64 = 4096
+	DefaultProviderBytes   int64 = 64 << 20
+	DefaultProviderItems   int64 = 1 << 20
+	DefaultTerminalBytes   int64 = 128 << 10
+	DefaultTerminalItems   int64 = 16
+)
+
 // Writer finalizes one capture outside the agent tick. Implementations retain
 // the original persistence error for callers to report incomplete evidence.
 type Writer interface{ FlushToFile(string) error }
@@ -28,6 +66,9 @@ type Writer interface{ FlushToFile(string) error }
 // secrets never cross this boundary or appear in capture errors.
 type ProviderCaptureOptions struct {
 	Destination string
+	// Limits uses the same protected defaults as live semantic evidence.
+	// Smaller values are useful for deterministic overflow tests.
+	Limits ResourceLimits
 }
 
 // ProviderCaptureSink admits raw provider events without doing filesystem
@@ -73,6 +114,10 @@ type LiveEvidenceOptions struct {
 	// The raw ProviderCapturePath remains available for immutable bundle
 	// evidence, but no new terminal sidecar is written beside it.
 	DisableProviderCaptureSidecar bool
+	// Limits bounds cumulative service-owned evidence. Zero fields retain the
+	// finite defaults declared above; larger values are capped at those
+	// defaults so callers cannot disable protection accidentally.
+	Limits ResourceLimits
 }
 
 // ProviderCapture is the optional composition port used to direct the provider

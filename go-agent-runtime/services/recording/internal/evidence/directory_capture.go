@@ -21,7 +21,9 @@ func (r *directoryRecorder) processMessage(item directoryEvidenceItem) {
 		return
 	}
 	if err := r.writeTranscript(item, transcript.StreamRuntimeMessage, item.payload); err != nil {
-		r.workerErr = err
+		if !isEvidenceBudgetError(err) {
+			r.workerErr = err
+		}
 		return
 	}
 	message, err := gatewaytesting.UnmarshalStreamMessage(item.payload)
@@ -36,18 +38,34 @@ func (r *directoryRecorder) processMessage(item directoryEvidenceItem) {
 }
 
 func (r *directoryRecorder) writeTranscript(item directoryEvidenceItem, stream transcript.Stream, payload []byte) error {
-	if err := r.ensureTranscriptFiles(); err != nil {
+	client, agent, sequence, err := r.encodeTranscript(item, stream, payload)
+	if err != nil {
 		return err
 	}
-	r.sequence++
+	if err := r.budget.reserveTranscript(int64(len(client)+len(agent)), 1, item.terminal != nil); err != nil {
+		r.latch(recordingWriteError("admit transcript evidence", err))
+		return err
+	}
+	return r.writeTranscriptRecords(client, agent, sequence)
+}
+
+func (r *directoryRecorder) encodeTranscript(item directoryEvidenceItem, stream transcript.Stream, payload []byte) ([]byte, []byte, uint64, error) {
+	sequence := r.sequence + 1
 	clientDirection, agentDirection := transcript.DirectionIn, transcript.DirectionOut
 	if item.direction == session.LiveRecordClient {
 		clientDirection, agentDirection = transcript.DirectionOut, transcript.DirectionIn
 	}
-	client, clientErr := transcript.Encode(transcript.NewRecord(r.sequence, item.timestamp, transcript.PeerClient, clientDirection, stream, payload))
-	agent, agentErr := transcript.Encode(transcript.NewRecord(r.sequence, item.timestamp, transcript.PeerAgent, agentDirection, stream, payload))
+	client, clientErr := transcript.Encode(transcript.NewRecord(sequence, item.timestamp, transcript.PeerClient, clientDirection, stream, payload))
+	agent, agentErr := transcript.Encode(transcript.NewRecord(sequence, item.timestamp, transcript.PeerAgent, agentDirection, stream, payload))
 	if err := errors.Join(clientErr, agentErr); err != nil {
-		return recordingWriteError("encode transcript frame", err)
+		return nil, nil, 0, recordingWriteError("encode transcript frame", err)
+	}
+	return client, agent, sequence, nil
+}
+
+func (r *directoryRecorder) writeTranscriptRecords(client, agent []byte, sequence uint64) error {
+	if err := r.ensureTranscriptFiles(); err != nil {
+		return err
 	}
 	if err := r.writeSpool(r.client, client); err != nil {
 		return recordingWriteError("write client transcript", err)
@@ -55,6 +73,7 @@ func (r *directoryRecorder) writeTranscript(item directoryEvidenceItem, stream t
 	if err := r.writeSpool(r.agent, agent); err != nil {
 		return recordingWriteError("write agent transcript", err)
 	}
+	r.sequence = sequence
 	return nil
 }
 
@@ -71,31 +90,65 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 	if r.workerErr != nil {
 		return
 	}
-	if len(item.frame.Samples) == 0 {
-		r.workerErr = r.writeAudioBoundary(item, "", 0)
+	data := codec.EncodePCM16(item.frame.Samples)
+	segment, offset := r.audioLocation(item.direction)
+	payload, err := json.Marshal(audioBoundary(item, segment, offset))
+	if err != nil {
+		r.workerErr = recordingWriteError("encode audio boundary", err)
 		return
 	}
-	file, segment, offset, err := r.audioFile(item.direction)
+	client, agent, sequence, err := r.encodeTranscript(item, transcript.StreamRuntimeAudio, payload)
 	if err != nil {
 		r.workerErr = err
 		return
 	}
-	data := codec.EncodePCM16(item.frame.Samples)
-	if err := r.writeSpool(file, data); err != nil {
-		r.workerErr = recordingWriteError("write audio evidence", err)
+	if err := r.budget.reserveAudioWithTranscript(int64(len(data)), int64(len(client)+len(agent)), boolToInt64(len(data) > 0)); err != nil {
+		r.latch(recordingWriteError("admit audio evidence", err))
 		return
 	}
-	if err := r.writeAudioBoundary(item, segment, *offset); err != nil {
+	if len(data) > 0 {
+		file, _, audioOffset, fileErr := r.audioFile(item.direction)
+		if fileErr != nil {
+			r.workerErr = fileErr
+			return
+		}
+		if err := r.writeSpool(file, data); err != nil {
+			r.workerErr = recordingWriteError("write audio evidence", err)
+			return
+		}
+		*audioOffset += uint64(len(data))
+	}
+	if err := r.writeTranscriptRecords(client, agent, sequence); err != nil {
 		r.workerErr = err
 		return
 	}
-	*offset += uint64(len(data))
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
-		r.conversation.recordResponseAudio(item.frame.PlaybackResponse.ResponseID, uint64(len(data)), *offset-uint64(len(data)), segment)
+		r.conversation.recordResponseAudio(item.frame.PlaybackResponse.ResponseID, uint64(len(data)), offset, segment)
 	} else {
-		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), *offset-uint64(len(data)), segment)
+		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), offset, segment)
 	}
 	r.latchProjectionError()
+}
+
+func audioBoundary(item directoryEvidenceItem, segment string, offset uint64) evidenceAudioBoundary {
+	frame := item.frame
+	sampleCount := len(frame.Samples)
+	frame.Samples = nil
+	return evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: sampleCount, Admission: item.admission, Frame: frame}
+}
+
+func boolToInt64(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func (r *directoryRecorder) audioLocation(direction session.LiveRecordDirection) (string, uint64) {
+	if direction == session.LiveRecordClient {
+		return "audio/in-000.pcm", r.inputBytes
+	}
+	return "audio/out-000.pcm", r.outputBytes
 }
 
 func (r *directoryRecorder) latchProjectionError() {
@@ -105,20 +158,6 @@ func (r *directoryRecorder) latchProjectionError() {
 	if err := r.conversation.projectionError(); err != nil {
 		r.latch(recordingWriteError("retain conversation summary", err))
 	}
-}
-
-func (r *directoryRecorder) writeAudioBoundary(item directoryEvidenceItem, segment string, offset uint64) error {
-	frame := item.frame
-	frame.Samples = nil
-	boundary := evidenceAudioBoundary{Kind: "audio.frame", Segment: segment, ByteOffset: offset, SampleCount: len(item.frame.Samples), Admission: item.admission, Frame: frame}
-	payload, err := json.Marshal(boundary)
-	if err == nil {
-		err = r.writeTranscript(item, transcript.StreamRuntimeAudio, payload)
-	}
-	if err != nil {
-		return recordingWriteError("write audio boundary", err)
-	}
-	return nil
 }
 
 func (r *directoryRecorder) audioFile(direction session.LiveRecordDirection) (*os.File, string, *uint64, error) {
@@ -213,7 +252,7 @@ func terminalSummary(value *messages.SessionCloseValue) *transcript.RecordingTer
 		reason = classification
 	}
 	return &transcript.RecordingTerminalSummary{
-		Reason: reason, Classification: classification,
+		Reason: boundedEventText(reason), Classification: boundedEventText(classification),
 		TerminalReason: value.TerminalReason, TerminalProvenance: value.TerminalProvenance,
 		OutputState: value.OutputState,
 	}
