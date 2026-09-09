@@ -581,6 +581,7 @@ def run_isolation() -> dict[str, Any]:
         require(child.get("status") == "ok", f"isolation child status={child}")
         isolation = child.get("isolation", {})
         require(isolation.get("both_in_flight") is True, "A/B did not prove simultaneous in-flight providers")
+        require(isolation.get("partial_a_observed") is True, "A was canceled before its partial delta was observed")
         require(sorted(isolation.get("entry_order", [])) == ["A-concurrent", "B-concurrent"], "A/B entry signals are not distinct")
         initial_a = isolation["initial_a"]
         initial_b = isolation["initial_b"]

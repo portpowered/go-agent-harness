@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -48,13 +49,17 @@ func (s *closeErrorStream) Close() error {
 }
 
 type closeErrorHandle struct {
-	calls int
-	err   error
+	calls  int
+	err    error
+	stream agentloop.Stream
 }
 
 func (h *closeErrorHandle) SessionID() string { return "test-session" }
 func (h *closeErrorHandle) Stream(context.Context, agentloop.ExecuteInput) (agentloop.Stream, error) {
-	return nil, errors.New("not implemented")
+	if h.stream == nil {
+		return nil, errors.New("not implemented")
+	}
+	return h.stream, nil
 }
 func (h *closeErrorHandle) Save() error        { return nil }
 func (h *closeErrorHandle) Flush(string) error { return nil }
@@ -91,6 +96,85 @@ func TestClosedControlRequiresExactDiagnosticMarker(t *testing.T) {
 	}
 	if control := closedControl(errors.New(historyOracleMarker+" observed mismatch"), historyOracleMarker); !control.FailedClosed {
 		t.Fatalf("expected history diagnostic was rejected: %+v", control)
+	}
+}
+
+type emptyManagedStore struct{}
+
+func (emptyManagedStore) Load(context.Context, string) ([]session.Message, error) { return nil, nil }
+func (emptyManagedStore) Latest(context.Context) (string, error)                  { return "", nil }
+func (emptyManagedStore) NewSessionID(context.Context) (string, error)            { return "test-session", nil }
+func (emptyManagedStore) Save(context.Context, string, []session.Message) error   { return nil }
+func (emptyManagedStore) LoadTrace(context.Context, string) (*session.TraceRecord, error) {
+	return nil, nil
+}
+func (emptyManagedStore) SaveTrace(context.Context, session.TraceRecord) error { return nil }
+func (emptyManagedStore) NewTraceID(context.Context) (string, error)           { return "test-trace", nil }
+func (emptyManagedStore) List(context.Context, session.SessionListOptions) ([]session.SessionInfo, error) {
+	return nil, nil
+}
+func (emptyManagedStore) Delete(context.Context, string) error { return nil }
+func (emptyManagedStore) ListTraces(context.Context) ([]session.TraceInfo, error) {
+	return nil, nil
+}
+
+type closeErrorService struct{ handle session.SessionHandle }
+
+func (closeErrorService) Run(context.Context, session.Request) (session.Result, error) {
+	return session.Result{}, errors.New("not implemented")
+}
+func (s closeErrorService) Open(context.Context, session.Request) (session.SessionHandle, error) {
+	return s.handle, nil
+}
+func (closeErrorService) RunIterative(context.Context, session.Request, session.IterativeRequest) (session.IterativeResult, error) {
+	return session.IterativeResult{}, errors.New("not implemented")
+}
+func (closeErrorService) NewSessionID(context.Context, session.Request) (string, error) {
+	return "test-session", nil
+}
+
+func TestRunTurnPropagatesStreamAndHandleCloseErrors(t *testing.T) {
+	streamErr := errors.New("stream close failed")
+	handleErr := errors.New("handle close failed")
+	stream := &closeErrorStream{err: streamErr}
+	handle := &closeErrorHandle{err: handleErr, stream: stream}
+	provider := newDeterministicProvider("close-errors", providerOptions{})
+
+	result, runErr := runTurn(
+		context.Background(),
+		config{Scenario: "boundary", Input: "close failure"},
+		runtimeInstance{service: closeErrorService{handle: handle}, store: emptyManagedStore{}},
+		provider, nil, false, false, "close-errors",
+	)
+	if runErr == nil || !strings.Contains(runErr.Error(), streamErr.Error()) || !strings.Contains(runErr.Error(), handleErr.Error()) {
+		t.Fatalf("close errors were not propagated: %v", runErr)
+	}
+	if result.StreamCloseCalls != closeAttempts || result.HandleCloseCalls != closeAttempts {
+		t.Fatalf("close counts=%d/%d, want %d/%d", result.StreamCloseCalls, result.HandleCloseCalls, closeAttempts, closeAttempts)
+	}
+}
+
+func TestIsolationCancellationWaitsForObservedPartialDelta(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		root := t.TempDir()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		result, runErr := runIsolation(ctx, config{
+			Scenario:            "isolation",
+			StoreDirectoryA:     root + "/store-a",
+			WorkspaceDirectoryA: root + "/workspace-a",
+			StoreDirectoryB:     root + "/store-b",
+			WorkspaceDirectoryB: root + "/workspace-b",
+		})
+		cancel()
+		if runErr != nil {
+			t.Fatalf("attempt %d isolation failed: %v", attempt, runErr)
+		}
+		if result.Isolation == nil || !result.Isolation.PartialAObserved {
+			t.Fatalf("attempt %d canceled before A partial delta was observed: %+v", attempt, result.Isolation)
+		}
+		if result.Isolation.CanceledA == nil || !result.Isolation.CanceledA.Stream.Partial {
+			t.Fatalf("attempt %d did not retain partial A cancellation: %+v", attempt, result.Isolation)
+		}
 	}
 }
 

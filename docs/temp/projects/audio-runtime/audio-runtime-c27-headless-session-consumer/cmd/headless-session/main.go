@@ -101,15 +101,16 @@ type controlReport struct {
 }
 
 type isolationReport struct {
-	EntryOrder     []string    `json:"entry_order"`
-	BothInFlight   bool        `json:"both_in_flight"`
-	InitialA       *turnReport `json:"initial_a,omitempty"`
-	InitialB       *turnReport `json:"initial_b,omitempty"`
-	CanceledA      *turnReport `json:"canceled_a,omitempty"`
-	CompletedB     *turnReport `json:"completed_b,omitempty"`
-	RestartA       *turnReport `json:"restart_a,omitempty"`
-	RestartB       *turnReport `json:"restart_b,omitempty"`
-	ProviderJoined bool        `json:"provider_joined"`
+	EntryOrder       []string    `json:"entry_order"`
+	BothInFlight     bool        `json:"both_in_flight"`
+	PartialAObserved bool        `json:"partial_a_observed"`
+	InitialA         *turnReport `json:"initial_a,omitempty"`
+	InitialB         *turnReport `json:"initial_b,omitempty"`
+	CanceledA        *turnReport `json:"canceled_a,omitempty"`
+	CompletedB       *turnReport `json:"completed_b,omitempty"`
+	RestartA         *turnReport `json:"restart_a,omitempty"`
+	RestartB         *turnReport `json:"restart_b,omitempty"`
+	ProviderJoined   bool        `json:"provider_joined"`
 }
 
 type report struct {
@@ -446,6 +447,10 @@ func providerCount(provider *deterministicProvider) int {
 }
 
 func collectStream(stream agentloop.Stream) streamReport {
+	return collectStreamObserved(stream, nil)
+}
+
+func collectStreamObserved(stream agentloop.Stream, onTextDelta func()) streamReport {
 	result := streamReport{}
 	for stream.HasNext() {
 		msg := stream.Response()
@@ -454,6 +459,9 @@ func collectStream(stream agentloop.Stream) streamReport {
 		case messages.StreamTypeTextDelta:
 			if value, ok := msg.Value.(*messages.TextDeltaValue); ok {
 				result.Text += value.Content
+				if onTextDelta != nil {
+					onTextDelta()
+				}
 			}
 		case messages.StreamTypeMessageEnd:
 			result.TerminalSeen = true
@@ -695,7 +703,13 @@ func runIsolation(ctx context.Context, cfg config) (report, error) {
 	}
 	resultA := make(chan streamReport, 1)
 	resultB := make(chan streamReport, 1)
-	go func() { resultA <- collectStream(streamA) }()
+	partialAObserved := make(chan struct{})
+	var partialAOnce sync.Once
+	go func() {
+		resultA <- collectStreamObserved(streamA, func() {
+			partialAOnce.Do(func() { close(partialAObserved) })
+		})
+	}()
 	go func() { resultB <- collectStream(streamB) }()
 	entryOrder := make([]string, 0, 2)
 	entryErr := error(nil)
@@ -711,7 +725,19 @@ func runIsolation(ctx context.Context, cfg config) (report, error) {
 			break
 		}
 	}
-	iso := isolationReport{EntryOrder: entryOrder, BothInFlight: len(entryOrder) == 2, InitialA: &initialA, InitialB: &initialB}
+	partialAReady := false
+	if entryErr == nil {
+		select {
+		case <-partialAObserved:
+			partialAReady = true
+		case <-time.After(5 * time.Second):
+			entryErr = errors.Join(entryErr, errors.New("isolation oracle: A partial delta was not observed before cancellation"))
+		}
+	}
+	iso := isolationReport{
+		EntryOrder: entryOrder, BothInFlight: len(entryOrder) == 2, PartialAObserved: partialAReady,
+		InitialA: &initialA, InitialB: &initialB,
+	}
 	cancelA()
 	var canceledStream streamReport
 	select {
