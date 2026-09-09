@@ -1,0 +1,95 @@
+{
+  "task": "audio-runtime-c16-sample-only-device-sink",
+  "baseRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "candidateSourceRevision": "6f261cf9820feb8ae9fa19aaf5e57e96b473e04f",
+  "branch": "codex/audio-runtime-c16-sample-only-device-sink",
+  "originMain": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+  "ancestry": {
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "baselineAncestor": true,
+    "startupIntegrationAncestor": true,
+    "recordedMainAncestor": true
+  },
+  "negativeControl": {
+    "artifact": "reproduction.json",
+    "sourceRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
+    "exitCode": 1,
+    "expected": "construction succeeds, 3-sample chunk reaches the sample-only backend, then the full-frame WriteSamples call panics through the pre-fix nil byteWriter",
+    "stdout": "open <nil>\nbackend samples 3\npartial <nil>\n"
+  },
+  "candidateReproducer": {
+    "command": "rtk proxy go run -tags=nomicrophone docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go",
+    "exitCode": 0,
+    "stdout": "open <nil>\nbackend samples 3\npartial <nil>\nbackend samples 480\nfull <nil>\ncalls 2\n"
+  },
+  "focusedChecks": [
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go test -race -tags=nomicrophone ./go-device-gateway/pkg/devices -run 'TestDeviceSink|TestDeviceAdaptersS9LifecycleBaseline' -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go test -tags=nomicrophone ./go-device-gateway/pkg/devices -count=1 -timeout=60s",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go vet -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy go build -tags=nomicrophone ./go-device-gateway/pkg/devices",
+      "exitCode": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "rtk git diff --check",
+      "exitCode": 0,
+      "result": "PASS"
+    }
+  ],
+  "sourceHashes": [
+    {
+      "path": "go-device-gateway/pkg/devices/sink_device.go",
+      "sha256": "0c42a746fcc250e059fbef519ed8280d3dedc4b3c959ee9e3c9b35db7c9ed1d0"
+    },
+    {
+      "path": "go-device-gateway/pkg/devices/sink_device_sample_only_test.go",
+      "sha256": "8e73970b8eeff906ecfb3aab33e0402893cf972f2e7530871aeb72f6f3bfefce"
+    }
+  ],
+  "artifactHashes": [
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduce.go",
+      "sha256": "43aafecea72761c9b523c71a287fda8aef0ac3040aa28f4d4cc549989e8790b0",
+      "matchesPlannerArtifact": true
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/reproduction.json",
+      "sha256": "833a9fb56eeeb7194299f233b3cf89bf06e6ebdbb13b45a00f0735bc862d9fce",
+      "matchesPlannerArtifact": true
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/c16-sample-only-device-sink/source-inspection.json",
+      "sha256": "4c5b1dfae286a815700a2bcf250d06a36b1234b8d3d1d2bce5af2e7e3bef24b4",
+      "matchesPlannerArtifact": true
+    }
+  ],
+  "canonicalInbox": {
+    "taskRowsRead": true,
+    "reviewRowsRead": true,
+    "priorCiRejection": false,
+    "priorReviewFindings": []
+  },
+  "scopeLimitations": [
+    "Software sample-backend receipt is proven; physical/acoustic consumption and live-provider evidence remain outside this repair and are not claimed.",
+    "Script-owned current-head CI, independent review, guarded merge and post-merge vertical validation remain open."
+  ]
+}
