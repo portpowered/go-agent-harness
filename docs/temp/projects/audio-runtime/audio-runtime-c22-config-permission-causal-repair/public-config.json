@@ -5,11 +5,11 @@
   "failures": [],
   "results": [
     {
-      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: c22-seed-model\n        api_key: \"\"\n        base_url: https://example.test/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:63196/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
+      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: c22-seed-model\n        api_key: \"\"\n        base_url: https://example.test/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:65037/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
       "config_observation": {
         "bytes": 2419,
         "mode": "640",
-        "sha256": "c99507907247964b9ebba7c18e1135bafbbc3a7bb2a734fb65cf658776b466d6"
+        "sha256": "fc01836d3c6c76e9a7568c704339480042393254f428648c6c50b696cf009b8e"
       },
       "existing": true,
       "label": "success/existing-0640",
@@ -17,19 +17,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-xpwfpb4e/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-8na4ms8n/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63196/v1",
+          "http://127.0.0.1:65037/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-xpwfpb4e",
-        "duration_seconds": 0.413067,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-8na4ms8n",
+        "duration_seconds": 0.420198,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Server reachable at http://127.0.0.1:63196/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-xpwfpb4e/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:63196/v1\n  model: c22-dummy-model\n",
+        "stdout": "Server reachable at http://127.0.0.1:65037/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-8na4ms8n/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:65037/v1\n  model: c22-dummy-model\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "022"
@@ -42,11 +42,11 @@
       "umask": "022"
     },
     {
-      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: z-ai/glm-4.7\n        api_key: \"\"\n        base_url: https://openrouter.ai/api/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:63202/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
+      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: z-ai/glm-4.7\n        api_key: \"\"\n        base_url: https://openrouter.ai/api/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:65040/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
       "config_observation": {
         "bytes": 2422,
         "mode": "600",
-        "sha256": "5c6f1ddd679dcec9c1f09ef23c204160fa88e6eca7ec1a4cb0390eec2fd0b702"
+        "sha256": "340932e51efc291028390ed300d839202677493849faafda060c282dc38d225b"
       },
       "existing": false,
       "label": "success/absent-default",
@@ -54,19 +54,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-kbqyd_as/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5sdyhwxv/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63202/v1",
+          "http://127.0.0.1:65040/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-kbqyd_as",
-        "duration_seconds": 0.039552,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5sdyhwxv",
+        "duration_seconds": 0.102468,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Server reachable at http://127.0.0.1:63202/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-kbqyd_as/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:63202/v1\n  model: c22-dummy-model\n",
+        "stdout": "Server reachable at http://127.0.0.1:65040/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5sdyhwxv/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:65040/v1\n  model: c22-dummy-model\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "022"
@@ -91,19 +91,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5k57603w/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-t86ixgy3/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63204/v1",
+          "http://127.0.0.1:65042/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5k57603w",
-        "duration_seconds": 0.023063,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-t86ixgy3",
+        "duration_seconds": 0.02785,
         "exit_code": 1,
-        "stderr": "Error: commit config: config revision conflict for /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-5k57603w/config/config.yaml: expected sha256:8b1c33333451336de82e7f108af19a7c44d4f52afa2a2d637a09bc286b8c8d9f, found sha256:b53ecb2d000fed7ce6e4d31538e1b86a791e7faaeaca3df97dc3deac8888030d\nUsage:\n  yui config add-local [flags]\n\nExamples:\n  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1\n\nFlags:\n      --base-url string   Base URL of the local inference server (e.g. http://localhost:11434/v1)\n  -h, --help              help for add-local\n      --model string      Model name to use (e.g. llama3, mistral)\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n",
-        "stdout": "Server reachable at http://127.0.0.1:63204/v1/models\n",
+        "stderr": "Error: commit config: config revision conflict for /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-t86ixgy3/config/config.yaml: expected sha256:8b1c33333451336de82e7f108af19a7c44d4f52afa2a2d637a09bc286b8c8d9f, found sha256:b53ecb2d000fed7ce6e4d31538e1b86a791e7faaeaca3df97dc3deac8888030d\nUsage:\n  yui config add-local [flags]\n\nExamples:\n  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1\n\nFlags:\n      --base-url string   Base URL of the local inference server (e.g. http://localhost:11434/v1)\n  -h, --help              help for add-local\n      --model string      Model name to use (e.g. llama3, mistral)\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n",
+        "stdout": "Server reachable at http://127.0.0.1:65042/v1/models\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "022"
@@ -116,11 +116,11 @@
       "umask": "022"
     },
     {
-      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: c22-seed-model\n        api_key: \"\"\n        base_url: https://example.test/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:63206/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
+      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: c22-seed-model\n        api_key: \"\"\n        base_url: https://example.test/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:65044/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
       "config_observation": {
         "bytes": 2419,
         "mode": "640",
-        "sha256": "3a60243590427f63614dfa8f8b02e75ed51a62ac0c7c54342858c3e22c2a0d53"
+        "sha256": "c27817b2bf7e3a64c49798eea0d1039f94e83ec8c309333e06f9069ab29a95ce"
       },
       "existing": true,
       "label": "success/existing-0640",
@@ -128,19 +128,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-_ttoppsj/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-cxiz0q4t/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63206/v1",
+          "http://127.0.0.1:65044/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-_ttoppsj",
-        "duration_seconds": 0.039107,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-cxiz0q4t",
+        "duration_seconds": 0.041306,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Server reachable at http://127.0.0.1:63206/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-_ttoppsj/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:63206/v1\n  model: c22-dummy-model\n",
+        "stdout": "Server reachable at http://127.0.0.1:65044/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-cxiz0q4t/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:65044/v1\n  model: c22-dummy-model\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "077"
@@ -153,11 +153,11 @@
       "umask": "077"
     },
     {
-      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: z-ai/glm-4.7\n        api_key: \"\"\n        base_url: https://openrouter.ai/api/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:63208/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
+      "config_bytes": "model:\n    provider: local\n    openai: null\n    claude: null\n    openrouter:\n        model: z-ai/glm-4.7\n        api_key: \"\"\n        base_url: https://openrouter.ai/api/v1\n    local:\n        model: c22-dummy-model\n        api_key: \"\"\n        base_url: http://127.0.0.1:65046/v1\n    fal: null\n    grok: null\n    continuation_nudge_enabled: false\n    continuation_nudge_message: \"\"\n    repetition_penalty: 0\ntools:\n    web:\n        brave:\n            enabled: false\n            api_key: \"\"\n            max_results: 0\n        duckduckgo:\n            enabled: false\n            max_results: 0\n    cron:\n        exec_timeout_minutes: 0\n    exec:\n        enable_deny_patterns: false\n        custom_deny_patterns: []\n    interactive:\n        fast_read_timeout: 5s\n        long_running_timeout: 20s\n        acknowledgement_threshold: 2s\n    list:\n        - id: exec\n          enabled: true\n        - id: read_file\n          enabled: true\n        - id: read_image\n          enabled: true\n        - id: write_file\n          enabled: true\n        - id: edit_file\n          enabled: true\n        - id: append_file\n          enabled: true\n        - id: list_dir\n          enabled: true\n        - id: web_fetch\n          enabled: true\n        - id: web_search\n          enabled: true\n        - id: show\n          enabled: true\n        - id: mouse\n          enabled: true\n        - id: load_skill\n          enabled: true\n        - id: sleep\n          enabled: true\nbrowser:\n    tools:\n        enabled: false\n        backend: webmcp\n        web_cast: false\n    connection:\n        cdp_url: \"\"\n        ws_endpoint: \"\"\n        user_data_dir: \"\"\n        allow_process_scan: false\n        allow_remote_cdp: false\n    managed:\n        headless: false\n        open: about:blank\n        close_on_exit: false\n    selection:\n        browser: \"\"\n        tab: \"\"\n        origin: \"\"\n        auto_select: \"off\"\n        activate_tab: false\n        persist: true\n    policy:\n        allowed_origins: []\n        denied_origins: []\n        approval: writes\n        cancel_on_interrupt: read-only\n    limits:\n        invocation_timeout: 30s\n        max_input_bytes: 262144\n        max_result_bytes: 262144\n        serialize_per_target: true\n    recording:\n        enabled: false\n        include_arguments: true\n        include_results: true\n        redact_url_query: true\n        redact_url_fragment: true\n    replay:\n        path: \"\"\n        strict: true\n",
       "config_observation": {
         "bytes": 2422,
         "mode": "600",
-        "sha256": "af34e7c048dc7e894e81eba62ee912640a43ef441732cbb03c852b3cb0d1a13c"
+        "sha256": "5a5efe78d4d26b06299eb45a762d01544e9fedc6d17bf78376274877bbd38c14"
       },
       "existing": false,
       "label": "success/absent-default",
@@ -165,19 +165,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-0rv59zbg/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-r2rj2v9e/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63208/v1",
+          "http://127.0.0.1:65046/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-0rv59zbg",
-        "duration_seconds": 0.038617,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-r2rj2v9e",
+        "duration_seconds": 0.043727,
         "exit_code": 0,
         "stderr": "",
-        "stdout": "Server reachable at http://127.0.0.1:63208/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-0rv59zbg/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:63208/v1\n  model: c22-dummy-model\n",
+        "stdout": "Server reachable at http://127.0.0.1:65046/v1/models\nLocal provider added to /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-r2rj2v9e/config/config.yaml\n  provider: local\n  base_url: http://127.0.0.1:65046/v1\n  model: c22-dummy-model\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "077"
@@ -202,19 +202,19 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
           "--config-dir",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-x7nblq2w/config",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-jwyvdkcz/config",
           "config",
           "add-local",
           "--base-url",
-          "http://127.0.0.1:63210/v1",
+          "http://127.0.0.1:65048/v1",
           "--model",
           "c22-dummy-model"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-x7nblq2w",
-        "duration_seconds": 0.020679,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-jwyvdkcz",
+        "duration_seconds": 0.035066,
         "exit_code": 1,
-        "stderr": "Error: commit config: config revision conflict for /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-x7nblq2w/config/config.yaml: expected sha256:8b1c33333451336de82e7f108af19a7c44d4f52afa2a2d637a09bc286b8c8d9f, found sha256:b53ecb2d000fed7ce6e4d31538e1b86a791e7faaeaca3df97dc3deac8888030d\nUsage:\n  yui config add-local [flags]\n\nExamples:\n  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1\n\nFlags:\n      --base-url string   Base URL of the local inference server (e.g. http://localhost:11434/v1)\n  -h, --help              help for add-local\n      --model string      Model name to use (e.g. llama3, mistral)\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n",
-        "stdout": "Server reachable at http://127.0.0.1:63210/v1/models\n",
+        "stderr": "Error: commit config: config revision conflict for /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-config-jwyvdkcz/config/config.yaml: expected sha256:8b1c33333451336de82e7f108af19a7c44d4f52afa2a2d637a09bc286b8c8d9f, found sha256:b53ecb2d000fed7ce6e4d31538e1b86a791e7faaeaca3df97dc3deac8888030d\nUsage:\n  yui config add-local [flags]\n\nExamples:\n  yui config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1\n\nFlags:\n      --base-url string   Base URL of the local inference server (e.g. http://localhost:11434/v1)\n  -h, --help              help for add-local\n      --model string      Model name to use (e.g. llama3, mistral)\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\n",
+        "stdout": "Server reachable at http://127.0.0.1:65048/v1/models\n",
         "timed_out": false,
         "timeout_seconds": 60.0,
         "umask": "077"
@@ -228,7 +228,7 @@
     }
   ],
   "schema": "audio-runtime-c22-public-config-v1",
-  "source_revision": "6560f06e0794115cc454548344e41ef9e088ec5f",
+  "source_revision": "b8b446288c408b35cb74af70703efd831635bfbc",
   "status": "passed",
   "umasks": [
     "022",
