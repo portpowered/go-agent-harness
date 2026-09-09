@@ -120,3 +120,11 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   helpers but exports no `RunRoom`; the legacy entrypoint is covered by its
   own internal package tests. The historical C20-owned hosted
   `test46/provider_burst` snapshot timeout remains unwaived and unchanged.
+- After the repair checkpoint was committed at
+  `9e61354c27ca381ed204ab05dec2aa7fd816c1d9`, the exact committed-head rerun
+  completed in `10.503` seconds with `23` bounded commands. The source archive,
+  fixture manifest, complete allowlist, dependency controls, package probes,
+  focused causal/regression tests, race, vet, zero-test control, timeout
+  cleanup, and clean shutdown remained accepted. The generated evidence now
+  identifies that measured candidate; the final evidence-only successor does
+  not alter the audited source paths.

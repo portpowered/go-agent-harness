@@ -8,7 +8,7 @@
   "sharedModulePathsModified": [],
   "baselinePathsModified": [],
   "realtimeOrDeviceAccess": false,
-  "candidateHeadAtCheckpoint": "8e96dc077744d204994274b22356af8e856a8aa7",
+  "candidateHeadAtCheckpoint": "9e61354c27ca381ed204ab05dec2aa7fd816c1d9",
   "pullRequest": 417,
   "chosenDependency": "legacy room-owned PCM16 cadence/mixer dependency",
   "chosenDependencyPlan": "extraction-plan.md",
