@@ -1,0 +1,10 @@
+{
+  "completed_repetitions": 2,
+  "failure_count": 0,
+  "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/cases/valid-pass-repeat/run/manifest.json",
+  "record_count": 2,
+  "requested_repetitions": 2,
+  "run_group_id": "e1112b24d20f",
+  "source_sha": "synthetic-control-source",
+  "status": "CAPTURED"
+}

@@ -1,0 +1,232 @@
+{
+  "cache_paths": {
+    "gocache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/cache/gocache",
+    "gomodcache": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/cache/gomodcache",
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/cache"
+  },
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+      "ended_at_utc": "2026-09-09T02:09:23.551Z",
+      "env_overrides": {},
+      "exit_status": 0,
+      "label": "run-e16f29-r1-synthetic-source-rev-parse",
+      "module": "synthetic",
+      "monotonic_end_ns": 2171562493991291,
+      "monotonic_start_ns": 2171562480080333,
+      "phase": "metadata",
+      "record_id": "run-e16f29-r1-synthetic-source-rev-parse",
+      "role": "source-rev-parse",
+      "schema": "c11-command-record-v1",
+      "scope": "run",
+      "selected_packages": [],
+      "signal": null,
+      "source_repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+      "spawn_error": null,
+      "started_at_utc": "2026-09-09T02:09:23.537Z",
+      "status": "PASS",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/e16f29b55733/r1/synthetic/source-validation/run-e16f29-r1-synthetic-source-rev-parse.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 41,
+      "stdout_path": "runs/e16f29b55733/r1/synthetic/source-validation/run-e16f29-r1-synthetic-source-rev-parse.stdout.txt",
+      "stdout_sha256": "54125282c7a085fc4c664c0672c3b36ce2dd2a96259dae2b25af0dcb8fd6d601",
+      "timed_out": false,
+      "timeout_seconds": 30,
+      "trial": 1,
+      "wall_seconds": 0.013910958
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+        "status",
+        "--porcelain"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+      "ended_at_utc": "2026-09-09T02:09:23.566Z",
+      "env_overrides": {},
+      "exit_status": 0,
+      "label": "run-e16f29-r1-synthetic-source-status",
+      "module": "synthetic",
+      "monotonic_end_ns": 2171562509162250,
+      "monotonic_start_ns": 2171562494888833,
+      "phase": "metadata",
+      "record_id": "run-e16f29-r1-synthetic-source-status",
+      "role": "source-status",
+      "schema": "c11-command-record-v1",
+      "scope": "run",
+      "selected_packages": [],
+      "signal": null,
+      "source_repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+      "spawn_error": null,
+      "started_at_utc": "2026-09-09T02:09:23.552Z",
+      "status": "PASS",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/e16f29b55733/r1/synthetic/source-validation/run-e16f29-r1-synthetic-source-status.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 0,
+      "stdout_path": "runs/e16f29b55733/r1/synthetic/source-validation/run-e16f29-r1-synthetic-source-status.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timed_out": false,
+      "timeout_seconds": 30,
+      "trial": 1,
+      "wall_seconds": 0.014273417
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/fixtures/emit_jsonl.py",
+        "--scenario",
+        "pass",
+        "--delay",
+        "0.005"
+      ],
+      "cohort": false,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity",
+      "ended_at_utc": "2026-09-09T02:09:23.634Z",
+      "env_overrides": {
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/cache/gocache",
+        "GOMAXPROCS": "1",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/cache/gomodcache"
+      },
+      "exit_status": 0,
+      "expected_package_count": 1,
+      "label": "run-e16f29-r1-synthetic",
+      "module": "synthetic",
+      "monotonic_end_ns": 2171562577606208,
+      "monotonic_start_ns": 2171562510100625,
+      "phase": "full",
+      "quiet_evidence": {
+        "active_work": [],
+        "captured_at_utc": "2026-09-09T02:09:23.473Z",
+        "isolation": "synthetic-control",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/quiet-evidence.json",
+        "runner": {
+          "architecture": "synthetic",
+          "cpu": "synthetic",
+          "go_version": "not-used",
+          "os": "synthetic"
+        },
+        "sha256": "8a988b40b3845a033bd68ce4920d1ce3831388fa7371ef7b966a04108c8f65d3",
+        "valid_until_utc": "2026-09-09T02:19:23.473Z"
+      },
+      "record_id": "run-e16f29-r1-synthetic",
+      "repeat_index": 1,
+      "requested_repetitions": 1,
+      "role": "synthetic-test",
+      "run_group_id": "e16f29b55733",
+      "schema": "c11-command-record-v1",
+      "scope": "run",
+      "selected_packages": [
+        "example/pass"
+      ],
+      "signal": null,
+      "source_sha": "be5cb6fd48ed2f7e67ed248c739df19a8abdc3c8",
+      "source_validation": {
+        "dirty_paths": [],
+        "expected_dirty_paths": [],
+        "expected_head": "be5cb6fd48ed2f7e67ed248c739df19a8abdc3c8",
+        "head": "be5cb6fd48ed2f7e67ed248c739df19a8abdc3c8",
+        "matches_manifest": true,
+        "metadata_record_ids": [
+          "run-e16f29-r1-synthetic-source-rev-parse",
+          "run-e16f29-r1-synthetic-source-status"
+        ],
+        "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo"
+      },
+      "spawn_error": null,
+      "started_at_utc": "2026-09-09T02:09:23.567Z",
+      "status": "PASS",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/e16f29b55733/r1/synthetic/run-e16f29-r1-synthetic.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 258,
+      "stdout_path": "runs/e16f29b55733/r1/synthetic/run-e16f29-r1-synthetic.stdout.jsonl",
+      "stdout_sha256": "2db1013568d2de3181dbca9dc30781bbdf28d2392d24c09b799b784de8fb8405",
+      "test_result_cache_policy": "disabled-by--count=1",
+      "timed_out": false,
+      "timeout_seconds": 5,
+      "trial": 1,
+      "wall_seconds": 0.067505583
+    }
+  ],
+  "created_at_utc": "2026-09-09T02:09:23.473Z",
+  "flags": {
+    "agent_cli_timeout_seconds": 5,
+    "cgo_enabled": "0",
+    "count": 1,
+    "general_timeout_seconds": 5,
+    "go_test_p": 1,
+    "gomaxprocs": 1,
+    "tags": [
+      "nomicrophone"
+    ]
+  },
+  "go": {
+    "env": {},
+    "executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "version": "not-used"
+  },
+  "inventory_command_ids": [],
+  "inventory_status": "PASS",
+  "measurement_status": "RUN_CAPTURED",
+  "metadata_command_ids": [],
+  "mode": "synthetic",
+  "modules": [
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/scripts/hermetic-profile/fixtures/emit_jsonl.py",
+        "--scenario",
+        "pass",
+        "--delay",
+        "0.005"
+      ],
+      "name": "synthetic",
+      "no_test_package_count": 0,
+      "package_count": 1,
+      "packages": [
+        {
+          "has_tests": true,
+          "import_path": "example/pass",
+          "package_arg": "."
+        }
+      ],
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity",
+      "relative": ".",
+      "test_package_count": 1
+    }
+  ],
+  "paths": {
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/run/manifest.json"
+  },
+  "project": "audio-runtime",
+  "repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity",
+  "runner": {
+    "architecture": "synthetic",
+    "cpu": "synthetic",
+    "go_version": "not-used",
+    "os": "synthetic"
+  },
+  "schema": "c11-hermetic-profile-manifest-v1",
+  "source_dirty_paths": [],
+  "source_repo": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c11-hermetic-package-profile/docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo",
+  "source_sha": "be5cb6fd48ed2f7e67ed248c739df19a8abdc3c8",
+  "updated_at_utc": "2026-09-09T02:09:23.635Z",
+  "warm": {
+    "command_ids": [],
+    "status": "NOT_RUN",
+    "test_binaries": []
+  },
+  "work": "audio-runtime-c11-hermetic-package-profile-controls"
+}

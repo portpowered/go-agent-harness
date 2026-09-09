@@ -3,12 +3,12 @@
   "project": "audio-runtime",
   "work": "audio-runtime-c11-hermetic-package-profile",
   "factory_session": "~default",
-  "candidate_head": "aeef9126ae54ea925dabb260818082db8675b324",
-  "current_branch_head_at_handoff": "aeef9126ae54ea925dabb260818082db8675b324",
-  "implementation_checkpoint": "aeef9126ae54ea925dabb260818082db8675b324",
-  "evidence_checkpoint": "aeef9126ae54ea925dabb260818082db8675b324",
-  "evidence_generated_from_sha": "aeef9126ae54ea925dabb260818082db8675b324",
-  "evidence_packaging_note": "The candidate SHA above is the exact tree used for the current focused recheck; evidence is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
+  "candidate_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "current_branch_head_at_handoff": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "implementation_checkpoint": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_checkpoint": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_generated_from_sha": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+  "evidence_packaging_note": "The candidate SHA above is the exact source tree used for the current focused recheck; the evidence bundle is packaged in a subsequent commit so the record does not make a self-referential future-commit claim.",
   "base_main": "c3bb663e118de9e73ea3eb211b381e8f86c4f480",
   "startup_integration_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -33,25 +33,28 @@
     "next_gate": "SCRIPT_CI_NOT_POLLED"
   },
   "latest_ci_rejection": {
-    "path": "ci-rejection-34294562855.json",
-    "log_path": "ci-rejection-34294562855.log",
-    "run_id": 34294562855,
-    "job_id": 102288251336,
-    "check": "CI (coverage)",
-    "head_sha": "6079ce29b98e553514c2aeb82e78a762f0131faa",
-    "failure_step": "Run coverage profiles and coverage gate",
-    "failure": "agent-cli/test/integration TestAskRecordsAndReplaysThroughProviderService/stream=true failed because failed to flush captures: HTTP capture has an active response body",
-    "owned_path": "agent-cli/test/integration/ask_capture_test.go",
-    "owner": "triggering predecessor rejection; repaired in current C11 head; hosted CI remains unclaimed",
+    "path": "ci-rejection-34300581145.json",
+    "log_path": "ci-rejection-34300581145.log",
+    "run_id": 34300581145,
+    "job_id": 102306427035,
+    "check": "CI (static)",
+    "head_sha": "177eda027ed2712211f8d44c313bbe2c103f596e",
+    "failure_step": "Run make architecture-size-check",
+    "failure": "architecture-size-check reported four stale baseline entries for streamSSEToGateway and four oversized/over-budget metrics for streamSSEToGatewayWithClose after the response-body cleanup repair duplicated the parser",
+    "owned_path": "go-llm-gateway/pkg/providers/openai/stream.go",
+    "owner": "C11 capture repair; consolidated into the existing parser at 955efeb; hosted CI remains unclaimed",
     "go_tests_started": true,
     "ci_claim": "NOT_GREEN; current-head rejection read in full; no waiver",
-    "metadata_sha256": "7d6a26ce15623a5c9e99a49a35654749035dc6848399f3350e7a5fe6813b3bbd",
-    "log_sha256": "8f40682f176a630c59b36d625f654b185024a9000d40e06257118fb027d70c10",
-    "local_rechecks": []
+    "metadata_sha256": "5269c3adc0095a381c8c8ea95da3cb0a28044b2dd06de23c49f4a3e881fbd928",
+    "log_sha256": "a1d159d420031e368bc76430fab1ae97285d68e45f9477f6fe7562bb36969997",
+    "local_rechecks": [
+      "architecture-size-check PASS at 955efeb",
+      "focused and race capture/provider tests PASS at 955efeb"
+    ]
   },
   "canonical_board_snapshot": {
-    "path": "canonical-board-after-ci-20260909.json",
-    "sha256": "30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07",
+    "path": "canonical-board-955efeb.json",
+    "sha256": "918672c9b796990c327de91086e070a30b3b407dd4be6e093ef5fdbcb2264e88",
     "command": "rtk proxy you --server \"$FACTORY_SERVER_URL\" --json work list --session \"~default\" --max-results 500 --all",
     "task_work_id": "work-task-4",
     "rejection_rows": 10
@@ -86,8 +89,8 @@
     "count": 1
   },
   "controls": {
-    "path": "ctrl-aeef9126/controls.json",
-    "sha256": "52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3",
+    "path": "ctrl-955efeb/controls.json",
+    "sha256": "38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567",
     "status": "PASS",
     "cases": 67,
     "result_groups": 27,
@@ -103,14 +106,19 @@
   },
   "schema_control_mapping": "schema-control-mapping.md",
   "fresh_focused_recheck": {
-      "checked_at_utc": "2026-09-09T01:41:53Z",
-      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324",
-      "controls_report_sha256": "52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3",
+      "checked_at_utc": "2026-09-09T02:09:06Z",
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
+      "controls_report_sha256": "38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567",
       "controls": "PASS: 67 cases, 27 result groups, zero Go/network/build invocations",
     "profile_help": "PASS",
     "python_ast": "PASS: 3 files (recursive scripts/hermetic-profile/**/*.py)",
     "timingate": "PASS: GOWORK=off go test . -count=1",
-    "diff_check": "PASS"
+    "diff_check": "PASS",
+    "affected_packages": "PASS: go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai -count=1",
+    "race_packages": "PASS: go test -race ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai -count=1 -run capture/provider regressions",
+    "architecture_size": "PASS: 181 packages, 1859 files, 27055 functions",
+    "lint": "PASS: pinned golangci-lint 2.9.0",
+    "staticcheck": "PASS: pinned staticcheck 2026.1"
   },
   "review_repairs": {
     "reviewed_head": "5d153a533fd881afb268860d98692bb00d560c9d",
@@ -136,8 +144,8 @@
       "status": "REPAIRED_AND_CAUSALLY_TESTED"
     },
     "current_capture_shutdown_repair": {
-      "trigger": "ci-rejection-34294562855",
-      "repair_commit": "aeef9126ae54ea925dabb260818082db8675b324",
+      "trigger": "ci-rejection-34294562855 and ci-rejection-34300581145",
+      "repair_commit": "955efeb680b0e5436bbef0c677c321ae3d09a10f",
       "status": "REPAIRED_AND_CAUSALLY_TESTED"
     },
     "items": [
@@ -191,12 +199,12 @@
     {
       "command": "go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/testing ./go-agent-runtime/services/providers/internal/service ./go-agent-runtime/services/session/internal/service ./go-agent-loop/pkg/agentloop -count=1 -timeout 180s",
       "status": "PASS",
-      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324"
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f"
     },
     {
       "command": "go test ./agent-cli/internal/acceptance -run '^TestAskRecordsAndReplaysThroughProviderService$|^TestAskStreamingCaptureJoinsResponseBodyBeforeFlush$' -count=10 -timeout 180s",
       "status": "PASS",
-      "tested_head": "aeef9126ae54ea925dabb260818082db8675b324"
+      "tested_head": "955efeb680b0e5436bbef0c677c321ae3d09a10f"
     }
   ],
   "source_files": {

@@ -7,7 +7,7 @@ Task `audio-runtime-c11-hermetic-package-profile`; admitted project
 ## Latest canonical continuation
 
 The current exact-head implementation checkpoint is
-`aeef9126ae54ea925dabb260818082db8675b324`, rebased in this isolated worktree
+`955efeb680b0e5436bbef0c677c321ae3d09a10f`, rebased in this isolated worktree
 onto `origin/main` `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The startup
 integration ancestor `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
 ancestor `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
@@ -42,8 +42,8 @@ The exact board response is retained in
 `canonical-board-recheck-20260908.json` (SHA-256
 `2e59896a24498f27bb22c6eca9a9cea581b0c16087d6da2ea2dd3d2a6bc2c5e6`). The
 current public control report is
-`ctrl-aeef9126/controls.json` (SHA-256
-`52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`): PASS,
+`ctrl-955efeb/controls.json` (SHA-256
+`38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`): PASS,
 67 cases, 27 result groups, zero Go/network/build invocations. It was generated
 from the exact implementation SHA above; evidence is packaged in a subsequent
 commit so the record does not make a self-referential future-commit claim. Raw retention is
@@ -53,6 +53,19 @@ its own stdout fixture. `profile.py --help`, Python AST parsing,
 also pass. Fresh timing remains BLOCKED because no isolated/dedicated runner is
 available; no broad suite was started on the shared host and no CI result is
 claimed.
+
+The final continuation board response is retained in
+`canonical-board-955efeb.json` (SHA-256
+`918672c9b796990c327de91086e070a30b3b407dd4be6e093ef5fdbcb2264e88`). The
+latest inspected CI static rejection is retained in
+`ci-rejection-34300581145.json` (SHA-256
+`5269c3adc0095a381c8c8ea95da3cb0a28044b2dd06de23c49f4a3e881fbd928`) and
+`ci-rejection-34300581145.log` (SHA-256
+`a1d159d420031e368bc76430fab1ae97285d68e45f9477f6fe7562bb36969997`). It
+failed only at architecture-size-check because the prior stream cleanup
+duplicated an oversized parser; source checkpoint `955efeb` consolidates the
+callback into the existing parser, and the local architecture gate passes
+without a baseline edit. Hosted CI remains unclaimed and was not polled.
 
 The post-CI canonical board response is retained in
 `canonical-board-after-ci-20260909.json` (SHA-256
@@ -90,7 +103,7 @@ still not a green-CI claim and has not been polled after repair.
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched `origin/main`.
 - The isolated worktree was rebased onto the fetched `origin/main`; the running
   host checkout was not merged or reset. The current implementation checkpoint
-  `6079ce29b98e553514c2aeb82e78a762f0131faa` has that main as an ancestor.
+  `955efeb680b0e5436bbef0c677c321ae3d09a10f` has that main as an ancestor.
 - Initial status was clean. Only `scripts/hermetic-profile/` and this matching
   evidence directory are in C11 scope; predecessor checkpoints, the C08
   predecessor worktree/PR400, the parent checkout, and factory configuration
@@ -236,10 +249,10 @@ The exact CI coverage rejection inspected before this repair is retained in
   `ci-rejection-34294562855.log`; this is an out-of-scope C12/runtime failure,
   not a C11 repair target or a green-CI claim.
 - `git diff --check`: PASS.
-- Fresh exact-head recheck from implementation head `aeef9126` passed: 67 public
+- Fresh exact-head recheck from implementation head `955efeb` passed: 67 public
   cases and 27 result groups with zero Go/network/build invocations (tracked
   report SHA-256
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`),
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`),
   profiler help, AST parsing of all three Python files, focused capture/provider/
   recorder/session/agent-loop Go tests, and `git diff --check`. The barrier
   capture/replay pair passed with `-count=10`.
@@ -267,7 +280,7 @@ synthetic controls and the focused timingate package test.
 ## Handoff
 
 The implementation source/control checkpoint remains pinned to
-`aeef9126ae54ea925dabb260818082db8675b324`; the current `origin/main`
+`955efeb680b0e5436bbef0c677c321ae3d09a10f`; the current `origin/main`
 ancestor is `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The latest review-37
 task rejection identified a command record whose `timed_out=true` declaration
 was accepted with PASS/exit 0. The repair adds the command-status consistency

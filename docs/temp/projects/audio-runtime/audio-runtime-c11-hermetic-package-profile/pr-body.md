@@ -15,7 +15,7 @@ met.
 - Session/server: `~default` / `http://127.0.0.1:7439`.
 - Branch and `prd.json.branchName`: `codex/audio-runtime-c11-hermetic-package-profile`.
 - Current delivery implementation checkpoint:
-  `aeef9126ae54ea925dabb260818082db8675b324`.
+  `955efeb680b0e5436bbef0c677c321ae3d09a10f`.
 - The implementation and exact-head controls are committed against that
   candidate; the evidence report is generated from that exact implementation
   SHA and packaged separately. This checkpoint consolidates all phase command records into one
@@ -51,9 +51,9 @@ met.
   weak quiet observations, out-of-root caches, no-test conflicts, malformed
   records, and stale-analysis replacement. The preserved predecessor
   `ctrl-c11-repair/controls.json` reports 63 cases;
-  the current `ctrl-aeef9126/controls.json` reports 67 declared cases, 27 result
+  the current `ctrl-955efeb/controls.json` reports 67 declared cases, 27 result
   groups, and zero Go/network/build invocations; its SHA-256 is
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`.
   The new regressions reject unreferenced invalid/zero-request groups,
   incomplete command-record schemas and artifacts, forged retained
   source-validation output/identity, aggregate duration overflow, malformed
@@ -75,9 +75,25 @@ met.
   `profile.py --help`, the 67-case control suite, focused capture/provider/
   recorder/session/agent-loop Go tests, and `git diff --check` pass. The
   barrier capture/replay pair also passed with `-count=10`.
-- Fresh exact-head recheck from `aeef9126` passed the same controls and focused
+- Fresh exact-head recheck from `955efeb` passed the same controls and focused
   checks; the tracked controls report SHA-256 is
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`.
+
+The latest submitted candidate rejection is run `34300581145`, job
+`102306427035` (`CI (static)`) at head
+`177eda027ed2712211f8d44c313bbe2c103f596e`. The job reached
+`make architecture-size-check` and reported four stale baseline entries for
+the old `streamSSEToGateway` plus four over-budget metrics for the duplicated
+`streamSSEToGatewayWithClose` parser. The exact metadata and 803-line log are
+retained in `ci-rejection-34300581145.json` (SHA-256
+`5269c3adc0095a381c8c8ea95da3cb0a28044b2dd06de23c49f4a3e881fbd928`) and
+`ci-rejection-34300581145.log` (SHA-256
+`a1d159d420031e368bc76430fab1ae97285d68e45f9477f6fe7562bb36969997`).
+Source checkpoint `955efeb` folds the optional response-body close callback
+into the existing parser, so the parser is not duplicated and the architecture
+baseline is unchanged. The local architecture gate, full affected packages,
+focused capture/provider tests, race regressions, lint, and staticcheck pass at
+that source head. Hosted CI remains unclaimed and was not polled after repair.
 
 ## CI rejection disposition
 
@@ -123,13 +139,14 @@ overrun, failed/partial full-trial admission, non-PASS
 inventory/warm phase commands, unreferenced invalid groups, forged retained Git
 metadata, aggregate duration overflow, incomplete command records, and the
 preceding timing/quiet/cache/no-test/repeated-terminal/artifact controls. Commit
-`aeef9126` contains the remaining code repairs, and the current public controls
+`955efeb` contains the remaining code repairs, and the current public controls
 cover every finding.
 
 ## Handoff
 
-Commit/push this same task, update PR #403 with the exact final head and
-evidence, and return `ACCEPTED` to the script-owned CI gate without polling it.
+Commit/push this same task, update PR #403 with source checkpoint
+`955efeb680b0e5436bbef0c677c321ae3d09a10f` and the exact evidence, and return
+`ACCEPTED` to the script-owned CI gate without polling it.
 Any C11-owned
 current-head rejection returns to this task; independent review, guarded merge,
 and post-integration vertical validation remain external. All nine immutable

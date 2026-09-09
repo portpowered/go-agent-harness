@@ -24,7 +24,7 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Fetched and integrated the latest `origin/main`:
   `c3bb663e118de9e73ea3eb211b381e8f86c4f480`.
 - Current delivery candidate implementation checkpoint:
-  `aeef9126ae54ea925dabb260818082db8675b324`.
+  `955efeb680b0e5436bbef0c677c321ae3d09a10f`.
 - The implementation and exact-head control evidence are committed against
   that candidate. The evidence report is generated from that exact candidate
   SHA and packaged separately in a later evidence commit so the record does not
@@ -46,9 +46,9 @@ not a waiver, and not a claim that the under-three-minute target is met.
 - Preserved baseline ancestor:
   `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 - Fresh current-head focused evidence is
-  `ctrl-aeef9126/controls.json`: 67 declared cases, 27 result groups, zero
+  `ctrl-955efeb/controls.json`: 67 declared cases, 27 result groups, zero
   Go/network/build invocations, SHA-256
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`.
 - The post-CI canonical board is
   `canonical-board-after-ci-20260909.json` (SHA-256
   `30f5576e2886465b87d863fc7d2c718ad49083913dac6252d14a800eec427d07`).
@@ -107,10 +107,10 @@ Focused evidence:
 
 - Python AST parsing of all shipped profiler/fixture scripts: PASS.
 - `python3 scripts/hermetic-profile/profile.py --help`: PASS.
-- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-aeef9126`:
+- `python3 scripts/hermetic-profile/controls.py --output .../ctrl-955efeb`:
   PASS; 67 declared cases and 27 result groups, zero Go, network, or build
   invocations. The report hash is
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`.
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`.
   The report truthfully marks top-level raw evidence retention `false` because
   the `missing-raw-artifact` case deliberately deletes its stdout fixture as a
   negative control; the per-case result also records `false`. The source
@@ -136,12 +136,17 @@ Focused evidence:
   stale-analysis replacement, and post-inventory source dirtiness remain
   fail-closed.
 - `GOWORK=off go test . -count=1` from `tools/timingate`: PASS.
+- The affected acceptance and OpenAI provider packages pass their full
+  package tests and focused race regressions; pinned golangci-lint 2.9.0,
+  staticcheck 2026.1, and `make architecture-size-check` also pass. The
+  architecture gate remains on the existing baseline; no baseline entry was
+  edited.
 - Rejected CI regression recheck:
   `go test ./agent-cli/internal/services/internal/agentruntime -count=1
   -run '^TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress$' -timeout 30s`:
   PASS after rebase.
 - `git diff --check`: PASS.
-- Focused causal Go regressions passed at `aeef9126`:
+- Focused causal Go regressions passed at `955efeb`:
   `go test ./agent-cli/internal/acceptance ./go-llm-gateway/pkg/providers/openai
   ./go-llm-gateway/pkg/testing
   ./go-agent-runtime/services/providers/internal/service
@@ -152,11 +157,28 @@ Focused evidence:
   recorder close/read failures, cancellation cleanup, and session lifecycle
   cleanup. The barrier regression was repeated with `-count=10` for the two
   capture/replay tests.
-- Fresh exact-head recheck from `aeef9126` passed: 67 public cases/27 result
+- Fresh exact-head recheck from `955efeb` passed: 67 public cases/27 result
   groups with zero Go/network/build invocations (tracked report SHA-256
-  `52226b0accd97a785c93589ea6ec13ec0fd82ea7ff787ce15c98daf082cddef3`),
+  `38570442ea6ed551e3e8ead44a9a74439b54e3ebd5a7ff0c17270bb8fbd7f567`),
   Python AST parsing, profiler help, the focused Go packages above, and
   `git diff --check`.
+
+The latest submitted candidate rejection is run `34300581145`, job
+`102306427035` (`CI (static)`) at head
+`177eda027ed2712211f8d44c313bbe2c103f596e`. The job reached
+`make architecture-size-check` and reported four stale baseline entries for
+the old `streamSSEToGateway` plus four over-budget metrics for the duplicated
+`streamSSEToGatewayWithClose` parser. The exact 803-line log and job metadata
+are retained in `ci-rejection-34300581145.log` (SHA-256
+`a1d159d420031e368bc76430fab1ae97285d68e45f9477f6fe7562bb36969997`) and
+`ci-rejection-34300581145.json` (SHA-256
+`5269c3adc0095a381c8c8ea95da3cb0a28044b2dd06de23c49f4a3e881fbd928`).
+The repair in `955efeb680b0e5436bbef0c677c321ae3d09a10f` folds the optional
+response-body close callback into the existing parser and delegates cleanup
+without duplicating the parser or changing the architecture baseline. The
+local architecture gate, full affected packages, focused capture/provider
+tests, and race regressions pass at that exact source head. Hosted CI remains
+unclaimed and was not polled after this repair.
 
 The latest prior current-head CI rejection was inspected in full from run
 `34231535549`, job `102078631796` (`CI (hermetic)`) at pre-C12 submitted head
@@ -277,8 +299,8 @@ protocol and honest fallback rather than restructuring suites.
 ## Residual handoff
 
 The current C11 implementation and exact-head controls are pinned to
-`aeef9126ae54ea925dabb260818082db8675b324`; the tracked
-`ctrl-aeef9126/controls.json` report is recorded above. The canonical
+`955efeb680b0e5436bbef0c677c321ae3d09a10f`; the tracked
+`ctrl-955efeb/controls.json` report is recorded above. The canonical
 review findings through review 37 named
 unreferenced invalid groups, forged retained Git metadata, aggregate duration
 overflow, incomplete command records, stale head/evidence references, and
@@ -290,7 +312,8 @@ rejection, unmatched and unselected-group filters,
 while retaining the earlier repairs for lane
 timing, quiet observations, cache containment, no-test markers, repeated
 package terminals, and artifact provenance. The next action is to
-commit/push this exact evidence checkpoint, update PR #403, and return
+commit/push this exact source/evidence checkpoint, update PR #403 with the
+source head above, and return
 `ACCEPTED` to the script-owned CI gate without polling it. Any C11-owned
 CI/review finding returns to this task; independent review and post-integration
 vertical validation remain external stages. No fresh timing or under-three-
