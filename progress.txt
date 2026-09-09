@@ -1206,3 +1206,38 @@ C18 hermetic rejection reconciliation and same-owner handoff checkpoint
   current causal proof, then return `ACCEPTED` to the script-owned current-head
   CI gate without polling. Retain ownership through `CONTINUE` for any exact
   same-head actionable C18 rejection; do not self-review or broaden scope.
+
+C18 current hermetic rejection reconciliation and same-owner handoff checkpoint
+
+- Reverified admission for `audio-runtime-c18-public-strict-replay`; the task
+  remains `work-task-24`, `prd.json.branchName` exactly matches the isolated
+  branch `codex/audio-runtime-c18-public-strict-replay`, and freshly fetched
+  `origin/main=e4137eba6a6499142f50701609c1149afc71db84` is an ancestor.
+  The worktree was clean before this checkpoint; no host checkout,
+  predecessor checkpoint, or unrelated owner was changed.
+- Read the complete current rejection for PR #410, run `34379551787`, job
+  `102560724979`, at candidate `1ff6cfb09d3317597be8c83ac5d27ad197b69358`.
+  The full 365-line hermetic log is recorded with SHA256
+  `ad2475daafb65f6bfd0fa0a29197bd427b52ac7bb34ec3aaa8d353cfa9830f2e` and
+  the raw job response, board feedback, full-log command, and extraction are
+  saved in `ci-rejection-34379551787.json`. Its sole failure was
+  `agent-cli/test/integration/TestSessionCLI_DuplexPCMMultiTurnSchedule` at
+  `session_duplex_overlap_test.go:56`: harness A hit its 2.002700715s
+  response deadline and the audio write observed context cancellation.
+- The exact hosted hermetic control was reproduced with
+  `CGO_ENABLED=0 -tags=nomicrophone -count=20 -timeout=90s`; all `20/20`
+  trials passed in `0.26-0.28s` with `final_tick=10`, `crossings=6`, and
+  `A_runtime=B_runtime=16`. The test is outside the C18 owned replay/Wire/
+  embedding paths, no C18 source defect reproduced, and no unrelated duplex
+  repair is authorized. The hosted result remains non-waived CI evidence.
+- Review30/37/40/42/43 repairs remain mapped to `087d30c5`, `0df3e912`,
+  `02478f63`, `e2e7bbff`, and `cf663a66`; the authorized architecture delta
+  remains exactly 14 stale CLI baseline entries plus the external consumer
+  `cmd` layout rule. No CI success, independent review, merge, vertical
+  acceptance, or project acceptance is claimed.
+- Exact next action: commit this raw rejection and causal reconciliation,
+  push the same admitted branch, update PR #410 with the non-waived external
+  failure and `20/20` reproduction, then return `ACCEPTED` to the
+  script-owned current-head CI gate without polling. Retain ownership through
+  `CONTINUE` for any exact-head actionable C18 rejection; do not self-review
+  or broaden scope to the unrelated duplex test.
