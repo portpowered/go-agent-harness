@@ -518,7 +518,7 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
     mutated["pcm"]["sha256"] = "0" * 64
     controls.append(("pcm-mismatch", mutated))
     mutated = json.loads(json.dumps(base_report))
-    mutated["responses"][0]["id"], mutated["responses"][1]["id"] = mutated["responses"][1]["id"], mutated["responses"][0]["id"]
+    mutated["tool_calls"][0]["id"], mutated["tool_calls"][1]["id"] = mutated["tool_calls"][1]["id"], mutated["tool_calls"][0]["id"]
     controls.append(("identity-swap", mutated))
     mutated = json.loads(json.dumps(base_report))
     mutated["tool_results"] = mutated["tool_results"][1:]
