@@ -403,9 +403,6 @@ func runOverflow(result *report) error {
 	if stableErr != nil {
 		return stableErr
 	}
-	if first == nil {
-		return errors.New("overflow recording silently reported success")
-	}
 	result.Finalization.FirstError = errorText(first)
 	result.Finalization.SecondError = errorText(run.finalizeError)
 	result.Finalization.Stable = errorText(first) == errorText(run.finalizeError)
@@ -429,7 +426,7 @@ func runOverflow(result *report) error {
 	result.SessionLogBytes = len(entries.raw)
 	result.SessionLogTurns = len(entries.entries)
 	result.Overflow = &overflowReport{PartialStatus: partial, AcceptedTurns: len(entries.entries), RawTailPresent: tailPresent, RawPCMBytes: fileSize(filepath.Join(run.destination, "audio", "out-000.pcm")), TerminalPreserved: terminal, SilentSuccess: first == nil}
-	if !partial || !tailPresent || !terminal || result.Overflow.RawPCMBytes != 6 {
+	if first == nil || !partial || !tailPresent || !terminal || result.Overflow.RawPCMBytes != 6 {
 		return fmt.Errorf("overflow evidence incomplete: partial=%t tail=%t terminal=%t pcm=%d", partial, tailPresent, terminal, result.Overflow.RawPCMBytes)
 	}
 	return nil
