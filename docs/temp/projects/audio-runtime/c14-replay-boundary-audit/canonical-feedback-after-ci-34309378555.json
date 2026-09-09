@@ -1,0 +1,12 @@
+{
+  "workId": "work-task-4",
+  "name": "audio-runtime-c14-replay-boundary-audit",
+  "workTypeName": "task",
+  "state": {
+    "name": "init",
+    "type": "PROCESSING"
+  },
+  "tags": {
+    "_rejection_feedback": "CI checks failed for PR #406 at head 654dae862841574a22feab33ace99bfa774bf30a: required checks failed on current head 654dae862841574a22feab33ace99bfa774bf30a: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34309378555/job/102332669048). Return this task to the executor with the listed failures."
+  }
+}
