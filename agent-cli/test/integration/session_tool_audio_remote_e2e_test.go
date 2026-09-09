@@ -128,6 +128,7 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
+	scenarioSlots := make(chan struct{}, 2)
 	cases := []remoteToolAudioCase{
 		{
 			name:            "test45",
@@ -175,11 +176,10 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				continue
 			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
-				// Every scenario owns its provider, tool fixture, device process,
-				// ports, and temporary files. Run the real-time device clocks in
-				// parallel so wall-clock duration does not grow with the size of
-				// the adversarial matrix.
+				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
+				scenarioSlots <- struct{}{}
+				defer func() { <-scenarioSlots }()
 				runRemoteToolAudioScenario(t, testCase, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
 			})
 		}
