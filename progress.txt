@@ -865,13 +865,18 @@ C18 static rejection repair checkpoint
   and centralizes `response.done` in the strict package constant used by input
   and evidence validation. No production limit, assertion, deadline, baseline,
   policy, or unrelated path changed.
+- Repair commit `cf663a66351e99205e2b18eaab7345c73cbed84d` is the exact current
+  source head. Its independently built `GOWORK=off` consumer has SHA256
+  `1e49019724db553923132ad60b8553d9cd8f90f3d4607c94e22de0a6c11965b8` and
+  exits successfully on `tests/embedding/testdata/replay`, reporting `16` wire
+  events, one tool call and `Device execution: false`.
 - Fresh focused evidence is green: architecture-size (`182` packages, `1869`
   files, `27204` functions), pinned golangci-lint (`0` issues), strict replay
   normal/race (`84` tests in four packages each), independent embedding
   `GOWORK=off` normal/race, and `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
   across normal/coverage/race. No CI, review, merge, vertical probe or project
   acceptance is claimed.
-- Exact next action: inspect the owned diff, commit and push the same admitted
-  task, update PR #410 with the repair and full rejection evidence, then return
+- Exact next action: push the same admitted task, update PR #410 with the repair
+  and full rejection evidence, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
   ownership through `CONTINUE` for any exact-head rejection; do not self-review.
