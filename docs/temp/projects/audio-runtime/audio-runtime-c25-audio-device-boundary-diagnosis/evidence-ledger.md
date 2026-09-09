@@ -128,3 +128,24 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   cleanup, and clean shutdown remained accepted. The generated evidence now
   identifies that measured candidate; the final evidence-only successor does
   not alter the audited source paths.
+
+## Review-86 causal repair checkpoint
+
+- Repair commit `6151f4b7eede2a8b5a5fd9867c856a8743ddc412` replaces the
+  fixture-text dependency check with a bounded Go AST oracle. It parses import
+  declarations and selector calls, rejects the real forbidden fixture, rejects
+  an allowed-fixture mutation containing `time.NewTicker`, and accepts a
+  comment-only mutation containing the same forbidden tokens. Failed, empty,
+  malformed, or incomplete oracle output fails closed.
+- The public-route reachability fields are now derived from the inspected route
+  source; the service-test export flag is derived from its actual declarations.
+  The zero-test regression keeps its native `zero test discovery` assertion but
+  gives cold-cache compilation the verifier's bounded `55s` child allowance
+  within the `60s` contract.
+- At this committed source candidate, `verify.py --mode all` returned
+  `ACCEPTED` in `14.734s` with clean shutdown. The AST build/run, positive,
+  negative, mutation, comment-only, stale/false-success/truncated, zero-test,
+  child-hang, archive, fixture, ancestry/path-allowlist, package, focused
+  normal/race/vet controls all passed. No production/shared/baseline/fixture
+  path was modified; C20's hosted `test46/provider_burst` timeout remains
+  separately owned historical evidence.

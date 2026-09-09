@@ -71,6 +71,24 @@ C20's reviewed recording/live repair has not reached `origin/main` in this refre
 the timeout remains C20-owned historical evidence. C25 therefore imports no C20
 production or fixture changes and makes no CI-green claim.
 
+## Review-86 causal repair checkpoint
+
+At committed verifier repair source candidate
+`6151f4b7eede2a8b5a5fd9867c856a8743ddc412`, `verify.py --mode all` completed in
+14.734 seconds with decision `ACCEPTED`. The verifier now uses a parsed Go AST
+dependency oracle instead of fixture-text token checks: the canonical fixture is
+accepted, the forbidden fixture is rejected, an allowed fixture mutated with a
+`time.NewTicker` edge is rejected, and the same forbidden tokens in comments are
+ignored. The public-route reachability fields are derived from the inspected
+source, not hard-coded.
+
+The fresh run retained 55-second child and 600-second aggregate bounds, passed
+the cold-cache zero-test control after bounded compilation allowance, preserved
+the pinned archive/ancestry/path checks, passed all focused normal/race/vet
+regressions, and left no child process. This repair remains source/package
+evidence only; the hosted C20 `test46/provider_burst` snapshot timeout remains
+historical, separately owned, and unwaived.
+
 ## Extraction plan
 
 The single chosen dependency is the legacy room-owned PCM16 cadence/mixer boundary. The exact current/proposed paths, APIs, callers, ownership, wire sequence, trigger, executable regression, and AUDIO/DEVICE/SERVICE/QUALITY gate map are in [`extraction-plan.md`](extraction-plan.md) and [`extraction-plan.json`](extraction-plan.json).
