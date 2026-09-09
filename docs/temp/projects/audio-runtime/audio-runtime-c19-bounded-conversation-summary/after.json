@@ -1,6 +1,6 @@
 {
   "case": "characterize",
-  "source": "daf1c3a2d91cdfc08bb596f5861d483fb1e69509; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "source": "e15fcf231764a2688e9c414f1823d2e65987f66d; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
   "summary_budget": {
     "max_bytes": 2097152,
     "max_items": 4096,
@@ -14,9 +14,9 @@
   },
   "finalization": {
     "stable": true,
-    "heap_live_bytes": 767512,
-    "heap_after_finalize_bytes": 767624,
-    "shutdown_total_alloc_bytes": 39624864,
+    "heap_live_bytes": 773152,
+    "heap_after_finalize_bytes": 773264,
+    "shutdown_total_alloc_bytes": 39626784,
     "shutdown_elapsed_ms": 27
   },
   "measurements": [
@@ -24,11 +24,11 @@
       "turns": 16,
       "events": 64,
       "payload_bytes": 10992,
-      "heap_live_bytes": 479104,
-      "heap_objects": 1421,
-      "shutdown_heap_bytes": 506528,
-      "shutdown_alloc_bytes": 4127024,
-      "shutdown_elapsed_ms": 17,
+      "heap_live_bytes": 485064,
+      "heap_objects": 1431,
+      "shutdown_heap_bytes": 512312,
+      "shutdown_alloc_bytes": 4132808,
+      "shutdown_elapsed_ms": 18,
       "drain_wait_ms": 100,
       "finalization_stable": true,
       "lock_released": true
@@ -37,11 +37,11 @@
       "turns": 64,
       "events": 256,
       "payload_bytes": 44208,
-      "heap_live_bytes": 534488,
-      "heap_objects": 2091,
-      "shutdown_heap_bytes": 545128,
-      "shutdown_alloc_bytes": 8800224,
-      "shutdown_elapsed_ms": 25,
+      "heap_live_bytes": 540512,
+      "heap_objects": 2097,
+      "shutdown_heap_bytes": 545960,
+      "shutdown_alloc_bytes": 8801056,
+      "shutdown_elapsed_ms": 21,
       "drain_wait_ms": 300,
       "finalization_stable": true,
       "lock_released": true
@@ -50,11 +50,11 @@
       "turns": 128,
       "events": 512,
       "payload_bytes": 88720,
-      "heap_live_bytes": 580472,
-      "heap_objects": 2488,
-      "shutdown_heap_bytes": 580472,
-      "shutdown_alloc_bytes": 14974672,
-      "shutdown_elapsed_ms": 22,
+      "heap_live_bytes": 581320,
+      "heap_objects": 2491,
+      "shutdown_heap_bytes": 586752,
+      "shutdown_alloc_bytes": 14981208,
+      "shutdown_elapsed_ms": 25,
       "drain_wait_ms": 500,
       "finalization_stable": true,
       "lock_released": true
@@ -63,11 +63,11 @@
       "turns": 256,
       "events": 1024,
       "payload_bytes": 178320,
-      "heap_live_bytes": 645640,
-      "heap_objects": 3258,
-      "shutdown_heap_bytes": 645688,
-      "shutdown_alloc_bytes": 24193976,
-      "shutdown_elapsed_ms": 27,
+      "heap_live_bytes": 651920,
+      "heap_objects": 3268,
+      "shutdown_heap_bytes": 651936,
+      "shutdown_alloc_bytes": 24201056,
+      "shutdown_elapsed_ms": 25,
       "drain_wait_ms": 900,
       "finalization_stable": true,
       "lock_released": true
@@ -76,11 +76,11 @@
       "turns": 512,
       "events": 2048,
       "payload_bytes": 357520,
-      "heap_live_bytes": 767512,
-      "heap_objects": 4799,
-      "shutdown_heap_bytes": 767624,
-      "shutdown_alloc_bytes": 39624864,
-      "shutdown_elapsed_ms": 25,
+      "heap_live_bytes": 773152,
+      "heap_objects": 4807,
+      "shutdown_heap_bytes": 773264,
+      "shutdown_alloc_bytes": 39626784,
+      "shutdown_elapsed_ms": 27,
       "drain_wait_ms": 1700,
       "finalization_stable": true,
       "lock_released": true
@@ -91,36 +91,36 @@
       "turns": 16,
       "events": 64,
       "payload_bytes": 10992,
-      "heap_live_bytes": 366136,
-      "heap_objects": 833
+      "heap_live_bytes": 371296,
+      "heap_objects": 838
     },
     {
       "turns": 64,
       "events": 256,
       "payload_bytes": 44208,
-      "heap_live_bytes": 436256,
-      "heap_objects": 1676
+      "heap_live_bytes": 442008,
+      "heap_objects": 1682
     },
     {
       "turns": 128,
       "events": 512,
       "payload_bytes": 88720,
-      "heap_live_bytes": 447360,
-      "heap_objects": 1692
+      "heap_live_bytes": 448192,
+      "heap_objects": 1694
     },
     {
       "turns": 256,
       "events": 1024,
       "payload_bytes": 178320,
-      "heap_live_bytes": 447712,
-      "heap_objects": 1693
+      "heap_live_bytes": 454008,
+      "heap_objects": 1704
     },
     {
       "turns": 512,
       "events": 2048,
       "payload_bytes": 357520,
-      "heap_live_bytes": 448256,
-      "heap_objects": 1696
+      "heap_live_bytes": 454504,
+      "heap_objects": 1706
     }
   ],
   "clean_shutdown": true,

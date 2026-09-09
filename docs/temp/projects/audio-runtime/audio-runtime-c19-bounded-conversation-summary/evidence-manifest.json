@@ -2,7 +2,7 @@
   "work": "audio-runtime-c19-bounded-conversation-summary",
   "project": "audio-runtime",
   "pre_fix_revision": "3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84",
-  "candidate_revision": "daf1c3a2d91cdfc08bb596f5861d483fb1e69509",
+  "candidate_revision": "e15fcf231764a2688e9c414f1823d2e65987f66d",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "candidate_consumer_source_sha256": "ebe59fca79a98d0c924e66f87c349fc90e91fecaba5ed53b6687f564eebd1a05",
@@ -22,13 +22,13 @@
   "reports_sha256": {
     "before.json": "5de19799828ab8d0d74ca5950be8bb832764b8b5b1e64475f800769134596e7c",
     "before-overflow.json": "191ec6e28cad596bd60a01ac5e91408004daac2bfe6a6d4b87f6b782fba136ee",
-    "after.json": "84bfa2e7c6e1d653919a317038b90ed5f01bd76b22d3faa7679430a43ec8c432",
-    "normal.json": "4f60bb75a9e4665c89edd6431ccd0f13dc53724f02b08da5530bfcd7f91920c1",
-    "overflow.json": "07168097a869aec3ad01544f95fdcb40a0525ad53d85259cac1a93d7e001d4de",
-    "matrix.json": "093bdb374119e9c0aabd9512018fcb56642d6eed3f11f7df389900bda97d8cd4",
-    "verify-normal.json": "5469dc1c679f34b1ed3f8eb8261bfda52ee44bc0465635b0996f7b65cfdb347c",
-    "verify-overflow.json": "3806bee90e333e51bf83d14dcbd1a2590a3da8adadf91ca2f31424d33c4cdf2e",
-    "verify-characterize.json": "462e8ac0ece8e5364b5bd3046bca09a741801e9871056a59f841191b59b9dd63"
+    "after.json": "43c5d82e59e7a3cdc4451ee9e2e529aa458350d5763b18012aeaaaae8e2579c5",
+    "normal.json": "3c194d9f735b859d3b0bcc621e265584fb1bf62287f66bfc7dc234aa710a2577",
+    "overflow.json": "4a7e11600dc74fed22631f704bc4c5a3e5a0d7534dfa4eb0f4dadf4b553efc73",
+    "matrix.json": "f33d6fa39cf2398407879dcf484824080006d191d24de25f1e4fc02e878a28d9",
+    "verify-normal.json": "b2ba85272981f2e3929f2a1964d6d74b4aac6950269a542333f5fe593d98bcad",
+    "verify-overflow.json": "a57617ccc235cf8992a4e2e6a523df3f8f7e56389900f3cf5624d0a082a78049",
+    "verify-characterize.json": "925749d5e98fdf8d52e3c6f6a0566209af328b43bdf4e18d40e38723137b3243"
   },
   "source_sha256": {
     "go-agent-runtime/services/recording/internal/evidence/directory.go": "499aba4587af9fd2d1df49c07a21703e51a9afbab8b1e2a52414b42b2a2b0340",
