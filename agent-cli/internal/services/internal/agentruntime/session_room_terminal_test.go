@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,31 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
+
+func TestRoomConnectTrackingInferencer_ConnectionFailureSurvivesRoomStop(t *testing.T) {
+	failure := errors.New("forced dial failure")
+	lifecycle := &roomParticipantLifecycle{}
+	tracker := newRoomConnectTrackingInferencer(&roomTestInferencer{connectErr: failure})
+	tracker.lifecycle = lifecycle
+	// The stop and cancellation observation can win before admission consumes
+	// the tracker outcome that was already published by the inferencer.
+	lifecycle.markCoordinatorStopping(false, RoomTerminationStopped)
+	if !lifecycle.observeTerminal(sessionTerminalObservationForCancellation(messages.TerminalOutputNone, false)) {
+		t.Fatal("room cancellation observation was not accepted")
+	}
+	_, err := tracker.ConnectSession(context.Background())
+	if !errors.Is(err, failure) {
+		t.Fatalf("tracked connection error = %v, want %v", err, failure)
+	}
+	lifecycle.markConnected(err)
+	observation := lifecycle.terminalObservationSnapshot()
+	if !observation.failure || observation.terminationTrigger != ParticipantTerminationTriggerSessionFailure || observation.terminationDisposition != ParticipantTerminationDispositionFailed || !errors.Is(observation.err, failure) {
+		t.Fatalf("connection failure observation = %+v, want causal failure", observation)
+	}
+	if reason, terminalErr, observed := lifecycle.terminal(); !observed || reason != ParticipantTerminationError || !errors.Is(terminalErr, failure) {
+		t.Fatalf("connection failure terminal = (%q, %v, %t), want error terminal", reason, terminalErr, observed)
+	}
+}
 
 func TestRunRoom_FailureTerminalEvidenceIsAuthoritative(t *testing.T) {
 	const (

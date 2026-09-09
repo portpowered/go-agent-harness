@@ -1468,3 +1468,56 @@ C18 current-head hermetic ownership reconciliation 2026-09-09
   script CI gate. This C18 task is blocked by that ownership prerequisite;
   all C18 implementation/review findings remain mapped and no C18 repair is
   actionable from this exact rejection.
+
+
+# C18 causal terminal disposition ownership recovery
+
+Project audio-runtime; contractRevision audio-runtime-v1. Existing task24/PR410 retains strict replay and clock ownership. Preserve HEAD 5266b4cb93d50a38abea39decc94cee00f4e746d and all checkpoints.
+
+Exact rejection: run34389523251/job102594107999, hermetic TestRunRoomLifecycleDiagnosis_ForcedOrderings/fast_connection_failure_before_sibling_completion, session_room_lifecycle_test.go:659. Target Connected=false, Error=forced dial failure, but Reason=ended, trigger/disposition=stopped and Classification/TerminalReason=cancellation. The raw 367-line log is retained in C18 owned evidence, SHA256 44fd1a4d4d06223310f93f1c41948ed4190b6db9f0c8a70d419ef89445ce716f. Executor 100/100 local passes are nonreproduction, not resolution.
+
+Primary explicitly transfers these exact files from the former broad C21 session_room*.go lease to C18 exclusively:
+- agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go
+- agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go
+- agent-cli/internal/services/internal/agentruntime/session_room_terminal.go
+- agent-cli/internal/services/internal/agentruntime/session_room_lifecycle_test.go
+- agent-cli/internal/services/internal/agentruntime/session_room_terminal_test.go
+
+C21 candidate 1f186b9202471a3c58fa6a5dbf5b85b5605b2a22 is clean and in script CI; its current main diff does not touch these five files. C21 retains gateway, session_room_audio_diagnostics_test.go, remaining room files and duplex EOF paths. No active work is moved or interrupted. C20 recording/live/composition and C23 evidence-only characterization remain separate. This exact transfer supersedes old blanket room-owner wording for these five files only. Read-only diagnosis across dependencies is allowed.
+
+Next action for resumed C18: construct a bounded causal interleaving around ConnectSession outcome publication, production lifecycle marking/finalization, and explicit room cancellation. The fixture publishes outcomes before ConnectSession returns; run.stop follows outcome observations. Determine whether genuine observed connect failure is overwritten by cancellation, or fixture observation does not establish the intended production ordering. Inspect buildRoomParticipantResult, lifecycle terminal precedence and terminal facts. Do not assume a fixture-only cause or mask a production race by merely waiting for success. Preserve a deterministic cancellation-overlap control and causal error precedence, identity, one terminal/close per participant and sibling isolation. Fix the demonstrated cause within the transferred production/test paths; use CONTINUE for actionable work. If another exact source path is necessary, preserve evidence and name it for immediate ownership handoff while continuing owned repair; there is no whole-C21 prerequisite.
+
+Bound each focused command to60s, retain existing2s scenario limits, use normal/nomicrophone/race and forced-ordering/terminal negative controls, retain first failure and pre-fix versus post-fix evidence. No unchanged CI retry, repeated broad hour-long attempt, retry-until-green wrapper, removed assertion, scenario timeout increase, serialization or baseline growth. Preserve every canonical replay review finding and existing external/public controls. Commit bounded repairs on same PR410, script current-head CI, independent review and guarded merge. Next exact-artifact Luna vertical probe must exercise shipped strict/public replay plus relevant room failure/terminal regression and clean shutdown. Software replay is not device/acoustic proof; all nine broad gates remain open, zero live Realtime.
+
+
+# C18 causal terminal disposition repair checkpoint 2026-09-09
+
+- The transferred five-file room ownership was used to reproduce the rejected
+  ordering with a deterministic regression: a forced `ConnectSession` error
+  was published before the production admission collector marked the
+  participant connected, while room stop/cancellation was observed first.
+  Before the repair the regression returned stopped/cancellation terminal
+  evidence despite the raw `forced dial failure`.
+- `roomParticipantLifecycle.markConnected` now records a genuine non-cancellation
+  connection failure as causal lifecycle failure evidence even when stop was
+  observed first. Context cancellation/deadline errors and bound cancellation
+  remain cancellation-only, and normal `failParticipant` still supplies the
+  existing safe terminal error wrapper. The regression asserts raw error
+  identity, failed trigger/disposition, and participant terminal precedence.
+- Focused causal and accumulated review-regression evidence is green: room
+  lifecycle/coordinator/terminal normal and race matrices; exact forced-ordering
+  normal and `nomicrophone` race runs (`20/20` each); replay, plan, strict and
+  wire packages normal and race; external `tests/embedding` consumer with
+  `GOWORK=off` normal and race; focused `go vet`; `make architecture-size-check`;
+  `make wire-check`; and `git diff --check`. The initial pre-fix regression
+  failed with the CI disposition and the post-fix regression passes.
+- `origin/main=5d5afcb14d7b269378020809f5a2418c499ac94d` is already an ancestor
+  of the candidate, as are the startup and immutable baseline ancestors; no
+  merge, reset or host-checkout mutation was needed. The original CI evidence
+  remains retained at run `34389523251`/job `102594107999`, with no CI polling
+  or waiver.
+- Next exact action: commit only the owned lifecycle repair, its terminal
+  regression and this progress checkpoint; push
+  `codex/audio-runtime-c18-public-strict-replay`, update PR #410, and return
+  `ACCEPTED` to the script CI gate. This is a handoff to CI, not a claim that
+  CI is green; inspect and repair the same task if the gate rejects again.
