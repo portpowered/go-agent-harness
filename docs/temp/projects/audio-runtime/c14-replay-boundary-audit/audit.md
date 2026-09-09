@@ -41,19 +41,19 @@ Evidence labels used below:
 
 The admitted project is `audio-runtime`, contract `audio-runtime-v1`, session
 `~default`, server `http://127.0.0.1:7439`. The exact task is
-`audio-runtime-c14-replay-boundary-audit`; the live board has its task row
-`work-task-34` in `init`/`PROCESSING`, its plan row `work-plan-33` is complete,
-and the idea row is the same named Work. At the initial C14 evidence capture,
-the task and review rows had no `_rejection_feedback`; that historical board
-snapshot and the complete extracted rejection inbox are preserved in
-`canonical-board.json` and `canonical-rejection-feedback.json`. The initial
-extraction contains 12 rows from prior C11/C12/C13 work, with no C14 finding at
-that snapshot. The current evidence index contains 17 rows: those 12 prior
-rows plus the later C14 task and review-36/review-39/review-41/review-42 rows,
-without replacing the prior inbox. The latest task feedback is retained on the
-task entry and review-42 is appended; earlier C14 findings remain individually
-preserved. The later executor re-admission and review findings are recorded in
-the current reconciliation below.
+`audio-runtime-c14-replay-boundary-audit`. At the original PR406 recording, the
+live board used task row `work-task-34` in `init`/`PROCESSING`, plan row
+`work-plan-33` was complete, and the idea row had the same named Work. The
+initial C14 task and review rows had no `_rejection_feedback`; that historical
+board snapshot and its complete extracted rejection inbox are preserved in the
+earlier checkpoint history. After the operator restart, the same admitted
+task was recovered as `work-task-4` in `init`/`PROCESSING` with `work-plan-2`
+complete; this is not a replacement task or project. The refreshed raw board is
+the current `canonical-board.json`. The owned rejection extraction remains 17
+rows: the 12 prior C11/C12/C13 rows plus C14 task and review-36/review-39/
+review-41/review-42 rows. Preserved Review-44 feedback is read from the
+stage4-restart recovery record and reconciled below without changing that
+17-row inbox. Earlier C14 findings remain individually preserved.
 
 The admission command, run from the admitted FACTORY_ROOT, returned:
 
@@ -68,14 +68,17 @@ The authoritative board was captured with the exact handoff command:
 rtk proxy you --server "$FACTORY_SERVER_URL" --json work list --session "~default" --max-results 500 --all
 ```
 
-The initial raw board snapshot is `canonical-board.json`, SHA-256
-`dd635d054164e644fc6c8d6a502394c597f3f49392f6c501b976be151b5ce7c7`; the
+The original raw board snapshot was
+`dd635d054164e644fc6c8d6a502394c597f3f49392f6c501b976be151b5ce7c7` at the
+initial checkpoint. The refreshed recovery board now in `canonical-board.json`
+has SHA-256
+`2bb5e77cc4d1d1d5ebf396aa1509ca9e0e50f81829082c13674beed671c9b323`. The
 full extracted rejection inbox is `canonical-rejection-feedback.json`,
-SHA-256 `8221544389487d9468dabc80ee9ad9921d21d1aacf7cf22d10f5973f16e85526`.
-The board was saved as raw JSON even though one historical feedback string
-contains unescaped control characters; the extraction used a permissive JSON
-reader solely to preserve that full feedback verbatim rather than clipping or
-discarding it.
+SHA-256 `6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9`,
+and contains 17 JSON rows. The board was saved as raw JSON even though one
+historical feedback string contains unescaped control characters; the
+extraction used a permissive JSON reader solely to preserve that full feedback
+verbatim rather than clipping or discarding it.
 
 The task packet is `prd.json` at the worktree root. Its authority hashes are:
 
@@ -85,7 +88,7 @@ The task packet is `prd.json` at the worktree root. Its authority hashes are:
 | request | `factory/projects/audio-runtime/request.md` | `4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0` |
 | immutable acceptance | `factory/projects/audio-runtime/acceptance.md` | `e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5` |
 
-The worktree and branch checks were:
+The initial C14 baseline capture, before evidence commits, recorded:
 
 ```text
 worktree: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c14-replay-boundary-audit
@@ -95,6 +98,17 @@ origin/main after fetch: c3bb663e118de9e73ea3eb211b381e8f86c4f480
 git diff origin/main...HEAD: empty before C14 evidence
 prd.branchName: codex/audio-runtime-c14-replay-boundary-audit
 ```
+
+The recovery candidate was still clean at
+`d91bea8337a17aae9a1a88fed8491e533268465b` when Review-44 was recorded. The
+recovery fetch then advanced the local `origin/main` ref to
+`f8e0863222da1bdbf296e2220fcbc081461cc877`, the reviewed C11 merge. The PR's
+base ref remains `main` at the historical
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; the pinned C14 source and C13
+historical evidence remain `c3bb663e`, while current main is recorded
+separately rather than substituted for that source. The candidate retains the
+required startup/source ancestry and its diff against fetched `origin/main`
+contains only the C14 evidence lease.
 
 `rtk git fetch origin main` was run in this isolated worktree. No merge or
 reset was performed, and the running host checkout was not touched. The
@@ -108,10 +122,12 @@ rtk git merge-base --is-ancestor c3bb663e118de9e73ea3eb211b381e8f86c4f480 HEAD: 
 
 The startup/bootstrap integration pin is
 `8bdafc7f947a3a2c9856220abdc539437035bd21`. The original refactor baseline
-is `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. The inspected source and
-fetched main are both `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The C13
-accepted vertical is a read-only predecessor dependency; C11/task4 and its
-scripts/evidence are disjoint and untouched.
+is `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. The inspected audit source and
+C13 accepted vertical are pinned to
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; the fetched current main is
+`f8e0863222da1bdbf296e2220fcbc081461cc877` and contains the reviewed C11
+merge. The C13 accepted vertical is a read-only predecessor dependency;
+C11/task4 and its scripts/evidence are disjoint and untouched.
 
 The canonical predecessor validation is explicit: Work
 `batch-audio-runtime-c13-recorded-pcm-integrity-vertical-probe-20260908-audio-runtime-c13-recorded-pcm-integrity-vertical-probe`
@@ -723,7 +739,7 @@ The exact historical source and artifact references are:
 | Provider-route tool cwd/sandbox portability | The fixture's `exec` call writes to relative `evidence/runs/exec-invocations-v4.log`; provider construction reaches `newLiveInferencerFactory` -> `providers.SessionService.BuildSession` -> `sessionDialer`/`NewReplayWebSocketDialer`, while CLI capabilities resolve `WorkDir`/allow paths through `NewSessionToolCapabilitiesFactoryFromService` and `ResolveFilesystemPolicy` | **Conditional historical proof / C14-unrun.** C13 provider replay passed from the evidence-root cwd; the independent strict route passed, but a provider replay from the reviewer worktree failed on the relative path. Future parity must record an explicit WorkDir and sandbox/allow-path policy, assert the marker and side effect, and report missing cwd prerequisites as BLOCKED. |
 | Audio evidence loading versus strict input packets | Strict `Prepare` opens `audio-trace` with `recording.OpenReplay` and reports `RecordedPCM`; production `runtime.go:31-70` instead uses `Capture` and `deriveInputActions` to decode provider-wire `input_audio_buffer.append` records, while only the test fake calls `Prepared.Audio.Next()` | **Source-proved / C14-unrun.** Future extraction must test these separately: validate/read trace evidence and scope, then compare the runtime's encoded input writes with the captured provider-wire PCM. Do not infer packet-consumption parity from a non-nil audio reader or scope bit. |
 | Prepared clock reaches the strict AgentLoop | `service.go:98-122` creates and stores a deterministic clock from `timelineOrigin`; `runtime.go:56-62` does not read `Prepared.Clock`; `agentloop.WithClock` is available at `go-agent-loop/pkg/agentloop/options.go:69-72`; `agentloop.New` forwards `cfg.Clock` at `agent_loop.go:191`; `engine.NewEngine` defaults to `clock.Real{}` at `engine.go:87-98` | **Current limitation / C14-unrun.** The present strict factory is deterministic only for the trace reader, not for AgentLoop hot-loop pacing. Future `strict/runtime.go` must reject nil and pass `agentloop.WithClock(prepared.Clock)`; a scheduler-observing non-zero pacing regression and nil-clock negative control must fail on omission or wall-clock substitution. |
-| Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. These hashes prove fixture/output bytes, not production consumption of `Prepared.Audio`. |
+| Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. These hashes prove fixture/output bytes, not production consumption of `Prepared.Audio`. |
 | Ordered handshake and turns | strict `trackingConn` validates exact message type/order; live `LiveReplayPlan.WaitForSessionUpdated`, `runReplay`, and `waitForResponse` keep PCM/commit behind the provider boundary | **Source-proved / C14-unrun.** Add public positive and reordered/early-append negatives. |
 | Clean shutdown and explicit terminal | strict `deriveEvidence`/`coreRuntime.Run` plus `ValidateComplete`; live `finishOnceBody`, `finishMedia`, `TerminalReasonReplayComplete` | **Historical software proof** for C13 clean close and **source-proved / C14-unrun** for the boundary map. Future test must reject success before terminal/close evidence. |
 | Interruption followed by healthy replacement | C13 artifact-3: cancelled `resp-c07-interrupted`, later healthy `resp-c07-healthy`; healthy tail 2,400 bytes, SHA-256 `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`; strict replay reported 15 wire events/0 tools | **Historical software proof.** Future external test must preserve replacement identity, healthy tail, cancellation, and clean completion. No C14 rerun. |
@@ -919,8 +935,11 @@ using a provider/device, profiling, duplicating broad CI, or polling CI:
 - `agent-cli`: the accumulated C13 controls `rtk go test ./test/integration -count=1 -run '^(TestSessionRecordedPCMIntegrity|TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact)$'` exited `0` with `5` tests passed in `1` package.
 
 The exact admission command returned the admitted single-project identity again;
-the branch matched `prd.branchName`; `origin/main` remained
-`c3bb663e118de9e73ea3eb211b381e8f86c4f480`; baseline, startup, and source
+the branch matched `prd.branchName`; at this earlier Review-42 checkpoint
+`origin/main` was still
+`c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The later recovery fetch recorded
+current `origin/main` as
+`f8e0863222da1bdbf296e2220fcbc081461cc877`; baseline, startup, and source
 objects existed; startup/source ancestry checks passed; and `git diff --check`
 passed. The current canonical re-read included the latest task feedback and
 `work-review-42`; the owned rejection extraction validates as JSON with `17`
@@ -930,6 +949,43 @@ the audit contains the future wiring and non-wall-clock regression requirement.
 The worktree remained limited to C14 evidence changes. These checks close the
 Review-42 audit finding as documentation, not as a runtime repair or a project
 acceptance claim.
+
+## Review-44 stale-evidence repair
+
+The preserved Review-44 rejection for PR #406 at candidate
+`d91bea8337a17aae9a1a88fed8491e533268465b` identified three evidence defects:
+the rendered PCM token was malformed, the recorded rejection-inbox digest was
+stale, and the handoff described an older unpushed candidate and an old main
+revision as current. The finding does not reopen the already reconciled
+Prepared.Audio/Prepared.Clock, Wire-cycle, interruption ownership, provider
+cwd, or route-integrity findings.
+
+The referenced artifacts were independently checked before this repair:
+
+- C13's read-only rendered artifact
+  `$FACTORY_ROOT/docs/temp/probes/audio-runtime-c13-recorded-pcm-integrity-vertical-probe/evidence/runs/bundle-replay.nmWrwW/rendered-output.pcm`
+  is 3,200 bytes and hashes to
+  `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`, matching
+  the accepted C13 report.
+- The owned `canonical-rejection-feedback.json` hashes to
+  `6b8f590fac6790e0fbbaa3d64b906a0e2ff45787c7e547a3def8546a397481f9` and
+  parses as exactly 17 rows. The refreshed raw board is separately recorded
+  above; Review-44 remains preserved in
+  `$FACTORY_ROOT/docs/temp/projects/audio-runtime/stage4-restart/board-before.json`
+  and `c14-prd-recovery/predecessor-feedback.json` rather than being silently
+  dropped or appended to the 17-row historical inbox.
+- The recovery fetch verified current `origin/main` at
+  `f8e0863222da1bdbf296e2220fcbc081461cc877`; the pinned audit source remains
+  `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, and the PR base ref was still
+  `main` at `c3bb663e`. Required startup/source ancestry and the admitted
+  branch identity remain intact. No runtime, generated Wire, predecessor,
+  factory, or host-checkout file was changed.
+
+The prior nine successful checks on `d91bea83` are historical candidate
+evidence only. This evidence correction creates a new same-task candidate;
+the new head must be pushed and sent through script CI and independent review
+again. No CI result for the repaired candidate, merge, vertical acceptance, or
+project acceptance is claimed here.
 
 ## Audio, clock, buffer, and device boundary audit
 
@@ -1197,9 +1253,13 @@ Delivery record:
   (`docs: record C14 pushed head`).
 - Pushed branch: `codex/audio-runtime-c14-replay-boundary-audit`.
 - Pull request: [#406](https://github.com/portpowered/go-agent-harness/pull/406),
-  base `main` at `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, state OPEN. The
-  post-push metadata check immediately after `7184993fd76acec1e432179bc942ac5890cec392`
-  reported that exact head and no merge SHA. The later audit-only record commit
+  base ref `main` at `c3bb663e118de9e73ea3eb211b381e8f86c4f480`, state OPEN at
+  the historical PR read. The later fetched `origin/main` is
+  `f8e0863222da1bdbf296e2220fcbc081461cc877`; that current-main advance is
+  recorded separately from the pinned C14 source and does not change the
+  historical C13 evidence. The post-push metadata check after
+  `7184993fd76acec1e432179bc942ac5890cec392` reported that exact old head and
+  no merge SHA. The later audit-only record commit
   `215973992d4f3a7f147afbd7fd4f4073aad86714` was pushed on the same branch.
 - Review-39 repair commit `2fc38169` (`docs: repair C14 replay boundary audit`)
   was pushed after the latest finding. The subsequent handoff-ledger commit is
@@ -1214,17 +1274,19 @@ Delivery record:
   polled or claimed.
 - Review-42 repair commit `0246e05fd705ed8547558f8bb4184fa8a70d75b4`
   (`docs: reconcile C14 clock boundary finding`) records the current limitation
-  and exact future `Prepared.Clock` -> `agentloop.WithClock` wiring, appends the
-  full latest feedback, and records the bounded validation above. It is the
-  current local candidate; it has not yet been pushed or submitted to a new CI
-  run.
-- The prior script-owned gate was rejected only for the unrelated coverage
-  timing failure recorded above; no new CI run is being polled or claimed
-  green. The next factory action after this evidence checkpoint is the
-  script-owned current-head CI gate, followed by independent review if that
-  gate succeeds.
+  and exact future `Prepared.Clock` -> `agentloop.WithClock` wiring. It was
+  superseded by the pushed checkpoint `d91bea8337a17aae9a1a88fed8491e533268465b`,
+  which was the PR head rejected by Review-44 for stale evidence, not an
+  unpushed current candidate. The Review-44 repair is the new evidence commit
+  from that exact head; its final PR SHA is checked after commit/push and is
+  the candidate handed to script CI.
+- The prior script-owned gate on `d91bea83` had nine successful checks; no
+  check result for the repaired candidate is being polled or called green.
+  The next factory action after this evidence checkpoint is push/update of
+  PR #406, then the script-owned current-head CI gate, followed by independent
+  review if that gate succeeds.
 
-After the review repair checkpoint, push this same branch and update its PR
+After the Review-44 repair checkpoint, push this same branch and update PR #406
 against `main`, then return `ACCEPTED` to the script-owned current-head CI gate.
 `ACCEPTED` means submitted to CI; it does not mean CI is green. Do not poll
 CI. If the script returns an exact rejection, retain this task, inspect the
