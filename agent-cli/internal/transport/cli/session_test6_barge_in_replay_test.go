@@ -29,7 +29,13 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-const test6OpenAIBargeInFixture = "testdata/test6-openai-barge-in.base64"
+const (
+	test6OpenAIBargeInFixture = "testdata/test6-openai-barge-in.base64"
+	// The device-bound session installs its playback controller after the
+	// provider handshake returns. Model that bounded startup gap before the
+	// first client turn so server audio cannot outrun the device boundary.
+	test6PlaybackStartupGapMS int64 = 100
+)
 
 // TestSessionCommandReplaysTest6CustomerBargeInThenNewAssistantAudio preserves
 // the provider-edge ordering observed in test6.json. Server VAD speech is the
@@ -56,6 +62,7 @@ func TestSessionCommandReplaysTest6CustomerBargeInThenNewAssistantAudio(t *testi
 	command.SetErr(&stderr)
 	command.SetArgs([]string{
 		"--replay", capturePath,
+		"--replay-timing", "recorded",
 		"--prompt", "test6 customer barge in",
 		"--audio-out-device", test6PlaybackDeviceID,
 	})
@@ -155,8 +162,12 @@ func writeTest6BargeInCapture(t *testing.T, path string, providerAudio [][]byte)
 		if err := json.Unmarshal(data, &envelope); err != nil {
 			t.Fatalf("decode test6 replay event type %d: %v", sequence, err)
 		}
+		timestampMs := int64(sequence)
+		if sequence >= 3 {
+			timestampMs += test6PlaybackStartupGapMS
+		}
 		records = append(records, gwtesting.CapturedSessionEvent{
-			Sequence: sequence, Direction: direction, TimestampMs: int64(sequence), Type: envelope.Type,
+			Sequence: sequence, Direction: direction, TimestampMs: timestampMs, Type: envelope.Type,
 			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: data,
 		})
 	}
