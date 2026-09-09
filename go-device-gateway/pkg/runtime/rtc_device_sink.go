@@ -112,13 +112,14 @@ type RTCDeviceSink struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	playbackMu         sync.Mutex
-	playbackBoundaryMu sync.Mutex
-	playbackReceiptMu  sync.RWMutex
-	playbackGeneration uint64
-	playbackBlocked    bool
-	playbackResponse   rtcDevicePlaybackIdentity
-	playbackSpans      []rtcDevicePlaybackSpan
+	playbackMu           sync.Mutex
+	playbackBoundaryMu   sync.Mutex
+	playbackReceiptMu    sync.RWMutex
+	playbackGeneration   uint64
+	playbackBlocked      bool
+	playbackResponse     rtcDevicePlaybackIdentity
+	playbackSpans        []rtcDevicePlaybackSpan
+	playbackNoopDiscards atomic.Uint64
 	// pacingMu serializes producer admission and enqueue while cancellation can
 	// still discard and wake a blocked producer.
 	pacingMu sync.Mutex
@@ -277,6 +278,10 @@ func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 		return audio.PlaybackQueueStats{}
 	}
 	stats := s.sink.PlaybackStats()
+	// A supported runtime cancellation is still an explicit discard boundary
+	// when the callback has already drained the native queue. Keep that logical
+	// event visible even though the native queue has no samples to remove.
+	stats.DiscardEvents += s.playbackNoopDiscards.Load()
 	s.snapshotStats.Store(&stats)
 	return stats
 }
@@ -322,6 +327,8 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	s.discardPlaybackObservations("interruption", s.playbackGeneration)
 	current := consumedPlaybackSamples(s.PlaybackStats())
 	var active rtcDevicePlaybackSpan
+	var boundary rtcDevicePlaybackSpan
+	boundaryFound := false
 	found := false
 	for _, span := range s.playbackSpans {
 		if requireRequested {
@@ -330,11 +337,24 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 				found = true
 				break
 			}
-		} else if current < span.end {
-			active = span
-			found = true
-			break
+		} else {
+			if current < span.end {
+				active = span
+				found = true
+				break
+			}
+			// A response without an end marker can be fully consumed at the
+			// interruption boundary. Retain that exact endpoint as a fallback,
+			// but prefer a later span above when its audio has actually started.
+			if current == span.end && !span.complete {
+				boundary = span
+				boundaryFound = true
+			}
 		}
+	}
+	if !found && !requireRequested && boundaryFound {
+		active = boundary
+		found = true
 	}
 	if !found && !requireRequested && s.playbackResponse.hasItem() {
 		active = rtcDevicePlaybackSpan{response: s.playbackResponse}
@@ -590,6 +610,13 @@ func (s *RTCDeviceSink) recordPlaybackSpanLocked(response rtcDevicePlaybackIdent
 func (s *RTCDeviceSink) prunePlaybackSpansLocked(consumed uint64) {
 	first := 0
 	for first < len(s.playbackSpans) && s.playbackSpans[first].end <= consumed {
+		// Keep the fully heard prefix of the still-open response until the next
+		// admission can merge it with a contiguous continuation. Otherwise a
+		// producer that races the callback clock drops the prefix and an
+		// interruption at the continuation boundary reports only the last chunk.
+		if !s.playbackSpans[first].complete && s.playbackResponse.hasItem() && s.playbackSpans[first].response.equal(s.playbackResponse) {
+			break
+		}
 		first++
 	}
 	if first > 0 {

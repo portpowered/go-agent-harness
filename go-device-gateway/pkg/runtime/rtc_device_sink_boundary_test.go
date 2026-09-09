@@ -256,6 +256,25 @@ func TestC21ConsumptionInterruptionAndRate(t *testing.T) {
 	testC21ConsumptionRate(t)
 }
 
+func TestC21ConsumptionInterruptionAtIncompleteSpanBoundary(t *testing.T) {
+	registry, sink := newC21SimulatedSink(t, 16000, audio.FrameSize)
+	defer closeC21Sink(t, sink)
+	response := audio.PlaybackResponse{ResponseID: "c21-boundary-response", ItemID: "c21-boundary-item"}
+	sink.StartPlayback(response)
+	c21WritePlayback(t, sink, "write first exact-boundary response chunk", boundaryTestPCM(audio.FrameSize, 1301))
+	c21Advance(t, registry, 1, "advance first exact-boundary response chunk")
+	c21WritePlayback(t, sink, "write second exact-boundary response chunk", boundaryTestPCM(audio.FrameSize, 1701))
+	c21Advance(t, registry, 1, "advance second exact-boundary response chunk")
+
+	interruption, ok := sink.InterruptActivePlayback()
+	if !ok || interruption.PlaybackResponse != response || interruption.AudioEndMS != 60 {
+		t.Fatalf("exact-boundary interruption = %+v, ok=%v, want 60ms of incomplete response", interruption, ok)
+	}
+	if stats := sink.PlaybackStats(); stats.DiscardEvents != 1 {
+		t.Fatalf("exact-boundary discard stats = %+v, want one accepted discard boundary", stats)
+	}
+}
+
 func testC21ConsumptionInterruption(t *testing.T) {
 	registry, sink := newC21SimulatedSink(t, 24000, 2000)
 	defer closeC21Sink(t, sink)

@@ -264,6 +264,9 @@ func (s *RTCDeviceSink) discardPlaybackObservations(reason string, generation ui
 	defer s.playbackBoundaryMu.Unlock()
 	before := s.sink.PlaybackStats()
 	discarded := s.sink.DiscardPlayback()
+	if discarded == 0 && s.renderBoundarySupported.Load() {
+		s.playbackNoopDiscards.Add(1)
+	}
 	after := s.sink.PlaybackStats()
 	s.playbackObservations.discard(s.id, s.deviceRate, generation, reason, discarded, before, after)
 	return discarded
