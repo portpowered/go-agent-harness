@@ -25,6 +25,8 @@ const defaultSessionUpdatedTimeout = 30 * time.Second
 
 const defaultPlaybackDrainTimeout = 5 * time.Second
 
+type mediaRequirements struct{ inbound, outbound bool }
+
 var _ session.LiveService = (*Service)(nil)
 var _ session.LiveRunner = (*Service)(nil)
 
@@ -183,7 +185,7 @@ type handle struct {
 	openingReadyOnce    sync.Once
 	openingAdmissionErr error
 	captureSourceActive bool
-	mediaRequired       bool
+	mediaRequirements   mediaRequirements
 	replayReady         chan struct{}
 	replayReadyOnce     sync.Once
 	// providerDone is raised by the provider-session adapter after its

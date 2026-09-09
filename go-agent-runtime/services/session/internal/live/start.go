@@ -73,6 +73,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		media:             h.media,
 		continuous:        h.request.OutputAudioContinuous,
 		flushOutbound:     h.request.FinishAfterResponse,
+		requirements:      h.mediaRequirements,
 		onDispatch:        h.observeProviderDispatch,
 		onToolResult:      h.beginToolResultAdmission,
 		onContinuation:    h.beginContinuationAdmission,

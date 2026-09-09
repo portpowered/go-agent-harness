@@ -20,7 +20,7 @@ func (h *handle) setProviderMediaAttached(attached bool) {
 		return
 	}
 	h.mu.Lock()
-	required := h.mediaRequired
+	required := h.mediaRequirements.inbound || h.mediaRequirements.outbound
 	h.mu.Unlock()
 	if required {
 		h.mediaFailure(mediagate.ErrMediaUnavailable)

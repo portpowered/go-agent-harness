@@ -40,4 +40,9 @@ python3 verify-public.py --case normal
 python3 verify-public.py --case many-small
 python3 verify-public.py --case large-record
 python3 verify-public.py --case provider-overflow
+python3 verify-public.py --case default-overflow
 ```
+
+`default-overflow` passes no limit flags; its large paced records exhaust the
+service's finite zero-request transcript default and must publish bounded
+partial evidence with a causal budget error.

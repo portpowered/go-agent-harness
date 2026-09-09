@@ -16,6 +16,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[5]
 CONSUMER = Path(__file__).with_name("consumer.go")
 BASELINE = "e4137eba6a6499142f50701609c1149afc71db84"
+SMALL_LIMITS = {
+    "transcript_limit": 32768,
+    "transcript_items": 128,
+    "audio_limit": 32768,
+    "audio_items": 32,
+    "provider_limit": 4096,
+    "provider_items": 4,
+}
 
 
 def run_bounded(argv, cwd, timeout=60, env=None):
@@ -115,27 +123,36 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def apply_small_limits(args):
+    values = vars(args).copy()
+    for name, value in SMALL_LIMITS.items():
+        if values[name] == 0:
+            values[name] = value
+    return argparse.Namespace(**values)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True)
     parser.add_argument("--revision", default="")
-    parser.add_argument("--transcript-limit", type=int, default=32768)
-    parser.add_argument("--transcript-items", type=int, default=128)
-    parser.add_argument("--audio-limit", type=int, default=32768)
-    parser.add_argument("--audio-items", type=int, default=32)
-    parser.add_argument("--provider-limit", type=int, default=4096)
-    parser.add_argument("--provider-items", type=int, default=4)
+    parser.add_argument("--transcript-limit", type=int, default=0)
+    parser.add_argument("--transcript-items", type=int, default=0)
+    parser.add_argument("--audio-limit", type=int, default=0)
+    parser.add_argument("--audio-items", type=int, default=0)
+    parser.add_argument("--provider-limit", type=int, default=0)
+    parser.add_argument("--provider-items", type=int, default=0)
     args = parser.parse_args()
+    run_args = apply_small_limits(args) if args.case in {"baseline", "many-small", "large-record", "provider-overflow"} else args
     if args.case == "baseline":
         revision = args.revision or BASELINE
-        before, before_binary = baseline_result("many-small", revision, args)
-        after, after_binary = candidate_result("many-small", args)
+        before, before_binary = baseline_result("many-small", revision, run_args)
+        after, after_binary = candidate_result("many-small", run_args)
         require(before["total_bytes"] > after["total_bytes"], f"baseline did not expose cumulative growth: before={before} after={after}")
         require(before.get("status") == "complete", f"baseline control was unexpectedly partial: {before}")
         require(after.get("status") == "partial", f"candidate did not publish partial overflow: {after}")
         output = {"case": "baseline", "before": before, "after": after, "before_binary": before_binary, "after_binary": after_binary}
     else:
-        after, binary = candidate_result(args.case, args)
+        after, binary = candidate_result(args.case, run_args)
         if args.case == "normal":
             require(after.get("status") == "complete", f"normal public capture was not complete: {after}")
             require(not after.get("finalization_error"), f"normal finalization failed: {after}")
@@ -143,6 +160,10 @@ def main():
             require(after.get("status") == "partial", f"overflow case status: {after}")
         if args.case == "provider-overflow":
             require(bool(after.get("provider_error")), f"provider overflow was not causal: {after}")
+        if args.case == "default-overflow":
+            require(after.get("status") == "partial", f"default-limit overflow status: {after}")
+            require("budget" in after.get("finalization_error", "").lower(), f"default-limit overflow was not causal: {after}")
+            require(all(value == 0 for value in after.get("limits_applied", {}).values()), f"default-limit case did not use zero requested limits: {after}")
         output = {"case": args.case, "result": after, "binary": binary}
     print(json.dumps(output, sort_keys=True))
 

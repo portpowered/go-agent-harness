@@ -66,8 +66,8 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	if runtimeHandle, ok := handle.(interface{ configureCaptureSource(bool) }); ok {
 		runtimeHandle.configureCaptureSource(options.DeviceRequest.CaptureEnabled || len(options.CaptureTurns) > 0)
 	}
-	if runtimeHandle, ok := handle.(interface{ configureMediaRequirement(bool) }); ok {
-		runtimeHandle.configureMediaRequirement(deviceRequestHasDirection(options.DeviceRequest))
+	if runtimeHandle, ok := handle.(interface{ configureMediaRequirements(bool, bool) }); ok {
+		runtimeHandle.configureMediaRequirements(options.DeviceRequest.PlaybackEnabled, options.DeviceRequest.CaptureEnabled)
 	}
 	invocation.attachRecorder()
 	if err := invocation.validateDeviceAdmission(); err != nil {
@@ -129,12 +129,13 @@ func deviceRequestHasDirection(request devices.Request) bool {
 	return request.CaptureEnabled || request.PlaybackEnabled
 }
 
-func (h *handle) configureMediaRequirement(required bool) {
-	if h == nil {
-		return
-	}
+func (r mediaRequirements) satisfiedBy(endpoints sharedaudio.MediaEndpoints) bool {
+	return (!r.inbound || endpoints.Inbound != nil) && (!r.outbound || endpoints.Outbound != nil)
+}
+
+func (h *handle) configureMediaRequirements(inbound, outbound bool) {
 	h.mu.Lock()
-	h.mediaRequired = required
+	h.mediaRequirements = mediaRequirements{inbound: inbound, outbound: outbound}
 	h.mu.Unlock()
 }
 

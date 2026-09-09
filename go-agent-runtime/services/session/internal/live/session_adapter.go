@@ -16,6 +16,7 @@ type capturingInferencer struct {
 	media             *mediagate.Gate
 	continuous        bool
 	flushOutbound     bool
+	requirements      mediaRequirements
 	onDispatch        func(messages.StreamMessage)
 	onToolResult      func(string, string, bool) func()
 	onContinuation    func() func()
@@ -44,7 +45,7 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	mediaAttached := false
 	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
 		endpoints := captureMediaEndpoints(s, providerMedia, i.continuous)
-		mediaAttached = endpoints.Inbound != nil
+		mediaAttached = i.requirements.satisfiedBy(endpoints)
 		i.media.Attach(ctx, endpoints)
 	}
 	if i.onMediaAttached != nil {

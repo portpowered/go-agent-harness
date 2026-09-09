@@ -130,16 +130,21 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		count = 1
 	case "provider-overflow":
 		count = 2
+	case "default-overflow":
+		count = 48
 	}
 	for index := 0; index < count; index++ {
 		text := fmt.Sprintf("public recording observation %04d", index)
 		if caseName == "large-record" {
 			text = repeated("large-record-", 8192)
 		}
+		if caseName == "default-overflow" {
+			text = strings.Repeat("default-overflow-", 1<<16)
+		}
 		if err := recorder.RecordMessage(ctx, session.LiveRecord{Direction: session.LiveRecordAgent, Timestamp: time.Now().UTC(), Message: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)}}); err != nil {
 			return fmt.Errorf("record message %d: %w", index, err)
 		}
-		if caseName == "many-small" || caseName == "baseline" {
+		if caseName == "many-small" || caseName == "baseline" || caseName == "default-overflow" {
 			time.Sleep(time.Millisecond)
 		}
 	}
@@ -258,11 +263,7 @@ func requestedMap(value limits) map[string]int64 {
 }
 
 func repeated(prefix string, count int) string {
-	value := ""
-	for index := 0; index < count; index++ {
-		value += prefix
-	}
-	return value
+	return strings.Repeat(prefix, count)
 }
 
 func writeResult(value result) error {
