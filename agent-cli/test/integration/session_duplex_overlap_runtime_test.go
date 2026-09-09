@@ -335,6 +335,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		}
 	}
 	wg.Wait()
+	waitForV8MultiTurnEOFs(t, ctx, aToBBridge, bToABridge)
 
 	run := v8DuplexRun{
 		base:       base,
@@ -344,6 +345,31 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		terminal:   map[string]v8TerminalFact{},
 		turnsBound: v8MultiTurnCount,
 	}
+	recordV8MultiTurnTerminals(t, &run, harnesses, aToBBridge, bToABridge)
+	for name, view := range views {
+		terminal := run.terminal[view.Harness]
+		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.json")
+		wavPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.wav")
+		writeV8ViewArtifacts(t, view, terminal, viewPath, wavPath)
+		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
+	}
+	return run
+}
+
+func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	t.Helper()
+	for name, bridge := range map[string]*v8MultiTurnBridge{
+		"A-to-B": aToBBridge,
+		"B-to-A": bToABridge,
+	} {
+		if !bridge.waitForEOFSeen(ctx) {
+			t.Logf("multi-turn bridge %s did not observe consumed EOF before run context ended: %s", name, bridge.eofState())
+		}
+	}
+}
+
+func recordV8MultiTurnTerminals(t *testing.T, run *v8DuplexRun, harnesses map[string]v8HarnessResult, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	t.Helper()
 	for name, result := range harnesses {
 		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
 		if err != nil {
@@ -366,14 +392,13 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 			terminal.InputEOF = aToBBridge.observedEOF()
 			terminal.OutputFrame = bToABridge.wroteFrames() == v8MultiTurnCount
 		}
+		if !terminal.InputEOF {
+			inputBridge := bToABridge
+			if name == "B" {
+				inputBridge = aToBBridge
+			}
+			t.Logf("multi-turn harness %s input EOF state: %s", name, inputBridge.eofState())
+		}
 		run.terminal[name] = terminal
 	}
-	for name, view := range views {
-		terminal := run.terminal[view.Harness]
-		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.json")
-		wavPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.wav")
-		writeV8ViewArtifacts(t, view, terminal, viewPath, wavPath)
-		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
-	}
-	return run
 }
