@@ -187,7 +187,7 @@ func (s *RTCDeviceSink) tickHoldTone(ctx context.Context, now time.Time, rate in
 		return
 	}
 	generation, blocked := s.playbackState()
-	_ = s.observedWritePlayback(ctx, frame, generation, blocked, false)
+	_ = s.observedWriteHoldTone(ctx, frame, generation, blocked)
 }
 
 // holdToneMu-guarded accessors below serialize every interaction with the
@@ -245,7 +245,7 @@ func (s *RTCDeviceSink) observeHoldToneRealFrame(ctx context.Context, generation
 	if len(tail) == 0 {
 		return nil
 	}
-	return s.observedWritePlayback(ctx, tail, generation, blocked, false)
+	return s.observedWriteHoldTone(ctx, tail, generation, blocked)
 }
 
 // SetHoldToneConfig updates the filler profile used by subsequent hold-tone

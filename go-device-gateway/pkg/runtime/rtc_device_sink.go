@@ -90,15 +90,11 @@ type RTCDeviceSink struct {
 	playbackObserver        func(devicegw.DeviceID, audio.PlaybackQueueStats)
 	playbackReceiptObserver RTCDevicePlaybackReceiptObserver
 	playbackSamplesObserver RTCDevicePlaybackSamplesObserver
-	// loudness applies this session's fixed, voice-specific gain (see
-	// audio voice-loudness table) to synthesized audio before it reaches the
-	// feedback-gate observer or the device, so --voice selection does not
-	// change local playback volume. This sink only ever plays one
-	// participant's own un-mixed provider audio (a room's human participant
-	// plays the room mix through a separate audio.DeviceSink, not this
-	// type), so per-voice gain here can never double-apply to already-mixed
-	// content.
-	loudness *audio.LoudnessNormalizer
+	renderObserverMu        sync.RWMutex
+	renderedSamplesObserver RTCDeviceRenderedSamplesObserver
+	renderBoundarySupported atomic.Bool
+	playbackObservations    rtcDevicePlaybackObservationState
+	loudness                *audio.LoudnessNormalizer
 
 	lifeCtx     context.Context
 	lifeCancel  context.CancelCauseFunc
@@ -125,11 +121,6 @@ type RTCDeviceSink struct {
 	// cancellation can wake a producer blocked in capacity admission.
 	pacingMu sync.Mutex
 
-	// holdToneConfig and holdToneTick configure the "still here" cue that
-	// fills a customer-facing gap once no real assistant audio has reached
-	// this device for longer than an ordinary conversational pause (see
-	// rtc_device_hold_tone.go). Tests may override both directly since this
-	// file and its tests share package services.
 	holdToneConfig audio.HoldToneConfig
 	holdToneTick   time.Duration
 
@@ -137,22 +128,14 @@ type RTCDeviceSink struct {
 	holdToneFiller *audio.HoldToneFiller
 }
 
-// NewRTCDeviceSink opens an output device through the shared audio registry.
-// An empty id selects the registry's output default; a non-empty id is passed
-// through as an exact stable device ID.
 func NewRTCDeviceSink(registry devicegw.DeviceRegistry, id devicegw.DeviceID) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, audio.SampleRate, "", nil)
 }
 
-// NewRTCDeviceSinkAtRate opens an output device for mono PCM16 at rate. A
-// zero rate retains the compatibility default used by NewRTCDeviceSink.
 func NewRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, rate, "", nil)
 }
 
-// newRTCDeviceSinkAtRate opens the sink's output device. voice selects the
-// fixed per-voice loudness gain applied to every frame this sink plays (see
-// LoudnessNormalizer); an empty voice is the documented 0 dB no-op.
 func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int, voice string, playbackObserver RTCDevicePlaybackObserver) (*RTCDeviceSink, error) {
 	if rate == 0 {
 		rate = audio.SampleRate
@@ -181,23 +164,21 @@ func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerR
 		holdToneConfig:   audio.DefaultHoldToneConfig(),
 		holdToneTick:     defaultRTCDeviceHoldToneTick,
 	}
+	result.renderBoundarySupported.Store(sink.SetPlaybackRenderObserver(result.observeDeviceRender))
+	result.playbackObservations.supported = result.renderBoundarySupported.Load()
 	commands.SetReceiptObserver(result.observePlaybackReceipt)
 	go result.runPlaybackCommands()
 	return result
 }
 
-// NewDefaultRTCDeviceSink opens the directional output default from registry.
 func NewDefaultRTCDeviceSink(registry devicegw.DeviceRegistry) (*RTCDeviceSink, error) {
 	return NewRTCDeviceSink(registry, "")
 }
 
-// NewRTCDeviceSinkAtRateWithOptions opens an output worker with its voice and
-// final queue observer configured at construction time.
 func NewRTCDeviceSinkAtRateWithOptions(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, rate, voice, observer)
 }
 
-// NewRTCDeviceSinkFromOpened adopts an already-opened output endpoint.
 func NewRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) *RTCDeviceSink {
 	return newRTCDeviceSinkFromOpened(sink, deviceRate, providerRate, voice, observer)
 }
@@ -240,10 +221,13 @@ func (s *RTCDeviceSink) SetPlaybackSamplesObserver(observer func(context.Context
 }
 
 func (s *RTCDeviceSink) SetRenderedSamplesObserver(observer func(int, []int16)) bool {
-	if s == nil || s.sink == nil || observer == nil {
+	if s == nil || observer == nil {
 		return false
 	}
-	return s.setRenderedSamplesObserver(observer)
+	s.renderObserverMu.Lock()
+	s.renderedSamplesObserver = RTCDeviceRenderedSamplesObserver(observer)
+	s.renderObserverMu.Unlock()
+	return s.renderBoundarySupported.Load()
 }
 
 // DeviceID returns the stable ID acquired by this sink.
@@ -292,10 +276,13 @@ func (s *RTCDeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 }
 
 func (s *RTCDeviceSink) setRenderedSamplesObserver(observer RTCDeviceRenderedSamplesObserver) bool {
-	if s == nil || s.sink == nil || observer == nil {
+	if s == nil || observer == nil {
 		return false
 	}
-	return s.sink.SetPlaybackRenderObserver(audio.PlaybackRenderObserver(observer))
+	s.renderObserverMu.Lock()
+	s.renderedSamplesObserver = observer
+	s.renderObserverMu.Unlock()
+	return s.renderBoundarySupported.Load()
 }
 
 // DiscardPlayback removes only queued local speaker samples that have not
@@ -306,6 +293,7 @@ func (s *RTCDeviceSink) DiscardPlayback() int {
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
+	s.discardPlaybackObservations("explicit discard", s.playbackGeneration)
 	s.playbackBlocked = true
 	s.playbackGeneration++
 	s.snapshotEpoch.Store(s.playbackGeneration)
@@ -337,6 +325,7 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	// that wins the queue lock is counted as heard; one that runs after the
 	// discard observes underflow, which leaves rendered-minus-underflow
 	// unchanged. This makes truncation linearizable with discard.
+	s.discardPlaybackObservations("interruption", s.playbackGeneration)
 	s.sink.DiscardPlayback()
 	current := consumedPlaybackSamples(s.PlaybackStats())
 	var active rtcDevicePlaybackSpan
@@ -379,11 +368,6 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	}, true
 }
 
-// Pump reads PCM frames from inbound and synchronously writes them to the
-// output device at the audio adapter's fixed frame size and sample rate. A
-// finite inbound endpoint ending with io.EOF is a clean pump completion. The
-// method does not close the RTC endpoint because that endpoint belongs to its
-// caller.
 func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) error {
 	if s == nil {
 		return ErrRTCDeviceSinkClosed
@@ -447,10 +431,6 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 }
 
 func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.PlaybackProcessor, providerFrame audio.PCMFrame, generation uint64, blocked bool) error {
-	// InboundMedia returns receiver-owned storage that may be reused after
-	// ReadFrame returns. Normalizing (when enabled) and resampling to the
-	// device rate below always produce a private copy, so no additional
-	// defensive copy is needed at this boundary.
 	samples := providerFrame.Samples
 	if s.loudness != nil {
 		// Normalize at the provider's own rate, before resampling, so the
@@ -498,27 +478,35 @@ func (s *RTCDeviceSink) flushProviderPlayback(ctx context.Context, pending *audi
 			return err
 		}
 	}
-	// Response boundaries are metadata, not physical drain points. Capacity
-	// pacing keeps the queue bounded while the response-span ledger preserves
-	// exact callback-clock interruption identity across a queued continuation.
 	return nil
 }
 
 // observedWritePlayback routes a device-rate playback chunk through the
-// optional self-hearing observer before it reaches the device adapter. The
-// callback sees exactly the PCM this sink accepts.
+// optional self-hearing observer before it reaches the device adapter.
 func (s *RTCDeviceSink) observedWritePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool) error {
 	return s.observedWritePlaybackForResponse(ctx, samples, generation, blocked, modelAudio, audio.PlaybackResponse{})
 }
 
 func (s *RTCDeviceSink) observedWritePlaybackForResponse(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, response audio.PlaybackResponse) error {
+	kind := RTCDevicePlaybackCue
+	if modelAudio {
+		kind = RTCDevicePlaybackConsumed
+	}
+	return s.observedWritePlaybackForResponseKind(ctx, samples, generation, blocked, modelAudio, response, kind)
+}
+
+func (s *RTCDeviceSink) observedWritePlaybackForResponseKind(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, response audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
 	write := func() error {
-		return s.writePlayback(ctx, samples, generation, blocked, modelAudio, response)
+		return s.writePlayback(ctx, samples, generation, blocked, modelAudio, response, kind)
 	}
 	if s.observer != nil {
 		return s.observer.WritePlayback(ctx, samples, write)
 	}
 	return write()
+}
+
+func (s *RTCDeviceSink) observedWriteHoldTone(ctx context.Context, samples []int16, generation uint64, blocked bool) error {
+	return s.observedWritePlaybackForResponseKind(ctx, samples, generation, blocked, false, audio.PlaybackResponse{}, RTCDevicePlaybackHoldTone)
 }
 
 func (s *RTCDeviceSink) playbackState() (uint64, bool) {
@@ -541,9 +529,7 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 	return s.playbackGeneration, s.playbackBlocked
 }
 
-// writePlayback admits only at an unchanged boundary and keeps cancellation
-// linearizable; capacity waits happen outside playbackMu so barge-in can proceed.
-func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse) error {
+func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, generation uint64, blocked, modelAudio bool, frameResponse audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
 	}
@@ -559,7 +545,7 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 	}
 	s.playbackMu.Lock()
 	response := frameResponse
-	if response.ItemID == "" {
+	if modelAudio && response.ItemID == "" {
 		response = s.playbackResponse
 	}
 	if blocked || s.playbackBlocked || generation != s.playbackGeneration {
@@ -567,14 +553,22 @@ func (s *RTCDeviceSink) writePlayback(ctx context.Context, samples []int16, gene
 		return nil
 	}
 	statsBefore := s.PlaybackStats()
+	reservation := s.playbackObservations.reserve(kind, response, generation, len(samples))
 	var err error
 	if len(samples) == audio.FrameSize {
 		err = s.sink.WriteFrame(ctx, samples)
 	} else {
 		err = s.sink.WriteSamples(ctx, samples)
 	}
-	if err == nil && modelAudio && response.ItemID != "" {
+	if err != nil {
+		s.playbackObservations.cancel(reservation)
+	} else if modelAudio && response.ItemID != "" {
 		s.recordPlaybackSpanLocked(response, consumedPlaybackSamples(statsBefore)+uint64(statsBefore.QueuedSamples), len(samples))
+	}
+	if err == nil {
+		statsAfter := s.PlaybackStats()
+		s.reconcilePlaybackObservationDrops(statsBefore, statsAfter)
+		s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
 	}
 	if err == nil && s.playbackSamplesObserver != nil {
 		err = s.playbackSamplesObserver(ctx, s.deviceRate, samples)
@@ -610,15 +604,10 @@ func (s *RTCDeviceSink) prunePlaybackSpansLocked(consumed uint64) {
 	}
 }
 
-// Run is an alias for Pump for callers that model the binding as a lifecycle
-// worker.
 func (s *RTCDeviceSink) Run(ctx context.Context, inbound audio.InboundMedia) error {
 	return s.Pump(ctx, inbound)
 }
 
-// Close stops an active pump and releases the acquired output handle exactly
-// once. The call waits for an in-flight ReadFrame or WriteFrame to observe the
-// cancellation before returning.
 func (s *RTCDeviceSink) Close() error {
 	if s == nil {
 		return nil
@@ -635,6 +624,7 @@ func (s *RTCDeviceSink) Close() error {
 			s.commands.Close()
 			<-s.commandDone
 		}
+		s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
 		s.closeErr = s.sink.Close()
 		if done != nil {
 			<-done
@@ -642,14 +632,11 @@ func (s *RTCDeviceSink) Close() error {
 		if s.playbackObserver != nil {
 			s.playbackObserver(s.id, s.PlaybackStats())
 		}
+		s.closePlaybackObservations()
 	})
 	return s.closeErr
 }
 
-// waitForPump waits for the provider-media pump to finish without cancelling
-// it. A graceful session close first seals the provider-owned inbound media;
-// the pump can then consume its already-accepted FIFO and wait for the native
-// playback queue to reach the physical device before the binding is released.
 func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	if s == nil {
 		return nil
@@ -736,6 +723,12 @@ func (s *RTCDeviceSink) WritePlaybackCue(ctx context.Context, samples []int16) e
 	return s.observedWritePlayback(ctx, samples, generation, blocked, false)
 }
 
+// WritePlaybackHoldTone admits local hold-tone PCM without provider attribution.
+func (s *RTCDeviceSink) WritePlaybackHoldTone(ctx context.Context, samples []int16) error {
+	generation, blocked := s.playbackState()
+	return s.observedWriteHoldTone(ctx, samples, generation, blocked)
+}
+
 // IsNilInboundMedia reports whether an inbound endpoint is nil, including a
 // typed nil hidden behind the media interface.
 func IsNilInboundMedia(media audio.InboundMedia) bool { return nilRTCInboundMedia(media) }
@@ -753,5 +746,12 @@ func (s *RTCDeviceSink) WriteDeviceFrame(ctx context.Context, samples []int16) e
 	if s == nil || s.sink == nil {
 		return ErrRTCDeviceSinkClosed
 	}
-	return s.sink.WriteFrame(ctx, samples)
+	reservation := s.playbackObservations.reserve(RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, s.snapshotEpoch.Load(), len(samples))
+	err := s.sink.WriteFrame(ctx, samples)
+	if err != nil {
+		s.playbackObservations.cancel(reservation)
+		return err
+	}
+	s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
+	return nil
 }

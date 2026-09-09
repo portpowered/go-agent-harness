@@ -3,9 +3,220 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
+
+type rtcDevicePlaybackSegment struct {
+	id         uint64
+	kind       RTCDevicePlaybackObservationKind
+	response   audio.PlaybackResponse
+	generation uint64
+	remaining  int
+	precise    bool
+}
+
+type rtcDevicePlaybackReservation struct {
+	id         uint64
+	kind       RTCDevicePlaybackObservationKind
+	response   audio.PlaybackResponse
+	generation uint64
+	start      uint64
+	length     int
+	precise    bool
+}
+
+type rtcDevicePlaybackObservationState struct {
+	mu                  sync.Mutex
+	supported           bool
+	closed              bool
+	subscription        *RTCDevicePlaybackObservationSubscription
+	segments            []rtcDevicePlaybackSegment
+	pendingSamples      uint64
+	deviceClock         uint64
+	sequence            uint64
+	nextSegmentID       uint64
+	metadataLostSamples uint64
+	lastRendered        uint64
+	lastUnderflow       uint64
+}
+
+func (s *rtcDevicePlaybackObservationState) detach(subscription *RTCDevicePlaybackObservationSubscription) {
+	s.mu.Lock()
+	if s.subscription == subscription {
+		s.subscription = nil
+	}
+	s.mu.Unlock()
+}
+
+func (s *rtcDevicePlaybackObservationState) closeSubscription() {
+	s.mu.Lock()
+	s.closed = true
+	subscription := s.subscription
+	s.subscription = nil
+	s.mu.Unlock()
+	if subscription != nil {
+		subscription.closeOnce.Do(func() {
+			subscription.closed.Store(true)
+			close(subscription.done)
+		})
+	}
+}
+
+func (s *rtcDevicePlaybackObservationState) publishLocked(event RTCDevicePlaybackObservation) {
+	s.sequence++
+	event.Sequence = s.sequence
+	event.DeviceRange = RTCDeviceSampleRange{StartSample: event.StartSample, EndSample: event.EndSample}
+	event.ResponseID = event.PlaybackResponse.ResponseID
+	event.ItemID = event.PlaybackResponse.ItemID
+	event.ContentIndex = event.PlaybackResponse.ContentIndex
+	if event.SampleCount == 0 && len(event.Samples) > 0 {
+		event.SampleCount = len(event.Samples)
+	}
+	if len(event.PCM) == 0 && len(event.Samples) > 0 {
+		event.PCM = event.Samples
+	}
+	if len(event.Samples) == 0 && len(event.PCM) > 0 {
+		event.Samples = event.PCM
+	}
+	subscription := s.subscription
+	if subscription == nil || subscription.closed.Load() {
+		return
+	}
+	select {
+	case subscription.events <- event:
+		subscription.published.Add(1)
+	default:
+		subscription.dropped.Add(1)
+		subscription.droppedSamples.Add(uint64(maxInt(event.SampleCount, 0)))
+	}
+}
+
+func (s *rtcDevicePlaybackObservationState) commit(reservation rtcDevicePlaybackReservation, samples []int16, deviceID devicegw.DeviceID, rate int) {
+	if reservation.length <= 0 {
+		return
+	}
+	s.mu.Lock()
+	event := RTCDevicePlaybackObservation{
+		Kind: RTCDevicePlaybackAdmission, ContentKind: reservation.kind,
+		DeviceID: deviceID, PlaybackResponse: reservation.response, Generation: reservation.generation, SampleRate: rate,
+		StartSample: reservation.start,
+		EndSample:   reservation.start + uint64(reservation.length),
+		SampleCount: reservation.length, Accepted: true, Precise: reservation.precise,
+	}
+	event.Samples = copyObservationSamples(samples, &event.Precise, &event.Reason)
+	event.PCM = event.Samples
+	s.publishLocked(event)
+	s.mu.Unlock()
+}
+
+// observeDeviceRender is installed once on construction. It fans the actual
+// callback into the bounded correlation port before invoking the legacy raw
+// observer, preserving the old API while keeping the new pull consumer out of
+// native callback execution.
+func (s *RTCDeviceSink) observeDeviceRender(rate int, samples []int16) {
+	if s == nil {
+		return
+	}
+	s.playbackObservations.render(s.id, rate, samples)
+	s.renderObserverMu.RLock()
+	observer := s.renderedSamplesObserver
+	s.renderObserverMu.RUnlock()
+	if observer != nil {
+		observer(rate, samples)
+	}
+}
+
+// PlaybackConsumptionSupported reports whether this sink is attached to a
+// backend that exposes the physical callback/consumption edge.
+func (s *RTCDeviceSink) PlaybackConsumptionSupported() bool {
+	return s != nil && s.renderBoundarySupported.Load()
+}
+
+// SubscribePlaybackObservations creates the one bounded pull subscription for
+// this sink. A replacement closes the prior subscription without waiting for
+// its caller. No user callback is run by the device callback.
+func (s *RTCDeviceSink) SubscribePlaybackObservations(capacity ...int) (*RTCDevicePlaybackObservationSubscription, error) {
+	if s == nil || !s.PlaybackConsumptionSupported() {
+		return nil, ErrRTCDevicePlaybackObservationUnsupported
+	}
+	buffer := DefaultRTCDevicePlaybackObservationCapacity
+	if len(capacity) > 1 {
+		return nil, ErrInvalidRTCDevicePlaybackObservationCapacity
+	}
+	if len(capacity) == 1 {
+		buffer = capacity[0]
+	}
+	if buffer <= 0 || buffer > MaxRTCDevicePlaybackObservationCapacity {
+		return nil, ErrInvalidRTCDevicePlaybackObservationCapacity
+	}
+	subscription := &RTCDevicePlaybackObservationSubscription{
+		events: make(chan RTCDevicePlaybackObservation, buffer),
+		done:   make(chan struct{}),
+		state:  &s.playbackObservations,
+	}
+	s.playbackObservations.mu.Lock()
+	if s.playbackObservations.closed {
+		s.playbackObservations.mu.Unlock()
+		return nil, ErrRTCDevicePlaybackObservationClosed
+	}
+	previous := s.playbackObservations.subscription
+	s.playbackObservations.subscription = subscription
+	s.playbackObservations.mu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return subscription, nil
+}
+
+// PlaybackObservationStats returns aggregate correlation/device-clock state
+// even when no subscription is currently attached.
+func (s *RTCDeviceSink) PlaybackObservationStats() RTCDevicePlaybackObservationStats {
+	if s == nil {
+		return RTCDevicePlaybackObservationStats{Closed: true}
+	}
+	s.playbackObservations.mu.Lock()
+	stats := RTCDevicePlaybackObservationStats{
+		Supported:     s.playbackObservations.supported,
+		Closed:        s.playbackObservations.closed,
+		DeviceSamples: s.playbackObservations.deviceClock,
+		LastSequence:  s.playbackObservations.sequence,
+	}
+	if subscription := s.playbackObservations.subscription; subscription != nil {
+		stats.PublishedObservations = subscription.published.Load()
+		stats.DroppedObservations = subscription.dropped.Load()
+		stats.DroppedSamples = subscription.droppedSamples.Load()
+	}
+	stats.MetadataLostSamples = s.playbackObservations.metadataLostSamples
+	s.playbackObservations.mu.Unlock()
+	return stats
+}
+
+func (s *RTCDeviceSink) closePlaybackObservations() {
+	if s != nil {
+		s.playbackObservations.closeSubscription()
+	}
+}
+
+func (s *RTCDeviceSink) discardPlaybackObservations(reason string, generation uint64) {
+	if s != nil {
+		s.playbackObservations.discard(s.id, s.deviceRate, generation, reason)
+	}
+}
+
+func (s *RTCDeviceSink) reconcilePlaybackObservationDrops(before, after audio.PlaybackQueueStats) {
+	if after.DroppedSamples <= before.DroppedSamples {
+		return
+	}
+	delta := after.DroppedSamples - before.DroppedSamples
+	max := uint64(^uint(0) >> 1)
+	if delta > max {
+		delta = max
+	}
+	s.playbackObservations.dropQueued(int(delta))
+}
 
 // runPlaybackCommands is a device worker separate from the PCM pump. An
 // interrupt can therefore discard a full output queue and wake its producer.

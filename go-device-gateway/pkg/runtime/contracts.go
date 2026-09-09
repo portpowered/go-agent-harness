@@ -2,8 +2,13 @@ package runtime
 
 import (
 	"context"
+	"errors"
+	"io"
+	"sync"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // CaptureFilter is the narrow feedback gate seam used by the capture worker.
@@ -21,3 +26,373 @@ type PlaybackObserver interface {
 
 var _ CaptureFilter = (*audio.PCM16FeedbackGate)(nil)
 var _ PlaybackObserver = (*audio.PCM16FeedbackGate)(nil)
+
+var (
+	ErrRTCDevicePlaybackObservationUnsupported     = errors.New("RTC device playback consumption observation is unsupported")
+	ErrRTCDevicePlaybackObservationClosed          = errors.New("RTC device playback observation is closed")
+	ErrInvalidRTCDevicePlaybackObservationCapacity = errors.New("invalid RTC device playback observation capacity")
+)
+
+const (
+	DefaultRTCDevicePlaybackObservationCapacity = 128
+	MaxRTCDevicePlaybackObservationCapacity     = 4096
+	maxRTCDevicePlaybackObservationSegments     = 256
+	maxRTCDevicePlaybackRetainedSamples         = 8192
+	maxRTCDevicePlaybackEventSamples            = 4096
+)
+
+// RTCDevicePlaybackObservationKind identifies the phase represented by one
+// observation. Admission and discard ranges are projected queue ranges;
+// consumed, underflow and hold-tone ranges are actual device callback ranges.
+type RTCDevicePlaybackObservationKind string
+
+const (
+	RTCDevicePlaybackAdmission    RTCDevicePlaybackObservationKind = "admission"
+	RTCDevicePlaybackConsumed     RTCDevicePlaybackObservationKind = "consumed"
+	RTCDevicePlaybackUnderflow    RTCDevicePlaybackObservationKind = "underflow"
+	RTCDevicePlaybackHoldTone     RTCDevicePlaybackObservationKind = "hold_tone"
+	RTCDevicePlaybackCue          RTCDevicePlaybackObservationKind = "cue"
+	RTCDevicePlaybackDiscard      RTCDevicePlaybackObservationKind = "discard"
+	RTCDevicePlaybackUnattributed RTCDevicePlaybackObservationKind = "unattributed"
+)
+
+// RTCDeviceSampleRange is a half-open range in the selected device's native
+// sample-clock domain. It is also exposed directly for consumers that do not
+// want to reconstruct the range from an observation's convenience fields.
+type RTCDeviceSampleRange struct {
+	StartSample uint64
+	EndSample   uint64
+}
+
+// RTCDevicePlaybackObservation is a bounded, copied receipt from the public
+// device boundary. StartSample and EndSample are a half-open range in the
+// native device sample clock, never provider-rate or wall-clock units.
+// SampleCount remains authoritative when PCM is omitted after a bounded-loss
+// condition. PlaybackResponse is empty for silence, cues and unknown ranges.
+type RTCDevicePlaybackObservation struct {
+	Sequence         uint64
+	Kind             RTCDevicePlaybackObservationKind
+	ContentKind      RTCDevicePlaybackObservationKind
+	DeviceID         devicegw.DeviceID
+	PlaybackResponse audio.PlaybackResponse
+	ResponseID       string
+	ItemID           string
+	ContentIndex     int
+	Generation       uint64
+	SampleRate       int
+	DeviceRange      RTCDeviceSampleRange
+	StartSample      uint64
+	EndSample        uint64
+	SampleCount      int
+	Consumed         bool
+	Precise          bool
+	Accepted         bool
+	PCM              []int16
+	Samples          []int16
+	Reason           string
+}
+
+// RTCDevicePlaybackObservationStats reports delivery and correlation loss
+// independently from audio loss. DroppedObservations counts events rejected
+// by a full subscriber queue; MetadataLostSamples counts queued samples whose
+// response identity could no longer be retained. LastSequence lets a consumer
+// detect gaps even when the final event itself was dropped.
+type RTCDevicePlaybackObservationStats struct {
+	Supported             bool
+	Closed                bool
+	PublishedObservations uint64
+	DroppedObservations   uint64
+	DroppedSamples        uint64
+	MetadataLostSamples   uint64
+	DeviceSamples         uint64
+	LastSequence          uint64
+}
+
+// RTCDevicePlaybackObservationSubscription is a pull-only diagnostic port.
+// Native callbacks perform a nonblocking send into its finite queue; caller
+// code never runs on the callback and a stalled caller cannot grow a worker
+// or queue without limit.
+type RTCDevicePlaybackObservationSubscription struct {
+	events         chan RTCDevicePlaybackObservation
+	done           chan struct{}
+	closeOnce      sync.Once
+	closed         atomic.Bool
+	state          *rtcDevicePlaybackObservationState
+	published      atomic.Uint64
+	dropped        atomic.Uint64
+	droppedSamples atomic.Uint64
+}
+
+// Next receives the next observation, preserving queue order and sequence
+// gaps. After Close or sink shutdown it drains already queued observations and
+// then returns io.EOF.
+func (s *RTCDevicePlaybackObservationSubscription) Next(ctx context.Context) (RTCDevicePlaybackObservation, error) {
+	if s == nil {
+		return RTCDevicePlaybackObservation{}, ErrRTCDevicePlaybackObservationClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		select {
+		case event := <-s.events:
+			return event, nil
+		default:
+		}
+		if s.closed.Load() {
+			return RTCDevicePlaybackObservation{}, io.EOF
+		}
+		select {
+		case event := <-s.events:
+			return event, nil
+		case <-s.done:
+			continue
+		case <-ctx.Done():
+			return RTCDevicePlaybackObservation{}, ctx.Err()
+		}
+	}
+}
+
+// Receive is an alias for Next for consumers that model the subscription as
+// a bounded receipt stream.
+func (s *RTCDevicePlaybackObservationSubscription) Receive(ctx context.Context) (RTCDevicePlaybackObservation, error) {
+	return s.Next(ctx)
+}
+
+// Stats returns loss counters even when the last diagnostic event was dropped.
+func (s *RTCDevicePlaybackObservationSubscription) Stats() RTCDevicePlaybackObservationStats {
+	if s == nil {
+		return RTCDevicePlaybackObservationStats{Closed: true}
+	}
+	stats := RTCDevicePlaybackObservationStats{
+		PublishedObservations: s.published.Load(),
+		DroppedObservations:   s.dropped.Load(),
+		DroppedSamples:        s.droppedSamples.Load(),
+		Closed:                s.closed.Load(),
+	}
+	if s.state == nil {
+		return stats
+	}
+	s.state.mu.Lock()
+	stats.Supported = s.state.supported
+	stats.MetadataLostSamples = s.state.metadataLostSamples
+	stats.DeviceSamples = s.state.deviceClock
+	stats.LastSequence = s.state.sequence
+	if s.state.closed {
+		stats.Closed = true
+	}
+	s.state.mu.Unlock()
+	return stats
+}
+
+// Close detaches the subscription without waiting for a caller-owned reader.
+func (s *RTCDevicePlaybackObservationSubscription) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		s.closed.Store(true)
+		close(s.done)
+		if s.state != nil {
+			s.state.detach(s)
+		}
+	})
+	return nil
+}
+
+func (s *rtcDevicePlaybackObservationState) cancel(reservation rtcDevicePlaybackReservation) {
+	if reservation.length <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	remaining := reservation.length
+	for index := len(s.segments) - 1; index >= 0 && remaining > 0; index-- {
+		segment := &s.segments[index]
+		if segment.id != reservation.id {
+			continue
+		}
+		removed := minInt(segment.remaining, remaining)
+		segment.remaining -= removed
+		remaining -= removed
+		s.pendingSamples -= uint64(removed)
+		if segment.remaining == 0 {
+			s.segments = append(s.segments[:index], s.segments[index+1:]...)
+		}
+	}
+}
+
+func (s *rtcDevicePlaybackObservationState) reserve(kind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, samples int) rtcDevicePlaybackReservation {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if samples <= 0 {
+		return rtcDevicePlaybackReservation{}
+	}
+	s.nextSegmentID++
+	reservation := rtcDevicePlaybackReservation{id: s.nextSegmentID, kind: kind, response: response, generation: generation, start: s.deviceClock + s.pendingSamples, length: samples, precise: kind != RTCDevicePlaybackUnattributed && response.ItemID != ""}
+	lossy := len(s.segments) >= maxRTCDevicePlaybackObservationSegments || s.pendingSamples+uint64(samples) > maxRTCDevicePlaybackRetainedSamples
+	if !lossy {
+		s.segments = append(s.segments, rtcDevicePlaybackSegment{id: reservation.id, kind: kind, response: response, generation: generation, remaining: samples, precise: reservation.precise})
+	} else {
+		reservation.id, reservation.kind, reservation.response, reservation.precise = s.nextSegmentID, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, false
+		s.metadataLostSamples += uint64(samples)
+		if len(s.segments) > 0 && s.segments[len(s.segments)-1].kind == RTCDevicePlaybackUnattributed {
+			tail := &s.segments[len(s.segments)-1]
+			tail.remaining += samples
+			tail.generation = 0
+			reservation.id = tail.id
+		} else if len(s.segments) < maxRTCDevicePlaybackObservationSegments {
+			s.segments = append(s.segments, rtcDevicePlaybackSegment{id: reservation.id, kind: RTCDevicePlaybackUnattributed, remaining: samples})
+		} else {
+			tail := &s.segments[len(s.segments)-1]
+			s.metadataLostSamples += uint64(tail.remaining)
+			tail.kind, tail.response, tail.generation, tail.precise = RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, false
+			tail.remaining += samples
+			reservation.id = tail.id
+		}
+	}
+	s.pendingSamples += uint64(samples)
+	return reservation
+}
+
+func (s *rtcDevicePlaybackObservationState) dropQueued(samples int) {
+	if samples <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	remaining := samples
+	for len(s.segments) > 0 && remaining > 0 {
+		segment := &s.segments[0]
+		removed := minInt(segment.remaining, remaining)
+		segment.remaining -= removed
+		remaining -= removed
+		s.pendingSamples -= uint64(removed)
+		if segment.remaining == 0 {
+			s.segments = s.segments[1:]
+		}
+	}
+	if remaining > 0 {
+		removed := minInt(remaining, int(s.pendingSamples))
+		s.pendingSamples -= uint64(removed)
+		s.metadataLostSamples += uint64(removed)
+	}
+}
+
+func (s *rtcDevicePlaybackObservationState) render(deviceID devicegw.DeviceID, rate int, samples []int16) {
+	if len(samples) == 0 {
+		return
+	}
+	s.mu.Lock()
+	modelSamples := minInt(len(samples), int(s.pendingSamples))
+	start := s.deviceClock
+	s.deviceClock += uint64(len(samples))
+	s.consumeModelLocked(deviceID, rate, start, samples, modelSamples)
+	if modelSamples < len(samples) {
+		offset := modelSamples
+		s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(offset), samples[offset:], true, false, "device callback zero-filled an unavailable queue range")
+	}
+	s.mu.Unlock()
+}
+
+func (s *rtcDevicePlaybackObservationState) consumeModelLocked(deviceID devicegw.DeviceID, rate int, start uint64, samples []int16, count int) {
+	if count < 0 || count > len(samples) {
+		count = 0
+	}
+	offset := 0
+	remaining := count
+	for remaining > 0 {
+		if len(s.segments) == 0 {
+			take := minInt(remaining, int(s.pendingSamples))
+			if take <= 0 {
+				return
+			}
+			s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnattributed, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, start+uint64(offset), samples[offset:offset+take], true, false, "device consumed samples without retained admission metadata")
+			s.pendingSamples -= uint64(take)
+			return
+		}
+		segment := &s.segments[0]
+		take := minInt(segment.remaining, remaining)
+		kind := RTCDevicePlaybackConsumed
+		if segment.kind == RTCDevicePlaybackHoldTone || segment.kind == RTCDevicePlaybackCue {
+			kind = segment.kind
+		} else if segment.kind == RTCDevicePlaybackUnattributed || !segment.precise {
+			kind = RTCDevicePlaybackUnattributed
+		}
+		response := segment.response
+		s.publishRangeLocked(deviceID, rate, kind, segment.kind, response, segment.generation, start+uint64(offset), samples[offset:offset+take], true, segment.precise && kind == RTCDevicePlaybackConsumed, "")
+		segment.remaining -= take
+		remaining -= take
+		offset += take
+		s.pendingSamples -= uint64(take)
+		if segment.remaining == 0 {
+			s.segments = s.segments[1:]
+		}
+	}
+}
+
+func (s *rtcDevicePlaybackObservationState) publishRangeLocked(deviceID devicegw.DeviceID, rate int, kind, contentKind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, start uint64, samples []int16, actual, precise bool, reason string) {
+	event := RTCDevicePlaybackObservation{
+		Kind: kind, ContentKind: contentKind, DeviceID: deviceID,
+		PlaybackResponse: response, Generation: generation, SampleRate: rate,
+		StartSample: start, EndSample: start + uint64(len(samples)),
+		SampleCount: len(samples), Consumed: actual, Precise: precise, Reason: reason,
+	}
+	event.Samples = copyObservationSamples(samples, &event.Precise, &event.Reason)
+	event.PCM = event.Samples
+	s.publishLocked(event)
+}
+
+func (s *rtcDevicePlaybackObservationState) discard(deviceID devicegw.DeviceID, rate int, generation uint64, reason string) {
+	s.mu.Lock()
+	offset := uint64(0)
+	for _, segment := range s.segments {
+		start := s.deviceClock + offset
+		event := RTCDevicePlaybackObservation{
+			Kind: RTCDevicePlaybackDiscard, ContentKind: segment.kind,
+			DeviceID: deviceID, PlaybackResponse: segment.response,
+			Generation: segment.generation, SampleRate: rate,
+			StartSample: start, EndSample: start + uint64(segment.remaining),
+			SampleCount: segment.remaining, Precise: segment.precise,
+			Reason: reason,
+		}
+		s.publishLocked(event)
+		offset += uint64(segment.remaining)
+	}
+	s.segments = nil
+	s.pendingSamples = 0
+	s.mu.Unlock()
+}
+
+func copyObservationSamples(samples []int16, precise *bool, reason *string) []int16 {
+	if len(samples) == 0 {
+		return nil
+	}
+	if len(samples) > maxRTCDevicePlaybackEventSamples {
+		*precise = false
+		*reason = appendReason(*reason, "PCM omitted after event-size bound")
+		return nil
+	}
+	return append([]int16(nil), samples...)
+}
+
+func appendReason(current, addition string) string {
+	if current == "" {
+		return addition
+	}
+	return current + "; " + addition
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(value, floor int) int {
+	if value < floor {
+		return floor
+	}
+	return value
+}

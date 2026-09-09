@@ -64,6 +64,7 @@ func (s *RTCDeviceSink) discardPlaybackAtEpoch(epoch uint64) (int, bool) {
 	if epoch <= s.playbackGeneration {
 		return 0, false
 	}
+	s.discardPlaybackObservations("epoch discard", s.playbackGeneration)
 	s.playbackBlocked = true
 	s.playbackGeneration = epoch
 	s.snapshotEpoch.Store(s.playbackGeneration)
