@@ -1,8 +1,8 @@
 {
   "answer": "c22 local answer",
   "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
-  "binary_sha256": "1bb25bcadcb578c854f62af5616ed583b660bf044ea94ce4ade7dd346b347739",
-  "capture_sha256": "e991cb0ff6cdc128dc4c9ba3bdf41c25b3994636f082258df69138e2b4068eba",
+  "binary_sha256": "8ebeff1fa864d67873d0091f4c38bbd5850fb8cff6dd4c1827622c0728bc022a",
+  "capture_sha256": "1984c7534de31b10194d17edf83451505f505a659b1bd8fe94d17a6722d75717",
   "failure": "",
   "fixture_paths": [
     "/v1/chat/completions"
@@ -13,7 +13,7 @@
       "argv": [
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
         "-C",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs/config",
         "ask",
         "--stream",
         "--system-prompt",
@@ -24,13 +24,13 @@
         "--model",
         "c22-capture-model",
         "--base-url",
-        "http://127.0.0.1:65050/v1",
+        "http://127.0.0.1:49678/v1",
         "--record",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4/capture.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs/capture.json",
         "c22 deterministic ask"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4",
-      "duration_seconds": 0.028333,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs",
+      "duration_seconds": 0.031359,
       "exit_code": 0,
       "label": "record",
       "stderr": "",
@@ -42,7 +42,7 @@
       "argv": [
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
         "-C",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs/config",
         "ask",
         "--stream",
         "--system-prompt",
@@ -53,13 +53,13 @@
         "--model",
         "c22-capture-model",
         "--base-url",
-        "http://127.0.0.1:65050/v1",
+        "http://127.0.0.1:49678/v1",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4/capture.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs/capture.json",
         "c22 deterministic ask"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-71bnqdt4",
-      "duration_seconds": 0.030899,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-o7b514vs",
+      "duration_seconds": 0.036323,
       "exit_code": 0,
       "label": "replay-after-helper-stop",
       "stderr": "",
@@ -69,6 +69,6 @@
     }
   ],
   "schema": "audio-runtime-c22-public-ask-v1",
-  "source_revision": "b8b446288c408b35cb74af70703efd831635bfbc",
+  "source_revision": "289a3fe994ac9162e4140e9b9182f5865a010987",
   "status": "passed"
 }

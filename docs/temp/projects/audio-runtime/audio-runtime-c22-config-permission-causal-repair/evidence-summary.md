@@ -53,3 +53,39 @@ No live Realtime, credential, physical-device, or acoustic evidence is claimed.
 The candidate is ready for executor handoff to script-owned current-head CI;
 CI, independent review, guarded merge, and post-merge vertical acceptance are
 not claimed by this evidence.
+
+## C22 exact duplex failure ownership recovery
+
+The PRD amendment assigns the named `agent-cli/test/integration/session_duplex_overlap*_test.go`
+fixture paths to this task for the rejected hermetic baseline. The full saved
+job log at `/tmp/audio-runtime-c22-hermetic-34372156060.log` showed six
+crossings, a third transcript on harness B, and no final audio/terminal before
+the unchanged two-second harness deadline. The fixture's final bridge writer
+published its EOF packet and then synchronously waited for the peer reader's
+`eofSeen`; that can deadlock final replay response completion because the peer
+may only reach its reader after that response returns.
+
+The candidate changes only the owned bridge fixture: EOF publication remains
+gated by the existing scheduled `eofReady`, packet delivery and abort paths,
+but the post-publication `eofSeen` observation is now opportunistic rather than
+blocking. All original command and harness deadlines, parallel overlap
+semantics, negative controls, and PCM/transcript/commit/terminal assertions
+remain unchanged. The architecture-size gate passes without changing the
+immutable migration baseline: 181 packages, 1860 files and 27151 functions.
+
+Current candidate source revision for refreshed evidence is
+`289a3fe994ac9162e4140e9b9182f5865a010987`; the fixture repair is the pending
+working-tree change. Final focused proof passed the complete
+`TestSessionCLI_DuplexPCMMultiTurn*` family 5/5 in normal mode and once under
+`-race`, plus the same family under `GOMAXPROCS=1`, `GOMAXPROCS=8`, and
+`CGO_ENABLED=0 -tags=nomicrophone`. Config evidence also passed the candidate
+022/077 permission matrix (exact test and all eight diagnostics), config normal
+and nomicrophone tests, config race, and config vet. Refreshed same-source
+public config (six cases across both masks) and credential-free local ask/
+replay (record then replay after helper shutdown) both passed; the yui binary
+SHA256 is `8ebeff1fa864d67873d0091f4c38bbd5850fb8cff6dd4c1827622c0728bc022a`.
+
+The rejected CI run remains historical evidence and is not called green. No
+terminal CI polling, independent review, merge, or post-merge vertical
+acceptance is claimed; next action is checkpoint commit, push/update the same
+PR, and return `ACCEPTED` to the script-owned current-head CI gate.
