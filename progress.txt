@@ -1376,3 +1376,54 @@ C18 final-source handoff evidence 2026-09-09
   project acceptance remain external; CI was not polled or claimed green.
   Next action: push this same admitted task head, update PR410 with the exact
   evidence and return `ACCEPTED` to the script-owned CI gate.
+
+C18 latest CI rejection reconciliation and same-owner handoff checkpoint 2026-09-09
+
+- Re-read the canonical `~default` board, all concluded C18 review rows, the
+  operating policy, implementation handoff, C18 scope/review/coordination
+  decisions and the admitted project manifest. Admission remains verified for
+  `work-task-24` with `project-control.py verify-work --type task --name
+  audio-runtime-c18-public-strict-replay` returning `admitted`. The isolated
+  worktree is clean before this checkpoint on
+  `codex/audio-runtime-c18-public-strict-replay`, exactly matching
+  `prd.json.branchName`; no host checkout, predecessor worktree or unrelated
+  lease was changed.
+- Fetched `origin/main=5d5afcb14d7b269378020809f5a2418c499ac94d`; it is already
+  an ancestor of `HEAD=6bbb06c4ade72440cd345aa77a42ec1ea80be541`. Required
+  startup integration, original baseline and planning-main ancestry remain
+  preserved. No merge or reset was needed.
+- The complete latest CI rejection for PR #410 is preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34387680469.json`.
+  Run `34387680469` at the current head failed only `CI (coverage)` and
+  `CI (integration)`. Coverage job `102587969328` failed
+  `TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession` at
+  `composition_test.go:417` because the composed session error was nil instead
+  of the RTC media capability error. The full 310-line log has SHA256
+  `dec8be2a21daf40ac7a10fd27c0b0b733646b8526f1fea16888dd63175737e24`.
+  Integration job `102587969256` failed
+  `TestFamilyAIterativeBuildUpThroughShippedProcess` at
+  `s2s_conversational_customer_sim_family_a_test.go:103` with a provider
+  simulator broken-pipe `ProtocolError` even though the shipped child reported
+  exit 0/normal; the full 339-line log has SHA256
+  `37a025289f0a668c48c8533069f48e4615818296f243a65a74005ef5049dfedd`.
+- The coverage control passed `20/20` with the hosted `nomicrophone` and
+  `coverpkg` shape, and the exact Family-A test passed with the bounded
+  `testtimeout` runner. These controls are outside C18's strict replay/clock
+  repair ownership (composition/live fixture ownership is partitioned to C20),
+  and no C18-specific defect reproduced. The failures remain recorded as
+  non-waived CI evidence; no unrelated source was changed.
+- Accumulated C18 proof on this exact source is green: runtime replay normal and
+  race each pass 84 tests across four packages; the separate GOWORK=off
+  embedding consumer passes normal and race; CLI replay normal and race each
+  pass 146 tests; deterministic parent cancellation passes 100/100; Wire
+  regeneration, architecture-size (`182` packages, `1871` files, `27224`
+  functions), and `git diff --check` pass. Review30/37/40/42/43 repairs remain
+  present; no assertions, deadlines, production limits, policy, baseline or
+  acceptance criterion was weakened.
+- This is an executor handoff only: the current evidence requires no C18 code
+  repair. Next action is to commit this raw rejection/reconciliation on the
+  same task, push/update PR410 with the exact evidence, and return `ACCEPTED`
+  to the script-owned current-head CI gate without polling. Any exact-head
+  actionable C18 rejection returns to this same task with `CONTINUE`; CI,
+  independent review, guarded merge, post-merge vertical validation and
+  project acceptance remain external.
