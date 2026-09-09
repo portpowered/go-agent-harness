@@ -25,11 +25,6 @@ var (
 	ErrContextUnavailable = errors.New("PCM mixer context is unavailable")
 )
 
-const (
-	pcm16MaxSample = 32767
-	pcm16MinSample = -32768
-)
-
 // Mixer emits one frame for every cadence interval. Each input is bounded and
 // independently epoch aware. A missing source contributes silence; a short
 // final response frame is retained at its actual length and marks the output
@@ -189,7 +184,15 @@ func combine(format Format, frameSize int, frames []audio.PCMFrame) (audio.PCMFr
 	if err != nil {
 		return audio.PCMFrame{}, err
 	}
-	metadata := audio.PCMFrame{Samples: clipMixedSamples(sumMixedSamples(frames, length))}
+	sources := make([][]int16, len(frames))
+	for index, frame := range frames {
+		sources[index] = frame.Samples
+	}
+	mixed, err := MixPCM16Samples(sources, length)
+	if err != nil {
+		return audio.PCMFrame{}, err
+	}
+	metadata := audio.PCMFrame{Samples: mixed}
 	metadata.Format = audio.PCM16DeviceFormat(format.SampleRate)
 	// Source epochs intentionally do not cross the mix boundary. A target
 	// playback queue has a graph-owned epoch domain, while evidence owners can
@@ -241,31 +244,6 @@ func mixedFrameLength(shape mixedFrameShape, frameSize int) (int, error) {
 		return frameSize, nil
 	}
 	return shape.length, nil
-}
-
-func sumMixedSamples(frames []audio.PCMFrame, length int) []int32 {
-	accumulated := make([]int32, length)
-	for _, frame := range frames {
-		for index, sample := range frame.Samples {
-			if index < len(accumulated) {
-				accumulated[index] += int32(sample)
-			}
-		}
-	}
-	return accumulated
-}
-
-func clipMixedSamples(accumulated []int32) []int16 {
-	result := make([]int16, len(accumulated))
-	for index, sample := range accumulated {
-		if sample > pcm16MaxSample {
-			sample = pcm16MaxSample
-		} else if sample < pcm16MinSample {
-			sample = pcm16MinSample
-		}
-		result[index] = int16(sample)
-	}
-	return result
 }
 
 func (m *Mixer) fail(err error) {
