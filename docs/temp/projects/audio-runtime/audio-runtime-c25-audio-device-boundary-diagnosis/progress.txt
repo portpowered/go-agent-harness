@@ -115,3 +115,16 @@ Current-head coverage rejection and ownership handoff
   resubmission case. Retain C25 ownership while waiting for the reviewed C20
   repair to reach `origin/main`; then refresh the exact-head verifier and
   submit the changed same task through the script CI gate without polling.
+
+Exact-head verifier refresh after coverage rejection
+- At local checkpoint `a52291203d244d9d4f4d3a06511b9519ac65acc9`, the bounded
+  `verify.py --mode all` run returned `ACCEPTED` in `14.0s` across `25`
+  commands. Source/archive identity, AST dependency controls, fixture digests,
+  complete owned-path allowlist, focused normal/race/vet checks, zero-test and
+  child-hang cleanup controls all passed with no surviving child.
+- This is an owned evidence-only refresh. The hosted composition failure remains
+  at rejected CI head `b061bf852076d4b36526600377ad916751e32b4b` in C20-owned
+  `agent-cli/internal/wire/composition_test.go:417`; C25 has no authorized repair
+  path and will not submit unchanged implementation. Next action is a reviewed
+  C20 repair integrated into `origin/main`, then a fresh C25 refresh and same-task
+  script-CI handoff.

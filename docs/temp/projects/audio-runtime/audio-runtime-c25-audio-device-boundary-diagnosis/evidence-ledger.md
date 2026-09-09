@@ -170,3 +170,16 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   remote fixture/gateway/duplex ownership is not implicated. C25 will not
   resubmit unchanged source. The next action is a reviewed C20 repair, then a
   C25 exact-head verifier refresh and same-task script-CI resubmission.
+
+## Exact-head verifier refresh after rejection
+
+- At measured candidate `a52291203d244d9d4f4d3a06511b9519ac65acc9`,
+  `verify.py --mode all` returned `ACCEPTED` in `14.0s` across `25` bounded
+  commands.
+- Source/archive identity, AST dependency controls, fixture manifest, complete
+  owned-path allowlist, focused normal/race/vet regressions, zero-test handling,
+  child-hang cleanup and aggregate shutdown all remained accepted; no child
+  survived.
+- This refresh changes only owned evidence metadata. The latest hosted coverage
+  rejection remains C20-owned at `b061bf85`; C25 does not claim a repair or
+  resubmit unchanged implementation.

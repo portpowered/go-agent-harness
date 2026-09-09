@@ -108,6 +108,16 @@ reviewed repair reaches `origin/main`, C25 will refresh its exact-head
 evidence and resubmit the changed same task through the script CI gate. No
 unchanged implementation is being resubmitted.
 
+## Exact-head verifier refresh after rejection
+
+At local checkpoint `a52291203d244d9d4f4d3a06511b9519ac65acc9`, the bounded
+`verify.py --mode all` command returned `ACCEPTED` in 14.0 seconds across 25
+commands. The pinned source/archive, AST positive/negative dependency controls,
+fixture digests, changed-path allowlist, focused normal/race/vet checks, zero-test
+and child-hang controls all remained accepted, with no surviving child process.
+This is an owned evidence refresh only; it does not repair the C20 composition
+failure or authorize an unchanged CI resubmission.
+
 ## Extraction plan
 
 The single chosen dependency is the legacy room-owned PCM16 cadence/mixer boundary. The exact current/proposed paths, APIs, callers, ownership, wire sequence, trigger, executable regression, and AUDIO/DEVICE/SERVICE/QUALITY gate map are in [`extraction-plan.md`](extraction-plan.md) and [`extraction-plan.json`](extraction-plan.json).
