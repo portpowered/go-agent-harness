@@ -424,7 +424,8 @@ func c21ReplaceObservationSubscription(t *testing.T, sink *RTCDeviceSink) *RTCDe
 	if err != nil {
 		t.Fatalf("first lifecycle subscription: %v", err)
 	}
-	if _, err := first.Next(nil); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationContext) {
+	var nilContext context.Context
+	if _, err := first.Next(nilContext); !errors.Is(err, ErrInvalidRTCDevicePlaybackObservationContext) {
 		t.Fatalf("nil observation context error = %v", err)
 	}
 	second, err := sink.SubscribePlaybackObservations(8)

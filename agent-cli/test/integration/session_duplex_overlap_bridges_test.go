@@ -173,10 +173,8 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 			if err := b.waitForEOF(); err != nil {
 				return 0, err
 			}
-			select {
-			case b.packets <- b.eofPacket():
-			case <-b.coordinator.abort:
-				return 0, context.Canceled
+			if err := b.publishEOF(); err != nil {
+				return 0, err
 			}
 			select {
 			case <-b.eofSeen:
@@ -226,10 +224,8 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 		if err := b.waitForEOF(); err != nil {
 			return 0, err
 		}
-		select {
-		case b.packets <- b.eofPacket():
-		case <-b.coordinator.abort:
-			return 0, context.Canceled
+		if err := b.publishEOF(); err != nil {
+			return 0, err
 		}
 		select {
 		case <-b.eofSeen:
@@ -291,16 +287,13 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 func (b *v8MultiTurnBridge) publishEOF() error {
 	select {
 	case b.packets <- v8MultiTurnBridgePacket{eof: true}:
+		// Publish only after the EOF packet is in the bridge. A cancelled reader
+		// may wake on this signal and must be able to consume the queued packet.
 		b.eofPublishOnce.Do(func() { close(b.eofPublished) })
 		return nil
 	case <-b.coordinator.abort:
 		return context.Canceled
 	}
-}
-
-func (b *v8MultiTurnBridge) eofPacket() v8MultiTurnBridgePacket {
-	b.eofPublishOnce.Do(func() { close(b.eofPublished) })
-	return v8MultiTurnBridgePacket{eof: true}
 }
 
 func (b *v8MultiTurnBridge) tryReadPacket(destination []byte) (int, error, bool) {
