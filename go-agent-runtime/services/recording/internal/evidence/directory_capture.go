@@ -121,34 +121,13 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.latch(recordingWriteError("admit audio evidence", err))
 		return
 	}
-	var audioFile *os.File
-	var audioOffset *uint64
-	var audioStart uint64
-	var audioCreated bool
-	if len(data) > 0 {
-		pathCount := len(r.outputPaths)
-		if item.direction == session.LiveRecordClient {
-			pathCount = len(r.inputPaths)
-		}
-		file, _, offset, fileErr := r.audioFile(item.direction)
-		if fileErr != nil {
-			r.workerErr = fileErr
-			return
-		}
-		audioFile, audioOffset, audioStart = file, offset, *offset
-		if item.direction == session.LiveRecordClient {
-			audioCreated = len(r.inputPaths) > pathCount
-		} else {
-			audioCreated = len(r.outputPaths) > pathCount
-		}
-		if err := r.writeCompleteSpool(audioFile, data); err != nil {
-			r.workerErr = errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(item.direction, audioFile, audioOffset, audioStart, audioCreated))
-			return
-		}
-		*audioOffset += uint64(len(data))
+	audioAttempt, err := r.writeAudioAttempt(item.direction, data)
+	if err != nil {
+		r.workerErr = err
+		return
 	}
 	if err := r.writeTranscriptRecords(client, agent, sequence); err != nil {
-		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioFile, audioOffset, audioStart, audioCreated))
+		r.workerErr = errors.Join(err, r.rollbackAudioAttempt(item.direction, audioAttempt.file, audioAttempt.offset, audioAttempt.start, audioAttempt.created))
 		return
 	}
 	if item.direction == session.LiveRecordAgent && item.frame.PlaybackResponse.ResponseID != "" {
@@ -157,6 +136,38 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), offset, segment)
 	}
 	r.latchProjectionError()
+}
+
+type audioWriteAttempt struct {
+	file    *os.File
+	offset  *uint64
+	start   uint64
+	created bool
+}
+
+func (r *directoryRecorder) writeAudioAttempt(direction session.LiveRecordDirection, data []byte) (audioWriteAttempt, error) {
+	if len(data) == 0 {
+		return audioWriteAttempt{}, nil
+	}
+	pathCount := len(r.outputPaths)
+	if direction == session.LiveRecordClient {
+		pathCount = len(r.inputPaths)
+	}
+	file, _, offset, err := r.audioFile(direction)
+	if err != nil {
+		return audioWriteAttempt{}, err
+	}
+	attempt := audioWriteAttempt{file: file, offset: offset, start: *offset}
+	if direction == session.LiveRecordClient {
+		attempt.created = len(r.inputPaths) > pathCount
+	} else {
+		attempt.created = len(r.outputPaths) > pathCount
+	}
+	if err := r.writeCompleteSpool(file, data); err != nil {
+		return attempt, errors.Join(recordingWriteError("write audio evidence", err), r.rollbackAudioAttempt(direction, file, offset, attempt.start, attempt.created))
+	}
+	*offset += uint64(len(data))
+	return attempt, nil
 }
 
 func audioBoundary(item directoryEvidenceItem, segment string, offset uint64) evidenceAudioBoundary {
