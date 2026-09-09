@@ -34,7 +34,7 @@ The verifier stores SHA-256 hashes and line counts for all audited files in `pro
 
 ## Dependency and regression evidence
 
-The refreshed `verify.py --mode all` passed at candidate `1040f92478bd1da6450f0f9a1fc1f4532ff34937` in 9.493 seconds:
+The refreshed `verify.py --mode all` passed at pushed candidate `0eb46135bdeb3f2976e4658a02a6f39cf1d47459` in 10.325 seconds:
 
 - positive canonical dependency control: `ACCEPTED`;
 - negative host-ticker/local-codec/direct-gateway control: `REJECTED_AS_FORBIDDEN`;

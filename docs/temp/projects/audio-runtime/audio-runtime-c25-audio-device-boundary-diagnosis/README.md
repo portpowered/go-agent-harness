@@ -30,7 +30,7 @@ The verifier pins source revision `5d5afcb14d7b269378020809f5a2418c499ac94d` sep
 - one legacy mixer behavior test;
 - one legacy agent-runtime behavior test, its race run, and focused vet.
 
-The exact candidate-head run completed in 4.008 seconds before the verifier expansion; the refreshed run is recorded in `diagnosis.json`, `diagnosis.md`, and `provenance.json` with exact file hashes, timestamps, native exits, and harness verdicts. Every child is bounded to 55 seconds and the aggregate to 600 seconds with process-group cleanup.
+The pushed candidate-head run completed in 10.325 seconds; `diagnosis.json`, `diagnosis.md`, and `provenance.json` record exact file hashes, timestamps, native exits, and harness verdicts. Every child is bounded to 55 seconds and the aggregate to 600 seconds with process-group cleanup.
 
 The current-head CI rejection was separately characterized read-only. Run `34397773527` / job `102621627290` failed only in the hosted integration matrix at `test46/provider_burst`: after all provider responses and callback-clock shutdown, the full `/v1/audio-device/control/snapshot` evidence request exceeded the existing 30-second scenario context at `session_tool_audio_remote_e2e_test.go:182`. The production-binary device replay and committed regression suite in that job passed. The exact production/fixture owner is C20; C25 makes no repair outside this evidence folder. Local single and full-matrix focused runs passed, so this remains an intermittent hosted diagnosis rather than a claimed fix.
 

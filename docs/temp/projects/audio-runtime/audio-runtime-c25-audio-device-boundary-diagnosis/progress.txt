@@ -21,7 +21,7 @@ Diagnosis
 - This is a concrete source/ownership migration hazard, not runtime/acoustic proof.
 
 Verifier checkpoint
-- verify.py --mode all at candidate 1040f92478bd1da6450f0f9a1fc1f4532ff34937: ACCEPTED in 9.493s; nine focused children, package probes, positive/negative dependency controls, stale/false-success/truncated-output controls, and intentional child-hang cleanup all passed; no child survived and shutdown was clean.
+- verify.py --mode all at pushed candidate 0eb46135bdeb3f2976e4658a02a6f39cf1d47459: ACCEPTED in 10.325s; nine focused children, package probes, positive/negative dependency controls, stale/false-success/truncated-output controls, and intentional child-hang cleanup all passed; no child survived and shutdown was clean.
 - Source gap: SOURCE_GAP_CONFIRMED.
 - Positive canonical graph: ACCEPTED.
 - Negative bypass graph: REJECTED_AS_FORBIDDEN.
