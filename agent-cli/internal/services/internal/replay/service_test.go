@@ -464,3 +464,36 @@ func TestServiceRejectsMissingTimeline(t *testing.T) {
 		t.Fatalf("err=%v, want missing timeline diagnostic", err)
 	}
 }
+
+func TestRelativeBundlePathServicePrepare(t *testing.T) {
+	root := writeManifestedReplayRoot(t)
+
+	parent := filepath.Dir(root)
+	nested := filepath.Join(parent, "nested-working-directory")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Base(root)
+	for _, test := range []struct {
+		name   string
+		cwd    string
+		bundle string
+	}{
+		{name: "parent-relative", cwd: parent, bundle: base},
+		{name: "parent-dot", cwd: parent, bundle: filepath.Join(".", base)},
+		{name: "nested-dot-dot", cwd: nested, bundle: filepath.Join("..", base)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Chdir(test.cwd)
+			prepared, err := New(Dependencies{ClockFactory: func(origin time.Time) *clock.Deterministic {
+				return clock.NewDeterministic(origin, 10)
+			}}).Prepare(context.Background(), publicreplay.Request{BundlePath: test.bundle})
+			if err != nil {
+				t.Fatalf("prepare %q from %q: %v", test.bundle, test.cwd, err)
+			}
+			if prepared.Audio == nil || prepared.WireEvents != 3 {
+				t.Fatalf("prepared=%+v, want audio and three wire events", prepared)
+			}
+		})
+	}
+}
