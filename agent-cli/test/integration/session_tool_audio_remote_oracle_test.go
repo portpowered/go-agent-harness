@@ -54,7 +54,7 @@ func requireRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 	t.Helper()
 	snapshot, err := waitForRemoteToolAudio(ctx, endpoint, want, callbackInterval, callbackAdvances)
 	if err != nil {
-		t.Fatalf("remote playback wait failed: %v; %s", err, remoteToolAudioFailureEvidence(endpoint, provider, expectedToolCalls, expected, done, stderr, callbackAdvances))
+		t.Fatalf("remote playback wait failed: %v; %s", err, remoteToolAudioFailureEvidence(ctx, endpoint, provider, expectedToolCalls, expected, done, stderr, callbackAdvances))
 	}
 	return snapshot
 }

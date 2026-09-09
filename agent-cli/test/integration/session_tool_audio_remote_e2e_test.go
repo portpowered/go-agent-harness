@@ -528,7 +528,7 @@ func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
 // Timeout diagnostics stay on the scenario path so a failure preserves the
 // bounded device, provider, child, and callback evidence needed to repair it.
 // Keep this evidence beside the scenario's deadline and cleanup logic.
-func remoteToolAudioFailureEvidence(endpoint string, provider *remoteToolAudioProvider, expectedToolCalls int, want []int16, done <-chan error, stderr *remoteToolAudioBuffer, callbackAdvances *atomic.Uint64) string {
+func remoteToolAudioFailureEvidence(ctx context.Context, endpoint string, provider *remoteToolAudioProvider, expectedToolCalls int, want []int16, done <-chan error, stderr *remoteToolAudioBuffer, callbackAdvances *atomic.Uint64) string {
 	childStatus := "still running at timeout"
 	childExited := false
 	select {
@@ -537,7 +537,7 @@ func remoteToolAudioFailureEvidence(endpoint string, provider *remoteToolAudioPr
 		childStatus = fmt.Sprintf("exited: %v", err)
 	default:
 	}
-	diagnosticCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	diagnosticCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
 	defer cancel()
 	snapshot, snapshotErr := devicegw.ReadRemoteDeviceServerSnapshot(diagnosticCtx, endpoint)
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)

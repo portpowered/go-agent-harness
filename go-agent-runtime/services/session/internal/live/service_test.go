@@ -30,6 +30,16 @@ type testSession struct {
 	mu                  sync.Mutex
 	sent                []messages.StreamMessage
 }
+
+func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
+	t.Helper()
+	h, ok := opened.(*handle)
+	if !ok {
+		t.Fatalf("handle type = %T, want *handle", opened)
+	}
+	return h
+}
+
 type failingLiveRecorder struct {
 	messageErr  error
 	finalized   chan struct{}
