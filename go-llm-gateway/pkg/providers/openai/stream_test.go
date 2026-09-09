@@ -191,11 +191,11 @@ func TestStreamSSEToGateway_ReaderErrorClassification(t *testing.T) {
 	t.Fatal("expected ERROR event")
 }
 
-func TestStreamSSEToGatewayWithClose_ReportsBodyCloseFailureBeforeTerminal(t *testing.T) {
+func TestStreamSSEToGateway_ReportsBodyCloseFailureBeforeTerminal(t *testing.T) {
 	closeErr := errors.New("response body close failed")
 	closed := false
 	ch := make(chan messages.StreamMessage, 64)
-	streamSSEToGatewayWithClose(
+	streamSSEToGateway(
 		strings.NewReader(sseData(
 			`{"id":"c1","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":"stop"}]}`,
 		)),

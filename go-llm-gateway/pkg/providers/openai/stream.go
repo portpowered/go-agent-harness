@@ -29,15 +29,9 @@ const (
 // It parses SSE data lines, decodes JSON chunks, and maps them to typed events:
 // MESSAGE.START, TEXT.*, AUDIO.*, REASONING.*, TOOLCALL.*, USAGE_INFO, MESSAGE.END.
 // Supports delta.reasoning for OpenRouter/DeepInfra thinking tokens and delta.audio for audio output.
-func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
-	streamSSEToGatewayWithClose(reader, ch, nil)
-}
-
-// streamSSEToGatewayWithClose joins response-body cleanup to the provider
-// terminal event. The caller must not expose MESSAGE.END until closeBody has
-// returned; otherwise consumers can flush an HTTP recorder while its body is
-// still active.
-func streamSSEToGatewayWithClose(reader io.Reader, ch chan<- messages.StreamMessage, closeBody func() error) {
+// When closeBody is provided, it must complete before MESSAGE.END so callers
+// can flush a recorder only after the HTTP response body is inactive.
+func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage, closeBody ...func() error) {
 	const defaultIndex = 0
 
 	ch <- messages.StreamMessage{
@@ -265,19 +259,7 @@ func streamSSEToGatewayWithClose(reader io.Reader, ch chan<- messages.StreamMess
 		}
 	}
 	scanErr := scanner.Err()
-	if closeBody != nil {
-		if err := closeBody(); err != nil {
-			ch <- messages.StreamMessage{
-				Type:               messages.StreamTypeError,
-				ActorProvidedIndex: defaultIndex,
-				Value:              providers.NewStreamTransportErrorValue(err),
-			}
-			return
-		}
-	}
-
-	sendMessageEnd()
-
+	closeResponseBody(closeBody, ch, sendMessageEnd)
 	if scanErr != nil {
 		streamErr := gateway.NewTransportError("openai", "chat completions stream", scanErr)
 		classification := providers.ErrorClassTransport
@@ -293,4 +275,20 @@ func streamSSEToGatewayWithClose(reader io.Reader, ch chan<- messages.StreamMess
 			Value:              errValue,
 		}
 	}
+}
+
+func closeResponseBody(closeBody []func() error, ch chan<- messages.StreamMessage, sendMessageEnd func()) {
+	if len(closeBody) == 0 || closeBody[0] == nil {
+		sendMessageEnd()
+		return
+	}
+	if err := closeBody[0](); err != nil {
+		ch <- messages.StreamMessage{
+			Type:               messages.StreamTypeError,
+			ActorProvidedIndex: 0,
+			Value:              providers.NewStreamTransportErrorValue(err),
+		}
+		return
+	}
+	sendMessageEnd()
 }
