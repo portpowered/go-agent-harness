@@ -149,3 +149,24 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   normal/race/vet controls all passed. No production/shared/baseline/fixture
   path was modified; C20's hosted `test46/provider_burst` timeout remains
   separately owned historical evidence.
+
+## Current-head coverage rejection
+
+- Candidate `b061bf852076d4b36526600377ad916751e32b4b` was submitted on PR417.
+- The complete latest coverage job was run `34413969081`, job
+  `102674534021`, check `CI (coverage)`. Its 31,872-byte raw log has SHA-256
+  `07a0eb388e05ca832306dfdcd0191d8c9a71ecc2c6c53e5528684a4f117a8c6e` and is
+  recorded in `ci-diagnosis.json`; the raw job metadata is retained alongside
+  it.
+- `make coverage` failed in
+  `agent-cli/internal/wire/composition_test.go:417` because the composed
+  session error was `<nil>` instead of the expected RTC media-capability
+  error after preflight. The package exited 1 and coverage exited 2; no
+  second failure was present in that job log.
+- The local focused causal control passed with coverage instrumentation in
+  `0.563s` at `4.7%` package coverage. C25 therefore records an external
+  composition failure, not a verifier failure or a C25 production defect.
+- C20 retains the admitted composition/recording/live repair ownership; C21's
+  remote fixture/gateway/duplex ownership is not implicated. C25 will not
+  resubmit unchanged source. The next action is a reviewed C20 repair, then a
+  C25 exact-head verifier refresh and same-task script-CI resubmission.

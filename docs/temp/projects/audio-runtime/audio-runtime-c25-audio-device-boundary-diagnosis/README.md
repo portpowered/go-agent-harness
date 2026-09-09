@@ -89,6 +89,25 @@ regressions, and left no child process. This repair remains source/package
 evidence only; the hosted C20 `test46/provider_burst` snapshot timeout remains
 historical, separately owned, and unwaived.
 
+## Current-head CI rejection checkpoint
+
+At the pushed candidate `b061bf852076d4b36526600377ad916751e32b4b`, PR417's
+latest script-CI coverage job (`34413969081` / `102674534021`) failed only at
+`agent-cli/internal/wire/composition_test.go:417`: the composed session error
+was nil where the test expected the RTC media-capability error after preflight.
+The full 31,872-byte job log is hashed in [`ci-diagnosis.json`](ci-diagnosis.json)
+and the raw job metadata is retained in the owned folder. The focused local
+reproduction, including coverage instrumentation, passed in `0.563s` with
+`4.7%` package coverage. This is an external composition regression, not a
+C25 verifier failure; C25 has no lease for the production or composition-test
+path, and makes no CI-green claim.
+
+The exact next action is for the existing C20 owner to repair and review that
+composition assertion/implementation on the same project task. After the
+reviewed repair reaches `origin/main`, C25 will refresh its exact-head
+evidence and resubmit the changed same task through the script CI gate. No
+unchanged implementation is being resubmitted.
+
 ## Extraction plan
 
 The single chosen dependency is the legacy room-owned PCM16 cadence/mixer boundary. The exact current/proposed paths, APIs, callers, ownership, wire sequence, trigger, executable regression, and AUDIO/DEVICE/SERVICE/QUALITY gate map are in [`extraction-plan.md`](extraction-plan.md) and [`extraction-plan.json`](extraction-plan.json).

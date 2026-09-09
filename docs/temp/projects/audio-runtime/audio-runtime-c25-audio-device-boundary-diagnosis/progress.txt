@@ -95,3 +95,23 @@ Review-86 causal repair checkpoint
 - The next bounded action is to refresh the human-readable evidence metadata,
   commit/push the same task and PR417, verify script-gate submission without
   polling CI, and return `ACCEPTED`; retain ownership for any exact rejection.
+
+Current-head coverage rejection and ownership handoff
+- The board's current rejection for `work-task-71` is PR417 at candidate
+  `b061bf852076d4b36526600377ad916751e32b4b`: `CI (coverage)=FAILURE`, run
+  `34413969081`, job `102674534021`.
+- The complete job log was inspected. `make coverage` failed only at
+  `agent-cli/internal/wire/composition_test.go:417`: the composed session
+  returned `<nil>` where the test expected the RTC media-capability error
+  after preflight. The package exited 1 and coverage exited 2. Raw metadata
+  and the full-log byte count/hash are retained in `ci-diagnosis.json` and
+  the owned raw JSON checkpoint.
+- The focused local reproduction with the same test and coverage
+  instrumentation passed in `0.563s` with `4.7%` package coverage. The C25
+  verifier/source evidence remains causal and accepted; C25 owns no
+  production or `agent-cli/internal/wire/composition_test.go` repair.
+- The exact owner is the existing C20 task/lease; C21's remote
+  fixture/gateway/duplex path is not implicated. This is not an unchanged
+  resubmission case. Retain C25 ownership while waiting for the reviewed C20
+  repair to reach `origin/main`; then refresh the exact-head verifier and
+  submit the changed same task through the script CI gate without polling.

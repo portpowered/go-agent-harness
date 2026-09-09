@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "candidate_revision_at_diagnosis": "6151f4b7eede2a8b5a5fd9867c856a8743ddc412",
+  "candidate_revision_at_diagnosis": "b061bf852076d4b36526600377ad916751e32b4b",
   "chosen_dependency": {
     "name": "legacy room-owned PCM16 cadence/mixer dependency",
     "current_paths": [
@@ -55,7 +55,7 @@
         "agent-cli/internal/transport/cli/room.go"
       ],
       "c25": "Diagnosis, verifier, fixtures, provenance, and extraction plan only; no production ownership.",
-      "follow_on": "C21 room/gateway/duplex owner, coordinated with C18 for exact lifecycle files and C20 for the active remote test46/provider_burst repair."
+      "follow_on": "C21 room/gateway/duplex owner, coordinated with C18 for exact lifecycle files and C20 for the active composition assertion plus remote test46/provider_burst repair."
     },
     "wire_and_sequence": [
       "Preserve wire_gen.go -> NewRoomServiceWithDevices -> room-wire Dependencies -> rooms.Service.",
@@ -64,7 +64,7 @@
       "Use MediaPorts/mediaBridge for local capture/playback and leave device conversion/callback ownership in device service.",
       "Retire the legacy ticker/raw-codec/direct-sink dependency only after focused controls and public-consumer regression pass."
     ],
-    "trigger": "Compiled legacy path owns time.NewTicker, PCM16 Decode/Encode, device constructors, and direct sink writes; separate current hosted failure is the remote snapshot timeout owned by C20.",
+    "trigger": "Compiled legacy path owns time.NewTicker, PCM16 Decode/Encode, device constructors, and direct sink writes; the separate current hosted coverage failure is the C20-owned composition assertion at agent-cli/internal/wire/composition_test.go:417.",
     "current_behavior": "Room-owned host cadence and raw bytes; room-side resample/decode; direct DeviceSink.WriteFrame.",
     "intended_behavior": "Injected scheduler; canonical PCMFrame and bounded FrameBuffer/mixer; device-owned playback queue and callback accounting.",
     "executable_regression": [
@@ -101,6 +101,7 @@
     "QUALITY": ["provenance", "positive/negative controls", "focused tests", "race", "vet", "bounded cleanup"]
   },
   "later_gates": [
+    "C20 reviewed composition assertion repair for CI coverage rejection",
     "C20 reviewed repair for test46/provider_burst",
     "same-task focused verifier refresh",
     "review and script CI gate; no CI polling or acceptance claim in this packet"

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "current_candidate_revision": "6151f4b7eede2a8b5a5fd9867c856a8743ddc412",
+  "current_candidate_revision": "b061bf852076d4b36526600377ad916751e32b4b",
   "candidate_at_ci_submission": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
   "ci": {
     "run": "34397773527",
@@ -15,6 +15,51 @@
     "make_target": "test-integration",
     "job_started_at": "2026-09-09T19:53:55.8886012Z",
     "failure_at": "2026-09-09T19:59:03.6943356Z"
+  },
+  "latest_ci_rejection": {
+    "run": "34413969081",
+    "job": "102674534021",
+    "pr": 417,
+    "head": "b061bf852076d4b36526600377ad916751e32b4b",
+    "check": "CI (coverage)",
+    "raw_job_json": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-rejection-34413969081-job-102674534021.json",
+    "raw_log_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102674534021/logs",
+    "raw_log_bytes": 31872,
+    "raw_log_sha256": "07a0eb388e05ca832306dfdcd0191d8c9a71ecc2c6c53e5528684a4f117a8c6e",
+    "make_target": "coverage",
+    "job_started_at": "2026-09-09T22:48:00Z",
+    "failure_at": "2026-09-09T22:53:46.1243764Z",
+    "failure": {
+      "test": "TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession",
+      "source": "agent-cli/internal/wire/composition_test.go",
+      "reported_line": 417,
+      "expected": "an error wrapping runtimeSession.ErrLiveMediaUnavailable after preflight",
+      "observed": "composed session error = <nil>",
+      "native_go_test_exit": 1,
+      "make_exit": 2,
+      "first_failed_control": "coverage package test failed before coverage aggregation; the assertion was the only reported test failure in the job log"
+    },
+    "completed_adjacent_checks": [
+      "CI (static)=SUCCESS",
+      "CI (unit)=SUCCESS",
+      "CI (race)=SUCCESS",
+      "CI (WebMCP Chrome)=SUCCESS",
+      "CI (macOS audio release)=SUCCESS",
+      "CI (Windows audio portable)=SUCCESS"
+    ],
+    "local_focused_control": {
+      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/c25-wire-coverage.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
+      "verdict": "PASS",
+      "duration_seconds": 0.563,
+      "coverage": "4.7% of statements"
+    },
+    "ownership": {
+      "c25": "evidence-only; no leased production or composition-test path",
+      "c20": "existing PR412 lease owns agent-cli/internal/wire/composition_test.go and the recording/live repair path",
+      "c21": "remote integration fixture and gateway/duplex lease; not implicated by this coverage assertion",
+      "next_action": "Primary resumes the existing C20 task for the exact composition assertion; after a reviewed repair is integrated into main, C25 refreshes exact-source evidence and submits the changed same task through script CI. Do not submit this unchanged implementation."
+    },
+    "interpretation": "The hosted coverage rejection is an external composition-path failure after the C25 verifier passed. The focused local reproduction, including coverage instrumentation, passed; this does not establish a C25 verifier or selected legacy-boundary failure."
   },
   "failure": {
     "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
