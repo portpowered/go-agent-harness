@@ -379,8 +379,7 @@ func runOverflow(result *report) error {
 	if err := run.send(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-before"}); err != nil {
 		return err
 	}
-	large := strings.Repeat("bounded-summary-overflow-", 250_000)
-	if err := run.send(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-overflow", Value: messages.NewTextDeltaValue(large)}); err != nil {
+	if err := sendOverflowText(run); err != nil {
 		return err
 	}
 	if err := run.send(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-after", Value: messages.NewTextDeltaValue("raw-tail-after-overflow")}); err != nil {
@@ -428,6 +427,12 @@ func runOverflow(result *report) error {
 		return fmt.Errorf("overflow evidence incomplete: partial=%t tail=%t terminal=%t pcm=%d", partial, tailPresent, terminal, result.Overflow.RawPCMBytes)
 	}
 	return nil
+}
+
+func sendOverflowText(run *runState) error {
+	large := strings.Repeat("bounded-summary-overflow-", 250_000)
+	message := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-overflow", Value: messages.NewTextDeltaValue(large)}
+	return run.send(session.LiveRecordAgent, message)
 }
 
 func runCharacterize(result *report) error {
