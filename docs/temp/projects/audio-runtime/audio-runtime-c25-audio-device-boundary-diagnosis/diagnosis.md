@@ -1,7 +1,7 @@
 # C25 audio/device boundary diagnosis
 
 - Task: `audio-runtime-c25-audio-device-boundary-diagnosis`
-- Candidate revision: `672659326172756e26a228009560062d412c6650`
+- Candidate revision: `8e96dc077744d204994274b22356af8e856a8aa7`
 - Source revision: `98ce636dd67349ba64f22cd7916dd370cf4ba484`
 - Source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`
 - Decision basis: source-only diagnosis; no realtime, provider, physical-device, or acoustic claim.
@@ -11,9 +11,12 @@
 
 `SOURCE_GAP_CONFIRMED`: the smallest remaining bypass is the compiled legacy CLI room path in `agent-cli/internal/room/mixer.go` and its `agent-cli/internal/services/internal/agentruntime` callers.
 
-That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and reachable from the service-test seam while duplicating the intended audio/device boundaries.
+That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended audio/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.
 
 ## Focused causal evidence
+
+- Legacy lifecycle mixer field: `[74]` (the actual field is at `session_room_lifecycle.go:74`).
+- Service-test import: `[9]`; `RunRoom` exports: `[]`.
 
 - `legacy-host-cadence` — `agent-cli/internal/room/mixer.go`: The legacy room mixer owns cadence with time.Ticker instead of an injected audio/pkg/clock scheduler.
   - `time_import` lines: 11
@@ -38,6 +41,9 @@ That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device co
 
 - Positive canonical graph: `ACCEPTED`.
 - Negative bypass graph: `REJECTED_AS_FORBIDDEN`.
+- Fixture manifest: `ACCEPTED` with exact SHA-256/byte/line checks for both owned fixtures.
+- Pinned source archive: `ACCEPTED`; rebuilt Git archive SHA-256 is `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
+- Changed-path allowlist: `ACCEPTED` for the complete source-to-candidate and working-tree path set.
 - The canonical `go-audio/pkg/mixer` consumes an injected `clock.TimerSource`, submits `audio.PCMFrame` values into bounded frame buffers, and exposes media ports; device runtime owns the playback queue and callback boundary.
 
 ## One extraction plan

@@ -8,7 +8,7 @@
   "sharedModulePathsModified": [],
   "baselinePathsModified": [],
   "realtimeOrDeviceAccess": false,
-  "candidateHeadAtCheckpoint": "672659326172756e26a228009560062d412c6650",
+  "candidateHeadAtCheckpoint": "8e96dc077744d204994274b22356af8e856a8aa7",
   "pullRequest": 417,
   "chosenDependency": "legacy room-owned PCM16 cadence/mixer dependency",
   "chosenDependencyPlan": "extraction-plan.md",
@@ -18,7 +18,8 @@
     "c21": "session duplex overlap and remaining gateway/room/duplex regression paths",
     "c20": "recording/live paths and test46/provider_burst; current row remains separately owned",
     "c23": "evidence characterization; read-only dependency",
-    "c24": "isolated script/fixture capacity"
+    "c24": "isolated script/fixture capacity",
+    "serviceTest": "agent-cli/internal/services/servicetest/runtime.go imports the legacy implementation but exports no RunRoom at lines 109-112"
   },
   "handoffRule": "Candidate diagnosis may identify the extraction owner and plan, but no production repair is included in C25. C20 retains test46/provider_burst repair; C21 retains room/gateway/duplex; C18 retains exact lifecycle files."
 }

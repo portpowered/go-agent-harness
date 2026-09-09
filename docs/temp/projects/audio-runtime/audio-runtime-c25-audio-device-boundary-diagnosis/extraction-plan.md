@@ -13,7 +13,9 @@ human participant's room path.
 
 The source gap is concrete even though the public `yui room run` route is now
 wired to `go-agent-runtime/services/rooms`: the legacy `RunRoom` implementation
-remains compiled and reachable from the service-test seam. The hosted C25
+remains compiled and exercised by its own internal package tests. The
+`servicetest` package imports the implementation for other session seams but
+does not export `RunRoom` (see `runtime.go:109-112`). The hosted C25
 rejection is a separate C20-owned remote-device scenario; C25 does not infer
 that the legacy path caused it.
 

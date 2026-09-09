@@ -5,11 +5,11 @@
 - Factory admission command: `python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c25-audio-device-boundary-diagnosis`.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c25-audio-device-boundary-diagnosis"}`.
 - PRD branch: `codex/audio-runtime-c25-audio-device-boundary-diagnosis`; isolated worktree and `git branch --show-current` agree.
-- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`, then the exact evidence successor was pushed at `672659326172756e26a228009560062d412c6650`.
+- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`. The latest pre-repair evidence baseline is `8e96dc077744d204994274b22356af8e856a8aa7`; earlier `67265932` and later documentation successors remain preserved checkpoints.
 - Baseline ancestry: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` is an ancestor of the admitted head.
 - Integration ancestry: `8bdafc7f947a3a2c9856220abdc539437035bd21` is an ancestor of the admitted head.
 - Refreshed source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
-- The canonical board had task row `work-task-71` in `PROCESSING`, plan row `work-plan-70` complete, no C25 review row, and the task-row CI rejection for PR417 at `1040f92478bd1da6450f0f9a1fc1f4532ff34937`. C18/C21 review findings were read and remain outside this owned path.
+- The canonical board had task row `work-task-71` in `PROCESSING`, plan row `work-plan-70` complete, concluded review row `work-review-78`, and the task-row CI rejection for PR417 at `1040f92478bd1da6450f0f9a1fc1f4532ff34937`. C18/C21 review findings were read and remain outside this owned path.
 
 ## Prior accepted evidence
 
@@ -28,7 +28,7 @@
 | Canonical timing/buffer graph | `go-audio/pkg/mixer/mixer.go`, `go-audio/pkg/mixer/input.go`, `go-audio/pkg/clock/clock.go`, `go-audio/pkg/audio/buffer.go` | 15, 45, 58; 28, 80; 34, 238, 390; 53, 101 | Injected `clock.TimerSource`, `audio.PCMFrame`, and bounded epoch-aware `audio.NewFrameBuffer`. |
 | Canonical room boundary | `go-agent-runtime/services/rooms/contract.go`, `.../lifecycle/graph.go`, `.../lifecycle/media.go`, `.../lifecycle/participant.go` | 95, 118; 66, 124; 22; 20, 35 | Room owns lifecycle while media ports, media bridge, and mixer own media behavior. |
 | Device boundary | `go-audio/pkg/audio/device_playback.go`, `go-audio/pkg/audio/device_playback_test.go`, `go-device-gateway/pkg/runtime/rtc_device.go`, `.../rtc_device_sink.go` | 51, 236; 190, 209; 105, 143, 387 | Device runtime owns the bounded playback queue/callback and distinguishes queued from consumed/zero-filled samples. |
-| Public route | `agent-cli/internal/wire/wire_gen.go`; `agent-cli/internal/transport/cli/room.go` | 109-110; 52 | `yui room run` receives public `runtimeRooms.Service`, not legacy `RunRoom`. |
+| Public route and service-test boundary | `agent-cli/internal/wire/wire_gen.go`; `agent-cli/internal/transport/cli/room.go`; `agent-cli/internal/services/servicetest/runtime.go` | 109-110; 52; 109-112 | `yui room run` receives public `runtimeRooms.Service`; `servicetest` imports the legacy implementation for session helpers but exports no `RunRoom`. |
 
 The verifier stores SHA-256 hashes and line counts for all audited files in `provenance.json`.
 
@@ -87,3 +87,36 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - The final exact-head rerun at `672659326172756e26a228009560062d412c6650`
   completed in `9.680` seconds with 19 commands and the same accepted diagnosis,
   ancestry/path equality, focused controls, and clean child shutdown evidence.
+
+## Review-78 repair checkpoint
+
+- The latest C25 task-row rejection required exact-head evidence, fail-closed
+  dependency/empty-test controls, lifecycle mixer-field capture, a reproducible
+  source archive, fixture digests, a complete changed-path allowlist, and a
+  corrected service-test reachability statement. The repair is confined to
+  this admitted evidence folder; no production, shared-module, baseline, or
+  existing fixture content was changed.
+- At current source candidate `8e96dc077744d204994274b22356af8e856a8aa7`,
+  `verify.py --mode all` completed in `16.275` seconds with `23` bounded
+  commands and decision `ACCEPTED`. Source ancestry and audited-path equality
+  returned 0, and clean shutdown held for every child.
+- `git archive` rebuilt the pinned source at
+  `98ce636dd67349ba64f22cd7916dd370cf4ba484` as 55,408,640 bytes with SHA-256
+  `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`; the
+  materialized `source.tar` matched the same digest.
+- The committed fixture manifest is `e640b7052eb93966be24d3016fe60995156e45cf98e2d9144a3f60c1521da95f`.
+  It accepts `allowed_room_graph.go` (`6833a559...ecb7b`, 769 bytes, 25
+  lines) and `forbidden_room_graph.go` (`46c2512...760a`, 660 bytes, 18
+  lines) exactly.
+- The complete source-to-candidate and working-tree path set stayed under
+  `docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/`;
+  `outside_allowed=[]` and `malformed_paths=[]`. Positive canonical control
+  was `ACCEPTED`; negative host-ticker/local-codec/direct-device control was
+  `REJECTED_AS_FORBIDDEN`; zero-test discovery and child-hang cleanup controls
+  were accepted as harness controls.
+- The source oracle now requires the actual lifecycle field at
+  `session_room_lifecycle.go:74`. It records that
+  `servicetest/runtime.go:109-112` imports the legacy package for session
+  helpers but exports no `RunRoom`; the legacy entrypoint is covered by its
+  own internal package tests. The historical C20-owned hosted
+  `test46/provider_burst` snapshot timeout remains unwaived and unchanged.

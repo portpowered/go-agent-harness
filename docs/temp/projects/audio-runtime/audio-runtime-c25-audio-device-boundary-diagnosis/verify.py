@@ -67,7 +67,15 @@ PUBLIC_ROUTE_PATHS = [
     "agent-cli/internal/services/wire/wire.go",
     "agent-cli/internal/wire/wire_gen.go",
 ]
-ALL_SOURCE_PATHS = LEGACY_PATHS + CANONICAL_PATHS + PUBLIC_ROUTE_PATHS
+SERVICE_TEST_PATH = "agent-cli/internal/services/servicetest/runtime.go"
+ALL_SOURCE_PATHS = LEGACY_PATHS + CANONICAL_PATHS + PUBLIC_ROUTE_PATHS + [SERVICE_TEST_PATH]
+OWNED_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/"
+FIXTURE_PATHS = [
+    "fixtures/allowed_room_graph.go",
+    "fixtures/forbidden_room_graph.go",
+]
+SOURCE_ARCHIVE_NAME = "source.tar"
+FIXTURE_MANIFEST_NAME = "fixtures/manifest.json"
 
 
 def rel(path: str) -> Path:
@@ -198,7 +206,8 @@ class Runner:
             children_alive = process_group_alive(proc.pid)
         native_returncode = proc.returncode
         harness_error = None
-        if require_tests and "[no tests to run]" in (stdout or ""):
+        no_test_markers = ("[no tests to run]", "no tests to run", "no tests matched")
+        if require_tests and any(marker in (stdout or "").lower() for marker in no_test_markers):
             harness_error = "zero test discovery"
         result = {
             "label": label,
@@ -272,6 +281,8 @@ def source_gap() -> dict[str, Any]:
     public_cli = rel(PUBLIC_ROUTE_PATHS[0]).read_text(encoding="utf-8")
     wire = rel(PUBLIC_ROUTE_PATHS[1]).read_text(encoding="utf-8")
     wire_gen = rel(PUBLIC_ROUTE_PATHS[2]).read_text(encoding="utf-8")
+    service_test = rel(SERVICE_TEST_PATH).read_text(encoding="utf-8")
+    lifecycle_mixer_field = line_hits(lifecycle, r"^\s*mixer\s+\*room\.PCM16Mixer\b")
 
     findings = [
         {
@@ -325,6 +336,7 @@ def source_gap() -> dict[str, Any]:
         findings[2]["evidence"]["mixer_constructor"],
         findings[2]["evidence"]["source_constructor"],
         findings[2]["evidence"]["sink_constructor"],
+        lifecycle_mixer_field,
         findings[3]["evidence"]["input_read"],
         findings[3]["evidence"]["sink_write"],
     )
@@ -338,17 +350,22 @@ def source_gap() -> dict[str, Any]:
         "legacy_entrypoints": {
             "RunRoom": line_hits(orchestration, r"func RunRoom\("),
             "RunRoomWithResult": line_hits(orchestration, r"func RunRoomWithResult\("),
-            "lifecycle_mixer_field": line_hits(lifecycle, r"mixer \*room\.PCM16Mixer"),
+            "lifecycle_mixer_field": lifecycle_mixer_field,
         },
         "findings": findings,
         "public_route": {
             "cli_room_service_type": line_hits(public_cli, r"runtimeRooms\.Service"),
             "wire_room_provider": line_hits(wire, r"NewRoomServiceWithDevices"),
             "generated_room_service": line_hits(wire_gen, r"NewRoomServiceWithDevices"),
+            "service_test_legacy_import": line_hits(service_test, r"^import impl .*internal/agentruntime"),
+            "service_test_run_room_exports": line_hits(
+                service_test, r"^\s*(?:func|var)\s+RunRoom(?:WithResult)?\b"
+            ),
             "legacy_entrypoint_imported_by_public_cli": False,
-            "interpretation": "The current yui room run command is wired to go-agent-runtime/services/rooms. The old RunRoom path remains compiled and is exposed to the CLI service-test seam, but is not the public command path. It is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.",
+            "legacy_entrypoint_exposed_by_service_test": False,
+            "interpretation": "The current yui room run command is wired to go-agent-runtime/services/rooms. servicetest imports the legacy package for other session seams, but runtime.go does not export RunRoom; the old RunRoom path is compiled and exercised by its own internal package tests, not exposed by the service-test API. It is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.",
         },
-        "smallest_bypass": "agent-cli/internal/room/mixer.go plus its legacy agentruntime callers: host ticker + local PCM codec + direct device sink write in one room path.",
+            "smallest_bypass": "agent-cli/internal/room/mixer.go plus its legacy agentruntime callers: host ticker + local PCM codec + direct device sink write in one room path.",
     }
 
 
@@ -394,11 +411,29 @@ def runner_controls(runner: Runner) -> dict[str, Any]:
         expect_failure=True,
     )
     cleanup_ok = bool(hang["timed_out"] and not hang["children_alive"] and hang["native_returncode"] is not None)
-    if not stale_rejected or false_success_ok or truncated_ok or not accepted_ok or not cleanup_ok:
+    no_tests = runner.run(
+        "runner-no-tests",
+        [
+            "go",
+            "test",
+            "-json",
+            "./internal/room",
+            "-run",
+            "^TestC25NoSuchTest$",
+            "-count=1",
+            "-timeout=10s",
+        ],
+        rel("agent-cli"),
+        timeout=10,
+        expect_failure=True,
+        require_tests=True,
+    )
+    no_tests_ok = no_tests.get("harness_error") == "zero test discovery"
+    if not stale_rejected or false_success_ok or truncated_ok or not accepted_ok or not cleanup_ok or not no_tests_ok:
         runner.failure = runner.failure or {
             "label": "runner-controls",
             "returncode": 1,
-            "stderr": "one or more stale/false-success/truncated/cleanup controls did not reach the intended oracle",
+            "stderr": "one or more stale/false-success/truncated/no-test/cleanup controls did not reach the intended oracle",
         }
     return {
         "stale_hash": {
@@ -426,8 +461,156 @@ def runner_controls(runner: Runner) -> dict[str, Any]:
             "children_alive": hang["children_alive"],
             "harness_verdict": hang["harness_verdict"],
         },
+        "zero_test_discovery": {
+            "verdict": "ACCEPTED" if no_tests_ok else "FAILED",
+            "harness_error": no_tests.get("harness_error"),
+            "native_returncode": no_tests.get("native_returncode"),
+            "timed_out": no_tests.get("timed_out"),
+            "children_alive": no_tests.get("children_alive"),
+        },
         "native_oracle_failure": hang,
     }
+
+
+def fixture_manifest_check() -> dict[str, Any]:
+    manifest_path = OWNED / FIXTURE_MANIFEST_NAME
+    result: dict[str, Any] = {
+        "path": str(manifest_path.relative_to(REPO)),
+        "expected_paths": sorted(FIXTURE_PATHS),
+        "verdict": "FAILED",
+    }
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        result["error"] = "fixture manifest is missing or not a regular file"
+        return result
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        result["error"] = f"fixture manifest cannot be read: {exc}"
+        return result
+    if not isinstance(manifest, dict):
+        result["error"] = "fixture manifest root is not an object"
+        return result
+    result["manifest_sha256"] = sha256_file(manifest_path)
+    result["manifest_bytes"] = manifest_path.stat().st_size
+    if manifest.get("schema") != 1 or manifest.get("task") != TASK or manifest.get("source_revision") != SOURCE_REVISION:
+        result["error"] = "fixture manifest identity does not match the pinned task/source"
+        return result
+    entries = manifest.get("fixtures")
+    if not isinstance(entries, list):
+        result["error"] = "fixture manifest fixtures is not a list"
+        return result
+    by_path: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or entry["path"] in by_path:
+            result["error"] = "fixture manifest has a malformed or duplicate entry"
+            return result
+        by_path[entry["path"]] = entry
+    if sorted(by_path) != sorted(FIXTURE_PATHS):
+        result["error"] = "fixture manifest does not enumerate exactly the owned fixtures"
+        result["declared_paths"] = sorted(by_path)
+        return result
+    fixtures: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for path in sorted(FIXTURE_PATHS):
+        fixture_path = OWNED / path
+        entry = by_path[path]
+        if not fixture_path.is_file() or fixture_path.is_symlink():
+            errors.append(f"{path} is missing or not a regular file")
+            continue
+        actual_sha = sha256_file(fixture_path)
+        actual_bytes = fixture_path.stat().st_size
+        actual_lines = len(fixture_path.read_text(encoding="utf-8").splitlines())
+        fixture = {
+            "path": path,
+            "expected_sha256": entry.get("sha256"),
+            "actual_sha256": actual_sha,
+            "expected_bytes": entry.get("bytes"),
+            "actual_bytes": actual_bytes,
+            "expected_lines": entry.get("lines"),
+            "actual_lines": actual_lines,
+        }
+        fixtures.append(fixture)
+        if entry.get("sha256") != actual_sha or entry.get("bytes") != actual_bytes or entry.get("lines") != actual_lines:
+            errors.append(f"{path} digest or size metadata does not match")
+    result["fixtures"] = fixtures
+    result["errors"] = errors
+    result["verdict"] = "ACCEPTED" if not errors else "FAILED"
+    return result
+
+
+def source_archive_check(runner: Runner) -> dict[str, Any]:
+    archive_path = OWNED / SOURCE_ARCHIVE_NAME
+    generated_path = runner.tmp_dir / "source-from-pin.tar"
+    generation = runner.run(
+        "source-archive-rebuild",
+        ["git", "archive", "--format=tar", f"--output={generated_path}", SOURCE_REVISION],
+        REPO,
+    )
+    result: dict[str, Any] = {
+        "path": str(archive_path.relative_to(REPO)),
+        "expected_sha256": SOURCE_ARCHIVE_SHA256,
+        "command_result": generation,
+        "generated_path": str(generated_path),
+        "verdict": "FAILED",
+    }
+    generated_ok = generation["returncode"] == 0 and generated_path.is_file() and not generated_path.is_symlink()
+    if generated_ok:
+        result["generated_sha256"] = sha256_file(generated_path)
+        result["generated_bytes"] = generated_path.stat().st_size
+    materialized_ok = True
+    if archive_path.exists() or archive_path.is_symlink():
+        result["materialized"] = True
+        if archive_path.is_symlink() or not archive_path.is_file():
+            materialized_ok = False
+            result["materialized_error"] = "materialized source archive is not a regular file"
+        else:
+            result["materialized_sha256"] = sha256_file(archive_path)
+            result["materialized_bytes"] = archive_path.stat().st_size
+            materialized_ok = result["materialized_sha256"] == SOURCE_ARCHIVE_SHA256
+    else:
+        result["materialized"] = False
+        result["materialized_note"] = "reproducible archive was verified from the pinned Git object; no checked-in copy is required"
+    result["verdict"] = "ACCEPTED" if generated_ok and result.get("generated_sha256") == SOURCE_ARCHIVE_SHA256 and materialized_ok else "FAILED"
+    return result
+
+
+def changed_path_allowlist(runner: Runner) -> dict[str, Any]:
+    committed = runner.run(
+        "changed-paths",
+        ["git", "diff", "--name-only", SOURCE_REVISION, "HEAD"],
+        REPO,
+    )
+    working = runner.run(
+        "working-tree-paths",
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        REPO,
+    )
+    committed_paths = [line.strip() for line in committed.get("stdout", "").splitlines() if line.strip()]
+    working_paths: list[str] = []
+    for line in working.get("stdout", "").splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[1]
+        if path:
+            working_paths.append(path)
+    all_paths = sorted(set(committed_paths + working_paths))
+    outside = [path for path in all_paths if not path.startswith(OWNED_RELATIVE)]
+    malformed = [path for path in all_paths if path.startswith("/") or "\x00" in path]
+    result = {
+        "allowed_prefixes": [OWNED_RELATIVE],
+        "committed_paths": sorted(set(committed_paths)),
+        "working_tree_paths": sorted(set(working_paths)),
+        "observed_paths": all_paths,
+        "outside_allowed": outside,
+        "malformed_paths": malformed,
+        "complete": committed["returncode"] == 0 and working["returncode"] == 0 and not outside and not malformed and bool(all_paths),
+        "committed_command": committed,
+        "working_tree_command": working,
+    }
+    result["verdict"] = "ACCEPTED" if result["complete"] else "FAILED"
+    return result
 
 
 def dependency_controls() -> dict[str, Any]:
@@ -436,8 +619,9 @@ def dependency_controls() -> dict[str, Any]:
     room_contract = rel("go-agent-runtime/services/rooms/contract.go").read_text(encoding="utf-8")
     room_graph = rel("go-agent-runtime/services/rooms/internal/lifecycle/graph.go").read_text(encoding="utf-8")
     device_runtime = rel("go-device-gateway/pkg/runtime/rtc_device_sink.go").read_text(encoding="utf-8")
-    allowed = (OWNED / "fixtures/allowed_room_graph.go").read_text(encoding="utf-8")
-    forbidden = (OWNED / "fixtures/forbidden_room_graph.go").read_text(encoding="utf-8")
+    allowed = (OWNED / FIXTURE_PATHS[0]).read_text(encoding="utf-8")
+    forbidden = (OWNED / FIXTURE_PATHS[1]).read_text(encoding="utf-8")
+    fixture_manifest = fixture_manifest_check()
 
     allowed_required = {
         "canonical_mixer_clock": line_hits(canonical_mixer, r"go-audio/pkg/clock"),
@@ -457,9 +641,13 @@ def dependency_controls() -> dict[str, Any]:
         "local_codec": line_hits(forbidden, r"go-audio/pkg/codec"),
         "direct_device": line_hits(forbidden, r"go-device-gateway/pkg/devices"),
     }
+    positive_ok = all(isinstance(value, list) and bool(value) for value in allowed_required.values()) and fixture_manifest["verdict"] == "ACCEPTED"
+    negative_ok = all(isinstance(value, list) and bool(value) for value in forbidden_hits.values())
     return {
-        "positive_control": {"verdict": "ACCEPTED" if all(allowed_required.values()) else "FAILED", "evidence": allowed_required},
-        "negative_control": {"verdict": "REJECTED_AS_FORBIDDEN" if all(forbidden_hits.values()) else "FAILED", "evidence": forbidden_hits},
+        "verdict": "ACCEPTED" if positive_ok and negative_ok else "FAILED",
+        "fixture_manifest": fixture_manifest,
+        "positive_control": {"verdict": "ACCEPTED" if positive_ok else "FAILED", "evidence": allowed_required},
+        "negative_control": {"verdict": "REJECTED_AS_FORBIDDEN" if negative_ok else "FAILED", "evidence": forbidden_hits},
         "interpretation": "The dependency oracle accepts the canonical injected-clock/buffer/media-port graph and rejects the legacy bypass shape. This is a source dependency check, not device playback evidence.",
     }
 
@@ -487,9 +675,12 @@ def write_markdown(diagnosis: dict[str, Any]) -> None:
         "",
         f"`{gap['status']}`: the smallest remaining bypass is the compiled legacy CLI room path in `agent-cli/internal/room/mixer.go` and its `agent-cli/internal/services/internal/agentruntime` callers.",
         "",
-        "That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and reachable from the service-test seam while duplicating the intended audio/device boundaries.",
+        "That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended audio/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.",
         "",
         "## Focused causal evidence",
+        "",
+        f"- Legacy lifecycle mixer field: `{gap['legacy_entrypoints']['lifecycle_mixer_field']}` (the actual field is at `session_room_lifecycle.go:74`).",
+        f"- Service-test import: `{gap['public_route']['service_test_legacy_import']}`; `RunRoom` exports: `{gap['public_route']['service_test_run_room_exports']}`.",
         "",
     ]
     for finding in gap["findings"]:
@@ -502,6 +693,9 @@ def write_markdown(diagnosis: dict[str, Any]) -> None:
         "",
         f"- Positive canonical graph: `{controls['positive_control']['verdict']}`.",
         f"- Negative bypass graph: `{controls['negative_control']['verdict']}`.",
+        f"- Fixture manifest: `{controls['fixture_manifest']['verdict']}` with exact SHA-256/byte/line checks for both owned fixtures.",
+        f"- Pinned source archive: `{diagnosis['source_archive']['verdict']}`; rebuilt Git archive SHA-256 is `{diagnosis['source_archive'].get('generated_sha256', 'not captured')}`.",
+        f"- Changed-path allowlist: `{diagnosis['changed_path_allowlist']['verdict']}` for the complete source-to-candidate and working-tree path set.",
         "- The canonical `go-audio/pkg/mixer` consumes an injected `clock.TimerSource`, submits `audio.PCMFrame` values into bounded frame buffers, and exposes media ports; device runtime owns the playback queue and callback boundary.",
         "",
         "## One extraction plan",
@@ -542,6 +736,8 @@ def run(mode: str) -> int:
     if mode in ("gap", "all"):
         head = runner.run("git-head", ["git", "rev-parse", "HEAD"], REPO)
         diagnosis["git_head"] = head["stdout"].strip()
+        diagnosis["source_archive"] = source_archive_check(runner)
+        diagnosis["changed_path_allowlist"] = changed_path_allowlist(runner)
         ancestry = runner.run(
             "source-ancestry",
             ["git", "merge-base", "--is-ancestor", SOURCE_REVISION, "HEAD"],
@@ -557,7 +753,7 @@ def run(mode: str) -> int:
         diagnosis["source_gap"] = source_gap()
         diagnosis["production_path_status"] = runner.run(
             "production-path-status",
-            ["git", "status", "--porcelain", "--untracked-files=all", "--"] + LEGACY_PATHS + CANONICAL_PATHS + PUBLIC_ROUTE_PATHS,
+            ["git", "status", "--porcelain", "--untracked-files=all", "--"] + ALL_SOURCE_PATHS,
             REPO,
         )
         if ancestry["returncode"] != 0:
@@ -572,9 +768,27 @@ def run(mode: str) -> int:
                 "returncode": source_paths["returncode"],
                 "stderr": f"inspected production paths differ from pinned source {SOURCE_REVISION}",
             }
+        if diagnosis["source_archive"]["verdict"] != "ACCEPTED":
+            runner.failure = runner.failure or {
+                "label": "source-archive",
+                "returncode": 1,
+                "stderr": "pinned source archive could not be reproduced and verified",
+            }
+        if diagnosis["changed_path_allowlist"]["verdict"] != "ACCEPTED":
+            runner.failure = runner.failure or {
+                "label": "changed-path-allowlist",
+                "returncode": 1,
+                "stderr": "candidate or working-tree paths escape the owned C25 evidence folder",
+            }
 
     if mode in ("controls", "all"):
         diagnosis["dependency_controls"] = dependency_controls()
+        if diagnosis["dependency_controls"].get("verdict") != "ACCEPTED":
+            runner.failure = runner.failure or {
+                "label": "dependency-controls",
+                "returncode": 1,
+                "stderr": "positive/negative dependency controls or their fixture manifest did not verify",
+            }
         diagnosis["runner_controls"] = runner_controls(runner)
         diagnosis["package_probes"] = [
             package_probe(runner, "agent-cli", "./internal/room"),
@@ -583,6 +797,14 @@ def run(mode: str) -> int:
             package_probe(runner, "go-audio", "./pkg/mixer"),
             package_probe(runner, "go-agent-runtime", "./services/rooms"),
         ]
+        for probe in diagnosis["package_probes"]:
+            command_result = probe.get("command_result", {})
+            if command_result.get("returncode") != 0 or not command_result.get("stdout", "").strip() or not probe.get("import_path"):
+                runner.failure = runner.failure or {
+                    "label": probe.get("package", "package-probe"),
+                    "returncode": command_result.get("returncode"),
+                    "stderr": "package probe failed or returned empty import metadata",
+                }
 
     if mode in ("regressions", "all"):
         tests = [
@@ -621,8 +843,11 @@ def run(mode: str) -> int:
         "baseline_revision": BASELINE_REVISION,
         "integration_revision": INTEGRATION_REVISION,
         "source_archive_sha256": SOURCE_ARCHIVE_SHA256,
+        "source_archive": diagnosis.get("source_archive"),
         "source_ancestry": diagnosis.get("source_ancestry"),
         "source_path_diff": diagnosis.get("source_path_diff"),
+        "changed_path_allowlist": diagnosis.get("changed_path_allowlist"),
+        "fixture_manifest": diagnosis.get("dependency_controls", {}).get("fixture_manifest"),
         "source_files": diagnosis["source_snapshot"],
         "generated_by": "verify.py",
     })
