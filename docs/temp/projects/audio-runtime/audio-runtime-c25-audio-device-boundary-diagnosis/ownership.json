@@ -1,0 +1,19 @@
+{
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
+  "project": "audio-runtime",
+  "ownedPaths": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/"
+  ],
+  "productionPathsModified": [],
+  "sharedModulePathsModified": [],
+  "baselinePathsModified": [],
+  "realtimeOrDeviceAccess": false,
+  "adjacentOwners": {
+    "c18": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go, session_room_coordinator.go, session_room_terminal.go and their tests",
+    "c21": "session duplex overlap and remaining gateway/room/duplex regression paths",
+    "c20": "recording/live paths; current row failed/inactive",
+    "c23": "evidence characterization; current row failed/inactive",
+    "c24": "isolated script/fixture capacity"
+  },
+  "handoffRule": "Candidate diagnosis may identify the extraction owner and plan, but no production repair is included in C25."
+}

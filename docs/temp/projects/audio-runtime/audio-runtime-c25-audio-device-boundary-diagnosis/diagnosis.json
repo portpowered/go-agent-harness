@@ -1,0 +1,926 @@
+{
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "bounded_runner": {
+    "aggregate_seconds": 600,
+    "clean_shutdown": true,
+    "per_child_seconds": 55
+  },
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "command": "git rev-parse HEAD",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+      "duration_seconds": 0.018,
+      "label": "git-head",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "5d5afcb14d7b269378020809f5a2418c499ac94d\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        "--",
+        "agent-cli/internal/room/mixer.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+        "go-audio/pkg/audio/media_contract.go",
+        "go-audio/pkg/audio/buffer.go",
+        "go-audio/pkg/audio/session_media.go",
+        "go-audio/pkg/mixer/mixer.go",
+        "go-audio/pkg/mixer/input.go",
+        "go-agent-runtime/services/rooms/contract.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/graph.go",
+        "go-device-gateway/pkg/runtime/rtc_device.go",
+        "go-device-gateway/pkg/runtime/rtc_device_sink.go",
+        "go-agent-loop/pkg/agentloop/architecture_import_test.go",
+        "agent-cli/internal/transport/cli/room.go",
+        "agent-cli/internal/services/wire/wire.go",
+        "agent-cli/internal/wire/wire_gen.go"
+      ],
+      "command": "git status --porcelain --untracked-files=all -- agent-cli/internal/room/mixer.go agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go agent-cli/internal/services/internal/agentruntime/session_room_run.go agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go go-audio/pkg/audio/media_contract.go go-audio/pkg/audio/buffer.go go-audio/pkg/audio/session_media.go go-audio/pkg/mixer/mixer.go go-audio/pkg/mixer/input.go go-agent-runtime/services/rooms/contract.go go-agent-runtime/services/rooms/internal/lifecycle/graph.go go-device-gateway/pkg/runtime/rtc_device.go go-device-gateway/pkg/runtime/rtc_device_sink.go go-agent-loop/pkg/agentloop/architecture_import_test.go agent-cli/internal/transport/cli/room.go agent-cli/internal/services/wire/wire.go agent-cli/internal/wire/wire_gen.go",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+      "duration_seconds": 0.023,
+      "label": "production-path-status",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "list",
+        "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+        "./internal/room"
+      ],
+      "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/room",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 0.057,
+      "label": "go-list:agent-cli/./internal/room",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/room|bytes,context,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,gopkg.in/yaml.v3,io,net,net/url,os,reflect,regexp,sort,strings,sync,time\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "list",
+        "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+        "./internal/services/internal/agentruntime"
+      ],
+      "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/services/internal/agentruntime",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 0.077,
+      "label": "go-list:agent-cli/./internal/services/internal/agentruntime",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime|bufio,bytes,context,crypto/sha256,encoding/hex,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/agent-cli/internal/input,github.com/portpowered/go-agent-harness/agent-cli/internal/room,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession,github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices,github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes,github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/sight,github.com/portpowered/go-agent-harness/agent-cli/internal/skills,github.com/portpowered/go-agent-harness/agent-cli/internal/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/contract,github.com/portpowered/go-agent-harness/go-audio/pkg/observability,github.com/portpowered/go-agent-harness/go-audio/pkg/recording,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,image,image/gif,image/jpeg,image/png,io,log,math,mime,net/url,os,os/exec,path,path/filepath,reflect,regexp,slices,sort,strconv,strings,sync,sync/atomic,time,unicode,unicode/utf8\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "list",
+        "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+        "./internal/transport/cli"
+      ],
+      "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/transport/cli",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 0.091,
+      "label": "go-list:agent-cli/./internal/transport/cli",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli|bufio,bytes,context,crypto/sha256,encoding/base64,encoding/hex,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/agent-cli/internal/flags,github.com/portpowered/go-agent-harness/agent-cli/internal/input,github.com/portpowered/go-agent-harness/agent-cli/internal/logger,github.com/portpowered/go-agent-harness/agent-cli/internal/output,github.com/portpowered/go-agent-harness/agent-cli/internal/probe,github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet,github.com/portpowered/go-agent-harness/agent-cli/internal/services,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession,github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices,github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes,github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire,github.com/portpowered/go-agent-harness/agent-cli/internal/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events,github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire,github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording,github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,github.com/spf13/cobra,github.com/spf13/pflag,golang.org/x/term,gopkg.in/yaml.v3,image,image/jpeg,image/png,io,net,net/http,net/url,os,os/exec,os/signal,os/user,path/filepath,regexp,sort,strconv,strings,sync,syscall,time\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "list",
+        "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+        "./pkg/mixer"
+      ],
+      "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./pkg/mixer",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-audio",
+      "duration_seconds": 0.03,
+      "label": "go-list:go-audio/./pkg/mixer",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer|context,errors,fmt,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,io,math,os,path/filepath,sort,strings,sync,time\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "list",
+        "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+        "./services/rooms"
+      ],
+      "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./services/rooms",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-agent-runtime",
+      "duration_seconds": 0.035,
+      "label": "go-list:go-agent-runtime/./services/rooms",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms|context,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/mixer,io,strings,time\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./pkg/mixer",
+        "-run",
+        "^Test(Mixer|PCMAccumulator)",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./pkg/mixer -run '^Test(Mixer|PCMAccumulator)' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-audio",
+      "duration_seconds": 0.401,
+      "label": "canonical-mixer-tests",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-audio/pkg/mixer\t0.232s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./pkg/agentloop",
+        "-run",
+        "^TestProductionAudioAndDeviceOwnership$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./pkg/agentloop -run '^TestProductionAudioAndDeviceOwnership$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-agent-loop",
+      "duration_seconds": 0.407,
+      "label": "loop-ownership-guard",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop\t0.200s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/room",
+        "-run",
+        "^TestPCM16MixerMixesEveryActiveInputAndClips$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./internal/room -run '^TestPCM16MixerMixesEveryActiveInputAndClips$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 0.568,
+      "label": "legacy-mixer-focused-test",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/room\t0.200s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/services/internal/agentruntime",
+        "-run",
+        "^$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./internal/services/internal/agentruntime -run '^$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 1.839,
+      "label": "legacy-agent-runtime-compile",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.436s [no tests to run]\n",
+      "timed_out": false
+    }
+  ],
+  "decision": "ACCEPTED",
+  "dependency_controls": {
+    "interpretation": "The dependency oracle accepts the canonical injected-clock/buffer/media-port graph and rejects the legacy bypass shape. This is a source dependency check, not device playback evidence.",
+    "negative_control": {
+      "evidence": {
+        "direct_device": [
+          8
+        ],
+        "host_ticker": [
+          15
+        ],
+        "local_codec": [
+          7
+        ]
+      },
+      "verdict": "REJECTED_AS_FORBIDDEN"
+    },
+    "positive_control": {
+      "evidence": {
+        "canonical_input_pcm_frame": [
+          28,
+          80,
+          98,
+          120,
+          125,
+          151,
+          157
+        ],
+        "canonical_mixer_clock": [
+          15
+        ],
+        "canonical_mixer_frame_buffer": [
+          48
+        ],
+        "device_queue": [
+          40,
+          82,
+          90,
+          196,
+          201,
+          285,
+          287,
+          745
+        ],
+        "fixture_audio": [
+          7
+        ],
+        "fixture_clock": [
+          8
+        ],
+        "fixture_mixer": [
+          9
+        ],
+        "room_graph_clock": [
+          66,
+          108,
+          123
+        ],
+        "room_graph_mixer": [
+          124
+        ],
+        "room_media_factory": [
+          118
+        ],
+        "room_media_ports": [
+          95
+        ]
+      },
+      "verdict": "ACCEPTED"
+    }
+  },
+  "elapsed_seconds": 3.552,
+  "failure": null,
+  "focused_regressions": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "./pkg/mixer",
+        "-run",
+        "^Test(Mixer|PCMAccumulator)",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./pkg/mixer -run '^Test(Mixer|PCMAccumulator)' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-audio",
+      "duration_seconds": 0.401,
+      "label": "canonical-mixer-tests",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-audio/pkg/mixer\t0.232s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./pkg/agentloop",
+        "-run",
+        "^TestProductionAudioAndDeviceOwnership$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./pkg/agentloop -run '^TestProductionAudioAndDeviceOwnership$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-agent-loop",
+      "duration_seconds": 0.407,
+      "label": "loop-ownership-guard",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop\t0.200s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/room",
+        "-run",
+        "^TestPCM16MixerMixesEveryActiveInputAndClips$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./internal/room -run '^TestPCM16MixerMixesEveryActiveInputAndClips$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 0.568,
+      "label": "legacy-mixer-focused-test",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/room\t0.200s\n",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/services/internal/agentruntime",
+        "-run",
+        "^$",
+        "-count=1",
+        "-timeout=45s"
+      ],
+      "command": "go test ./internal/services/internal/agentruntime -run '^$' -count=1 -timeout=45s",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+      "duration_seconds": 1.839,
+      "label": "legacy-agent-runtime-compile",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.436s [no tests to run]\n",
+      "timed_out": false
+    }
+  ],
+  "git_head": "5d5afcb14d7b269378020809f5a2418c499ac94d",
+  "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "mode": "all",
+  "origin_main": "5d5afcb14d7b269378020809f5a2418c499ac94d",
+  "owned_path": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis",
+  "package_probes": [
+    {
+      "command_result": {
+        "argv": [
+          "go",
+          "list",
+          "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+          "./internal/room"
+        ],
+        "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/room",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+        "duration_seconds": 0.057,
+        "label": "go-list:agent-cli/./internal/room",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/room|bytes,context,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,gopkg.in/yaml.v3,io,net,net/url,os,reflect,regexp,sort,strings,sync,time\n",
+        "timed_out": false
+      },
+      "direct_imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/config",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+        "gopkg.in/yaml.v3",
+        "io",
+        "net",
+        "net/url",
+        "os",
+        "reflect",
+        "regexp",
+        "sort",
+        "strings",
+        "sync",
+        "time"
+      ],
+      "import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
+      "module_dir": "agent-cli",
+      "package": "./internal/room"
+    },
+    {
+      "command_result": {
+        "argv": [
+          "go",
+          "list",
+          "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+          "./internal/services/internal/agentruntime"
+        ],
+        "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/services/internal/agentruntime",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+        "duration_seconds": 0.077,
+        "label": "go-list:agent-cli/./internal/services/internal/agentruntime",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime|bufio,bytes,context,crypto/sha256,encoding/hex,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/agent-cli/internal/input,github.com/portpowered/go-agent-harness/agent-cli/internal/room,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession,github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices,github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes,github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/sight,github.com/portpowered/go-agent-harness/agent-cli/internal/skills,github.com/portpowered/go-agent-harness/agent-cli/internal/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/contract,github.com/portpowered/go-agent-harness/go-audio/pkg/observability,github.com/portpowered/go-agent-harness/go-audio/pkg/recording,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,image,image/gif,image/jpeg,image/png,io,log,math,mime,net/url,os,os/exec,path,path/filepath,reflect,regexp,slices,sort,strconv,strings,sync,sync/atomic,time,unicode,unicode/utf8\n",
+        "timed_out": false
+      },
+      "direct_imports": [
+        "bufio",
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/config",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/input",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/sight",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/skills",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/clock",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/contract",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/observability",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/recording",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+        "image",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "io",
+        "log",
+        "math",
+        "mime",
+        "net/url",
+        "os",
+        "os/exec",
+        "path",
+        "path/filepath",
+        "reflect",
+        "regexp",
+        "slices",
+        "sort",
+        "strconv",
+        "strings",
+        "sync",
+        "sync/atomic",
+        "time",
+        "unicode",
+        "unicode/utf8"
+      ],
+      "import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "module_dir": "agent-cli",
+      "package": "./internal/services/internal/agentruntime"
+    },
+    {
+      "command_result": {
+        "argv": [
+          "go",
+          "list",
+          "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+          "./internal/transport/cli"
+        ],
+        "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./internal/transport/cli",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/agent-cli",
+        "duration_seconds": 0.091,
+        "label": "go-list:agent-cli/./internal/transport/cli",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli|bufio,bytes,context,crypto/sha256,encoding/base64,encoding/hex,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/agent-cli/internal/config,github.com/portpowered/go-agent-harness/agent-cli/internal/flags,github.com/portpowered/go-agent-harness/agent-cli/internal/input,github.com/portpowered/go-agent-harness/agent-cli/internal/logger,github.com/portpowered/go-agent-harness/agent-cli/internal/output,github.com/portpowered/go-agent-harness/agent-cli/internal/probe,github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet,github.com/portpowered/go-agent-harness/agent-cli/internal/services,github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession,github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices,github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes,github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay,github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire,github.com/portpowered/go-agent-harness/agent-cli/internal/tools,github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events,github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery,github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers,github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire,github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording,github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay,github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools,github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing,github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc,github.com/spf13/cobra,github.com/spf13/pflag,golang.org/x/term,gopkg.in/yaml.v3,image,image/jpeg,image/png,io,net,net/http,net/url,os,os/exec,os/signal,os/user,path/filepath,regexp,sort,strconv,strings,sync,syscall,time\n",
+        "timed_out": false
+      },
+      "direct_imports": [
+        "bufio",
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/base64",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/config",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/flags",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/input",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/logger",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/output",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/tools",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/clock",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+        "github.com/spf13/cobra",
+        "github.com/spf13/pflag",
+        "golang.org/x/term",
+        "gopkg.in/yaml.v3",
+        "image",
+        "image/jpeg",
+        "image/png",
+        "io",
+        "net",
+        "net/http",
+        "net/url",
+        "os",
+        "os/exec",
+        "os/signal",
+        "os/user",
+        "path/filepath",
+        "regexp",
+        "sort",
+        "strconv",
+        "strings",
+        "sync",
+        "syscall",
+        "time"
+      ],
+      "import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+      "module_dir": "agent-cli",
+      "package": "./internal/transport/cli"
+    },
+    {
+      "command_result": {
+        "argv": [
+          "go",
+          "list",
+          "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+          "./pkg/mixer"
+        ],
+        "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./pkg/mixer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-audio",
+        "duration_seconds": 0.03,
+        "label": "go-list:go-audio/./pkg/mixer",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer|context,errors,fmt,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/codec,github.com/portpowered/go-agent-harness/go-audio/pkg/wavio,io,math,os,path/filepath,sort,strings,sync,time\n",
+        "timed_out": false
+      },
+      "direct_imports": [
+        "context",
+        "errors",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/clock",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/codec",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+        "io",
+        "math",
+        "os",
+        "path/filepath",
+        "sort",
+        "strings",
+        "sync",
+        "time"
+      ],
+      "import_path": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+      "module_dir": "go-audio",
+      "package": "./pkg/mixer"
+    },
+    {
+      "command_result": {
+        "argv": [
+          "go",
+          "list",
+          "-f={{.ImportPath}}|{{join .Imports \",\"}}",
+          "./services/rooms"
+        ],
+        "command": "go list '-f={{.ImportPath}}|{{join .Imports \",\"}}' ./services/rooms",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/go-agent-runtime",
+        "duration_seconds": 0.035,
+        "label": "go-list:go-agent-runtime/./services/rooms",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms|context,encoding/json,errors,fmt,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages,github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript,github.com/portpowered/go-agent-harness/go-agent-runtime/services/session,github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room,github.com/portpowered/go-agent-harness/go-audio/pkg/audio,github.com/portpowered/go-agent-harness/go-audio/pkg/clock,github.com/portpowered/go-agent-harness/go-audio/pkg/mixer,io,strings,time\n",
+        "timed_out": false
+      },
+      "direct_imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/clock",
+        "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
+        "io",
+        "strings",
+        "time"
+      ],
+      "import_path": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "module_dir": "go-agent-runtime",
+      "package": "./services/rooms"
+    }
+  ],
+  "production_path_status": {
+    "argv": [
+      "git",
+      "status",
+      "--porcelain",
+      "--untracked-files=all",
+      "--",
+      "agent-cli/internal/room/mixer.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+      "go-audio/pkg/audio/media_contract.go",
+      "go-audio/pkg/audio/buffer.go",
+      "go-audio/pkg/audio/session_media.go",
+      "go-audio/pkg/mixer/mixer.go",
+      "go-audio/pkg/mixer/input.go",
+      "go-agent-runtime/services/rooms/contract.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/graph.go",
+      "go-device-gateway/pkg/runtime/rtc_device.go",
+      "go-device-gateway/pkg/runtime/rtc_device_sink.go",
+      "go-agent-loop/pkg/agentloop/architecture_import_test.go",
+      "agent-cli/internal/transport/cli/room.go",
+      "agent-cli/internal/services/wire/wire.go",
+      "agent-cli/internal/wire/wire_gen.go"
+    ],
+    "command": "git status --porcelain --untracked-files=all -- agent-cli/internal/room/mixer.go agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go agent-cli/internal/services/internal/agentruntime/session_room_run.go agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go go-audio/pkg/audio/media_contract.go go-audio/pkg/audio/buffer.go go-audio/pkg/audio/session_media.go go-audio/pkg/mixer/mixer.go go-audio/pkg/mixer/input.go go-agent-runtime/services/rooms/contract.go go-agent-runtime/services/rooms/internal/lifecycle/graph.go go-device-gateway/pkg/runtime/rtc_device.go go-device-gateway/pkg/runtime/rtc_device_sink.go go-agent-loop/pkg/agentloop/architecture_import_test.go agent-cli/internal/transport/cli/room.go agent-cli/internal/services/wire/wire.go agent-cli/internal/wire/wire_gen.go",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+    "duration_seconds": 0.023,
+    "label": "production-path-status",
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "",
+    "timed_out": false
+  },
+  "schema": 1,
+  "source_archive_sha256": "0bebedbf449193683267220769084393f0c3e175d59d7e6dc7ba0992c06364ac",
+  "source_gap": {
+    "findings": [
+      {
+        "evidence": {
+          "new_ticker": [
+            167
+          ],
+          "pcm_mixer_type": [
+            224
+          ],
+          "time_import": [
+            11
+          ]
+        },
+        "id": "legacy-host-cadence",
+        "meaning": "The legacy room mixer owns cadence with time.Ticker instead of an injected audio/pkg/clock scheduler.",
+        "path": "agent-cli/internal/room/mixer.go"
+      },
+      {
+        "evidence": {
+          "codec_import": [
+            13
+          ],
+          "decode": [
+            736
+          ],
+          "encode": [
+            760
+          ]
+        },
+        "id": "legacy-local-pcm-codec",
+        "meaning": "The legacy mixer decodes and encodes raw PCM16 inside room orchestration rather than passing canonical PCMFrame values through the audio subsystem.",
+        "path": "agent-cli/internal/room/mixer.go"
+      },
+      {
+        "evidence": {
+          "device_import": [
+            3
+          ],
+          "mixer_constructor": [
+            161
+          ],
+          "sink_constructor": [
+            499
+          ],
+          "source_constructor": [
+            494
+          ]
+        },
+        "id": "legacy-direct-device-construction",
+        "meaning": "The legacy room orchestration creates both the local PCM mixer and physical device endpoints in the same implementation.",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go"
+      },
+      {
+        "evidence": {
+          "decode": [
+            1176
+          ],
+          "input_read": [
+            1049
+          ],
+          "resample": [
+            1057,
+            1074,
+            1180
+          ],
+          "sink_write": [
+            1186
+          ]
+        },
+        "id": "legacy-direct-device-write",
+        "meaning": "The legacy human output loop resamples/decodes pending PCM and writes device frames directly, so queue admission and actual consumption are not represented by the canonical device runtime boundary.",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+      }
+    ],
+    "legacy_entrypoints": {
+      "RunRoom": [
+        22
+      ],
+      "RunRoomWithResult": [
+        31
+      ],
+      "lifecycle_mixer_field": []
+    },
+    "legacy_package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+    "public_route": {
+      "cli_room_service_type": [
+        46,
+        52,
+        355
+      ],
+      "generated_room_service": [
+        109
+      ],
+      "interpretation": "The current yui room run command is wired to go-agent-runtime/services/rooms. The old RunRoom path remains compiled and is exposed to the CLI service-test seam, but is not the public command path. It is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.",
+      "legacy_entrypoint_imported_by_public_cli": false,
+      "wire_room_provider": [
+        64,
+        67,
+        71
+      ]
+    },
+    "scope": "compiled legacy implementation; no claim of active public room-run reachability",
+    "smallest_bypass": "agent-cli/internal/room/mixer.go plus its legacy agentruntime callers: host ticker + local PCM codec + direct device sink write in one room path.",
+    "status": "SOURCE_GAP_CONFIRMED"
+  },
+  "source_revision": "5d5afcb14d7b269378020809f5a2418c499ac94d",
+  "source_snapshot": {
+    "agent-cli/internal/room/mixer.go": {
+      "bytes": 26846,
+      "lines": 891,
+      "sha256": "21a1ade23f4f2ef9b2121be902ad73b1ae78f7e078a8769043c6c23ee6b515ce"
+    },
+    "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go": {
+      "bytes": 42108,
+      "lines": 1242,
+      "sha256": "d79e860106c801b6f2afd518dcd1215a5132e2b115a4d06ed550aea7d63088a0"
+    },
+    "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go": {
+      "bytes": 19185,
+      "lines": 507,
+      "sha256": "97febf0be93751dceb4a0ce5876dd34340e3eaddc056a342614729c61bc5e526"
+    },
+    "agent-cli/internal/services/internal/agentruntime/session_room_run.go": {
+      "bytes": 47635,
+      "lines": 1192,
+      "sha256": "2ac0ff50ee59a1ec8f04682e04d876d270146ecda8245c5d14d28a5f7120e8d6"
+    },
+    "agent-cli/internal/services/wire/wire.go": {
+      "bytes": 9847,
+      "lines": 162,
+      "sha256": "5d0d626ae34610675eaf303bbe604f262d34a10a460a5aa6d6786237f0f0cf28"
+    },
+    "agent-cli/internal/transport/cli/room.go": {
+      "bytes": 18172,
+      "lines": 527,
+      "sha256": "c31b3cb46222ecc7fa9c62a2007471e5588a4522080b3fd9faa39c0cae1796a2"
+    },
+    "agent-cli/internal/wire/wire_gen.go": {
+      "bytes": 19670,
+      "lines": 389,
+      "sha256": "458cc9cb41d447488afa1d8816c742c7d89c633b93bf57140904132af42421f6"
+    },
+    "go-agent-loop/pkg/agentloop/architecture_import_test.go": {
+      "bytes": 1791,
+      "lines": 59,
+      "sha256": "55f7b7a15901c87d1cd216d5b716a0e2916373a07cf46125670898609f762d47"
+    },
+    "go-agent-runtime/services/rooms/contract.go": {
+      "bytes": 8350,
+      "lines": 257,
+      "sha256": "941083d07437ee3a26cb7356467690f788b7110cd46fd2199b145ecb9fd2838f"
+    },
+    "go-agent-runtime/services/rooms/internal/lifecycle/graph.go": {
+      "bytes": 10395,
+      "lines": 322,
+      "sha256": "c2da83c98e0c8b28156072cd418bcbb3397dec72ecea217eb6d855ee0152f5a4"
+    },
+    "go-audio/pkg/audio/buffer.go": {
+      "bytes": 6517,
+      "lines": 225,
+      "sha256": "9257dbba4086d849a2167821ab412fac71aac2b120c12872e6df95246ac90934"
+    },
+    "go-audio/pkg/audio/media_contract.go": {
+      "bytes": 7156,
+      "lines": 175,
+      "sha256": "fe016849e95408be71394824b55f36f06b60c1654e394da54891bb057ca3e1f3"
+    },
+    "go-audio/pkg/audio/session_media.go": {
+      "bytes": 16407,
+      "lines": 550,
+      "sha256": "61ffe922cbcc2a7387cb75b529b2512019d4f5f18f8340329ddab7e005f95b08"
+    },
+    "go-audio/pkg/mixer/input.go": {
+      "bytes": 4780,
+      "lines": 187,
+      "sha256": "c85017d7d1b5e503a66458f8511dc0708af2a6d3f4b66e320087f14064294164"
+    },
+    "go-audio/pkg/mixer/mixer.go": {
+      "bytes": 8078,
+      "lines": 307,
+      "sha256": "2d2d55babf90aeaf830f0df450cb90a3885b8a49cc61c3e041f86df62eb24f0d"
+    },
+    "go-device-gateway/pkg/runtime/rtc_device.go": {
+      "bytes": 12986,
+      "lines": 422,
+      "sha256": "e09b3379771021779f5fbde405e4a2264c0e4f226a504eb6ae7818b7f0d3b832"
+    },
+    "go-device-gateway/pkg/runtime/rtc_device_sink.go": {
+      "bytes": 26992,
+      "lines": 757,
+      "sha256": "0ff0c39c55708ae7403c50f5f1b8d57ab84cd95de8b359fceff141992a0cdf54"
+    }
+  },
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis"
+}

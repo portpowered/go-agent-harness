@@ -1,0 +1,32 @@
+C25 progress checkpoint
+
+Admission and preservation
+- Read factory/docs/operating-policy.md and factory/docs/implementation-handoff.md before action.
+- Verified task admission with project-control.py: admitted to project audio-runtime.
+- Confirmed prd.branchName matches codex/audio-runtime-c25-audio-device-boundary-diagnosis and the isolated worktree.
+- Fetched origin/main at 5d5afcb14d7b269378020809f5a2418c499ac94d.
+- Preserved baseline 3194edd97aed588f7cdf2f8c58a69ac21da4c9ad and integration 8bdafc7f947a3a2c9856220abdc539437035bd21 ancestry.
+- Initial source worktree was clean; no predecessor or unrelated changes were touched.
+
+Board/review context
+- Canonical task row: work-task-71; plan work-plan-70 complete; no C25 review/rejection finding existed.
+- Read accepted C15/C16/C17 evidence and current C18/C20/C21/C23 findings. Their owned paths and actionable review repairs remain outside this packet.
+
+Diagnosis
+- The public yui room run route uses runtimeRooms.Service from go-agent-runtime/services/rooms.
+- The compiled legacy agentruntime package still exposes RunRoom/RunRoomWithResult through the CLI service-test seam.
+- Legacy agent-cli/internal/room/mixer.go owns time.Ticker, PCM16 codec operations, and local bounded cadence.
+- Legacy session_room_orchestration.go opens gateway source/sink handles and constructs the legacy mixer.
+- Legacy session_room_run.go resamples/decodes output and calls sink.WriteFrame directly.
+- This is a concrete source/ownership migration hazard, not runtime/acoustic proof.
+
+Verifier checkpoint
+- verify.py --mode all: ACCEPTED.
+- Source gap: SOURCE_GAP_CONFIRMED.
+- Positive canonical graph: ACCEPTED.
+- Negative bypass graph: REJECTED_AS_FORBIDDEN.
+- go list probes and all four focused checks returned 0.
+- Aggregate 3.552s; child cap 55s; aggregate cap 600s; clean shutdown.
+
+Next action
+- Checkpoint owned evidence files, commit and push this diagnosis branch, then open/update the PR for script CI handoff. Do not poll CI; if the gate later rejects, inspect the exact check and repair this same task.
