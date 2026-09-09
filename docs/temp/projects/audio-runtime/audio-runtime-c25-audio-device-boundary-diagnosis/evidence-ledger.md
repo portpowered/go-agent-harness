@@ -5,7 +5,7 @@
 - Factory admission command: `python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c25-audio-device-boundary-diagnosis`.
 - Admission result: `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c25-audio-device-boundary-diagnosis"}`.
 - PRD branch: `codex/audio-runtime-c25-audio-device-boundary-diagnosis`; isolated worktree and `git branch --show-current` agree.
-- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`.
+- `origin/main` after refresh: `98ce636dd67349ba64f22cd7916dd370cf4ba484`; it was merged into the isolated candidate at `88f996c5384222d97b92578a6ba7f1ea83adbf2e`, then the exact evidence successor was pushed at `672659326172756e26a228009560062d412c6650`.
 - Baseline ancestry: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` is an ancestor of the admitted head.
 - Integration ancestry: `8bdafc7f947a3a2c9856220abdc539437035bd21` is an ancestor of the admitted head.
 - Refreshed source archive SHA-256: `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
@@ -84,3 +84,6 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - The C20 `test46/provider_burst` rejection remains the only unclaimed red check
   and is not fixed or waived by this documentation-only refresh. C25 remains
   source-only and retains no C20 production ownership.
+- The final exact-head rerun at `672659326172756e26a228009560062d412c6650`
+  completed in `9.680` seconds with 19 commands and the same accepted diagnosis,
+  ancestry/path equality, focused controls, and clean child shutdown evidence.

@@ -47,6 +47,11 @@ accepted every focused package/control check, and recorded the intentional
 1-second child-hang control as an expected terminated failure with no surviving
 children. The refreshed source archive is `e77933bdc0f47a2f885581eb9b51a297b763f7a7b54bffe3b07254fa2126f11e`.
 
+The final exact-head refresh at pushed candidate
+`672659326172756e26a228009560062d412c6650` completed in 9.680 seconds with
+the same 19-command result and no unexpected failure. `diagnosis.json`,
+`diagnosis.md`, and `provenance.json` identify this exact pushed HEAD.
+
 The current-head CI rejection was separately characterized read-only. Run `34397773527` / job `102621627290` failed only in the hosted integration matrix at `test46/provider_burst`: after all provider responses and callback-clock shutdown, the full `/v1/audio-device/control/snapshot` evidence request exceeded the existing 30-second scenario context at `session_tool_audio_remote_e2e_test.go:182`. The production-binary device replay and committed regression suite in that job passed. The exact production/fixture owner is C20; C25 makes no repair outside this evidence folder. Local single and full-matrix focused runs passed, so this remains an intermittent hosted diagnosis rather than a claimed fix.
 
 C20's reviewed recording/live repair has not reached `origin/main` in this refresh;

@@ -59,3 +59,8 @@ Current-main refresh after C24 merge
 - `verify.py --mode all` returned `ACCEPTED` in `9.475s` with 19 bounded commands: `SOURCE_GAP_CONFIRMED`, source ancestry/path equality and production-path status accepted, all focused list/test/race/vet and dependency controls accepted, and the intentional 1-second child hang terminated with native `-15` and no surviving child.
 - No C20 reviewed production/fixture repair is present on refreshed main; the historical PR417 `test46/provider_burst` snapshot timeout remains C20-owned. C25 made no production/shared/fixture/baseline/device/provider/realtime change and makes no CI-green claim.
 - Next action: commit/push this exact-head evidence refresh, update PR417 with the refreshed source/candidate hashes and C20 ownership note, and submit the same changed task to the script CI gate without polling; retain C25 ownership for any exact same-head rejection.
+
+Final pushed-head evidence stamp
+- At pushed HEAD `672659326172756e26a228009560062d412c6650`, the final `verify.py --mode all` rerun returned `ACCEPTED` in `9.680s` with 19 commands, `SOURCE_GAP_CONFIRMED`, accepted source ancestry/path equality and focused controls, and no unexpected failure. The intentional child-hang control remained bounded and left no child.
+- Updated `diagnosis.json`, `diagnosis.md`, `provenance.json`, `extraction-plan.json`, and `ownership.json` to identify this exact candidate. No production/shared/fixture/baseline/device/provider/realtime path changed.
+- Next action: commit this exact evidence stamp, push the same PR, update PR417, and submit to the script CI gate without polling. No CI-green, merge, or project-acceptance claim is made.
