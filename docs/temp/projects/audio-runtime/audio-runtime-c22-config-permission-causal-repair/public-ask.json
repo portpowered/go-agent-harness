@@ -1,0 +1,74 @@
+{
+  "answer": "c22 local answer",
+  "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
+  "binary_sha256": "1bb25bcadcb578c854f62af5616ed583b660bf044ea94ce4ade7dd346b347739",
+  "capture_sha256": "be395bda75bee958f0709b50c47af93daf0f9088a50850d32a4e36472d7db2ea",
+  "failure": "",
+  "fixture_paths": [
+    "/v1/chat/completions"
+  ],
+  "prompt": "c22 deterministic ask",
+  "results": [
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c22-capture-model",
+        "--base-url",
+        "http://127.0.0.1:63121/v1",
+        "--record",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_/capture.json",
+        "c22 deterministic ask"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_",
+      "duration_seconds": 0.419774,
+      "exit_code": 0,
+      "label": "record",
+      "stderr": "",
+      "stdout": "c22 local answer",
+      "timed_out": false,
+      "timeout_seconds": 60.0
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c22-config-permission-causal-repair/docs/temp/projects/audio-runtime/audio-runtime-c22-config-permission-causal-repair/bin/yui",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c22-capture-model",
+        "--base-url",
+        "http://127.0.0.1:63121/v1",
+        "--replay",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_/capture.json",
+        "c22 deterministic ask"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c22-public-ask-8j7jhy3_",
+      "duration_seconds": 0.025,
+      "exit_code": 0,
+      "label": "replay-after-helper-stop",
+      "stderr": "",
+      "stdout": "c22 local answer",
+      "timed_out": false,
+      "timeout_seconds": 60.0
+    }
+  ],
+  "schema": "audio-runtime-c22-public-ask-v1",
+  "source_revision": "e927682a8e7da9912d3ea9fd2cfb2b01db50c653",
+  "status": "passed"
+}
