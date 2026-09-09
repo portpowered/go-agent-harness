@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/stretchr/testify/require"
 )
 
 type recordingAudioInputSender struct {
@@ -442,9 +443,8 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	}
 }
 
-// An explicit control may register its media barrier before an automatic
-// provider send reaches the wrapper. The automatic send must be allowed to
-// finish so the model runner can dispatch the control; waiting on the control
+// An explicit control may register its media barrier before an automatic provider send reaches the wrapper.
+// The automatic send must finish so the model runner can dispatch the control; waiting on the control
 // barrier from the runner itself would deadlock both operations.
 func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
 	gate := mediagate.New(nil)
@@ -593,7 +593,7 @@ func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
 }
 func TestMediaRequirementsRespectCapturePlaybackDirections(t *testing.T) {
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
-	t.Cleanup(func() { _ = media.Close() })
+	t.Cleanup(func() { require.NoError(t, media.Close()) })
 	if !(mediaRequirements{outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) || !(mediaRequirements{inbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) {
 		t.Fatal("direction-aware media admission mismatch")
 	}
