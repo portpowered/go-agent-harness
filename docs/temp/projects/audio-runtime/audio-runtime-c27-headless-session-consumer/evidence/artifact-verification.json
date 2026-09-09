@@ -1,8 +1,8 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "d1129928db22b786ec32b9c7da73d688d5d48750f6f497065b185ef023c4a3fb",
-    "size": 11295
+    "sha256": "c48a042c3820eeff7d9da9aedc316631a763c964d8d2aecaa3646b4dd87ad080",
+    "size": 11297
   },
   "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
   "tamper_control": "tampered artifact digest/size rejected",
@@ -11,13 +11,13 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "43ddee5f62ef8736f36d1097df792c29ce32b4d22fb5186193d5e6c7526e17a4",
-        "size": 7538419
+        "sha256": "3a47af9c4153192a8df9ee7f365e571a2237d33ce8f94762de37db408d0b29f9",
+        "size": 7539659
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "ed1b935b149142c30e522c9463d15af44bf2a3cbd6e943bb567150541d7abfba",
-        "size": 9190898
+        "sha256": "1f5668a0446d208a8a327042ffc5e3e433396f41dde151de9d738e2c567ca389",
+        "size": 9207602
       },
       {
         "path": "evidence/artifacts/yui.archive",
@@ -41,9 +41,16 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "19bc6bb581c6eaea8099f6775780fb7e5fb724595fc146e146bee56e66b7cf4a",
-        "size": 48147
+        "sha256": "2cae2b3ac0000b2f60fca92e403024f6a6ab7afecb2dbb3556aa0d7ba3fbe396",
+        "size": 50351
       }
-    ]
+    ],
+    "provenance": {
+      "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
+      "current_head": "14c3d73566c70974939f3a319e6b35206a637948",
+      "source_changes_since_source_revision": [],
+      "source_revision": "14c3d73566c70974939f3a319e6b35206a637948",
+      "source_revision_matches_current_head": true
+    }
   }
 }
