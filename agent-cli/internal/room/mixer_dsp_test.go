@@ -19,7 +19,11 @@ func TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mixer: %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("close mixer: %v", err)
+		}
+	})
 	for _, id := range []string{"gamma", "alpha", "beta"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add input %s: %v", id, err)
@@ -61,7 +65,11 @@ func TestPCMMixLegacyKeepsFullCadenceZeroPadding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mixer: %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("close mixer: %v", err)
+		}
+	})
 	if err := mixer.AddInput("speaker"); err != nil {
 		t.Fatalf("add input: %v", err)
 	}
