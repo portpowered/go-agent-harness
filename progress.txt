@@ -1072,3 +1072,44 @@ C18 static lint repair and script-gate handoff checkpoint
   update PR #410 with the repair/evidence, and return `ACCEPTED` to the
   script-owned current-head CI gate without polling it. Retain ownership and
   use `CONTINUE` for any exact-head rejection; do not self-review.
+
+C18 coverage rejection reconciliation and same-owner handoff checkpoint
+
+- Reverified admission for `audio-runtime-c18-public-strict-replay`; the task
+  remains `work-task-24`, `prd.json.branchName` and the isolated branch remain
+  exactly `codex/audio-runtime-c18-public-strict-replay`, and `origin/main` is
+  `e4137eba6a6499142f50701609c1149afc71db84`. The planning main,
+  startup-integration revision and original baseline remain ancestors; the
+  worktree and unrelated worktrees were preserved.
+- Read the complete latest rejection for PR #410, run `34373981932`, job
+  `102541983884`, at candidate `e74de9e284cbee0c973bb8619ab65fcd898d0a19`.
+  The 309-line coverage log has one failure:
+  `agent-cli/internal/wire/TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession`
+  received a nil session error where `runtimeSession.ErrLiveMediaUnavailable`
+  was required at `composition_test.go:417`. The raw completed job JSON,
+  board feedback, full-log command, SHA256
+  `5529bce4c1d79721042964152759382f9bc7206c50a91c595ca91711d4f079c1`, and
+  exact extraction are saved in
+  `ci-rejection-34373981932.json`. The replay packages, integration package,
+  static, race and other coverage work passed; the cleanup submodule warning
+  is unrelated.
+- Reproduced the exact composition test 20/20 with the same `nomicrophone`
+  and `-coverpkg` instrumentation. It is outside C18's owned replay/Wire/
+  embedding implementation paths and does not traverse strict replay; no C18
+  production defect reproduced and no unrelated repair is authorized. A broad
+  separate embedding race run also exposed the pre-existing room-latency
+  fixture race/timeout, outside C18; the required strict public consumer
+  controls pass in normal and race modes.
+- Accumulated causal checks after the rejection are green: replay subtree
+  normal `420` and race `252` tests across four packages; strict prepared/tool
+  regressions normal `25` and race `15`; focused public embedding strict
+  controls normal and race; replay integration `10`; CLI replay `96`; and
+  coverage-instrumented composition reproduction `20/20`. Review43 repairs
+  remain in `983098cd` and the static assertion repair in `e74de9e2`; no
+  production behavior changed after those repairs.
+- No CI success, independent review, merge, vertical probe or project
+  acceptance is claimed. Next action: commit this raw rejection and causal
+  reconciliation, push the same admitted branch, update PR #410 with the
+  exact non-waived failure evidence, and return `ACCEPTED` to the
+  script-owned current-head CI gate without polling. Retain ownership through
+  `CONTINUE` for any exact-head actionable C18 rejection; do not self-review.
