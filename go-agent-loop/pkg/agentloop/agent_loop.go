@@ -167,7 +167,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 		// result-driven model request. This preserves provider-wire
 		// queue/sequence ordering when both are ready in the same tick.
 		hlps = append(hlps, subsystems.NewToolResultForwarderWithEnqueuer(modelRunner.EnqueueSessionEvent, cfg.Logger))
-		pingPong := subsystems.NewPingPong(kernelRunner.DeltaInbox, cfg.Logger)
+		pingPong := subsystems.NewPingPongWithClock(kernelRunner.DeltaInbox, cfg.Logger, cfg.Clock)
 		hlps = append(hlps, pingPong)
 	}
 
