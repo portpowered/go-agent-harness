@@ -334,7 +334,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 			t.Fatal("v8 multi-turn CLI harnesses did not return after the bounded cleanup window")
 		}
 	}
-	wg.Wait()
+	waitForV8MultiTurnCompletion(t, &wg, ctx, aToBBridge, bToABridge)
 
 	run := v8DuplexRun{
 		base:       base,
@@ -376,4 +376,21 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
 	}
 	return run
+}
+
+func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	t.Helper()
+	for name, bridge := range map[string]*v8MultiTurnBridge{
+		"A-to-B": aToBBridge,
+		"B-to-A": bToABridge,
+	} {
+		if !bridge.waitForEOFSeen(ctx) {
+			t.Logf("multi-turn bridge %s did not observe consumed EOF before run context ended: %s", name, bridge.eofState())
+		}
+	}
+}
+
+func waitForV8MultiTurnCompletion(t *testing.T, wg *sync.WaitGroup, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	wg.Wait()
+	waitForV8MultiTurnEOFs(t, ctx, aToBBridge, bToABridge)
 }

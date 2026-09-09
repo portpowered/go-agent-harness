@@ -4,6 +4,7 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -132,4 +133,175 @@ func (h *adversarialCapacityHandle) WriteFrame(context.Context, []int16) error {
 func (h *adversarialCapacityHandle) Close() error {
 	h.once.Do(func() { h.closed.Store(true) })
 	return nil
+}
+
+type c21DelayedPlaybackRegistry struct {
+	device devicegw.Device
+	handle *c21DelayedPlaybackHandle
+}
+
+func newC21DelayedPlaybackRegistry(t *testing.T, handle *c21DelayedPlaybackHandle) *c21DelayedPlaybackRegistry {
+	t.Helper()
+	device, err := devicegw.NewDevice("c21-delayed", "output", "C21 Delayed Output", devicegw.DirectionOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &c21DelayedPlaybackRegistry{device: device, handle: handle}
+}
+
+func (r *c21DelayedPlaybackRegistry) List() ([]devicegw.Device, error) {
+	return []devicegw.Device{r.device}, nil
+}
+
+func (r *c21DelayedPlaybackRegistry) Default(devicegw.Direction) (devicegw.Device, error) {
+	return r.device, nil
+}
+
+func (r *c21DelayedPlaybackRegistry) Open(devicegw.DeviceID) (devicegw.OpenedDevice, error) {
+	return r.handle, nil
+}
+
+type c21DelayedPlaybackHandle struct {
+	deviceID        devicegw.DeviceID
+	format          audio.DeviceFormat
+	queue           *audio.PlaybackQueue
+	callbackStarted chan struct{}
+	release         chan struct{}
+	callbackOnce    sync.Once
+	releaseOnce     sync.Once
+	closeOnce       sync.Once
+}
+
+func newC21DelayedPlaybackHandle(t *testing.T, rate int) *c21DelayedPlaybackHandle {
+	t.Helper()
+	format := audio.PCM16DeviceFormat(rate)
+	queue, err := audio.NewPlaybackQueue(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &c21DelayedPlaybackHandle{
+		deviceID:        "c21-delayed:output",
+		format:          format,
+		queue:           queue,
+		callbackStarted: make(chan struct{}),
+		release:         make(chan struct{}),
+	}
+}
+
+func (h *c21DelayedPlaybackHandle) DeviceDirection() devicegw.Direction {
+	return devicegw.DirectionOutput
+}
+
+func (h *c21DelayedPlaybackHandle) DeviceFormat() audio.DeviceFormat { return h.format }
+
+func (h *c21DelayedPlaybackHandle) WaitForPlaybackCapacity(context.Context, int) error {
+	return nil
+}
+
+func (h *c21DelayedPlaybackHandle) WriteFrame(ctx context.Context, samples []int16) error {
+	if err := audio.ContextError(ctx); err != nil {
+		return err
+	}
+	h.queue.Enqueue(samples)
+	return nil
+}
+
+func (h *c21DelayedPlaybackHandle) WriteSamples(ctx context.Context, samples []int16) error {
+	return h.WriteFrame(ctx, samples)
+}
+
+func (h *c21DelayedPlaybackHandle) SetPlaybackRenderObserver(observer audio.PlaybackRenderObserver) {
+	h.queue.SetRenderObserver(func(rate int, samples []int16) {
+		h.callbackOnce.Do(func() { close(h.callbackStarted) })
+		<-h.release
+		observer(rate, samples)
+	})
+}
+
+func (h *c21DelayedPlaybackHandle) releaseObserver() {
+	h.releaseOnce.Do(func() { close(h.release) })
+}
+
+func (h *c21DelayedPlaybackHandle) PlaybackStats() audio.PlaybackQueueStats {
+	return h.queue.Snapshot()
+}
+
+func (h *c21DelayedPlaybackHandle) DiscardPlayback() int { return h.queue.Discard() }
+
+func (h *c21DelayedPlaybackHandle) render(samples int) int {
+	return h.queue.RenderInto(make([]int16, samples))
+}
+
+func (h *c21DelayedPlaybackHandle) Close() error {
+	h.closeOnce.Do(h.releaseObserver)
+	return nil
+}
+
+var _ devicegw.DeviceRegistry = (*c21DelayedPlaybackRegistry)(nil)
+var _ devicegw.OpenedDevice = (*c21DelayedPlaybackHandle)(nil)
+var _ audio.PlaybackStatsProvider = (*c21DelayedPlaybackHandle)(nil)
+var _ audio.PlaybackDiscarder = (*c21DelayedPlaybackHandle)(nil)
+
+func c21StartDelayedRender(handle *c21DelayedPlaybackHandle) chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		handle.render(4)
+		close(done)
+	}()
+	return done
+}
+
+func c21WaitDelayedCallback(t *testing.T, handle *c21DelayedPlaybackHandle) {
+	t.Helper()
+	select {
+	case <-handle.callbackStarted:
+	case <-time.After(time.Second):
+		t.Fatal("delayed callback did not reach observer gate")
+	}
+}
+
+func c21WaitDelayedRender(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("delayed callback did not finish")
+	}
+}
+
+func assertC21DelayedConsumed(t *testing.T, got RTCDevicePlaybackObservation, response audio.PlaybackResponse, samples []int16) {
+	t.Helper()
+	if got.Kind != RTCDevicePlaybackConsumed || got.PlaybackResponse != response || got.StartSample != 0 || got.EndSample != 4 || got.SampleCount != 4 || !got.Consumed || !got.Precise || !reflect.DeepEqual(got.Samples, samples[:4]) {
+		t.Fatalf("delayed callback consumed = %+v, want one callback-owned prefix", got)
+	}
+}
+
+func assertC21DelayedDiscard(t *testing.T, got RTCDevicePlaybackObservation, response audio.PlaybackResponse) {
+	t.Helper()
+	if got.Kind != RTCDevicePlaybackDiscard || got.PlaybackResponse != response || got.StartSample != 4 || got.EndSample != 8 || got.SampleCount != 4 || got.Consumed || !got.Precise {
+		t.Fatalf("delayed callback discard = %+v, want only native tail [4,8)", got)
+	}
+}
+
+func assertC21NoDelayedDuplicate(t *testing.T, sub *RTCDevicePlaybackObservationSubscription) {
+	t.Helper()
+	select {
+	case event := <-sub.events:
+		t.Fatalf("delayed callback produced duplicate event: %+v", event)
+	default:
+	}
+}
+
+func c21WaitForDeviceSamples(t *testing.T, sub *RTCDevicePlaybackObservationSubscription, want uint64) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if sub.Stats().DeviceSamples >= want {
+			return
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("device sample clock = %d, want at least %d after callback drain", sub.Stats().DeviceSamples, want)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
