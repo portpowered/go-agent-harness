@@ -1107,6 +1107,12 @@ Delivery record:
   on the same branch and PR; the PR body is updated with the exact latest head,
   finding map, and bounded validation evidence. No merge SHA exists and the new
   script-owned CI result has not been polled or claimed.
+- Review-41 repair commit `887198b0d82950c5fedc55348d06e6204664bbd7`
+  (`docs: repair C14 Wire and provider boundary audit`) is pushed on the same
+  branch and PR. It updates the audit and the full C14 rejection-inbox
+  extraction; PR #406 is OPEN at this exact head. The PR body was updated with
+  the finding map and bounded validation evidence. No new CI result is being
+  polled or claimed.
 - The prior script-owned gate was rejected only for the unrelated coverage
   timing failure recorded above; no new CI run is being polled or claimed
   green. The next factory action after this evidence checkpoint is the
