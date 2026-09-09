@@ -12,19 +12,20 @@ import (
 
 // capturingInferencer attaches optional provider media after session setup.
 type capturingInferencer struct {
-	inner             messages.SessionInferencer
-	media             *mediagate.Gate
-	continuous        bool
-	flushOutbound     bool
-	onDispatch        func(messages.StreamMessage)
-	onToolResult      func(string, string, bool) func()
-	onContinuation    func() func()
-	onOpeningAdmitted func()
-	onProviderDone    func(error)
-	onMediaAttached   func(bool)
-	captureMu         sync.Mutex
-	captureFlush      func() error
-	connectedSession  messages.Session
+	inner              messages.SessionInferencer
+	media              *mediagate.Gate
+	continuous         bool
+	flushOutbound      bool
+	onDispatch         func(messages.StreamMessage)
+	onToolResult       func(string, string, bool) func()
+	onContinuation     func() func()
+	onOpeningAdmitted  func()
+	onProviderDone     func(error)
+	onMediaAttached    func(bool)
+	onMediaUnavailable func(error)
+	captureMu          sync.Mutex
+	captureFlush       func() error
+	connectedSession   messages.Session
 }
 
 func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -51,6 +52,9 @@ func (i *capturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 		i.onMediaAttached(mediaAttached)
 	}
 	if !mediaAttached {
+		if i.onMediaUnavailable != nil {
+			i.onMediaUnavailable(mediagate.ErrMediaUnavailable)
+		}
 		i.media.Fail(mediagate.ErrMediaUnavailable)
 	}
 	// Notify the live owner after the provider cleanup boundary, even if the

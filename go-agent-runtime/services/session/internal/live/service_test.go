@@ -23,11 +23,12 @@ func (i *testInferencer) ConnectSession(context.Context) (messages.Session, erro
 }
 
 type testSession struct {
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
-	close   sync.Once
-	mu      sync.Mutex
-	sent    []messages.StreamMessage
+	receive             *messages.TypedBuffer[messages.StreamMessage]
+	done                chan struct{}
+	close               sync.Once
+	closeDoneOnDoneCall bool
+	mu                  sync.Mutex
+	sent                []messages.StreamMessage
 }
 type failingLiveRecorder struct {
 	messageErr  error
@@ -99,7 +100,12 @@ func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 	return true
 }
 func (s *testSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
-func (s *testSession) Done() <-chan struct{}                                  { return s.done }
+func (s *testSession) Done() <-chan struct{} {
+	if s.closeDoneOnDoneCall {
+		s.close.Do(func() { close(s.done) })
+	}
+	return s.done
+}
 func (s *testSession) Close() error {
 	s.close.Do(func() { close(s.done) })
 	return nil
@@ -114,6 +120,54 @@ func (s *testSession) hasText(text string) bool {
 	}
 	return false
 }
+
+func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
+	for _, testCase := range []struct {
+		name                    string
+		providerDoneBeforeCheck bool
+	}{
+		{name: "provider_done_before_media_check", providerDoneBeforeCheck: true},
+		{name: "provider_done_after_media_check", providerDoneBeforeCheck: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			provider := newTestSession()
+			if testCase.providerDoneBeforeCheck {
+				provider.close.Do(func() { close(provider.done) })
+			} else {
+				// capturingInferencer calls Done after it reports the missing
+				// capability, so this closes the provider immediately after the
+				// media check and exercises the opposite terminal ordering.
+				provider.closeDoneOnDoneCall = true
+			}
+			service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+				return &testInferencer{session: provider}, nil
+			}})
+			opened, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: testCase.name})
+			if err != nil {
+				t.Fatalf("OpenLive: %v", err)
+			}
+			h, ok := opened.(*handle)
+			if !ok {
+				t.Fatalf("handle type = %T, want *handle", opened)
+			}
+			h.configureMediaRequirement(true)
+			if err := h.Start(context.Background()); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			wait := make(chan error, 1)
+			go func() { wait <- h.Wait() }()
+			select {
+			case err := <-wait:
+				if !errors.Is(err, session.ErrLiveMediaUnavailable) {
+					t.Fatalf("Wait = %v, want ErrLiveMediaUnavailable", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for missing-media terminal")
+			}
+		})
+	}
+}
+
 func TestOpenLiveIsInertUntilStart(t *testing.T) {
 	s := newTestSession()
 	called := make(chan session.LiveRequest, 1)

@@ -111,6 +111,15 @@ func (h *handle) configureCaptureSource(active bool) {
 	h.mu.Unlock()
 }
 
+func (h *handle) configureMediaRequirement(required bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.mediaRequired = required
+	h.mu.Unlock()
+}
+
 func (h *handle) captureSourceIsActive() bool {
 	if h == nil {
 		return false

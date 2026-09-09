@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -294,7 +295,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 		command.Args = append(command.Args, prompt)
 	}
 	command.Env = remoteToolAudioEnvironment(os.Environ(), fixturePath, testCase.holdToneControl)
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr remoteToolAudioBuffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Start(); err != nil {
@@ -307,8 +308,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 
 	clockCtx, stopClock := context.WithCancel(ctx)
+	var callbackAdvances atomic.Uint64
 	clockDone := make(chan error, 1)
-	go driveRemoteToolAudioClock(clockCtx, endpoint, provider.firstAudioSent, callbackInterval, clockDone)
+	go driveRemoteToolAudioClock(clockCtx, endpoint, provider.firstAudioSent, callbackInterval, &callbackAdvances, clockDone)
 
 	select {
 	case <-provider.allResponsesSent:
@@ -348,7 +350,11 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		snapshot = waitForRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval)
+		var waitErr error
+		snapshot, waitErr = waitForRemoteToolAudio(ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval, &callbackAdvances)
+		if waitErr != nil {
+			t.Fatalf("remote playback wait failed: %v; %s", waitErr, remoteToolAudioFailureEvidence(endpoint, provider, len(calls), want, done, &stderr, &callbackAdvances))
+		}
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
@@ -492,7 +498,7 @@ func primeRemoteToolAudioInput(t *testing.T, ctx context.Context, endpoint strin
 	}
 }
 
-func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-chan struct{}, interval time.Duration, result chan<- error) {
+func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-chan struct{}, interval time.Duration, callbackAdvances *atomic.Uint64, result chan<- error) {
 	select {
 	case <-start:
 	case <-ctx.Done():
@@ -515,12 +521,12 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 				result <- err
 				return
 			}
+			callbackAdvances.Add(1)
 		}
 	}
 }
 
-func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration) devicegw.DeviceServerSnapshot {
-	t.Helper()
+func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64) (devicegw.DeviceServerSnapshot, error) {
 	// The provider having written all WebSocket events does not mean the agent's
 	// media pump has consumed them yet. Keep the external callback clock alive
 	// until every expected sample reaches the device or the unique tail of the
@@ -541,11 +547,11 @@ func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 		if callbacksSinceSnapshot >= callbacksPerSnapshot {
 			snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
 			if err != nil {
-				t.Fatalf("read remote device evidence: %v", err)
+				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("read remote device evidence: %w", err)
 			}
 			got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 			if remoteToolAudioHasSuffix(got, finalMarker) && snapshot.Playback.QueuedSamples == 0 {
-				return snapshot
+				return snapshot, nil
 			}
 			callbacksSinceSnapshot = 0
 		}
@@ -555,13 +561,71 @@ func waitForRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, 
 			// and snapshot sequentially so a large evidence response cannot race
 			// another HTTP request against the deterministic device server.
 			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
-				t.Fatalf("advance remote playback while awaiting final marker: %v", err)
+				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("advance remote playback while awaiting final marker: %w", err)
 			}
+			callbackAdvances.Add(1)
 			callbacksSinceSnapshot++
 		case <-ctx.Done():
-			t.Fatal("remote playback did not reach final PCM marker before the scenario deadline")
+			return devicegw.DeviceServerSnapshot{}, fmt.Errorf("remote playback did not reach final PCM marker before the scenario deadline: %w", ctx.Err())
 		}
 	}
+}
+
+type remoteToolAudioBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *remoteToolAudioBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(data)
+}
+
+func (b *remoteToolAudioBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func remoteToolAudioFailureEvidence(endpoint string, provider *remoteToolAudioProvider, expectedToolCalls int, want []int16, done <-chan error, stderr *remoteToolAudioBuffer, callbackAdvances *atomic.Uint64) string {
+	childStatus := "still running at timeout"
+	childExited := false
+	select {
+	case err := <-done:
+		childExited = true
+		childStatus = fmt.Sprintf("exited: %v", err)
+	default:
+	}
+	diagnosticCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	snapshot, snapshotErr := devicegw.ReadRemoteDeviceServerSnapshot(diagnosticCtx, endpoint)
+	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
+	markerSamples := audio.FrameSize
+	if markerSamples > len(want) {
+		markerSamples = len(want)
+	}
+	finalMarker := want[len(want)-markerSamples:]
+	lastTrace := remoteToolAudioTraceTail(snapshot.Trace, "")
+	lastRenderTrace := remoteToolAudioTraceTail(snapshot.Trace, "render")
+	lastCaptureTrace := remoteToolAudioTraceTail(snapshot.Trace, "capture")
+	stderrText := "<child still running>"
+	if childExited {
+		stderrText = stderr.String()
+		if len(stderrText) > 4096 {
+			stderrText = stderrText[len(stderrText)-4096:]
+		}
+	}
+	return fmt.Sprintf("remote timeout evidence: snapshot_error=%v rendered_pcm=%d nonzero_pcm=%d expected_pcm=%d final_marker=%t playback={queued:%d dropped:%d overflow:%d discarded:%d discard_events:%d callbacks:%d rendered:%d} capture={queued:%d captured:%d dropped:%d} trace_last=%s trace_render=%s trace_capture=%s expected_tool_calls=%d provider=%+v child=%s stderr=%q callback_advances=%d", snapshotErr, len(snapshot.RenderedSamples), len(got), len(want), remoteToolAudioHasSuffix(got, finalMarker), snapshot.Playback.QueuedSamples, snapshot.Playback.DroppedSamples, snapshot.Playback.OverflowEvents, snapshot.Playback.DiscardedSamples, snapshot.Playback.DiscardEvents, snapshot.Playback.CallbackCount, snapshot.Playback.RenderedSamples, snapshot.Capture.QueuedSamples, snapshot.Capture.CapturedSamples, snapshot.Capture.DroppedSamples, lastTrace, lastRenderTrace, lastCaptureTrace, expectedToolCalls, provider.Snapshot(), childStatus, stderrText, callbackAdvances.Load())
+}
+
+func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) string {
+	for index := len(trace) - 1; index >= 0; index-- {
+		if tap == "" || trace[index].Tap == tap {
+			return fmt.Sprintf("%+v", trace[index])
+		}
+	}
+	return "none"
 }
 
 func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
