@@ -138,12 +138,10 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 	case <-b.coordinator.abort:
 		return 0, context.Canceled
 	}
-	// Holding the output boundary until the peer has consumed the packet makes
-	// the overlap observable: the next user's PCM starts while this response
-	// is still in the bridge, without sending RESPONSE.CANCEL. The final
-	// response also waits for peer input acceptance; its EOF is released only
-	// after the peer has completed its second turn so the raw input commit
-	// cannot preempt the queued response events.
+	// Holding the output boundary until the peer consumes the packet keeps the
+	// overlap observable: the next user's PCM starts while the response remains
+	// in the bridge without RESPONSE.CANCEL. The final response also waits for
+	// peer input acceptance; its EOF is released after the peer's second turn.
 	finalSchedule := len(v8MultiTurnSchedule()) - 1
 	if crossing.Schedule == finalSchedule {
 		select {
@@ -171,6 +169,7 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 			case <-b.eofSeen:
 			case <-b.coordinator.abort:
 				return 0, context.Canceled
+			default:
 			}
 		}
 		return len(data), nil
@@ -223,6 +222,7 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 		case <-b.eofSeen:
 		case <-b.coordinator.abort:
 			return 0, context.Canceled
+		default:
 		}
 	}
 	return len(data), nil
