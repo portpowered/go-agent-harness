@@ -972,3 +972,46 @@ C18 integration rejection reconciliation and script-gate handoff checkpoint
   gate without polling. Retain ownership through `CONTINUE` for any exact
   same-head rejection; do not self-review or claim CI, merge, vertical or
   project acceptance.
+
+C18 completion-forgery repair checkpoint
+
+- Reverified admission with `factory/scripts/project-control.py verify-work
+  --type task --name audio-runtime-c18-public-strict-replay`, returning
+  `admitted`. The task remains `work-task-24`; `prd.json.branchName` and the
+  isolated branch are both `codex/audio-runtime-c18-public-strict-replay`.
+  Fetched `origin/main` at `e4137eba6a6499142f50701609c1149afc71db84` and
+  confirmed it, the startup integration revision
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, original baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and planning main
+  `3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84` remain ancestors. The exact
+  repair commit is `97773a17936697a072b1840b21b32204a28e68d0`; no host checkout,
+  predecessor checkpoint, C05 worktree, or C20-owned path was changed.
+- Resolved review37/review42's completion-forgery finding by removing caller
+  supplied wire/tool counts from `StrictPreparedBuilder.Build`. Expected wire
+  cardinality now comes from the captured records and expected tool cardinality
+  from the service-owned executor metadata; empty/unknown evidence is marked
+  incomplete. The external GOWORK=off regression now proves zero-evidence
+  construction and unconsumed rewrapping cannot validate; prior opaque-field,
+  nil-context, missing-terminal, exact-once, integrity, and confinement controls
+  remain intact.
+- Causal validation is green: replay subtree normal/race each pass `168` tests
+  across four packages; standalone `tests/embedding` normal/race each pass
+  `42` tests with `GOWORK=off`; `make fmt`, `make wire-check`, `make vet`, pinned
+  golangci-lint `2.9.0` (0 issues), pinned Staticcheck `2026.1`, architecture
+  size (`182` packages, `1869` files, `27207` functions), and diff checks pass.
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` exits 0 in normal,
+  coverage, and race modes with expected mismatch/PCM/transcript negatives.
+- Exact current-source public artifacts pass all owned cases. The yui binary
+  SHA256 is `d4c762c2543c5ae1f61f85e49719ff77056f7af6c271e8aef7f99e13a5ba0bed`;
+  the independent GOWORK=off consumer SHA256 is
+  `b7f91a3ed0f15c5b494b46f114ce00fdb0c1d9e2ff049f740bca17c119b8a79f`. Reports
+  at `verify-public-{external,strict,provider,interruption,ask}.json` all have
+  source revision `97773a1`, status `passed`, and 2/2/2/3/2 passing results;
+  the external consumer reports 16 wire events/1 tool and `Device execution:
+  false`, strict replay reports 18 wire events/1 tool, provider/interruption
+  retain their PCM/15-event controls, and the stopped-helper ask replay matches.
+- No CI result, independent review, merge, vertical acceptance, or project
+  acceptance is claimed. Next action: commit this evidence ledger, push the
+  same task, update PR #410 with the exact current head and repair evidence,
+  submit `ACCEPTED` to script-owned CI without polling, and retain ownership
+  through `CONTINUE` for any exact-head rejection.
