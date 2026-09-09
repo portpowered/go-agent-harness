@@ -1,0 +1,51 @@
+{
+  "case": "normal",
+  "consumer": "docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
+  "execution": {
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c19-bounded-conversation-summary/docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/summary-consumer",
+      "--case",
+      "normal",
+      "--output",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c19-verify-bz2gt745/normal.json"
+    ],
+    "report": {
+      "case": "normal",
+      "clean_shutdown": true,
+      "finalization": {
+        "heap_after_finalize_bytes": 537408,
+        "heap_live_bytes": 504344,
+        "shutdown_elapsed_ms": 31,
+        "shutdown_total_alloc_bytes": 5306144,
+        "stable": true
+      },
+      "lock_released": true,
+      "normal": {
+        "complete_summary": true,
+        "expected_turns": 24,
+        "late_audio_attributed": true,
+        "pcm_bytes": 48,
+        "tool_result_exact_once": true,
+        "transcript_snapshots": true
+      },
+      "queue": {
+        "capacity_bytes": 16777216,
+        "drain_wait_ms": 400,
+        "events": 149,
+        "payload_bytes": 16614
+      },
+      "session_log_bytes": 6812,
+      "session_log_turns": 24,
+      "source": "150fffd9cbbe06e9fd884937e73df6a8fee68426; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+      "summary_budget": {
+        "max_bytes": 2097152,
+        "max_items": 4096,
+        "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+      }
+    },
+    "returncode": 0,
+    "stderr": "",
+    "stdout": ""
+  },
+  "passed": true
+}

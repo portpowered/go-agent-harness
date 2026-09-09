@@ -1,0 +1,36 @@
+{
+  "case": "overflow",
+  "source": "3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84; public recording Wire + LiveRecorder; raw transcript/PCM/provider files are authoritative",
+  "summary_budget": {
+    "max_bytes": 2097152,
+    "max_items": 4096,
+    "scope": "retained convenience projection and final JSONL; queue/raw disk are separate"
+  },
+  "queue": {
+    "capacity_bytes": 16777216,
+    "drain_wait_ms": 2000,
+    "events": 5,
+    "payload_bytes": 12500938
+  },
+  "finalization": {
+    "stable": true,
+    "heap_live_bytes": 6742672,
+    "heap_after_finalize_bytes": 6770704,
+    "shutdown_total_alloc_bytes": 295803984,
+    "shutdown_elapsed_ms": 90
+  },
+  "overflow": {
+    "partial_status": false,
+    "accepted_turns": 2,
+    "raw_tail_present": true,
+    "raw_pcm_bytes": 6,
+    "terminal_preserved": true,
+    "silent_success": true
+  },
+  "raw_evidence_after_limit": true,
+  "clean_shutdown": true,
+  "lock_released": true,
+  "session_log_bytes": 6250431,
+  "session_log_turns": 2,
+  "error": "overflow evidence incomplete: partial=false tail=true terminal=true pcm=6"
+}

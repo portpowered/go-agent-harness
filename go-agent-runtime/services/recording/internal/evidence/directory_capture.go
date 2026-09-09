@@ -32,6 +32,7 @@ func (r *directoryRecorder) processMessage(item directoryEvidenceItem) {
 		return
 	}
 	r.conversation.observe(message, item.direction == session.LiveRecordClient, r.sequence)
+	r.latchProjectionError()
 }
 
 func (r *directoryRecorder) writeTranscript(item directoryEvidenceItem, stream transcript.Stream, payload []byte) error {
@@ -93,6 +94,16 @@ func (r *directoryRecorder) processAudio(item directoryEvidenceItem) {
 		r.conversation.recordResponseAudio(item.frame.PlaybackResponse.ResponseID, uint64(len(data)), *offset-uint64(len(data)), segment)
 	} else {
 		r.conversation.observeAudio(item.direction == session.LiveRecordClient, len(data), *offset-uint64(len(data)), segment)
+	}
+	r.latchProjectionError()
+}
+
+func (r *directoryRecorder) latchProjectionError() {
+	if r == nil {
+		return
+	}
+	if err := r.conversation.projectionError(); err != nil {
+		r.latch(recordingWriteError("retain conversation summary", err))
 	}
 }
 
