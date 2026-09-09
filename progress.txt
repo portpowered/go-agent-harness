@@ -679,3 +679,49 @@ C18 public completion-forgery repair checkpoint
   task, update PR #410 with the callback-removal repair and causal evidence,
   then return `ACCEPTED` to script-owned current-head CI without polling. Keep
   ownership through `CONTINUE` for any exact-head rejection.
+
+C18 latest coverage rejection inspection and handoff checkpoint
+
+- The canonical task row returned PR #410 head
+  `02478f638b2a3878d2490a8c9dd7503606deabb2` after CI run `34337384856`, job
+  `102419861247`, `CI (coverage)` failed. The complete job API response and
+  the full log endpoint were read; the only reported test failure was
+  `TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession` in
+  `agent-cli/internal/wire`, where the composed session returned nil instead
+  of `runtimeSession.ErrLiveMediaUnavailable`. The integration package then
+  completed successfully. Raw job metadata and the exact extracted failure
+  are preserved in
+  `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/ci-rejection-34337384856.json`.
+- This failure did not reproduce under the CI package settings: the exact
+  test passed `1000` repetitions with `CGO_ENABLED=0`, `-tags=nomicrophone`,
+  the same cross-module `-coverpkg` list and coverage instrumentation; it
+  also passed `100` repetitions under `-race`. The complete `agent-cli/internal/wire`
+  package coverage run passed `20` repetitions. The test and session
+  composition path are unchanged from `origin/main`; C18's Wire change only
+  replaces the removed CLI replay constructor with the public runtime strict
+  service. No C18 causal source defect is demonstrated; the hosted result is
+  retained as non-waived contention-sensitive evidence, not claimed green or
+  waived.
+- Current owned/review validation remains green: runtime replay normal/race
+  `77` tests each; CLI replay normal/race `146` tests each; independent
+  embedding `GOWORK=off` normal/race; architecture-size `182` packages,
+  `1869` files, `27188` functions; architecturegate tests; Wire regeneration;
+  coverage registration `172` packages; focused vet; pinned Staticcheck
+  `2026.1`; diff check; and `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
+  in normal, coverage and race modes. The expected mismatch/PCM/transcript
+  negative diagnostics remain asserted.
+- The current external consumer was rebuilt from source HEAD `02478f63` with
+  `GOWORK=off`; its SHA256 is
+  `00662b74d1835310300345f398c46595ba1ff17efc60fc872df02eed31381d55`.
+  Relative and absolute fixture paths both return the recorded continuation,
+  `16` wire events, `1` recorded tool call and `Device execution: false`.
+  Review30/37 repairs remain present: only the authorized 14 baseline-entry
+  deletions plus the consumer `cmd` layout rule are in the manifest delta,
+  strict completion is witness-bound, and nil contexts are rejected before
+  manifested bundle work.
+- Next action: commit this exact CI inspection/evidence checkpoint, force-add
+  the owned raw rejection JSON, push the same branch, update PR #410 with the
+  current SHA and nonreproduction evidence, and return `ACCEPTED` to the
+  script-owned CI gate without polling. Do not claim CI, independent review,
+  merge, vertical acceptance or project acceptance; retain this task for any
+  exact same-head rejection.
