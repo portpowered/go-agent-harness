@@ -118,5 +118,45 @@
     "workId": "work-task-23",
     "workTypeName": "task",
     "_rejection_feedback": "CI checks failed for PR #405 at head d3edaea95c28644876582955f2e73945490eb9b5: required checks failed on current head d3edaea95c28644876582955f2e73945490eb9b5: CI (coverage)=FAILURE, CI (hermetic)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34278881224/job/102238552654); CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34278881224/job/102238552748). Return this task to the executor with the listed failures."
+  },
+  {
+    "name": "audio-runtime-c14-replay-boundary-audit",
+    "state": {
+      "name": "init",
+      "type": "PROCESSING"
+    },
+    "workId": "work-task-34",
+    "workTypeName": "task",
+    "_rejection_feedback": "PR #406 head 2eb3150244a42f2d58bd4f7ddc36433fc5f65fd9 has all required checks green, but the audit is not actionable: audit.md:495-510 permits strict code to call replay/wire.NewService while audit.md:526-539 makes replay/wire import internal/strict, creating a Go import cycle. Specify an acyclic injected admission dependency or shared plan constructor and exact Wire ownership. Also document the provider-route tool/cwd boundary: independent pinned strict replay passed, but provider replay from the reviewer worktree failed on the fixture's relative tool path; historical C13 passed only from the evidence-root cwd. Add exact capability/factory symbols, cwd/sandbox precondition, and classify portability honestly. Record canonicalValidation complete/TERMINAL explicitly. Repair audit.md, rerun bounded checks, push, and resubmit the same PR to script CI; do not merge this head."
+  },
+  {
+    "name": "audio-runtime-c14-replay-boundary-audit",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-36",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #406 at head 96c11e8ecb440bdf03e0a958560eeb9525d9e50f has an exact provenance defect: audit.md:105 records baseline 3194edd97aed588f7df2f8c58a69ac21da4c9ad, but the admitted manifest, prd.json, and source plan specify 3194edd97aed588f7cdf2f8c58a69ac21da4c9ad; the recorded SHA is not a Git object. Correct the SHA, rerun and record provenance checks, commit/push the same PR, then return through script CI and review. Do not merge this head."
+  },
+  {
+    "name": "audio-runtime-c14-replay-boundary-audit",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-39",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #406 head 5824a495 has all nine required checks green, and both exact-binary replay routes independently exited 0. However, audit.md has actionable defects: it cites a nonexistent live interruption.go; correct the ownership to control.go:324-341 and replay/internal/plan/interruption.go. It also implies production strict replay consumes Prepared.Audio, but runtime.go:31-70 never reads it; only a test fake does. Explicitly distinguish audio evidence loading from packet consumption and revise the proposed boundary and parity controls. Update audit.md, preserve prior findings, rerun bounded source/evidence checks, push a new head, and route it through script CI for re-review. No merge performed."
+  },
+  {
+    "name": "audio-runtime-c14-replay-boundary-audit",
+    "state": {
+      "name": "fin",
+      "type": "FAILED"
+    },
+    "workId": "work-review-41",
+    "workTypeName": "review",
+    "_rejection_feedback": "PR #406 head 2eb3150244a42f2d58bd4f7ddc36433fc5f65fd9 has all required checks green, but the audit is not actionable: audit.md:495-510 permits strict code to call replay/wire.NewService while audit.md:526-539 makes replay/wire import internal/strict, creating a Go import cycle. Specify an acyclic injected admission dependency or shared plan constructor and exact Wire ownership. Also document the provider-route tool/cwd boundary: independent pinned strict replay passed, but provider replay from the reviewer worktree failed on the fixture's relative tool path; historical C13 passed only from the evidence-root cwd. Add exact capability/factory symbols, cwd/sandbox precondition, and classify portability honestly. Record canonicalValidation complete/TERMINAL explicitly. Repair audit.md, rerun bounded checks, push, and resubmit the same PR to script CI; do not merge this head."
   }
 ]

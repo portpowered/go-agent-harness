@@ -48,8 +48,10 @@ the task and review rows had no `_rejection_feedback`; that historical board
 snapshot and the complete extracted rejection inbox are preserved in
 `canonical-board.json` and `canonical-rejection-feedback.json`. The initial
 extraction contains 12 rows from prior C11/C12/C13 work, with no C14 finding at
-that snapshot. The later executor re-admission and review finding are recorded
-in the current reconciliation below.
+that snapshot. The current evidence index contains 16 rows: those 12 prior
+rows plus the later C14 task and review-36/review-39/review-41 rows, without
+replacing the prior inbox. The later executor re-admission and review findings
+are recorded in the current reconciliation below.
 
 The admission command, run from the admitted FACTORY_ROOT, returned:
 
@@ -64,10 +66,10 @@ The authoritative board was captured with the exact handoff command:
 rtk proxy you --server "$FACTORY_SERVER_URL" --json work list --session "~default" --max-results 500 --all
 ```
 
-The raw board is `canonical-board.json`, SHA-256
+The initial raw board snapshot is `canonical-board.json`, SHA-256
 `dd635d054164e644fc6c8d6a502394c597f3f49392f6c501b976be151b5ce7c7`; the
 full extracted rejection inbox is `canonical-rejection-feedback.json`,
-SHA-256 `09c5ead3b238e6f9685f0eff5fa1b6201c04690a38471eafeb2f21bdc4c6b672`.
+SHA-256 `8221544389487d9468dabc80ee9ad9921d21d1aacf7cf22d10f5973f16e85526`.
 The board was saved as raw JSON even though one historical feedback string
 contains unescaped control characters; the extraction used a permissive JSON
 reader solely to preserve that full feedback verbatim rather than clipping or
@@ -108,6 +110,14 @@ is `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`. The inspected source and
 fetched main are both `c3bb663e118de9e73ea3eb211b381e8f86c4f480`. The C13
 accepted vertical is a read-only predecessor dependency; C11/task4 and its
 scripts/evidence are disjoint and untouched.
+
+The canonical predecessor validation is explicit: Work
+`batch-audio-runtime-c13-recorded-pcm-integrity-vertical-probe-20260908-audio-runtime-c13-recorded-pcm-integrity-vertical-probe`
+has `workTypeName=validation` and state `complete`/`TERMINAL` on the live
+board. Its accepted assessment also records
+`canonicalValidation: {"name":"complete","type":"TERMINAL"}`. This is the
+C13 scoped validation prerequisite only; it does not close any C14 story or
+project rubric.
 
 The parent manager's source inspection is
 `$FACTORY_ROOT/docs/temp/projects/audio-runtime/c14-replay-boundary-audit/source-inspection.json`,
@@ -290,6 +300,56 @@ SessionCommand.runSessionCommand
                claim a local render tail)
             -> final terminal classification and event publication
 ```
+
+### Provider-route tool and working-directory boundary
+
+`session --replay` does not call the strict service proposed above. Its
+provider-facing construction is the following separate chain:
+
+```text
+session_command_support.go:buildSessionRequest/runSessionRequest
+  -> livehost/request.go:BuildRequest/admitReplay
+  -> session/wire.NewLiveService
+  -> agent-cli/internal/wire/live_service.go:newLiveInferencerFactory
+  -> providers.SessionService.BuildSession
+  -> providers/internal/service.sessionDialer:179-194
+  -> gatewaytesting.NewReplayWebSocketDialer(cfg.ReplayPath)
+```
+
+`go-agent-runtime/services/replay/internal/plan.Service.InspectCapture` and
+`ResolveCapturePath` only admit/classify the provider artifact; they do not
+execute the recorded tool. The tool capability is injected by the CLI graph:
+`agent-cli/internal/transport/cli/session_capabilities.go:28-75` builds
+`NewSessionToolCapabilitiesFactory`/`NewSessionToolCapabilitiesFactoryFromService`,
+which calls `agent-cli/internal/services/wire.NewToolCapabilitiesService` and
+`services/internal/tools.Service.Resolve`. That resolver applies
+`agent-cli/internal/tools.ResolveFilesystemPolicy` to the effective
+`FilesystemWorkDir` and additional allowed roots before
+`agentruntime.service.go:247-299` supplies `capabilities.Executor` to the
+session loop. This is the exact capability/factory boundary; the replay
+admission service is not a tool registry.
+
+The C13 tool fixture is not cwd-independent: its `exec` arguments write to the
+relative path `evidence/runs/exec-invocations-v4.log`, and the optional
+`working_dir` field is part of the advertised tool schema rather than a
+captured absolute execution root. The historical C13 provider replay passed
+when launched from the evidence-root cwd. The independent pinned strict replay
+also passed, but a provider replay launched from the reviewer worktree failed
+on that relative tool path. Therefore a provider-route replay requires an
+explicit effective `WorkDir` whose filesystem policy contains the fixture's
+relative target (or a fixture rewritten to an explicitly rooted path); it must
+not inherit an accidental repository cwd. A sandbox/allow-path restriction is
+also a valid failure and must be reported as tool admission failure, not
+silently treated as a successful replay.
+
+This is a portability limitation of the provider/tool route, not evidence that
+strict replay is broken or that both routes have parity. The C13 provider result
+remains historical software proof under its evidence-root precondition; the
+reviewer-worktree failure is a reproduced portability diagnostic; and C14 has
+not run a new provider process. A future external parity control must set and
+record an absolute WorkDir/allow-path policy, then assert the tool marker and
+cwd-relative side effect. A run without that precondition is **BLOCKED**, not
+PASS, and must not be used to close EMBED, TRACE, REPLAY, or PARITY.
 
 The command-to-route edge is
 `agent-cli/internal/transport/cli/session_command_support.go:179-190`. The
@@ -505,9 +565,22 @@ The package may use `go-agent-loop/pkg/{agentloop,engine,messages}`,
 `go-audio/pkg/{audio,clock,codec,recording}` and
 `go-llm-gateway/pkg/{gateway,inference,providers/openai,testing,transport}`.
 It must not import `agent-cli`, `agent-cli/internal`, provider credential
-configuration, device backends, or the CLI tool/browser registry. It may call
-the existing public replay admission Wire constructor to reuse manifest/path
-validation, but it must not create a second project-specific admission rule.
+configuration, device backends, the CLI tool/browser registry, or
+`go-agent-runtime/services/replay/wire`. The last prohibition is structural:
+the future runtime Wire package imports `internal/strict`, so a strict package
+that called `replay/wire.NewService` would create the cycle
+`replay/wire -> internal/strict -> replay/wire`.
+
+The acyclic admission dependency is a narrow public interface declared in
+`go-agent-runtime/services/replay/service.go`, for example
+`CaptureAdmission` with only
+`ResolveCapturePath(context.Context, string) (string, error)`. The existing
+`go-agent-runtime/services/replay/internal/plan.Service` is the sole
+implementation/provider of that interface. `strict.Service` receives this
+interface in its constructor/dependencies and calls it directly; it never
+constructs a Wire graph. This reuses the existing `plan.New` admission rule
+without adding a second project-specific validator and without importing the
+Wire package upward.
 
 The existing provider shim at
 `go-agent-runtime/services/providers/internal/service/replay.go` remains
@@ -523,35 +596,45 @@ provider ownership surface and create an avoidable cycle/behavior-risk review.
 
 The exact future Wire ownership is:
 
-1. Add `NewStrictService` to
-   `go-agent-runtime/services/replay/wire/wire.go`, with generated output in
-   `go-agent-runtime/services/replay/wire/wire_gen.go`. Its private provider
-   set is `strict.New`, a deterministic clock factory, and the strict OpenAI
-   runtime factory; the return type is the public `replay.StrictService`.
-   Keep the existing `NewService` admission constructor unchanged. A test
-   seam may pass a `StrictRuntimeFactory` through a second explicit constructor
-   in the same Wire package, but the production constructor must remain
-   deterministic and credential-free.
-2. Replace the strict business construction in
+1. Add the public `replay.CaptureAdmission` dependency contract and
+   `replay.StrictService` contract in
+   `go-agent-runtime/services/replay/service.go`. Keep
+   `go-agent-runtime/services/replay/internal/plan.Service` as the shared
+   admission implementation; `plan.New` remains the only root-manifest/path
+   validator.
+2. `go-agent-runtime/services/replay/wire/wire.go` and its generated
+   `wire_gen.go` own both `NewService` and `NewStrictService`. The strict
+   injector supplies one `plan.New` value as `replay.CaptureAdmission`, a
+   deterministic clock factory, and `strict.NewOpenAIRuntimeFactory` to
+   `strict.New`, then binds `*strict.Service` to `replay.StrictService`.
+   In dependency order the graph is `plan.New -> strict.New -> public
+   replay.StrictService`; strict imports the public replay contract and
+   `internal/plan`, never `replay/wire`. The generated file is regenerated,
+   never hand-edited. The production constructor remains deterministic and
+   credential-free; a separate explicit runtime-factory seam is test-only.
+3. Keep runtime `NewService` as the provider of the existing admission
+   `replay.Service`. The two public services may share the stateless plan
+   provider, but `NewStrictService` must not call `NewService` or construct a
+   second validator.
+4. Replace the strict business construction in
    `agent-cli/internal/services/wire/replay.go` with a thin call to
-   `runtimeReplayWire.NewStrictService` (or a CLI adapter whose only job is
-   supplying the runtime Wire dependencies). It must no longer import
+   `runtimeReplayWire.NewStrictService` (or an adapter whose only job is
+   passing the runtime Wire dependencies). It must no longer import
    `agent-cli/internal/services/internal/replay`.
-3. Regenerate `agent-cli/internal/wire/wire_gen.go` from
-   `agent-cli/internal/wire/wire.go`. The generated graph still constructs the
-   CLI router, but the strict service dependency comes from runtime replay Wire.
-   No hand-edited generated output is acceptable.
-4. Keep `agent-cli/internal/transport/cli/session_replay.go` as presentation:
-   it receives the public strict service, maps `Request`/result to Cobra output,
-   and retains the success-only verification text. It must not parse timeline,
-   validate manifests, construct gateways, execute tools, or select devices.
-5. Keep `session_observability.go` and `livehost/request.go` on the existing
-   runtime admission `replay.Service`. `session --replay` provider/live route
-   is a different contract and must continue to use `InspectCapture` and
-   `LiveReplayPlan`.
-6. Keep `services/session/wire/live.go`, `agent-cli/internal/wire/live_service.go`,
-   and the provider Wire graph as the live/session owner. Strict replay is
-   headless and does not get inserted into `LiveDependencies`.
+5. Regenerate `agent-cli/internal/wire/wire_gen.go` from
+   `agent-cli/internal/wire/wire.go`. The CLI graph owns routing and adapter
+   composition; runtime replay Wire owns strict business construction. No
+   hand-edited generated output is acceptable.
+6. Keep `agent-cli/internal/transport/cli/session_replay.go` as presentation:
+   it receives the public strict service, maps request/result values to Cobra
+   output, and retains success-only verification text. It must not parse
+   timeline, validate manifests, construct gateways, execute tools, or select
+   devices.
+7. Keep `session_observability.go`, `livehost/request.go`,
+   `services/session/wire/live.go`, `agent-cli/internal/wire/live_service.go`,
+   and the provider Wire graph as the live/session owner. `session --replay`
+   remains the separate `InspectCapture`/`LiveReplayPlan` provider contract;
+   strict replay is headless and is not inserted into `LiveDependencies`.
 
 ### Tests and external consumer
 
@@ -615,6 +698,7 @@ The exact historical source and artifact references are:
 | control | route and exact control | evidence status and required future assertion |
 | --- | --- | --- |
 | Valid finalized bundle, provider wire and tool | `session replay <bundle>` and `session --replay <bundle> --audio-out <file>` over C13 artifact-2; strict reported 18 wire events/1 tool call, flag route emitted `PROBE_TOOL_MARKER_9182`, continuation and clean terminal | **Historical software proof.** Future public runtime test must preserve both route results and exact tool count; no credential/device claim. |
+| Provider-route tool cwd/sandbox portability | The fixture's `exec` call writes to relative `evidence/runs/exec-invocations-v4.log`; provider construction reaches `newLiveInferencerFactory` -> `providers.SessionService.BuildSession` -> `sessionDialer`/`NewReplayWebSocketDialer`, while CLI capabilities resolve `WorkDir`/allow paths through `NewSessionToolCapabilitiesFactoryFromService` and `ResolveFilesystemPolicy` | **Conditional historical proof / C14-unrun.** C13 provider replay passed from the evidence-root cwd; the independent strict route passed, but a provider replay from the reviewer worktree failed on the relative path. Future parity must record an explicit WorkDir and sandbox/allow-path policy, assert the marker and side effect, and report missing cwd prerequisites as BLOCKED. |
 | Audio evidence loading versus strict input packets | Strict `Prepare` opens `audio-trace` with `recording.OpenReplay` and reports `RecordedPCM`; production `runtime.go:31-70` instead uses `Capture` and `deriveInputActions` to decode provider-wire `input_audio_buffer.append` records, while only the test fake calls `Prepared.Audio.Next()` | **Source-proved / C14-unrun.** Future extraction must test these separately: validate/read trace evidence and scope, then compare the runtime's encoded input writes with the captured provider-wire PCM. Do not infer packet-consumption parity from a non-nil audio reader or scope bit. |
 | Provider PCM and rendered PCM | C13 artifact-2 provider PCM is 4,800 bytes, SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`; rendered output is 3,200 bytes, SHA-256 `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` | **Historical software proof.** Future extraction must keep sample-rate conversion and byte hashes; rendered/file output is not physical consumption. These hashes prove fixture/output bytes, not production consumption of `Prepared.Audio`. |
 | Ordered handshake and turns | strict `trackingConn` validates exact message type/order; live `LiveReplayPlan.WaitForSessionUpdated`, `runReplay`, and `waitForResponse` keep PCM/commit behind the provider boundary | **Source-proved / C14-unrun.** Add public positive and reordered/early-append negatives. |
@@ -689,6 +773,69 @@ This is a documentation repair against the pinned source, not a runtime change.
 The prior C13 root-manifest, undeclared-trace, and historical audio/interruption
 findings remain explicitly preserved as resolved predecessor evidence or known
 residuals; none is silently converted into a current C14 pass.
+
+## Review-41 Wire, provider-cwd, and canonical-validation repair
+
+The live canonical board was re-read for the same admitted task before this
+repair. It retains `work-task-34`, concluded `work-review-36`, concluded
+`work-review-39`, and latest concluded `work-review-41`; there is no replacement
+task, second project, waiver, or ownership transfer. Review-41 rejected PR #406
+head `2eb3150244a42f2d58bd4f7ddc36433fc5f65fd9` despite all required checks
+being green because the proposed dependency direction could form an import
+cycle, provider-route tool replay was cwd-sensitive, and the audit did not
+record `canonicalValidation` as `complete`/`TERMINAL`.
+
+The three repairs are causal and scoped:
+
+1. The extraction map now prohibits `internal/strict` from calling
+   `replay/wire.NewService`. It defines the narrow injected
+   `replay.CaptureAdmission` interface, keeps `internal/plan.Service` as its
+   sole implementation, and assigns the runtime replay Wire source/generated
+   pair ownership of `NewStrictService`. The dependency order and binds are
+   explicit, so `replay/wire -> internal/strict -> public replay/plan` is
+   acyclic and strict never imports its own Wire package.
+2. The provider route now names the actual capability/factory symbols and
+   distinguishes admission from tool execution. It records the relative
+   `evidence/runs/exec-invocations-v4.log` fixture path, the historical
+   evidence-root cwd precondition, the reviewer-worktree failure, and the
+   required explicit WorkDir/allow-path control. This is classified as
+   conditional historical software evidence and a portability residual, not a
+   new provider pass or strict-route failure.
+3. The provenance section records the exact C13 validation Work ID,
+   `workTypeName=validation`, board state `complete`/`TERMINAL`, and the
+   assessment's `canonicalValidation` object. This is scoped prerequisite
+   evidence only and does not claim C14 or project completion.
+
+The focused source/evidence regressions below recheck these documentation
+boundaries and preserve review-36's corrected baseline and review-39's
+interruption/`Prepared.Audio` repairs. No runtime implementation, generated
+Wire file, fixture, predecessor worktree, or policy was changed.
+
+## Review-41 bounded validation
+
+After the Review-41 documentation repair, the focused causal and accumulated
+regressions passed without a product build, provider/device invocation, broad
+CI suite, or CI polling:
+
+- From `agent-cli`,
+  `rtk go test ./internal/services/internal/replay ./internal/services/replay ./internal/transport/cli -count=1`
+  exited `0`: `719` tests in `3` packages.
+- From `go-agent-runtime`, `rtk go test ./services/replay/... -count=1`
+  exited `0`: `43` tests in `3` packages.
+- From `go-agent-runtime`, `rtk go test ./services/session/internal/live -count=1`
+  exited `0`: `68` tests in `1` package.
+- From `agent-cli`, the accumulated C13 controls
+  `rtk go test ./test/integration -count=1 -run
+  '^(TestSessionRecordedPCMIntegrity|TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact)$'`
+  exited `0`: `5` tests in `1` package.
+- `rtk proxy git diff --check`, nonempty audit, `canonical-rejection-feedback.json`
+  JSON length `16`, assessment `canonicalValidation`=`complete`/`TERMINAL`,
+  startup/source ancestry, and all named Wire/provider/cwd source markers
+  passed.
+
+These checks validate the audit evidence and pinned baseline behavior only. The
+future extraction, external-module consumer, explicit provider WorkDir replay,
+and fresh exact-artifact vertical probe remain proposed or unrun.
 
 ## Audio, clock, buffer, and device boundary audit
 
