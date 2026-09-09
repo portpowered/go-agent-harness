@@ -81,7 +81,7 @@ func TestReplayServiceConsumesActualWireObservationEnvelope(t *testing.T) {
 	if len(prepared.Capture().Records) != 3 {
 		t.Fatalf("capture records=%d", len(prepared.Capture().Records))
 	}
-	if prepared.Capture().Records[0].Direction != "client_to_server" || prepared.Capture().Records[0].Type != "session.update" {
+	if prepared.Capture().Records[0].Direction != "client_to_server" || prepared.Capture().Records[0].Type != sessionUpdateEventType {
 		t.Fatalf("first replay record=%+v", prepared.Capture().Records[0])
 	}
 	if prepared.Capture().Records[0].Type == "message_type" || !bytesEqual(prepared.Capture().Records[0].Payload, update) {
