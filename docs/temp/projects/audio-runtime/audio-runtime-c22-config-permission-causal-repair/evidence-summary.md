@@ -84,7 +84,9 @@ public config (six cases across both masks) and credential-free local ask/
 replay (record then replay after helper shutdown) both passed; the yui binary
 SHA256 is `8ebeff1fa864d67873d0091f4c38bbd5850fb8cff6dd4c1827622c0728bc022a`.
 
-The rejected CI run remains historical evidence and is not called green. No
-terminal CI polling, independent review, merge, or post-merge vertical
-acceptance is claimed; next action is checkpoint commit, push/update the same
-PR, and return `ACCEPTED` to the script-owned current-head CI gate.
+The implementation is committed as `d78e7b8f7d9f40a3cd15b3a98dfa8b411f72806e`
+and the evidence-provenance follow-up is committed/pushed as
+`25bda944`. The rejected CI run remains historical evidence and is not called
+green. No terminal CI polling, independent review, merge, or post-merge
+vertical acceptance is claimed; next action is the script-owned current-head
+CI gate.
