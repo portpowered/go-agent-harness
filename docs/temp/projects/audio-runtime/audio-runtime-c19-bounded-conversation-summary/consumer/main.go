@@ -262,6 +262,12 @@ func (r *runState) drain() {
 	r.drainWaitMS += int(wait / time.Millisecond)
 }
 
+func (r *runState) drainN(count int) {
+	for index := 0; index < count; index++ {
+		r.drain()
+	}
+}
+
 func (r *runState) finalize() (error, error) {
 	started := time.Now()
 	first := r.recorder.Finalize(context.Background(), nil)
@@ -391,7 +397,7 @@ func runOverflow(result *report) error {
 	if err := run.terminal(); err != nil {
 		return err
 	}
-	run.drain()
+	run.drainN(20)
 	heapLive := heapBytes()
 	first, stableErr := run.finalize()
 	if stableErr != nil {
