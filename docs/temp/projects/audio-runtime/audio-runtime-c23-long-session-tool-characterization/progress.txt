@@ -1,0 +1,8 @@
+C23 task-local checkpoint
+
+- Admission verified by project-control.py for audio-runtime task audio-runtime-c23-long-session-tool-characterization.
+- Current branch matches prd.json.branchName: codex/audio-runtime-c23-long-session-tool-characterization.
+- Fresh main fetched at 5d5afcb14d7b269378020809f5a2418c499ac94d; startup 8bdafc7f947a3a2c9856220abdc539437035bd21 and project baseline 3194edd97aed588f7cdf2f8c58a69ac21da4c9ad remain ancestors.
+- Owned evidence path only: docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/.
+- No production files, shared fixtures, module manifests, factory configuration, or shared progress were changed.
+- Initial implementation checkpoint: public source-file consumer, deterministic overlap fixture, and bounded driver added; focused build and causal verification pending.

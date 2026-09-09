@@ -1,0 +1,17 @@
+{
+  "audio": {
+    "sample_rate": 16000,
+    "samples_per_turn": 64
+  },
+  "seed": "c23-overlap",
+  "tool_identities": [
+    {
+      "name": "lookup_alpha",
+      "result_prefix": "alpha"
+    },
+    {
+      "name": "lookup_beta",
+      "result_prefix": "beta"
+    }
+  ]
+}
