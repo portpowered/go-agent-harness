@@ -1,10 +1,10 @@
 {
   "task": "audio-runtime-c16-sample-only-device-sink",
   "baseRevision": "f8e0863222da1bdbf296e2220fcbc081461cc877",
-  "candidateSourceRevision": "18cc82b5ca2eb342ca050b03d9411bfc108c933d",
+  "candidateSourceRevision": "fab89031ab00000c763bbb01d40835396aaed930",
   "branch": "codex/audio-runtime-c16-sample-only-device-sink",
-  "originMain": "49ca32eb6e3fba5fe95a993324d0b3d27f18c324",
-  "integrationRevision": "b15eba330ef4b7bf1df04676c38fa89ead04c4c1",
+  "originMain": "f98733864d9c46c691a1198d714943afbd52fbcb",
+  "integrationRevision": "cc592e28272260129d10d0ffb5d25067ac24b909",
   "ancestry": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -59,19 +59,19 @@
   ],
   "ciRejectionRepair": {
     "pullRequest": 408,
-    "rejectedHead": "ad986f7aa3c125fef43587bcf8466255c110b57c",
-    "run": "34312993226",
-    "job": "102343318163",
+    "rejectedHead": "ffbce24d642b76c877878f1f21cccfef36e44124",
+    "run": "34313875871",
+    "job": "102345903861",
     "check": "CI (static)",
     "feedback": "Required CI (static) failed on the current head.",
-    "logRead": "gh run view reported the run still in progress and returned no log; the exact lint defect was reproduced locally with the pinned analyzer.",
+    "logRead": "The complete job log was read through the GitHub job-log API; the failed step was Verify service architecture and size budgets.",
     "localReproduction": {
-      "command": "rtk proxy make lint",
+      "command": "rtk proxy make architecture-size-check",
       "exitCode": 2,
-      "finding": "go-device-gateway/pkg/devices/sink_device_sample_only_test.go:330:21: Error return value of sink.Close is not checked (errcheck)"
+      "finding": "baseline-drift github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices (53 > 52): the added sample-only test file increased the maintained file count above the immutable baseline"
     },
-    "repairCommit": "18cc82b5ca2eb342ca050b03d9411bfc108c933d",
-    "causalValidation": "The cleanup callback now reports sink.Close errors; the pinned make lint sweep passes with 0 issues, including go-device-gateway."
+    "repairCommit": "fab89031ab00000c763bbb01d40835396aaed930",
+    "causalValidation": "The sample-only regressions were consolidated into the existing leased sink_device_test.go and the extra test file was removed; architecture-size-check now passes at 52 maintained device files and 600 test-file lines without changing the baseline."
   },
   "postIntegrationChecks": [
     {
@@ -105,6 +105,14 @@
     {
       "command": "rtk proxy make staticcheck",
       "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make architecture-check",
+      "exitCode": 0
+    },
+    {
+      "command": "rtk proxy make architecture-size-check",
+      "exitCode": 0
     }
   ],
   "sourceHashes": [
@@ -113,8 +121,8 @@
       "sha256": "0c42a746fcc250e059fbef519ed8280d3dedc4b3c959ee9e3c9b35db7c9ed1d0"
     },
     {
-      "path": "go-device-gateway/pkg/devices/sink_device_sample_only_test.go",
-      "sha256": "3e08b24cecdd3e359b7210c7c364612b7f47df72acd74f691115650aaacc53ce"
+      "path": "go-device-gateway/pkg/devices/sink_device_test.go",
+      "sha256": "cb0ef75de6a6107d9313977890af8eede07d8dfb2eb5c36498ae37036cf6605e"
     }
   ],
   "artifactHashes": [
