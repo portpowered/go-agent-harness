@@ -3,9 +3,12 @@ package room
 import (
 	"bytes"
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
+
+	audiomixer "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
 func TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution(t *testing.T) {
@@ -86,5 +89,22 @@ func TestPCMMixLegacyKeepsFullCadenceZeroPadding(t *testing.T) {
 	want := pcm16(7, 8, 0, 0)
 	if !bytes.Equal(got.PCM, want) || !reflect.DeepEqual(got.Sources, []string{"speaker"}) {
 		t.Fatalf("short legacy frame = %v sources=%v, want zero-padded frame and speaker", decodePCM16(got.PCM), got.Sources)
+	}
+}
+
+func TestPCMMixLegacyRejectsOutputBoundBeforeDecoding(t *testing.T) {
+	input := pcm16(7)
+	mixer := &PCM16Mixer{
+		frameBytes: (audiomixer.MaxPCM16MixSamples + 1) * 2,
+		inputs: map[string]*pcm16MixerInput{
+			"speaker": {data: input},
+		},
+	}
+
+	if _, _, err := mixer.mixFrameWithSources(); !errors.Is(err, audiomixer.ErrPCM16MixInvalidLength) {
+		t.Fatalf("output-bound mix error = %v, want ErrPCM16MixInvalidLength", err)
+	}
+	if !bytes.Equal(mixer.inputs["speaker"].data, input) {
+		t.Fatalf("input changed after rejected output bound: got %v, want %v", mixer.inputs["speaker"].data, input)
 	}
 }

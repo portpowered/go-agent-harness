@@ -123,11 +123,11 @@ func (m *Mixer) run() {
 	}
 }
 
-func (m *Mixer) mix() (audio.PCMFrame, []string, error) {
+func (m *Mixer) snapshotMixInputs() ([]string, error) {
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
-		return audio.PCMFrame{}, nil, ErrClosed
+		return nil, ErrClosed
 	}
 	ids := make([]string, 0, len(m.inputs))
 	for id := range m.inputs {
@@ -135,6 +135,17 @@ func (m *Mixer) mix() (audio.PCMFrame, []string, error) {
 	}
 	m.mu.Unlock()
 	sort.Strings(ids)
+	if err := ValidatePCM16MixBounds(len(ids), m.frameSize); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func (m *Mixer) mix() (audio.PCMFrame, []string, error) {
+	ids, err := m.snapshotMixInputs()
+	if err != nil {
+		return audio.PCMFrame{}, nil, err
+	}
 	// Rebuild source order after sorting IDs. The map lookup stays outside the
 	// input lock; each FrameBuffer has its own synchronization.
 	frames := make([]audio.PCMFrame, len(ids))

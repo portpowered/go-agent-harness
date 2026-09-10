@@ -723,6 +723,9 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	if err := audiomixer.ValidatePCM16MixBounds(len(ids), m.frameBytes/2); err != nil {
+		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
+	}
 	sourceSamples := make([][]int16, 0, len(ids))
 	taken := make([]int, len(ids))
 	sources := make([]string, 0, len(ids))
@@ -760,12 +763,9 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 			input.data = input.data[:len(input.data)-take]
 		}
 	}
-	if len(ids) > 0 {
-		m.signalWritersLocked()
-	}
+	m.signalWritersLocked()
 	return frame, sources, nil
 }
-
 func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []string) error {
 	if m == nil {
 		return ErrMixerClosed

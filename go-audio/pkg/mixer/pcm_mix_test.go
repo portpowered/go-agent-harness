@@ -123,6 +123,18 @@ func TestMixPCM16SamplesRejectsUnsupportedBounds(t *testing.T) {
 	}
 }
 
+func TestValidatePCM16MixBoundsDoesNotAllocateOrConsume(t *testing.T) {
+	if err := ValidatePCM16MixBounds(MaxPCM16MixSources, MaxPCM16MixSamples); err != nil {
+		t.Fatalf("maximum supported bounds rejected: %v", err)
+	}
+	if !errors.Is(ValidatePCM16MixBounds(MaxPCM16MixSources+1, 1), ErrPCM16MixSourceLimit) {
+		t.Fatal("source overflow was not rejected")
+	}
+	if !errors.Is(ValidatePCM16MixBounds(1, MaxPCM16MixSamples+1), ErrPCM16MixInvalidLength) {
+		t.Fatal("output overflow was not rejected")
+	}
+}
+
 func TestCombineUsesSharedSafePCMOperation(t *testing.T) {
 	frames := make([]audio.PCMFrame, 65539)
 	for index := range frames {

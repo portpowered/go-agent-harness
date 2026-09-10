@@ -40,15 +40,26 @@ const (
 // does not affect the result, while callers remain responsible for preserving
 // any source attribution alongside their input slices.
 //
+// ValidatePCM16MixBounds checks the source and output limits without
+// allocating or consuming any input. Callers that pull from a queue or decode
+// bytes before calling MixPCM16Samples can use it to reject unsupported work
+// before making that state change.
+func ValidatePCM16MixBounds(sourceCount, outputLength int) error {
+	if outputLength < 0 || outputLength > MaxPCM16MixSamples {
+		return fmt.Errorf("%w: got %d samples, want 0..%d", ErrPCM16MixInvalidLength, outputLength, MaxPCM16MixSamples)
+	}
+	if sourceCount > MaxPCM16MixSources {
+		return fmt.Errorf("%w: got %d sources, want at most %d", ErrPCM16MixSourceLimit, sourceCount, MaxPCM16MixSources)
+	}
+	return nil
+}
+
 // The source and output bounds are explicit. With at most
 // MaxPCM16MixSources int16 inputs, int64 accumulation is mathematically safe
 // before the final clip, including source counts beyond the int32 threshold.
 func MixPCM16Samples(sources [][]int16, outputLength int) ([]int16, error) {
-	if outputLength < 0 || outputLength > MaxPCM16MixSamples {
-		return nil, fmt.Errorf("%w: got %d samples, want 0..%d", ErrPCM16MixInvalidLength, outputLength, MaxPCM16MixSamples)
-	}
-	if len(sources) > MaxPCM16MixSources {
-		return nil, fmt.Errorf("%w: got %d sources, want at most %d", ErrPCM16MixSourceLimit, len(sources), MaxPCM16MixSources)
+	if err := ValidatePCM16MixBounds(len(sources), outputLength); err != nil {
+		return nil, err
 	}
 	for index, source := range sources {
 		if len(source) > outputLength {
