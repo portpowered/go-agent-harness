@@ -1,0 +1,284 @@
+{
+  "version": 2,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "id": "sess-c07-audio-tool",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "model": "gpt-realtime",
+          "tools": [
+            {
+              "description": "Execute a shell command and return its output. Use with caution.",
+              "name": "exec",
+              "parameters": {
+                "properties": {
+                  "command": {
+                    "description": "The shell command to execute",
+                    "type": "string"
+                  },
+                  "working_dir": {
+                    "description": "Optional working directory for the command",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ],
+          "type": "realtime"
+        },
+        "type": "session.update"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 20,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "id": "sess-c07-audio-tool",
+          "model": "gpt-realtime"
+        },
+        "type": "session.created"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 30,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item": {
+          "content": [
+            {
+              "text": "probe PROBE_TOOL_MARKER_9182",
+              "type": "input_text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        "type": "conversation.item.create"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 40,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 50,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-tool"
+        },
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 60,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item": {
+          "call_id": "call-c07-tool",
+          "id": "item-c07-tool",
+          "name": "exec",
+          "type": "function_call"
+        },
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 70,
+      "type": "response.function_call_arguments.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "arguments": "{\"command\":\"echo PROBE_TOOL_MARKER_9182 \\u003e\\u003e \\\"evidence/runs/exec-invocations-v4.log\\\"; echo PROBE_TOOL_MARKER_9182\"}",
+        "call_id": "call-c07-tool",
+        "name": "exec",
+        "type": "response.function_call_arguments.done"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 80,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-tool",
+          "status": "completed"
+        },
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 90,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item": {
+          "call_id": "call-c07-tool",
+          "output": "PROBE_TOOL_MARKER_9182\n",
+          "type": "function_call_output"
+        },
+        "type": "conversation.item.create"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 100,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 110,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-continuation"
+        },
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 120,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "delta": "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",
+        "format": "pcm16",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.delta"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 130,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "delta": "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",
+        "format": "pcm16",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.delta"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 140,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "server_to_client",
+      "timestamp_ms": 150,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "delta": "strict replay continuation",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_text.delta"
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "server_to_client",
+      "timestamp_ms": 160,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_text.done"
+      }
+    },
+    {
+      "sequence": 17,
+      "direction": "server_to_client",
+      "timestamp_ms": 170,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-continuation",
+          "status": "completed"
+        },
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 18,
+      "direction": "server_to_client",
+      "timestamp_ms": 180,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "reason": "fixture_complete",
+        "session_id": "sess-c07-audio-tool",
+        "type": "session.closed"
+      }
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "87433d700c1a739a2131b6c4192584db79d939b1a694cec829dff5e3102f15bc"
+  }
+}
