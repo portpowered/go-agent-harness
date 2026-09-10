@@ -1,0 +1,59 @@
+{
+  "base_revision": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "case_count": 40,
+  "clean_shutdown": true,
+  "consumer": {
+    "path": "/private/tmp/c32-capture-consumer",
+    "sha256": "cf9d31cf2c819095d24bee47c80aba522c4af5fe34b1a930c83cb67aeade9796",
+    "source_sha256": "d4183e08ce60b2d2478810cb7304e0e655defe21e5b51e50d55ca2cf0a0a462f"
+  },
+  "expected_sha256": "51fa73fccb83aa0c39560f97b0cc5ab2df8baa57188201a55db506c1680119e2",
+  "negative_control": {
+    "changed_case": "pcm16-stereo-padded-energy",
+    "changed_expected_energy": 1.25,
+    "reason": "pcm16-stereo-padded-energy.energy: got 1.5, want 1.25",
+    "rejected": true
+  },
+  "origin_main": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "process": {
+    "argv": [
+      "/private/tmp/c32-capture-consumer"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c32-canonical-capture-sample-energy/docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy",
+    "deadline_seconds": 10,
+    "elapsed_seconds": 0.005421,
+    "exit_code": 0,
+    "timed_out": false
+  },
+  "required_ancestors": {
+    "baselineRevision": {
+      "is_ancestor": true,
+      "revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
+    },
+    "fetchedOriginMain": {
+      "is_ancestor": true,
+      "revision": "1f82284abee0bd31a6680310444cea2e4c16ef00"
+    },
+    "planningMain": {
+      "is_ancestor": true,
+      "revision": "1f82284abee0bd31a6680310444cea2e4c16ef00"
+    },
+    "startupIntegrationRevision": {
+      "is_ancestor": true,
+      "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+    }
+  },
+  "resource_bounds": {
+    "child_deadline_seconds": 10,
+    "max_output_bytes": 1048576,
+    "packet_scratch_allocation": "none in canonical helpers"
+  },
+  "schema": "audio-runtime-c32-capture-sample-energy-verification.v1",
+  "source_revision": "918aee53",
+  "source_sha256": {
+    "docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy/consumer/main.go": "d4183e08ce60b2d2478810cb7304e0e655defe21e5b51e50d55ca2cf0a0a462f",
+    "go-audio/pkg/audio/packet_energy.go": "6cb747c67a8284ead5f7252c52fab490120f6beee19d0e1d81e506d4e2fcedd7",
+    "go-audio/pkg/codec/sample_value.go": "dd082cb6972beff06484745c9afbf8df3d43193301a5f1d8151765fa2bab500b",
+    "go-device-gateway/pkg/devices/device_windows.go": "b65f2c34e159b4ddf04468dcb2960a587205dfc11bacfec8c105f1803341b930"
+  }
+}
