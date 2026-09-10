@@ -3345,3 +3345,50 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   return `ACCEPTED` to the script-owned CI gate without polling. Retain the
   same task through `CONTINUE` for any new exact CI rejection or actionable
   repair; do not claim CI green, review, merge or vertical/project acceptance.
+
+# C38 current-main static rejection repair and storage checkpoint 2026-09-10T23:04Z
+
+- Re-read the required Factory policy and implementation handoff, the admitted
+  manifest, `prd.json`, progress history, and the complete canonical `~default`
+  C38 task/review inbox. Admission remains
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c38-interruption-audio-retention"}`;
+  the isolated branch matches `prd.json.branchName`, and the sole project,
+  ownership, predecessor checkpoints and host checkout remain preserved.
+- Fetched `origin/main=fdf3b2d98914f50577865e825c733e73520b9ef3` and integrated
+  it in merge/fix checkpoint `83e31db1bf5df09cb8c9044826bce2b8c315df74`.
+  The shared `progress.txt` conflict retained both C38 and incoming-main
+  ledgers; required startup, baseline, C30 planning and fresh-main ancestry
+  remain intact. No second project, waiver, reset or unrelated owner path was
+  used.
+- The complete latest C38 CI rejection is run `34539207051`, job
+  `103077775076`, `CI (static)`, at head `d04b34a1`: pinned golangci-lint
+  reported the sole errcheck at
+  `agent-cli/test/integration/session_tool_audio_remote_oracle_test.go:32`,
+  discarded `sink.Close()`. The repair wraps deferred close and reports an
+  error through the test, preserving cleanup observability; staticcheck in
+  that job passed. The repair is committed in `83e31db1` with the required
+  main merge.
+- Current merged-head C38 evidence passes normal and race session-audio
+  regressions (`20` each), focused vet, architecture-size (`184` packages,
+  `1,888` files, `27,806` functions), size-check, Wire, pinned golangci-lint
+  `v2.9.0` (`0` issues in every module), pinned staticcheck `2026.1`, and
+  `git diff --check`. The newly authorized remote-marker causal control passes
+  normally. Its race build fails before test execution because macOS `strip`
+  cannot write the integration helper while free space is about `493 MiB`,
+  below the required `2 GiB` reserve; no C38 assertion failed.
+- Previous review-219/229/245/249/258 repairs remain in the owned source/test
+  files and are covered by the preserved deterministic barrier, queued-delta,
+  delayed-delta/canceled-connect, close-error, mutated-PCM, missing-timeline,
+  cleanup and provenance controls. Existing exact artifact evidence is not
+  relabeled: the merged main and new test changed executable/build inputs, so
+  a fresh yui build and exact-head `package` provenance are required.
+- This is an implementation checkpoint only: no current-head CI success,
+  independent review, guarded merge, vertical acceptance, physical/acoustic
+  proof or project completion is claimed. Exact next action is for the
+  operator to restore stable free space above `2 GiB`; then rerun the remote
+  causal control in normal/race and C38 `causal`, `original`, `repaired`,
+  `negative-controls`, `cleanup-control`, `focused-checks`, fresh yui build and
+  `package` modes from this clean head. Push/update PR #430 with the exact
+  finding-to-repair map, then submit the changed same-task head to script CI
+  without polling; retain C38 ownership through `CONTINUE` while storage or
+  any exact actionable repair remains.
