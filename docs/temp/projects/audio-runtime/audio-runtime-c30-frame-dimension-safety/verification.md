@@ -454,3 +454,90 @@ build. Before handoff, verify that `git diff --name-only
 directory; the source revision and executable/input hashes above remain the
 truthful tested provenance. A source or executable-input change requires a new
 build and fresh runs.
+
+# C30 current-main consolidation and exact-head refresh
+
+The latest admitted-board finding required current-main integration before any
+new evidence. `git fetch origin main` resolved
+`431fc96c14f0e0045629d9c36f98ee61ff06e840`, which was merged into this isolated
+branch as `8e42efb3ddb3820c032cceb9c6707c8773bb48f4`. Required baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
+`1f82284abee0bd31a6680310444cea2e4c16ef00`, and fetched current main are all
+ancestors. The running host checkout was not merged or reset. The unrelated
+untracked `meta-operator-throughput-feedback.md` remains untouched.
+
+The amended C30 lease was applied for the final architecture shape: the
+unchanged PCM16 framer symbols and regression assertion remain in the owned
+`pcm16_frame_size.go` and `pcm16_frame_size_test.go`, while the redundant old
+framer files are removed so the audio package remains at its immutable 49-file
+budget. `format.go` and `pcm16_convert_test.go` are unchanged against
+`origin/main`. Checked sizing, queue-product preflight, wide Stats duration and
+the `ErrMixerInvalidFormat` legacy delegation remain in the implementation.
+
+## Focused and structural evidence
+
+```text
+go test ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 285 tests
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 285 tests
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: pass; no issues
+make architecture-check size-check: pass; 181 packages, 1866 files, 27510 functions
+git diff --check: pass
+```
+
+The pre-refresh stale consumer record was rejected before execution with
+`build provenance revision mismatch` (`a7302e07` versus the requested repair
+head). The refreshed bounded consumer is built from exact source
+`727b789f9423c84eb70d899ddf2da1c52837dc4f`, with executable SHA256
+`bf69965133ee822554bfc2b689c3f44ece42f66a35d8d5b8837adfbdf1c5b87e`:
+
+```text
+run.py --build --source-root <isolated-worktree>: pass
+run.py --positive --source-root <isolated-worktree>: pass; 21/21 literal cases; clean shutdown
+run.py --negative-control --source-root <isolated-worktree>: pass; child exit 1; actual_samples=480 mutated_expected=481
+run.py --timeout-control --source-root <isolated-worktree>: pass; 1 MiB stdout/stderr capped, SIGTERM then SIGKILL, reaped, reader threads stopped
+run.py --build --source-root $FACTORY_ROOT: rejected before execution; host source lacks PCM16FrameSamples/PCM16FrameBytes/PCM16ByteCapacity
+```
+
+The consumer artifact and manifest are refreshed at the exact source head;
+`build.json` and `artifact-manifest.json` carry the same source revision,
+explicit source module, fixture hashes and executable hash.
+
+## Same-source shipped yui refresh
+
+`artifacts/yui-verification.json` is regenerated as schema v3 from the same
+`727b789f` source. The yui executable SHA256 is
+`f05fe81bedc314a1bfed344ef503003b41c88791ab0485821a77fcd8db14dc50`. Its
+tracked Go/module input digest covers 1,925 files with SHA256
+`6e406672e834a8f5563892cd93075b960f759239f014374af2a03312bdd156df`.
+Fixture hashes remain artifact-2
+`38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169` and
+artifact-3 `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+
+The current tool fixture emits `PROBE_TOOL_MARKER_9182`, strict continuation
+and `fixture_complete`; its bundle has 18 wire events and one tool call,
+provider PCM 4,800 bytes with SHA256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, and
+rendered PCM 3,200 bytes with SHA256
+`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`. Directory
+replay exits 0 with the same 18-event/one-tool verification.
+
+The no-trace control captures successfully without an audio trace, and strict
+directory replay exits 1 with the expected missing `timeline.jsonl` diagnostic.
+The interruption fixture captures 15 wire events and zero tool calls, with
+provider PCM 3,840 bytes / SHA256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22` and
+rendered PCM 3,360 bytes / SHA256
+`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`.
+The first immediate bounded replay observed the bundle before
+`timeline.jsonl` became visible; the same bounded command was rerun after the
+bundle stabilized and exited 0 with `Replay verified: 15 wire events, 0 tool
+calls`. Both outcomes are retained in the v3 report; no failure was relabeled.
+All yui children used a 60-second child deadline and a 90-second outer
+`testtimeout` budget, with no Realtime or physical-device use.
+
+No current-head script-CI success, independent review, guarded merge,
+post-merge vertical acceptance or project completion is claimed. The next
+action is to checkpoint and push this changed same-task candidate, update PR
+#422 with the current-main ancestry and exact-head evidence, and return
+`ACCEPTED` to the script-owned CI gate without polling it.
