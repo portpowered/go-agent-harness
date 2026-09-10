@@ -511,6 +511,10 @@ def source_provenance(source_arg: str, consumer_source: pathlib.Path, consumer: 
             fixture_hashes[path.name] = sha256(path)
     return {
         "source_revision": git_value("rev-parse", "HEAD"),
+        "source_archive": {
+            "format": "tar",
+            "sha256": sha256_bytes(command_output(["rtk", "proxy", "git", "archive", "--format=tar", "HEAD"], ROOT)),
+        },
         "source_tree_dirty": bool(git_value("status", "--porcelain")),
         "source_descriptor": source_descriptor,
         "consumer_binary": str(consumer),
