@@ -37,6 +37,8 @@ func OpenReplay(directory string) (*Replay, error) {
 	positions := make(map[string]uint64)
 	rates := make(map[string]int)
 	var base time.Time
+	started := false
+	closed := false
 	for scan.Scan() {
 		var event Event
 		if err := json.Unmarshal(scan.Bytes(), &event); err != nil {
@@ -63,6 +65,27 @@ func OpenReplay(directory string) (*Replay, error) {
 			}
 		} else if len(result.events) == 0 {
 			return nil, fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
+		}
+		if closed {
+			return nil, fmt.Errorf("%w: event %q follows recording_closed", ErrIncomplete, event.Kind)
+		}
+		switch event.Kind {
+		case "recording_started":
+			if started || len(result.events) != 0 {
+				return nil, fmt.Errorf("%w: duplicate or nonleading recording_started", ErrIncomplete)
+			}
+			started = true
+		case "recording_closed":
+			if !started || !event.Clean {
+				return nil, fmt.Errorf("%w: recording_closed must be one final clean close", ErrIncomplete)
+			}
+			closed = true
+		case "audio", "runtime":
+			if !started {
+				return nil, fmt.Errorf("%w: recording must begin with recording_started", ErrIncomplete)
+			}
+		case "trace_overflow":
+			return nil, ErrIncomplete
 		}
 		switch event.Kind {
 		case "audio":
