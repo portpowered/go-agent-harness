@@ -35,7 +35,7 @@ The replay check is regression evidence only. It does not claim physical
 device or acoustic behavior, live Realtime use, CI success, independent
 review, merge, or project acceptance.
 
-## Current merged-head checkpoint
+## Prior merged-head checkpoint (historical)
 
 The current tested source checkpoint is `ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9`,
 which merges fetched `origin/main` at `5f14c45313cfdc71e000fda209e3408fcf863faf`.
@@ -46,8 +46,8 @@ all pass on that head. Focused normal/race policy tests, replay-bundle and
 strict allowlist regressions, Wire, architecture, registration, fmt, vet, and
 diff checks also pass. The interruption replay is not rerun: C38/task198 still
 owns the observed 2400-byte result against the frozen 3840-byte oracle, pending
-reviewed repair and primary independent vertical acceptance. The branch remains
-local and unsubmitted until that known failing replay can be rerun honestly.
+reviewed repair and primary independent vertical acceptance. This checkpoint is
+historical; its artifacts are not relabeled as current-head evidence.
 
 ## Exact candidate checkpoint
 
@@ -61,3 +61,31 @@ cleanup control records capped output, native exit `-15`, bounded SIGTERM/SIGKIL
 and descendant reaping. The shipped tool workflow retains the marker and exact
 4800-byte PCM hash. The interruption replay remains explicitly blocked on the
 unrepaired C38/task198 retention finding and is not relabeled or retried.
+
+## Current-main integration checkpoint
+
+Fetched `origin/main=fdf3b2d98914f50577865e825c733e73520b9ef3` was merged into
+the preserved C40 branch as `6ada74ed5be03821478f4de2fa66fe7806e135e4`.
+Baseline `926ded7b` and startup integration `8bdafc7f` remain ancestors. The
+post-merge inventory `runs/run-inventory-20260910T225900Z-56423` accepts this
+exact head, with 247 runtime dependencies and no CLI/config/WebMCP imports;
+the C40 policy file remains 155 physical lines and aggregate CLI agentruntime
+production is 41,131 lines under the same counting method.
+
+Post-merge bounded policy coverage passes: tools normal/race each pass 340 tests
+in 17 packages, CLI interactive-policy normal/race each pass 13 tests, coverage
+registration passes 175 workspace packages across 6 modules, and diff-check
+passes. No new executable was built: the merge changes executable inputs and
+the host has only about 1.0 GiB free against the required 2 GiB reserve.
+Existing consumer/YUI artifacts therefore remain tied to their recorded source
+revisions and are not relabeled as current-head evidence.
+
+The interruption replay remains blocked on C38/task198's unreleased review and
+primary vertical acceptance. Its frozen oracle is 3840 bytes with SHA-256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`, while the
+retained failure is the 2400-byte healthy tail with SHA-256
+`16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`. After
+that prerequisite and storage recovery, rebuild from this merged source, rerun
+the unchanged replay and same-source evidence, then submit the changed head to
+SCRIPT CI. No CI-green, review, merge, vertical, hardware, or project
+acceptance is claimed here.

@@ -373,6 +373,46 @@
       "reason": "C38 review258 still requires closeErr repair; the frozen interruption oracle remains 3840 bytes while the retained observed result is 2400 bytes."
     }
   },
+  "latest_current_main_integration": {
+    "merge_commit": "6ada74ed5be03821478f4de2fa66fe7806e135e4",
+    "candidate_revision": "6ada74ed5be03821478f4de2fa66fe7806e135e4",
+    "origin_main": "fdf3b2d98914f50577865e825c733e73520b9ef3",
+    "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+    "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "ancestry": {
+      "baseline_is_ancestor": true,
+      "startup_is_ancestor": true,
+      "origin_main_is_ancestor": true
+    },
+    "inventory_run": "runs/run-inventory-20260910T225900Z-56423",
+    "inventory": {
+      "decision": "ACCEPTED",
+      "runtime_dependency_count": 247,
+      "forbidden_runtime_dependencies": [],
+      "cli_policy_lines": 155,
+      "aggregate_cli_agentruntime_production_lines": 41131,
+      "source_tree_dirty": false
+    },
+    "focused_validation": {
+      "tools_normal": "passed: 340 tests in 17 packages",
+      "tools_race": "passed: 340 tests in 17 packages",
+      "cli_policy_normal": "passed: 13 tests",
+      "cli_policy_race": "passed: 13 tests",
+      "coverage_registration": "passed: 175 workspace packages checked across 6 modules",
+      "diff_check": "passed",
+      "architecture_and_size": "not rerun: current free space is about 1.0 GiB, below the required 2 GiB reserve"
+    },
+    "artifact_provenance": "No executable rebuilt after this merge; prior artifacts retain their tested source and input identities.",
+    "replay_regression": {
+      "decision": "BLOCKED_PENDING_C38_REVIEWED_REPAIR_AND_PRIMARY_INDEPENDENT_VERTICAL_ACCEPTANCE",
+      "not_run": true,
+      "owner": "C38/task198",
+      "frozen_pcm_bytes": 3840,
+      "frozen_pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+      "retained_failure_bytes": 2400,
+      "retained_failure_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+    }
+  },
   "focused_commands": [
     "rtk go test ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
     "rtk go test -race ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
