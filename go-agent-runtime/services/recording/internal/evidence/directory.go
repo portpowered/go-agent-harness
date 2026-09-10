@@ -37,6 +37,7 @@ type directoryRecorder struct {
 
 	mu             sync.Mutex
 	queuedBytes    int64
+	queuedItems    int64
 	closed         bool
 	recordErr      error
 	workerErr      error
@@ -56,6 +57,8 @@ type directoryRecorder struct {
 	outputPaths    []string
 	terminal       *transcript.RecordingTerminalSummary
 	conversation   evidenceConversation
+	usageMu        sync.Mutex
+	usage          recording.ResourceUsage
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -303,6 +306,26 @@ func (r *directoryRecorder) enqueue(item directoryEvidenceItem) error {
 	select {
 	case r.queue <- item:
 		r.queuedBytes += item.bytes
+		r.queuedItems++
+		r.usageMu.Lock()
+		r.usage.QueueBytes = r.queuedBytes
+		r.usage.QueueItems = r.queuedItems
+		if r.queuedBytes > r.usage.PeakQueueBytes {
+			r.usage.PeakQueueBytes = r.queuedBytes
+		}
+		if r.queuedItems > r.usage.PeakQueueItems {
+			r.usage.PeakQueueItems = r.queuedItems
+		}
+		r.usage.AcceptedItems++
+		switch item.kind {
+		case evidenceMessage:
+			r.usage.AcceptedMessages++
+		case evidenceAudio:
+			r.usage.AcceptedAudio++
+		case evidenceEvent:
+			r.usage.AcceptedEvents++
+		}
+		r.usageMu.Unlock()
 	default:
 		r.latchLocked(recordingWriteError("enqueue recording evidence", errors.New("recording evidence queue is full")))
 	}
@@ -318,6 +341,7 @@ func (r *directoryRecorder) run() {
 }
 
 func (r *directoryRecorder) processItem(item directoryEvidenceItem) {
+	defer r.captureUsage(true)
 	switch item.kind {
 	case evidenceMessage:
 		r.processMessage(item)
@@ -344,7 +368,15 @@ func (r *directoryRecorder) processEvent(item directoryEvidenceItem) {
 func (r *directoryRecorder) releaseQueueItem(item directoryEvidenceItem) {
 	r.mu.Lock()
 	r.queuedBytes -= item.bytes
+	if r.queuedItems > 0 {
+		r.queuedItems--
+	}
+	queuedBytes, queuedItems := r.queuedBytes, r.queuedItems
 	r.mu.Unlock()
+	r.usageMu.Lock()
+	r.usage.QueueBytes = queuedBytes
+	r.usage.QueueItems = queuedItems
+	r.usageMu.Unlock()
 }
 
 var _ session.LiveRecorder = (*directoryRecorder)(nil)

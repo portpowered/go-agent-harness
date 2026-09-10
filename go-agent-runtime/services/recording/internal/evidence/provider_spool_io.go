@@ -48,7 +48,68 @@ func writeProviderCaptureLine(file *os.File, encoded []byte) error {
 
 const providerCaptureDigestHexLength = 64
 
+// Provider and session metadata are public strings, so validate their lengths
+// before encoding either object. This keeps the finalization scratch bounded
+// even when a caller supplies an adversarial envelope that is much larger than
+// the provider byte budget. The bounded fields preserve the public envelope
+// shape; an oversized field fails closed instead of being silently truncated.
+const providerCaptureMetadataFieldLimit = 4 << 10
+
+func boundProviderCaptureMetadata(capture gatewaytesting.SessionCapture) (gatewaytesting.SessionCapture, error) {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{name: "provider.name", value: capture.Provider.Name},
+		{name: "provider.model", value: capture.Provider.Model},
+		{name: "session.id", value: capture.Session.ID},
+		{name: "session.started_at_utc", value: capture.Session.StartedAtUTC},
+		{name: "session.fixture_provenance", value: capture.Session.FixtureProvenance},
+	}
+	for _, field := range fields {
+		if len(field.value) > providerCaptureMetadataFieldLimit {
+			return capture, fmt.Errorf("%w: provider capture metadata field %s exceeds %d bytes", errProviderCaptureBudget, field.name, providerCaptureMetadataFieldLimit)
+		}
+	}
+	return capture, nil
+}
+
+func (s *providerCaptureSpool) checkEnvelopeBudget(capture gatewaytesting.SessionCapture) error {
+	overhead, err := providerCaptureEnvelopeOverhead(capture)
+	if err != nil {
+		return fmt.Errorf("encode provider capture envelope metadata: %w", err)
+	}
+	s.mu.Lock()
+	committedBytes := s.committedBytes
+	limit := s.limits.ProviderBytes
+	s.mu.Unlock()
+	if overhead > limit-committedBytes {
+		return errProviderCaptureBudget
+	}
+	return nil
+}
+
+func (s *providerCaptureSpool) updatePeaksLocked() {
+	if s.queuedBytes > s.peakQueueBytes {
+		s.peakQueueBytes = s.queuedBytes
+	}
+	if int64(s.queuedItems) > int64(s.peakQueueItems) {
+		s.peakQueueItems = s.queuedItems
+	}
+	providerBytes := s.committedBytes + s.queuedBytes
+	providerItems := s.committedItems + int64(s.queuedItems)
+	if providerBytes > s.peakProviderBytes {
+		s.peakProviderBytes = providerBytes
+	}
+	if providerItems > s.peakProviderItems {
+		s.peakProviderItems = providerItems
+	}
+}
+
 func providerCaptureEnvelopeOverhead(capture gatewaytesting.SessionCapture) (int64, error) {
+	if _, err := boundProviderCaptureMetadata(capture); err != nil {
+		return 0, err
+	}
 	version := capture.Version
 	if version == 0 {
 		version = gatewaytesting.SessionCaptureVersion
@@ -149,6 +210,7 @@ func (s *providerCaptureSpool) run() {
 			break
 		}
 		s.mu.Lock()
+		s.processedItems++
 		if s.queueItems > 0 {
 			s.queueItems--
 		}
@@ -217,6 +279,7 @@ func (s *providerCaptureSpool) drainPending(pending map[int]providerCapturePendi
 				s.mu.Lock()
 				s.committedBytes += entry.bytes
 				s.committedItems++
+				s.updatePeaksLocked()
 				s.mu.Unlock()
 			}
 		}
@@ -246,4 +309,5 @@ func (s *providerCaptureSpool) releaseLocked(bytes int64) {
 }
 
 var _ recording.ProviderCaptureSink = (*providerCaptureSpool)(nil)
+var _ recording.ResourceUsageReporter = (*providerCaptureSpool)(nil)
 var _ gatewaytesting.SessionCaptureRecordReader = (*providerCaptureSpoolReader)(nil)

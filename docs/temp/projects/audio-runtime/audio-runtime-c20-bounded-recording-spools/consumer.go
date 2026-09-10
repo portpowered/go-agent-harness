@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -23,17 +28,78 @@ import (
 )
 
 type result struct {
-	Case            string           `json:"case"`
-	FinalizationErr string           `json:"finalization_error,omitempty"`
-	ProviderErr     string           `json:"provider_error,omitempty"`
-	Status          string           `json:"status,omitempty"`
-	TranscriptLines map[string]int   `json:"transcript_lines,omitempty"`
-	FileBytes       map[string]int64 `json:"file_bytes,omitempty"`
-	TotalBytes      int64            `json:"total_bytes"`
-	ProviderBytes   int64            `json:"provider_bytes"`
-	SidecarBytes    int64            `json:"sidecar_bytes"`
-	SourceRevision  string           `json:"source_revision,omitempty"`
-	LimitsApplied   map[string]int64 `json:"limits_applied,omitempty"`
+	Case                 string            `json:"case"`
+	FinalizationErr      string            `json:"finalization_error,omitempty"`
+	ProviderErr          string            `json:"provider_error,omitempty"`
+	Status               string            `json:"status,omitempty"`
+	TranscriptLines      map[string]int    `json:"transcript_lines,omitempty"`
+	FileBytes            map[string]int64  `json:"file_bytes,omitempty"`
+	TotalBytes           int64             `json:"total_bytes"`
+	ProviderBytes        int64             `json:"provider_bytes"`
+	SidecarBytes         int64             `json:"sidecar_bytes"`
+	SourceRevision       string            `json:"source_revision,omitempty"`
+	LimitsApplied        map[string]int64  `json:"limits_applied,omitempty"`
+	TranscriptSHA256     map[string]string `json:"transcript_sha256,omitempty"`
+	ProviderSequences    []int             `json:"provider_sequences,omitempty"`
+	ProviderCaptureValid bool              `json:"provider_capture_valid"`
+	InputErrors          []string          `json:"input_errors,omitempty"`
+	SemanticUsage        *usageSnapshot    `json:"semantic_usage,omitempty"`
+	ProviderUsage        *usageSnapshot    `json:"provider_usage,omitempty"`
+	DiskUsage            diskUsage         `json:"disk_usage"`
+	Finalization         finalizationUsage `json:"finalization"`
+	RepeatFinalize       string            `json:"repeat_finalization_error,omitempty"`
+	RepeatProvider       string            `json:"repeat_provider_error,omitempty"`
+}
+
+type usageSnapshot struct {
+	QueueBytes             int64 `json:"queue_bytes"`
+	QueueItems             int64 `json:"queue_items"`
+	PeakQueueBytes         int64 `json:"peak_queue_bytes"`
+	PeakQueueItems         int64 `json:"peak_queue_items"`
+	AcceptedItems          int64 `json:"accepted_items"`
+	ProcessedItems         int64 `json:"processed_items"`
+	AcceptedMessages       int64 `json:"accepted_messages"`
+	AcceptedAudio          int64 `json:"accepted_audio"`
+	AcceptedEvents         int64 `json:"accepted_events"`
+	TranscriptBytes        int64 `json:"transcript_bytes"`
+	TranscriptItems        int64 `json:"transcript_items"`
+	AudioBytes             int64 `json:"audio_bytes"`
+	AudioItems             int64 `json:"audio_items"`
+	SidecarBytes           int64 `json:"sidecar_bytes"`
+	SidecarItems           int64 `json:"sidecar_items"`
+	MetadataBytes          int64 `json:"metadata_bytes"`
+	MetadataItems          int64 `json:"metadata_items"`
+	TerminalBytes          int64 `json:"terminal_bytes"`
+	TerminalItems          int64 `json:"terminal_items"`
+	SummaryBytes           int64 `json:"summary_bytes"`
+	SummaryItems           int64 `json:"summary_items"`
+	PeakSummaryBytes       int64 `json:"peak_summary_bytes"`
+	PeakSummaryItems       int64 `json:"peak_summary_items"`
+	ProviderQueueBytes     int64 `json:"provider_queue_bytes"`
+	ProviderQueueItems     int64 `json:"provider_queue_items"`
+	PeakProviderQueueBytes int64 `json:"peak_provider_queue_bytes"`
+	PeakProviderQueueItems int64 `json:"peak_provider_queue_items"`
+	ProviderAcceptedItems  int64 `json:"provider_accepted_items"`
+	ProviderBytes          int64 `json:"provider_bytes"`
+	ProviderItems          int64 `json:"provider_items"`
+	PeakProviderBytes      int64 `json:"peak_provider_bytes"`
+	PeakProviderItems      int64 `json:"peak_provider_items"`
+}
+
+type diskUsage struct {
+	FinalBytes         int64 `json:"final_bytes"`
+	PeakFinalBytes     int64 `json:"peak_final_bytes"`
+	PeakStagingBytes   int64 `json:"peak_staging_bytes"`
+	PeakTemporaryBytes int64 `json:"peak_temporary_bytes"`
+	PeakOwnedBytes     int64 `json:"peak_owned_bytes"`
+	Samples            int64 `json:"samples"`
+}
+
+type finalizationUsage struct {
+	DurationMS      int64  `json:"duration_ms"`
+	AllocatedBytes  uint64 `json:"allocated_bytes"`
+	HeapAllocBefore uint64 `json:"heap_alloc_before"`
+	HeapAllocAfter  uint64 `json:"heap_alloc_after"`
 }
 
 func main() {
@@ -64,12 +130,202 @@ type limits struct {
 	providerItems   int64
 }
 
+type diskMonitor struct {
+	destination         string
+	destinationParent   string
+	destinationPrefix   string
+	providerParent      string
+	providerSpoolPrefix string
+	providerStagePrefix string
+
+	stop     chan struct{}
+	done     chan struct{}
+	stopOnce sync.Once
+	sampleMu sync.Mutex
+	mu       sync.Mutex
+	usage    diskUsage
+}
+
+func newDiskMonitor(destination, providerPath string) *diskMonitor {
+	providerParent := filepath.Dir(providerPath)
+	providerBase := filepath.Base(providerPath)
+	monitor := &diskMonitor{
+		destination:         destination,
+		destinationParent:   filepath.Dir(destination),
+		destinationPrefix:   "." + filepath.Base(destination) + ".staging-",
+		providerParent:      providerParent,
+		providerSpoolPrefix: "." + providerBase + ".provider-spool-",
+		providerStagePrefix: "." + providerBase + ".provider-publish-",
+		stop:                make(chan struct{}),
+		done:                make(chan struct{}),
+	}
+	monitor.sample()
+	go monitor.run()
+	return monitor
+}
+
+func (m *diskMonitor) run() {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer func() {
+		ticker.Stop()
+		close(m.done)
+	}()
+	for {
+		select {
+		case <-ticker.C:
+			m.sample()
+		case <-m.stop:
+			return
+		}
+	}
+}
+
+func (m *diskMonitor) close() diskUsage {
+	if m == nil {
+		return diskUsage{}
+	}
+	m.stopOnce.Do(func() { close(m.stop) })
+	<-m.done
+	m.sample()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.usage
+}
+
+func (m *diskMonitor) sample() {
+	if m == nil {
+		return
+	}
+	m.sampleMu.Lock()
+	defer m.sampleMu.Unlock()
+	finalBytes := treeBytes(m.destination)
+	stagingBytes := matchingTreeBytes(m.destinationParent, m.destinationPrefix) + matchingTreeBytes(m.providerParent, m.providerStagePrefix)
+	temporaryBytes := matchingTreeBytes(os.TempDir(), ".go-agent-runtime-recording-") + matchingTreeBytes(m.providerParent, m.providerSpoolPrefix)
+	ownedBytes := finalBytes + stagingBytes + temporaryBytes
+	m.mu.Lock()
+	m.usage.FinalBytes = finalBytes
+	if finalBytes > m.usage.PeakFinalBytes {
+		m.usage.PeakFinalBytes = finalBytes
+	}
+	if stagingBytes > m.usage.PeakStagingBytes {
+		m.usage.PeakStagingBytes = stagingBytes
+	}
+	if temporaryBytes > m.usage.PeakTemporaryBytes {
+		m.usage.PeakTemporaryBytes = temporaryBytes
+	}
+	if ownedBytes > m.usage.PeakOwnedBytes {
+		m.usage.PeakOwnedBytes = ownedBytes
+	}
+	m.usage.Samples++
+	m.mu.Unlock()
+}
+
+func treeBytes(root string) int64 {
+	var total int64
+	err := filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return 0
+	}
+	return total
+}
+
+func matchingTreeBytes(root, prefix string) int64 {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			total += treeBytes(filepath.Join(root, entry.Name()))
+		}
+	}
+	return total
+}
+
+func finalizeWithUsage(recorder session.LiveRecorder, ctx context.Context) (error, finalizationUsage) {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	started := time.Now()
+	err := recorder.Finalize(ctx, nil)
+	duration := time.Since(started)
+	runtime.ReadMemStats(&after)
+	allocated := uint64(0)
+	if after.TotalAlloc >= before.TotalAlloc {
+		allocated = after.TotalAlloc - before.TotalAlloc
+	}
+	return err, finalizationUsage{DurationMS: duration.Milliseconds(), AllocatedBytes: allocated, HeapAllocBefore: before.HeapAlloc, HeapAllocAfter: after.HeapAlloc}
+}
+
+func snapshotUsage(target any) *usageSnapshot {
+	value := reflect.ValueOf(target)
+	if !value.IsValid() || (value.Kind() == reflect.Pointer && value.IsNil()) {
+		return nil
+	}
+	method := value.MethodByName("ResourceUsage")
+	if !method.IsValid() {
+		return nil
+	}
+	results := method.Call(nil)
+	if len(results) != 1 {
+		return nil
+	}
+	value = results[0]
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return nil
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return nil
+	}
+	usage := &usageSnapshot{}
+	fields := map[string]*int64{
+		"QueueBytes": &usage.QueueBytes, "QueueItems": &usage.QueueItems,
+		"PeakQueueBytes": &usage.PeakQueueBytes, "PeakQueueItems": &usage.PeakQueueItems,
+		"AcceptedItems": &usage.AcceptedItems, "ProcessedItems": &usage.ProcessedItems,
+		"AcceptedMessages": &usage.AcceptedMessages, "AcceptedAudio": &usage.AcceptedAudio, "AcceptedEvents": &usage.AcceptedEvents,
+		"TranscriptBytes": &usage.TranscriptBytes, "TranscriptItems": &usage.TranscriptItems,
+		"AudioBytes": &usage.AudioBytes, "AudioItems": &usage.AudioItems,
+		"SidecarBytes": &usage.SidecarBytes, "SidecarItems": &usage.SidecarItems,
+		"MetadataBytes": &usage.MetadataBytes, "MetadataItems": &usage.MetadataItems,
+		"TerminalBytes": &usage.TerminalBytes, "TerminalItems": &usage.TerminalItems,
+		"SummaryBytes": &usage.SummaryBytes, "SummaryItems": &usage.SummaryItems,
+		"PeakSummaryBytes": &usage.PeakSummaryBytes, "PeakSummaryItems": &usage.PeakSummaryItems,
+		"ProviderQueueBytes": &usage.ProviderQueueBytes, "ProviderQueueItems": &usage.ProviderQueueItems,
+		"PeakProviderQueueBytes": &usage.PeakProviderQueueBytes, "PeakProviderQueueItems": &usage.PeakProviderQueueItems,
+		"ProviderAcceptedItems": &usage.ProviderAcceptedItems, "ProviderBytes": &usage.ProviderBytes,
+		"ProviderItems": &usage.ProviderItems, "PeakProviderBytes": &usage.PeakProviderBytes, "PeakProviderItems": &usage.PeakProviderItems,
+	}
+	for name, destination := range fields {
+		field := value.FieldByName(name)
+		if field.IsValid() && field.Kind() >= reflect.Int && field.Kind() <= reflect.Int64 {
+			*destination = field.Int()
+		}
+	}
+	return usage
+}
+
 func run(caseName, destination, sourceRevision string, requested limits) error {
+	if _, ok := supportedCases[caseName]; !ok {
+		return fmt.Errorf("public recording case %q is not implemented", caseName)
+	}
 	root := filepath.Dir(destination)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
 	}
 	providerPath := filepath.Join(root, "provider.json")
+	disk := newDiskMonitor(destination, providerPath)
+	defer disk.close()
 	service := recordingwire.NewService(clock.Real{})
 	providerService := recordingwire.NewProviderCaptureService(clock.Real{})
 	providerOptions := recording.ProviderCaptureOptions{Destination: providerPath}
@@ -78,34 +334,15 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 	if err != nil {
 		return fmt.Errorf("open provider capture: %w", err)
 	}
-	providerRecords := []gatewaytesting.CapturedSessionEvent{{
-		Sequence: 1, Direction: gatewaytesting.DirectionClientToServer,
-		Type: "session.update", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
-		Payload: []byte(`{"type":"session.update","case":"` + caseName + `"}`),
-	}}
+	providerRecords := providerEvents(caseName)
 	providerCapture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion, Records: providerRecords}
-	if caseName == "provider-overflow" {
-		for sequence := 2; sequence <= 8; sequence++ {
-			providerRecords = append(providerRecords, gatewaytesting.CapturedSessionEvent{
-				Sequence: sequence, Direction: gatewaytesting.DirectionServerToClient,
-				Type: "response.output_text.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
-				Payload: []byte(`{"type":"response.output_text.delta","text":"` + repeated("provider-evidence-", 64) + `"}`),
-			})
-		}
-		providerCapture.Records = providerRecords
+	providerErr := settleProviderCapture(sink, providerRecords, caseName)
+	if providerErr != nil {
+		providerErr = errors.Join(providerErr, sink.FlushToFile(providerPath, providerCapture))
+	} else {
+		providerErr = sink.FlushToFile(providerPath, providerCapture)
 	}
-	for _, event := range providerRecords {
-		if err := sink.Append(event); err != nil {
-			providerErr := err
-			_ = sink.Abort()
-			return writeResult(result{Case: caseName, ProviderErr: providerErr.Error(), SourceRevision: sourceRevision, LimitsApplied: requestedMap(requested)})
-		}
-		if err := sink.Commit(event.Sequence); err != nil {
-			_ = sink.Abort()
-			return fmt.Errorf("commit provider event %d: %w", event.Sequence, err)
-		}
-	}
-	providerErr := sink.FlushToFile(providerPath, providerCapture)
+	disk.sample()
 
 	options := recording.LiveEvidenceOptions{
 		Destination:         providerDestination(destination),
@@ -128,39 +365,194 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		count = 512
 	case "large-record":
 		count = 1
-	case "provider-overflow":
+	case "semantic-boundaries", "encoded-expansion":
 		count = 2
-	case "default-overflow":
-		count = 48
+	case "overflow-healthy-terminal":
+		count = 8
+	case "summary-only-overflow":
+		count = 1
+	case "default-overflow", "cumulative-overflow":
+		count = 128
+	case "publication-resources":
+		count = 4
+	case "composition", "audio-tool":
+		count = 2
+	case "interruption":
+		count = 1
+	case "ask":
+		count = 2
 	}
+	var inputErrors []string
 	for index := 0; index < count; index++ {
 		text := fmt.Sprintf("public recording observation %04d", index)
 		if caseName == "large-record" {
 			text = repeated("large-record-", 8192)
 		}
-		if caseName == "default-overflow" {
+		if caseName == "summary-only-overflow" {
+			text = repeated("summary-only-overflow-", 1<<18)
+		}
+		if caseName == "default-overflow" || caseName == "cumulative-overflow" {
 			text = strings.Repeat("default-overflow-", 1<<16)
 		}
-		if err := recorder.RecordMessage(ctx, session.LiveRecord{Direction: session.LiveRecordAgent, Timestamp: time.Now().UTC(), Message: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)}}); err != nil {
+		if caseName == "encoded-expansion" {
+			text = strings.Repeat("quotes=\"\\\" slash=\\ backslash=\\n control=\n ", 1024)
+		}
+		message := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)}
+		direction := session.LiveRecordAgent
+		if caseName == "ask" && index == 0 {
+			direction = session.LiveRecordClient
+			message.Role = messages.RoleUser
+			message.Value = messages.NewTextDeltaValue("public ask input")
+		}
+		if caseName == "default-overflow" || caseName == "cumulative-overflow" {
+			message = messages.StreamMessage{Type: messages.StreamTypeReasoningDelta, Value: messages.NewReasoningDeltaValue(text)}
+		}
+		if caseName == "interruption" {
+			canceled, cancel := context.WithCancel(ctx)
+			cancel()
+			if err := recorder.RecordMessage(canceled, session.LiveRecord{Direction: direction, Timestamp: time.Now().UTC(), Message: message}); err != nil {
+				inputErrors = append(inputErrors, err.Error())
+			} else {
+				return errors.New("interruption case did not observe cancellation")
+			}
+			continue
+		}
+		if err := recorder.RecordMessage(ctx, session.LiveRecord{Direction: direction, Timestamp: time.Now().UTC(), Message: message}); err != nil {
 			return fmt.Errorf("record message %d: %w", index, err)
 		}
-		if caseName == "many-small" || caseName == "baseline" || caseName == "default-overflow" {
+		if caseName == "many-small" || caseName == "baseline" || caseName == "default-overflow" || caseName == "cumulative-overflow" {
 			time.Sleep(time.Millisecond)
 		}
+		disk.sample()
 	}
-	if caseName == "normal" {
-		frame := sharedaudio.PCMFrame{Samples: []int16{1, -2, 3, -4}, Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
-		if err := recorder.RecordAudio(ctx, session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: time.Now().UTC(), Frame: frame}); err != nil {
-			return fmt.Errorf("record audio: %w", err)
+	if caseName == "composition" {
+		if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: "composition.checkpoint", Timestamp: time.Now().UTC(), Text: "provider and semantic evidence composed", Critical: false}); err != nil {
+			return fmt.Errorf("record composition checkpoint: %w", err)
+		}
+	}
+	if caseName == "normal" || caseName == "overflow-healthy-terminal" || caseName == "summary-only-overflow" || caseName == "cleanup-failures" || caseName == "publication-resources" || caseName == "audio-tool" {
+		frameCount := 1
+		if caseName == "audio-tool" {
+			frameCount = 2
+		}
+		for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+			frame := sharedaudio.PCMFrame{Samples: []int16{int16(frameIndex + 1), -2, 3, -4}, Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
+			if err := recorder.RecordAudio(ctx, session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: time.Now().UTC(), Frame: frame}); err != nil {
+				return fmt.Errorf("record audio: %w", err)
+			}
 		}
 	}
 	terminal := messages.NewSessionCloseValueWithTerminal("c20-public-consumer", "complete", "complete", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
 	if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: string(session.LiveEventTerminal), Timestamp: time.Now().UTC(), Terminal: terminal, Critical: true}); err != nil {
 		return fmt.Errorf("record terminal: %w", err)
 	}
-	finalErr := recorder.Finalize(ctx, nil)
+	disk.sample()
+	finalErr, finalization := finalizeWithUsage(recorder, ctx)
+	var repeatFinalizeErr error
+	var repeatProviderErr error
+	if caseName == "cleanup-failures" {
+		repeatFinalizeErr = recorder.Finalize(ctx, nil)
+		repeatProviderErr = sink.FlushToFile(providerPath, providerCapture)
+	}
+	diskUsage := disk.close()
 	output := inspectResult(caseName, destination, providerPath, sourceRevision, requested, finalErr, providerErr)
+	output.InputErrors = inputErrors
+	output.SemanticUsage = snapshotUsage(recorder)
+	output.ProviderUsage = snapshotUsage(sink)
+	output.DiskUsage = diskUsage
+	output.Finalization = finalization
+	if repeatFinalizeErr != nil {
+		output.RepeatFinalize = repeatFinalizeErr.Error()
+	}
+	if repeatProviderErr != nil {
+		output.RepeatProvider = repeatProviderErr.Error()
+	}
 	return writeResult(output)
+}
+
+var supportedCases = map[string]struct{}{
+	"baseline": {}, "normal": {}, "many-small": {}, "large-record": {},
+	"semantic-boundaries": {}, "encoded-expansion": {}, "overflow-healthy-terminal": {},
+	"summary-only-overflow": {}, "provider-boundaries": {}, "provider-settlement": {},
+	"provider-overflow": {}, "provider-overflow-controls": {}, "cleanup-failures": {},
+	"default-overflow": {}, "cumulative-overflow": {}, "publication-resources": {},
+	"composition": {}, "audio-tool": {}, "interruption": {}, "ask": {},
+}
+
+func providerEvents(caseName string) []gatewaytesting.CapturedSessionEvent {
+	events := []gatewaytesting.CapturedSessionEvent{{
+		Sequence: 1, Direction: gatewaytesting.DirectionClientToServer,
+		Type: "session.update", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+		Payload: []byte(`{"type":"session.update","case":"` + caseName + `"}`),
+	}}
+	if caseName != "provider-overflow" && caseName != "provider-overflow-controls" {
+		return append(events,
+			gatewaytesting.CapturedSessionEvent{Sequence: 2, Direction: gatewaytesting.DirectionServerToClient, Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: []byte(`{"type":"session.created"}`)},
+			gatewaytesting.CapturedSessionEvent{Sequence: 3, Direction: gatewaytesting.DirectionServerToClient, Type: "response.done", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: []byte(`{"type":"response.done"}`)},
+		)
+	}
+	for sequence := 2; sequence <= 8; sequence++ {
+		events = append(events, gatewaytesting.CapturedSessionEvent{
+			Sequence: sequence, Direction: gatewaytesting.DirectionServerToClient,
+			Type: "response.output_text.delta", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+			Payload: []byte(`{"type":"response.output_text.delta","text":"` + repeated("provider-evidence-", 64) + `"}`),
+		})
+	}
+	return events
+}
+
+func settleProviderCapture(sink recording.ProviderCaptureSink, events []gatewaytesting.CapturedSessionEvent, caseName string) error {
+	accepted := make([]gatewaytesting.CapturedSessionEvent, 0, len(events))
+	var appendErr error
+	for _, event := range events {
+		if err := sink.Append(event); err != nil {
+			appendErr = err
+			break
+		}
+		accepted = append(accepted, event)
+	}
+	if appendErr != nil {
+		// A data budget failure must not strand already admitted mutations. Use
+		// both settlement controls after the overflow so the bounded control
+		// reserve is exercised before FlushToFile reports the failed prefix.
+		for _, event := range accepted {
+			var err error
+			if event.Sequence%2 == 0 {
+				err = sink.Discard(event.Sequence)
+			} else {
+				err = sink.Commit(event.Sequence)
+			}
+			if err != nil {
+				return errors.Join(appendErr, err)
+			}
+		}
+		return appendErr
+	}
+	switch caseName {
+	case "provider-boundaries":
+		if err := sink.Commit(events[0].Sequence); err != nil {
+			return err
+		}
+		if err := sink.Discard(events[1].Sequence); err != nil {
+			return err
+		}
+		return sink.Commit(events[2].Sequence)
+	case "provider-settlement":
+		if err := sink.Commit(events[2].Sequence); err != nil {
+			return err
+		}
+		if err := sink.Discard(events[1].Sequence); err != nil {
+			return err
+		}
+		return sink.Commit(events[0].Sequence)
+	default:
+		for _, event := range events {
+			if err := sink.Commit(event.Sequence); err != nil {
+				return fmt.Errorf("commit provider event %d: %w", event.Sequence, err)
+			}
+		}
+		return nil
+	}
 }
 
 func providerDestination(destination string) string {
@@ -191,7 +583,7 @@ func applyLimitFields(target any, requested limits) {
 }
 
 func inspectResult(caseName, destination, providerPath, sourceRevision string, requested limits, finalErr, providerErr error) result {
-	output := result{Case: caseName, SourceRevision: sourceRevision, LimitsApplied: requestedMap(requested), TranscriptLines: map[string]int{}, FileBytes: map[string]int64{}}
+	output := result{Case: caseName, SourceRevision: sourceRevision, LimitsApplied: requestedMap(requested), TranscriptLines: map[string]int{}, FileBytes: map[string]int64{}, TranscriptSHA256: map[string]string{}}
 	if finalErr != nil {
 		output.FinalizationErr = finalErr.Error()
 	}
@@ -222,7 +614,8 @@ func inspectResult(caseName, destination, providerPath, sourceRevision string, r
 	sort.Strings(paths)
 	for _, rel := range paths {
 		if filepath.Base(rel) == "client.transcript.jsonl" || filepath.Base(rel) == "agent.transcript.jsonl" {
-			if data, err := os.ReadFile(filepath.Join(destination, rel)); err == nil {
+			path := filepath.Join(destination, rel)
+			if data, err := os.ReadFile(path); err == nil {
 				lines := 0
 				for _, line := range splitLines(data) {
 					if len(line) > 0 {
@@ -230,6 +623,9 @@ func inspectResult(caseName, destination, providerPath, sourceRevision string, r
 					}
 				}
 				output.TranscriptLines[rel] = lines
+			}
+			if digest, err := hashFile(path); err == nil {
+				output.TranscriptSHA256[rel] = digest
 			}
 		}
 	}
@@ -239,7 +635,27 @@ func inspectResult(caseName, destination, providerPath, sourceRevision string, r
 	if info, err := os.Stat(strings.TrimSuffix(providerPath, filepath.Ext(providerPath)) + ".jsonl"); err == nil {
 		output.SidecarBytes = info.Size()
 	}
+	if capture, err := gatewaytesting.LoadSessionCapture(providerPath); err == nil {
+		output.ProviderCaptureValid = true
+		output.ProviderSequences = make([]int, 0, len(capture.Records))
+		for _, event := range capture.Records {
+			output.ProviderSequences = append(output.ProviderSequences, event.Sequence)
+		}
+	}
 	return output
+}
+
+func hashFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	digest := sha256.New()
+	if _, err := io.Copy(digest, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 func splitLines(data []byte) [][]byte {

@@ -39,6 +39,56 @@ type ResourceLimits struct {
 	ProviderItems   int64
 }
 
+// ResourceUsage is an optional read-only snapshot of one invocation's bounded
+// evidence accounting. Queue fields describe transient admission backlog;
+// cumulative fields describe accepted on-disk evidence and are not refunded
+// when the queue drains. Summary fields are the conservative retained-memory
+// charge for the conversation projection.
+//
+// Implementations may expose this through ResourceUsageReporter without
+// changing the LiveRecorder or ProviderCaptureSink contracts.
+type ResourceUsage struct {
+	QueueBytes             int64
+	QueueItems             int64
+	PeakQueueBytes         int64
+	PeakQueueItems         int64
+	AcceptedItems          int64
+	ProcessedItems         int64
+	AcceptedMessages       int64
+	AcceptedAudio          int64
+	AcceptedEvents         int64
+	TranscriptBytes        int64
+	TranscriptItems        int64
+	AudioBytes             int64
+	AudioItems             int64
+	SidecarBytes           int64
+	SidecarItems           int64
+	MetadataBytes          int64
+	MetadataItems          int64
+	TerminalBytes          int64
+	TerminalItems          int64
+	SummaryBytes           int64
+	SummaryItems           int64
+	PeakSummaryBytes       int64
+	PeakSummaryItems       int64
+	ProviderQueueBytes     int64
+	ProviderQueueItems     int64
+	PeakProviderQueueBytes int64
+	PeakProviderQueueItems int64
+	ProviderAcceptedItems  int64
+	ProviderBytes          int64
+	ProviderItems          int64
+	PeakProviderBytes      int64
+	PeakProviderItems      int64
+}
+
+// ResourceUsageReporter optionally reports bounded evidence accounting. It is
+// intentionally separate from the recording lifecycle interfaces so existing
+// embedders do not need to implement diagnostics.
+type ResourceUsageReporter interface {
+	ResourceUsage() ResourceUsage
+}
+
 // The defaults are intentionally finite on the public constructors. The
 // terminal budget is independent from data budgets and preserves bounded
 // lifecycle evidence after a data budget is exhausted.

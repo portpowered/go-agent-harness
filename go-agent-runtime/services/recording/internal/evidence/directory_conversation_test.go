@@ -192,6 +192,34 @@ func TestEvidenceResourceLimitsNormalizeProtectedDefaults(t *testing.T) {
 	}
 }
 
+func TestDirectoryRecorderResourceUsageSeparatesQueueFromRetainedSummary(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	if err := r.RecordMessage(t.Context(), session.LiveRecord{
+		Direction: session.LiveRecordAgent,
+		Timestamp: evidenceTime(),
+		Message:   messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("bounded usage")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	usage := r.ResourceUsage()
+	if usage.QueueBytes != 0 || usage.QueueItems != 0 {
+		t.Fatalf("queue usage after finalize = %d/%d, want zero", usage.QueueBytes, usage.QueueItems)
+	}
+	if usage.PeakQueueBytes == 0 || usage.PeakQueueItems == 0 {
+		t.Fatalf("queue peak was not retained: %+v", usage)
+	}
+	if usage.AcceptedMessages != 1 || usage.AcceptedEvents != 1 || usage.ProcessedItems != 2 {
+		t.Fatalf("usage event counts = %+v", usage)
+	}
+	if usage.TranscriptBytes == 0 || usage.SummaryBytes == 0 || usage.SummaryBytes > directorySummaryMaxBytes {
+		t.Fatalf("cumulative/summary usage = %+v", usage)
+	}
+}
+
 func TestMinimalRecordingConfigRetainsProviderMarkerAndBoundedTerminal(t *testing.T) {
 	config := transcript.RecordingConfig{SessionLog: []byte(strings.Repeat("session-log ", 1024)), Metadata: transcript.RecordingMetadata{Transport: "runtime", Configuration: map[string]string{"provider_capture": testProviderCaptureAvailable, "oversized": strings.Repeat("metadata ", 1024)}}, Terminal: &transcript.RecordingTerminalSummary{Reason: strings.Repeat("reason ", 1024), Classification: strings.Repeat("classification ", 1024), TerminalReason: messages.TerminalReason(strings.Repeat("terminal ", 1024)), TerminalProvenance: messages.TerminalProvenance(strings.Repeat("provenance ", 1024)), OutputState: messages.TerminalOutputState(strings.Repeat("output ", 1024))}}
 	minimal := minimalRecordingConfig(config, nil)

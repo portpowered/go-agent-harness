@@ -75,14 +75,20 @@ type providerCaptureSpool struct {
 	done                chan struct{}
 	limits              recording.ResourceLimits
 
-	mu             sync.Mutex
-	queuedBytes    int64
-	queuedItems    int
-	queueItems     int
-	committedBytes int64
-	committedItems int64
-	closed         bool
-	err            error
+	mu                sync.Mutex
+	queuedBytes       int64
+	queuedItems       int
+	queueItems        int
+	peakQueueBytes    int64
+	peakQueueItems    int
+	committedBytes    int64
+	committedItems    int64
+	peakProviderBytes int64
+	peakProviderItems int64
+	acceptedItems     int64
+	processedItems    int64
+	closed            bool
+	err               error
 
 	finishOnce sync.Once
 	finishErr  error
@@ -235,6 +241,10 @@ func (s *providerCaptureSpool) enqueueReserved(mutation providerCaptureMutation)
 	select {
 	case s.queue <- mutation:
 		s.queueItems++
+		s.updatePeaksLocked()
+		if mutation.kind == providerCaptureAppend {
+			s.acceptedItems++
+		}
 		return nil
 	default:
 		s.releaseLocked(mutation.bytes)
@@ -256,6 +266,7 @@ func (s *providerCaptureSpool) admitControl(kind providerCaptureMutationKind, se
 	select {
 	case s.queue <- providerCaptureMutation{kind: kind, sequence: sequence}:
 		s.queueItems++
+		s.updatePeaksLocked()
 		return nil
 	default:
 		s.latchLocked(errProviderCaptureQueueFull)
@@ -288,7 +299,12 @@ func (s *providerCaptureSpool) flush(path string, capture gatewaytesting.Session
 	if err := s.currentError(); err != nil {
 		return errors.Join(s.prefixDiagnostic(err), s.removeSpool(), s.releaseDestinationClaim())
 	}
-	if err := s.checkEnvelopeBudget(capture); err != nil {
+	boundedCapture, err := boundProviderCaptureMetadata(capture)
+	if err != nil {
+		s.latch(err)
+		return errors.Join(s.prefixDiagnostic(err), s.removeSpool(), s.releaseDestinationClaim())
+	}
+	if err := s.checkEnvelopeBudget(boundedCapture); err != nil {
 		s.latch(err)
 		return errors.Join(s.prefixDiagnostic(err), s.removeSpool(), s.releaseDestinationClaim())
 	}
@@ -297,7 +313,7 @@ func (s *providerCaptureSpool) flush(path string, capture gatewaytesting.Session
 		return errors.Join(fmt.Errorf("open provider capture spool for finalization: %w", err), s.removeSpool(), s.releaseDestinationClaim())
 	}
 	reader := &providerCaptureSpoolReader{decoder: json.NewDecoder(bufio.NewReader(file))}
-	writeErr := publishProviderCapture(path, capture, reader)
+	writeErr := publishProviderCapture(path, boundedCapture, reader)
 	closeErr := file.Close()
 	removeErr := s.removeSpool()
 	claimErr := s.releaseDestinationClaim()
@@ -334,19 +350,32 @@ func (s *providerCaptureSpool) prefixDiagnostic(err error) error {
 	return fmt.Errorf("%w: accepted provider prefix items=%d bytes=%d", err, s.committedItems, s.committedBytes)
 }
 
-func (s *providerCaptureSpool) checkEnvelopeBudget(capture gatewaytesting.SessionCapture) error {
-	overhead, err := providerCaptureEnvelopeOverhead(capture)
-	if err != nil {
-		return fmt.Errorf("encode provider capture envelope metadata: %w", err)
+// ResourceUsage reports bounded provider reservations and committed records.
+// A discarded reservation is absent from ProviderBytes but remains represented
+// by its peak, distinguishing transient queue pressure from cumulative evidence.
+func (s *providerCaptureSpool) ResourceUsage() recording.ResourceUsage {
+	if s == nil {
+		return recording.ResourceUsage{}
 	}
 	s.mu.Lock()
-	committedBytes := s.committedBytes
-	limit := s.limits.ProviderBytes
-	s.mu.Unlock()
-	if overhead > limit-committedBytes {
-		return errProviderCaptureBudget
+	defer s.mu.Unlock()
+	return recording.ResourceUsage{
+		QueueBytes:             s.queuedBytes,
+		QueueItems:             int64(s.queueItems),
+		PeakQueueBytes:         s.peakQueueBytes,
+		PeakQueueItems:         int64(s.peakQueueItems),
+		AcceptedItems:          s.acceptedItems,
+		ProcessedItems:         s.processedItems,
+		ProviderQueueBytes:     s.queuedBytes,
+		ProviderQueueItems:     int64(s.queuedItems),
+		PeakProviderQueueBytes: s.peakQueueBytes,
+		PeakProviderQueueItems: int64(s.peakQueueItems),
+		ProviderAcceptedItems:  s.acceptedItems,
+		ProviderBytes:          s.committedBytes,
+		ProviderItems:          s.committedItems,
+		PeakProviderBytes:      s.peakProviderBytes,
+		PeakProviderItems:      s.peakProviderItems,
 	}
-	return nil
 }
 
 func (s *providerCaptureSpool) releaseDestinationClaim() error {

@@ -74,6 +74,7 @@ func (r *directoryRecorder) finalize(runErr error) error {
 	if r.spool != "" {
 		result = errors.Join(result, os.RemoveAll(r.spool))
 	}
+	r.captureUsage(false)
 	return result
 }
 

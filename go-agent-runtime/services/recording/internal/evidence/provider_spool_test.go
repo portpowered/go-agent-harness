@@ -56,6 +56,40 @@ func TestProviderCaptureSpoolMatchesCanonicalCapture(t *testing.T) {
 	}
 }
 
+func TestProviderCaptureSpoolResourceUsageReportsQueueAndCommittedPeaks(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	sink, err := NewProviderCapture(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := providerSpoolEvents()
+	for _, event := range events {
+		if err := sink.Append(event); err != nil {
+			t.Fatal(err)
+		}
+		if err := sink.Commit(event.Sequence); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); err != nil {
+		t.Fatal(err)
+	}
+	reporter, ok := sink.(recording.ResourceUsageReporter)
+	if !ok {
+		t.Fatalf("sink type %T does not report resource usage", sink)
+	}
+	usage := reporter.ResourceUsage()
+	if usage.QueueBytes != 0 || usage.QueueItems != 0 || usage.ProviderQueueBytes != 0 || usage.ProviderQueueItems != 0 {
+		t.Fatalf("queue usage after flush = %+v", usage)
+	}
+	if usage.AcceptedItems != 2 || usage.ProcessedItems != 4 || usage.ProviderAcceptedItems != 2 || usage.ProviderItems != 2 || usage.ProviderBytes == 0 {
+		t.Fatalf("provider usage counts = %+v", usage)
+	}
+	if usage.PeakQueueBytes == 0 || usage.PeakQueueItems == 0 || usage.PeakProviderBytes < usage.ProviderBytes || usage.PeakProviderItems < usage.ProviderItems {
+		t.Fatalf("provider peaks = %+v", usage)
+	}
+}
+
 func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	sink, err := NewProviderCapture(destination)
