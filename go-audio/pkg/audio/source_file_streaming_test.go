@@ -24,7 +24,11 @@ func TestFileSourceWAVUsesOneStreamingCursorForMixedReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("source.Close() error = %v", err)
+		}
+	})
 
 	frame := make([]int16, FrameSize)
 	if err := source.ReadFrame(context.Background(), frame); err != nil {
@@ -52,7 +56,11 @@ func TestFileSourceWAVReadsPayloadAfterOpenWithoutSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("source.Close() error = %v", err)
+		}
+	})
 
 	file, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err != nil {
@@ -61,9 +69,11 @@ func TestFileSourceWAVReadsPayloadAfterOpenWithoutSnapshot(t *testing.T) {
 	var replacement [2]byte
 	// The canonical 44-byte header puts the first data sample at byte 44.
 	replacement[0], replacement[1] = 0x41, 0x01 // 321 in little-endian PCM16.
-	if _, err := file.WriteAt(replacement[:], 44); err != nil {
-		_ = file.Close()
-		t.Fatal(err)
+	if _, writeErr := file.WriteAt(replacement[:], 44); writeErr != nil {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Fatalf("WriteAt() error = %v; file.Close() error = %v", writeErr, closeErr)
+		}
+		t.Fatal(writeErr)
 	}
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
@@ -87,7 +97,9 @@ func TestFileSourceWAVRejectsPhysicalTruncationBeforeFirstRead(t *testing.T) {
 
 	source, err := NewFileSource(path, nil)
 	if source != nil {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("unexpected source.Close() error = %v", closeErr)
+		}
 		t.Fatal("NewFileSource() returned a source for a physically truncated WAV")
 	}
 	if !errors.Is(err, wavio.ErrTruncated) {
@@ -115,11 +127,15 @@ func TestWAVSourceMetadataAndPayloadReadBounds(t *testing.T) {
 	before := len(reader.reads)
 	got := make([]int16, 7)
 	if count, err := source.ReadSamples(context.Background(), got); count != 7 || err != nil || !reflect.DeepEqual(got, []int16{-32768, -12345, -1, 0, 1, 12345, 32767}) {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("ReadSamples() = %d, %v, %v; source.Close() error = %v", count, err, got, closeErr)
+		}
 		t.Fatalf("ReadSamples() = %d, %v, %v", count, err, got)
 	}
 	if readBytes := reader.readBytesSince(before); readBytes != 14 || reader.payloadReadBytesSince(before, 44) != 14 {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("ReadSamples() read %d payload bytes out of %d total; source.Close() error = %v", reader.payloadReadBytesSince(before, 44), readBytes, closeErr)
+		}
 		t.Fatalf("ReadSamples() read %d payload bytes out of %d total; want exactly 14", reader.payloadReadBytesSince(before, 44), readBytes)
 	}
 	if err := source.Close(); err != nil {
@@ -148,7 +164,9 @@ func TestWAVSourcePreservesCancellationIOAndCloseErrorIdentity(t *testing.T) {
 	cancel()
 	count, readErr := source.ReadSamples(ctx, make([]int16, 1))
 	if count != 0 || !errors.Is(readErr, context.Canceled) || reader.readBytes() != before {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("cancelled read = %d, %v, reads before/after=%d/%d; source.Close() error = %v", count, readErr, before, reader.readBytes(), closeErr)
+		}
 		t.Fatalf("cancelled read = %d, %v, reads before/after=%d/%d", count, readErr, before, reader.readBytes())
 	}
 	if err := source.Close(); err != nil {
@@ -183,7 +201,9 @@ func TestWAVSourcePreservesPayloadStreamErrorAndClosedPrecedence(t *testing.T) {
 	reader.failPayload = wantErr
 	count, readErr := source.ReadSamples(context.Background(), make([]int16, 1))
 	if count != 0 || !errors.Is(readErr, wantErr) {
-		_ = source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("payload read = %d, %v; source.Close() error = %v", count, readErr, closeErr)
+		}
 		t.Fatalf("payload read = %d, %v; want wrapped payload error", count, readErr)
 	}
 	if err := source.Close(); err != nil {

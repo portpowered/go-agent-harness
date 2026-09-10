@@ -216,8 +216,7 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 			return nil, newStreamError("read", path, format, readErr)
 		}
 		if wav.SampleRate() != SampleRate {
-			_ = wav.Close()
-			return nil, &FormatError{
+			formatErr := &FormatError{
 				Path:      path,
 				Extension: ".wav",
 				Format:    format.String(),
@@ -228,6 +227,10 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 					Supported: "16000 Hz",
 				},
 			}
+			if closeErr := wav.Close(); closeErr != nil {
+				return nil, errors.Join(formatErr, newStreamError("close", path, format, closeErr))
+			}
+			return nil, formatErr
 		}
 		source.wav = wav
 		source.reader = nil
