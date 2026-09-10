@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -213,7 +212,7 @@ func runEnergyCase(testCase energyCase) (result caseReport) {
 	input := append([]byte(nil), testCase.raw...)
 	result = caseReport{
 		Name:           testCase.name,
-		API:            "audio.PacketEnergy",
+		API:            "codec.PacketEnergy",
 		InputHex:       hex.EncodeToString(input),
 		Encoding:       encodingName(testCase.format.Encoding),
 		BitsPerSample:  testCase.format.BitsPerSample,
@@ -258,7 +257,7 @@ func callEnergy(raw []byte, testCase energyCase) (result energyResult) {
 			result.panic = fmt.Sprint(recovered)
 		}
 	}()
-	value, err := audio.PacketEnergy(raw, testCase.frames, testCase.channels, testCase.stride, testCase.format)
+	value, err := codec.PacketEnergy(raw, testCase.frames, testCase.channels, testCase.stride, testCase.format)
 	result.err = err
 	if err == nil {
 		result.energy = &value
@@ -304,11 +303,11 @@ func errorKind(err error) string {
 		return "ErrSampleInputTooShort"
 	case errors.Is(err, codec.ErrNonFiniteSample):
 		return "ErrNonFiniteSample"
-	case errors.Is(err, audio.ErrInvalidPacketDimensions):
+	case errors.Is(err, codec.ErrInvalidPacketDimensions):
 		return "ErrInvalidPacketDimensions"
-	case errors.Is(err, audio.ErrPacketInputTooShort):
+	case errors.Is(err, codec.ErrPacketInputTooShort):
 		return "ErrPacketInputTooShort"
-	case errors.Is(err, audio.ErrPacketEnergyOverflow):
+	case errors.Is(err, codec.ErrPacketEnergyOverflow):
 		return "ErrPacketEnergyOverflow"
 	default:
 		return "unknown"

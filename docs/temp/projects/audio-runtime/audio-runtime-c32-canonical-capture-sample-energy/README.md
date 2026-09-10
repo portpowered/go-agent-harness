@@ -5,7 +5,7 @@ independent literal oracle. The production change is limited to the named
 codec/audio helpers, the Windows adapter delegation, and the portable Windows
 regression test.
 
-The public APIs are `codec.DecodeSampleValue` and `audio.PacketEnergy`.
+The public APIs are `codec.DecodeSampleValue` and `codec.PacketEnergy`.
 `SampleFormat.ValidBitsPerSample` is validated metadata; normalization always
 uses the complete container width so reduced-valid-bit samples preserve the
 historical scaling and padding is not silently shifted.

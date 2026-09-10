@@ -222,7 +222,7 @@
       "expected_error_kind": "ErrNonFiniteSample"
     },
     "pcm16-stereo-padded-energy": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "004000c0aabb00000080ccdd",
       "bits_per_sample": 16,
       "valid_bits_per_sample": 16,
@@ -234,7 +234,7 @@
       "expected_energy": 1.5
     },
     "pcm8-mono-energy": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "0080ff",
       "bits_per_sample": 8,
       "valid_bits_per_sample": 8,
@@ -246,7 +246,7 @@
       "expected_energy": 1.98443603515625
     },
     "float32-stereo-energy": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "0000003f000000bf0000004000000000",
       "bits_per_sample": 32,
       "valid_bits_per_sample": 32,
@@ -258,7 +258,7 @@
       "expected_energy": 4.5
     },
     "float64-mono-energy": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "000000000000f83f00000000000000c0",
       "bits_per_sample": 64,
       "valid_bits_per_sample": 64,
@@ -270,7 +270,7 @@
       "expected_energy": 6.25
     },
     "zero-frames": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "",
       "bits_per_sample": 16,
       "valid_bits_per_sample": 16,
@@ -282,7 +282,7 @@
       "expected_energy": 0
     },
     "short-final-frame": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "0000000000",
       "bits_per_sample": 16,
       "valid_bits_per_sample": 16,
@@ -292,7 +292,7 @@
       "expected_error_kind": "ErrPacketInputTooShort"
     },
     "invalid-channel-stride": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "0000",
       "bits_per_sample": 16,
       "valid_bits_per_sample": 16,
@@ -302,7 +302,7 @@
       "expected_error_kind": "ErrInvalidPacketDimensions"
     },
     "invalid-frame-overflow": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "00",
       "bits_per_sample": 16,
       "valid_bits_per_sample": 16,
@@ -312,7 +312,7 @@
       "expected_error_kind": "ErrInvalidPacketDimensions"
     },
     "float-nan-energy": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "010000000000f87f",
       "bits_per_sample": 64,
       "valid_bits_per_sample": 64,
@@ -322,7 +322,7 @@
       "expected_error_kind": "ErrNonFiniteSample"
     },
     "float-square-overflow": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "ffffffffffffef7f",
       "bits_per_sample": 64,
       "valid_bits_per_sample": 64,
@@ -332,7 +332,7 @@
       "expected_error_kind": "ErrPacketEnergyOverflow"
     },
     "float-sum-overflow": {
-      "api": "audio.PacketEnergy",
+      "api": "codec.PacketEnergy",
       "input_hex": "f15f096bdfdde75ff15f096bdfdde75f",
       "bits_per_sample": 64,
       "valid_bits_per_sample": 64,

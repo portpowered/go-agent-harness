@@ -12,7 +12,6 @@ import (
 	"time"
 	"unsafe"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -834,7 +833,7 @@ func wasapiCapturePacketEnergy(data unsafe.Pointer, frames, flags uint32, format
 		return 0, fmt.Errorf("WASAPI capture format is not measurable: %w", err)
 	}
 	raw := unsafe.Slice((*byte)(data), int(byteCount))
-	energy, err := audio.PacketEnergy(raw, int(frames), int(format.channels), int(format.blockAlign), sampleFormat)
+	energy, err := codec.PacketEnergy(raw, int(frames), int(format.channels), int(format.blockAlign), sampleFormat)
 	if err != nil {
 		return 0, fmt.Errorf("WASAPI capture packet energy: %w", err)
 	}

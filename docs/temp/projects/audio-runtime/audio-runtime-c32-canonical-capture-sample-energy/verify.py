@@ -23,7 +23,6 @@ DEADLINE_SECONDS = 10
 MAX_OUTPUT_BYTES = 1 << 20
 SOURCE_FILES = (
     "go-audio/pkg/codec/sample_value.go",
-    "go-audio/pkg/audio/packet_energy.go",
     "go-device-gateway/pkg/devices/device_windows.go",
     "docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy/consumer/main.go",
 )
