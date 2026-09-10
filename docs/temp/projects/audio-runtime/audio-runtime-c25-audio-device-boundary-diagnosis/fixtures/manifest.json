@@ -14,6 +14,6 @@
     }
   ],
   "schema": 1,
-  "source_revision": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+  "source_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis"
 }
