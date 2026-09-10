@@ -2955,3 +2955,39 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   return `ACCEPTED` to SCRIPT CI without polling it. CI/review/guarded merge
   and the primary's fresh post-merge vertical probe remain open; no project
   completion is claimed.
+
+# C43 current-head merge and storage prerequisite checkpoint 2026-09-10
+
+- Re-read the admitted C43 task/review rows from the canonical `~default` board,
+  including the concluded Review-254 rejection and the task's merge-conflict
+  feedback. Admission verification returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c43-retire-cli-image-staging"}`.
+  The isolated branch remains `codex/audio-runtime-c43-retire-cli-image-staging`,
+  exactly matching `prd.json.branchName`; the running host checkout, peer
+  worktrees, predecessor checkpoints and unrelated paths were not reset or
+  edited.
+- Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` and merged it
+  into the preserved C43 branch as `ac77c076`. The only conflict was the shared
+  `progress.txt`; both the C43 and incoming C44 ledger entries were retained.
+  Required baseline `926ded7b`, startup integration `8bdafc7f`, and fetched
+  current main all pass `git merge-base --is-ancestor` against this head.
+- After the merge, bounded focused checks passed: tools normal/race, CLI image
+  adapter normal/race, live package normal/race, `make fmt wire-check vet
+  size-check`, pinned golangci-lint 2.9.0 with 0 issues, pinned staticcheck
+  2026.1, `make architecture-size-check` at 184 packages/1,888 files/27,779
+  functions, and `make coverage-registration` at 174 workspace packages.
+  Wire regeneration left no tracked changes and `git diff --check` is clean.
+- Storage preflight was 2.3 GiB free before the focused quality runs and is now
+  1,794,788 KiB (about 1.7 GiB), below the required 2 GiB reserve and the
+  C43 256 MiB attributable-growth cap. No cache, evidence, peer artifact or
+  unrelated worktree was deleted. The historical C43 process run at source
+  `169490ea` is not relabeled as current-head proof because the merged main
+  changed executable inputs.
+- This is an implementation checkpoint only: no current-head executable build,
+  process image/read_image/semantic-refresh/timeout cleanup verifier, CI result,
+  independent review, guarded merge, vertical acceptance or project acceptance
+  is claimed. Next action after the operator restores stable headroom above the
+  2 GiB reserve is the exact bounded command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`,
+  followed by fresh provenance/handoff and PR #434 update, then submission of
+  the changed same-task head to script CI without polling. Retain C43 through
+  `CONTINUE` while this prerequisite is unavailable.
