@@ -3022,3 +3022,29 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and integrates it, reruns exact-head repaired/package provenance and the
   focused C38 gates, pushes the same PR #430, and resubmits to script CI
   without polling. C38 retains ownership for any actionable in-lease repair.
+
+# C38 remote-marker causal-control checkpoint 2026-09-10T22:47Z
+
+- The task-specific handoff now authorizes the existing C38 lease to own both
+  remote integration test files. The exact rejected `test46/slow_device` run
+  was executed with its unchanged scenario deadline and passes locally in
+  normal and race modes; this is retained as characterization, not a claim
+  that the prior CI rejection is repaired.
+- Added `TestRemoteToolAudioSlowDeviceEdgeOracleControl` in the leased remote
+  oracle file. It uses the exact test46 response PCM, the same manual-clock
+  remote device, 45ms callback cadence, final-marker comparison and zero-loss
+  checks, but removes provider/session lifecycle ordering. It paces writes
+  through the device's bounded capacity API; the control passes with exact
+  PCM, zero drops, zero overflows and zero discards. This localizes the
+  rejected symptom to the process/provider/session-to-device scheduling
+  boundary rather than the device server or final-marker oracle.
+- Accumulated C38 session-audio normal/race regressions pass (`20` each),
+  focused vet passes, `make architecture-size-check` passes at `183` packages,
+  `1,884` files and `27,780` functions, and `git diff --check` is clean. No
+  CI-green, independent-review, merge, vertical, physical/acoustic or project
+  acceptance claim is made.
+- Exact next action: commit the leased causal control and checkpoint, push the
+  same PR #430, update it with the prior CI log and new control evidence, and
+  submit the changed head to script CI once without polling. Retain C38
+  ownership through `CONTINUE` for any exact rejection or actionable repair;
+  do not relabel the older artifact evidence to this changed source head.
