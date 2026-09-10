@@ -1,0 +1,106 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c29-bounded-validation-budget",
+  "branch": "codex/audio-runtime-c29-bounded-validation-budget",
+  "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "integrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "fetchedOriginMain": "9a115a83435933b4e5558ee60613fabc963afcd6",
+  "preCommitWorktreeRevision": "9a115a83435933b4e5558ee60613fabc963afcd6",
+  "candidateRevision": "9e6edc15049b9854d848cd18d071776d0bb4d53a",
+  "admission": {
+    "verification": "admitted",
+    "project": "audio-runtime",
+    "session": "~default",
+    "server": "http://127.0.0.1:7439",
+    "secondProject": false,
+    "acceptanceWaiver": false
+  },
+  "canonicalInbox": {
+    "boardSnapshot": "/tmp/audio-runtime-c29-board.json",
+    "taskState": "init",
+    "reviewRows": [],
+    "ciRejection": null,
+    "unresolvedC29Findings": []
+  },
+  "source": {
+    "repairedScript": {
+      "path": "factory/scripts/prepare-validation.py",
+      "sha256": "ef66c785dbf342640ab4a02ec993b0ef5ff3d95848a2685a2da39113c3164101"
+    },
+    "beforeScript": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/prepare-validation-before.py",
+      "sha256": "f7d63136f729af91a32dceebd05f9e15c2f9fbf08edaef14602e1f04b989b92c"
+    },
+    "manifest": "factory/projects/audio-runtime/manifest.json",
+    "productionAdmissionMutated": false,
+    "factoryJsonChanged": false,
+    "activeHostScriptChanged": false
+  },
+  "findingMap": [
+    {
+      "finding": "Equality to 1800 rejects the authorized 900-second validation before launch.",
+      "proof": "public-controls-legacy.json",
+      "repair": "prepare-validation.py accepts non-bool integer timeSeconds from 1 through 1800",
+      "causalRegressions": [
+        "test_prepare_validation_budget.py",
+        "public-controls-bounded.json"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "rtk proxy python3 -m unittest discover -s factory/scripts/tests -p test_prepare_validation_budget.py",
+      "result": "4 tests, OK"
+    },
+    {
+      "command": "rtk proxy python3 -m unittest discover -s factory/scripts/tests -p test_project_control.py",
+      "result": "12 tests, OK"
+    },
+    {
+      "command": "rtk proxy python3 -m unittest discover -s factory/scripts/tests -p test_project_admission.py",
+      "result": "11 tests, OK"
+    },
+    {
+      "command": "rtk proxy python3 -m unittest discover -s factory/scripts/tests -p test_factory_graph.py",
+      "result": "2 tests, OK"
+    },
+    {
+      "command": "rtk proxy python3 -m unittest discover -s factory/scripts/tests -p test_factory_script_target.py",
+      "result": "4 tests, OK"
+    },
+    {
+      "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/public-controls.py --script docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/prepare-validation-before.py --expect legacy --child-timeout-seconds 10",
+      "result": "passed"
+    },
+    {
+      "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/public-controls.py --script factory/scripts/prepare-validation.py --expect bounded --child-timeout-seconds 10",
+      "result": "passed"
+    },
+    {
+      "command": "rtk proxy git diff --check",
+      "result": "passed"
+    }
+  ],
+  "changedPathAllowlist": [
+    "factory/scripts/prepare-validation.py",
+    "factory/scripts/tests/test_prepare_validation_budget.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/"
+  ],
+  "laterGates": [
+    "SCRIPT-CI",
+    "independent-review",
+    "guarded-merge",
+    "C29-INDEPENDENT-PROBE",
+    "C29-SAFE-DEPLOYMENT",
+    "C28-FRESH-900-PROVENANCE",
+    "FINAL-CUSTOMER-ENGINEERING"
+  ],
+  "claims": {
+    "scriptCI": false,
+    "review": false,
+    "merged": false,
+    "C28Accepted": false,
+    "projectAccepted": false
+  }
+}

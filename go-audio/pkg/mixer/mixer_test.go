@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -175,6 +176,72 @@ func TestMixerDoesNotAttributeBoundaryToAnotherSource(t *testing.T) {
 	got := readFrame(t, mixer.Output())
 	if !reflect.DeepEqual(got.Samples, []int16{5, 6}) || got.EndOfResponse {
 		t.Fatalf("mixed boundary marker = %+v, want speech samples without boundary", got)
+	}
+}
+
+func TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	scheduler := clock.NewDeterministic(time.Time{}, time.Second)
+	mixer, err := New(ctx, scheduler, Config{
+		Format:            Format{SampleRate: 1, Channels: 1, FrameDuration: time.Second},
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("mixer.Close(): %v", err)
+		}
+	})
+
+	input, err := mixer.AddInput("queued")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := input.WriteFrame(ctx, audio.PCMFrame{
+		Samples:       []int16{123},
+		Epoch:         7,
+		EndOfResponse: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Nil entries stand in for registered sources whose consumers are not
+	// reached: the regression is specifically that the queued source must not
+	// be received before the source-count rejection.
+	mixer.mu.Lock()
+	for index := 0; index < MaxPCM16MixSources; index++ {
+		mixer.inputs["overflow-"+strconv.Itoa(index)] = nil
+	}
+	mixer.mu.Unlock()
+
+	if _, _, err := mixer.mix(); !errors.Is(err, ErrPCM16MixSourceLimit) {
+		t.Fatalf("source-limit mix error = %v, want ErrPCM16MixSourceLimit", err)
+	}
+	queued := input.input.control.Snapshot()
+	if queued.QueuedSamples != 1 || queued.ConsumedSamples != 0 {
+		t.Fatalf("queued source changed after rejected mix: %+v", queued)
+	}
+
+	mixer.mu.Lock()
+	for id, source := range mixer.inputs {
+		if source == nil {
+			delete(mixer.inputs, id)
+		}
+	}
+	mixer.mu.Unlock()
+	frame, sources, err := mixer.mix()
+	if err != nil {
+		t.Fatalf("mix after removing overflow sources: %v", err)
+	}
+	if !reflect.DeepEqual(frame.Samples, []int16{123}) || !frame.EndOfResponse {
+		t.Fatalf("queued frame = %+v, want PCM and terminal metadata intact", frame)
+	}
+	if !reflect.DeepEqual(sources, []string{"queued"}) {
+		t.Fatalf("queued frame sources = %v, want queued", sources)
 	}
 }
 
