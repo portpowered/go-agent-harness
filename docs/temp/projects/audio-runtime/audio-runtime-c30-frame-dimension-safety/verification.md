@@ -593,3 +593,83 @@ post-merge vertical acceptance or project completion is claimed. The next
 action is to checkpoint and push this changed same-task candidate, update PR
 #422 with the current-main ancestry and exact-head evidence, and return
 `ACCEPTED` to the script-owned CI gate without polling it.
+
+# C30 current-main exact-source handoff
+
+The latest canonical rejection required current-main integration before new
+provenance. `git fetch origin main` resolved
+`c61ee2774986c896560ee40a92441c914976000d`, which was merged into this isolated
+branch as `154d2543ad4e3d310bb7e4861027c7d826674a9f`. Startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched current main are
+ancestors. The running host checkout and unrelated untracked
+`meta-operator-throughput-feedback.md` were preserved.
+
+The amended C30 lease was used to keep the PCM16 framer symbols and regression
+assertion in the owned frame-sizing source/test files while removing only the
+redundant co-located files. `format.go` and `pcm16_convert_test.go` remain
+byte-identical to `origin/main`; the audio package remains at 49 Go files.
+Checked sizing, queue-product preflight, wide Stats duration, and legacy
+`ErrMixerInvalidFormat` delegation are unchanged by the integration.
+
+## Focused and structural evidence
+
+```text
+go test ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 293 tests
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 293 tests
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: pass; no issues
+make architecture-size-check: pass; 181 packages, 1866 files, 27532 functions
+git diff --check: pass
+```
+
+The wide-rate Stats regression covers `rate=1<<62`, `channels=2`, and
+`1,953,125ns` without a zero denominator or duration wrap. Tiny-frame and
+large-queue constructor tests prove input/output byte products are rejected
+before cadence setup, goroutines, channels, or allocations. Direct exported
+consumer checks pass 21/21 literal cases, including common-rate answers,
+fractional/sign/zero rejection, reduced rate-duration sizing, channel-product
+overflow, and byte-capacity boundaries. The mutated expected `480 -> 481`
+negative control exits 1 with `actual_samples=480 mutated_expected=481`.
+
+## Exact-source bounded consumer
+
+`run.py --build --source-root .`, `--positive`, `--negative-control`, and the
+ignored-SIGTERM output-flood `--timeout-control` all pass from source
+`154d2543ad4e3d310bb7e4861027c7d826674a9f`. The consumer SHA256 is
+`9dec8109925ff9447c4863413b2fa5f50697ee277a65a7af092e3c056e995ae0`; the
+runner records the source root, module, revision, fixture hashes, executable
+hash, capped output, process-group cleanup, and clean shutdown. An explicit
+different source root is rejected before execution with
+`build provenance source root mismatch`.
+
+## Same-source shipped yui regression
+
+`artifacts/yui-verification.json` records a `yui` build from the same tested
+source with executable SHA256
+`963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6`. The
+tracked Go/module input set contains 1,929 files with aggregate SHA256
+`e7e0b8eea8008bf0e1c0d2451b27f5557fc587863985294559cfc9dbed6e1ca6`.
+
+The corrected tool capture/replay passes 18 wire events and one tool call,
+with provider PCM 4,800 bytes / SHA256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502` and
+rendered PCM 3,200 bytes / SHA256
+`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`. The
+interruption capture/replay passes 15 wire events and zero tool calls, with
+provider PCM 3,840 bytes / SHA256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22` and
+rendered PCM 3,360 bytes / SHA256
+`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`.
+The no-trace capture is retained and strict replay exits 1 for the expected
+missing `timeline.jsonl`. The first tool attempt's missing-directory failure is
+preserved at `runs/current-154d-tool-trace/failure.json`; it was repaired by
+precreating `evidence/runs`, not by changing source. All fresh children used
+the 60-second child and 90-second outer deadlines, with no Realtime or physical
+device use.
+
+No current-head script-CI success, independent review, guarded merge,
+post-merge vertical acceptance, or project completion is claimed. The exact
+next action is to commit and push this changed same-task candidate, update PR
+#422 with the current-main ancestry and fresh hashes, and return `ACCEPTED` to
+the script-owned CI gate without polling it; any exact CI rejection remains
+with this executor for `CONTINUE` repair.

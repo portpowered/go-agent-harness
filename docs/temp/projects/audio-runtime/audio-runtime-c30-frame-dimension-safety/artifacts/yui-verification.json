@@ -1,22 +1,29 @@
 {
-  "schema": "audio-runtime-c30-yui-regression.v4",
+  "schema": "audio-runtime-c30-yui-regression.v5",
   "project": "audio-runtime",
   "work": "audio-runtime-c30-frame-dimension-safety",
   "decision": "PASS",
-  "tested_source_revision": "a87247bf77abaf6746820c3eb2073d33166c3ac1",
-  "integrated_base_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
-  "merge_base": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
+  "integrated_base_revision": "c61ee2774986c896560ee40a92441c914976000d",
+  "merge_base": "c61ee2774986c896560ee40a92441c914976000d",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
   "build": {
-    "argv": ["go", "build", "-trimpath", "-o", "artifacts/yui", "./agent-cli/cmd/yui"],
+    "argv": [
+      "go",
+      "build",
+      "-trimpath",
+      "-o",
+      "artifacts/yui",
+      "./agent-cli/cmd/yui"
+    ],
     "executable": "docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
     "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6",
     "go_version": "go version go1.26.7 darwin/arm64",
     "go_build_inputs": {
-      "file_count": 1927,
-      "sha256": "71f8b6896fcf6412c6b4318b45b44577f08b366659d4d3fb15f3bd2548197167",
+      "file_count": 1929,
+      "sha256": "e7e0b8eea8008bf0e1c0d2451b27f5557fc587863985294559cfc9dbed6e1ca6",
       "method": "sha256(relative-path NUL content for tracked Go/module inputs in lexical order, including go.work and go.work.sum)"
     }
   },
@@ -37,18 +44,19 @@
     "physical_device": false
   },
   "results": {
-    "tool_trace_capture": "runs/current-a872-tool-trace-v2/capture-result.json",
-    "tool_trace_replay": "runs/current-a872-tool-trace-v2-replay/replay-result.json",
-    "tool_no_trace_capture": "runs/current-a872-tool-no-trace/capture-result.json",
-    "tool_no_trace_strict_negative": "runs/current-a872-tool-no-trace-strict/replay-result.json",
-    "interruption_capture": "runs/current-a872-interruption/capture-result.json",
-    "interruption_replay": "runs/current-a872-interruption-replay/replay-result.json"
+    "tool_trace_capture": "runs/current-154d-tool-trace-v2/capture-result.json",
+    "tool_trace_replay": "runs/current-154d-tool-trace-v2-replay/replay-result.json",
+    "tool_no_trace_capture": "runs/current-154d-tool-no-trace/capture-result.json",
+    "tool_no_trace_strict_negative": "runs/current-154d-tool-no-trace-strict/replay-result.json",
+    "interruption_capture": "runs/current-154d-interruption/capture-result.json",
+    "interruption_replay": "runs/current-154d-interruption-replay/replay-result.json",
+    "first_tool_attempt": "runs/current-154d-tool-trace/failure.json"
   },
   "summary": {
     "tool_provider_pcm_bytes": 4800,
     "tool_provider_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
     "tool_rendered_pcm_bytes": 3200,
-    "tool_rendered_pcm_sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+    "tool_rendered_pcm_sha256": "7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
     "interruption_provider_pcm_bytes": 3840,
     "interruption_provider_pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
     "interruption_rendered_pcm_bytes": 3360,
@@ -61,6 +69,6 @@
   },
   "residuals": [
     "Software/file replay only; physical and acoustic device proof remains unavailable.",
-    "The first fresh tool run failed because its evidence/runs directory was not provisioned; the failure is retained at runs/current-a872-tool-trace/failure.json and the corrected v2 run passed."
+    "The first fresh tool run failed because its evidence/runs directory was not provisioned; the failure is retained at runs/current-154d-tool-trace/failure.json and the corrected v2 run passed."
   ]
 }

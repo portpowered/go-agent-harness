@@ -78,10 +78,11 @@ acoustic device proof.
 ## Current integrated source
 
 The regenerated yui report is from tested source
-`a87247bf77abaf6746820c3eb2073d33166c3ac1`, integrated on `origin/main`
-`c95a2cb4f96fa8c14bd4655f5197a822c86a980c`. It pins the current C21 fixture
-paths and hashes plus 1,927 tracked Go/module inputs. Tool capture/replay passes
+`154d2543ad4e3d310bb7e4861027c7d826674a9f`, a merge of fetched `origin/main`
+`c61ee2774986c896560ee40a92441c914976000d`. It pins the current C21 fixture
+paths and hashes plus 1,929 tracked Go/module inputs. Tool capture/replay passes
 18 wire events and one tool call; interruption capture/replay passes 15 wire
 events and zero tool calls. The first fresh tool run's missing-directory setup
-failure is retained separately from the passing v2 run. See
-`artifacts/yui-verification.json` and the `current-a872-*` run records.
+failure is retained at `runs/current-154d-tool-trace/failure.json`; the corrected
+v2 run passes. See `artifacts/yui-verification.json` and the `current-154d-*`
+run records.
