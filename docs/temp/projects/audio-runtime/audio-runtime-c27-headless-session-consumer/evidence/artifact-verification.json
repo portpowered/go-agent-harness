@@ -1,7 +1,7 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "676e24f587e366371e8e980449a3791db65968e6e7cedc1f138b87a5ac0823a0",
+    "sha256": "045aede351d4a8b8f71d3f3f40d774d9dd68ffb0080d6361d5dc0a966e7a7d4c",
     "size": 11777
   },
   "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
@@ -11,17 +11,17 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "97ccc19a0617d211805b873bd81d5f737ee7afa20d6be846949cedb467c7ab8a",
-        "size": 7553891
+        "sha256": "68cdb50cfa27974fd2790cd5740294bd8c1af2f5f4cdd3e2d18caf1ea16bbb55",
+        "size": 7556310
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "7712ed8e874dc6a20bed408d956b7de81b2c672ac802b80347cc38f29453de51",
-        "size": 9207794
+        "sha256": "906538b99469341b4a8b08a77b57824841ffc0e95ebb87b007c11389fac5b9d7",
+        "size": 9207842
       },
       {
         "path": "evidence/artifacts/yui.archive",
-        "sha256": "795c052e715dde1624834d1e9f49dc8ce45f6b02711f18122e967a6e928f8871",
+        "sha256": "48aee1505b7787d67fc4fdf5d88be4479fe795bb820800ad128f72716627923f",
         "size": 52548242
       },
       {
@@ -41,15 +41,15 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "09f38408123086f0dc4e39263c5b03ad87f0bc07f9f4de5aa80f0a76c9d96ddb",
-        "size": 50468
+        "sha256": "6b3f30779268445183f2067292c8155216d561f4bad3ff6a17ab2102adf57a91",
+        "size": 51594
       }
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "7135f038819c1c7ca58c71db8ab544448129abd9",
+      "current_head": "d112f1eda491e56ea691338e4b58ca4d3ba2a519",
       "source_changes_since_source_revision": [],
-      "source_revision": "7135f038819c1c7ca58c71db8ab544448129abd9",
+      "source_revision": "d112f1eda491e56ea691338e4b58ca4d3ba2a519",
       "source_revision_matches_current_head": true
     }
   }
