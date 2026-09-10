@@ -2677,3 +2677,72 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and hand the candidate to SCRIPT CI. Do not claim CI, review, merge, or
   vertical acceptance; retain ownership with `CONTINUE` for any exact
   rejection or actionable repair.
+
+# C44 current-main integration and storage-blocked validation checkpoint 2026-09-10
+
+- Re-read the required Factory operating policy and implementation handoff,
+  verified the admitted task with `project-control.py verify-work --type task
+  --name audio-runtime-c44-retire-cli-model-admission`, and confirmed
+  `prd.json.branchName` exactly matches the isolated branch
+  `codex/audio-runtime-c44-retire-cli-model-admission`. No second project,
+  waiver, reset, host checkout, predecessor checkpoint or unrelated owner path
+  was changed.
+- Fetched current `origin/main=7b6ce8cecee80d3f78b7aad02760067387853ade` and
+  merged it into the same task branch as `f882566c4f8b066eaf1f48557ba35e4e803c3c9c`.
+  The only merge conflict was `progress.txt`; the complete incoming current-main
+  ledger and the complete C44 history were both retained. Baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main are ancestors.
+- The merged source manifest changed to 1,079 external-consumer files with
+  SHA-256 `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  and 2,177 shipped-CLI files with SHA-256
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767`.
+  Clean-source public verifier run `verify-20260910T203314Z-62352` built the
+  fresh external consumer (`6403602` bytes, SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`) but
+  failed only at YUI compilation with `mkdir .../go-build3679637339/b470/:
+  no space left on device`; free space fell from 271,944 KiB to 197,212 KiB.
+  No current-head YUI artifact or public runtime claim was made.
+- Independent negative-controls run `verify-20260910T203346Z-62643` returned
+  `ACCEPTED` from source `f882566c` with `source_tree_dirty=false`: consumer
+  normal/race, deliberate wrong-oracle rejection, and forced-timeout TERM/reap
+  cleanup with no survivors passed. Its final free-space measurement was
+  186,876 KiB. Structured details are in
+  `docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/current-head-validation-f882566c.json`;
+  prior clean-source accepted evidence remains historical and is not relabeled.
+- Focused provider admission/service tests pass normal and race. The targeted
+  CLI model test could not link because Go reported `no space left on device`,
+  and `make architecture-size-check` could not create its Go work directory for
+  the same reason. These are the recorded operator storage prerequisite, not
+  source failures; no caches or evidence were deleted.
+- This is an executor checkpoint, not CI, review, merge, vertical acceptance or
+  project completion. Next action: after the operator restores stable headroom
+  above the recorded 2 GiB compilation reserve, rerun the merged-head public
+  verifier and remaining bounded Go/structural checks, record fresh YUI/input
+  hashes, then commit/push this same task and update PR #436 before returning
+  `ACCEPTED` to script CI. Retain C44 ownership with `CONTINUE` while that
+  actionable prerequisite remains.
+
+# C44 storage recovery and public validation checkpoint 2026-09-10
+
+- Free space recovered to 7.1 GiB before the rerun, above the recorded 2 GiB
+  compilation reserve. The merged-head public verifier
+  `verify-20260910T211218Z-69790` returned `ACCEPTED` in 28.127080s at source
+  `f882566c4f8b066eaf1f48557ba35e4e803c3c9c`. It built the external consumer at
+  6,403,602 bytes, SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`, and
+  the nomicrophone YUI at 51,042,338 bytes, SHA-256
+  `d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`.
+- The run accepted provider consumer normal/race, invalid bare-session and
+  self-play no-side-effect controls, exact audio-tool/interruption replay
+  (`4800` bytes and `3840` bytes with a `2400`-byte healthy tail), wrong
+  PCM/marker oracles, and bounded timeout TERM/reap cleanup. Focused provider
+  and CLI normal/race tests passed, and `make architecture-size-check` passed
+  with `183` packages, `1884` files, and `27754` functions.
+- The diagnostic run recorded `source_tree_dirty=true` only because the
+  inherited README/progress checkpoint was staged. Its executable-input
+  manifests are consumer `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  over `1079` files and shipped YUI
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767` over
+  `2177` files. The diagnostic evidence is retained and will not be relabeled;
+  the next bounded action is a clean-source public and negative-controls rerun.

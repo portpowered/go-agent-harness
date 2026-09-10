@@ -78,3 +78,35 @@ across six modules, including the leased private-admission manifest. This
 evidence update is documentation-only and outside both verifier build-input
 prefixes; the recorded manifest hashes are therefore the explicit compiled-
 input identity proof for its descendant.
+
+After merging current `origin/main` `7b6ce8ce` as `f882566c`, the fresh input
+manifests changed to 1,079 consumer files (`185fced2...`) and 2,177 shipped
+CLI files (`183d914d...`). The required clean-source public rerun
+`verify-20260910T203314Z-62352` rebuilt the external consumer but stopped at
+YUI compilation with the exact host error `no space left on device`; it did
+not produce a current-head YUI artifact. The independent
+`verify-20260910T203346Z-62643` negative-controls run returned `ACCEPTED`:
+consumer normal/race, deliberate wrong-oracle rejection, and bounded
+TERM/reap cleanup with no survivors passed. Full details and measured free
+space are recorded in `current-head-validation-f882566c.json`; the public
+workflow, CLI model checks, architecture scan, and delivery handoff remain
+blocked until the operator restores the 2 GiB compilation reserve.
+
+After headroom recovered, the merged-head public rerun
+`verify-20260910T211218Z-69790` returned `ACCEPTED` in 28.127080s at source
+`f882566c4f8b066eaf1f48557ba35e4e803c3c9c`. It rebuilt the external consumer
+(`6,403,602` bytes, SHA-256
+`5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`) and
+nomicrophone YUI (`51,042,338` bytes, SHA-256
+`d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`).
+The provider consumer normal/race checks, invalid bare-session and self-play
+no-side-effect controls, exact 4800-byte audio-tool and 3840-byte interruption
+replays (including the 2400-byte healthy tail), wrong PCM/marker oracles, and
+bounded timeout cleanup all passed. This diagnostic run still recorded
+`source_tree_dirty=true` because the inherited README/progress checkpoint was
+staged; its executable-input manifests remained
+`185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711` for the
+consumer and `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767`
+for shipped YUI. Focused provider and CLI normal/race tests and the architecture
+gate (`183` packages, `1884` files, `27754` functions) also pass. A clean-source
+rerun follows this checkpoint commit; the diagnostic artifact is not relabeled.
