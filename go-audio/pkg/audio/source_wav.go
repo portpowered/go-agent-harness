@@ -3,6 +3,7 @@ package audio
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
@@ -34,9 +35,33 @@ func (s *WAVSource) SampleRate() int {
 	return s.sampleRate
 }
 
+func fileWAVSampleRateError(path string, format audioFormat, rate int) *FormatError {
+	return &FormatError{
+		Path:      path,
+		Extension: ".wav",
+		Format:    format.String(),
+		Reason:    fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", rate, SampleRate),
+		Err: &wavio.UnsupportedError{
+			Property:  "sample rate",
+			Observed:  rate,
+			Supported: "16000 Hz",
+		},
+	}
+}
+
 // NewWAVSource validates the container without loading PCM and takes ownership
 // of the supplied file on success. The file remains caller-owned on failure.
 func NewWAVSource(path string, r io.ReadSeekCloser) (*WAVSource, error) {
+	return newWAVSource(path, r, true)
+}
+
+// newFileWAVSource validates a file-backed WAV container while leaving the
+// FileSource adapter's stricter 16 kHz compatibility check to its caller.
+func newFileWAVSource(path string, r io.ReadSeekCloser) (*WAVSource, error) {
+	return newWAVSource(path, r, false)
+}
+
+func newWAVSource(path string, r io.ReadSeekCloser, validateRate bool) (*WAVSource, error) {
 	if r == nil {
 		return nil, ErrNilStream
 	}
@@ -44,8 +69,10 @@ func NewWAVSource(path string, r io.ReadSeekCloser) (*WAVSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := wavio.ValidateSampleRate(layout.SampleRate); err != nil {
-		return nil, err
+	if validateRate {
+		if err := wavio.ValidateSampleRate(layout.SampleRate); err != nil {
+			return nil, err
+		}
 	}
 	return &WAVSource{path: path, file: r, remaining: int64(layout.DataBytes), sampleRate: layout.SampleRate, done: layout.DataBytes == 0}, nil
 }
@@ -99,20 +126,21 @@ func (s *WAVSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
 		count = s.remaining
 	}
 	encoded := make([]byte, count)
-	if _, err := io.ReadFull(s.file, encoded); err != nil {
+	read, err := io.ReadFull(s.file, encoded)
+	if err != nil {
 		s.done = true
 		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
-			return 0, &TruncatedPCMError{Path: s.path, Bytes: int(count % 2)}
+			return 0, &TruncatedPCMError{Path: s.path, Bytes: read % 2}
 		}
 		return 0, &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
 	}
-	s.remaining -= count
-	if count%2 != 0 {
+	s.remaining -= int64(read)
+	if read%2 != 0 {
 		s.done = true
 		return 0, &TruncatedPCMError{Path: s.path, Bytes: 1}
 	}
-	n := int(count / 2)
-	if err := codec.DecodePCM16Into(buf[:n], encoded); err != nil {
+	n := read / 2
+	if err := codec.DecodePCM16Into(buf[:n], encoded[:read]); err != nil {
 		return 0, &StreamError{Operation: "read", Path: s.path, Format: "wav", Err: err}
 	}
 	if s.remaining == 0 {

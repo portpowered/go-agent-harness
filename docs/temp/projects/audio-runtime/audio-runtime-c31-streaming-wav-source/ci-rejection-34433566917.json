@@ -1,0 +1,71 @@
+{
+  "schema": "audio-runtime-c31-ci-rejection.v1",
+  "source_revision": "6717dd5add3d613b0adf24516d679dd63293495",
+  "pull_request": 423,
+  "run": {
+    "id": 34433566917,
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34433566917",
+    "head_sha": "6717dd5add3d613b0adf24516d679dd63293495",
+    "status": "completed",
+    "conclusion": "failure"
+  },
+  "canonical_board": {
+    "work_id": "work-task-123",
+    "name": "audio-runtime-c31-streaming-wav-source",
+    "state": "init",
+    "branch": "codex/audio-runtime-c31-streaming-wav-source",
+    "review_rows_for_task": [],
+    "rejection_feedback": "CI checks failed for PR #423 at head 6717dd5add3d613b0adf24516d679dd63293495: required checks failed on current head 6717dd5add3d613b0adf24516d679dd63293495: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34433566917/job/102733925196). Return this task to the executor with the listed failures."
+  },
+  "failed_jobs": [
+    {
+      "id": 102733925196,
+      "name": "CI (hermetic)",
+      "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34433566917/job/102733925196",
+      "conclusion": "failure",
+      "command": "make test-hermetic",
+      "mode": "CGO_ENABLED=0 tags=nomicrophone",
+      "failure": "TestFamilyAIterativeBuildUpThroughShippedProcess: output evidence reads=3 bytes=12, want four streamed confirmation audio markers",
+      "log_read": "gh run view 34433566917 --job 102733925196 --log (full 363-line job log read in bounded sections)"
+    },
+    {
+      "id": 102733924992,
+      "name": "CI (integration)",
+      "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34433566917/job/102733924992",
+      "conclusion": "failure",
+      "command": "make test-integration",
+      "failure": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device: remote playback did not reach final PCM marker before the unchanged scenario deadline",
+      "location": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183",
+      "log_read": "gh run view 34433566917 --job 102733924992 --log-failed"
+    }
+  ],
+  "causal_scope": [
+    {
+      "failure": "Family A streamed output",
+      "path": "agent-cli/test/integration/s2s_conversational_customer_sim_family_a_test.go",
+      "c31_owned": false,
+      "exercised_path": "raw stdin FileSource.ReadFrame",
+      "reproduction": "CGO_ENABLED=0 go test ./agent-cli/test/integration -tags=nomicrophone -run ^TestFamilyAIterativeBuildUpThroughShippedProcess$ -count=20 -timeout 120s: 20/20 pass",
+      "decision": "No C31 source repair; raw behavior is unchanged by the streaming WAV change."
+    },
+    {
+      "failure": "remote test46 slow_device final PCM marker",
+      "path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+      "c31_owned": false,
+      "owner": "C20",
+      "decision": "No C31 mutation; preserve the independent owner and exact external failure."
+    }
+  ],
+  "c31_controls_after_reconciliation": {
+    "audio_normal_count": 3,
+    "audio_race_count": 2,
+    "audio_vet": "pass",
+    "consumer_allocation_io_positive_negative": "pass",
+    "file_input_workflow": "pass",
+    "read_only_c21_regression": "pass",
+    "architecture": "181 packages, 1863 files, 27347 functions",
+    "diff_check": "pass"
+  },
+  "ci_success_claimed": false,
+  "review_or_merge_claimed": false
+}
