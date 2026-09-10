@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	audiomixer "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
@@ -101,30 +102,20 @@ func DefaultPCM16Format() PCM16Format {
 // FrameSamples returns the number of interleaved samples in one cadence
 // frame. The duration must resolve to an integral number of samples.
 func (f PCM16Format) FrameSamples() (int, error) {
-	if f.SampleRate <= 0 || f.Channels <= 0 || f.FrameDuration <= 0 {
-		return 0, fmt.Errorf("%w: sample rate, channels, and frame duration must be positive", ErrMixerInvalidFormat)
+	samples, err := sharedaudio.PCM16FrameSamples(f.SampleRate, f.Channels, f.FrameDuration)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %w", ErrMixerInvalidFormat, err)
 	}
-	samplesPerChannel := (int64(f.SampleRate) * int64(f.FrameDuration)) / int64(time.Second)
-	if samplesPerChannel <= 0 || (int64(f.SampleRate)*int64(f.FrameDuration))%int64(time.Second) != 0 {
-		return 0, fmt.Errorf("%w: frame duration %s is not sample aligned at %d Hz", ErrMixerInvalidFormat, f.FrameDuration, f.SampleRate)
-	}
-	samples := samplesPerChannel * int64(f.Channels)
-	if samples > int64(^uint(0)>>1) {
-		return 0, fmt.Errorf("%w: frame is too large", ErrMixerInvalidFormat)
-	}
-	return int(samples), nil
+	return samples, nil
 }
 
 // FrameBytes returns the byte length of one interleaved PCM16 frame.
 func (f PCM16Format) FrameBytes() (int, error) {
-	samples, err := f.FrameSamples()
+	frameBytes, err := sharedaudio.PCM16FrameBytes(f.SampleRate, f.Channels, f.FrameDuration)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %w", ErrMixerInvalidFormat, err)
 	}
-	if samples > int(^uint(0)>>1)/2 {
-		return 0, fmt.Errorf("%w: frame is too large", ErrMixerInvalidFormat)
-	}
-	return samples * 2, nil
+	return frameBytes, nil
 }
 
 // PCM16MixerConfig controls bounded buffering around a PCM16Mixer.
@@ -188,13 +179,13 @@ type PCM16MixerStats struct {
 	Output PCM16QueueStats
 }
 
-func (c PCM16MixerConfig) normalized() (PCM16MixerConfig, int, error) {
+func (c PCM16MixerConfig) normalized() (PCM16MixerConfig, int, int, error) {
 	if c.Format == (PCM16Format{}) {
 		c.Format = DefaultPCM16Format()
 	}
 	frameBytes, err := c.Format.FrameBytes()
 	if err != nil {
-		return PCM16MixerConfig{}, 0, err
+		return PCM16MixerConfig{}, 0, 0, err
 	}
 	if c.InputQueueFrames == 0 {
 		c.InputQueueFrames = DefaultPCM16InputQueueFrames
@@ -206,12 +197,21 @@ func (c PCM16MixerConfig) normalized() (PCM16MixerConfig, int, error) {
 		c.CadenceFactory = realPCM16CadenceFactory
 	}
 	if c.InputQueueFrames < 0 || c.OutputQueueFrames < 0 {
-		return PCM16MixerConfig{}, 0, fmt.Errorf("%w: queue frame limits must not be negative", ErrMixerInvalidFormat)
+		return PCM16MixerConfig{}, 0, 0, fmt.Errorf("%w: queue frame limits must not be negative", ErrMixerInvalidFormat)
 	}
 	if c.InputQueueFrames == 0 || c.OutputQueueFrames == 0 {
-		return PCM16MixerConfig{}, 0, fmt.Errorf("%w: queue frame limits must be positive", ErrMixerInvalidFormat)
+		return PCM16MixerConfig{}, 0, 0, fmt.Errorf("%w: queue frame limits must be positive", ErrMixerInvalidFormat)
 	}
-	return c, frameBytes, nil
+	// Validate queue storage before constructing cadence, context, channels, or
+	// the goroutine that owns them.
+	inputCapacityBytes, err := sharedaudio.PCM16ByteCapacity(c.InputQueueFrames, frameBytes)
+	if err != nil {
+		return PCM16MixerConfig{}, 0, 0, fmt.Errorf("%w: input queue capacity: %w", ErrMixerInvalidFormat, err)
+	}
+	if _, err := sharedaudio.PCM16ByteCapacity(c.OutputQueueFrames, frameBytes); err != nil {
+		return PCM16MixerConfig{}, 0, 0, fmt.Errorf("%w: output queue capacity: %w", ErrMixerInvalidFormat, err)
+	}
+	return c, frameBytes, inputCapacityBytes, nil
 }
 
 type pcm16MixerInput struct {
@@ -269,7 +269,7 @@ func NewMixer(ctx context.Context, config PCM16MixerConfig) (*PCM16Mixer, error)
 
 // NewPCM16MixerWithConfig creates a cadence-controlled mixer.
 func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM16Mixer, error) {
-	config, frameBytes, err := config.normalized()
+	config, frameBytes, inputCapacityBytes, err := config.normalized()
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 	mixer := &PCM16Mixer{
 		format:       config.Format,
 		frameBytes:   frameBytes,
-		maxInputSize: config.InputQueueFrames * frameBytes,
+		maxInputSize: inputCapacityBytes,
 		cadence:      cadence,
 		manual:       config.Manual,
 		ctx:          mixerCtx,
@@ -862,7 +862,7 @@ func queueFrameCount(bytes, frameBytes int) int {
 	if bytes <= 0 || frameBytes <= 0 {
 		return 0
 	}
-	return (bytes + frameBytes - 1) / frameBytes
+	return (bytes-1)/frameBytes + 1
 }
 
 func pcm16Duration(bytes int, format PCM16Format) time.Duration {
