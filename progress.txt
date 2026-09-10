@@ -2446,3 +2446,41 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Merged-tree focused provider admission and CLI model/self-play/reasoning-effort tests pass normal and race; targeted vet, fmt, Wire, architecture/size, coverage registration, and diff-check pass. Admission coverage is `98.1%`; structural gates report `182` packages / `1,881` files / `27,721` functions and `172` registered workspace packages across six modules.
 - Clean merged-head public run `verify-20260910T175919Z-21784` and negative-controls run `verify-20260910T175942Z-21950` both returned `ACCEPTED` from source `d6e4f9c5549eef337e27e9e5e9a068114e3a6ae7` with `source_tree_dirty=false`, source archive SHA-256 `76c93cee5d8347028962af48c1cf15cf94cc0218f405edadfb8deefb0c65c934`, external consumer artifact SHA-256 `6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3`, yui artifact SHA-256 `fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255`, and unchanged input manifests `6b08837a3509ac6d61d26ee15b04be3d492dd8348cf8c022fce8668edc78e606` / `40fbec9ef01a8e77d8274d61ade13e80c7b38e70bc5241d6e1d8bf786dcee16c`. Normal/race consumer tests pass; wrong-oracle controls exit `1`; forced timeout is bounded with TERM, parent reaped, and no survivors; replay fixture/PCM and invalid CLI admission controls pass.
 - Next action: commit this checkpoint, push the same PR, verify the PR is conflict-free at its current head without polling CI, update its evidence body, and return `ACCEPTED` to the script-owned CI gate. CI success, independent review, guarded merge, post-merge vertical acceptance, physical/acoustic proof and project completion remain open; retain C44 ownership through `CONTINUE` for any exact CI rejection or actionable review repair.
+
+# C44 static rejection repair and current-head CI handoff 2026-09-10
+
+- Re-read the Factory policy/handoff, admitted manifest, progress history and
+  canonical `~default` board. Admission remains `{"status":"admitted",
+  "project":"audio-runtime","name":"audio-runtime-c44-retire-cli-model-admission"}`;
+  `prd.json.branchName` matches the isolated branch
+  `codex/audio-runtime-c44-retire-cli-model-admission`, and required baseline,
+  startup and fetched `origin/main=d6efc88d` ancestry remain intact. No host
+  checkout, second project, waiver, reset, predecessor checkpoint or unrelated
+  path was changed.
+- The full current-head rejection for PR `#436`, run `34511830096`, job
+  `102987578885`, is preserved at `/tmp/audio-runtime-c44-ci-static-34511830096.log`.
+  It reported only pinned golangci-lint `goconst` in
+  `agent-cli/internal/services/internal/agentruntime/session_models_test.go:120`
+  for the repeated `custom-only` literal. Repair commit `8f9963b` introduces
+  test-local/package-local constants in the two owned admission test files;
+  behavior, production code and public executable inputs are unchanged.
+- Post-repair focused evidence is green: pinned `make lint` (all 15 modules,
+  `0 issues`), `make staticcheck`, `make fmt`, `make vet`, `make wire-check`,
+  `make architecture-size-check` (`182` packages / `1,881` files /
+  `27,721` functions), `make coverage-registration` (`172` packages across
+  six modules), `git diff --check`, and `1,102` normal tests across the owned
+  CLI/providers packages. Provider race controls pass `48` tests; the C44
+  model-admission race selection passed its provider/service tests before the
+  CLI test binary linker reached the host's `no space left on device` limit
+  with only about `354 MiB` available. This is an environment limitation, not
+  a source failure; no caches or evidence were deleted.
+- The earlier clean merged-source public and negative-control runs remain valid
+  for this test-only descendant: production/build inputs are unchanged, and
+  their recorded consumer/yui hashes, invalid-admission side-effect controls,
+  replay PCM/fixture checks, wrong-oracle failures and bounded shutdown remain
+  preserved. No CI success, independent review, guarded merge, post-merge
+  vertical acceptance or project completion is claimed.
+- Next action: push `8f9963b` plus this evidence checkpoint on the same PR `#436`,
+  update its body with the exact rejection and repair, and return `ACCEPTED` to
+  the script-owned current-head CI gate without polling. Retain C44 ownership
+  through `CONTINUE` for any exact CI rejection or actionable review repair.
