@@ -319,6 +319,7 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 	if _, ok := supportedCases[caseName]; !ok {
 		return fmt.Errorf("public recording case %q is not implemented", caseName)
 	}
+	recordedAt := time.Date(2026, 1, 2, 3, 4, 5, 123456000, time.UTC)
 	root := filepath.Dir(destination)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
@@ -351,7 +352,7 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		ParticipantID:       "consumer",
 		Provider:            "fixture",
 		Model:               "fixture-model",
-		ClockBase:           time.Now().UTC(), WallClockStart: time.Now().UTC(),
+		ClockBase:           recordedAt, WallClockStart: recordedAt,
 	}
 	applyLimitFields(&options, requested)
 	recorder, err := service.OpenLiveEvidence(options)
@@ -410,14 +411,14 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		if caseName == "interruption" {
 			canceled, cancel := context.WithCancel(ctx)
 			cancel()
-			if err := recorder.RecordMessage(canceled, session.LiveRecord{Direction: direction, Timestamp: time.Now().UTC(), Message: message}); err != nil {
+			if err := recorder.RecordMessage(canceled, session.LiveRecord{Direction: direction, Timestamp: recordedAt, Message: message}); err != nil {
 				inputErrors = append(inputErrors, err.Error())
 			} else {
 				return errors.New("interruption case did not observe cancellation")
 			}
 			continue
 		}
-		if err := recorder.RecordMessage(ctx, session.LiveRecord{Direction: direction, Timestamp: time.Now().UTC(), Message: message}); err != nil {
+		if err := recorder.RecordMessage(ctx, session.LiveRecord{Direction: direction, Timestamp: recordedAt, Message: message}); err != nil {
 			return fmt.Errorf("record message %d: %w", index, err)
 		}
 		if caseName == "many-small" || caseName == "baseline" || caseName == "default-overflow" || caseName == "cumulative-overflow" {
@@ -426,7 +427,7 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		disk.sample()
 	}
 	if caseName == "composition" {
-		if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: "composition.checkpoint", Timestamp: time.Now().UTC(), Text: "provider and semantic evidence composed", Critical: false}); err != nil {
+		if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: "composition.checkpoint", Timestamp: recordedAt, Text: "provider and semantic evidence composed", Critical: false}); err != nil {
 			return fmt.Errorf("record composition checkpoint: %w", err)
 		}
 	}
@@ -437,13 +438,13 @@ func run(caseName, destination, sourceRevision string, requested limits) error {
 		}
 		for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
 			frame := sharedaudio.PCMFrame{Samples: []int16{int16(frameIndex + 1), -2, 3, -4}, Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
-			if err := recorder.RecordAudio(ctx, session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: time.Now().UTC(), Frame: frame}); err != nil {
+			if err := recorder.RecordAudio(ctx, session.LiveAudioRecord{Direction: session.LiveRecordAgent, Admission: session.LiveAudioMessageObserved, Timestamp: recordedAt, Frame: frame}); err != nil {
 				return fmt.Errorf("record audio: %w", err)
 			}
 		}
 	}
 	terminal := messages.NewSessionCloseValueWithTerminal("c20-public-consumer", "complete", "complete", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
-	if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: string(session.LiveEventTerminal), Timestamp: time.Now().UTC(), Terminal: terminal, Critical: true}); err != nil {
+	if err := recorder.RecordEvent(ctx, session.LiveEvent{Kind: string(session.LiveEventTerminal), Timestamp: recordedAt, Terminal: terminal, Critical: true}); err != nil {
 		return fmt.Errorf("record terminal: %w", err)
 	}
 	disk.sample()
