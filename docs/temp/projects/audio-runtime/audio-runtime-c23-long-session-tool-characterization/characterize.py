@@ -842,7 +842,7 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             else:
                 results.append({"control": name, "mode": "report-oracle", "passed": False, "rejected": "negative mutation was accepted"})
         runtime_controls = {
-            "missing-result": {"diagnostic": "fixture control missing tool result", "tool_results": 0},
+            "missing-result": {"diagnostic": "fixture control missing tool result", "tool_results": 1},
             "duplicate-result": {"diagnostic": "fixture control duplicate tool result", "tool_results": 1},
         }
         for name, expectation in runtime_controls.items():
