@@ -55,11 +55,26 @@ Windows hardware and physical acoustic proof are out of scope under the
 current project amendment; Windows software and hermetic checks remain later
 project gates.
 
-The merged-head public run `verify-20260910T175919Z-21784` and
-negative-controls run `verify-20260910T175942Z-21950` both returned `ACCEPTED`
-from clean source `d6e4f9c`. They preserve the external consumer normal/race
-passes, invalid CLI admission controls, exact replay fixture/PCM controls,
-wrong-oracle rejection, and bounded timeout TERM/reap with no survivors. The
-merged-tree structural gates report `182` packages, `1,881` files, and `27,721`
-functions; coverage registration reports `172` workspace packages across six
-modules, including the leased private-admission manifest.
+The historical merged-head public run `verify-20260910T175919Z-21784` and
+negative-controls run `verify-20260910T175942Z-21950` remain retained from
+clean source `d6e4f9c`. After the review identified that the test-only lint
+repair changed the verifier input manifests, fresh clean-source runs
+`verify-20260910T193922Z-16355` (public) and
+`verify-20260910T193938Z-16512` (negative-controls) were run at exact source
+`54b920136220b9e9fe1c027104addf05d6b1cee6`; both returned `ACCEPTED` with
+`source_tree_dirty=false`. Both runs record external consumer artifact
+`6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3`, shipped
+`yui` artifact
+`fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255`, and
+input manifests `5ae620e01eb64745dfc036d945fb8d6ad65495dd4e6c7fdff2b134b52f74741e`
+(consumer) and
+`28058a55b6f7cb97dcdb23b8f0f2103b15b6b8325b09a56546c9607394509528` (shipped
+CLI). They preserve the external consumer normal/race passes, invalid CLI
+admission side-effect controls, exact replay fixture/PCM controls,
+wrong-oracle rejection, and bounded timeout TERM/reap with no survivors.
+The merged-tree structural gates remain `182` packages, `1,881` files, and
+`27,721` functions; coverage registration remains `172` workspace packages
+across six modules, including the leased private-admission manifest. This
+evidence update is documentation-only and outside both verifier build-input
+prefixes; the recorded manifest hashes are therefore the explicit compiled-
+input identity proof for its descendant.

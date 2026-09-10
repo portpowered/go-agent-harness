@@ -2484,3 +2484,39 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   update its body with the exact rejection and repair, and return `ACCEPTED` to
   the script-owned current-head CI gate without polling. Retain C44 ownership
   through `CONTINUE` for any exact CI rejection or actionable review repair.
+
+# C44 clean current-head provenance repair checkpoint 2026-09-10
+
+- Re-read the admitted C44 manifest and canonical `~default` board. The latest
+  review rejection was a precise provenance gap: test-only repair commit
+  `8f9963b` made the previous `d6e4f9c` consumer/yui manifests stale for current
+  head `54b920136220b9e9fe1c027104addf05d6b1cee6`. No source, artifact, CI,
+  review, merge or acceptance claim was inferred from the old evidence.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d`; baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main remain ancestors
+  of the isolated branch. `project-control.py verify-work --type task --name
+  audio-runtime-c44-retire-cli-model-admission` returned `admitted`. The
+  running host checkout, predecessor checkpoints, peer worktrees and unrelated
+  paths were preserved.
+- Clean bounded verifier run `verify-20260910T193922Z-16355` in public mode and
+  `verify-20260910T193938Z-16512` in negative-controls mode both returned
+  `ACCEPTED` at source `54b92013` with `source_tree_dirty=false`. Consumer
+  normal/race, invalid session/self-play pre-effect controls, exact replay
+  PCM/marker/healthy-tail controls, wrong PCM/marker oracles, and TERM/reap
+  cleanup with no survivors passed. External consumer artifact SHA-256 is
+  `6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3`; shipped
+  yui SHA-256 is
+  `fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255`.
+- Current build-input manifests are `5ae620e01eb64745dfc036d945fb8d6ad65495dd4e6c7fdff2b134b52f74741e`
+  for the external consumer (1,076 files) and
+  `28058a55b6f7cb97dcdb23b8f0f2103b15b6b8325b09a56546c9607394509528` for
+  shipped yui (2,174 files). The compact checked-in record is
+  `docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/current-head-validation-54b92013.json`;
+  historical ignored raw run directories remain preserved.
+- This is an executor repair checkpoint. Next action: run final focused
+  causal/review regressions on the committed evidence update, commit and push
+  the same PR `#436`, update its body with these exact run IDs/hashes, and
+  return `ACCEPTED` to the script-owned current-head CI gate without polling.
+  CI success, independent review, guarded merge, post-merge vertical
+  acceptance, physical/acoustic proof and project completion remain open.
