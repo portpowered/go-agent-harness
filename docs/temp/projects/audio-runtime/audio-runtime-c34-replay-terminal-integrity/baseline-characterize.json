@@ -1,0 +1,429 @@
+{
+  "consumer": {
+    "build": {
+      "command": [
+        "go",
+        "build",
+        "-mod=mod",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "./"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/build",
+      "duration_seconds": 0.4359,
+      "environment_controls": {
+        "GOWORK": "off",
+        "source_root": "/private/tmp/audio-runtime-c34-before.jdQiZb"
+      },
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-build.stderr.txt",
+      "stdout": "",
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-build.stdout.txt",
+      "timed_out": false
+    },
+    "consumer_source_sha256": "ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+    "sha256": "5ca8fc47159aed222b43223f36ee6a90de1ed55c068f3e2aadf9c856ae56bda1",
+    "source_revision": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "source_root": "/private/tmp/audio-runtime-c34-before.jdQiZb"
+  },
+  "consumer_verification": {
+    "before_repair_observation": {
+      "error": null,
+      "post_close_runtime_accepted": true,
+      "timeline_kinds": [
+        "recording_started",
+        "recording_closed",
+        "runtime",
+        "recording_closed"
+      ]
+    },
+    "cases": {
+      "audio-after-close": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/audio-after-close"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003779,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/audio-after-close",
+        "fixture_sha256": {
+          "microphone-pre-gate.wav": "0cfdd14cec0a6d6d7e3a2c4a37f20d1e4cfed2f46d37dcf656b38e87f2b96082",
+          "timeline.jsonl": "e056675649567fbfbc58b0f629286be7e4dea4da81db5a76f2d89b498588d855"
+        },
+        "json": {
+          "accepted": true,
+          "audio_frames": 1,
+          "clock_elapsed_ns": 2000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "recording_closed",
+            "audio",
+            "recording_closed"
+          ],
+          "pcm_bytes": 8,
+          "pcm_sha256": "bef3ade0379ec5ab48ba96073682fbe52ccc2296d1782373a87567fd09d77f85",
+          "replay_exposed": true,
+          "total_samples": 4
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-audio-after-close.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"recording_closed\",\"audio\",\"recording_closed\"],\"audio_frames\":1,\"total_samples\":4,\"pcm_bytes\":8,\"pcm_sha256\":\"bef3ade0379ec5ab48ba96073682fbe52ccc2296d1782373a87567fd09d77f85\",\"eof\":true,\"clock_elapsed_ns\":2000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-audio-after-close.stdout.txt",
+        "timed_out": false
+      },
+      "baseline-first-final-only": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/baseline-first-final-only"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.004143,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/baseline-first-final-only",
+        "fixture_sha256": {
+          "timeline.jsonl": "702ec54de5e51339ff6b0edf711cb09b6190296f48beea6d8edb6ee083527607"
+        },
+        "json": {
+          "accepted": true,
+          "clock_elapsed_ns": 2000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "recording_closed",
+            "runtime",
+            "recording_closed"
+          ],
+          "pcm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "replay_exposed": true
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-baseline-first-final-only.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"recording_closed\",\"runtime\",\"recording_closed\"],\"pcm_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"eof\":true,\"clock_elapsed_ns\":2000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-baseline-first-final-only.stdout.txt",
+        "timed_out": false
+      },
+      "duplicate-close": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-close"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003683,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-close",
+        "fixture_sha256": {
+          "timeline.jsonl": "87e6f850b03bfe2f7d3673c74517096a78325182f6bdf0d727085b85eeaa2289"
+        },
+        "json": {
+          "accepted": true,
+          "clock_elapsed_ns": 1000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "recording_closed",
+            "recording_closed"
+          ],
+          "pcm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "replay_exposed": true
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-duplicate-close.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"recording_closed\",\"recording_closed\"],\"pcm_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"eof\":true,\"clock_elapsed_ns\":1000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-duplicate-close.stdout.txt",
+        "timed_out": false
+      },
+      "duplicate-start": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-start"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003594,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-start",
+        "fixture_sha256": {
+          "timeline.jsonl": "2a1566f6ce424fc7c616de8467b7ce0a408c91ea21b85d860f3211c4ad67bfc2"
+        },
+        "json": {
+          "accepted": true,
+          "clock_elapsed_ns": 1000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "recording_started",
+            "recording_closed"
+          ],
+          "pcm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "replay_exposed": true
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-duplicate-start.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"recording_started\",\"recording_closed\"],\"pcm_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"eof\":true,\"clock_elapsed_ns\":1000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-duplicate-start.stdout.txt",
+        "timed_out": false
+      },
+      "missing-close": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-close"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003628,
+        "exit_code": 1,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-close",
+        "fixture_sha256": {
+          "timeline.jsonl": "b3a3991742f8df5b2cdd0e24891ca6b67a35c172ee0a5e9458f8172e60b8f154"
+        },
+        "json": {
+          "accepted": false,
+          "eof": false,
+          "err_incomplete": true,
+          "error": "audio trace is incomplete",
+          "replay_exposed": false
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-missing-close.stderr.txt",
+        "stdout": "{\"accepted\":false,\"err_incomplete\":true,\"error\":\"audio trace is incomplete\",\"replay_exposed\":false,\"eof\":false}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-missing-close.stdout.txt",
+        "timed_out": false
+      },
+      "missing-leading-start": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-leading-start"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003412,
+        "exit_code": 1,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-leading-start",
+        "fixture_sha256": {
+          "timeline.jsonl": "ba860c74f105ee86840d559df32535f9bbc0ff0a6e843a08d2f4ebca5efa41bc"
+        },
+        "json": {
+          "accepted": false,
+          "eof": false,
+          "err_incomplete": true,
+          "error": "audio trace is incomplete",
+          "replay_exposed": false
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-missing-leading-start.stderr.txt",
+        "stdout": "{\"accepted\":false,\"err_incomplete\":true,\"error\":\"audio trace is incomplete\",\"replay_exposed\":false,\"eof\":false}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-missing-leading-start.stdout.txt",
+        "timed_out": false
+      },
+      "trailing-event-after-close": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/trailing-event-after-close"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003805,
+        "exit_code": 1,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/trailing-event-after-close",
+        "fixture_sha256": {
+          "timeline.jsonl": "fc7c6805b960d039f27981ee2bd37fa45bb2a6f17a14d864826d4699ae89ab9c"
+        },
+        "json": {
+          "accepted": false,
+          "eof": false,
+          "err_incomplete": true,
+          "error": "audio trace is incomplete",
+          "replay_exposed": false
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-trailing-event-after-close.stderr.txt",
+        "stdout": "{\"accepted\":false,\"err_incomplete\":true,\"error\":\"audio trace is incomplete\",\"replay_exposed\":false,\"eof\":false}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-trailing-event-after-close.stdout.txt",
+        "timed_out": false
+      },
+      "unclean-close": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/unclean-close"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.003594,
+        "exit_code": 1,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/unclean-close",
+        "fixture_sha256": {
+          "timeline.jsonl": "09b26443e2183cda46f7f93fc7d9ba2edf594ecf462b7d279b8c65b815c8f7c4"
+        },
+        "json": {
+          "accepted": false,
+          "eof": false,
+          "err_incomplete": true,
+          "error": "audio trace is incomplete",
+          "replay_exposed": false
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-unclean-close.stderr.txt",
+        "stdout": "{\"accepted\":false,\"err_incomplete\":true,\"error\":\"audio trace is incomplete\",\"replay_exposed\":false,\"eof\":false}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-unclean-close.stdout.txt",
+        "timed_out": false
+      },
+      "valid-audio-runtime": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-audio-runtime"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.004482,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-audio-runtime",
+        "fixture_sha256": {
+          "microphone-pre-gate.wav": "0cfdd14cec0a6d6d7e3a2c4a37f20d1e4cfed2f46d37dcf656b38e87f2b96082",
+          "timeline.jsonl": "d1b79ef3cafd1db9fe3eeba7327f451608f3ab25540b4628a22e4b5bd16a947d"
+        },
+        "json": {
+          "accepted": true,
+          "audio_frames": 1,
+          "clock_elapsed_ns": 2000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "audio",
+            "runtime",
+            "recording_closed"
+          ],
+          "pcm_bytes": 8,
+          "pcm_sha256": "bef3ade0379ec5ab48ba96073682fbe52ccc2296d1782373a87567fd09d77f85",
+          "replay_exposed": true,
+          "total_samples": 4
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-valid-audio-runtime.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"audio\",\"runtime\",\"recording_closed\"],\"audio_frames\":1,\"total_samples\":4,\"pcm_bytes\":8,\"pcm_sha256\":\"bef3ade0379ec5ab48ba96073682fbe52ccc2296d1782373a87567fd09d77f85\",\"eof\":true,\"clock_elapsed_ns\":2000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-valid-audio-runtime.stdout.txt",
+        "timed_out": false
+      },
+      "valid-empty": {
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-empty"
+        ],
+        "consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/replay-consumer",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+        "duration_seconds": 0.227454,
+        "exit_code": 0,
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-empty",
+        "fixture_sha256": {
+          "timeline.jsonl": "c216e427074cd91427fe06bfde0462375589d4c27ec407e73aeec38a56e42384"
+        },
+        "json": {
+          "accepted": true,
+          "clock_elapsed_ns": 2000000,
+          "eof": true,
+          "err_incomplete": false,
+          "event_kinds": [
+            "recording_started",
+            "runtime",
+            "recording_closed"
+          ],
+          "pcm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "replay_exposed": true
+        },
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-valid-empty.stderr.txt",
+        "stdout": "{\"accepted\":true,\"err_incomplete\":false,\"replay_exposed\":true,\"event_kinds\":[\"recording_started\",\"runtime\",\"recording_closed\"],\"pcm_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"eof\":true,\"clock_elapsed_ns\":2000000}\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/consumer-valid-empty.stdout.txt",
+        "timed_out": false
+      }
+    },
+    "mode": "characterize"
+  },
+  "fixtures": {
+    "cases": {
+      "audio-after-close": {
+        "files": {
+          "microphone-pre-gate.wav": "0cfdd14cec0a6d6d7e3a2c4a37f20d1e4cfed2f46d37dcf656b38e87f2b96082",
+          "timeline.jsonl": "e056675649567fbfbc58b0f629286be7e4dea4da81db5a76f2d89b498588d855"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/audio-after-close"
+      },
+      "baseline-first-final-only": {
+        "files": {
+          "timeline.jsonl": "702ec54de5e51339ff6b0edf711cb09b6190296f48beea6d8edb6ee083527607"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/baseline-first-final-only"
+      },
+      "duplicate-close": {
+        "files": {
+          "timeline.jsonl": "87e6f850b03bfe2f7d3673c74517096a78325182f6bdf0d727085b85eeaa2289"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-close"
+      },
+      "duplicate-start": {
+        "files": {
+          "timeline.jsonl": "2a1566f6ce424fc7c616de8467b7ce0a408c91ea21b85d860f3211c4ad67bfc2"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/duplicate-start"
+      },
+      "missing-close": {
+        "files": {
+          "timeline.jsonl": "b3a3991742f8df5b2cdd0e24891ca6b67a35c172ee0a5e9458f8172e60b8f154"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-close"
+      },
+      "missing-leading-start": {
+        "files": {
+          "timeline.jsonl": "ba860c74f105ee86840d559df32535f9bbc0ff0a6e843a08d2f4ebca5efa41bc"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/missing-leading-start"
+      },
+      "trailing-event-after-close": {
+        "files": {
+          "timeline.jsonl": "fc7c6805b960d039f27981ee2bd37fa45bb2a6f17a14d864826d4699ae89ab9c"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/trailing-event-after-close"
+      },
+      "unclean-close": {
+        "files": {
+          "timeline.jsonl": "09b26443e2183cda46f7f93fc7d9ba2edf594ecf462b7d279b8c65b815c8f7c4"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/unclean-close"
+      },
+      "valid-audio-runtime": {
+        "files": {
+          "microphone-pre-gate.wav": "0cfdd14cec0a6d6d7e3a2c4a37f20d1e4cfed2f46d37dcf656b38e87f2b96082",
+          "timeline.jsonl": "d1b79ef3cafd1db9fe3eeba7327f451608f3ab25540b4628a22e4b5bd16a947d"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-audio-runtime"
+      },
+      "valid-empty": {
+        "files": {
+          "timeline.jsonl": "c216e427074cd91427fe06bfde0462375589d4c27ec407e73aeec38a56e42384"
+        },
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures/valid-empty"
+      }
+    },
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt/fixtures"
+  },
+  "mode": "characterize",
+  "project": "audio-runtime",
+  "run_directory": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-8k8tnwtt",
+  "source_dirty": "",
+  "source_revision": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "source_root": "/private/tmp/audio-runtime-c34-before.jdQiZb",
+  "status": "passed",
+  "work": "audio-runtime-c34-replay-terminal-integrity"
+}
