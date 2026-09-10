@@ -1005,7 +1005,7 @@ def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path
     artifact = artifacts / "yui-c38-repaired"
     source_revision = git_output(source_root, "rev-parse", "HEAD")
     build_inputs = build_input_manifest(source_root)
-    argv = ["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(artifact), "./agent-cli/cmd/yui"]
+    argv = ["go", "build", "-p=1", "-tags=nomicrophone", "-trimpath", "-o", str(artifact), "./agent-cli/cmd/yui"]
     env = os.environ.copy()
     env["GOWORK"] = ""
     result = run_process("build-repaired-yui", argv, cwd=source_root, run_dir=run_dir, timeout_seconds=TARGETED_TIMEOUT_SECONDS, environment=env)
