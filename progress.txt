@@ -2439,3 +2439,53 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   without polling. If that gate rejects a specific check, inspect only its
   exact log, repair the same task, and return `CONTINUE` while actionable work
   remains.
+
+# C43 current-main integration and static rejection repair 2026-09-10
+
+- Reverified the admitted sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`, which returned admitted. The
+  isolated branch remains exactly `codex/audio-runtime-c43-retire-cli-image-staging`,
+  matching `prd.json`; the worktree was clean before repair and the running
+  host checkout, predecessor checkpoints, peer paths, project admission and
+  acceptance policy were not reset or changed.
+- Read the full canonical `~default` board and the saved CI rejection log for
+  PR `#434`, run `34511330330`, job `102985912553`, at head
+  `3da342cc45aa063ec27c28d60918717614501b2f`. Architecture-size passed in
+  that log; the sole actionable failure was pinned golangci-lint errcheck at
+  `agent-cli/internal/services/internal/agentruntime/session_image_staging.go:46`
+  for discarded `staged.Cleanup()`. The task inbox had no concluded C43 review
+  finding beyond this current-head CI rejection.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d` and integrated
+  it into the preserved C43 branch as clean merge `3dfd88d3`. The prior C43
+  implementation, coverage registration and mainline ancestry remain intact;
+  no architecture baseline or generated Wire file was edited.
+- Repaired the complete static gate in owned paths. CLI deferred cleanup now
+  explicitly logs a cleanup error. Private partial-write failure now returns
+  `errors.Join(writeError, cleanupError)`; the unchanged `0700` directory and
+  `0600` file policies are named constants, and
+  `TestService_PartialWriteFailureJoinsCleanupError` proves both causes remain
+  observable. Source checkpoint `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2`
+  contains the repair.
+- Exact-head gates pass: normal and race tools suites (`325` tests in `16`
+  packages), focused CLI image/session normal and race (`22` tests), private
+  imagestaging normal/race (`6` tests each), affected-package vet, `make fmt`,
+  `make wire-check`, `make architecture-size-check` (`182` packages, `1,881`
+  files, `27,712` functions), `make coverage-registration` (`172` packages),
+  pinned golangci-lint `v2.9.0` with `0` issues, and pinned staticcheck
+  `2026.1`.
+- Clean-source `verify.py --mode focused` run
+  `verify-20260910T182006Z-42109` returns `PASS`: public Wire consumer reads
+  the exact `70`-byte PNG with SHA-256
+  `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`, exact
+  refreshed advertisement and idempotent cleanup; wrong-oracle negative exits
+  `1` with expected `71` versus actual `70`; cleanup-negative rejects a
+  post-cleanup read; private normal/race, CLI adapter normal/race, all tools
+  regressions, shipped CLI image workflow and credential-free replay all pass.
+- This is an executor handoff, not CI/review/merge or project acceptance. The
+  next action is to push this same branch, update PR `#434` with head
+  `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2` and the repair/evidence map, then
+  return `ACCEPTED` to the script-owned CI gate without polling. Retain C43
+  ownership through `CONTINUE` for any exact current-head rejection or other
+  actionable repair; the primary must perform independent review, guarded merge
+  and the fresh exact-artifact vertical probe.
