@@ -32,8 +32,9 @@ review, merge, or project acceptance.
 
 ## Current merged-head checkpoint
 
-The current local checkpoint is `ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9`,
-which merges fetched `origin/main` at `5f14c45313cfdc71e000fda209e3408fcf863faf`.
+The current tested source checkpoint is `ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9`,
+which merges fetched `origin/main` at `5f14c45313cfdc71e000fda209e3408fcf863faf`;
+the evidence-only ledger update is commit `0831db2`.
 The fresh inventory, GOWORK=off consumer, wrong-oracle, and public-policy runs
 all pass on that head. Focused normal/race policy tests, replay-bundle and
 strict allowlist regressions, Wire, architecture, registration, fmt, vet, and
