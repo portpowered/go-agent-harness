@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	audiomixer "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
 var (
@@ -710,9 +711,7 @@ func (m *PCM16Mixer) run() {
 		}
 	}
 }
-
 func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
-	frame := make([]byte, m.frameBytes)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -723,46 +722,50 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	accumulated := make([]int32, m.frameBytes/2)
-	sampleScratch := make([]int16, m.frameBytes/2)
+	if err := audiomixer.ValidatePCM16MixBounds(len(ids), m.frameBytes/2); err != nil {
+		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
+	}
+	frame := make([]byte, m.frameBytes)
+	sourceSamples := make([][]int16, 0, len(ids))
+	taken := make([]int, len(ids))
 	sources := make([]string, 0, len(ids))
-	for _, id := range ids {
+	for index, id := range ids {
 		input := m.inputs[id]
 		take := len(input.data)
 		if take > m.frameBytes {
 			take = m.frameBytes
 		}
-		inputSamples := sampleScratch[:take/2]
+		if take%2 != 0 {
+			return nil, nil, fmt.Errorf("%w: input %q has odd byte length %d", ErrMixerInvalidFormat, id, take)
+		}
+		taken[index] = take
+		inputSamples := make([]int16, take/2)
 		if err := codec.DecodePCM16Into(inputSamples, input.data[:take]); err != nil {
 			return nil, nil, fmt.Errorf("decode mixer PCM16 input %q: %w", id, err)
 		}
-		for offset, sample := range inputSamples {
-			accumulated[offset] += int32(sample)
-		}
 		if take > 0 {
+			sourceSamples = append(sourceSamples, inputSamples)
 			sources = append(sources, id)
-			copy(input.data, input.data[take:])
-			input.data = input.data[:len(input.data)-take]
 		}
 	}
-	if len(ids) > 0 {
-		m.signalWritersLocked()
-	}
-	outputSamples := make([]int16, len(accumulated))
-	for index, sample := range accumulated {
-		if sample > 32767 {
-			sample = 32767
-		} else if sample < -32768 {
-			sample = -32768
-		}
-		outputSamples[index] = int16(sample)
+	outputSamples, err := audiomixer.MixPCM16Samples(sourceSamples, m.frameBytes/2)
+	if err != nil {
+		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
 	}
 	if err := codec.EncodePCM16Into(frame, outputSamples); err != nil {
 		return nil, nil, fmt.Errorf("encode mixer PCM16 output: %w", err)
 	}
+	for index, id := range ids {
+		input := m.inputs[id]
+		take := taken[index]
+		if take > 0 {
+			copy(input.data, input.data[take:])
+			input.data = input.data[:len(input.data)-take]
+		}
+	}
+	m.signalWritersLocked()
 	return frame, sources, nil
 }
-
 func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []string) error {
 	if m == nil {
 		return ErrMixerClosed
@@ -791,7 +794,6 @@ func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []s
 		return m.writeTerminationError()
 	}
 }
-
 func (m *PCM16Mixer) popOutputSources() []string {
 	if m == nil {
 		return nil
@@ -807,7 +809,6 @@ func (m *PCM16Mixer) popOutputSources() []string {
 	m.outputSources = m.outputSources[:len(m.outputSources)-1]
 	return sources
 }
-
 func (m *PCM16Mixer) setError(err error) {
 	if err == nil {
 		return
@@ -831,7 +832,6 @@ func (m *PCM16Mixer) signalWritersLocked() {
 	close(m.writeWake)
 	m.writeWake = make(chan struct{})
 }
-
 func (m *PCM16Mixer) writeTerminationError() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
