@@ -418,37 +418,72 @@ func TestDirectoryRecorderBoundsManifestMetadata(t *testing.T) {
 	}
 }
 
-func TestDirectoryRecorderRollsBackPartialTranscriptLines(t *testing.T) {
-	r := newEvidenceRecorder(t)
-	writes := 0
-	r.writeSpool = func(file *os.File, data []byte) error {
-		writes++
-		if writes == 4 {
-			n := len(data) / 2
-			if n == 0 {
-				n = 1
-			}
-			if _, err := file.Write(data[:n]); err != nil {
-				return err
-			}
-			return io.ErrShortWrite
-		}
-		return writeAll(file, data)
+func TestDirectoryRecorderRollsBackPairedEvidenceOnAgentWriteFailure(t *testing.T) {
+	cases := []struct {
+		name   string
+		audio  bool
+		failAt int
+		kind   string
+	}{
+		{name: "partial transcript", failAt: 4, kind: "partial"},
+		{name: "zero-byte transcript", failAt: 4, kind: "zero"},
+		{name: "offset transcript", failAt: 4, kind: "offset"},
+		{name: "zero-byte audio", audio: true, failAt: 5, kind: "zero"},
+		{name: "offset audio", audio: true, failAt: 5, kind: "offset"},
 	}
-	recordEvidenceText(t, r, "first complete")
-	recordEvidenceText(t, r, "second partially written")
-	recordEvidenceTerminal(t, r)
-	if err := r.Finalize(t.Context(), nil); err == nil {
-		t.Fatal("partial transcript write reported complete")
-	}
-	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
-		lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, name)), []byte{'\n'})
-		if len(lines) != 1 {
-			t.Fatalf("%s lines = %d, want one paired prefix", name, len(lines))
-		}
-		if _, err := transcript.Decode(lines[0]); err != nil {
-			t.Fatalf("%s retained invalid JSONL prefix: %v", name, err)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newEvidenceRecorder(t)
+			writes := 0
+			r.writeSpool = func(file *os.File, data []byte) error {
+				writes++
+				if writes == tc.failAt {
+					switch tc.kind {
+					case "zero":
+						return errors.New("fixture zero-byte agent write")
+					case "offset":
+						return nil
+					case "partial":
+						n := len(data) / 2
+						if n == 0 {
+							n = 1
+						}
+						if _, err := file.Write(data[:n]); err != nil {
+							return err
+						}
+						return io.ErrShortWrite
+					}
+				}
+				return writeAll(file, data)
+			}
+			recordEvidenceText(t, r, "first complete")
+			if tc.audio {
+				frame := sharedaudio.PCMFrame{Samples: []int16{11, -12}, Format: sharedaudio.PCM16DeviceFormat(24000)}
+				if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				recordEvidenceText(t, r, "second failed")
+			}
+			recordEvidenceTerminal(t, r)
+			if err := r.Finalize(t.Context(), nil); err == nil {
+				t.Fatal("agent write failure reported complete")
+			}
+			for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+				lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, name)), []byte{'\n'})
+				if len(lines) != 1 {
+					t.Fatalf("%s lines = %d, want one paired prefix", name, len(lines))
+				}
+				if _, err := transcript.Decode(lines[0]); err != nil {
+					t.Fatalf("%s retained invalid JSONL prefix: %v", name, err)
+				}
+			}
+			if tc.audio {
+				if _, err := os.Stat(filepath.Join(r.destination, "audio", "out-000.pcm")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("failed audio retained bytes: %v", err)
+				}
+			}
+		})
 	}
 }
 

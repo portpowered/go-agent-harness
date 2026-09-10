@@ -80,11 +80,11 @@ func (r *directoryRecorder) writeTranscriptRecords(client, agent []byte, sequenc
 		return recordingWriteError("write client transcript", err)
 	}
 	if err := r.writeCompleteSpool(r.agent, agent); err != nil {
-		var writeFailure *spoolWriteError
-		if errors.As(err, &writeFailure) && writeFailure.partial {
-			if rollbackErr := rollbackSpoolFile(r.client, clientOffset); rollbackErr != nil {
-				return errors.Join(recordingWriteError("write agent transcript", err), rollbackErr)
-			}
+		// The client peer is not a committed record until the agent peer also
+		// succeeds. Roll it back for zero-byte and offset-only failures too, not
+		// just writes that reported a partial byte count.
+		if rollbackErr := rollbackSpoolFile(r.client, clientOffset); rollbackErr != nil {
+			return errors.Join(recordingWriteError("write agent transcript", err), rollbackErr)
 		}
 		return recordingWriteError("write agent transcript", err)
 	}

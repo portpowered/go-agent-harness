@@ -426,12 +426,13 @@ func TestDirectoryRecorderDiskFailurePreservesCauseAndPartialManifest(t *testing
 	writes := 0
 	r.writeSpool = func(file *os.File, data []byte) error {
 		writes++
-		if writes > 1 {
+		if writes > 2 {
 			return failure
 		}
 		return writeAll(file, data)
 	}
 	recordEvidenceText(t, r, "first")
+	recordEvidenceText(t, r, "second fails after paired prefix")
 	recordEvidenceTerminal(t, r)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
