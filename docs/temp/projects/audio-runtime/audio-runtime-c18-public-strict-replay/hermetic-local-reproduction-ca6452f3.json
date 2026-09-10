@@ -1,0 +1,33 @@
+{
+  "schema": "c18-hermetic-local-reproduction-v1",
+  "work": "audio-runtime-c18-public-strict-replay",
+  "branch": "codex/audio-runtime-c18-public-strict-replay",
+  "source_revision": "ca6452f3e6aa5c7d64e1a35d958bfc478a1c140c",
+  "command": "make test-hermetic",
+  "environment": {
+    "CGO_ENABLED": "0",
+    "tags": "nomicrophone",
+    "GO_TEST_TIMEOUT": "300s",
+    "AGENT_CLI_INTEGRATION_TIMEOUT": "480s"
+  },
+  "status": "failed",
+  "failure": {
+    "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/config",
+    "test": "TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically",
+    "diagnostic": "revision_test.go:86: config mode = 600, want 640",
+    "repeat_command": "go test ./agent-cli/internal/config -tags=nomicrophone -run '^TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically$' -count=20 -timeout=90s",
+    "repeat_result": "0 passed, 20 failed"
+  },
+  "c18_scope": {
+    "owned_paths_touched": false,
+    "replay_and_embedding_packages": "passed",
+    "repair_authorized": false,
+    "interpretation": "The deterministic failure is outside C18 replay/Wire/embedding owned paths and is retained as non-waived script-gate evidence; no unrelated source was changed."
+  },
+  "latest_ci_observation": {
+    "run_id": 34362228180,
+    "job_id": 102501845709,
+    "board_feedback": "CI checks failed for PR #410 at head ca6452f3e6aa5c7d64e1a35d958bfc478a1c140c",
+    "log_observation": "gh run view reported the run still in progress, so the completed CI log was unavailable; no CI polling was performed."
+  }
+}
