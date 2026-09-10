@@ -74,3 +74,14 @@ and zero tool calls. The no-trace bundle is retained as a negative control and
 strict replay rejects its missing `timeline.jsonl`. Every child has a 60-second
 process-group deadline. This is software/file replay evidence, not physical or
 acoustic device proof.
+
+## Current integrated source
+
+The regenerated yui report is from tested source
+`a87247bf77abaf6746820c3eb2073d33166c3ac1`, integrated on `origin/main`
+`c95a2cb4f96fa8c14bd4655f5197a822c86a980c`. It pins the current C21 fixture
+paths and hashes plus 1,927 tracked Go/module inputs. Tool capture/replay passes
+18 wire events and one tool call; interruption capture/replay passes 15 wire
+events and zero tool calls. The first fresh tool run's missing-directory setup
+failure is retained separately from the passing v2 run. See
+`artifacts/yui-verification.json` and the `current-a872-*` run records.

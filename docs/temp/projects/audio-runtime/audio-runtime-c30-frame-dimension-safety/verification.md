@@ -1,3 +1,55 @@
+# C30 integrated-main repair and exact-source evidence — 2026-09-10
+
+The admitted branch integrated the freshly fetched `origin/main` at
+`c95a2cb4f96fa8c14bd4655f5197a822c86a980c` in merge commit
+`a87247bf77abaf6746820c3eb2073d33166c3ac1`. The startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The host checkout
+was not merged or reset; `meta-operator-throughput-feedback.md` remains an
+untracked user file. `format.go` and `pcm16_convert_test.go` remain unchanged
+against integrated `origin/main`, while C30 owns the consolidated framing files.
+
+The implementation and accumulated causal controls pass on the integrated tree:
+
+```text
+go test ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: PASS, 293 tests
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: PASS, 293 tests
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: PASS
+make architecture-check size-check: PASS, 181 packages / 1866 files / 27532 functions
+git diff --check: PASS
+```
+
+The bounded exported consumer was rebuilt from `a87247bf` and its manifest pins
+the source root, source module, executable SHA256
+`1f61b0c03879e8a871fc492eee18de9d2126012519911c8c800504175c4b8ca4`, and exact
+fixture hashes. Positive literal/range/error controls pass; the mutated-480
+negative control exits 1 with `actual_samples=480 mutated_expected=481`; the
+output-flooding timeout control caps both 1 MiB pipes, sends TERM/KILL, reaps the
+child after KILL, stops readers, and completes in under five seconds.
+
+The same-source shipped `yui` artifact is pinned by
+`artifacts/yui-verification.json`: executable SHA256
+`963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6`, 1,927
+tracked Go/module inputs with aggregate SHA256
+`71f8b6896fcf6412c6b4318b45b44577f08b366659d4d3fb15f3bd2548197167`, and the
+current C21 fixture hashes. Tool capture/replay passes with 18 wire events and
+one tool call; interruption capture/replay passes with 15 wire events and zero
+tool calls. Provider PCM is 4,800 bytes with SHA256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502` for the
+tool fixture and 3,840 bytes with SHA256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22` for the
+interruption fixture. The no-trace strict replay negative control rejects the
+bundle for missing `timeline.jsonl`. The first fresh tool run's missing
+`evidence/runs` setup failure is preserved in `runs/current-a872-tool-trace/failure.json`;
+the corrected v2 run is the passing result.
+
+All executable artifacts above were tested at `a87247bf`; the final evidence
+commit is explicitly an evidence-only descendant. The Go/module input count and
+aggregate hash, source root, fixture hashes, and executable hashes are the
+identity proof that adding reports did not change executable inputs. No current
+head CI success, independent review, guarded merge, post-merge vertical
+acceptance, physical/acoustic proof, or project completion is claimed here.
+
 # C30 CI rejection reconciliation — evidence-only descendant
 
 The prior implementation source remains `a7302e076768d730cce0cfac7997be6b4fc84969`.
