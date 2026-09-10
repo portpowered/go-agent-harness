@@ -1,0 +1,96 @@
+{
+  "artifacts": {
+    "consumer_sha256": "1e050f412e4aa40373b40c7236176e51b1a7296075422c893cc4c223e97e415e",
+    "consumer_source_sha256": "a02d85d874153dea8948ea1fb35d0da9e0e69b1ecea9c2914dbd0df759559599",
+    "source_revision": "7d772d30e749f777440d7ad9f422b55d9d8e89b7",
+    "yui_sha256": "6d5164ae4f6e81c5634baebf5efecbf000415f77405bea642fbd55b67cf6b37a"
+  },
+  "consumer": {
+    "invalid_error_identity": "ErrPCM16ConversionSize",
+    "known_answers": {
+      "arbitrary_rate": [
+        0,
+        667,
+        1000
+      ],
+      "empty_input": [],
+      "extra_channel_repeat": [
+        1,
+        2,
+        2
+      ],
+      "mono_stereo_arbitrary_rate": [
+        0,
+        0,
+        2000,
+        2000,
+        3000,
+        3000
+      ],
+      "negative_half_rounding": [
+        0,
+        -501,
+        -1001,
+        -1001
+      ],
+      "signed_extrema_identity": [
+        -32768,
+        32767
+      ],
+      "stereo_downmix": [
+        500,
+        2500
+      ],
+      "supported_rate": [
+        0,
+        2000,
+        3000
+      ]
+    },
+    "required_invalid_cases": [
+      "source-frame-first-invalid",
+      "source-frame-max-int",
+      "target-sample-byte-overflow",
+      "float-to-int-rounded-boundary"
+    ],
+    "required_ownership_cases": [
+      "ResamplePCM16 identity",
+      "ConvertPCM16Bytes identity"
+    ]
+  },
+  "replay": {
+    "directory_replay_tokens": [
+      "Replay verified: 18 wire events, 1 tool calls.",
+      "strict replay continuation"
+    ],
+    "expected_provider_pcm_bytes": 4800,
+    "expected_provider_pcm_file": "expected-provider.pcm",
+    "expected_provider_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+    "expected_rendered_pcm_bytes": 3200,
+    "expected_rendered_pcm_file": "expected-rendered.pcm",
+    "expected_rendered_pcm_sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+    "fixture_relative_hint": "docs/temp/probes/audio-runtime-c07-stabilized-runtime-probe-fixture-corrected/evidence/captures/c07-audio-tool-traced.session.json",
+    "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "stdout_tokens": [
+      "PROBE_TOOL_MARKER_9182",
+      "strict replay continuation",
+      "fixture_complete"
+    ],
+    "timeline": {
+      "audio_frames": 5,
+      "audio_sample_count": 480,
+      "audio_sample_rate": 24000,
+      "audio_start_samples": [
+        0,
+        480,
+        960,
+        1440,
+        1920
+      ],
+      "provider_wire_events": 18,
+      "tool_calls": 1,
+      "tool_results": 1
+    }
+  },
+  "schema": "audio-runtime-c28-expected-effects.v1"
+}

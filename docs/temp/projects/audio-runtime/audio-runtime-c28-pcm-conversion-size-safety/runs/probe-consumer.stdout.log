@@ -1,0 +1,349 @@
+{
+  "schema": "audio-runtime-c28-pcm-consumer.v1",
+  "case": "verify",
+  "source": "7d772d30e749f777440d7ad9f422b55d9d8e89b7",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "int_bits": 64,
+  "started_at": "2026-09-09T23:53:05.66168Z",
+  "duration_ms": 0,
+  "cases": [
+    {
+      "name": "supported-rate-known-answer",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        0,
+        3000
+      ],
+      "input_rate": 16000,
+      "output_rate": 24000,
+      "expected_samples": [
+        0,
+        2000,
+        3000
+      ],
+      "actual_samples": [
+        0,
+        2000,
+        3000
+      ],
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "arbitrary-rate-known-answer",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        0,
+        1000
+      ],
+      "input_rate": 1000,
+      "output_rate": 1500,
+      "expected_samples": [
+        0,
+        667,
+        1000
+      ],
+      "actual_samples": [
+        0,
+        667,
+        1000
+      ],
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "negative-half-rounding",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        0,
+        -1001
+      ],
+      "input_rate": 2,
+      "output_rate": 4,
+      "expected_samples": [
+        0,
+        -501,
+        -1001,
+        -1001
+      ],
+      "actual_samples": [
+        0,
+        -501,
+        -1001,
+        -1001
+      ],
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "identity-copy",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        1,
+        -2,
+        3
+      ],
+      "input_rate": 1000,
+      "output_rate": 1000,
+      "expected_samples": [
+        1,
+        -2,
+        3
+      ],
+      "actual_samples": [
+        1,
+        -2,
+        3
+      ],
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "stereo-downmix",
+      "api": "ConvertPCM16Bytes",
+      "input_samples": [
+        0,
+        1000,
+        2000,
+        3000
+      ],
+      "input_bytes": 8,
+      "input_rate": 1000,
+      "output_rate": 1000,
+      "source_channels": 2,
+      "target_channels": 1,
+      "expected_samples": [
+        500,
+        2500
+      ],
+      "actual_samples": [
+        500,
+        2500
+      ],
+      "expected_bytes": 4,
+      "actual_bytes": 4,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "mono-stereo-arbitrary-rate",
+      "api": "ConvertPCM16Bytes",
+      "input_samples": [
+        0,
+        3000
+      ],
+      "input_bytes": 4,
+      "input_rate": 1000,
+      "output_rate": 1500,
+      "source_channels": 1,
+      "target_channels": 2,
+      "expected_samples": [
+        0,
+        0,
+        2000,
+        2000,
+        3000,
+        3000
+      ],
+      "actual_samples": [
+        0,
+        0,
+        2000,
+        2000,
+        3000,
+        3000
+      ],
+      "expected_bytes": 12,
+      "actual_bytes": 12,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "extra-channel-repeat",
+      "api": "ConvertPCM16Bytes",
+      "input_samples": [
+        1,
+        2
+      ],
+      "input_bytes": 4,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 2,
+      "target_channels": 3,
+      "expected_samples": [
+        1,
+        2,
+        2
+      ],
+      "actual_samples": [
+        1,
+        2,
+        2
+      ],
+      "expected_bytes": 6,
+      "actual_bytes": 6,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "signed-extrema-identity",
+      "api": "ConvertPCM16Bytes",
+      "input_samples": [
+        -32768,
+        32767
+      ],
+      "input_bytes": 4,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 1,
+      "target_channels": 1,
+      "expected_samples": [
+        -32768,
+        32767
+      ],
+      "actual_samples": [
+        -32768,
+        32767
+      ],
+      "expected_bytes": 4,
+      "actual_bytes": 4,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "empty-input",
+      "api": "ConvertPCM16Bytes",
+      "input_rate": 16000,
+      "output_rate": 24000,
+      "source_channels": 1,
+      "target_channels": 2,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": true
+    },
+    {
+      "name": "source-frame-first-invalid",
+      "api": "ConvertPCM16Bytes",
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 4611686018427387904,
+      "target_channels": 1,
+      "expected_error": "ErrPCM16ConversionSize",
+      "actual_error": "PCM16 conversion output size overflows: source frame size for 4611686018427387904 channels",
+      "error_is_expected": true,
+      "panicked": false,
+      "returned_nil": true,
+      "passed": true
+    },
+    {
+      "name": "source-frame-max-int",
+      "api": "ConvertPCM16Bytes",
+      "input_bytes": 2,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 9223372036854775807,
+      "target_channels": 9223372036854775807,
+      "expected_error": "ErrPCM16ConversionSize",
+      "actual_error": "PCM16 conversion output size overflows: source frame size for 9223372036854775807 channels",
+      "error_is_expected": true,
+      "panicked": false,
+      "returned_nil": true,
+      "passed": true
+    },
+    {
+      "name": "target-sample-byte-overflow",
+      "api": "ConvertPCM16Bytes",
+      "input_bytes": 2,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 1,
+      "target_channels": 4611686018427387904,
+      "expected_error": "ErrPCM16ConversionSize",
+      "actual_error": "PCM16 conversion output size overflows: frames=1 channels=4611686018427387904",
+      "error_is_expected": true,
+      "panicked": false,
+      "returned_nil": true,
+      "passed": true
+    },
+    {
+      "name": "float-to-int-rounded-boundary",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        1
+      ],
+      "input_rate": 1,
+      "output_rate": 9223372036854775807,
+      "expected_error": "ErrPCM16ConversionSize",
+      "actual_error": "PCM16 conversion output size overflows: input=1 source=1 target=9223372036854775807",
+      "error_is_expected": true,
+      "panicked": false,
+      "returned_nil": true,
+      "passed": true
+    }
+  ],
+  "ownership": [
+    {
+      "name": "ResamplePCM16 identity",
+      "input_unchanged_after_success": true,
+      "output_independent_after_input_mutation": true,
+      "passed": true
+    },
+    {
+      "name": "ConvertPCM16Bytes identity",
+      "input_unchanged_after_success": true,
+      "output_independent_after_input_mutation": true,
+      "passed": true
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "source-frame-boundary",
+      "word_bits": 64,
+      "source_channels": 4611686018427387904,
+      "doubled_source_channels": -9223372036854775808,
+      "doubled_source_representable": false,
+      "positive_zero_wrap_reachable": false,
+      "zero_wrap_proof": "positive int channels are at most 2^(64-1)-1; doubling them is at most 2^64-2, so zero modulo 2^64 is unreachable",
+      "target_channels": 0,
+      "output_frames": 0,
+      "output_sample_bytes": "",
+      "output_bytes_representable": false,
+      "public_call": false,
+      "resource_bounded": true
+    },
+    {
+      "name": "target-sample-byte-boundary",
+      "word_bits": 64,
+      "source_channels": 0,
+      "doubled_source_channels": 0,
+      "doubled_source_representable": false,
+      "positive_zero_wrap_reachable": false,
+      "zero_wrap_proof": "",
+      "target_channels": 4611686018427387904,
+      "output_frames": 1,
+      "output_sample_bytes": "9223372036854775808",
+      "output_bytes_representable": false,
+      "public_call": false,
+      "resource_bounded": true
+    }
+  ],
+  "clean_shutdown": true
+}

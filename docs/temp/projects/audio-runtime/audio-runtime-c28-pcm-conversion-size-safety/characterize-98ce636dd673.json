@@ -1,0 +1,122 @@
+{
+  "command": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c28-characterize-7pi94jir/pcm-consumer --case characterize",
+  "consumer_sha256": "332e1652b86228a22f390756c67d435d3a271e0a5dea394dfe6b881ae548a0f1",
+  "go_version": "go version go1.26.7 darwin/arm64",
+  "hazardous_target_allocation_called": false,
+  "mode": "characterize",
+  "pre_fix_defects": {
+    "float_length_failure": true,
+    "source_frame_empty_or_tiny": true,
+    "wrapped_source_frame_error": true
+  },
+  "report": {
+    "case": "characterize",
+    "cases": [
+      {
+        "api": "ConvertPCM16Bytes",
+        "error_is_expected": false,
+        "input_rate": 16000,
+        "name": "empty-max-source-channels",
+        "output_rate": 16000,
+        "panicked": false,
+        "passed": false,
+        "returned_nil": false,
+        "source_channels": 9223372036854775807,
+        "target_channels": 1
+      },
+      {
+        "actual_bytes": 2,
+        "api": "ConvertPCM16Bytes",
+        "error_is_expected": false,
+        "input_bytes": 2,
+        "input_rate": 16000,
+        "name": "tiny-max-source-channels",
+        "output_rate": 16000,
+        "panicked": false,
+        "passed": false,
+        "returned_nil": false,
+        "source_channels": 9223372036854775807,
+        "target_channels": 9223372036854775807
+      },
+      {
+        "actual_error": "PCM16 conversion payload is not frame-aligned: got 2 bytes, frame size -9223372036854775808",
+        "api": "ConvertPCM16Bytes",
+        "error_is_expected": false,
+        "input_bytes": 2,
+        "input_rate": 16000,
+        "name": "tiny-first-wrapped-frame-size",
+        "output_rate": 16000,
+        "panicked": false,
+        "passed": false,
+        "returned_nil": true,
+        "source_channels": 4611686018427387904,
+        "target_channels": 1
+      },
+      {
+        "api": "ResamplePCM16",
+        "error_is_expected": false,
+        "input_rate": 1,
+        "input_samples": [
+          1
+        ],
+        "name": "float-length-boundary",
+        "output_rate": 9223372036854775807,
+        "panic": "runtime error: makeslice: len out of range",
+        "panicked": true,
+        "passed": false,
+        "returned_nil": true
+      }
+    ],
+    "clean_shutdown": true,
+    "dimensions": [
+      {
+        "doubled_source_channels": -9223372036854775808,
+        "doubled_source_representable": false,
+        "name": "source-frame-boundary",
+        "output_bytes_representable": false,
+        "output_frames": 0,
+        "output_sample_bytes": "",
+        "positive_zero_wrap_reachable": false,
+        "public_call": false,
+        "resource_bounded": true,
+        "source_channels": 4611686018427387904,
+        "target_channels": 0,
+        "word_bits": 64,
+        "zero_wrap_proof": "positive int channels are at most 2^(64-1)-1; doubling them is at most 2^64-2, so zero modulo 2^64 is unreachable"
+      },
+      {
+        "doubled_source_channels": 0,
+        "doubled_source_representable": false,
+        "name": "target-sample-byte-boundary",
+        "output_bytes_representable": false,
+        "output_frames": 1,
+        "output_sample_bytes": "9223372036854775808",
+        "positive_zero_wrap_reachable": false,
+        "public_call": false,
+        "resource_bounded": true,
+        "source_channels": 0,
+        "target_channels": 4611686018427387904,
+        "word_bits": 64,
+        "zero_wrap_proof": ""
+      }
+    ],
+    "duration_ms": 0,
+    "goarch": "arm64",
+    "goos": "darwin",
+    "int_bits": 64,
+    "schema": "audio-runtime-c28-pcm-consumer.v1",
+    "source": "98ce636dd67349ba64f22cd7916dd370cf4ba484",
+    "started_at": "2026-09-09T23:02:30.813062Z"
+  },
+  "result": {
+    "command": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c28-characterize-7pi94jir/pcm-consumer --case characterize",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c28-pcm-conversion-size-safety/docs/temp/projects/audio-runtime/audio-runtime-c28-pcm-conversion-size-safety",
+    "duration_ms": 164,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\n  \"schema\": \"audio-runtime-c28-pcm-consumer.v1\",\n  \"case\": \"characterize\",\n  \"source\": \"98ce636dd67349ba64f22cd7916dd370cf4ba484\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"int_bits\": 64,\n  \"started_at\": \"2026-09-09T23:02:30.813062Z\",\n  \"duration_ms\": 0,\n  \"cases\": [\n    {\n      \"name\": \"empty-max-source-channels\",\n      \"api\": \"ConvertPCM16Bytes\",\n      \"input_rate\": 16000,\n      \"output_rate\": 16000,\n      \"source_channels\": 9223372036854775807,\n      \"target_channels\": 1,\n      \"error_is_expected\": false,\n      \"panicked\": false,\n      \"returned_nil\": false,\n      \"passed\": false\n    },\n    {\n      \"name\": \"tiny-max-source-channels\",\n      \"api\": \"ConvertPCM16Bytes\",\n      \"input_bytes\": 2,\n      \"input_rate\": 16000,\n      \"output_rate\": 16000,\n      \"source_channels\": 9223372036854775807,\n      \"target_channels\": 9223372036854775807,\n      \"actual_bytes\": 2,\n      \"error_is_expected\": false,\n      \"panicked\": false,\n      \"returned_nil\": false,\n      \"passed\": false\n    },\n    {\n      \"name\": \"tiny-first-wrapped-frame-size\",\n      \"api\": \"ConvertPCM16Bytes\",\n      \"input_bytes\": 2,\n      \"input_rate\": 16000,\n      \"output_rate\": 16000,\n      \"source_channels\": 4611686018427387904,\n      \"target_channels\": 1,\n      \"actual_error\": \"PCM16 conversion payload is not frame-aligned: got 2 bytes, frame size -9223372036854775808\",\n      \"error_is_expected\": false,\n      \"panicked\": false,\n      \"returned_nil\": true,\n      \"passed\": false\n    },\n    {\n      \"name\": \"float-length-boundary\",\n      \"api\": \"ResamplePCM16\",\n      \"input_samples\": [\n        1\n      ],\n      \"input_rate\": 1,\n      \"output_rate\": 9223372036854775807,\n      \"error_is_expected\": false,\n      \"panicked\": true,\n      \"panic\": \"runtime error: makeslice: len out of range\",\n      \"returned_nil\": true,\n      \"passed\": false\n    }\n  ],\n  \"dimensions\": [\n    {\n      \"name\": \"source-frame-boundary\",\n      \"word_bits\": 64,\n      \"source_channels\": 4611686018427387904,\n      \"doubled_source_channels\": -9223372036854775808,\n      \"doubled_source_representable\": false,\n      \"positive_zero_wrap_reachable\": false,\n      \"zero_wrap_proof\": \"positive int channels are at most 2^(64-1)-1; doubling them is at most 2^64-2, so zero modulo 2^64 is unreachable\",\n      \"target_channels\": 0,\n      \"output_frames\": 0,\n      \"output_sample_bytes\": \"\",\n      \"output_bytes_representable\": false,\n      \"public_call\": false,\n      \"resource_bounded\": true\n    },\n    {\n      \"name\": \"target-sample-byte-boundary\",\n      \"word_bits\": 64,\n      \"source_channels\": 0,\n      \"doubled_source_channels\": 0,\n      \"doubled_source_representable\": false,\n      \"positive_zero_wrap_reachable\": false,\n      \"zero_wrap_proof\": \"\",\n      \"target_channels\": 4611686018427387904,\n      \"output_frames\": 1,\n      \"output_sample_bytes\": \"9223372036854775808\",\n      \"output_bytes_representable\": false,\n      \"public_call\": false,\n      \"resource_bounded\": true\n    }\n  ],\n  \"clean_shutdown\": true\n}\n",
+    "timed_out": false
+  },
+  "schema": "audio-runtime-c28-characterization.v1",
+  "source_revision": "98ce636dd67349ba64f22cd7916dd370cf4ba484"
+}

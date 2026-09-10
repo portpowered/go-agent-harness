@@ -186,14 +186,20 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 			}
 		}
 	}
+	// The source inferencer can publish its scripted audio as soon as its own
+	// SESSION.OPEN is observed. Hold that frame until every participant has
+	// crossed SESSION.OPEN so this fixture exercises the closed-mixer rejection
+	// after target connection/lifecycle registration, not before Bob can own a
+	// participant result.
+	openGate := newRoomParticipantOpenGate(len(inferencers))
+	options.onParticipantSessionOpen = openGate.observe
+	inferencers["alice"].audioGate = openGate.done()
 	sink := &diagnosticRecordSink{}
 	options.OnDiagnostic = func(_ string, record SessionDiagnosticRecord) {
 		sink.RecordSessionDiagnostic(record)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	result, runErr := RunRoomWithResult(ctx, io.Discard, options)
+	result, runErr := runClosedTargetRoom(t, options)
 	bobResult, bobPresent := result.Participants["bob"]
 	if runErr != nil || result.Reason != RoomTerminationStopped || !bobPresent || bobResult.TerminationReason != ParticipantTerminationError || bobResult.Error == "" {
 		t.Fatalf("closed-target room result=%+v err=%v, want participant-scoped rejection with a clean room stop", result, runErr)
@@ -254,6 +260,106 @@ func TestRunRoom_ReportsClosedTargetAsRejectedPeerIngress(t *testing.T) {
 	}
 	if _, hasPCMField := rejection.Fields["pcm"]; hasPCMField {
 		t.Fatalf("rejection diagnostic unexpectedly contains a raw PCM field: %v", rejection.Fields)
+	}
+}
+
+type roomParticipantOpenGate struct {
+	mu       sync.Mutex
+	expected int
+	opened   int
+	released chan struct{}
+	once     sync.Once
+}
+
+func newRoomParticipantOpenGate(expected int) *roomParticipantOpenGate {
+	return &roomParticipantOpenGate{expected: expected, released: make(chan struct{})}
+}
+
+func (g *roomParticipantOpenGate) observe(string) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.opened++
+	ready := g.opened >= g.expected
+	g.mu.Unlock()
+	if ready {
+		g.once.Do(func() { close(g.released) })
+	}
+}
+
+func (g *roomParticipantOpenGate) done() <-chan struct{} {
+	if g == nil {
+		return nil
+	}
+	return g.released
+}
+
+type closedTargetRoomLifecycle struct {
+	diagnostic     RoomParticipantDiagnosticObserver
+	terminated     RoomParticipantObserver
+	rejected       chan struct{}
+	bobFailed      chan struct{}
+	rejectOnce     sync.Once
+	bobFailureOnce sync.Once
+}
+
+func runClosedTargetRoom(t *testing.T, options RoomRunOptions) (RoomResult, error) {
+	lifecycle := closedTargetRoomLifecycle{
+		diagnostic: options.OnDiagnostic,
+		terminated: options.OnParticipantTerminated,
+		rejected:   make(chan struct{}),
+		bobFailed:  make(chan struct{}),
+	}
+	options.OnDiagnostic = lifecycle.recordDiagnostic
+	options.OnParticipantTerminated = lifecycle.recordParticipantTermination
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, options)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+	waitForClosedTargetSignal(t, ctx, lifecycle.rejected, "closed-target rejection was not observed before the room deadline")
+	waitForClosedTargetSignal(t, ctx, lifecycle.bobFailed, "closed-target participant failure was not observed before the room deadline")
+	// Stop after both the diagnostic and participant result are committed so
+	// cancellation cannot race failure attribution, while still exercising
+	// session close and observer join immediately.
+	cancel()
+	select {
+	case got := <-outcome:
+		return got.result, got.err
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish after closed-target rejection cancellation")
+		return RoomResult{}, errors.New("closed-target room outcome unavailable")
+	}
+}
+
+func waitForClosedTargetSignal(t *testing.T, ctx context.Context, signal <-chan struct{}, message string) {
+	select {
+	case <-signal:
+	case <-ctx.Done():
+		t.Fatal(message)
+	}
+}
+
+func (h *closedTargetRoomLifecycle) recordDiagnostic(participantID string, record SessionDiagnosticRecord) {
+	if h.diagnostic != nil {
+		h.diagnostic(participantID, record)
+	}
+	if record.Event == SessionDiagnosticEventRoomAudioIngress &&
+		record.Fields[SessionDiagnosticFieldParticipantID] == "bob" &&
+		record.Fields[SessionDiagnosticFieldReason] == "mixer_closed" {
+		h.rejectOnce.Do(func() { close(h.rejected) })
+	}
+}
+
+func (h *closedTargetRoomLifecycle) recordParticipantTermination(result RoomParticipantResult) {
+	if h.terminated != nil {
+		h.terminated(result)
+	}
+	if result.ParticipantID == "bob" && result.TerminationReason == ParticipantTerminationError && result.Error != "" {
+		h.bobFailureOnce.Do(func() { close(h.bobFailed) })
 	}
 }
 
