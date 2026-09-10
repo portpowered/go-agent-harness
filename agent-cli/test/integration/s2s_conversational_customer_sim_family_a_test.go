@@ -233,6 +233,7 @@ type familyAProviderFixture struct {
 	pendingCallStarted    time.Duration
 	pendingResult         bool
 	awaitingFinalSilence  bool
+	finalSilenceSeen      bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -333,6 +334,11 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 						f.failProtocol(err.Error())
 						return
 					}
+				case "input_audio_buffer.commit":
+					if err := f.handleAudioCommit(connection); err != nil {
+						f.failProtocol(err.Error())
+						return
+					}
 				case "response.create":
 					if err := f.handleContinuation(connection); err != nil {
 						f.failProtocol(err.Error())
@@ -367,10 +373,20 @@ func (f *familyAProviderFixture) handleAudioSilence(connection *websocket.Conn) 
 	closeAfterFinalSilence := f.awaitingFinalSilence
 	f.awaitingFinalSilence = false
 	if closeAfterFinalSilence {
+		f.finalSilenceSeen = true
+	}
+	f.mu.Unlock()
+	return nil
+}
+func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) error {
+	f.mu.Lock()
+	finalSilenceSeen := f.finalSilenceSeen
+	f.finalSilenceSeen = false
+	if finalSilenceSeen {
 		f.closedAfterFinalInput = true
 	}
 	f.mu.Unlock()
-	if !closeAfterFinalSilence {
+	if !finalSilenceSeen {
 		return nil
 	}
 	return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"})
