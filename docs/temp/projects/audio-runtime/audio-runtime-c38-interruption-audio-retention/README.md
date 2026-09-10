@@ -67,7 +67,8 @@ The owned repair is confined to
 
 - provider ingress is connected without the caller cancellation signal;
 - the wrapper drains the finite accepted provider buffer under a bounded,
-  non-cancellable teardown context before closing the underlying session;
+  non-cancellable teardown context, waiting for the shared straggler quiet
+  period before closing the underlying session;
 - assistant PCM is written before best-effort public-buffer publication during
   teardown; and
 - clean interruption uses a barrier regression that cancels while the first

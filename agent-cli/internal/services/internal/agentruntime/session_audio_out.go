@@ -1,7 +1,6 @@
 package agentruntime
 
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
 	"errors"
@@ -735,14 +734,15 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
 	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
+	quiet := time.After(sessionStragglerDrainQuietPeriod)
 	for {
 		select {
 		case msg := <-input.Chan():
 			if !s.forwardMessageWithContext(retainCtx, msg, true) {
 				return
 			}
-		case <-s.Session.Done():
-			s.drain(input, retainCtx, true)
+			quiet = time.After(sessionStragglerDrainQuietPeriod)
+		case <-quiet:
 			return
 		case <-retainCtx.Done():
 			return
