@@ -1,0 +1,127 @@
+{
+  "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
+  "case": "verify",
+  "source": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "source_inputs_sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "started_at": "2026-09-10T06:46:05.870523Z",
+  "duration_ms": 2,
+  "clean_shutdown": true,
+  "io": {
+    "open_read_bytes": 44,
+    "open_payload_read_bytes": 0,
+    "open_read_ranges": [
+      {
+        "start": 0,
+        "end": 12
+      },
+      {
+        "start": 12,
+        "end": 20
+      },
+      {
+        "start": 20,
+        "end": 36
+      },
+      {
+        "start": 36,
+        "end": 44
+      }
+    ],
+    "open_seek_count": 6,
+    "sample_read_bytes": 14,
+    "sample_payload_read_bytes": 14,
+    "sample_read_ranges": [
+      {
+        "start": 44,
+        "end": 58
+      }
+    ],
+    "sample_seek_count": 0,
+    "frame_read_bytes": 20,
+    "frame_payload_read_bytes": 20,
+    "frame_read_ranges": [
+      {
+        "start": 44,
+        "end": 64
+      }
+    ],
+    "frame_seek_count": 0,
+    "frame_source_open_read_ranges": [
+      {
+        "start": 0,
+        "end": 12
+      },
+      {
+        "start": 12,
+        "end": 20
+      },
+      {
+        "start": 20,
+        "end": 36
+      },
+      {
+        "start": 36,
+        "end": 44
+      }
+    ],
+    "frame_source_open_seek_count": 6,
+    "close_count": 2,
+    "close_counts": [
+      1,
+      1
+    ],
+    "open_bound_pass": true,
+    "sample_bound_pass": true,
+    "frame_bound_pass": true,
+    "open_trace_pass": true,
+    "sample_trace_pass": true,
+    "frame_trace_pass": true,
+    "pass": true
+  },
+  "checks": [
+    {
+      "name": "literal-samples",
+      "pass": true
+    },
+    {
+      "name": "mixed-read-cursor",
+      "pass": true
+    },
+    {
+      "name": "sample-tail-and-untouched-buffer",
+      "pass": true
+    },
+    {
+      "name": "frame-tail-zero-padding",
+      "pass": true
+    },
+    {
+      "name": "empty-wav-eof",
+      "pass": true
+    },
+    {
+      "name": "cancellation-before-read",
+      "pass": true
+    },
+    {
+      "name": "upfront-error-identities",
+      "pass": true
+    },
+    {
+      "name": "streaming-mutation-visible",
+      "pass": true,
+      "detail": "streaming mutation observed (snapshot isolation is intentionally not promised)"
+    },
+    {
+      "name": "post-open-truncation-errors",
+      "pass": true,
+      "detail": "first read reports *audio.TruncatedPCMError; subsequent reads are terminal"
+    },
+    {
+      "name": "caller-owned-stdin",
+      "pass": true
+    }
+  ]
+}

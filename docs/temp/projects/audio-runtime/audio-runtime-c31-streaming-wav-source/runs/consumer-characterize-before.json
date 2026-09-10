@@ -1,0 +1,13 @@
+{
+  "name": "consumer-characterize-before",
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
+    "--case",
+    "characterize"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
+  "exit_code": 0,
+  "elapsed_ms": 201,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"characterize\",\n  \"source\": \"1f82284abee0bd31a6680310444cea2e4c16ef00\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T02:36:33.485383Z\",\n  \"duration_ms\": 38,\n  \"clean_shutdown\": true,\n  \"allocations\": {\n    \"payload_bytes\": [\n      4096,\n      4194304\n    ],\n    \"repetitions\": 5,\n    \"measurements\": [\n      {\n        \"payload_bytes\": [\n          4096\n        ],\n        \"bytes\": [\n          74136,\n          74136,\n          74136,\n          74136,\n          74136\n        ]\n      },\n      {\n        \"payload_bytes\": [\n          4194304\n        ],\n        \"bytes\": [\n          26624424,\n          26629840,\n          26624552,\n          26624424,\n          26624632\n        ]\n      }\n    ],\n    \"small_max_bytes\": 74136,\n    \"large_max_bytes\": 26629840,\n    \"small_median_bytes\": 74136,\n    \"large_median_bytes\": 26624552,\n    \"large_minus_small_median\": 26550416,\n    \"oracle\": {\n      \"per_constructor_limit\": 65536,\n      \"growth_limit\": 16384,\n      \"pass\": false\n    }\n  }\n}\n",
+  "stderr": ""
+}

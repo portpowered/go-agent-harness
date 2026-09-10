@@ -1,0 +1,54 @@
+{
+  "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
+  "case": "characterize",
+  "source": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "source_inputs_sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "started_at": "2026-09-10T06:46:02.560296Z",
+  "duration_ms": 5,
+  "clean_shutdown": true,
+  "allocations": {
+    "payload_bytes": [
+      4096,
+      4194304
+    ],
+    "repetitions": 5,
+    "measurements": [
+      {
+        "payload_bytes": [
+          4096
+        ],
+        "bytes": [
+          488,
+          488,
+          488,
+          488,
+          488
+        ]
+      },
+      {
+        "payload_bytes": [
+          4194304
+        ],
+        "bytes": [
+          488,
+          488,
+          488,
+          488,
+          488
+        ]
+      }
+    ],
+    "small_max_bytes": 488,
+    "large_max_bytes": 488,
+    "small_median_bytes": 488,
+    "large_median_bytes": 488,
+    "large_minus_small_median": 0,
+    "oracle": {
+      "per_constructor_limit": 65536,
+      "growth_limit": 16384,
+      "pass": true
+    }
+  }
+}
