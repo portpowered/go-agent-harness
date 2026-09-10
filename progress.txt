@@ -2534,3 +2534,49 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
   this same task through `CONTINUE` for any exact CI rejection or actionable
   repair.
+
+# C36 frame-metadata oracle repair checkpoint 2026-09-10
+
+- Re-read the Factory operating policy, implementation handoff, admitted C36
+  `prd.json`, progress history, and the canonical `~default` task/review
+  inbox. Admission remains `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c36-room-media-epoch-consumer"}`;
+  `work-task-187` and `prd.json.branchName` match the isolated branch. The
+  latest review256 rejection for PR #429 head `b4e422c1` is the sole actionable
+  finding: C36 discarded PCMFrame format, stream ID, start-sample cursor and
+  playback-response identity, and the verifier checked only sample/epoch
+  fields. Prior review202/review224 lifecycle, boundary, provenance,
+  mutation, and strict-bundle findings remain resolved and preserved.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d`; it is already
+  an ancestor of the candidate, along with baseline `3194edd9`, startup
+  `8bdafc7f`, and observed main `d5012004`. No host checkout, second project,
+  waiver, predecessor checkpoint, or unrelated owner path was changed.
+- Repair commit `621e2909857904fe4d098aee975a47c61ad7ed0d` adds serialized
+  FrameFormat and PlaybackResponseObservation fields to source, peer-output,
+  playback and raw observations; the Go validator and Python verifier now
+  compare exact metadata oracles. Added format, stream-ID, start-sample and
+  playback-response subprocess mutation controls, preserving the original
+  five controls and all assertions/deadlines.
+- Focused final-source checks pass: C36 normal and race tests, vet, room
+  lifecycle causal normal/race `count=3`, mixer/audio causal normal/race
+  `count=3`, `make architecture-size-check` (`181` packages, `1,877` files,
+  `27,690` functions), Wire, and diff-check. Fresh committed-source
+  `verify.py --action all` returns `{"status":"accepted","action":"all"}`
+  in `15.443803s`; source revision is `621e290`, source archive SHA-256 is
+  `1fbd35c8da0d3162e9c03c63308432a0207265e0131f1312158fa0767b2025e`, input
+  manifest SHA-256 is
+  `8605ca75749526d2582f6dd2f87d0349751bce30bde740250f8c502c8faa7244`, room
+  binary SHA-256 is
+  `9305fff3ffe4f308666429901b33c4921a7b69d04cef713481731e7d71dbbad6`, and
+  same-source yui SHA-256 is
+  `79dca64f4413b3e926071b18769660f57d7d04a06359955f02bd25cf08abec33`.
+  All nine mutation cases reject, including the four metadata cases; exact
+  peer PCM, stale pending count, lifecycle, hang cleanup, partial recording,
+  and C21 parity remain accepted. Physical playback remains unavailable.
+- This is an implementation checkpoint only: the changed head is not yet
+  pushed or through current-head SCRIPT CI, independent review, guarded merge,
+  or post-merge vertical acceptance. Exact next action: force-add the owned
+  root README, new evidence summaries under
+  `evidence/current-head-621e290/`, and this progress checkpoint; commit the
+  evidence, push/update PR #429 with the review256 repair map, then return
+  `ACCEPTED` to the script-owned CI gate without polling. Retain C36 ownership
+  through `CONTINUE` for any exact rejection or actionable repair.
