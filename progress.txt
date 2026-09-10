@@ -2530,3 +2530,28 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   update its body with review-245's race and exact evidence, verify submission
   once without polling CI, and return `ACCEPTED`; retain ownership with
   `CONTINUE` for any exact rejection or actionable repair.
+
+# C38 close-error retention repair checkpoint 2026-09-10T19:58:22Z
+
+- Review-258's exact finding is repaired in the leased audio wrapper: the
+  existing wait barrier now closes the wrapped session after retained draining
+  and joins its provider close error with any stream/write error, so malformed
+  `AUDIO.DELTA` and sink-error paths cannot silently discard shutdown failures.
+  The existing sink-error regression now asserts both sentinels, and a focused
+  malformed-delta sentinel asserts the provider close error independently.
+- Exact source/test gates pass at the admitted baselines: `session_audio_out.go`
+  is `804` lines against `804`, `session_audio_out_test.go` is `684` against
+  `684`, architecture is green for `181` packages / `1,877` files / `27,710`
+  functions, size-check passes, Wire regeneration passes, focused normal and
+  race C38 tests each pass `19` cases, focused vet passes, and `git diff
+  --check` is clean. The prior C38 causal/original/negative/cleanup evidence
+  remains preserved; it predates this close-error-only repair and will be
+  rerun from the final clean head.
+- Admission remains the sole `audio-runtime` project, with the PRD branch
+  matching this isolated worktree; origin/main is an ancestor and no host
+  checkout, unrelated change, predecessor checkpoint, second project, or
+  acceptance waiver was touched. Next action: commit this checkpoint with the
+  source/test repair, then build the exact-head repaired artifact and rerun
+  causal, negative-control, cleanup, focused, and package evidence before
+  pushing/updating PR `#430` and returning `ACCEPTED` to the script CI gate
+  without polling it.

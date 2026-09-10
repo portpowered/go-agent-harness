@@ -533,30 +533,25 @@ func (i *sessionAudioOutputInferencer) wait() {
 	connected := i.connected
 	i.mu.Unlock()
 	if connected != nil {
-		<-connected.done
+		// Close completes retained draining and captures provider shutdown errors.
+		i.recordErr(connected.Close())
 	}
 }
 
+// recordErr joins stream and provider-close failures from the same session.
 func (i *sessionAudioOutputInferencer) recordErr(err error) {
 	if err == nil {
 		return
 	}
 	i.mu.Lock()
-	if i.lastErr == nil {
-		i.lastErr = err
-	}
+	i.lastErr = errors.Join(i.lastErr, err)
 	i.mu.Unlock()
 }
 
 func (i *sessionAudioOutputInferencer) err() error {
 	i.mu.Lock()
-	lastErr := i.lastErr
-	connected := i.connected
-	i.mu.Unlock()
-	if connected == nil {
-		return lastErr
-	}
-	return errors.Join(lastErr, connected.Close())
+	defer i.mu.Unlock()
+	return i.lastErr
 }
 
 type sessionAudioOutputSession struct {
