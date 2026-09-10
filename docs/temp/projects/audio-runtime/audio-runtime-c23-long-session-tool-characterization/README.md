@@ -8,17 +8,23 @@ it does not import CLI-private or runtime-internal packages.
 
 The deterministic fixture runs 16, 64, 128, and 256 logical turns. Every turn
 has two distinguishable tool identities, one correlated result per call, a
-continuation response, and one exact PCM16 frame. Recording off/on runs share
-the same provider fixture and schedule; the driver compares normalized
-semantic results and the complete PCM byte stream and SHA-256.
+continuation response, and one exact PCM16 frame. For multi-turn runs the first
+two provider response identities are prefetched before the first tool result;
+the evidence records both active IDs and requires exact-once cross-routing.
+Recording off/on runs share the same provider fixture and schedule; the driver
+compares normalized semantic results and the complete PCM byte stream and
+SHA-256.
 
-The interruption scenario exercises `RESPONSE.CANCEL`, proves that the
-cancelled response emits no later output, and requests a distinct healthy
-response with a non-empty exact tail. It is provider-simulated evidence only;
-it does not claim physical device, acoustic, or host-load proof.
+The interruption scenario exercises `RESPONSE.CANCEL`, records the exact public
+event sequence at the send boundary, queues delayed provider audio between
+cancel and the cancellation terminal, proves that this byteset is rejected
+from public output, and requests a distinct healthy response with a non-empty
+exact tail. It is provider-simulated evidence only; it does not claim physical
+device, acoustic, or host-load proof.
 
 The runner also records source/ancestry/toolchain/build provenance, sanitized
-child execution, bounded output, raw public session capture, semantic
+child execution with live stdout/stderr caps and descendant cleanup controls,
+bounded raw provider capture with usage counters, raw public session capture, semantic
 recording, per-turn timestamp-domain latency samples, heap/goroutine
 measurements, a zero-turn baseline, per-length median/p95/max summaries and
 checkpoint deltas, host-load/resource observations with explicit no-quiet-host

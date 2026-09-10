@@ -21,6 +21,7 @@ import signal
 import statistics
 import subprocess
 import sys
+import threading
 import time
 from typing import Any
 
@@ -44,6 +45,7 @@ FIXTURE_PATH = OWNED_ROOT / "fixtures.json"
 CONSUMER_PATH = OWNED_ROOT / "bin" / "c23-consumer"
 YUI_PATH = OWNED_ROOT / "bin" / "yui"
 PROVENANCE_PATH = OWNED_ROOT / "provenance.json"
+PROCESS_CONTROL_PATH = OWNED_ROOT / "process_control.py"
 MAX_CHILD_OUTPUT_BYTES = 64 * 1024
 MAX_FIXTURE_BYTES = 2 * 1024 * 1024
 MAX_TRACE_EVENTS = 8192
@@ -465,6 +467,24 @@ def terminate_process_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
     }
 
 
+def _read_bounded_pipe(stream: Any, retained: bytearray, observed: list[int], overflow: list[bool]) -> None:
+    """Drain one child pipe while retaining no more than the output budget."""
+    try:
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                return
+            observed[0] += len(chunk)
+            remaining = MAX_CHILD_OUTPUT_BYTES - len(retained)
+            if remaining > 0:
+                retained.extend(chunk[:remaining])
+            if observed[0] > MAX_CHILD_OUTPUT_BYTES:
+                overflow[0] = True
+    finally:
+        with suppress(OSError):
+            stream.close()
+
+
 def run_child(command: list[str], label: str, run_root: Path, source_revision: str, timeout: float) -> dict[str, Any]:
     require(timeout > 0, f"{label} has no remaining child budget")
     run_root.mkdir(parents=True, exist_ok=True)
@@ -475,35 +495,70 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
     resource_before = child_resource_snapshot()
     host_before = host_load_snapshot()
     timed_out = False
-    with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-        process = subprocess.Popen(command, cwd=REPO_ROOT, env=environment, stdout=stdout, stderr=stderr, start_new_session=True)
-        try:
-            returncode = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
+    output_overflow = False
+    stdout_retained = bytearray()
+    stderr_retained = bytearray()
+    stdout_observed = [0]
+    stderr_observed = [0]
+    stdout_overflow = [False]
+    stderr_overflow = [False]
+    process = subprocess.Popen(
+        command,
+        cwd=REPO_ROOT,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=True,
+    )
+    stdout_reader = threading.Thread(target=_read_bounded_pipe, args=(process.stdout, stdout_retained, stdout_observed, stdout_overflow), daemon=True)
+    stderr_reader = threading.Thread(target=_read_bounded_pipe, args=(process.stderr, stderr_retained, stderr_observed, stderr_overflow), daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+    deadline = time.monotonic() + timeout
+    while process.poll() is None:
+        if stdout_overflow[0] or stderr_overflow[0]:
+            output_overflow = True
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             timed_out = True
-            returncode = process.returncode if process.returncode is not None else -signal.SIGKILL
-        cleanup = terminate_process_group(process)
+            break
+        try:
+            process.wait(timeout=min(remaining, 0.05))
+        except subprocess.TimeoutExpired:
+            continue
+    cleanup = terminate_process_group(process)
+    stdout_reader.join(timeout=2)
+    stderr_reader.join(timeout=2)
+    if process.returncode is None:
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=2)
+    stdout_path.write_bytes(stdout_retained)
+    stderr_path.write_bytes(stderr_retained)
     elapsed_ms = int((time.monotonic() - started) * 1000)
-    stdout_bytes = stdout_path.stat().st_size
-    stderr_bytes = stderr_path.stat().st_size
-    output_bounded = stdout_bytes <= MAX_CHILD_OUTPUT_BYTES and stderr_bytes <= MAX_CHILD_OUTPUT_BYTES
+    stdout_bytes = len(stdout_retained)
+    stderr_bytes = len(stderr_retained)
+    output_bounded = not output_overflow and stdout_bytes <= MAX_CHILD_OUTPUT_BYTES and stderr_bytes <= MAX_CHILD_OUTPUT_BYTES
     result = {
         "label": label,
         "command": command,
-        "returncode": returncode,
+        "returncode": process.returncode,
         "timed_out": timed_out,
+        "output_overflow": output_overflow,
         "elapsed_ms": elapsed_ms,
         "stdout": relative_owned(stdout_path),
         "stderr": relative_owned(stderr_path),
         "stdout_bytes": stdout_bytes,
         "stderr_bytes": stderr_bytes,
+        "stdout_observed_bytes": stdout_observed[0],
+        "stderr_observed_bytes": stderr_observed[0],
         "output_bounded": output_bounded,
         "cleanup": cleanup,
         "host_load": {"before": host_before, "after": host_load_snapshot(), "limits": {"quiet_host_threshold": None, "claim": "observation_only"}},
         "resource_usage": {"before": resource_before, "after": child_resource_snapshot(), "policy": "child-process RUSAGE_CHILDREN observer; no quiet-host performance claim"},
     }
     set_failure_context(execution=result)
-    require(output_bounded, f"{label} exceeded the bounded child output volume")
     require(not cleanup["group_alive_after"], f"{label} left a live process group after cleanup")
     return result
 
@@ -511,6 +566,34 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
 def child_text(execution: dict[str, Any], stream: str) -> str:
     path = OWNED_ROOT / execution[stream]
     return path.read_text(errors="replace")[:MAX_CHILD_OUTPUT_BYTES]
+
+
+def process_controls(source_revision: str, phase: PhaseBudget, requested_timeout: float) -> dict[str, Any]:
+    require(PROCESS_CONTROL_PATH.is_file(), "bounded process control script is missing")
+    command_base = [sys.executable, str(PROCESS_CONTROL_PATH)]
+    controls: dict[str, dict[str, Any]] = {}
+
+    normal_root = new_run_root("controls-process-normal")
+    normal = run_child(command_base + ["normal"], "controls-process-normal", normal_root / "process", source_revision, phase.child_timeout(requested_timeout))
+    require(normal["returncode"] == 0 and not normal["timed_out"] and normal["output_bounded"], "normal bounded child control did not complete cleanly")
+    require("CHILD_SPAWNED" in child_text(normal, "stderr") and "bounded normal output" in child_text(normal, "stdout"), "normal bounded child control omitted its expected markers")
+    controls["normal"] = normal
+
+    overflow_root = new_run_root("controls-process-overflow")
+    overflow = run_child(command_base + ["overflow"], "controls-process-overflow", overflow_root / "process", source_revision, phase.child_timeout(requested_timeout))
+    require(overflow["output_overflow"] and not overflow["timed_out"], "overflow control was not stopped at the live output boundary")
+    require(overflow["stdout_observed_bytes"] > MAX_CHILD_OUTPUT_BYTES and overflow["stdout_bytes"] <= MAX_CHILD_OUTPUT_BYTES, "overflow control did not retain bounded output")
+    require("CHILD_SPAWNED" in child_text(overflow, "stderr"), "overflow control did not spawn its descendant")
+    require(overflow["returncode"] not in (None, 0) and overflow["cleanup"]["parent_reaped"] and not overflow["cleanup"]["group_alive_after"], "overflow control did not reap its process group")
+    controls["overflow"] = overflow
+
+    deadline_root = new_run_root("controls-process-deadline")
+    deadline = run_child(command_base + ["deadline"], "controls-process-deadline", deadline_root / "process", source_revision, min(2.0, phase.child_timeout(requested_timeout)))
+    require(deadline["timed_out"] and deadline["output_bounded"], "deadline control did not report a bounded timeout")
+    require("CHILD_SPAWNED" in child_text(deadline, "stderr"), "deadline control did not spawn its descendant")
+    require(deadline["cleanup"]["parent_reaped"] and not deadline["cleanup"]["group_alive_after"], "deadline control left a live process group")
+    controls["deadline"] = deadline
+    return {"script": relative_owned(PROCESS_CONTROL_PATH), "max_output_bytes": MAX_CHILD_OUTPUT_BYTES, "cases": controls}
 
 
 def new_run_root(label: str) -> Path:
@@ -691,7 +774,7 @@ def expected_interruption_pcm() -> bytes:
 
 
 def report_normalized(report: dict[str, Any]) -> dict[str, Any]:
-    normalized = {key: report.get(key) for key in ("schema", "scenario", "turns", "fixture_sha256", "consumer_surface", "responses", "tool_calls", "tool_results", "trace", "pcm", "events", "terminal", "clean_shutdown", "trace_complete")}
+    normalized = {key: report.get(key) for key in ("schema", "scenario", "turns", "fixture_sha256", "consumer_surface", "responses", "tool_calls", "tool_results", "trace", "pcm", "events", "terminal", "clean_shutdown", "trace_complete", "overlap")}
     # The injected timestamp domain and missing-sample classification are
     # semantic evidence. Wall-clock pacing used to keep the recording worker's
     # bounded queue below its admission limit is intentionally not parity data.
@@ -727,6 +810,15 @@ def validate_recording_usage(report: dict[str, Any]) -> None:
     require(all(isinstance(limits.get(key), int) and limits[key] > 0 for key in RECORDING_LIMIT_KEYS), "recording limits are missing or unbounded")
     drops = usage.get("drops", {})
     require(isinstance(drops, dict) and all(isinstance(value, int) and value >= 0 for value in drops.values()), "recording drop counters are malformed")
+    if report.get("scenario") == "tool-matrix":
+        require(usage.get("provider_capture_available") is True, "tool matrix did not expose the bounded provider capture usage reporter")
+        provider_usage = usage.get("provider_capture_usage", {})
+        require(isinstance(provider_usage, dict) and provider_usage, "provider capture usage snapshot is missing")
+        provider_keys = ("provider_accepted_items", "provider_bytes", "provider_items", "peak_provider_bytes", "peak_provider_items")
+        require(all(key in provider_usage for key in provider_keys), "provider capture usage omitted a provider counter")
+        require(all(isinstance(provider_usage[key], int) and provider_usage[key] >= 0 for key in provider_keys), "provider capture usage contains an invalid counter")
+        require(provider_usage["provider_items"] > 0 and provider_usage["provider_bytes"] > 0, "provider capture admitted no raw provider evidence")
+        require(provider_usage["provider_bytes"] <= limits["provider_bytes"] and provider_usage["provider_items"] <= limits["provider_items"], "provider capture exceeded its configured limits")
     if not enabled:
         require(usage.get("available") is False, "disabled recording unexpectedly reported a usage snapshot")
         return
@@ -827,6 +919,17 @@ def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -
     response_ids = {item.get("id") for item in report.get("responses", [])}
     expected_responses = {f"tool-resp-{turn:03d}" for turn in range(turns)} | set(expected_response_ids)
     require(response_ids == expected_responses, "response identities are missing, duplicated, or cross-routed")
+    overlap = report.get("overlap", {})
+    expected_prefetched = ["tool-resp-000", "tool-resp-001"]
+    require(overlap.get("prefetched_response_ids") == expected_prefetched, "provider did not expose two distinguishable prefetched response identities")
+    require(overlap.get("active_response_ids") == expected_prefetched, "provider did not report both prefetched responses as active")
+    require(overlap.get("prefetch_before_first_tool_result") is True, "prefetched response identity was not established before the first tool result")
+    require(overlap.get("cross_routing_verified") is True, "tool result cross-routing was not verified exactly against its call identity")
+    require(overlap.get("exactly_once_tool_results_verified") is True, "tool result exactly-once verification was not proved")
+    first_tool_result = next((index for index, item in enumerate(report.get("trace", [])) if item.get("kind") == "MESSAGE.START" and item.get("role") == "tool"), None)
+    require(first_tool_result is not None, "public trace omitted the first tool-result boundary")
+    prefetch_positions = {item.get("response_id"): index for index, item in enumerate(report.get("trace", [])) if item.get("kind") == "MESSAGE.START" and item.get("response_id") in expected_prefetched}
+    require(all(prefetch_positions.get(response_id, first_tool_result) < first_tool_result for response_id in expected_prefetched), "prefetched response starts were not both observed before the first tool result")
     validate_ordered_trace(report, expected_call_ids, expected_response_ids)
     pcm = report.get("pcm", {})
     expected = expected_pcm(turns)
@@ -850,7 +953,11 @@ def validate_interruption_report(report: dict[str, Any], fixture_sha: str) -> No
     validate_recording_usage(report)
     interruption = report.get("interruption", {})
     require(interruption.get("cancel_sent") is True, "response.cancel was not admitted")
+    require(isinstance(interruption.get("cancel_boundary_sequence"), int) and interruption.get("cancel_boundary_sequence") > 0, "response.cancel send boundary was not recorded")
     require(interruption.get("cancellation_terminal_observed") is True, "cancelled terminal was not observed")
+    require(interruption.get("post_cancel_audio_observed") is True and interruption.get("post_cancel_audio_bytes", 0) > 0, "delayed provider audio between cancel and terminal was not characterized")
+    require(interruption.get("post_cancel_audio_publicly_emitted") is False, "delayed cancelled-response audio escaped the public output filter")
+    require(interruption.get("cancelled_output_rejected") is True, "delayed cancelled-response audio was accepted into public output")
     require(interruption.get("healthy_response_id") == "healthy-resp-2", "healthy replacement response identity changed")
     require(interruption.get("forbidden_post_cancel_audio") is False, "cancelled response emitted forbidden post-cancel audio")
     expected_tail = expected_interruption_pcm()
@@ -867,7 +974,7 @@ def run_consumer(source_revision: str, fixture_sha: str, turns: int, recording: 
     if recording:
         command.append("--recording")
     execution = run_child(command, label, root / "process", source_revision, timeout)
-    require(execution["returncode"] == 0 and not execution["timed_out"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
+    require(execution["returncode"] == 0 and not execution["timed_out"] and execution["output_bounded"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
     report = load_json(report_path)
     set_failure_context(execution=execution, report=report, report_path=report_path, expected={"scenario": "tool-matrix", "turns": turns, "recording": recording})
     validate_tool_report(report, turns, fixture_sha)
@@ -879,7 +986,7 @@ def run_baseline(source_revision: str, fixture_sha: str, label: str, timeout: fl
     report_path = root / "consumer-report.json"
     command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "baseline", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
     execution = run_child(command, label, root / "process", source_revision, timeout)
-    require(execution["returncode"] == 0 and not execution["timed_out"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
+    require(execution["returncode"] == 0 and not execution["timed_out"] and execution["output_bounded"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
     report = load_json(report_path)
     set_failure_context(execution=execution, report=report, report_path=report_path, expected={"scenario": "baseline", "fixture_sha256": fixture_sha})
     require(report.get("scenario") == "baseline", "baseline consumer changed scenario")
@@ -1003,18 +1110,21 @@ def controls(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, 
     phase = begin_phase("controls", provenance, args)
     started = time.monotonic()
     try:
-        off = run_consumer(source_revision, fixture_sha, 16, False, "controls-off-16", phase.child_timeout(args.child_timeout_seconds))
-        on = run_consumer(source_revision, fixture_sha, 16, True, "controls-on-16", phase.child_timeout(args.child_timeout_seconds))
-        compare_recording_pair(off, on)
+        # Keep the independent process and interruption contracts observable
+        # even when the overlap probe preserves a later public-runtime failure.
+        process_result = process_controls(source_revision, phase, args.child_timeout_seconds)
         interruption_root = new_run_root("controls-interruption")
         report_path = interruption_root / "consumer-report.json"
         command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "interruption", "--artifact-root", str(interruption_root / "consumer-artifacts"), "--output", str(report_path)]
         execution = run_child(command, "controls-interruption", interruption_root / "process", source_revision, phase.child_timeout(args.child_timeout_seconds))
-        require(execution["returncode"] == 0 and not execution["timed_out"], f"interruption control failed: {child_text(execution, 'stderr').strip()}")
+        require(execution["returncode"] == 0 and not execution["timed_out"] and execution["output_bounded"], f"interruption control failed: {child_text(execution, 'stderr').strip()}")
         interruption = load_json(report_path)
         set_failure_context(execution=execution, report=interruption, report_path=report_path, expected={"scenario": "interruption", "terminal": EXPECTED_INTERRUPTION_TERMINAL})
         validate_interruption_report(interruption, fixture_sha)
-        result = {"schema": "audio-runtime.c23.controls.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "tool_pair": {"off": off, "on": on}, "interruption": {"execution": execution, "report": interruption, "report_path": relative_owned(report_path)}}
+        off = run_consumer(source_revision, fixture_sha, 16, False, "controls-off-16", phase.child_timeout(args.child_timeout_seconds))
+        on = run_consumer(source_revision, fixture_sha, 16, True, "controls-on-16", phase.child_timeout(args.child_timeout_seconds))
+        compare_recording_pair(off, on)
+        result = {"schema": "audio-runtime.c23.controls.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "tool_pair": {"off": off, "on": on}, "process_controls": process_result, "interruption": {"execution": execution, "report": interruption, "report_path": relative_owned(report_path)}}
         write_json(OWNED_ROOT / "controls.json", result)
     except Exception as error:
         phase.finish(False, str(error))
@@ -1148,7 +1258,7 @@ def shipped_regressions(args: argparse.Namespace, provenance: dict[str, Any]) ->
         stderr = child_text(execution, "stderr")
         stdout = child_text(execution, "stdout")
         set_failure_context(execution=execution, expected={"returncode": 0, "clean_shutdown": True, "exact_pcm": True})
-        require(execution["returncode"] == 0 and not execution["timed_out"], f"shipped yui replay failed: {(stderr or stdout).strip()}")
+        require(execution["returncode"] == 0 and not execution["timed_out"] and execution["output_bounded"], f"shipped yui replay failed: {(stderr or stdout).strip()}")
         lower_output = (stderr + stdout).lower()
         for forbidden in ("api_key", "openai_api_key", "credential_reference", "unauthorized"):
             require(forbidden not in lower_output, f"shipped yui replay exposed or requested credential material: {forbidden}")
@@ -1258,7 +1368,7 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             report_path = root / "consumer-report.json"
             command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "tool-control", "--control", name, "--turns", "2", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
             execution = run_child(command, f"self-check-{name}", root / "process", provenance["source_revision"], phase.child_timeout(args.child_timeout_seconds))
-            require(execution["returncode"] != 0 and not execution["timed_out"], f"runtime negative control {name} unexpectedly succeeded or timed out")
+            require(execution["returncode"] != 0 and not execution["timed_out"] and execution["output_bounded"], f"runtime negative control {name} unexpectedly succeeded or timed out")
             runtime_report = load_json(report_path)
             set_failure_context(execution=execution, report=runtime_report, report_path=report_path, expected={"tool_control": name, "terminal": EXPECTED_NEGATIVE_TERMINAL, "clean_shutdown": False})
             actual_error = str(runtime_report.get("error", ""))
