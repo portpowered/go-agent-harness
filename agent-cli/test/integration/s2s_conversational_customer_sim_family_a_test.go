@@ -76,9 +76,8 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 		BaseURL:          fixture.WebSocketURL(),
 		APIKey:           "hermetic-key",
 		SystemPrompt:     scenario.TextSeed,
-		MaxDuration:      scenario.Deadline,
-		AdditionalArgs:   []string{"--wait-for-close"},
-		FrameDuration:    5 * time.Millisecond,
+		MaxDuration:      scenario.Deadline, AdditionalArgs: []string{"--wait-for-close"},
+		FrameDuration: 5 * time.Millisecond,
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "turn-1-speech", PCM16: frame},
 			{ID: "turn-1-silence", SilenceFor: 5 * time.Millisecond},
@@ -204,37 +203,30 @@ type familyAFunctionCall struct {
 	Args     string
 }
 type familyAProviderObservation struct {
-	ConnectionCount    int
-	SessionUpdates     int
-	FunctionCalls      []familyAFunctionCall
-	ToolObservations   []probe.ToolObservation
-	CustomerTranscript []probe.TranscriptEvent
-	ProductTranscript  []probe.TranscriptEvent
-	FinalSummary       string
-	ProtocolError      string
+	ConnectionCount, SessionUpdates int
+	FunctionCalls                   []familyAFunctionCall
+	ToolObservations                []probe.ToolObservation
+	CustomerTranscript              []probe.TranscriptEvent
+	ProductTranscript               []probe.TranscriptEvent
+	FinalSummary                    string
+	ProtocolError                   string
 }
 type familyAProviderFixture struct {
-	server                *httptest.Server
-	upgrader              websocket.Upgrader
-	scenario              probe.CustomerScenario
-	mu                    sync.Mutex
-	startedAt             time.Time
-	connectionCount       int
-	sessionUpdates        int
-	inputAppends          int
-	closedAfterFinalInput bool
-	awaitingFinalSilence  bool
-	finalSilenceSeen      bool
-	functionCalls         []familyAFunctionCall
-	toolObservations      []probe.ToolObservation
-	customerTranscript    []probe.TranscriptEvent
-	productTranscript     []probe.TranscriptEvent
-	finalSummary          string
-	protocolError         string
-	actionIndex           int
-	pendingCall           *familyAFunctionCall
-	pendingCallStarted    time.Duration
-	pendingResult         bool
+	server                                                        *httptest.Server
+	upgrader                                                      websocket.Upgrader
+	scenario                                                      probe.CustomerScenario
+	mu                                                            sync.Mutex
+	startedAt                                                     time.Time
+	connectionCount, sessionUpdates, inputAppends                 int
+	closedAfterFinalInput, awaitingFinalSilence, finalSilenceSeen bool
+	functionCalls                                                 []familyAFunctionCall
+	toolObservations                                              []probe.ToolObservation
+	customerTranscript, productTranscript                         []probe.TranscriptEvent
+	finalSummary, protocolError                                   string
+	actionIndex                                                   int
+	pendingCall                                                   *familyAFunctionCall
+	pendingCallStarted                                            time.Duration
+	pendingResult                                                 bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -331,10 +323,7 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 						return
 					}
 				case "input_audio_buffer.commit":
-					if err := f.handleAudioCommit(connection); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
+					f.handleAudioCommit(connection)
 				case "response.create":
 					if err := f.handleContinuation(connection); err != nil {
 						f.failProtocol(err.Error())
@@ -366,28 +355,23 @@ func (f *familyAProviderFixture) handleAudioSilence(connection *websocket.Conn) 
 		return err
 	}
 	f.mu.Lock()
-	if f.awaitingFinalSilence {
-		f.awaitingFinalSilence = false
-		f.finalSilenceSeen = true
-	}
+	f.finalSilenceSeen = f.finalSilenceSeen || f.awaitingFinalSilence
+	f.awaitingFinalSilence = false
 	f.mu.Unlock()
 	return nil
 }
-func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) error {
+func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) {
 	f.mu.Lock()
 	finalSilenceSeen := f.finalSilenceSeen
 	f.finalSilenceSeen = false
-	if finalSilenceSeen {
-		f.closedAfterFinalInput = true
-	}
+	f.closedAfterFinalInput = finalSilenceSeen
 	f.mu.Unlock()
 	if !finalSilenceSeen {
-		return nil
+		return
 	}
 	if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
-		return fmt.Errorf("send terminal session.closed after final input commit: %w", err)
+		f.failProtocol(fmt.Errorf("send terminal session.closed after final input commit: %w", err).Error())
 	}
-	return nil
 }
 func (f *familyAProviderFixture) handleToolResultEvent(itemType, callID, output string) error {
 	if itemType != "function_call_output" {
