@@ -2477,7 +2477,88 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   evidence, and return `ACCEPTED` to the script-owned current-head CI gate
   without polling. If that gate rejects a specific check, inspect only its
   exact log, repair the same task, and return `CONTINUE` while actionable work
-  remains.
+ remains.
+
+# C44 merged-main repair and script-CI handoff checkpoint 2026-09-10
+
+- The PR was opened as `#436`, then its one read reported `CONFLICTING` against the newer base `main` `d6efc88d10e046396e777762802f5f731c9c6d9d`. The same isolated branch merged that current main as `d6e4f9c`; the only conflict was shared `progress.txt`, resolved by preserving the complete newer main history and reapplying this C44 checkpoint. Required baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main remain ancestors. The README evidence refresh is `d5555401`; no host checkout, second project, waiver, reset, predecessor checkpoint or unrelated owner path was changed.
+- Merged-tree focused provider admission and CLI model/self-play/reasoning-effort tests pass normal and race; targeted vet, fmt, Wire, architecture/size, coverage registration, and diff-check pass. Admission coverage is `98.1%`; structural gates report `182` packages / `1,881` files / `27,721` functions and `172` registered workspace packages across six modules.
+- Clean merged-head public run `verify-20260910T175919Z-21784` and negative-controls run `verify-20260910T175942Z-21950` both returned `ACCEPTED` from source `d6e4f9c5549eef337e27e9e5e9a068114e3a6ae7` with `source_tree_dirty=false`, source archive SHA-256 `76c93cee5d8347028962af48c1cf15cf94cc0218f405edadfb8deefb0c65c934`, external consumer artifact SHA-256 `6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3`, yui artifact SHA-256 `fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255`, and unchanged input manifests `6b08837a3509ac6d61d26ee15b04be3d492dd8348cf8c022fce8668edc78e606` / `40fbec9ef01a8e77d8274d61ade13e80c7b38e70bc5241d6e1d8bf786dcee16c`. Normal/race consumer tests pass; wrong-oracle controls exit `1`; forced timeout is bounded with TERM, parent reaped, and no survivors; replay fixture/PCM and invalid CLI admission controls pass.
+- Next action: commit this checkpoint, push the same PR, verify the PR is conflict-free at its current head without polling CI, update its evidence body, and return `ACCEPTED` to the script-owned CI gate. CI success, independent review, guarded merge, post-merge vertical acceptance, physical/acoustic proof and project completion remain open; retain C44 ownership through `CONTINUE` for any exact CI rejection or actionable review repair.
+
+# C44 static rejection repair and current-head CI handoff 2026-09-10
+
+- Re-read the Factory policy/handoff, admitted manifest, progress history and
+  canonical `~default` board. Admission remains `{"status":"admitted",
+  "project":"audio-runtime","name":"audio-runtime-c44-retire-cli-model-admission"}`;
+  `prd.json.branchName` matches the isolated branch
+  `codex/audio-runtime-c44-retire-cli-model-admission`, and required baseline,
+  startup and fetched `origin/main=d6efc88d` ancestry remain intact. No host
+  checkout, second project, waiver, reset, predecessor checkpoint or unrelated
+  path was changed.
+- The full current-head rejection for PR `#436`, run `34511830096`, job
+  `102987578885`, is preserved at `/tmp/audio-runtime-c44-ci-static-34511830096.log`.
+  It reported only pinned golangci-lint `goconst` in
+  `agent-cli/internal/services/internal/agentruntime/session_models_test.go:120`
+  for the repeated `custom-only` literal. Repair commit `8f9963b` introduces
+  test-local/package-local constants in the two owned admission test files;
+  behavior, production code and public executable inputs are unchanged.
+- Post-repair focused evidence is green: pinned `make lint` (all 15 modules,
+  `0 issues`), `make staticcheck`, `make fmt`, `make vet`, `make wire-check`,
+  `make architecture-size-check` (`182` packages / `1,881` files /
+  `27,721` functions), `make coverage-registration` (`172` packages across
+  six modules), `git diff --check`, and `1,102` normal tests across the owned
+  CLI/providers packages. Provider race controls pass `48` tests; the C44
+  model-admission race selection passed its provider/service tests before the
+  CLI test binary linker reached the host's `no space left on device` limit
+  with only about `354 MiB` available. This is an environment limitation, not
+  a source failure; no caches or evidence were deleted.
+- The earlier clean merged-source public and negative-control runs remain valid
+  for this test-only descendant: production/build inputs are unchanged, and
+  their recorded consumer/yui hashes, invalid-admission side-effect controls,
+  replay PCM/fixture checks, wrong-oracle failures and bounded shutdown remain
+  preserved. No CI success, independent review, guarded merge, post-merge
+  vertical acceptance or project completion is claimed.
+- Next action: push `8f9963b` plus this evidence checkpoint on the same PR `#436`,
+  update its body with the exact rejection and repair, and return `ACCEPTED` to
+  the script-owned current-head CI gate without polling. Retain C44 ownership
+  through `CONTINUE` for any exact CI rejection or actionable review repair.
+
+# C44 clean current-head provenance repair checkpoint 2026-09-10
+
+- Re-read the admitted C44 manifest and canonical `~default` board. The latest
+  review rejection was a precise provenance gap: test-only repair commit
+  `8f9963b` made the previous `d6e4f9c` consumer/yui manifests stale for current
+  head `54b920136220b9e9fe1c027104addf05d6b1cee6`. No source, artifact, CI,
+  review, merge or acceptance claim was inferred from the old evidence.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d`; baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main remain ancestors
+  of the isolated branch. `project-control.py verify-work --type task --name
+  audio-runtime-c44-retire-cli-model-admission` returned `admitted`. The
+  running host checkout, predecessor checkpoints, peer worktrees and unrelated
+  paths were preserved.
+- Clean bounded verifier run `verify-20260910T193922Z-16355` in public mode and
+  `verify-20260910T193938Z-16512` in negative-controls mode both returned
+  `ACCEPTED` at source `54b92013` with `source_tree_dirty=false`. Consumer
+  normal/race, invalid session/self-play pre-effect controls, exact replay
+  PCM/marker/healthy-tail controls, wrong PCM/marker oracles, and TERM/reap
+  cleanup with no survivors passed. External consumer artifact SHA-256 is
+  `6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3`; shipped
+  yui SHA-256 is
+  `fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255`.
+- Current build-input manifests are `5ae620e01eb64745dfc036d945fb8d6ad65495dd4e6c7fdff2b134b52f74741e`
+  for the external consumer (1,076 files) and
+  `28058a55b6f7cb97dcdb23b8f0f2103b15b6b8325b09a56546c9607394509528` for
+  shipped yui (2,174 files). The compact checked-in record is
+  `docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/current-head-validation-54b92013.json`;
+  historical ignored raw run directories remain preserved.
+- This is an executor repair checkpoint. Next action: run final focused
+  causal/review regressions on the committed evidence update, commit and push
+  the same PR `#436`, update its body with these exact run IDs/hashes, and
+  return `ACCEPTED` to the script-owned current-head CI gate without polling.
+  CI success, independent review, guarded merge, post-merge vertical
+  acceptance, physical/acoustic proof and project completion remain open.
 
 # C39 merged-main conflict repair and exact-source handoff checkpoint 2026-09-10
 
@@ -2690,3 +2771,104 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and prior review-finding map, then return `ACCEPTED` to the script-owned
   current-head CI gate without polling. Retain C39 ownership through
   `CONTINUE` for any exact rejection or actionable repair.
+# C44 current-main integration and storage-blocked validation checkpoint 2026-09-10
+
+- Re-read the required Factory operating policy and implementation handoff,
+  verified the admitted task with `project-control.py verify-work --type task
+  --name audio-runtime-c44-retire-cli-model-admission`, and confirmed
+  `prd.json.branchName` exactly matches the isolated branch
+  `codex/audio-runtime-c44-retire-cli-model-admission`. No second project,
+  waiver, reset, host checkout, predecessor checkpoint or unrelated owner path
+  was changed.
+- Fetched current `origin/main=7b6ce8cecee80d3f78b7aad02760067387853ade` and
+  merged it into the same task branch as `f882566c4f8b066eaf1f48557ba35e4e803c3c9c`.
+  The only merge conflict was `progress.txt`; the complete incoming current-main
+  ledger and the complete C44 history were both retained. Baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main are ancestors.
+- The merged source manifest changed to 1,079 external-consumer files with
+  SHA-256 `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  and 2,177 shipped-CLI files with SHA-256
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767`.
+  Clean-source public verifier run `verify-20260910T203314Z-62352` built the
+  fresh external consumer (`6403602` bytes, SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`) but
+  failed only at YUI compilation with `mkdir .../go-build3679637339/b470/:
+  no space left on device`; free space fell from 271,944 KiB to 197,212 KiB.
+  No current-head YUI artifact or public runtime claim was made.
+- Independent negative-controls run `verify-20260910T203346Z-62643` returned
+  `ACCEPTED` from source `f882566c` with `source_tree_dirty=false`: consumer
+  normal/race, deliberate wrong-oracle rejection, and forced-timeout TERM/reap
+  cleanup with no survivors passed. Its final free-space measurement was
+  186,876 KiB. Structured details are in
+  `docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/current-head-validation-f882566c.json`;
+  prior clean-source accepted evidence remains historical and is not relabeled.
+- Focused provider admission/service tests pass normal and race. The targeted
+  CLI model test could not link because Go reported `no space left on device`,
+  and `make architecture-size-check` could not create its Go work directory for
+  the same reason. These are the recorded operator storage prerequisite, not
+  source failures; no caches or evidence were deleted.
+- This is an executor checkpoint, not CI, review, merge, vertical acceptance or
+  project completion. Next action: after the operator restores stable headroom
+  above the recorded 2 GiB compilation reserve, rerun the merged-head public
+  verifier and remaining bounded Go/structural checks, record fresh YUI/input
+  hashes, then commit/push this same task and update PR #436 before returning
+  `ACCEPTED` to script CI. Retain C44 ownership with `CONTINUE` while that
+  actionable prerequisite remains.
+
+# C44 storage recovery and public validation checkpoint 2026-09-10
+
+- Free space recovered to 7.1 GiB before the rerun, above the recorded 2 GiB
+  compilation reserve. The merged-head public verifier
+  `verify-20260910T211218Z-69790` returned `ACCEPTED` in 28.127080s at source
+  `f882566c4f8b066eaf1f48557ba35e4e803c3c9c`. It built the external consumer at
+  6,403,602 bytes, SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`, and
+  the nomicrophone YUI at 51,042,338 bytes, SHA-256
+  `d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`.
+- The run accepted provider consumer normal/race, invalid bare-session and
+  self-play no-side-effect controls, exact audio-tool/interruption replay
+  (`4800` bytes and `3840` bytes with a `2400`-byte healthy tail), wrong
+  PCM/marker oracles, and bounded timeout TERM/reap cleanup. Focused provider
+  and CLI normal/race tests passed, and `make architecture-size-check` passed
+  with `183` packages, `1884` files, and `27754` functions.
+- The diagnostic run recorded `source_tree_dirty=true` only because the
+  inherited README/progress checkpoint was staged. Its executable-input
+  manifests are consumer `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  over `1079` files and shipped YUI
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767` over
+  `2177` files. The diagnostic evidence is retained and will not be relabeled;
+  the next bounded action is a clean-source public and negative-controls rerun.
+
+# C44 clean-source delivery evidence checkpoint 2026-09-10
+
+- Committed the inherited C44 progress/evidence checkpoint as `9f869d1`; it is
+  documentation-only over implementation `f882566c`. The clean public verifier
+  `verify-20260910T211705Z-79019` returned `ACCEPTED` in `6.410442s`, and the
+  clean negative-controls verifier `verify-20260910T211716Z-79149` returned
+  `ACCEPTED` in `4.839780s`. Both record source-tree cleanliness and the exact
+  source archive/input/artifact provenance in
+  `current-head-validation-9f869d1.json`.
+- `source_tree_dirty=false`; source archive SHA-256 is
+  `778fafb4fb0f8480f3fc8be93e38435adbf1bf89e286c1dd728def06585dd3b4`.
+  Consumer input manifest is `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  over `1079` files and artifact is `6403602` bytes with SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`.
+  Shipped-YUI input manifest is
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767` over
+  `2177` files and artifact is `51042338` bytes with SHA-256
+  `d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`.
+- Clean public controls preserve invalid session/self-play admission with no
+  provider/output side effects, exact audio-tool PCM `4800`/
+  `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, exact
+  interruption PCM `3840`/`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`,
+  healthy tail `2400`/`16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`,
+  wrong PCM/marker rejection, and timeout TERM/reap with no survivors.
+  Provider and CLI normal/race plus architecture-size checks remain passed.
+- The exact accumulated review findings are now accounted for: the earlier
+  verifier-input identity gap is resolved by the clean runs; the latest
+  progress conflict is resolved by merge `f882566c`; no source or evidence
+  repair remains. Next action is to push `9f869d1` on the same PR #436 and
+  return `ACCEPTED` to SCRIPT CI without polling it. CI/review/guarded merge
+  and the primary's fresh post-merge vertical probe remain open; no project
+  completion is claimed.
