@@ -3,6 +3,7 @@ package audio
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
@@ -32,6 +33,20 @@ func (s *WAVSource) SampleRate() int {
 		return 0
 	}
 	return s.sampleRate
+}
+
+func fileWAVSampleRateError(path string, format audioFormat, rate int) *FormatError {
+	return &FormatError{
+		Path:      path,
+		Extension: ".wav",
+		Format:    format.String(),
+		Reason:    fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", rate, SampleRate),
+		Err: &wavio.UnsupportedError{
+			Property:  "sample rate",
+			Observed:  rate,
+			Supported: "16000 Hz",
+		},
+	}
 }
 
 // NewWAVSource validates the container without loading PCM and takes ownership

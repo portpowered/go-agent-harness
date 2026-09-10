@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const rawFrameBytes = FrameSize * 2
@@ -216,17 +214,7 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 			return nil, newStreamError("read", path, format, readErr)
 		}
 		if wav.SampleRate() != SampleRate {
-			formatErr := &FormatError{
-				Path:      path,
-				Extension: ".wav",
-				Format:    format.String(),
-				Reason:    fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", wav.SampleRate(), SampleRate),
-				Err: &wavio.UnsupportedError{
-					Property:  "sample rate",
-					Observed:  wav.SampleRate(),
-					Supported: "16000 Hz",
-				},
-			}
+			formatErr := fileWAVSampleRateError(path, format, wav.SampleRate())
 			if closeErr := wav.Close(); closeErr != nil {
 				return nil, errors.Join(formatErr, newStreamError("close", path, format, closeErr))
 			}
