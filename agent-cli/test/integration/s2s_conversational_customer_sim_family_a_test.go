@@ -222,6 +222,7 @@ type familyAProviderFixture struct {
 	sessionUpdates        int
 	inputAppends          int
 	closedAfterFinalInput bool
+	awaitingFinalSilence  bool
 	functionCalls         []familyAFunctionCall
 	toolObservations      []probe.ToolObservation
 	customerTranscript    []probe.TranscriptEvent
@@ -232,7 +233,6 @@ type familyAProviderFixture struct {
 	pendingCall           *familyAFunctionCall
 	pendingCallStarted    time.Duration
 	pendingResult         bool
-	awaitingFinalSilence  bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -329,10 +329,10 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 						return
 					}
 				case "input_audio_buffer.commit":
-					// Wait for the child-owned commit before publishing terminal
-					// close; this preserves final input ordering at the provider
-					// boundary without timing-based coordination.
-					f.handleAudioCommit(connection)
+					// A commit is not the terminal boundary: the client can enqueue
+					// it before the final silence append. The silence handler below
+					// closes only after the final response has armed the boundary.
+					// No response is written here.
 				case "response.create":
 					if err := f.handleContinuation(connection); err != nil {
 						f.failProtocol(err.Error())
@@ -360,20 +360,20 @@ func (f *familyAProviderFixture) handleAudioSilence(connection *websocket.Conn) 
 	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
 		return err
 	}
-	return f.send(connection, map[string]string{"type": "input_audio_buffer.committed"})
-}
-func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) {
+	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
+		return err
+	}
 	f.mu.Lock()
 	closeAfterFinalInput := f.awaitingFinalSilence
 	f.awaitingFinalSilence = false
 	f.closedAfterFinalInput = closeAfterFinalInput
 	f.mu.Unlock()
-	if !closeAfterFinalInput {
-		return
+	if closeAfterFinalInput {
+		if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
+			return fmt.Errorf("send terminal session.closed after final silence: %w", err)
+		}
 	}
-	if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
-		f.failProtocol(err.Error())
-	}
+	return nil
 }
 func (f *familyAProviderFixture) handleToolResultEvent(itemType, callID, output string) error {
 	if itemType != "function_call_output" {
