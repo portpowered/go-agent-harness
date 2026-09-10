@@ -3,6 +3,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/run.py",
     "--source-root",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
+    "--build",
     "--mode",
     "characterize",
     "--report",
@@ -10,23 +11,38 @@
   ],
   "passed": true,
   "public": {
-    "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-6defe91768db",
-    "binary_sha256": "0b41415fb059a2cf05cda5f3dcd745c234d09b3f28edc9e3a5d3cc3871922438",
+    "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-3652ded7fac4",
+    "binary_sha256": "473efadcb0c966d56f47b2e621cf4c4f6264d03b0bb6bfe91776bfeee0b929e4",
     "build": {
-      "reused": true
+      "argv": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-mod=mod",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-3652ded7fac4",
+        "."
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c33-build-82vuzmva",
+      "duration_seconds": 0.290654,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
     },
     "execution": {
       "argv": [
         "rtk",
         "proxy",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-6defe91768db",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-3652ded7fac4",
         "--mode",
         "characterize",
         "--output",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T033416Z-28467/consumer-characterize.json"
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T041551Z-53737/consumer-characterize.json"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
-      "duration_seconds": 0.074551,
+      "duration_seconds": 0.198578,
       "exit_code": 0,
       "report": {
         "allocation_budget_bytes": 262144,
@@ -66,14 +82,14 @@
         },
         "resource_bound": false,
         "scratch_bytes": 65536,
-        "source": "6defe91768db15763f601e9af0b893cbb881b0d6",
+        "source": "3652ded7fac458210fd7bfe9dcb317bc2b9d782a",
         "version": "c33-v1"
       },
       "stderr": "",
       "stdout": ""
     },
-    "source_revision": "6defe91768db15763f601e9af0b893cbb881b0d6",
+    "source_revision": "3652ded7fac458210fd7bfe9dcb317bc2b9d782a",
     "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink"
   },
-  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T033416Z-28467"
+  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T041551Z-53737"
 }
