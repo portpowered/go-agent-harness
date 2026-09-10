@@ -203,3 +203,34 @@ this documentation/evidence checkpoint, push the same branch, update PR #434
 with the exact current head and review-254 repair map, and return `ACCEPTED` to
 the script-owned CI gate without polling it. Retain this task through
 `CONTINUE` for any exact CI rejection.
+
+## Current-head merge and storage prerequisite checkpoint — 2026-09-10
+
+The canonical task/review inbox was re-read and admission reverified. The
+isolated branch still exactly matches `prd.json.branchName`. Fetched
+`origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` was merged as
+`ac77c076`; the only conflict was the shared `progress.txt`, with both C43 and
+incoming C44 ledger entries retained. Baseline `926ded7b`, startup integration
+`8bdafc7f`, and current main are ancestors of the candidate. The merge and
+follow-up storage checkpoint are pushed at `7a07f811` on PR #434, which is open
+and currently reported mergeable.
+
+Post-merge bounded checks pass: tools and CLI image normal/race tests, live
+package normal/race tests, `make fmt wire-check vet size-check`, pinned
+golangci-lint 2.9.0 with 0 issues, pinned staticcheck 2026.1,
+`make architecture-size-check` at 184 packages/1,888 files/27,779 functions,
+and `make coverage-registration` at 174 packages. Wire regeneration produced
+no tracked changes and `git diff --check` is clean.
+
+The required fresh executable verifier was not run because free space fell from
+2.3 GiB before the bounded quality checks to 1,794,788 KiB afterward, below the
+required 2 GiB reserve and C43's 256 MiB attributable-growth cap. No cache,
+evidence, peer artifact or unrelated worktree was deleted. The historical
+`169490ea` process artifact is not relabeled as current-head proof because the
+merged main changed executable inputs. After the operator restores stable
+headroom, run the exact bounded command
+`rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`,
+record fresh provenance, update this handoff and PR #434, then submit the same
+task to script CI without polling. This remains an executor `CONTINUE` checkpoint;
+CI, independent review, guarded merge, vertical acceptance and project
+acceptance are not claimed.

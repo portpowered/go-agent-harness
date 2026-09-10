@@ -5,6 +5,28 @@ contract. The public tools Wire/executor now owns staging, permission policy,
 path advertisement, refresh decoration, typed image projection, and cleanup;
 the CLI retains host configuration resolution and composition.
 
+## Latest executor checkpoint — pushed head `7a07f811`
+
+- Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` and merged it
+  as `ac77c076`; the only conflict was shared `progress.txt`, with C43 and
+  incoming C44 ledger entries both preserved. Required baseline `926ded7b`,
+  startup integration `8bdafc7f`, and current-main ancestry are intact.
+- Bounded post-merge checks pass: tools and CLI image normal/race, live package
+  normal/race, Wire/fmt/vet/size, architecture-size (`184 packages`, `1,888
+  files`, `27,779 functions`), coverage registration (`174 packages`), pinned
+  golangci-lint 2.9.0 (0 issues), staticcheck 2026.1, and diff-check.
+- The fresh executable process verifier is pending because free space fell from
+  2.3 GiB to `1,794,788 KiB` after those checks, below the required 2 GiB
+  reserve and C43's 256 MiB growth cap. The prior `169490ea` process artifact
+  is historical, not relabeled for this merged head. No cache/evidence/peer
+  artifact was deleted.
+- Next action after storage recovery: run
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`,
+  record fresh executable/build/fixture provenance, update this PR, and submit
+  the same task to script CI without polling. This PR does not claim CI,
+  independent review, merge, vertical acceptance, physical/acoustic proof, or
+  project acceptance.
+
 ## Admitted candidate
 
 - Sole admitted project/task: `audio-runtime` /
