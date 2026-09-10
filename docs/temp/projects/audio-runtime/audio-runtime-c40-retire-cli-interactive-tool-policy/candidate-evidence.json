@@ -149,6 +149,111 @@
     "registration_command": "rtk make coverage-registration",
     "result": "passed: 172 workspace packages checked across 6 modules"
   },
+  "current_merged_head_validation": {
+    "candidate_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
+    "tested_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
+    "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
+    "note": "Local checkpoint after merging fetched origin/main. Current-head artifacts below supersede earlier executor hashes; the frozen interruption replay is intentionally not rerun while C38/task198 lacks reviewed repair and primary independent vertical acceptance.",
+    "ancestry": {
+      "baseline_926ded7b_is_ancestor": true,
+      "startup_8bdafc7_is_ancestor": true,
+      "origin_main_5f14c453_is_ancestor": true
+    },
+    "runs": {
+      "inventory": "runs/run-inventory-20260910T214830Z-1616",
+      "consumer": "runs/run-consumer-20260910T214832Z-1759",
+      "wrong_oracle": "runs/run-wrong-oracle-20260910T214834Z-1785",
+      "public_policy": "runs/run-public-policy-20260910T214835Z-1811"
+    },
+    "inventory": {
+      "cli_policy": {
+        "baseline_lines": 173,
+        "candidate_lines": 155,
+        "baseline_sha256": "0d00612dce284f189f7dcf6665a745cf993436a5546eb8c2ae8d4605071e4d14",
+        "candidate_sha256": "0d8017170faf798222443163dc478904a87cce3c1f174344bc64dc5d79a4194a"
+      },
+      "aggregate_cli_agentruntime": {
+        "baseline_lines": 41305,
+        "candidate_lines": 41202
+      },
+      "runtime_contract": {
+        "lines": 80,
+        "sha256": "6fe69e2899182be23368efbc3e9c60c38c571d48d0bd1b841c23eaa498992423"
+      },
+      "runtime_policy": {
+        "lines": 159,
+        "sha256": "9554a0f575c4926edbfd1526ecf62523196dbc4cd0853038d876d41d647f073c"
+      },
+      "wire": {
+        "lines": 29,
+        "sha256": "4cf2c3ce164744890671dd72b30940bf01a90bcd2788979ec57ab88f12e752f5"
+      },
+      "wire_generated": {
+        "lines": 28,
+        "sha256": "50bba6e2d376674c9f000cc2fbd94546904deec1314fa69b3a0a02c3be86f1b1"
+      }
+    },
+    "focused_validation": {
+      "tools_normal": "passed: 334 tests in 16 packages",
+      "tools_race": "passed: 334 tests in 16 packages",
+      "cli_policy_normal": "passed: 13 tests",
+      "cli_policy_race": "passed: 13 tests",
+      "replay_bundle": "passed: 19 tests in 1 package",
+      "strict_allowlist": "passed: 2 tests in 1 package",
+      "coverage_registration": "passed: 174 workspace packages checked across 6 modules",
+      "architecture_and_size": "passed: 184 packages, 1887 files, 27788 functions",
+      "wire": "passed: full check-wire.py; generated files unchanged",
+      "format_and_vet": "passed: make fmt and make vet",
+      "diff_check": "passed: git diff --check"
+    },
+    "consumer": {
+      "decision": "ACCEPTED",
+      "gowork": "off",
+      "binary_bytes": 6249666,
+      "binary_sha256": "7fa671bf2a58a88c9cc8660f1814719727cc8981ed3da599b0aab2e8bb75552a",
+      "marker": "C40_POLICY_CONSUMER",
+      "defaults": "5s fast/read, 20s long-running, 2s acknowledgement",
+      "overrides": "7s fast/read, 15s long-running, 1.2s acknowledgement",
+      "classes": "browser_select/catalog_page/dynamic_page/exec/sleep bounded-long-running; read_file fast/read",
+      "timeouts": "catalog_page/exec 20s; read_file 5s",
+      "snapshot_input_isolation": true,
+      "snapshot_clone_isolation": true,
+      "invalid_rejected_before_effects": true,
+      "provider_setup_calls": 0,
+      "correlated_continuation": "exec -> completed -> continuation",
+      "policy_call_chain": "tools Wire -> private policy Factory -> public ClassForTool/TimeoutForTool"
+    },
+    "wrong_oracle": {
+      "decision": "ACCEPTED",
+      "binary_sha256": "7fa671bf2a58a88c9cc8660f1814719727cc8981ed3da599b0aab2e8bb75552a",
+      "exit_code": 1,
+      "proof": "literal class decision mismatch rejected",
+      "descendants_reaped": true
+    },
+    "public_policy": {
+      "decision": "ACCEPTED",
+      "yui_binary_bytes": 50895090,
+      "yui_binary_sha256": "71eb588b4421d01436209c61862c816bfcc06b9b6d9e18929089d5a3f560bc21",
+      "build_tags": "nomicrophone",
+      "audio_tool_fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "terminal_reason": "provider_close / fixture_complete",
+      "descendants_reaped": true
+    },
+    "replay_regression": {
+      "decision": "BLOCKED_PENDING_C38_REVIEWED_REPAIR_AND_PRIMARY_VERTICAL_ACCEPTANCE",
+      "not_run": true,
+      "expected_pcm_bytes": 3840,
+      "retained_observed_pcm_bytes": 2400,
+      "retained_observed_healthy_tail_offset": 1440
+    },
+    "storage": {
+      "available_1024_block_units_after_evidence": 1795276,
+      "reserve_required_1024_block_units": 2097152,
+      "next_artifact_generation": "deferred until the reserve is restored"
+    }
+  },
   "retained_dependency_failure": {
     "owner": "C38/task198",
     "source": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",

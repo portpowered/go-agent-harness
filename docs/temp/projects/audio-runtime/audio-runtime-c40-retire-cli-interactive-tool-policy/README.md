@@ -29,3 +29,15 @@ and the 2400-byte healthy tail at offset 1440 /
 The replay check is regression evidence only. It does not claim physical
 device or acoustic behavior, live Realtime use, CI success, independent
 review, merge, or project acceptance.
+
+## Current merged-head checkpoint
+
+The current local checkpoint is `ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9`,
+which merges fetched `origin/main` at `5f14c45313cfdc71e000fda209e3408fcf863faf`.
+The fresh inventory, GOWORK=off consumer, wrong-oracle, and public-policy runs
+all pass on that head. Focused normal/race policy tests, replay-bundle and
+strict allowlist regressions, Wire, architecture, registration, fmt, vet, and
+diff checks also pass. The interruption replay is not rerun: C38/task198 still
+owns the observed 2400-byte result against the frozen 3840-byte oracle, pending
+reviewed repair and primary independent vertical acceptance. The branch remains
+local and unsubmitted until that known failing replay can be rerun honestly.
