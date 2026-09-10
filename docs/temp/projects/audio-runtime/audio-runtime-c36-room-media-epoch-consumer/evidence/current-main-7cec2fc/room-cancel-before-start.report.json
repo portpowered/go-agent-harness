@@ -1,0 +1,89 @@
+{
+  "cancellation": {
+    "close_calls": 0,
+    "closed": 0,
+    "closed_by_service": true,
+    "joined": true,
+    "media_pump_active": false,
+    "mode": "cancel-before-start",
+    "opened": 0,
+    "output_frames": 0,
+    "participants": {
+      "alice": "error",
+      "bob": "error"
+    },
+    "public_service_run": true,
+    "repeated_close_ok": true,
+    "room_termination": "stopped",
+    "run_returned": true,
+    "source_frames": 0,
+    "start_error": "public room admission observed no start before cancellation",
+    "started": 0,
+    "waited": 0
+  },
+  "epochs": {
+    "end_of_response_before_terminal": false,
+    "healthy_tail": null,
+    "stale_pending_samples": 0
+  },
+  "lifecycle": {
+    "closed": 0,
+    "natural_exit": false,
+    "opened": 0,
+    "repeated_close_ok": false,
+    "started": 0,
+    "waited": 0,
+    "workers_joined": false
+  },
+  "mode": "cancel-before-start",
+  "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-cancel-before-start",
+  "playback": {
+    "admitted": null,
+    "admitted_samples": 0,
+    "callback_count": 0,
+    "consumed": null,
+    "consumed_samples": 0,
+    "discarded_samples": 0,
+    "discarded_stale": null,
+    "domain": "",
+    "physical_device": false,
+    "rendered_before_callback": 0,
+    "rendered_samples": 0,
+    "underflow": null,
+    "underflow_samples": 0,
+    "zero_filled_samples": 0
+  },
+  "playback_boundary": {
+    "admitted": null,
+    "admitted_samples": 0,
+    "callback_count": 0,
+    "consumed": null,
+    "consumed_samples": 0,
+    "discarded_samples": 0,
+    "discarded_stale": null,
+    "domain": "",
+    "physical_device": false,
+    "rendered_before_callback": 0,
+    "rendered_samples": 0,
+    "underflow": null,
+    "underflow_samples": 0,
+    "zero_filled_samples": 0
+  },
+  "provider_admission": {
+    "frames": 0,
+    "samples": 0
+  },
+  "recording": {
+    "pcm_bytes": 0,
+    "provider_trace": "",
+    "reason": "",
+    "replayable": false,
+    "state": ""
+  },
+  "room": {
+    "participants": null,
+    "termination_reason": ""
+  },
+  "schema_version": 1,
+  "status": "complete"
+}

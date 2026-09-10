@@ -312,8 +312,8 @@ func TestDeterministicContextDeadlineAndParentCancellation(t *testing.T) {
 	default:
 	}
 	clock.AdvanceBy(time.Millisecond)
-	if !waitForContextDone(ctx) {
-		t.Fatal("context did not expire after virtual deadline")
+	if !contextDoneImmediately(ctx) {
+		t.Fatal("context did not expire synchronously after virtual deadline")
 	}
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		t.Fatalf("context error: got %v, want DeadlineExceeded", ctx.Err())
@@ -549,5 +549,14 @@ func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
 		if got != expectedTime {
 			t.Fatalf("equal-tick read: got %v, want %v", got, expectedTime)
 		}
+	}
+}
+
+func contextDoneImmediately(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
 	}
 }
