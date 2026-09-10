@@ -1,3 +1,58 @@
+# C30 CI rejection reconciliation — evidence-only descendant
+
+The prior implementation source remains `a7302e076768d730cce0cfac7997be6b4fc84969`.
+The current branch head before this evidence checkpoint is
+`6eb1f72182f6debace03c6315b5cd513f3a7e176`; the only changes after the tested
+implementation are within this owned evidence directory, so these artifacts are
+not relabeled as a build from the documentation descendant.
+
+The complete raw CI rejection payload for run `34442412086` was saved at
+`/tmp/audio-runtime-c30-ci-rejection-34442412086.json` (SHA256
+`10a27e0f43d8909815f45cf2d8d60a3886b1aa6eaa4bb4c571639ff234b8a9e6`, 16,111
+bytes). The complete `CI (hermetic)` job log was saved at
+`/tmp/audio-runtime-c30-ci-hermetic-34442412086.log` (SHA256
+`559f0ffdda3632c5fb124a23d161f45744b98768cc37bbf0e911bf1cdf050714`, 296
+lines, 34,361 bytes) and read in full. The run checked out merge ref
+`522202ed915924b295e48e3f1b65f44056125f33`, merging PR #422 head
+`6eb1f72182f6debace03c6315b5cd513f3a7e176` into `b0acab1238d1aa6bf6bce5ca074451310c7eb039`.
+
+All required jobs passed except `CI (hermetic)`. Its sole failing package
+control was the untouched, out-of-lease
+`agent-cli/internal/transport/cli/internal/events` test:
+
+```text
+TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence
+room_live_liveness_test.go:40: room did not publish liveness through the live service
+```
+
+The current C30 diff has no path under that package. The exact test passes in
+the isolated C30 worktree in both relevant modes:
+
+```text
+go test ./agent-cli/internal/transport/cli/internal/events -run '^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$' -count=5 -timeout 60s: exit 0, 5/5
+CGO_ENABLED=0 go test ./agent-cli/internal/transport/cli/internal/events -tags=nomicrophone -run '^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$' -count=5 -timeout 60s: exit 0, 5/5
+```
+
+This is a nonreproduced external-package CI failure, not a C30 source defect;
+no out-of-lease repair or acceptance waiver was made. Review132's Stats and
+constructor findings, Review139's owned-path/provenance finding, and Review149's
+current-main and bounded-runner findings remain covered by the source and
+evidence sections below. The C30 source diff still contains only the owned
+framing/room paths and this evidence directory; `format.go` and
+`pcm16_convert_test.go` remain unchanged.
+
+The evidence-only ancestry check is explicit: `git diff --name-only
+a7302e076768d730cce0cfac7997be6b4fc84969 HEAD` contains only files under
+`docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety`.
+The tested consumer source revision, executable SHA256, fixture hashes, yui
+source revision/input digest and replay hashes remain the values recorded for
+`a7302e07`; no executable input changed after that implementation checkpoint.
+
+No current-head CI success, independent review, guarded merge, post-merge
+vertical acceptance or project completion is claimed. After this checkpoint is
+committed and pushed, the same PR is ready for script-owned CI resubmission;
+the prior hermetic failure must not be treated as a C30 repair or as green CI.
+
 # C30 merged-main repair and exact-head verification
 
 Implementation source revision: `a7302e076768d730cce0cfac7997be6b4fc84969`
