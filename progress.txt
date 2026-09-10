@@ -2986,3 +2986,39 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   return `ACCEPTED` to SCRIPT CI without polling it. CI/review/guarded merge
   and the primary's fresh post-merge vertical probe remain open; no project
   completion is claimed.
+
+# C38 external integration rejection ownership checkpoint 2026-09-10T22:20Z
+
+- Admission was reverified for the sole `audio-runtime` project with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c38-interruption-audio-retention`; it returned `admitted`.
+  `prd.json.branchName` matches the isolated branch, `HEAD=d10aeab5`, and
+  fetched `origin/main=5f14c453` is an ancestor. No second project, waiver,
+  reset, host-checkout mutation, predecessor mutation or unrelated path edit
+  was made.
+- The exact current-head rejection for PR #430 is run `34534937395`, job
+  `103064239529`, `CI (integration)`. The completed job log was read through
+  the GitHub job-log API. Its only assertion failure is the inherited
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  control at `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183`:
+  remote playback missed the final PCM marker at the unchanged `47.45s`
+  scenario deadline, with `rendered_pcm=319200`, `expected_pcm=174391`,
+  `final_marker=false`, `callback_advances=665`, and the child still running.
+  The other replay/error lines are expected negative-control diagnostics.
+- This failure is outside C38's immutable two-file production/test lease and
+  is the previously recorded C20/C21 shared remote-fixture ownership boundary;
+  C38 did not edit `session_tool_audio_remote_e2e_test.go`, device runtime,
+  provider or integration paths. No speculative cross-lease repair,
+  deadline change, assertion weakening, unchanged retry or stale artifact
+  relabeling is justified. The C38 current-head focused regressions remain
+  green: normal and race each pass `20` audio-output tests, focused vet and
+  Wire pass, architecture-size passes at `183` packages / `1,884` files /
+  `27,774` functions, and `git diff --check` is clean.
+- No script-CI success, independent-review acceptance, guarded merge,
+  post-delivery vertical validation, physical/acoustic proof or project
+  acceptance is claimed. Exact next action: primary routes the named
+  remote-fixture failure to its existing owner (or records the required
+  ownership decision); after that repair reaches reviewed main, C38 fetches
+  and integrates it, reruns exact-head repaired/package provenance and the
+  focused C38 gates, pushes the same PR #430, and resubmits to script CI
+  without polling. C38 retains ownership for any actionable in-lease repair.
