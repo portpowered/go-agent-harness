@@ -10,6 +10,7 @@ import os
 import pathlib
 import runpy
 import shutil
+import stat
 import subprocess
 import tarfile
 import time
@@ -94,6 +95,28 @@ def require_deadline(started: float, total_timeout: float, phase: str) -> None:
         raise RuntimeError(f"aggregate deadline exceeded during {phase}")
 
 
+def stage_executables(staged_root: pathlib.Path, run_dir: pathlib.Path) -> dict[str, pathlib.Path]:
+    staging_dir = run_dir / "staged-binaries"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    staged: dict[str, pathlib.Path] = {}
+    for key in ("artifact-0-yui", "artifact-1-consumer"):
+        source = staged_root / EXPECTED_ARTIFACTS[key]["name"]
+        destination = staging_dir / source.name
+        shutil.copy2(source, destination)
+        source_stat = source.stat()
+        destination_stat = destination.stat()
+        if destination_stat.st_ino == source_stat.st_ino or destination_stat.st_nlink != 1:
+            raise RuntimeError(f"staged executable is not an independent copy: {source} -> {destination}")
+        os.chmod(destination, destination_stat.st_mode | stat.S_IWUSR | stat.S_IXUSR)
+        facts = artifact_facts(destination)
+        if facts["bytes"] != source_stat.st_size or facts["sha256"] != sha256(source):
+            raise RuntimeError(f"staged executable changed while copying: {facts}, source={source}")
+        if not os.access(destination, os.X_OK | os.W_OK):
+            raise RuntimeError(f"staged executable is not writable and executable: {destination}")
+        staged[key] = destination
+    return staged
+
+
 def check_staged_artifacts(staged_root: pathlib.Path) -> dict[str, Any]:
     before: dict[str, Any] = {}
     for key, expected in EXPECTED_ARTIFACTS.items():
@@ -149,10 +172,12 @@ def run_controls(
     child_timeout: float,
     total_timeout: float,
     max_output_bytes: int,
+    executable_paths: dict[str, pathlib.Path] | None = None,
 ) -> dict[str, Any]:
     verifier_globals = module["_c45_globals"]
-    verifier_globals["CONSUMER"] = staged_root / "artifact-1"
-    verifier_globals["YUI"] = staged_root / "artifact-0"
+    executable_paths = executable_paths or {}
+    verifier_globals["CONSUMER"] = executable_paths.get("artifact-1", staged_root / "artifact-1")
+    verifier_globals["YUI"] = executable_paths.get("artifact-0", staged_root / "artifact-0")
     verifier_globals["FIXTURES"] = fixture_root
     verifier_globals["ARTIFACTS"] = run_dir / "unused-artifacts"
     verifier_globals["RUNS"] = run_dir / "unused-runs"
@@ -218,7 +243,7 @@ def main() -> int:
     staged_root = args.staged_root.resolve()
     run_dir = RUNS / f"staged-probe-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
     run_dir.mkdir(parents=True, exist_ok=False)
-    scratch_paths = [run_dir / "staged-source", run_dir / "unused-artifacts", run_dir / "unused-runs"]
+    scratch_paths = [run_dir / "staged-source", run_dir / "staged-binaries", run_dir / "unused-artifacts", run_dir / "unused-runs"]
     outcome: dict[str, Any] = {
         "schema": "audio-runtime-c45-staged-probe/v1",
         "decision": "FAILED",
@@ -238,11 +263,14 @@ def main() -> int:
             raise RuntimeError(f"free-space prerequisite unavailable before probe: {free_before} < {args.min_free_bytes}")
         staged_before = check_staged_artifacts(staged_root)
         descriptor = json.loads((staged_root / "artifact-3.json").read_text(encoding="utf-8"))
+        executable_paths = stage_executables(staged_root, run_dir)
         fixture_root = extract_required_fixtures(staged_root / "artifact-2.tar", run_dir / "staged-source")
         outcome["artifact_hashes_before"] = staged_before
         outcome["verifier_sha256"] = sha256(VERIFY)
         outcome["staged_binary_bytes"] = staged_before["artifact-0-yui"]["bytes"] + staged_before["artifact-1-consumer"]["bytes"]
         outcome["binary_output_bytes"] = 0
+        outcome["binary_staging_bytes"] = sum(path.stat().st_size for path in executable_paths.values())
+        outcome["execution_bindings"] = {key: str(path) for key, path in executable_paths.items()}
         outcome["free_space_before_bytes"] = free_before
         outcome["source_staging_bytes"] = tree_bytes(run_dir / "staged-source")
         outcome["fixture_bytes"] = outcome["source_staging_bytes"]
@@ -259,7 +287,7 @@ def main() -> int:
             if isinstance(step, dict)
         ]
         module = import_verify()
-        controls = run_controls(module, run_dir, fixture_root, staged_root, started, args.child_timeout, args.total_timeout, args.max_output_bytes)
+        controls = run_controls(module, run_dir, fixture_root, staged_root, started, args.child_timeout, args.total_timeout, args.max_output_bytes, executable_paths)
         outcome["controls"] = controls
         outcome["forbidden_helpers_called"] = module["_c45_forbidden_calls"]
         if outcome["forbidden_helpers_called"]:

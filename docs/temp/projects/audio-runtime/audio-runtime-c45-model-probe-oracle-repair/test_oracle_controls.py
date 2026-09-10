@@ -231,6 +231,9 @@ def run_staged_probe_success_path() -> dict[str, Any]:
         def fake_check_staged_artifacts(_staged_root: pathlib.Path) -> dict[str, Any]:
             return artifact_facts
 
+        def fake_stage_executables(_staged_root: pathlib.Path, _run_dir: pathlib.Path) -> dict[str, pathlib.Path]:
+            return {}
+
         def fake_extract_required_fixtures(_archive: pathlib.Path, _destination: pathlib.Path) -> pathlib.Path:
             fixture_root = _destination / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures"
             fixture_root.mkdir(parents=True, exist_ok=True)
@@ -262,6 +265,7 @@ def run_staged_probe_success_path() -> dict[str, Any]:
         probe_globals["RUNS"] = fake_runs
         probe_globals["free_bytes"] = lambda _path: 2 * 1024 * 1024 * 1024
         probe_globals["check_staged_artifacts"] = fake_check_staged_artifacts
+        probe_globals["stage_executables"] = fake_stage_executables
         probe_globals["extract_required_fixtures"] = fake_extract_required_fixtures
         probe_globals["import_verify"] = fake_import_verify
         probe_globals["run_controls"] = fake_run_controls
@@ -375,6 +379,9 @@ def run_staged_probe_deadline_control() -> dict[str, Any]:
         def fake_check_staged_artifacts(_staged_root: pathlib.Path) -> dict[str, Any]:
             return artifact_facts
 
+        def fake_stage_executables(_staged_root: pathlib.Path, _run_dir: pathlib.Path) -> dict[str, pathlib.Path]:
+            return {}
+
         def fake_extract_required_fixtures(_archive: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
             fixture_root = destination / "fixtures"
             fixture_root.mkdir(parents=True, exist_ok=True)
@@ -407,6 +414,7 @@ def run_staged_probe_deadline_control() -> dict[str, Any]:
         probe_globals["RUNS"] = fake_runs
         probe_globals["free_bytes"] = lambda _path: 2 * 1024 * 1024 * 1024
         probe_globals["check_staged_artifacts"] = fake_check_staged_artifacts
+        probe_globals["stage_executables"] = fake_stage_executables
         probe_globals["extract_required_fixtures"] = fake_extract_required_fixtures
         probe_globals["import_verify"] = fake_import_verify
         probe_globals["run_controls"] = slow_run_controls
