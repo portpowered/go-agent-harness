@@ -1,0 +1,50 @@
+{
+  "schema": "audio-runtime-c35-canonical-pcm-byte-mixing-fixtures.v1",
+  "task": "audio-runtime-c35-canonical-pcm-byte-mixing",
+  "source": "audio-runtime-c11-hermetic-profile-vertical-probe-stage4",
+  "fixtures": [
+    {
+      "identity": "c07-audio-tool-traced.session.json",
+      "path": "docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json",
+      "bytes": 14060,
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    {
+      "identity": "c07-interruption-no-close.session.json",
+      "path": "docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json",
+      "bytes": 12980,
+      "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+    }
+  ],
+  "pcm_expectations": {
+    "tool_provider": {
+      "bytes": 4800,
+      "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+    },
+    "tool_rendered": {
+      "bytes": 3200,
+      "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+    },
+    "interruption_provider": {
+      "bytes": 3840,
+      "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+    },
+    "interruption_rendered": {
+      "bytes": 3360,
+      "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+    },
+    "interruption_healthy_tail": {
+      "bytes": 2400,
+      "offset": 1440,
+      "sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+    }
+  },
+  "controls": {
+    "tool_marker": "PROBE_TOOL_MARKER_9182",
+    "tool_events": 2,
+    "interruption_response_audio_bytes": [1440, 2400],
+    "software_replay_only": true,
+    "realtime_sessions": 0,
+    "physical_or_acoustic_evidence": false
+  }
+}

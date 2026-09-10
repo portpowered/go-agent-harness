@@ -1,11 +1,13 @@
 package mixer
 
 import (
+	"bytes"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestMixPCM16SamplesSumsBeforeOneFinalClip(t *testing.T) {
@@ -132,6 +134,101 @@ func TestValidatePCM16MixBoundsDoesNotAllocateOrConsume(t *testing.T) {
 	}
 	if !errors.Is(ValidatePCM16MixBounds(1, MaxPCM16MixSamples+1), ErrPCM16MixInvalidLength) {
 		t.Fatal("output overflow was not rejected")
+	}
+}
+
+func TestMixPCM16BytesUsesIndependentLiteralPCM16Oracles(t *testing.T) {
+	tests := []struct {
+		name    string
+		sources [][]byte
+		length  int
+		want    []byte
+	}{
+		{
+			name: "signed extrema and one final clip",
+			sources: [][]byte{
+				{0xff, 0x7f, 0xff, 0x7f, 0x00, 0x00},
+				{0xff, 0x7f, 0x00, 0x80, 0x01, 0x00},
+				{0x00, 0x80, 0x04, 0x00, 0x00, 0x80},
+			},
+			length: 3,
+			want:   []byte{0xfe, 0x7f, 0x03, 0x00, 0x01, 0x80},
+		},
+		{
+			name:    "short tail and empty source",
+			sources: [][]byte{{0x01, 0x00, 0x02, 0x00}, {}, nil},
+			length:  4,
+			want:    []byte{0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			name:    "empty output",
+			sources: [][]byte{{}, nil},
+			length:  0,
+			want:    []byte{},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := MixPCM16Bytes(test.sources, test.length)
+			if err != nil {
+				t.Fatalf("mix bytes: %v", err)
+			}
+			if !bytes.Equal(got, test.want) {
+				t.Fatalf("mixed bytes = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestMixPCM16BytesIsPermutationInvariantAndDoesNotAliasInputs(t *testing.T) {
+	first := []byte{0x30, 0x75, 0x18, 0xfc}
+	second := []byte{0x10, 0x27, 0xd0, 0x07}
+	third := []byte{0x00, 0x80, 0x0a, 0x00}
+	want := []byte{0x40, 0x1c, 0xf2, 0x03}
+	permutations := [][][]byte{
+		{first, second, third}, {first, third, second},
+		{second, first, third}, {second, third, first},
+		{third, first, second}, {third, second, first},
+	}
+	for index, sources := range permutations {
+		got, err := MixPCM16Bytes(sources, 2)
+		if err != nil {
+			t.Fatalf("permutation %d: %v", index, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("permutation %d = %v, want %v", index, got, want)
+		}
+	}
+
+	before := append([]byte(nil), first...)
+	got, err := MixPCM16Bytes([][]byte{first}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first[0] = 0x07
+	if !bytes.Equal(first, []byte{0x07, 0x75, 0x18, 0xfc}) {
+		t.Fatalf("source was unexpectedly changed: %v", first)
+	}
+	if !bytes.Equal(got, before) {
+		t.Fatalf("returned bytes changed or aliased input: got %v, want %v", got, before)
+	}
+}
+
+func TestMixPCM16BytesRejectsEveryInvalidDimensionBeforeDecoding(t *testing.T) {
+	if _, err := MixPCM16Bytes(nil, -1); !errors.Is(err, ErrPCM16MixInvalidLength) {
+		t.Fatalf("negative output error = %v, want ErrPCM16MixInvalidLength", err)
+	}
+	if _, err := MixPCM16Bytes(nil, MaxPCM16MixSamples+1); !errors.Is(err, ErrPCM16MixInvalidLength) {
+		t.Fatalf("oversized output error = %v, want ErrPCM16MixInvalidLength", err)
+	}
+	if _, err := MixPCM16Bytes([][]byte{{0x01}}, 1); !errors.Is(err, codec.ErrPCM16OddLength) {
+		t.Fatalf("odd source error = %v, want codec.ErrPCM16OddLength", err)
+	}
+	if _, err := MixPCM16Bytes([][]byte{{0, 0, 0, 0}}, 1); !errors.Is(err, ErrPCM16MixSourceTooLong) {
+		t.Fatalf("overlong source error = %v, want ErrPCM16MixSourceTooLong", err)
+	}
+	if _, err := MixPCM16Bytes(make([][]byte, MaxPCM16MixSources+1), 1); !errors.Is(err, ErrPCM16MixSourceLimit) {
+		t.Fatalf("source limit error = %v, want ErrPCM16MixSourceLimit", err)
 	}
 }
 
