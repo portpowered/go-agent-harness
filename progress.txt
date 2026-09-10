@@ -1551,3 +1551,73 @@ Bound each focused command to60s, retain existing2s scenario limits, use normal/
   commit/push the changed candidate, update PR #410, and submit `ACCEPTED` to
   script CI without polling. Do not resubmit this unchanged source or claim
   CI, review, merge, vertical acceptance or project completion.
+
+C18 accepted-main integration and exact-source delivery checkpoint 2026-09-09
+
+- Reverified admission with `project-control.py verify-work --type task --name
+  audio-runtime-c18-public-strict-replay`, returning `admitted`; the isolated
+  branch remains `codex/audio-runtime-c18-public-strict-replay`, exactly
+  matching `prd.json.branchName`. The canonical board still identifies
+  `work-task-24`; C20 PR412 and C21 PR414 are now reviewed/merged dependencies.
+- Fetched `origin/main=b0acab1238d1aa6bf6bce5ca074451310c7eb039`; required
+  startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, original baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, planning main
+  `3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84`, accepted C21 merge
+  `a1156f0c0c6271643578cb37894026944df2a633`, and fetched main are all
+  ancestors. The merge into this isolated branch is `b8f1139aa7f8ef2807293634f80f125bdab22f9`.
+  Its only conflict was append-only `progress.txt`; the final ledger retains
+  both C18 and incoming C20/C21/C22 records. No host checkout or predecessor
+  worktree was reset or edited, and main introduced no C18-owned source diff.
+- Focused causal evidence on the merged source is green: room forced-ordering
+  and terminal negative controls pass `20/20` normal and race with
+  `CGO_ENABLED=0 -tags=nomicrophone`; replay service normal/race and replay
+  integration normal/race pass; the independent `tests/embedding` module
+  passes normal/race with `GOWORK=off`; C18 CLI replay subsets pass normal/race;
+  and the full deterministic clock package passes normal/race. The accumulated
+  `COUNT=1 bash scripts/test-session-ci-regressions.sh all` matrix passes all
+  normal, coverage and race modes, including strict mismatch, tool, duplex,
+  simulated-device and OpenAI composition regressions.
+- Source-quality evidence is green: `make wire-check` leaves generated files
+  unchanged, `make architecture-size-check` reports `182` packages, `1874`
+  files and `27509` functions, focused `go vet` passes, pinned Staticcheck
+  `2026.1` passes, pinned golangci-lint `2.9.0` reports `0 issues` in every
+  module, and `git diff --check` passes. The broad CLI race package also
+  retains one first failure outside the C18 lease:
+  `TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback` stopped after
+  `785760/810400` samples because the virtual output adapter closed; the
+  C18-owned replay subset passes race and no unrelated path was changed.
+- Fresh merged-source public artifacts are exact: independent consumer
+  `/tmp/audio-runtime-c18-strict-replay-b8f1139` SHA256
+  `b02f8b8a1b75913c5ace20036ef923b01046a96e071d2a8710892c7c1fd811e4`;
+  `yui` `/tmp/audio-runtime-c18-yui-b8f1139` SHA256
+  `00b9f057698b4fdec31250cea11f3626b619eafae1067ebcf294667eedd3ba44`.
+  `verify-public.py` passes external `2/2`, strict `5/5`, provider `7/7`,
+  interruption `4/4`, and ask `2/2` from source `b8f1139`; strict/provider
+  relative and absolute finalized bundles, missing/corrupt/path-escape PCM
+  mutations, wrong-cwd confinement, exact `3200`-byte provider PCM SHA256
+  `7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`, exact
+  interruption `3360`-byte PCM SHA256
+  `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`, and
+  healthy-tail SHA256
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf` all
+  pass. The external consumer reports `16` wire events/`1` tool call and
+  `Device execution: false`; the recorded executable-tool marker stays absent.
+- Exact reports are retained under the owned C18 evidence directory:
+  `verify-public-external-b8f1139.json` SHA256
+  `d22b4f5df488422b4cd7116b8b1df2733abe0d15675a349b1b5f72d565718c07`,
+  `verify-public-strict-b8f1139.json` SHA256
+  `8cccc5573a47f883cffeacc93ffa9896607486fbc3a243f17ea66a777d784314`,
+  `verify-public-provider-b8f1139.json` SHA256
+  `565ab7edf7f649b8b3aa19604ac44709dffd72e606971c35c47b8151f4b6b383`,
+  `verify-public-interruption-b8f1139.json` SHA256
+  `3f001474656c43c07b3b7c644cc903afdae47cb3e37bd02f82128a639a385717`,
+  and `verify-public-ask-b8f1139.json` SHA256
+  `d06aa3da912d2334d69cac7f4f158fa86e060b21b88a3394c4975f1cd98e3a4d`.
+- The latest prior CI rejection `34393224331` remains non-waived historical
+  evidence; its Family-A and duplex failures belonged to C20/C21 and their
+  accepted repairs are now in `origin/main`. No C18 CI status is claimed for
+  this new head. Next exact action: force-add these five exact reports, commit
+  this checkpoint, push the same branch, update PR #410 with the merge/source/
+  evidence map, and return `ACCEPTED` to script-owned current-head CI without
+  polling. Retain this task for any exact-head rejection and repair it with
+  `CONTINUE`.
