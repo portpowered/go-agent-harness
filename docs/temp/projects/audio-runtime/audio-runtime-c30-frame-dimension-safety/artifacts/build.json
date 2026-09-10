@@ -3,23 +3,27 @@
     "go",
     "build",
     "-trimpath",
+    "-ldflags=-X main.compiledSourceRevision=4eb31919a0ad6a138dc5c9f88bc5bd03697adbb5",
+    "-modfile",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-mod-psy31idw/go.mod",
     "-o",
-    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-build-ac6tpvxo/pcm16-frame-consumer",
     "."
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer",
   "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
-  "source_revision": "df08f066140aa16eef784cb862d124c129477c9a",
-  "duration_seconds": 0.083192,
+  "source_module": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/go-audio",
+  "source_revision": "4eb31919a0ad6a138dc5c9f88bc5bd03697adbb5",
+  "duration_seconds": 0.474119,
   "exit_code": 0,
   "stdout": "",
   "stderr": "",
   "fixture_sha256": {
     "consumer/go.mod": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060",
     "consumer/go.sum": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d",
-    "consumer/main.go": "89ecb9ca682062296ac3e571d5e21ea57f49c12f3c82b1f3329d722a759eff90"
+    "consumer/main.go": "347c3110dd1ccdc838fca16fbb986059cda21cd2c890bf0c6a41c092e12ddd38"
   },
   "executable": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
-  "executable_sha256": "721500a9a5375125e58aa68d4d969954713dd7f39089ded81ec2ab8c2610b653",
-  "executable_bytes": 2958146
+  "executable_sha256": "b4988bb5f7a8d7b0737a2cc2d833ac1624c72da9fdbdcd48d5ca352e3c80738d",
+  "executable_bytes": 2958242
 }

@@ -1,4 +1,78 @@
-# C30 verification checkpoint
+# C30 final repair verification
+
+Final candidate source revision: `4eb31919a0ad6a138dc5c9f88bc5bd03697adbb5`
+Branch: `codex/audio-runtime-c30-frame-dimension-safety`
+PR: `#422`
+Fetched `origin/main`: `1f82284abee0bd31a6680310444cea2e4c16ef00`
+
+The admitted task was reverified with
+`project-control.py verify-work --type task --name audio-runtime-c30-frame-dimension-safety`.
+The result was `status=admitted`, project `audio-runtime`, and the branch matches
+`prd.json.branchName` in this isolated worktree. Required ancestry remains present
+for startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and `origin/main`.
+
+## Repaired review findings
+
+- Restored `go-audio/pkg/audio/pcm16_framer.go` and its regression test exactly
+  from `origin/main`; removed the co-located duplicate framer definitions while
+  keeping the audio package at its immutable 49-file baseline.
+- Added checked PCM16 frame samples/bytes and byte-capacity arithmetic, with
+  exact sample alignment, platform-int bounds, and wide intermediate handling.
+  Mixer duration statistics now use the checked shared helper, including safe
+  handling for a rate of `1<<62` with two channels.
+- Added the tiny-frame/large-queue constructor overflow cases and the wide
+  rate/channel statistics regression before runtime setup.
+- The public consumer runner now validates the explicit checkout root, builds
+  against that root through a temporary modfile, embeds the source revision,
+  and refuses stale or mismatched build provenance, fixture hashes, or binary
+  hashes.
+
+## Final gate evidence
+
+```text
+focused PCM16 framer/frame/mixer tests: pass (52 tests across go-audio and room)
+go test ./go-audio/pkg/audio ./agent-cli/internal/room: pass (285 tests)
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room: pass (285 tests)
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: pass; no issues
+make lint: pass; pinned golangci-lint reported 0 issues in every module
+make staticcheck: pass
+make architecture-size-check: pass; 181 packages, 1864 files, 27365 functions
+make architecture-check: pass
+gofmt and git diff --check: pass
+```
+
+The stale pre-repair build record was rejected before the final rebuild, and an
+explicit different source root was honored (its build failed on the absent new
+API rather than silently using this checkout). No running host checkout was
+merged or reset.
+
+## Final bounded public consumer artifacts
+
+```text
+build: pass; source_revision=4eb31919a0ad6a138dc5c9f88bc5bd03697adbb5
+positive: pass; child exit_code=0; 21/21 cases passed; clean_shutdown=true
+result: runs/positive-_ld49dx5/result.json
+negative-control: pass; runner exit=0; child exit_code=1; clean_shutdown=true
+result: runs/negative-control-wcvcrc9t/result.json
+causal mismatch: actual_samples=480 mutated_expected=481
+```
+
+Final artifact hashes:
+
+```text
+build.json: 3412acd8e33597b95b104c5f34a707544015ab65faa27694af839bbe1714ec72
+artifact-manifest.json: f15b9be602b74839f952f7f328dba28ff137900a221cac4f241492d55fba211f
+positive result: 6757733139b3ecfa23cd9a82a5aa04c091be165b0209357de912f9aa6e17244a
+negative result: a85dbb16c2bc81999cfcf81f2cf4616a17476deefc2e49d3eb98cc3b77d6c1f4
+consumer executable: b4988bb5f7a8d7b0737a2cc2d833ac1624c72da9fdbdcd48d5ca352e3c80738d
+```
+
+The predecessor checkpoint below is retained for auditability; its older
+result paths are historical and are superseded by the final-head artifacts
+listed above.
+
+# Predecessor C30 verification checkpoint (retained)
 
 Candidate source revision: `df08f066140aa16eef784cb862d124c129477c9a`
 Branch: `codex/audio-runtime-c30-frame-dimension-safety`
