@@ -36,11 +36,13 @@ import (
 const fixtureJSON = `{"audio":{"sample_rate":16000,"samples_per_turn":64},"interruption":{"healthy_tail":[21,34,55,89,144,233,13,8]},"seed":"c23-overlap","tool_identities":[{"name":"lookup_alpha","result_prefix":"alpha"},{"name":"lookup_beta","result_prefix":"beta"}]}`
 
 const (
-	maxTraceEvents              = 8192
-	fixtureRate                 = 16000
-	fixtureSamples              = 64
-	maxRecordingTranscriptBytes = 4 << 20
-	maxRecordingTranscriptItems = 8192
+	maxTraceEvents = 8192
+	fixtureRate    = 16000
+	fixtureSamples = 64
+	// The finite matrix reaches 256 turns. Keep the transcript bound finite but
+	// leave headroom for the public recording wire's per-event JSON envelope.
+	maxRecordingTranscriptBytes = 32 << 20
+	maxRecordingTranscriptItems = 32768
 	maxRecordingAudioBytes      = 4 << 20
 	maxRecordingAudioItems      = 8192
 	maxRecordingSidecarBytes    = 256 << 10
