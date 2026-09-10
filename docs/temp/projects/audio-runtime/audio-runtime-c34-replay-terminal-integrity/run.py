@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import selectors
 import shutil
 import signal
 import struct
@@ -20,8 +21,13 @@ import wave
 
 
 BASELINE_REVISION = "1f82284abee0bd31a6680310444cea2e4c16ef00"
+STARTUP_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
+ARCHITECTURE_BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 SCHEMA_VERSION = 1
 CHILD_TIMEOUT_SECONDS = 30
+MAX_CAPTURE_BYTES = 1 << 20
+PIPE_READ_BYTES = 64 * 1024
+TERMINATION_GRACE_SECONDS = 5
 REPLAY_BUNDLE = Path(
     "docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe"
 ) / "evidence/runs/interruption/bundle"
@@ -63,6 +69,77 @@ def git_output(source_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def git_probe(source_root: Path, *args: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(source_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    return result.returncode == 0
+
+
+def process_group_alive(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def signal_process_group(process_group_id: int, signal_number: signal.Signals) -> None:
+    try:
+        os.killpg(process_group_id, signal_number)
+    except ProcessLookupError:
+        pass
+
+
+def read_process_pipes(
+    process: subprocess.Popen[bytes],
+    selector: selectors.BaseSelector,
+    buffers: dict[str, bytearray],
+    truncated: dict[str, bool],
+    deadline: float,
+) -> bool:
+    while True:
+        if process.poll() is not None and not selector.get_map():
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        if selector.get_map():
+            for key, _ in selector.select(min(remaining, 0.1)):
+                stream = key.fileobj
+                label = str(key.data)
+                while True:
+                    try:
+                        data = os.read(stream.fileno(), PIPE_READ_BYTES)
+                    except BlockingIOError:
+                        break
+                    except OSError:
+                        data = b""
+                    if not data:
+                        try:
+                            selector.unregister(stream)
+                        except (KeyError, ValueError):
+                            pass
+                        stream.close()
+                        break
+                    available = MAX_CAPTURE_BYTES - len(buffers[label])
+                    if available > 0:
+                        buffers[label].extend(data[:available])
+                    if len(data) > max(available, 0):
+                        truncated[label] = True
+        else:
+            try:
+                process.wait(timeout=min(remaining, 0.1))
+            except subprocess.TimeoutExpired:
+                pass
+
+
 def run_process(command: list[str], cwd: Path, timeout_seconds: int, *, env: dict[str, str] | None = None) -> dict[str, object]:
     started = time.monotonic()
     process = subprocess.Popen(
@@ -72,31 +149,87 @@ def run_process(command: list[str], cwd: Path, timeout_seconds: int, *, env: dic
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
+        text=False,
         start_new_session=True,
     )
-    timed_out = False
+    process_group_id = process.pid
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    truncated = {"stdout": False, "stderr": False}
+    timed_out = not read_process_pipes(
+        process,
+        selector,
+        buffers,
+        truncated,
+        time.monotonic() + timeout_seconds,
+    )
+    terminated = False
+    reap_timed_out = False
     try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            stdout, stderr = process.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
+        if timed_out:
+            terminated = True
+            signal_process_group(process_group_id, signal.SIGTERM)
+            if not read_process_pipes(
+                process,
+                selector,
+                buffers,
+                truncated,
+                time.monotonic() + TERMINATION_GRACE_SECONDS,
+            ):
+                signal_process_group(process_group_id, signal.SIGKILL)
+                if not read_process_pipes(
+                    process,
+                    selector,
+                    buffers,
+                    truncated,
+                    time.monotonic() + TERMINATION_GRACE_SECONDS,
+                ):
+                    reap_timed_out = True
+        if process.poll() is None:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            stdout, stderr = process.communicate()
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                reap_timed_out = True
+                process.kill()
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    reap_timed_out = True
+    finally:
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                try:
+                    selector.unregister(stream)
+                except (KeyError, ValueError):
+                    pass
+                stream.close()
+        selector.close()
+
+    if process_group_alive(process_group_id):
+        signal_process_group(process_group_id, signal.SIGKILL)
+        deadline = time.monotonic() + TERMINATION_GRACE_SECONDS
+        while process_group_alive(process_group_id) and time.monotonic() < deadline:
+            time.sleep(0.05)
+    descendants_reaped = not process_group_alive(process_group_id)
+    stdout = bytes(buffers["stdout"]).decode("utf-8", errors="replace")
+    stderr = bytes(buffers["stderr"]).decode("utf-8", errors="replace")
+    if truncated["stdout"]:
+        stdout += f"\n[stdout truncated at {MAX_CAPTURE_BYTES} bytes]\n"
+    if truncated["stderr"]:
+        stderr += f"\n[stderr truncated at {MAX_CAPTURE_BYTES} bytes]\n"
     return {
         "command": command,
         "cwd": str(cwd),
         "exit_code": process.returncode,
         "timed_out": timed_out,
+        "terminated": terminated,
+        "reap_timed_out": reap_timed_out,
+        "process_group_id": process_group_id,
+        "descendants_reaped": descendants_reaped,
+        "stdout_truncated": truncated["stdout"],
+        "stderr_truncated": truncated["stderr"],
         "duration_seconds": round(time.monotonic() - started, 6),
         "stdout": stdout,
         "stderr": stderr,
@@ -112,6 +245,13 @@ def save_process(record: dict[str, object], directory: Path, label: str) -> dict
     saved["stdout_path"] = str(stdout_path)
     saved["stderr_path"] = str(stderr_path)
     return saved
+
+
+def assert_process_integrity(record: dict[str, object], label: str) -> None:
+    require(record["descendants_reaped"] is True, f"{label} left a live process group: {record}")
+    require(record["reap_timed_out"] is False, f"{label} was not reaped within the bounded cleanup window: {record}")
+    require(record["stdout_truncated"] is False, f"{label} stdout exceeded the evidence cap: {record}")
+    require(record["stderr_truncated"] is False, f"{label} stderr exceeded the evidence cap: {record}")
 
 
 def require(condition: bool, message: str) -> None:
@@ -184,22 +324,32 @@ def make_fixtures(run_directory: Path) -> tuple[Path, dict[str, dict[str, object
 
     valid_audio = root / "valid-audio-runtime"
     write_wav(valid_audio / "microphone-pre-gate.wav", samples)
+    valid_audio_events = [
+        event(base, "recording_started"),
+        event(
+            base,
+            "audio",
+            tap="microphone_pre_gate",
+            sample_rate=16000,
+            start_sample=0,
+            sample_count=len(samples),
+            pcm_sha256=pcm_hash,
+            duration_ns=250_000,
+        ),
+        event(base, "runtime", 1_000_000, runtime_kind="fixture"),
+        event(base, "recording_closed", 2_000_000, clean=True),
+    ]
+    write_timeline(valid_audio, valid_audio_events)
+
+    mutated_valid_audio = root / "mutated-valid-audio-after-close"
+    mutated_valid_audio.mkdir()
+    shutil.copy2(valid_audio / "microphone-pre-gate.wav", mutated_valid_audio / "microphone-pre-gate.wav")
     write_timeline(
-        valid_audio,
+        mutated_valid_audio,
         [
-            event(base, "recording_started"),
-            event(
-                base,
-                "audio",
-                tap="microphone_pre_gate",
-                sample_rate=16000,
-                start_sample=0,
-                sample_count=len(samples),
-                pcm_sha256=pcm_hash,
-                duration_ns=250_000,
-            ),
-            event(base, "runtime", 1_000_000, runtime_kind="fixture"),
-            event(base, "recording_closed", 2_000_000, clean=True),
+            *[dict(value) for value in valid_audio_events],
+            event(base, "runtime", 2_000_000, runtime_kind="post-close-runtime"),
+            event(base, "recording_closed", 3_000_000, clean=True),
         ],
     )
 
@@ -294,6 +444,7 @@ def build_consumer(source_root: Path, run_directory: Path) -> tuple[Path, dict[s
     record = run_process(command, build_root, 60, env=environment)
     record["environment_controls"] = {"GOWORK": "off", "source_root": str(source_root)}
     record = save_process(record, run_directory, "consumer-build")
+    assert_process_integrity(record, "consumer build")
     require(record["exit_code"] == 0 and not record["timed_out"], f"consumer build failed: {record}")
     return binary, {
         "path": str(binary),
@@ -319,6 +470,7 @@ def parse_consumer_output(record: dict[str, object]) -> dict[str, object] | None
 def run_consumer(binary: Path, fixture: Path, run_directory: Path, label: str) -> dict[str, object]:
     record = run_process([str(binary), str(fixture)], run_directory, CHILD_TIMEOUT_SECONDS)
     saved = save_process(record, run_directory, label)
+    assert_process_integrity(saved, label)
     saved["fixture"] = str(fixture)
     saved["fixture_sha256"] = fixture_hashes(fixture)
     saved["consumer"] = str(binary)
@@ -374,7 +526,54 @@ def verify_consumer(binary: Path, fixtures: Path, run_directory: Path, mode: str
         require(not successful(record), f"malformed fixture {name} unexpectedly succeeded: {record}")
         require(isinstance(value, dict) and value.get("accepted") is not True and value.get("replay_exposed") is False, f"malformed fixture {name} exposed replay: {value}")
         require(value.get("err_incomplete") is True, f"malformed fixture {name} did not return ErrIncomplete: {value}")
-    return {"mode": mode, "cases": records, "negative_control": negative_control}
+
+    negative_record = None
+    if negative_control:
+        negative_record = run_consumer(
+            binary,
+            fixtures / "mutated-valid-audio-after-close",
+            run_directory,
+            "consumer-negative-control-mutated-valid-audio",
+        )
+        value = negative_record["json"]
+        require(negative_record["exit_code"] != 0 and not negative_record["timed_out"], f"mutated valid audio unexpectedly succeeded: {negative_record}")
+        require(
+            isinstance(value, dict)
+            and value.get("accepted") is not True
+            and value.get("replay_exposed") is False
+            and value.get("err_incomplete") is True,
+            f"mutated valid audio negative control was not rejected before exposure: {value}",
+        )
+    return {"mode": mode, "cases": records, "negative_control": negative_record}
+
+
+def runtime_case(yui: Path, bundle: Path, run_directory: Path, label: str, *, audio_output: Path | None = None) -> dict[str, object]:
+    config = run_directory / f"config-{label}"
+    config.mkdir()
+    command = [str(yui), "-C", str(config), "session", "replay", str(bundle)]
+    if audio_output is not None:
+        command = [
+            str(yui),
+            "-C",
+            str(config),
+            "session",
+            "--replay",
+            str(bundle),
+            "--audio-out",
+            str(audio_output),
+            "--max-duration",
+            "60s",
+        ]
+    record = run_process(command, run_directory, 60)
+    saved = save_process(record, run_directory, label)
+    assert_process_integrity(saved, label)
+    return saved
+
+
+def require_runtime_rejection(record: dict[str, object], label: str, markers: tuple[str, ...]) -> None:
+    require(record["exit_code"] != 0 and not record["timed_out"], f"{label} unexpectedly succeeded or timed out: {record}")
+    output = f"{record['stdout']}\n{record['stderr']}".lower()
+    require(any(marker in output for marker in markers), f"{label} omitted its causal diagnostic: {record}")
 
 
 def runtime_regression(yui: Path, run_directory: Path) -> dict[str, object]:
@@ -383,17 +582,11 @@ def runtime_regression(yui: Path, run_directory: Path) -> dict[str, object]:
     require(source_bundle.is_dir(), f"preserved software replay bundle missing: {source_bundle}")
     bundle = run_directory / "runtime-bundle"
     shutil.copytree(source_bundle, bundle)
-    config = run_directory / "config"
-    config.mkdir()
     output = run_directory / "rendered-output.pcm"
-    commands = [
-        [str(yui), "-C", str(config), "session", "replay", str(bundle)],
-        [str(yui), "-C", str(config), "session", "--replay", str(bundle), "--audio-out", str(output), "--max-duration", "60s"],
+    records = [
+        runtime_case(yui, bundle, run_directory, "runtime-regression-1"),
+        runtime_case(yui, bundle, run_directory, "runtime-regression-2", audio_output=output),
     ]
-    records = []
-    for index, command in enumerate(commands, start=1):
-        record = run_process(command, run_directory, 60)
-        records.append(save_process(record, run_directory, f"runtime-regression-{index}"))
     directory_output = f"{records[0]['stdout']}\n{records[0]['stderr']}"
     flag_output = f"{records[1]['stdout']}\n{records[1]['stderr']}"
     require(records[0]["exit_code"] == 0 and "Replay verified: 15 wire events, 0 tool calls" in directory_output, f"strict directory replay failed: {records[0]}")
@@ -403,6 +596,23 @@ def runtime_regression(yui: Path, run_directory: Path) -> dict[str, object]:
     require(output.is_file(), f"strict flag replay did not write {output}")
     pcm = {"bytes": output.stat().st_size, "sha256": sha256(output)}
     require(tuple((pcm["bytes"], pcm["sha256"])) == EXPECTED_RENDERED_PCM, f"strict replay PCM changed: {pcm}")
+
+    missing_timeline = run_directory / "runtime-bundle-missing-timeline"
+    shutil.copytree(source_bundle, missing_timeline)
+    missing_timeline_path = missing_timeline / "audio-trace/timeline.jsonl"
+    missing_timeline_path.unlink()
+    missing_record = runtime_case(yui, missing_timeline, run_directory, "runtime-regression-missing-timeline")
+    require_runtime_rejection(missing_record, "missing timeline control", ("timeline", "not found", "no such file"))
+
+    corrupted_trace = run_directory / "runtime-bundle-corrupt-audio"
+    shutil.copytree(source_bundle, corrupted_trace)
+    corrupted_audio = corrupted_trace / "audio-trace/speaker-enqueued.wav"
+    corrupted_bytes = bytearray(corrupted_audio.read_bytes())
+    require(len(corrupted_bytes) > 44, f"corruption control WAV is unexpectedly short: {corrupted_audio}")
+    corrupted_bytes[-1] ^= 1
+    corrupted_audio.write_bytes(corrupted_bytes)
+    corrupt_record = runtime_case(yui, corrupted_trace, run_directory, "runtime-regression-corrupt-audio")
+    require_runtime_rejection(corrupt_record, "corrupt audio control", ("integrity", "pcm", "audio"))
     return {
         "yui": str(yui),
         "yui_sha256": sha256(yui),
@@ -411,6 +621,19 @@ def runtime_regression(yui: Path, run_directory: Path) -> dict[str, object]:
         "private_bundle": str(bundle),
         "commands": records,
         "rendered_pcm": pcm,
+        "negative_controls": {
+            "missing_timeline": {
+                "bundle": str(missing_timeline),
+                "fixture_sha256": fixture_hashes(missing_timeline),
+                "command": missing_record,
+            },
+            "corrupt_audio": {
+                "bundle": str(corrupted_trace),
+                "fixture_sha256": fixture_hashes(corrupted_trace),
+                "mutated_path": str(corrupted_audio),
+                "command": corrupt_record,
+            },
+        },
     }
 
 
@@ -440,6 +663,10 @@ def main() -> int:
         require((source_root / "go-audio/pkg/recording/replay.go").is_file(), f"invalid source root: {source_root}")
         report["source_revision"] = git_output(source_root, "rev-parse", "HEAD")
         report["source_dirty"] = git_output(source_root, "status", "--short")
+        report["origin_main_revision"] = git_output(source_root, "rev-parse", "origin/main") if git_probe(source_root, "rev-parse", "origin/main") else None
+        report["contains_origin_main"] = git_probe(source_root, "merge-base", "--is-ancestor", "origin/main", "HEAD")
+        report["contains_startup_revision"] = git_probe(source_root, "merge-base", "--is-ancestor", STARTUP_REVISION, "HEAD")
+        report["contains_architecture_baseline_revision"] = git_probe(source_root, "merge-base", "--is-ancestor", ARCHITECTURE_BASELINE_REVISION, "HEAD")
         if args.runtime_regression:
             require(args.yui is not None, "--runtime-regression requires --yui")
             report["runtime_regression"] = runtime_regression(args.yui.resolve(), run_directory)
