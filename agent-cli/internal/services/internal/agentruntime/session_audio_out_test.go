@@ -485,6 +485,46 @@ func TestRunSessionWithAudioOut_PreservesSinkWriteError(t *testing.T) {
 		t.Fatalf("write error = %v, want underlying error", err)
 	}
 }
+
+func TestRunSessionWithAudioOut_PreservesSessionCloseErrorAfterMalformedDelta(t *testing.T) {
+	closeErr := errors.New("provider close failed after malformed audio")
+	inf := &sessionAudioCloseErrorInferencer{
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("not PCM audio")},
+		},
+		closeErr: closeErr,
+	}
+
+	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		ReplayPath:        "synthetic.json",
+		SessionInferencer: inf,
+	}, "-")
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("malformed audio error = %v, want provider close error", err)
+	}
+}
+
+func TestRunSessionWithAudioOut_PreservesSessionCloseErrorAfterSinkWriteFailure(t *testing.T) {
+	writeErr := errors.New("stdout write failed")
+	closeErr := errors.New("provider close failed after sink write")
+	inf := &sessionAudioCloseErrorInferencer{
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sessionAudioFrame(700)))},
+		},
+		closeErr: closeErr,
+	}
+
+	err := RunSessionWithAudioOut(context.Background(), sessionAudioErrorWriter{err: writeErr}, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		ReplayPath:        "synthetic.json",
+		SessionInferencer: inf,
+	}, "-")
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("sink write error = %v, want underlying error", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("sink write error = %v, want provider close error", err)
+	}
+}
 func sessionAudioFrame(seed int16) []int16 {
 	frame := make([]int16, audio.FrameSize)
 	for index := range frame {
@@ -602,6 +642,35 @@ func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []by
 type sessionAudioErrorWriter struct{ err error }
 
 func (w sessionAudioErrorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+type sessionAudioCloseErrorInferencer struct {
+	events   []messages.StreamMessage
+	closeErr error
+}
+
+func (i *sessionAudioCloseErrorInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := &sessionAudioCloseErrorSession{scriptedSession: newScriptedSession(), closeErr: i.closeErr}
+	go func() {
+		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeSessionOpen,
+			Value: messages.NewSessionOpenValue("close-error-session", "session"),
+		})
+		for _, event := range i.events {
+			session.recv.Write(ctx, event)
+		}
+	}()
+	return session, nil
+}
+
+type sessionAudioCloseErrorSession struct {
+	*scriptedSession
+	closeErr error
+}
+
+func (s *sessionAudioCloseErrorSession) Close() error {
+	_ = s.scriptedSession.Close()
+	return s.closeErr
+}
 
 type growingSessionAudioWriter struct {
 	mu           sync.Mutex

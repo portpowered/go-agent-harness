@@ -550,8 +550,13 @@ func (i *sessionAudioOutputInferencer) recordErr(err error) {
 
 func (i *sessionAudioOutputInferencer) err() error {
 	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.lastErr
+	lastErr := i.lastErr
+	connected := i.connected
+	i.mu.Unlock()
+	if connected == nil {
+		return lastErr
+	}
+	return errors.Join(lastErr, connected.Close())
 }
 
 type sessionAudioOutputSession struct {
