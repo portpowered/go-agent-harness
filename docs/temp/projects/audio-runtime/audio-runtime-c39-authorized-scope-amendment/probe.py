@@ -482,23 +482,24 @@ def _input_provenance(
         path = _source_for(relative)
         reviewed_inputs[relative] = {"path": str(path), "sha256": _sha256(path)}
     replay_inputs = []
-    for label, (fixture, config) in zip(
-        ("audio-tool", "interruption"), replay_pairs, strict=True
-    ):
-        fixture_path = _regular_file(fixture, f"{label} replay fixture")
-        replay_inputs.append(
-            {
-                "label": label,
-                "fixture": {
-                    "path": str(fixture_path),
-                    "sha256": _sha256(fixture_path),
-                },
-                "config": {
-                    "path": str(_regular_directory(config, f"{label} replay config")),
-                    "files": _config_hashes(config),
-                },
-            }
-        )
+    if replay_pairs:
+        for label, (fixture, config) in zip(
+            ("audio-tool", "interruption"), replay_pairs, strict=True
+        ):
+            fixture_path = _regular_file(fixture, f"{label} replay fixture")
+            replay_inputs.append(
+                {
+                    "label": label,
+                    "fixture": {
+                        "path": str(fixture_path),
+                        "sha256": _sha256(fixture_path),
+                    },
+                    "config": {
+                        "path": str(_regular_directory(config, f"{label} replay config")),
+                        "files": _config_hashes(config),
+                    },
+                }
+            )
     yui_path = _regular_file(yui, "yui")
     return {
         "sourceRevision": source_revision,

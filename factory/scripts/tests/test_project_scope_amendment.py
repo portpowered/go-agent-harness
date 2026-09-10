@@ -622,6 +622,11 @@ class ScopeAmendmentTests(unittest.TestCase):
                 )
 
     def test_probe_bounded_output_and_failure_evidence(self):
+        yui = Path(self.temp_dir.name) / "controller-only-yui"
+        yui.write_bytes(b"controller-only executable placeholder")
+        provenance = PROBE._input_provenance("c39-test-source", yui, [])
+        self.assertEqual(provenance["replayInputs"], [])
+
         result = PROBE.run_bounded(
             [
                 sys.executable,
