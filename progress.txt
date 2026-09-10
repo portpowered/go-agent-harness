@@ -1621,3 +1621,55 @@ C18 accepted-main integration and exact-source delivery checkpoint 2026-09-09
   evidence map, and return `ACCEPTED` to script-owned current-head CI without
   polling. Retain this task for any exact-head rejection and repair it with
   `CONTINUE`.
+
+C18 direct cancellation-cause repair and final-source handoff checkpoint 2026-09-10
+
+- Admission was reverified with `python3 factory/scripts/project-control.py
+  verify-work --type task --name audio-runtime-c18-public-strict-replay`,
+  returning `{"status": "admitted", "project": "audio-runtime", "name":
+  "audio-runtime-c18-public-strict-replay"}` for `work-task-24`. The isolated
+  branch is `codex/audio-runtime-c18-public-strict-replay`, exactly matching
+  `prd.json.branchName`; the worktree and predecessor checkpoints were
+  preserved, and the running host checkout was not touched.
+- Fetched `origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840` and integrated
+  it with merge `f53b4599`; the reviewed C32 inputs are present and the merge
+  had no conflict. Required prior C18/main ancestry remains preserved. The
+  source repair is committed as `9ea40269` plus the size-budget follow-up
+  `fdabf6b9f3007b66d3aa4d1c348e5d8a0b08b49e`.
+- The latest canonical Review156 finding was reproduced before the fix by the
+  new `TestDeterministicContextParentCancellationReportsCauseBeforeDone`: after
+  parent cancellation, direct `ctx.Err()` returned nil before `Done()` was
+  observed. `deadlineContext.Err()` now invokes its existing nonblocking
+  parent-propagation path before reading the stored error; `Cause()` therefore
+  preserves the parent cause without changing first-terminal-wins behavior.
+  The repair stays within the immutable 547-line clock budget; no baseline or
+  policy was changed.
+- Causal controls pass: the new test passes `100/100` normal and `50/50` race;
+  the full clock package passes `23` normal and `23` race. Accumulated C18
+  regressions pass: runtime replay `84` tests across four packages normal and
+  race; the separate `GOWORK=off` embedding consumer normal and race; and the
+  owned CLI replay/integrity subset `13` tests in two packages normal and race.
+  `make architecture-size-check` passes at `182` packages, `1876` files and
+  `27550` functions; Wire regeneration is unchanged, focused vet passes and
+  `git diff --check` is clean.
+- Fresh public artifacts were built from exact source `fdabf6b9f3007b66d3aa4d1c348e5d8a0b08b49e`:
+  yui `/tmp/audio-runtime-c18-yui-fdabf6b` SHA256
+  `a8397c7b9159eac60d0448615d48cdcd1ebf0cc748121acccc3ec357a8a0b70b` and
+  independent consumer `/tmp/audio-runtime-c18-strict-replay-fdabf6b` SHA256
+  `59b5ae6735fb1d8ccedaee5781b9075ddac784e88e38bc106972d3dab54af822`.
+  Fresh bounded `verify-public.py` reports pass external `2/2`, strict `5/5`,
+  provider `7/7`, interruption `4/4`, and ask `2/2`; every report records
+  source revision `fdabf6b9f3007b66d3aa4d1c348e5d8a0b08b49e` and the matching
+  executable hash. Report hashes are external
+  `48a48af85781a84158575d92b460349358d8c9c188f59234fbf01078e111c784`, strict
+  `f56519806c82aa76d6d52c81ba9a44eafc291bb5c9409e91f329a78d768145cb`, provider
+  `ccb3291cbc0f73a90b7e610de1631377c83c8cf31616e61f3b2bf4bfa8cf013f`,
+  interruption `7b3fd3074990fd1c7517fe72afe62264fbaef4576cce7a5f20982bed5517426b`,
+  and ask `bd22a359f7190f66b41281143a798b8d2dd6945e3174d3c3c96a68ef47f0368f`.
+- The five reports are evidence-only descendants of `fdabf6b9`: they do not
+  change executable inputs and are force-added under the owned C18 evidence
+  directory. No script CI was polled or claimed green; independent review,
+  guarded merge and the exact-artifact post-merge vertical probe remain
+  external. Next action: commit/push this same task, update PR410 with the
+  exact source/merge/evidence map, return `ACCEPTED` to the script CI gate
+  without polling, and retain ownership for any exact-head rejection.
