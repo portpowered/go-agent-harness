@@ -381,7 +381,7 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 		t.Fatalf("interrupted PCM = %d bytes, want both accepted deltas (%d bytes)", len(got), len(want))
 	}
 }
-func TestSessionAudioOutput_RetainsQueuedAndDelayedDeltaAcrossCancellationBarrier(t *testing.T) {
+func TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier(t *testing.T) {
 	for index, cancelBeforeConnect := range []bool{false, true} {
 		t.Run([]string{"delayed-delta", "canceled-connect"}[index], func(t *testing.T) { runSessionAudioCancellationBarrier(t, cancelBeforeConnect) })
 	}
