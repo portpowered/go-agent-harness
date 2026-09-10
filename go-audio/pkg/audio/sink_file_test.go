@@ -387,20 +387,15 @@ type zeroWriter struct{}
 func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
 
 type invalidCountWriter struct {
-	delta int
 	count int
 	err   error
 }
 
 func (w invalidCountWriter) Write(data []byte) (int, error) {
-	if w.count != 0 {
-		return w.count, w.err
+	if w.count == 0 {
+		w.count = len(data) + 1
 	}
-	delta := w.delta
-	if delta == 0 {
-		delta = 1
-	}
-	return len(data) + delta, w.err
+	return w.count, w.err
 }
 
 type closeError struct{ err error }
@@ -429,8 +424,8 @@ func TestFileSinkBoundedRawFailureControls(t *testing.T) {
 		{"later chunk", largeSamples, &shortWriter{max: rawSinkScratchBytes, err: chunkErr, failAfter: true}, chunkErr, nil, rawSinkScratchBytes, 2, false},
 		{"zero count", shortSamples, zeroWriter{}, io.ErrShortWrite, nil, 0, 0, false},
 		{"negative count", shortSamples, invalidCountWriter{count: -1}, io.ErrShortWrite, nil, 0, 0, false},
-		{"too-large count", shortSamples, invalidCountWriter{delta: 1}, io.ErrShortWrite, nil, 0, 0, false},
-		{"invalid count precedes error", shortSamples, invalidCountWriter{delta: 1, err: partialErr}, io.ErrShortWrite, partialErr, 0, 0, false},
+		{"too-large count", shortSamples, invalidCountWriter{}, io.ErrShortWrite, nil, 0, 0, false},
+		{"invalid count precedes error", shortSamples, invalidCountWriter{err: partialErr}, io.ErrShortWrite, partialErr, 0, 0, false},
 		{"cancellation", largeSamples, &shortWriter{max: rawSinkScratchBytes, cancel: cancel}, context.Canceled, nil, rawSinkScratchBytes, 1, false},
 	} {
 		t.Run(test.name, func(t *testing.T) { assertBoundedRawFailure(t, cancelCtx, test) })
