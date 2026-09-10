@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -26,6 +28,7 @@ var errLifecycleHandleClosed = errors.New("room-media fake live handle is closed
 type Request struct {
 	Mode      string `json:"mode"`
 	OutputDir string `json:"output_dir"`
+	Mutation  string `json:"mutation,omitempty"`
 }
 
 // Report is the machine-readable candidate evidence emitted by the child.
@@ -49,6 +52,7 @@ type Report struct {
 	ReplayRejectReason string                         `json:"replay_reject_reason,omitempty"`
 	Room               RoomObservation                `json:"room,omitempty"`
 	Cancellation       *CancellationReport            `json:"cancellation,omitempty"`
+	RawEvents          []RawEvent                     `json:"raw_events,omitempty"`
 }
 
 type InputObservation struct {
@@ -71,21 +75,45 @@ type AdmissionReport struct {
 }
 
 type PlaybackReport struct {
-	Domain            string  `json:"domain"`
-	Admitted          []int16 `json:"admitted"`
-	Consumed          []int16 `json:"consumed"`
-	Underflow         []int16 `json:"underflow"`
-	DiscardedStale    []int16 `json:"discarded_stale"`
-	BeforeRender      uint64  `json:"rendered_before_callback"`
-	CallbackCount     uint64  `json:"callback_count"`
-	RenderedSamples   uint64  `json:"rendered_samples"`
-	UnderflowSamples  uint64  `json:"underflow_samples"`
-	DiscardedSamples  uint64  `json:"discarded_samples"`
-	AdmittedSamples   uint64  `json:"admitted_samples"`
-	ConsumedSamples   uint64  `json:"consumed_samples"`
-	ZeroFilledSamples uint64  `json:"zero_filled_samples"`
-	PhysicalDevice    bool    `json:"physical_device"`
-	CapabilityGap     string  `json:"capability_gap,omitempty"`
+	Domain            string             `json:"domain"`
+	Admitted          []int16            `json:"admitted"`
+	Consumed          []int16            `json:"consumed"`
+	Underflow         []int16            `json:"underflow"`
+	DiscardedStale    []int16            `json:"discarded_stale"`
+	BeforeRender      uint64             `json:"rendered_before_callback"`
+	CallbackCount     uint64             `json:"callback_count"`
+	RenderedSamples   uint64             `json:"rendered_samples"`
+	UnderflowSamples  uint64             `json:"underflow_samples"`
+	DiscardedSamples  uint64             `json:"discarded_samples"`
+	AdmittedSamples   uint64             `json:"admitted_samples"`
+	ConsumedSamples   uint64             `json:"consumed_samples"`
+	ZeroFilledSamples uint64             `json:"zero_filled_samples"`
+	PhysicalDevice    bool               `json:"physical_device"`
+	CapabilityGap     string             `json:"capability_gap,omitempty"`
+	Observed          []FrameObservation `json:"observed,omitempty"`
+}
+
+// FrameObservation is an exact copy of one frame crossing the public media
+// boundary. Summary fields are derived from these observations.
+type FrameObservation struct {
+	Epoch    uint64  `json:"epoch"`
+	Sequence uint64  `json:"sequence"`
+	Samples  []int16 `json:"samples"`
+	End      bool    `json:"end_of_response"`
+}
+
+// RawEvent preserves the observed order of source audio, peer output,
+// software playback input, and terminal events. A nonmatching frame is never
+// silently discarded from this ledger.
+type RawEvent struct {
+	Kind          string  `json:"kind"`
+	Participant   string  `json:"participant"`
+	Target        string  `json:"target,omitempty"`
+	Epoch         uint64  `json:"epoch,omitempty"`
+	Sequence      uint64  `json:"sequence,omitempty"`
+	Samples       []int16 `json:"samples,omitempty"`
+	End           bool    `json:"end_of_response,omitempty"`
+	AfterTerminal bool    `json:"after_terminal,omitempty"`
 }
 
 type TerminalObservation struct {
@@ -123,37 +151,59 @@ type RoomObservation struct {
 }
 
 type CancellationReport struct {
-	Mode             string `json:"mode"`
-	StartError       string `json:"start_error,omitempty"`
-	WaitError        string `json:"wait_error,omitempty"`
-	FirstCloseError  string `json:"first_close_error,omitempty"`
-	SecondCloseError string `json:"second_close_error,omitempty"`
-	Joined           bool   `json:"joined"`
+	Mode             string            `json:"mode"`
+	StartError       string            `json:"start_error,omitempty"`
+	WaitError        string            `json:"wait_error,omitempty"`
+	FirstCloseError  string            `json:"first_close_error,omitempty"`
+	SecondCloseError string            `json:"second_close_error,omitempty"`
+	RoomTermination  string            `json:"room_termination,omitempty"`
+	RoomError        string            `json:"room_error,omitempty"`
+	Participants     map[string]string `json:"participants,omitempty"`
+	Opened           int               `json:"opened"`
+	Started          int               `json:"started"`
+	Waited           int               `json:"waited"`
+	Closed           int               `json:"closed"`
+	Joined           bool              `json:"joined"`
+	RunReturned      bool              `json:"run_returned"`
+	RepeatedCloseOK  bool              `json:"repeated_close_ok"`
 }
 
 type coordinator struct {
-	mu           sync.Mutex
-	outputs      map[string][]int16
-	playback     []int16
-	handles      map[string]*fakeHandle
-	done         chan struct{}
-	healthyReady chan struct{}
-	healthyCount int
-	readyOnce    sync.Once
-	finished     bool
-	finish       sync.Once
+	mu             sync.Mutex
+	outputs        map[string][]int16
+	playback       []int16
+	inputs         []InputObservation
+	rawEvents      []RawEvent
+	terminalSeen   map[string]bool
+	outputFrames   map[string]int
+	outputEnded    map[string]bool
+	playbackFrames int
+	handles        map[string]*fakeHandle
+	done           chan struct{}
+	healthyReady   chan struct{}
+	startedReady   chan struct{}
+	healthyCount   int
+	startedCount   int
+	readyOnce      sync.Once
+	startedOnce    sync.Once
+	finished       bool
+	finish         sync.Once
 }
 
 func newCoordinator() *coordinator {
 	return &coordinator{
 		outputs:      make(map[string][]int16),
+		terminalSeen: make(map[string]bool),
+		outputFrames: make(map[string]int),
+		outputEnded:  make(map[string]bool),
 		handles:      make(map[string]*fakeHandle),
 		done:         make(chan struct{}),
 		healthyReady: make(chan struct{}),
+		startedReady: make(chan struct{}),
 	}
 }
 
-func (c *coordinator) awaitHealthyInput() {
+func (c *coordinator) awaitHealthyInput(ctx context.Context) error {
 	c.mu.Lock()
 	c.healthyCount++
 	if c.healthyCount == 2 {
@@ -161,7 +211,12 @@ func (c *coordinator) awaitHealthyInput() {
 	}
 	ready := c.healthyReady
 	c.mu.Unlock()
-	<-ready
+	select {
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *coordinator) inputsReady() bool {
@@ -173,31 +228,80 @@ func (c *coordinator) inputsReady() bool {
 	}
 }
 
+func (c *coordinator) noteStarted() {
+	c.mu.Lock()
+	c.startedCount++
+	if c.startedCount >= 2 {
+		c.startedOnce.Do(func() { close(c.startedReady) })
+	}
+	c.mu.Unlock()
+}
+
+func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) {
+	c.mu.Lock()
+	samples := append([]int16(nil), frame.Samples...)
+	c.inputs = append(c.inputs, InputObservation{
+		Participant: participant, Epoch: frame.Epoch, Sequence: frame.Sequence,
+		Samples: samples, End: frame.EndOfResponse,
+	})
+	c.rawEvents = append(c.rawEvents, RawEvent{
+		Kind: "source_audio", Participant: participant, Epoch: frame.Epoch,
+		Sequence: frame.Sequence, Samples: samples, End: frame.EndOfResponse,
+		AfterTerminal: c.terminalSeen[participant],
+	})
+	c.mu.Unlock()
+}
+
 func (c *coordinator) register(handle *fakeHandle) {
 	c.mu.Lock()
 	c.handles[handle.id] = handle
 	c.mu.Unlock()
 }
 
-func (c *coordinator) recordOutput(target string, samples []int16) error {
+func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	c.mu.Lock()
+	if c.terminalSeen[target] {
+		c.mu.Unlock()
+		return context.Canceled
+	}
+	copySamples := append([]int16(nil), frame.Samples...)
+	c.rawEvents = append(c.rawEvents, RawEvent{
+		Kind: "peer_output", Participant: target, Target: target,
+		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
+		End: frame.EndOfResponse, AfterTerminal: c.terminalSeen[target],
+	})
 	if c.finished {
 		c.mu.Unlock()
 		return context.Canceled
 	}
-	c.outputs[target] = append(c.outputs[target], samples...)
+	if frame.EndOfResponse {
+		c.outputEnded[target] = true
+	}
+	if len(frame.Samples) > 0 && !allZero(frame.Samples) {
+		c.outputs[target] = append(c.outputs[target], frame.Samples...)
+		c.outputFrames[target]++
+	}
 	c.mu.Unlock()
 	c.maybeFinish()
 	return nil
 }
 
-func (c *coordinator) recordPlayback(samples []int16) error {
+func (c *coordinator) recordPlayback(frame audio.PCMFrame) error {
 	c.mu.Lock()
+	copySamples := append([]int16(nil), frame.Samples...)
+	c.rawEvents = append(c.rawEvents, RawEvent{
+		Kind: "playback_input", Participant: "listener", Target: "listener",
+		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
+		End: frame.EndOfResponse, AfterTerminal: c.terminalSeen["listener"],
+	})
 	if c.finished {
 		c.mu.Unlock()
 		return context.Canceled
 	}
-	c.playback = append(c.playback, samples...)
+	if len(frame.Samples) > 0 && !allZero(frame.Samples) {
+		c.playback = append(c.playback, frame.Samples...)
+		c.playbackFrames++
+	}
 	c.mu.Unlock()
 	c.maybeFinish()
 	return nil
@@ -205,9 +309,8 @@ func (c *coordinator) recordPlayback(samples []int16) error {
 
 func (c *coordinator) maybeFinish() {
 	c.mu.Lock()
-	ready := len(c.outputs["alice"]) == 4 &&
-		len(c.outputs["bob"]) == 4 &&
-		len(c.playback) == 4
+	ready := c.outputFrames["alice"] > 0 && c.outputFrames["bob"] > 0 &&
+		c.outputEnded["alice"] && c.outputEnded["bob"] && c.playbackFrames > 0
 	c.mu.Unlock()
 	if !ready {
 		return
@@ -225,6 +328,48 @@ func (c *coordinator) maybeFinish() {
 		}
 		close(c.done)
 	})
+}
+
+func (c *coordinator) snapshotInputs() []InputObservation {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	inputs := append([]InputObservation(nil), c.inputs...)
+	sort.SliceStable(inputs, func(i, j int) bool {
+		if inputs[i].Participant != inputs[j].Participant {
+			return inputs[i].Participant < inputs[j].Participant
+		}
+		return inputs[i].Sequence < inputs[j].Sequence
+	})
+	return inputs
+}
+
+func (c *coordinator) snapshotOutputs() map[string][]int16 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	outputs := make(map[string][]int16, len(c.outputs))
+	for participant, samples := range c.outputs {
+		outputs[participant] = append([]int16(nil), samples...)
+	}
+	return outputs
+}
+
+func (c *coordinator) snapshotRawEvents() []RawEvent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	events := append([]RawEvent(nil), c.rawEvents...)
+	for index := range events {
+		events[index].Samples = append([]int16(nil), events[index].Samples...)
+	}
+	return events
+}
+
+func (c *coordinator) recordTerminal(participant string, event session.LiveEvent) {
+	c.mu.Lock()
+	c.terminalSeen[participant] = true
+	c.rawEvents = append(c.rawEvents, RawEvent{
+		Kind: "terminal", Participant: participant, Sequence: event.Sequence,
+	})
+	c.mu.Unlock()
 }
 
 type fakeLiveService struct {
@@ -269,7 +414,7 @@ type fakeHandle struct {
 func newFakeHandle(id string, coord *coordinator) *fakeHandle {
 	return &fakeHandle{
 		id: id, coord: coord, events: make(chan session.LiveEvent, 8), done: make(chan struct{}),
-		inbound:  &scriptedInbound{frames: fixtureFrames(id), coord: coord},
+		inbound:  &scriptedInbound{id: id, frames: fixtureFrames(id), coord: coord},
 		outbound: &captureOutbound{id: id, coord: coord},
 	}
 }
@@ -291,6 +436,7 @@ func (h *fakeHandle) Start(context.Context) error {
 	}
 	h.started = true
 	h.startCount++
+	h.coord.noteStarted()
 	return nil
 }
 
@@ -340,12 +486,14 @@ func (h *fakeHandle) publishTerminal() {
 		h.mu.Lock()
 		h.terminalEvent = &event
 		h.mu.Unlock()
+		h.coord.recordTerminal(h.id, event)
 		h.events <- event
 		h.closeDone.Do(func() { close(h.done) })
 	})
 }
 
 type scriptedInbound struct {
+	id     string
 	mu     sync.Mutex
 	frames []audio.PCMFrame
 	index  int
@@ -358,19 +506,24 @@ func (s *scriptedInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error)
 		return audio.PCMFrame{}, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.index < len(s.frames) {
-		frame := s.frames[s.index]
-		s.index++
-		frame.Samples = append([]int16(nil), frame.Samples...)
-		if s.index == 2 && s.coord != nil {
-			s.mu.Unlock()
-			s.coord.awaitHealthyInput()
-			s.mu.Lock()
-		}
-		return frame, nil
+	if s.index >= len(s.frames) {
+		s.mu.Unlock()
+		return audio.PCMFrame{}, io.EOF
 	}
-	return audio.PCMFrame{}, io.EOF
+	frame := s.frames[s.index]
+	s.index++
+	frame.Samples = append([]int16(nil), frame.Samples...)
+	index := s.index
+	s.mu.Unlock()
+	if s.coord != nil {
+		s.coord.recordInput(s.id, frame)
+		if index == 2 {
+			if err := s.coord.awaitHealthyInput(ctx); err != nil {
+				return audio.PCMFrame{}, err
+			}
+		}
+	}
+	return frame, nil
 }
 
 func (s *scriptedInbound) Close() error {
@@ -391,19 +544,13 @@ func (o *captureOutbound) WriteFrame(ctx context.Context, frame audio.PCMFrame) 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if allZero(frame.Samples) {
-		return nil
-	}
-	if !equalSamples(frame.Samples, expectedPeerOutput(o.id)) {
-		return nil
-	}
 	o.mu.Lock()
 	closed := o.closed
 	o.mu.Unlock()
 	if closed {
 		return context.Canceled
 	}
-	return o.coord.recordOutput(o.id, frame.Samples)
+	return o.coord.recordOutput(o.id, frame)
 }
 
 func (o *captureOutbound) Close() error {
@@ -442,13 +589,13 @@ func (p *softwarePlayback) Pump(ctx context.Context, inbound audio.InboundMedia)
 		if err != nil {
 			return err
 		}
-		if len(frame.Samples) == 0 {
-			continue
-		}
-		if allZero(frame.Samples) {
-			continue
-		}
-		if !equalSamples(frame.Samples, []int16{322, 324, 326, 328}) {
+		p.mu.Lock()
+		p.report.Observed = append(p.report.Observed, FrameObservation{
+			Epoch: frame.Epoch, Sequence: frame.Sequence,
+			Samples: append([]int16(nil), frame.Samples...), End: frame.EndOfResponse,
+		})
+		p.mu.Unlock()
+		if len(frame.Samples) == 0 || allZero(frame.Samples) {
 			continue
 		}
 		p.mu.Lock()
@@ -470,7 +617,7 @@ func (p *softwarePlayback) Pump(ctx context.Context, inbound audio.InboundMedia)
 		p.report.ZeroFilledSamples = stats.ZeroFilledSamples
 		p.report.ConsumedSamples = stats.RenderedSamples - stats.UnderflowSamples
 		p.mu.Unlock()
-		if err := p.coord.recordPlayback(frame.Samples); err != nil {
+		if err := p.coord.recordPlayback(frame); err != nil {
 			return err
 		}
 		<-p.coord.done
@@ -509,25 +656,6 @@ func allZero(samples []int16) bool {
 	return true
 }
 
-func equalSamples(got, want []int16) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for index := range got {
-		if got[index] != want[index] {
-			return false
-		}
-	}
-	return true
-}
-
-func expectedPeerOutput(target string) []int16 {
-	if target == "alice" {
-		return []int16{211, 212, 213, 214}
-	}
-	return []int16{111, 112, 113, 114}
-}
-
 func buildManifest() rooms.Manifest {
 	return rooms.Manifest{
 		SchemaVersion: rooms.SchemaVersion,
@@ -536,6 +664,17 @@ func buildManifest() rooms.Manifest {
 			{Kind: rooms.ParticipantKindAgent, ID: "alice", SystemPrompt: "fixture", OpeningPrompt: "begin", Provider: "fixture", Model: "fixture", APIKeyEnv: "C36_FIXTURE_KEY", Tools: []string{}},
 			{Kind: rooms.ParticipantKindAgent, ID: "bob", SystemPrompt: "fixture", OpeningPrompt: "begin", Provider: "fixture", Model: "fixture", APIKeyEnv: "C36_FIXTURE_KEY", Tools: []string{}},
 			{Kind: rooms.ParticipantKindHuman, ID: "listener", SystemPrompt: "fixture", InputDevice: "software-input", OutputDevice: "software-output", Tools: []string{}},
+		},
+	}
+}
+
+func buildCancellationManifest() rooms.Manifest {
+	return rooms.Manifest{
+		SchemaVersion: rooms.SchemaVersion,
+		Room:          rooms.Room{Interactive: true},
+		Participants: []rooms.Participant{
+			{Kind: rooms.ParticipantKindAgent, ID: "alice", SystemPrompt: "fixture", OpeningPrompt: "begin", Provider: "fixture", Model: "fixture", APIKeyEnv: "C36_FIXTURE_KEY", Tools: []string{}},
+			{Kind: rooms.ParticipantKindAgent, ID: "bob", SystemPrompt: "fixture", Provider: "fixture", Model: "fixture", APIKeyEnv: "C36_FIXTURE_KEY", Tools: []string{}},
 		},
 	}
 }
@@ -617,25 +756,18 @@ func runLiveScenario(outputDir string, mode string) (Report, error) {
 
 finished:
 	liveHandles := live.handles()
+	inputs := coord.snapshotInputs()
+	outputs := coord.snapshotOutputs()
+	rawEvents := coord.snapshotRawEvents()
 	report := Report{
 		SchemaVersion: 1, Status: "complete", Mode: mode, OutputDir: outputDir,
-		SourceInputs: []InputObservation{
-			{Participant: "alice", Epoch: 1, Sequence: 1, Samples: []int16{101, 102}},
-			{Participant: "alice", Epoch: 2, Sequence: 2, Samples: []int16{111, 112, 113, 114}, End: true},
-			{Participant: "bob", Epoch: 1, Sequence: 1, Samples: []int16{201, 202}},
-			{Participant: "bob", Epoch: 2, Sequence: 2, Samples: []int16{211, 212, 213, 214}, End: true},
-		},
-		PeerOutputs: map[string][]int16{
-			"alice": append([]int16(nil), coord.outputs["alice"]...),
-			"bob":   append([]int16(nil), coord.outputs["bob"]...),
-		},
-		ProviderAdmission: AdmissionReport{Frames: 4, Samples: 12},
-		Playback:          playback.queueSnapshot(),
-		Epochs:            EpochReport{StalePendingSamples: 4, HealthyTail: []int16{111, 112, 113, 114}, EndBeforeTerminal: true},
-		Terminal:          make(map[string]TerminalObservation),
-		Room:              RoomObservation{TerminationReason: string(outcome.result.TerminationReason), Participants: map[string]string{}},
-		Lifecycle:         LifecycleReport{Opened: live.opened, NaturalExit: outcome.err == nil},
-		Recording:         RecordingReport{State: "partial", ProviderTrace: "unavailable", Reason: "fixture live handles intentionally do not emit provider capture artifacts", PCMBytes: 12 * 2, Replayable: false},
+		SourceInputs: inputs, PeerOutputs: outputs,
+		ProviderAdmission: admissionFromInputs(inputs), Playback: playback.queueSnapshot(),
+		Epochs: epochReport(inputs, outputs, rawEvents), Terminal: make(map[string]TerminalObservation),
+		Room:      RoomObservation{TerminationReason: string(outcome.result.TerminationReason), Participants: map[string]string{}},
+		Lifecycle: LifecycleReport{Opened: len(liveHandles), NaturalExit: outcome.err == nil},
+		Recording: RecordingReport{State: "partial", ProviderTrace: "unavailable", Reason: "fixture live handles intentionally do not emit provider capture artifacts", PCMBytes: inputPCMBytes(inputs), Replayable: false},
+		RawEvents: rawEvents,
 	}
 	for id, participant := range outcome.result.Participants {
 		report.Room.Participants[id] = string(participant.TerminationReason)
@@ -656,8 +788,11 @@ finished:
 			Provenance: string(terminal.Terminal.TerminalProvenance), OutputState: string(terminal.Terminal.OutputState),
 		}
 	}
-	report.Lifecycle.WorkersJoined = report.Lifecycle.Waited == report.Lifecycle.Opened && report.Lifecycle.Closed == report.Lifecycle.Opened
+	report.Lifecycle.WorkersJoined = report.Lifecycle.Opened > 0 && report.Lifecycle.Waited == report.Lifecycle.Opened && report.Lifecycle.Closed == report.Lifecycle.Opened
 	report.Lifecycle.RepeatedCloseOK = true
+	for _, handle := range liveHandles {
+		report.Lifecycle.RepeatedCloseOK = report.Lifecycle.RepeatedCloseOK && handle.Close() == nil && handle.Close() == nil
+	}
 	if outcome.err != nil {
 		report.Status = "failed"
 		report.Room.Error = outcome.err.Error()
@@ -679,6 +814,50 @@ func (s *fakeLiveService) handles() map[string]*fakeHandle {
 	for id, handle := range s.coord.handles {
 		result[id] = handle
 	}
+	return result
+}
+
+func admissionFromInputs(inputs []InputObservation) AdmissionReport {
+	result := AdmissionReport{}
+	for _, input := range inputs {
+		result.Frames++
+		result.Samples += len(input.Samples)
+	}
+	return result
+}
+
+func inputPCMBytes(inputs []InputObservation) int {
+	result := 0
+	for _, input := range inputs {
+		result += len(input.Samples) * 2
+	}
+	return result
+}
+
+func epochReport(inputs []InputObservation, outputs map[string][]int16, events []RawEvent) EpochReport {
+	result := EpochReport{}
+	for _, input := range inputs {
+		if input.Epoch == 1 {
+			result.StalePendingSamples += len(input.Samples)
+		}
+	}
+	result.HealthyTail = append([]int16(nil), outputs["bob"]...)
+	endIndexes := make(map[string]int)
+	terminalIndexes := make(map[string]int)
+	for index, event := range events {
+		if event.Kind == "source_audio" && event.End {
+			endIndexes[event.Participant] = index
+		}
+		if event.Kind == "terminal" {
+			terminalIndexes[event.Participant] = index
+		}
+	}
+	aliceEnd, aliceHasEnd := endIndexes["alice"]
+	bobEnd, bobHasEnd := endIndexes["bob"]
+	aliceTerminal, aliceHasTerminal := terminalIndexes["alice"]
+	bobTerminal, bobHasTerminal := terminalIndexes["bob"]
+	result.EndBeforeTerminal = aliceHasEnd && bobHasEnd && aliceHasTerminal && bobHasTerminal &&
+		aliceEnd < aliceTerminal && bobEnd < bobTerminal
 	return result
 }
 
@@ -727,35 +906,166 @@ func Run(request Request) (Report, error) {
 		report.Playback.DiscardedStale = boundary.DiscardedStale
 		report.Playback.DiscardedSamples = boundary.DiscardedSamples
 		report.Playback.CapabilityGap = boundary.CapabilityGap
+		if request.Mode == "mutations" && request.Mutation != "" {
+			if err := compareMutationOracle(report, request.Mutation); err == nil {
+				return Report{}, fmt.Errorf("mutation %q unexpectedly matched the frozen oracle", request.Mutation)
+			} else {
+				return Report{}, fmt.Errorf("literal oracle mismatch: %w", err)
+			}
+		}
 		return report, nil
 	case "cancel-before-start", "cancel-active":
-		return Report{SchemaVersion: 1, Status: "complete", Mode: request.Mode, OutputDir: request.OutputDir, Cancellation: runCancellationProbe(request.Mode)}, nil
+		cancellation, err := runCancellationProbe(request.Mode, request.OutputDir)
+		if err != nil {
+			return Report{}, err
+		}
+		return Report{SchemaVersion: 1, Status: "complete", Mode: request.Mode, OutputDir: request.OutputDir, Cancellation: cancellation}, nil
 	default:
 		return Report{}, fmt.Errorf("unknown mode %q", request.Mode)
 	}
 }
 
-func runCancellationProbe(mode string) *CancellationReport {
-	handle := newFakeHandle("lifecycle", newCoordinator())
-	report := &CancellationReport{Mode: mode}
+func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
+	coord := newCoordinator()
+	live := &fakeLiveService{coord: coord}
+	service := wire.NewService(wire.Dependencies{Live: live, Clock: clock.NewDeterministic(time.Unix(0, 0).UTC(), time.Millisecond)})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	if mode == "cancel-before-start" {
-		handle.Cancel(context.Canceled)
-		if err := handle.Start(context.Background()); err != nil {
-			report.StartError = err.Error()
-		}
-	} else {
-		if err := handle.Start(context.Background()); err != nil {
-			report.StartError = err.Error()
-		}
-		handle.Cancel(context.Canceled)
+		cancel()
 	}
-	if err := handle.Wait(); err != nil {
-		report.WaitError = err.Error()
+	resultCh := make(chan struct {
+		result rooms.RoomResult
+		err    error
+	}, 1)
+	go func() {
+		result, err := service.Run(ctx, io.Discard, rooms.RoomRunOptions{
+			Manifest: buildCancellationManifest(), OutputDir: outputDir, ConfigDir: outputDir,
+			WorkDir: outputDir, AllowPaths: []string{outputDir},
+			AudioFormat: mixer.Format{SampleRate: 1000, Channels: 1, FrameDuration: 4 * time.Millisecond},
+		})
+		resultCh <- struct {
+			result rooms.RoomResult
+			err    error
+		}{result, err}
+	}()
+	if mode == "cancel-active" {
+		select {
+		case <-coord.startedReady:
+			cancel()
+		case <-time.After(2 * time.Second):
+			cancel()
+			return nil, errors.New("public room service did not admit active cancellation participants")
+		}
 	}
-	report.Joined = true
-	report.FirstCloseError = errorString(handle.Close())
-	report.SecondCloseError = errorString(handle.Close())
-	return report
+	var outcome struct {
+		result rooms.RoomResult
+		err    error
+	}
+	select {
+	case outcome = <-resultCh:
+	case <-time.After(3 * time.Second):
+		cancel()
+		return nil, errors.New("public room service cancellation did not return within bounded deadline")
+	}
+	handles := live.handles()
+	report := &CancellationReport{
+		Mode: mode, RoomTermination: string(outcome.result.TerminationReason),
+		RoomError: outcome.result.Error, Participants: map[string]string{}, RunReturned: true,
+	}
+	for id, participant := range outcome.result.Participants {
+		report.Participants[id] = string(participant.TerminationReason)
+	}
+	for _, handle := range handles {
+		handle.mu.Lock()
+		report.Opened++
+		report.Started += handle.startCount
+		report.Waited += handle.waitCount
+		report.Closed += handle.closeCount
+		handle.mu.Unlock()
+	}
+	report.Joined = report.RunReturned && (report.Opened == 0 || report.Waited == report.Opened)
+	if mode == "cancel-before-start" {
+		if report.Started != 0 {
+			return nil, fmt.Errorf("pre-start cancellation unexpectedly started %d participants", report.Started)
+		}
+		report.StartError = "public room admission observed no start before cancellation"
+	} else if report.Started != report.Opened {
+		return nil, fmt.Errorf("active cancellation started %d of %d admitted participants", report.Started, report.Opened)
+	}
+	report.RepeatedCloseOK = true
+	for _, handle := range handles {
+		report.RepeatedCloseOK = report.RepeatedCloseOK && handle.Close() == nil && handle.Close() == nil
+	}
+	if outcome.err != nil {
+		report.WaitError = outcome.err.Error()
+	}
+	if !report.Joined || !report.RepeatedCloseOK {
+		return nil, fmt.Errorf("public cancellation cleanup was not joined/idempotent: %+v", report)
+	}
+	return report, nil
+}
+
+func compareMutationOracle(report Report, mutation string) error {
+	want := Report{
+		SourceInputs: []InputObservation{
+			{Participant: "alice", Epoch: 1, Sequence: 1, Samples: []int16{101, 102}},
+			{Participant: "alice", Epoch: 2, Sequence: 2, Samples: []int16{111, 112, 113, 114}, End: true},
+			{Participant: "bob", Epoch: 1, Sequence: 1, Samples: []int16{201, 202}},
+			{Participant: "bob", Epoch: 2, Sequence: 2, Samples: []int16{211, 212, 213, 214}, End: true},
+		},
+		PeerOutputs: map[string][]int16{"alice": {211, 212, 213, 214}, "bob": {111, 112, 113, 114}},
+		Epochs:      EpochReport{StalePendingSamples: 4, HealthyTail: []int16{111, 112, 113, 114}, EndBeforeTerminal: true},
+		Terminal: map[string]TerminalObservation{
+			"alice": {Kind: "terminal", Sequence: 99, Reason: "fixture_complete", Classification: "fixture_complete", TerminalReason: "provider_close", Provenance: "provider", OutputState: "complete"},
+			"bob":   {Kind: "terminal", Sequence: 99, Reason: "fixture_complete", Classification: "fixture_complete", TerminalReason: "provider_close", Provenance: "provider", OutputState: "complete"},
+		},
+	}
+	candidate := report
+	candidate.SourceInputs = append([]InputObservation(nil), report.SourceInputs...)
+	for index := range candidate.SourceInputs {
+		candidate.SourceInputs[index].Samples = append([]int16(nil), candidate.SourceInputs[index].Samples...)
+	}
+	candidate.PeerOutputs = make(map[string][]int16, len(report.PeerOutputs))
+	for participant, samples := range report.PeerOutputs {
+		candidate.PeerOutputs[participant] = append([]int16(nil), samples...)
+	}
+	candidate.Epochs.HealthyTail = append([]int16(nil), report.Epochs.HealthyTail...)
+	candidate.Terminal = make(map[string]TerminalObservation, len(report.Terminal))
+	for participant, terminal := range report.Terminal {
+		candidate.Terminal[participant] = terminal
+	}
+	switch mutation {
+	case "peer-participant-key":
+		candidate.PeerOutputs["mallory"] = []int16{111, 112, 113, 114}
+	case "source-order":
+		for left, right := 0, len(candidate.SourceInputs)-1; left < right; left, right = left+1, right-1 {
+			candidate.SourceInputs[left], candidate.SourceInputs[right] = candidate.SourceInputs[right], candidate.SourceInputs[left]
+		}
+	case "epoch":
+		candidate.Epochs.StalePendingSamples = 0
+	case "pcm":
+		candidate.PeerOutputs["alice"][0] = 999
+	case "terminal":
+		terminal := candidate.Terminal["alice"]
+		terminal.Provenance = "replay"
+		candidate.Terminal["alice"] = terminal
+	default:
+		return fmt.Errorf("unknown mutation %q", mutation)
+	}
+	if !reflect.DeepEqual(candidate.SourceInputs, want.SourceInputs) {
+		return errors.New("source input order or samples differ")
+	}
+	if !reflect.DeepEqual(candidate.PeerOutputs, want.PeerOutputs) {
+		return errors.New("peer participant/PCM oracle differs")
+	}
+	if !reflect.DeepEqual(candidate.Epochs, want.Epochs) {
+		return errors.New("epoch oracle differs")
+	}
+	if !reflect.DeepEqual(candidate.Terminal, want.Terminal) {
+		return errors.New("terminal provenance oracle differs")
+	}
+	return nil
 }
 
 func errorString(err error) string {

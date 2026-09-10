@@ -15,13 +15,17 @@ The module is standalone and must be built with the workspace disabled:
 
 ```sh
 GOWORK=off go test ./...
-GOWORK=off go test -race -run 'TestRoomMediaRoutesAndDiscardsStaleEpoch|TestPlaybackBoundarySeparatesAdmissionConsumptionAndUnderflow|TestLifecycleCancellationAndRepeatedClose' -count=5
+GOWORK=off go test -race -run 'TestRoomMediaRoutesPeersAndDiscardsStaleEpoch|TestPlaybackBoundarySeparatesAdmissionConsumptionAndUnderflow|TestLifecycleCancellationAndRepeatedClose' -count=5
 GOWORK=off go vet ./...
 ```
 
-The bounded verifier records a deterministic source archive, input hashes,
-child-process controls, causal reports, mutation negatives, partial-recording
-rejection, and the two frozen C16/YUI parity fixtures:
+The bounded verifier records a deterministic archive and hash manifest for the
+admitted consumer, every workspace module it builds, and the frozen fixtures.
+It binds the selected toolchain, build flags, package paths, and binary hashes;
+`--no-build` is accepted only with a matching prior build record. It also
+records child-process group cleanup, causal frame observations, subprocess
+mutation negatives, partial-recording rejection, and strict replay of each
+generated C16/YUI bundle:
 
 ```sh
 python3 verify.py --action all --source "$FACTORY_ROOT" \
@@ -30,4 +34,7 @@ python3 verify.py --action all --source "$FACTORY_ROOT" \
 
 `verify.py` supports the individual gates `boundary`, `provenance`,
 `routing-epochs`, `mutations`, `partial-recording`, `consumption`,
-`lifecycle`, `hang-control`, and `parity`, plus `all`.
+`lifecycle`, `hang-control`, and `parity`, plus `all`. The positive report
+retains raw source, peer-output, playback, and terminal events so unexpected
+frames cannot be hidden by summary filtering; it explicitly reports the
+software-only playback boundary and physical-device capability gap.

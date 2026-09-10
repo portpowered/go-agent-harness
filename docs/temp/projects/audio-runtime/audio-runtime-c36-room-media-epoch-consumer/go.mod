@@ -20,3 +20,7 @@ replace github.com/portpowered/go-agent-harness/go-agent-loop => ../../../../../
 replace github.com/portpowered/go-agent-harness/go-agent-runtime => ../../../../../go-agent-runtime
 
 replace github.com/portpowered/go-agent-harness/go-audio => ../../../../../go-audio
+
+replace github.com/portpowered/go-agent-harness/go-device-gateway => ../../../../../go-device-gateway
+
+replace github.com/portpowered/go-agent-harness/go-llm-gateway => ../../../../../go-llm-gateway
