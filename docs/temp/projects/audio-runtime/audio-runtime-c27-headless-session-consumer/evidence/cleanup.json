@@ -7,16 +7,16 @@
     ],
     "cleanup_bounded": true,
     "cleanup_error": "",
-    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-cleanup-n8_a6rlx/child/cwd",
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-cleanup-tjq2cwqn/child/cwd",
     "descendants_alive": false,
     "descendants_killed": 0,
     "descendants_seen": 0,
-    "duration_seconds": 0.086855,
+    "duration_seconds": 0.009946,
     "exit_code": 0,
     "process_group_alive": false,
     "reaped": true,
     "stderr": "",
-    "stdout": "{\n  \"schema\": \"audio-runtime-c27-headless-session-consumer/v1\",\n  \"scenario\": \"cleanup\",\n  \"status\": \"ok\",\n  \"instance\": \"normal\",\n  \"session_id\": \"1789021008181215000\",\n  \"constructor_provider_calls\": 0,\n  \"provider_calls\": 1,\n  \"turn\": {\n    \"label\": \"cleanup\",\n    \"session_id\": \"1789021008181215000\",\n    \"input\": \"cleanup probe\",\n    \"expected_request\": [\n      {\n        \"role\": \"user\",\n        \"text\": \"cleanup probe\"\n      }\n    ],\n    \"provider_requests\": [\n      {\n        \"instance\": \"normal\",\n        \"messages\": [\n          {\n            \"role\": \"user\",\n            \"text\": \"cleanup probe\"\n          }\n        ],\n        \"history_sha256\": \"5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e\",\n        \"response\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\",\n        \"call\": 1\n      }\n    ],\n    \"stream\": {\n      \"types\": [\n        \"MESSAGE.START\",\n        \"TEXT.START\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.END\",\n        \"MESSAGE.END\",\n        \"LOOP.END\"\n      ],\n      \"text\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\",\n      \"terminal_seen\": true,\n      \"terminal_source\": \"provider\",\n      \"outcome\": \"drained\",\n      \"partial\": false,\n      \"close_calls\": 0\n    },\n    \"persisted_history\": {\n      \"present\": true,\n      \"items\": [\n        {\n          \"role\": \"user\",\n          \"text\": \"cleanup probe\"\n        },\n        {\n          \"role\": \"assistant\",\n          \"text\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\"\n        }\n      ],\n      \"sha256\": \"2fca14aba9b2c237e09662e5d0c6ca4bf74e33a6d2960959f20e8473e5d170a5\"\n    },\n    \"loaded_history\": {\n      \"present\": false\n    },\n    \"listed_session_ids\": [\n      \"1789021008181215000\"\n    ],\n    \"latest_session_id\": \"1789021008181215000\",\n    \"constructor_provider_calls\": 0,\n    \"provider_calls\": 1,\n    \"stream_close_calls\": 2,\n    \"handle_close_calls\": 2,\n    \"saved\": true\n  }\n}\n",
+    "stdout": "{\n  \"schema\": \"audio-runtime-c27-headless-session-consumer/v1\",\n  \"scenario\": \"cleanup\",\n  \"status\": \"ok\",\n  \"instance\": \"normal\",\n  \"session_id\": \"1789025161360029000\",\n  \"constructor_provider_calls\": 0,\n  \"provider_calls\": 1,\n  \"turn\": {\n    \"label\": \"cleanup\",\n    \"session_id\": \"1789025161360029000\",\n    \"input\": \"cleanup probe\",\n    \"expected_request\": [\n      {\n        \"role\": \"user\",\n        \"text\": \"cleanup probe\"\n      }\n    ],\n    \"provider_requests\": [\n      {\n        \"instance\": \"normal\",\n        \"messages\": [\n          {\n            \"role\": \"user\",\n            \"text\": \"cleanup probe\"\n          }\n        ],\n        \"history_sha256\": \"5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e\",\n        \"response\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\",\n        \"call\": 1\n      }\n    ],\n    \"stream\": {\n      \"types\": [\n        \"MESSAGE.START\",\n        \"TEXT.START\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.DELTA\",\n        \"TEXT.END\",\n        \"MESSAGE.END\",\n        \"LOOP.END\"\n      ],\n      \"text\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\",\n      \"terminal_seen\": true,\n      \"terminal_source\": \"provider\",\n      \"outcome\": \"drained\",\n      \"partial\": false,\n      \"close_calls\": 0\n    },\n    \"persisted_history\": {\n      \"present\": true,\n      \"items\": [\n        {\n          \"role\": \"user\",\n          \"text\": \"cleanup probe\"\n        },\n        {\n          \"role\": \"assistant\",\n          \"text\": \"provider=normal input=\\\"cleanup probe\\\" history=5e1c28a2b5b591aa855c22aee5aec4d9ade833165702d76bf5c62c274275997e count=1 call=1\"\n        }\n      ],\n      \"sha256\": \"2fca14aba9b2c237e09662e5d0c6ca4bf74e33a6d2960959f20e8473e5d170a5\"\n    },\n    \"loaded_history\": {\n      \"present\": false\n    },\n    \"listed_session_ids\": [\n      \"1789025161360029000\"\n    ],\n    \"latest_session_id\": \"1789025161360029000\",\n    \"constructor_provider_calls\": 0,\n    \"provider_calls\": 1,\n    \"stream_close_calls\": 2,\n    \"handle_close_calls\": 2,\n    \"saved\": true\n  }\n}\n",
     "timed_out": false
   },
   "report": {
@@ -25,7 +25,7 @@
     "provider_calls": 1,
     "scenario": "cleanup",
     "schema": "audio-runtime-c27-headless-session-consumer/v1",
-    "session_id": "1789021008181215000",
+    "session_id": "1789025161360029000",
     "status": "ok",
     "turn": {
       "constructor_provider_calls": 0,
@@ -38,9 +38,9 @@
       "handle_close_calls": 2,
       "input": "cleanup probe",
       "label": "cleanup",
-      "latest_session_id": "1789021008181215000",
+      "latest_session_id": "1789025161360029000",
       "listed_session_ids": [
-        "1789021008181215000"
+        "1789025161360029000"
       ],
       "loaded_history": {
         "present": false
@@ -75,7 +75,7 @@
         }
       ],
       "saved": true,
-      "session_id": "1789021008181215000",
+      "session_id": "1789025161360029000",
       "stream": {
         "close_calls": 0,
         "outcome": "drained",
@@ -118,11 +118,11 @@
       ],
       "cleanup_bounded": true,
       "cleanup_error": "",
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-cleanup-n8_a6rlx/escaped-timeout/cwd",
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-cleanup-tjq2cwqn/escaped-timeout/cwd",
       "descendants_alive": false,
       "descendants_killed": 1,
       "descendants_seen": 1,
-      "duration_seconds": 0.2802,
+      "duration_seconds": 0.304035,
       "exit_code": -9,
       "process_group_alive": false,
       "reaped": true,

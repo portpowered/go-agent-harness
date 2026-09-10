@@ -1,28 +1,36 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "d9706da6a585415781060637de423d03b91a3e01b1192fe02516b10d1ec5126d",
-    "size": 12665
+    "sha256": "f6ed193932ba5a73a7dd562faf8d72c2fc713650bb617e9c4d6ea63254ab4311",
+    "size": 12663
   },
-  "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
-  "tamper_control": "tampered artifact digest/size rejected",
+  "missing_artifact_control": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
+  "missing_descriptor_control": "artifact descriptor is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json",
+  "tamper_control": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
+  "tamper_controls": {
+    "consumer_artifact_sha256": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
+    "dependency_graph_packages_sha256": "dependency graph digest mismatch for packages_sha256: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 3ec8a26eb83511326fd9eaa221dd8d30dfe881d9623313182e49e1ddf7cd8e9c",
+    "missing_declared_artifact": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
+    "module_source_tree_sha256": "module source tree digest mismatch: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 801773b7f401ff37e53af9a7fcd3a4b5fb2b828e3c00ecc4fb034fb108969652",
+    "replacement_source_tree_sha256": "replacement source tree digest mismatch for go-audio: declared 0000000000000000000000000000000000000000000000000000000000000000, observed cd5cf5393e15c34462cbca43bc2f9c2a180c449d5f6c1960be9b7ef519f54c65"
+  },
   "verified": {
     "all_digests_match": true,
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "945d416ccdc128cec9d095bebcb457cf1454a17d089b306b26ecf3f2ec1b3de0",
-        "size": 7583739
+        "sha256": "57afb7c7b0737af664585f3861ae4acaf2a205a3fa3584754dddc74c03f67c21",
+        "size": 7587387
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "ff89cbdcb9f5436eec33070806e31f33114fa539893106aaec6e442c03e4d882",
+        "sha256": "b4849e409afda08749388b767598582edc745b84c415146066fbbbf43aa6b54b",
         "size": 9224354
       },
       {
         "path": "evidence/artifacts/yui.archive",
-        "sha256": "131cdce97e9e7d97a286c3a1b641aa0b80947fe8493d3a833bad55e38e98fc4a",
-        "size": 52674162
+        "sha256": "e36f010f65b8877265fe0b11a2216d6a24ef8ee21bfc5301ccaaa96dd61afddd",
+        "size": 52674370
       },
       {
         "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
@@ -51,16 +59,31 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "64fb07bd801bb06a6886ce3fa289399ee1324ae783cbb57fe5e4a81449c9ccfd",
-        "size": 61388
+        "sha256": "987cd16fab3be80e7f6365cb6c6f92cb90e9a7296175eecec7183b4e8510a104",
+        "size": 66853
       }
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "a860a19f680691b8edcc5a824c72c8651e0465c0",
+      "current_head": "f773563f08e5e62ee376d226680bc3824092c6cc",
       "source_changes_since_source_revision": [],
-      "source_revision": "b618c5fd172b51be48ce0471e591851742d365b9",
-      "source_revision_matches_current_head": false
+      "source_revision": "f773563f08e5e62ee376d226680bc3824092c6cc",
+      "source_revision_matches_current_head": true
+    },
+    "verified_digests": {
+      "dependency_graph": {
+        "modules_sha256": "bc45389a3ed781fb22eaa2956f94d9c8fcc8123528eac82cc73c81cf44b16997",
+        "packages_sha256": "3ec8a26eb83511326fd9eaa221dd8d30dfe881d9623313182e49e1ddf7cd8e9c"
+      },
+      "module_source_tree_sha256": "801773b7f401ff37e53af9a7fcd3a4b5fb2b828e3c00ecc4fb034fb108969652",
+      "replacement_source_tree_sha256": {
+        "agent-cli": "3b9ed39a43bc09783fa45e2976564d3309c838f7e7ddcc371cb813525f9c1a09",
+        "go-agent-loop": "303fa4db63b4a1cee6a5424ce27f07645de132e853544ca87adbfbda9db17d60",
+        "go-agent-runtime": "789a9e972d487a67929f6448d65dda9441456f408dcfa1ddb91a2bcccdb57a86",
+        "go-audio": "cd5cf5393e15c34462cbca43bc2f9c2a180c449d5f6c1960be9b7ef519f54c65",
+        "go-device-gateway": "567207a765af04efd98d9086af92eed9896da823ee72853d113c8e482f69e83a",
+        "go-llm-gateway": "1f13bfecbe6d9dfe1e1244bd27bf01c3c3bba3914864a71e8460c474ecf2d319"
+      }
     }
   }
 }
