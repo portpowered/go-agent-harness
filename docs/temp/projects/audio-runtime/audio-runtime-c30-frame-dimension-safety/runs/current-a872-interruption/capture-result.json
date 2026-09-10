@@ -1,0 +1,25 @@
+{
+  "schema": "audio-runtime-c30-yui-capture.v1",
+  "tested_source_revision": "a87247bf77abaf6746820c3eb2073d33166c3ac1",
+  "base_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "fixture": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+    "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+  },
+  "exit_code": 0,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "terminal": {
+    "reason": "replay_complete",
+    "classification": "replay_complete",
+    "terminal_reason": "replay_complete",
+    "terminal_provenance": "replay",
+    "output_state": "complete"
+  },
+  "wire_events": 15,
+  "tool_calls": 0,
+  "provider_pcm": {"bytes": 3840, "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"},
+  "rendered_pcm": {"bytes": 3360, "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"},
+  "bundle_manifest_sha256": "3c22ec584918cc9c13d82074d50cd0282db517d2dcfca4991c21df45e0721480",
+  "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6"
+}

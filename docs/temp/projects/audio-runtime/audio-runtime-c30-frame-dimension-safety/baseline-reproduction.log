@@ -1,0 +1,11 @@
+C30-01 pre-fix exported-API characterization
+source revision: 1f82284abee0bd31a6680310444cea2e4c16ef00
+command: rtk proxy go test ./agent-cli/internal/room -run '^TestPCM16FrameSizingPreFixCharacterization$' -count=1 -timeout 60s -v
+exit code: 0
+
+=== RUN   TestPCM16FrameSizingPreFixCharacterization/rate_duration_product
+source=1f82284abee0bd31a6680310444cea2e4c16ef00 format={SampleRate:2305843009213717952 Channels:1 FrameDuration:1s} samples=24000 sampleErr=<nil> bytes=48000 byteErr=<nil>
+=== RUN   TestPCM16FrameSizingPreFixCharacterization/channel_product
+format={SampleRate:4 Channels:4611686018427387905 FrameDuration:1s} samples=4 sampleErr=<nil> bytes=8 byteErr=<nil>
+PASS
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	0.187s

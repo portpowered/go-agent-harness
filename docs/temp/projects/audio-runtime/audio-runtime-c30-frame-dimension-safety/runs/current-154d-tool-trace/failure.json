@@ -1,0 +1,9 @@
+{
+  "schema": "audio-runtime-c30-yui-run-failure.v1",
+  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
+  "command": "go run ./agent-cli/cmd/testtimeout --timeout 90s --dir runs/current-154d-tool-trace --label c30-current-154d-tool-trace -- artifacts/yui -C runs/current-154d-tool-trace/config session --replay c16-audio-tool.session.json --audio-out runs/current-154d-tool-trace/rendered.pcm --record-dir runs/current-154d-tool-trace/bundle --max-duration 60s --trace-audio",
+  "exit_code": 1,
+  "cause": "The first fresh run directory omitted evidence/runs/exec-invocations-v4.log, so the replayed tool redirect caused a deterministic fixture mismatch.",
+  "preserved_follow_up": "current-154d-tool-trace-v2",
+  "repair": "Precreated evidence/runs and reran the same fixture from the same source and executable; the v2 capture passed."
+}
