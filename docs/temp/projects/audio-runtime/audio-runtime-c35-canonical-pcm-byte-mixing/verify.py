@@ -23,7 +23,20 @@ from typing import Any
 
 
 EVIDENCE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = EVIDENCE_DIR.parents[5]
+
+
+def git_top_level(path: Path) -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return Path(result.stdout.strip()).resolve()
+
+
+REPO_ROOT = git_top_level(EVIDENCE_DIR)
 FACTORY_ROOT = Path(os.environ.get("FACTORY_ROOT", str(REPO_ROOT))).resolve()
 EVIDENCE_REL = EVIDENCE_DIR.relative_to(REPO_ROOT)
 CONSUMER_DIR_REL = EVIDENCE_REL / "consumer"
