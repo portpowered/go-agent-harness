@@ -10,16 +10,16 @@ and process cleanup state.
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
 - implementation merge checkpoint: `f3a230fd7f86b1fd990abea07305a6247a47771b`
-- current-main integration checkpoint: `f3e58cb7dc3b1b578385fdee00d7021833927eab`
+- current-main integration checkpoint: `71302110fe1506233df0f64a0f2541b9200ad658`
 - evidence lineage: documentation-only descendants of the current-main
   integration checkpoint; owned Go inputs are unchanged from that checkpoint
-- fresh `origin/main` merged into the candidate: `c61ee2774986c896560ee40a92441c914976000d`
+- fresh `origin/main` merged into the candidate: `d5012004c15c4df613fd5fc7d8c220f2c7252822`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 
 The reports record successful ancestry probes for the fresh main and both required
 startup/baseline revisions. Candidate verification and the runtime regression were
-generated at source `dbed967241f4c02f4355c316ac62c7328ca04789`; both report only
+generated at source `71302110fe1506233df0f64a0f2541b9200ad658`; both report only
 the preserved untracked operator note as dirty. The final evidence head does not
 alter executable inputs. The rebuilt public consumer has source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and binary
@@ -87,7 +87,7 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-aAQFx6/yui` with SHA-256
+The tested YUI is `/private/tmp/audio-runtime-c34-yui-eUBacy/yui` with SHA-256
 `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`. It was
 rebuilt from the exact source used by the runtime report. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`
@@ -112,8 +112,10 @@ and provenance; `work-review-173` recorded the same remaining stale-main issue.
 The latest board finding identified committed evidence based on `origin/main`
 `c95a2cb4f96fa8c14bd4655f5197a822c86a980c` while remote main was
 `c61ee2774986c896560ee40a92441c914976000d`, with
-`contains_origin_main=false`. The candidate now contains the fetched current-main
-merge and fresh source-pinned reports. The runner includes the requested real
+`contains_origin_main=false`. Remote main advanced again while the PR was being
+updated; the candidate then merged exact tip
+`d5012004c15c4df613fd5fc7d8c220f2c7252822` and regenerated the source-pinned
+reports with `contains_origin_main=true`. The runner includes the requested real
 mutated-valid-audio control, missing-timeline and corrupt-audio controls, bounded
 output capture, and descendant process-group cleanup assertions; all pass.
 

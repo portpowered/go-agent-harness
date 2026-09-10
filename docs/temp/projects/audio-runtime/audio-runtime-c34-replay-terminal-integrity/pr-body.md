@@ -12,10 +12,10 @@
 This is the admitted `audio-runtime-c34-replay-terminal-integrity` task. The
 implementation merge checkpoint is
 `f3a230fd7f86b1fd990abea07305a6247a47771b`. The current-main integration
-checkpoint is `f3e58cb7dc3b1b578385fdee00d7021833927eab`; subsequent evidence
+checkpoint is `71302110fe1506233df0f64a0f2541b9200ad658`; subsequent evidence
 commits are documentation-only descendants with identical executable inputs. The
 candidate merged fresh `origin/main` at
-`c61ee2774986c896560ee40a92441c914976000d`; ancestry probes also
+`d5012004c15c4df613fd5fc7d8c220f2c7252822`; ancestry probes also
 pass for startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and architecture
 baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 
@@ -31,7 +31,7 @@ The evidence runner also repairs the previously non-causal controls: it runs a
 real valid-audio trace mutated after its first close, tests missing-timeline and
 corrupt-audio bundle failures, and asserts bounded process-group cleanup and
 bounded output capture. Candidate verification and runtime reports were generated
-at `dbed967241f4c02f4355c316ac62c7328ca04789`. These are source-pinned to the
+at `71302110fe1506233df0f64a0f2541b9200ad658`. These are source-pinned to the
 current-main integration checkpoint. The rebuilt consumer source hash is
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and its
 binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
@@ -56,8 +56,9 @@ binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d
   diagnostics and no descendant leak.
 
 The stale-head review rejection was reconciled by merging current `origin/main`
-at `c61ee2774986c896560ee40a92441c914976000d`. Candidate reports record source
-`dbed967241f4c02f4355c316ac62c7328ca04789`, origin-main/base revisions,
+at `d5012004c15c4df613fd5fc7d8c220f2c7252822` after the earlier `c61ee277`
+checkpoint. Candidate reports record source
+`71302110fe1506233df0f64a0f2541b9200ad658`, origin-main/base revisions,
 consumer source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`, consumer
 binary hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`,
