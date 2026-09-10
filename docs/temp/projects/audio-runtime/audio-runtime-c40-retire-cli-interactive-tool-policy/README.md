@@ -89,3 +89,37 @@ that prerequisite and storage recovery, rebuild from this merged source, rerun
 the unchanged replay and same-source evidence, then submit the changed head to
 SCRIPT CI. No CI-green, review, merge, vertical, hardware, or project
 acceptance is claimed here.
+
+## Current-head independent policy evidence
+
+The current exact head is `2f3c0463cf1bd4f9a57f8ca05fe6ba542c0e1725`, with
+`origin/main=fdf3b2d98914f50577865e825c733e73520b9ef3` and a clean source tree.
+The refreshed run IDs and full child logs are recorded under
+`runs/run-*-20260910T2324*` and summarized in `candidate-evidence.json`.
+
+Inventory is accepted with 247 runtime dependencies, no forbidden CLI/config/
+WebMCP dependencies, 155 policy lines, and 41,131 aggregate CLI agentruntime
+production lines. The standalone GOWORK=off consumer is accepted with binary
+SHA-256 `bee8cea199a5aac5caf052455457185738087d9dc02b8d19acba0aaea276fa9d`,
+literal 5s/20s/2s defaults, 7s/15s/1.2s overrides, snapshot isolation,
+pre-effect invalid rejection, zero provider setup calls, and the deliberate
+wrong-oracle child exits `1` at the class decision assertion.
+
+The shipped public-policy control builds YUI (50,895,602 bytes,
+SHA-256 `a2fdb97f7018fd5bf34e4dc2e5a6c068e8b10c1025ed1c800ba19b0d060436f7`),
+reaches the policy call chain, retains `PROBE_TOOL_MARKER_9182`, and produces
+the frozen 4,800-byte PCM SHA-256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`.
+Focused normal/race policy tests, 98.3% private-policy coverage, architecture
+size (185/1891/27813), 175-package coverage registration, Wire, vet, pinned
+lint/staticcheck, and diff checks pass. Cleanup control records bounded
+SIGTERM/SIGKILL, descendant reaping, and accepted harness timeout behavior.
+
+The interruption replay remains intentionally unrun: C38/task198 owns the
+reviewed close/drain repair and primary vertical acceptance. The retained
+failure is 2,400 bytes / `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`
+against the frozen 3,840-byte oracle /
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`. This
+checkpoint does not claim script CI, independent review, merge, or project
+acceptance; after C38 is reviewed and accepted, rebuild and refresh the
+dependent replay/evidence before the same PR is submitted to SCRIPT CI.
