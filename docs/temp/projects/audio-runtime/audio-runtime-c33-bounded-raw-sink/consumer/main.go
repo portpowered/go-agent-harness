@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,9 +22,24 @@ const (
 	largeSampleCount   = 8_388_611
 	patternSampleSize  = 5
 	measurementVersion = "c33-v1"
+
+	// The input pattern is intentionally separate from this immutable byte
+	// oracle. The fixture hashes below were derived once from these literal
+	// bytes, outside the allocation measurement interval.
+	oraclePatternBytes    = "\x00\x80\xff\xff\x00\x00\x01\x00\xff\x7f"
+	oraclePatternHex      = "0080ffff00000100ff7f"
+	oraclePatternSHA256   = "556753b4da9b39610600e40b9673205bc62e4df0f649c9957c6282bd59ab42a0"
+	oracleOneSampleBytes  = "\x00\x80"
+	oracleOneSampleHex    = "0080"
+	oracleOneSampleSHA256 = "085edad400785fca7e7e90b1fac4beb776fc2beee5aa24352d5f39b5d57efcad"
+	oracleTailBytes       = "\x00\x80\xff\x7f\xff\xff"
+	oracleTailHex         = "0080ff7fffff"
+	oracleTailSHA256      = "d68491246ad239fd17f4917785722e6cab3280a1dc3239a5372adacd3981d2b1"
+	smallExpectedSHA256   = "e030ba41539620d000c2f320e440a862bb12ae903a54b63e2b110006dd3ec1fb"
+	largeExpectedSHA256   = "9fcc93121a4301d2fad4ce2ecae35f1ecb86cee5e7fc04dc1c80c15be36b7f03"
 )
 
-var literalPattern = [...]int16{-32768, -1, 0, 1, 32767}
+var inputPattern = [...]int16{-32768, -1, 0, 1, 32767}
 
 type countingWriter struct {
 	digest     hash.Hash
@@ -56,6 +70,25 @@ func (w *countingWriter) reset() {
 }
 
 func (w *countingWriter) hash() string { return hex.EncodeToString(w.digest.Sum(nil)) }
+
+type oracleWriter struct {
+	*countingWriter
+	payload []byte
+}
+
+func newOracleWriter() *oracleWriter {
+	return &oracleWriter{countingWriter: newCountingWriter()}
+}
+
+func (w *oracleWriter) Write(payload []byte) (int, error) {
+	written, err := w.countingWriter.Write(payload)
+	if written > 0 {
+		w.payload = append(w.payload, payload[:written]...)
+	}
+	return written, err
+}
+
+func (w *oracleWriter) hex() string { return hex.EncodeToString(w.payload) }
 
 type measurement struct {
 	Samples              int    `json:"samples"`
@@ -200,8 +233,8 @@ func measureSizes() ([]measurement, uint64, error) {
 }
 
 func runOracle(negative bool) (oracleReport, error) {
-	pattern := []int16{literalPattern[0], literalPattern[1], literalPattern[2], literalPattern[3], literalPattern[4]}
-	patternWriter := newCountingWriter()
+	pattern := []int16{inputPattern[0], inputPattern[1], inputPattern[2], inputPattern[3], inputPattern[4]}
+	patternWriter := newOracleWriter()
 	patternSink, err := audio.NewFileSink("-", patternWriter)
 	if err != nil {
 		return oracleReport{}, err
@@ -213,7 +246,7 @@ func runOracle(negative bool) (oracleReport, error) {
 		return oracleReport{}, err
 	}
 
-	one := newCountingWriter()
+	one := newOracleWriter()
 	oneSink, err := audio.NewFileSink("-", one)
 	if err != nil {
 		return oracleReport{}, err
@@ -225,7 +258,7 @@ func runOracle(negative bool) (oracleReport, error) {
 		return oracleReport{}, err
 	}
 
-	tail := newCountingWriter()
+	tail := newOracleWriter()
 	tailSink, err := audio.NewFileSink("-", tail)
 	if err != nil {
 		return oracleReport{}, err
@@ -239,19 +272,34 @@ func runOracle(negative bool) (oracleReport, error) {
 	}
 
 	oracle := oracleReport{
-		PatternHex:    "0080ffff00000100ff7f",
+		PatternHex:    patternWriter.hex(),
 		PatternBytes:  int(patternWriter.bytes),
 		PatternSHA256: patternWriter.hash(),
-		OneSampleHex:  "0080",
-		TailHex:       "0080ff7fffff",
+		OneSampleHex:  one.hex(),
+		TailHex:       tail.hex(),
 		TailBytes:     int(tail.bytes),
 	}
-	oracle.ExactOraclePassed = patternWriter.bytes == 10 && patternWriter.hash() == expectedHash(patternSampleSize) &&
-		one.bytes == 2 && one.hash() == hashBytes([]byte{0x00, 0x80}) &&
-		tail.bytes == 6 && tail.hash() == hashBytes([]byte{0x00, 0x80, 0xff, 0x7f, 0xff, 0xff})
+	expectedPatternHex := oraclePatternHex
+	expectedPatternHash := oraclePatternSHA256
+	expectedOneSampleHex := oracleOneSampleHex
+	expectedOneSampleHash := oracleOneSampleSHA256
+	expectedTailHex := oracleTailHex
+	expectedTailHash := oracleTailSHA256
 	if negative {
-		oracle.ExactOraclePassed = false
-		return oracle, errors.New("literal oracle mismatch: negative-control mutated expected sample/hash")
+		// Mutate the expected values, rather than forcing the result, so this
+		// control proves the oracle can reject an incorrect sample/hash.
+		expectedPatternHex = mutateExpectedOracle(expectedPatternHex)
+		expectedPatternHash = mutateExpectedOracle(expectedPatternHash)
+	}
+	oracle.ExactOraclePassed = patternWriter.bytes == uint64(len(oraclePatternBytes)) &&
+		patternWriter.hex() == expectedPatternHex && patternWriter.hash() == expectedPatternHash &&
+		one.bytes == uint64(len(oracleOneSampleBytes)) && one.hex() == expectedOneSampleHex && one.hash() == expectedOneSampleHash &&
+		tail.bytes == uint64(len(oracleTailBytes)) && tail.hex() == expectedTailHex && tail.hash() == expectedTailHash
+	if !oracle.ExactOraclePassed {
+		if negative {
+			return oracle, errors.New("literal oracle mismatch: negative-control mutated expected sample/hash")
+		}
+		return oracle, fmt.Errorf("literal oracle mismatch: pattern=%s/%s one=%s/%s tail=%s/%s", patternWriter.hex(), patternWriter.hash(), one.hex(), one.hash(), tail.hex(), tail.hash())
 	}
 	return oracle, nil
 }
@@ -286,29 +334,44 @@ func verifyMeasurements(measurements []measurement) error {
 func makeSamples(count int) []int16 {
 	samples := make([]int16, count)
 	for index := range samples {
-		samples[index] = literalPattern[index%len(literalPattern)]
+		samples[index] = inputPattern[index%len(inputPattern)]
 	}
 	return samples
 }
 
 func expectedHash(count int) string {
-	digest := sha256.New()
-	var encoded [patternSampleSize * 2]byte
-	for index, sample := range literalPattern {
-		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
+	switch count {
+	case smallSampleCount:
+		return smallExpectedSHA256
+	case largeSampleCount:
+		return largeExpectedSHA256
+	case patternSampleSize:
+		return oraclePatternSHA256
+	default:
+		return hashRepeatedOracle(count)
 	}
+}
+
+func hashRepeatedOracle(count int) string {
+	digest := sha256.New()
 	full := count / patternSampleSize
 	for index := 0; index < full; index++ {
-		_, _ = digest.Write(encoded[:])
+		_, _ = digest.Write([]byte(oraclePatternBytes))
 	}
 	remaining := count % patternSampleSize
-	_, _ = digest.Write(encoded[:remaining*2])
+	_, _ = digest.Write([]byte(oraclePatternBytes[:remaining*2]))
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
-func hashBytes(payload []byte) string {
-	digest := sha256.Sum256(payload)
-	return hex.EncodeToString(digest[:])
+func mutateExpectedOracle(value string) string {
+	if value == "" {
+		return "0"
+	}
+	replacement := byte('0')
+	if value[len(value)-1] == replacement {
+		replacement = '1'
+	}
+	return value[:len(value)-1] + string(replacement)
 }
 
 func totalAlloc() uint64 {
