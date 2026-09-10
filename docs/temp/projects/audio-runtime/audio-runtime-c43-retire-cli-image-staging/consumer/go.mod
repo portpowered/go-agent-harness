@@ -3,6 +3,7 @@ module example.com/audio-runtime-c43-retire-cli-image-staging-consumer
 go 1.26.7
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3
 	github.com/portpowered/go-agent-harness/go-agent-runtime v0.0.0
 )

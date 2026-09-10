@@ -366,7 +366,18 @@ func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan sessio
 
 func capabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
 	kind := strings.ToLower(strings.TrimSpace(event.Type))
-	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation")
+	if event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") {
+		return true
+	}
+	// Adapter-owned semantic browser streams report incremental catalog
+	// mutations directly. Treat those notifications like the legacy broker's
+	// catalog_changed event so the provider receives the refreshed definitions.
+	switch kind {
+	case "tools_added", "tools_removed", "page_navigated", "frame_navigated":
+		return true
+	default:
+		return false
+	}
 }
 
 func waitForOpeningContent(value any, ctx context.Context) error {
