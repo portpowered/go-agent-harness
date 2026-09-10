@@ -157,3 +157,129 @@ func TestPCM16DurationRejectsMalformedOrUnrepresentableInput(t *testing.T) {
 		t.Fatalf("overflow PCM16Duration() error = %v", err)
 	}
 }
+
+func TestPCM16ConversionsRejectOverflowingDimensionsBeforeAllocation(t *testing.T) {
+	maximumInt := maximumPCM16Int()
+	firstInvalidChannels := maximumInt/2 + 1
+	tinyPCM := codec.EncodePCM16([]int16{0})
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "empty source frame size first invalid",
+			call: func() error {
+				_, err := ConvertPCM16Bytes(nil, firstInvalidChannels, 16000, 1, 16000)
+				return err
+			},
+		},
+		{
+			name: "empty source frame size max int",
+			call: func() error {
+				_, err := ConvertPCM16Bytes(nil, maximumInt, 16000, 1, 16000)
+				return err
+			},
+		},
+		{
+			name: "tiny source frame size first invalid",
+			call: func() error {
+				_, err := ConvertPCM16Bytes(tinyPCM, firstInvalidChannels, 16000, 1, 16000)
+				return err
+			},
+		},
+		{
+			name: "tiny source frame size max int",
+			call: func() error {
+				_, err := ConvertPCM16Bytes(tinyPCM, maximumInt, 16000, maximumInt, 16000)
+				return err
+			},
+		},
+		{
+			name: "target sample byte size",
+			call: func() error {
+				_, err := ConvertPCM16Bytes(tinyPCM, 1, 16000, firstInvalidChannels, 16000)
+				return err
+			},
+		},
+		{
+			name: "resample float rounded length",
+			call: func() error {
+				_, err := ResamplePCM16([]int16{1}, 1, maximumInt)
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.call(); !errors.Is(err, ErrPCM16ConversionSize) {
+				t.Fatalf("error = %v, want ErrPCM16ConversionSize", err)
+			}
+		})
+	}
+
+	if got, err := ConvertPCM16Bytes(nil, maximumInt/2, 16000, 1, 16000); err != nil || got == nil {
+		t.Fatalf("largest representable source frame size = %#v, %v; want nonnil empty output", got, err)
+	}
+	if _, err := ConvertPCM16Bytes(tinyPCM, maximumInt/2, 16000, 1, 16000); !errors.Is(err, ErrPCM16ConversionAlignment) {
+		t.Fatalf("largest representable source frame size with tiny input = %v, want alignment error", err)
+	}
+}
+
+func TestPCM16ConversionSizingHelpersUseSafeBoundaries(t *testing.T) {
+	maximumInt := maximumPCM16Int()
+	if got, err := checkedPCM16OutputLength(1, 1, maximumInt); err == nil || !errors.Is(err, ErrPCM16ConversionSize) {
+		t.Fatalf("rounded float boundary = %d, %v; want size error", got, err)
+	}
+	if got, err := checkedPCM16OutputLength(0, 1, maximumInt); err != nil || got != 0 {
+		t.Fatalf("empty output sizing = %d, %v; want zero", got, err)
+	}
+	if got, err := checkedPCM16OutputLength(2, 1000, 1500); err != nil || got != 3 {
+		t.Fatalf("ceil output sizing = %d, %v; want 3", got, err)
+	}
+
+	maximumSamples := maximumInt / 2
+	if got, err := checkedPCM16OutputSampleCount(1, maximumSamples); err != nil || got != maximumSamples {
+		t.Fatalf("largest representable sample count = %d, %v; want %d", got, err, maximumSamples)
+	}
+	for _, dimensions := range [][2]int{
+		{2, maximumSamples},
+		{1, maximumSamples + 1},
+		{maximumSamples, 2},
+	} {
+		if got, err := checkedPCM16OutputSampleCount(dimensions[0], dimensions[1]); !errors.Is(err, ErrPCM16ConversionSize) {
+			t.Fatalf("sample dimensions %v = %d, %v; want size error", dimensions, got, err)
+		}
+	}
+}
+
+func TestPCM16ConversionsPreserveRoundingAndOwnership(t *testing.T) {
+	got, err := ResamplePCM16([]int16{0, -1001}, 2, 4)
+	if err != nil {
+		t.Fatalf("ResamplePCM16() rounding error = %v", err)
+	}
+	if want := []int16{0, -501, -1001, -1001}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResamplePCM16() rounding = %v, want %v", got, want)
+	}
+
+	inputSamples := []int16{1, -2, 3}
+	resampled, err := ResamplePCM16(inputSamples, 1000, 1000)
+	if err != nil {
+		t.Fatalf("ResamplePCM16() identity error = %v", err)
+	}
+	resampled[0] = 99
+	inputSamples[1] = 88
+	if !reflect.DeepEqual(resampled, []int16{99, -2, 3}) {
+		t.Fatalf("ResamplePCM16() output changed after input mutation: %v", resampled)
+	}
+
+	inputPCM := codec.EncodePCM16([]int16{1, -2})
+	converted, err := ConvertPCM16Bytes(inputPCM, 1, 1000, 1, 1000)
+	if err != nil {
+		t.Fatalf("ConvertPCM16Bytes() identity error = %v", err)
+	}
+	converted[0] = 99
+	inputPCM[1] = 88
+	if converted[0] != 99 || converted[1] != 0 {
+		t.Fatalf("ConvertPCM16Bytes() ownership changed after mutations: output=%v input=%v", converted, inputPCM)
+	}
+}
