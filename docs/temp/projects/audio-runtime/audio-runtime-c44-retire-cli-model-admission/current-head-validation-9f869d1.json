@@ -1,0 +1,56 @@
+{
+  "schema": "audio-runtime-c44-current-head-validation/v2",
+  "task": "audio-runtime-c44-retire-cli-model-admission",
+  "tested_source_revision": "9f869d1dbb0a1724128f7c7d083a0054270def68",
+  "implementation_source_revision": "f882566c4f8b066eaf1f48557ba35e4e803c3c9c",
+  "source_tree_dirty": false,
+  "source_archive_sha256": "778fafb4fb0f8480f3fc8be93e38435adbf1bf89e286c1dd728def06585dd3b4",
+  "evidence_only_descendant": true,
+  "build_inputs": {
+    "external_consumer": {
+      "file_count": 1079,
+      "manifest_sha256": "185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711",
+      "artifact_bytes": 6403602,
+      "artifact_sha256": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b"
+    },
+    "shipped_yui": {
+      "file_count": 2177,
+      "manifest_sha256": "183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767",
+      "artifact_bytes": 51042338,
+      "artifact_sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe"
+    }
+  },
+  "runs": {
+    "public": {
+      "run_dir": "runs/verify-20260910T211705Z-79019",
+      "decision": "ACCEPTED",
+      "elapsed_seconds": 6.410442,
+      "audio_tool_pcm_bytes": 4800,
+      "audio_tool_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "interruption_pcm_bytes": 3840,
+      "interruption_pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+      "interruption_healthy_tail_bytes": 2400,
+      "interruption_healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+      "invalid_admission_side_effects": "provider connection and output target absent",
+      "wrong_pcm_oracle_exit": 1,
+      "wrong_marker_oracle_exit": 1,
+      "timeout_cleanup": "TERM sent, parent reaped, no surviving process group PIDs"
+    },
+    "negative_controls": {
+      "run_dir": "runs/verify-20260910T211716Z-79149",
+      "decision": "ACCEPTED",
+      "elapsed_seconds": 4.83978,
+      "consumer_normal": "passed",
+      "consumer_race": "passed",
+      "wrong_oracle_exit": 1,
+      "timeout_cleanup": "TERM sent, parent reaped, no surviving process group PIDs"
+    }
+  },
+  "focused_checks": {
+    "provider_normal": "passed",
+    "provider_race": "passed",
+    "cli_model_normal": "passed",
+    "cli_model_race": "passed",
+    "architecture_size": "183 packages, 1884 files, 27754 functions"
+  }
+}
