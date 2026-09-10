@@ -234,7 +234,7 @@ func TestComposeSessionInstructionsDistinguishesConnectedUnselectedBrowser(t *te
 				BrowserCapabilityState: state,
 				ToolDefinitions:        []messages.ToolDefinition{{Name: webmcp.ListTabsToolName}},
 			}, "customer instructions")
-			if strings.Contains(got, sessionConnectedUnselectedBrowserGrounding) || strings.Contains(got, "browser endpoint is connected") {
+			if strings.Contains(got, "WebMCP browser selection:") || strings.Contains(got, "browser endpoint is connected") {
 				t.Fatalf("state %q received connected-unselected grounding: %q", state, got)
 			}
 		})
@@ -474,7 +474,7 @@ func TestComposeSessionInstructionsCalibratesGenuineAmbiguityAsksNamingBoth(t *t
 // covers required test 5: unresolved selection ambiguity must never surface
 // to the model as "the capability is unavailable." This is the Session-2/3
 // live failure (zero tool calls, "I can't directly inspect..."). Critically,
-// the calibration block -- unlike sessionConnectedUnselectedBrowserGrounding
+// the calibration block -- unlike the connected-unselected browser block
 // -- must appear for every browser capability state as long as browser tools
 // are enabled, not only the narrow "connected but never yet selected" state,
 // because the failing live probe had already selected a page earlier in the
