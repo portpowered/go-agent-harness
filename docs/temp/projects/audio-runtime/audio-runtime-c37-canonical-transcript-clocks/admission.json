@@ -1,0 +1,23 @@
+{
+  "project_control": {
+    "command": "factory/scripts/project-control.py verify-work --type task --name audio-runtime-c37-canonical-transcript-clocks",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c37-canonical-transcript-clocks"
+    }
+  },
+  "board_session": "~default",
+  "task": {
+    "work_id": "work-task-190",
+    "state": "init",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks",
+    "branch": "codex/audio-runtime-c37-canonical-transcript-clocks",
+    "base_revision": "2525da44053e5bfe7e2d8fccc55463a645107e29"
+  },
+  "review_rows": [],
+  "rejection_feedback": [],
+  "branch_matches_prd": true,
+  "sole_admitted_project": "audio-runtime",
+  "no_acceptance_waiver": true
+}
