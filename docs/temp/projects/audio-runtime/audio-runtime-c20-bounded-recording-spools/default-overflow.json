@@ -6,7 +6,7 @@
     "file_bytes": {
       "agent.transcript.jsonl": 26743253,
       "client.transcript.jsonl": 26743253,
-      "manifest.json": 1032,
+      "manifest.json": 1034,
       "provider.json": 439
     },
     "finalization_error": "transcript: recording retain conversation summary: recording conversation summary budget exceeded\nshort buffer",
@@ -20,9 +20,9 @@
     },
     "provider_bytes": 439,
     "sidecar_bytes": 448,
-    "source_revision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
+    "source_revision": "99452901a8b352862823420f287980b1cc56c63d",
     "status": "partial",
-    "total_bytes": 53487977,
+    "total_bytes": 53487979,
     "transcript_lines": {
       "agent.transcript.jsonl": 19,
       "client.transcript.jsonl": 19
