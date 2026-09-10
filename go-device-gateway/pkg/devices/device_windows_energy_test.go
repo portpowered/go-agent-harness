@@ -29,7 +29,7 @@ func TestWindowsPortablePlaybackBurstPreservesFIFOCanonicalCaptureEnergy(t *test
 		if err := codec.EncodePCM16Into(raw, samples); err != nil {
 			t.Fatal(err)
 		}
-		energy, err := audio.PacketEnergy(raw, 1, 1, len(raw), codec.SampleFormat{
+		energy, err := audio.PacketEnergy(raw, 1, len(samples), len(raw), codec.SampleFormat{
 			Encoding:           codec.SampleEncodingPCM,
 			BitsPerSample:      16,
 			ValidBitsPerSample: 16,
