@@ -14,6 +14,7 @@ admission. The predecessor and baseline checkpoints were preserved:
 | required baseline | `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` |
 | freshly fetched `origin/main` | `1f82284abee0bd31a6680310444cea2e4c16ef00` |
 | pre-change isolated HEAD | `1f82284abee0bd31a6680310444cea2e4c16ef00` |
+| candidate implementation revision | `6f82c04` |
 
 `git merge-base --is-ancestor` passed for the startup integration revision,
 the required baseline, and fetched `origin/main`. No merge or reset was used;
