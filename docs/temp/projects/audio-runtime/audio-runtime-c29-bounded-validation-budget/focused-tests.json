@@ -1,0 +1,20 @@
+{
+  "command": [
+    "rtk",
+    "proxy",
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "factory/scripts/tests",
+    "-p",
+    "test_prepare_validation_budget.py"
+  ],
+  "elapsedSeconds": 3.6042729588225484,
+  "returncode": 0,
+  "stderr": "....\n----------------------------------------------------------------------\nRan 4 tests in 3.532s\n\nOK\n",
+  "stdout": "",
+  "timedOut": false,
+  "timeoutSeconds": 120
+}
