@@ -347,24 +347,20 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 	providerRelease, writerRelease := make(chan struct{}), make(chan struct{})
 	firstWritten := make(chan struct{})
 	writer := &growingSessionAudioWriter{firstWritten: firstWritten, release: writerRelease}
+	ctx, cancel := context.WithCancel(context.Background())
 	inf := &gatedSessionAudioInferencer{
 		first:   pcm16Bytes(first),
 		second:  pcm16Bytes(second),
-		release: providerRelease,
+		release: providerRelease, cancel: cancel,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- RunSessionWithAudioOut(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
-			SessionInferencer: inf,
+			SessionInferencer: inf, RuntimeObserver: inf,
 		}, "-")
 	}()
-	select {
-	case <-firstWritten:
-	case <-time.After(2 * time.Second):
-		t.Fatal("first audio delta did not reach the output barrier")
-	}
+	waitForClosedTargetSignal(t, context.Background(), firstWritten, "first audio delta output barrier")
 	cancel()
 	close(providerRelease)
 	close(writerRelease)
@@ -637,7 +633,11 @@ type gatedSessionAudioInferencer struct {
 	first   []byte
 	second  []byte
 	release <-chan struct{}
+	cancel  context.CancelFunc
 }
+
+func (i *gatedSessionAudioInferencer) ObserveSessionRuntime(SessionRuntimeObservation) { i.cancel() }
+
 type sessionAudioTerminalBarrierSession struct {
 	*scriptedSession
 	closeStarted, releaseClose, releaseConnect, connectStarted chan struct{}

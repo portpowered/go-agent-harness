@@ -2504,3 +2504,29 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   without polling. If that gate rejects a specific check, inspect only its
   exact log, repair the same task, and return `CONTINUE` while actionable work
   remains.
+
+# C38 queued-before-cancellation repair checkpoint 2026-09-10T12:00Z
+
+- Review-245's exact finding is repaired in the leased `forwardNext` path: a
+  selected provider message now receives a bounded
+  `context.WithoutCancel(s.ctx)` retention context before `WriteSamples`, with
+  retention enabled when cancellation was already observed. The existing
+  clean-interrupt fixture now cancels from the runtime observation immediately
+  before sink write; the prior source failed that regression after the 10s
+  timeout, while the repaired source passes and preserves both ordered PCM
+  deltas. No unrelated source or predecessor checkpoint was changed.
+- Exact current worktree evidence is green for the C38 scope: normal audio
+  focused checks (`4` targeted tests), audio race (`19` tests), full
+  `agentruntime` normal package (`1,055` tests), focused vet, architecture-size
+  (`181` packages / `1,877` files / `27,709` functions), size, Wire, pinned
+  golangci-lint `v2.9.0` (`0` issues in every module), staticcheck `2026.1`,
+  and `git diff --check`. A full package race attempt had `1,054` passes and
+  one unrelated browser-validator subprocess-timeout failure under race; no
+  C38 audio assertion failed.
+- The worktree remains uncommitted and owned only by this task's two leased
+  files pending the exact-head runner. Next action: commit this checkpoint and
+  the source/test repair, run causal/original/repaired/negative/cleanup/
+  focused/package evidence from the clean head, push the same PR `#430`,
+  update its body with review-245's race and exact evidence, verify submission
+  once without polling CI, and return `ACCEPTED`; retain ownership with
+  `CONTINUE` for any exact rejection or actionable repair.

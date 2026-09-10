@@ -638,9 +638,7 @@ func (s *sessionAudioOutputSession) Receive() *messages.TypedBuffer[messages.Str
 	return s.receive
 }
 
-func (s *sessionAudioOutputSession) Done() <-chan struct{} {
-	return s.done
-}
+func (s *sessionAudioOutputSession) Done() <-chan struct{} { return s.done }
 
 func (s *sessionAudioOutputSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.Session)
@@ -670,7 +668,9 @@ func (s *sessionAudioOutputSession) forward() {
 func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
 	select {
 	case msg := <-input.Chan():
-		return s.forwardMessage(msg)
+		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		defer cancel()
+		return s.forwardMessageWithContext(retainingCtx, msg, s.ctx.Err() != nil)
 	case <-s.Session.Done():
 		if s.ctx.Err() == nil {
 			s.drain(input, s.ctx, false)
