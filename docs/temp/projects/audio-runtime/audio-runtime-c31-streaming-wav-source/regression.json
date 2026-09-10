@@ -1,8 +1,8 @@
 {
   "schema": "audio-runtime-c31-read-only-c21-regression.v1",
-  "source": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
-  "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
-  "yui_build_inputs_sha256": "033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4",
+  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+  "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+  "yui_build_inputs_sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78",
   "controls": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/verify.py",
   "fixtures": {
     "audio-tool": {
@@ -19,14 +19,14 @@
       "label": "audio-tool",
       "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
-      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/yui-audio-tool.stdout",
-      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/yui-audio-tool.stderr",
-      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-audio-tool/tool-record/manifest.json",
-      "manifest_sha256": "a5b45459abf58e8d83e0f71417ae620c123464f27c786ca41edc952d7ded3f45",
-      "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-audio-tool/tool-record/audio/out-000.pcm",
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/yui-audio-tool.stdout",
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/yui-audio-tool.stderr",
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-audio-tool/tool-record/manifest.json",
+      "manifest_sha256": "9f06967a9c86f7309f55e2ab19fc426a7a16bfdd98aecfb488850d26cd317149",
+      "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-audio-tool/tool-record/audio/out-000.pcm",
       "pcm_bytes": 4800,
       "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
-      "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-audio-tool/audio.wav",
+      "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-audio-tool/audio.wav",
       "audio_out_bytes": 3244,
       "audio_out_sha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc",
       "terminal": {
@@ -36,21 +36,21 @@
         "terminal_provenance": "provider",
         "output_state": "not_applicable"
       },
-      "session_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-audio-tool/tool-record/session-log.jsonl",
+      "session_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-audio-tool/tool-record/session-log.jsonl",
       "healthy_tail": {}
     },
     {
       "label": "interruption",
       "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
       "fixture_sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
-      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/yui-interruption.stdout",
-      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/yui-interruption.stderr",
-      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-interruption/tool-record/manifest.json",
-      "manifest_sha256": "3f3d07e5e4898da3a5791c1a33aff3f24864cc361a24af3c54d4cdcd6ed30899",
-      "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-interruption/tool-record/audio/out-000.pcm",
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/yui-interruption.stdout",
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/yui-interruption.stderr",
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-interruption/tool-record/manifest.json",
+      "manifest_sha256": "6055a8bc891515cbf727610d128714532e36727343aa3db6a3e8c608386f4b58",
+      "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-interruption/tool-record/audio/out-000.pcm",
       "pcm_bytes": 3840,
       "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
-      "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-interruption/audio.wav",
+      "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-interruption/audio.wav",
       "audio_out_bytes": 3404,
       "audio_out_sha256": "5383d64f00998543e04931a3bbc548c6700a62d051b5801bdf806179111d349f",
       "terminal": {
@@ -60,7 +60,7 @@
         "terminal_provenance": "replay",
         "output_state": "complete"
       },
-      "session_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789015316116760000/parity-interruption/tool-record/session-log.jsonl",
+      "session_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/regression-1789017447536836000/parity-interruption/tool-record/session-log.jsonl",
       "healthy_tail": {
         "offset_bytes": 1440,
         "bytes": 2400,

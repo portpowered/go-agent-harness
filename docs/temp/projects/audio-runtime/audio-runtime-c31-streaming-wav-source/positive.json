@@ -1,12 +1,12 @@
 {
   "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
   "case": "verify",
-  "source": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
   "source_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0",
   "goos": "darwin",
   "goarch": "arm64",
-  "started_at": "2026-09-10T04:41:34.207734Z",
-  "duration_ms": 3,
+  "started_at": "2026-09-10T05:16:57.749492Z",
+  "duration_ms": 2,
   "clean_shutdown": true,
   "io": {
     "open_read_bytes": 44,

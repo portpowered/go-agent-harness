@@ -1,7 +1,7 @@
 {
   "schema": "audio-runtime-c31-artifact-manifest.v2",
-  "source": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
-  "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+  "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
   "build_inputs": {
     "consumer": {
       "path_prefixes": [
@@ -23,7 +23,7 @@
         "go.work.sum"
       ],
       "file_count": 2157,
-      "sha256": "033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4"
+      "sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78"
     }
   },
   "go_version": "go version go1.26.7 darwin/arm64",
@@ -31,14 +31,14 @@
     "consumer": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
       "sha256": "bdc0da3c7fd81255c6c073c18e85bc9e9647cc454c7151c926505496f52d87f6",
-      "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+      "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
       "build_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0"
     },
     "yui": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
-      "sha256": "5926ed933a58e8d1e026be60df41f60897954fac2dc94b78c15881618f4a7dfc",
-      "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
-      "build_inputs_sha256": "033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4"
+      "sha256": "b9da73df35aecfbef051fe2f2ab7c696b4b54e91e8d4c07ae28088bffc688a18",
+      "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+      "build_inputs_sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78"
     }
   }
 }

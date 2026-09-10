@@ -34,19 +34,21 @@ the identical oracle must pass. Generated binaries, process records, and JSON
 reports record exact source identity and are retained as task evidence when
 they are committed.
 
-The JSON reports identify the clean implementation revision that was tested as
-`tested_source_revision` and include a SHA256 over their scoped build inputs.
+The JSON reports identify the clean merged implementation revision that was
+tested as `tested_source_revision`
+(`ce9a795192bc5433811de4f37824cc579fa0daa8`) and include a SHA256 over their
+scoped build inputs.
 The final evidence checkpoint may be a docs-only descendant of that revision;
 the descendant is valid only when `git diff --name-status` shows evidence paths
 and the recorded build-input hashes are unchanged. This separates executable
 provenance from the later evidence ledger commit.
 
-`characterize-before.json` records the unfixed `origin/main` source
+`characterize-before.json` records the unfixed pre-repair source
 (`1f82284abee0bd31a6680310444cea2e4c16ef00`): the 4096-byte fixture measured
 74136 bytes per constructor and the 4194304-byte fixture measured a median
 26624552 bytes (maximum 26629840), so the frozen oracle failed. The repaired
 run keeps both fixture maxima under 65536 bytes and median growth at zero; the
-exact measurements and source identity are in `characterize-after.json`.
+exact measurements and merged-source identity are in `characterize-after.json`.
 
 The file-input workflow is launched with the same-source `yui` binary and a
 derived, integrity-sealed copy of the shipped credential-free
