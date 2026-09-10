@@ -1,0 +1,49 @@
+{
+  "invalid_setups_rejected": true,
+  "process": {
+    "argv": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session"
+    ],
+    "cleanup_bounded": true,
+    "cleanup_error": "",
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-negative-iv6fc8w9/child/cwd",
+    "descendants_alive": false,
+    "descendants_killed": 0,
+    "descendants_seen": 0,
+    "duration_seconds": 0.011346,
+    "exit_code": 1,
+    "process_group_alive": false,
+    "reaped": true,
+    "stderr": "headless-session: expected negative controls rejected all invalid setups\n",
+    "stdout": "{\n  \"schema\": \"audio-runtime-c27-headless-session-consumer/v1\",\n  \"scenario\": \"negative-controls\",\n  \"status\": \"expected_negative_controls\",\n  \"constructor_provider_calls\": 0,\n  \"provider_calls\": 0,\n  \"controls\": {\n    \"crossed_output_history\": {\n      \"failed_closed\": true,\n      \"diagnostic\": \"history oracle: provider observed [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"A only\\\"},{\\\"role\\\":\\\"assistant\\\",\\\"text\\\":\\\"provider=A-cross input=\\\\\\\"A only\\\\\\\" history=77ebabd7e85203e41e99cfcb2caed9fc98abcc75f9bb0aabc88f45262fd231f0 count=1 call=1\\\"},{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"A output checked against B\\\"}], expected [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"B only\\\"},{\\\"role\\\":\\\"assistant\\\",\\\"text\\\":\\\"provider=B-cross input=\\\\\\\"B only\\\\\\\" history=aecf513cf6b249933b3e2ed265d382266906ea8b5b49350cd7581df4c1822afe count=1 call=1\\\"},{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"A output checked against B\\\"}]\"\n    },\n    \"crossed_store_history\": {\n      \"failed_closed\": true,\n      \"diagnostic\": \"history oracle: provider observed [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"B store checked against A\\\"}], expected [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"A only\\\"},{\\\"role\\\":\\\"assistant\\\",\\\"text\\\":\\\"provider=A-cross input=\\\\\\\"A only\\\\\\\" history=77ebabd7e85203e41e99cfcb2caed9fc98abcc75f9bb0aabc88f45262fd231f0 count=1 call=1\\\"},{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"B store checked against A\\\"}]\"\n    },\n    \"missing_saved_file\": {\n      \"failed_closed\": true,\n      \"diagnostic\": \"history oracle: provider observed [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"after missing file\\\"}], expected [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"negative saved history\\\"},{\\\"role\\\":\\\"assistant\\\",\\\"text\\\":\\\"provider=negative-initial input=\\\\\\\"negative saved history\\\\\\\" history=2b2bb2be0712bc3fc40282c818d5dd250e45bd8689bca55c4e300049bdeed598 count=1 call=1\\\"},{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"after missing file\\\"}]\"\n    },\n    \"no_op_save\": {\n      \"failed_closed\": true,\n      \"diagnostic\": \"history oracle: provider observed [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"after no-op save\\\"}], expected [{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"no-op save history\\\"},{\\\"role\\\":\\\"assistant\\\",\\\"text\\\":\\\"provider=negative-noop input=\\\\\\\"no-op save history\\\\\\\" history=ed58bbea6e2c7b9034fe2c46f919c38bd0f35cc766c48521038658c613d0016a count=1 call=1\\\"},{\\\"role\\\":\\\"user\\\",\\\"text\\\":\\\"after no-op save\\\"}]\"\n    }\n  },\n  \"notes\": [\n    \"each control must fail closed with an observable history or cross-boundary diagnostic\"\n  ]\n}\n",
+    "timed_out": false
+  },
+  "report": {
+    "constructor_provider_calls": 0,
+    "controls": {
+      "crossed_output_history": {
+        "diagnostic": "history oracle: provider observed [{\"role\":\"user\",\"text\":\"A only\"},{\"role\":\"assistant\",\"text\":\"provider=A-cross input=\\\"A only\\\" history=77ebabd7e85203e41e99cfcb2caed9fc98abcc75f9bb0aabc88f45262fd231f0 count=1 call=1\"},{\"role\":\"user\",\"text\":\"A output checked against B\"}], expected [{\"role\":\"user\",\"text\":\"B only\"},{\"role\":\"assistant\",\"text\":\"provider=B-cross input=\\\"B only\\\" history=aecf513cf6b249933b3e2ed265d382266906ea8b5b49350cd7581df4c1822afe count=1 call=1\"},{\"role\":\"user\",\"text\":\"A output checked against B\"}]",
+        "failed_closed": true
+      },
+      "crossed_store_history": {
+        "diagnostic": "history oracle: provider observed [{\"role\":\"user\",\"text\":\"B store checked against A\"}], expected [{\"role\":\"user\",\"text\":\"A only\"},{\"role\":\"assistant\",\"text\":\"provider=A-cross input=\\\"A only\\\" history=77ebabd7e85203e41e99cfcb2caed9fc98abcc75f9bb0aabc88f45262fd231f0 count=1 call=1\"},{\"role\":\"user\",\"text\":\"B store checked against A\"}]",
+        "failed_closed": true
+      },
+      "missing_saved_file": {
+        "diagnostic": "history oracle: provider observed [{\"role\":\"user\",\"text\":\"after missing file\"}], expected [{\"role\":\"user\",\"text\":\"negative saved history\"},{\"role\":\"assistant\",\"text\":\"provider=negative-initial input=\\\"negative saved history\\\" history=2b2bb2be0712bc3fc40282c818d5dd250e45bd8689bca55c4e300049bdeed598 count=1 call=1\"},{\"role\":\"user\",\"text\":\"after missing file\"}]",
+        "failed_closed": true
+      },
+      "no_op_save": {
+        "diagnostic": "history oracle: provider observed [{\"role\":\"user\",\"text\":\"after no-op save\"}], expected [{\"role\":\"user\",\"text\":\"no-op save history\"},{\"role\":\"assistant\",\"text\":\"provider=negative-noop input=\\\"no-op save history\\\" history=ed58bbea6e2c7b9034fe2c46f919c38bd0f35cc766c48521038658c613d0016a count=1 call=1\"},{\"role\":\"user\",\"text\":\"after no-op save\"}]",
+        "failed_closed": true
+      }
+    },
+    "notes": [
+      "each control must fail closed with an observable history or cross-boundary diagnostic"
+    ],
+    "provider_calls": 0,
+    "scenario": "negative-controls",
+    "schema": "audio-runtime-c27-headless-session-consumer/v1",
+    "status": "expected_negative_controls"
+  }
+}
