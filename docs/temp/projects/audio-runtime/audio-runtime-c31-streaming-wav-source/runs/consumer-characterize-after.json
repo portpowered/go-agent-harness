@@ -1,0 +1,25 @@
+{
+  "name": "consumer-characterize-after",
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
+    "--case",
+    "characterize"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
+  "exit_code": 0,
+  "elapsed_ms": 175,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"characterize\",\n  \"source\": \"a85ebbd374d8264f33a79d551b9cea8aff9b36ab\",\n  \"source_inputs_sha256\": \"a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T06:46:02.560296Z\",\n  \"duration_ms\": 5,\n  \"clean_shutdown\": true,\n  \"allocations\": {\n    \"payload_bytes\": [\n      4096,\n      4194304\n    ],\n    \"repetitions\": 5,\n    \"measurements\": [\n      {\n        \"payload_bytes\": [\n          4096\n        ],\n        \"bytes\": [\n          488,\n          488,\n          488,\n          488,\n          488\n        ]\n      },\n      {\n        \"payload_bytes\": [\n          4194304\n        ],\n        \"bytes\": [\n          488,\n          488,\n          488,\n          488,\n          488\n        ]\n      }\n    ],\n    \"small_max_bytes\": 488,\n    \"large_max_bytes\": 488,\n    \"small_median_bytes\": 488,\n    \"large_median_bytes\": 488,\n    \"large_minus_small_median\": 0,\n    \"oracle\": {\n      \"per_constructor_limit\": 65536,\n      \"growth_limit\": 16384,\n      \"pass\": true\n    }\n  }\n}\n",
+  "stderr": "",
+  "timed_out": false,
+  "timeout_seconds": 60,
+  "cleanup_timeout_seconds": 0.25,
+  "cleanup": {
+    "attempted": false,
+    "signal": null,
+    "signal_sent": false,
+    "reaped": true,
+    "reap_timed_out": false,
+    "pipes_closed": true,
+    "elapsed_ms": 0
+  }
+}
