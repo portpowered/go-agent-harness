@@ -1,0 +1,52 @@
+{
+  "raw_job_response": {
+    "id": 102541983884,
+    "run_id": 34373981932,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34373981932",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX3_qAjA",
+    "head_sha": "e74de9e284cbee0c973bb8619ab65fcd898d0a19",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102541983884",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34373981932/job/102541983884",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T16:00:38Z",
+    "started_at": "2026-09-09T16:00:40Z",
+    "completed_at": "2026-09-09T16:06:15Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T16:00:41Z", "completed_at": "2026-09-09T16:00:42Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T16:00:42Z", "completed_at": "2026-09-09T16:00:45Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T16:00:45Z", "completed_at": "2026-09-09T16:00:56Z"},
+      {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T16:00:56Z", "completed_at": "2026-09-09T16:06:12Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T16:06:12Z", "completed_at": "2026-09-09T16:06:12Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T16:06:12Z", "completed_at": "2026-09-09T16:06:13Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T16:06:13Z", "completed_at": "2026-09-09T16:06:13Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34373981932/job/102541983884",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208778,
+    "runner_name": "GitHub Actions 1000208778",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head e74de9e284cbee0c973bb8619ab65fcd898d0a19: required checks failed on current head e74de9e284cbee0c973bb8619ab65fcd898d0a19: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34373981932/job/102541983884). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102541983884/logs",
+  "full_log_observation": {
+    "available": true,
+    "line_count": 309,
+    "sha256": "5529bce4c1d79721042964152759382f9bc7206c50a91c595ca91711d4f079c1",
+    "failed_step": "Run coverage profiles and coverage gate / make coverage",
+    "failure": "agent-cli/internal/wire TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession failed at composition_test.go:417 because composed session error was <nil>, but the test requires the RTC media capability error after preflight; agent-cli coverage exited with status 1 and make coverage exited with status 2.",
+    "other_observed_results": "The C18 replay packages and agent-cli integration package completed successfully; expected negative-control diagnostics preceded the one failure; the post-job submodule warning was unrelated."
+  },
+  "causal_reproduction": {
+    "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=20 -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/c18-wire-coverage.out -timeout=180s",
+    "exit_code": 0,
+    "result": "20/20 passed in 1 package under the same coverage instrumentation",
+    "scope": "The failing composition control is outside C18 owned replay/Wire/embedding implementation paths, does not traverse the extracted strict replay service, and no C18 production defect reproduced."
+  },
+  "current_candidate": "e74de9e284cbee0c973bb8619ab65fcd898d0a19"
+}
