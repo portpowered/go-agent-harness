@@ -1,0 +1,20 @@
+{
+  "command": [
+    "rtk",
+    "proxy",
+    "python3",
+    "docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/public-controls.py",
+    "--script",
+    "docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/prepare-validation-before.py",
+    "--expect",
+    "legacy",
+    "--child-timeout-seconds",
+    "10"
+  ],
+  "elapsedSeconds": 0.2911067078821361,
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "{\"status\": \"passed\", \"report\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c29-bounded-validation-budget/docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/public-controls-report.json\", \"expect\": \"legacy\"}\n",
+  "timedOut": false,
+  "timeoutSeconds": 120
+}

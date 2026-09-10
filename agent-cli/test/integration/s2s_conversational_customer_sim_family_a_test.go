@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,18 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/gorilla/websocket"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 )
 
-// TestFamilyAIterativeBuildUpThroughShippedProcess is the whole-family
-// hermetic proof for the customer simulator's first scenario. Four natural
-// customer utterances cross one continuously open PCM16 stream into the
-// shipped executable. The fake Realtime provider requests the real process's
-// exec, write_file, and edit_file tools, and gates each next utterance on the
-// prior confirmation audio. The filesystem oracle snapshots the sandbox from
-// those gates, before later turns are allowed to run.
 func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	scenario := loadFamilyAScenario(t)
 	sandbox := filepath.Join(t.TempDir(), "sandbox")
@@ -40,7 +32,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	fixture := newFamilyAProviderFixture(scenario)
 	defer fixture.Close()
 	startedAt := time.Now()
-	fixture.SetStartedAt(startedAt)
+	fixture.startedAt = startedAt
 	configDir := filepath.Join(t.TempDir(), "config")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatalf("create config directory: %v", err)
@@ -94,7 +86,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 			{ID: "turn-3-speech", PCM16: familyAFrame(3), WaitForOutputBytes: 8, Before: captureCheckpoint(1)},
 			{ID: "turn-3-silence", SilenceFor: 5 * time.Millisecond},
 			{ID: "turn-4-speech", PCM16: familyAFrame(4), WaitForOutputBytes: 12, Before: captureFinalStateBoundaries},
-			{ID: "turn-4-silence", SilenceFor: 5 * time.Millisecond},
+			{ID: "turn-4-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 16},
 		},
 	})
 
@@ -190,7 +182,6 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 		t.Fatalf("final summary evidence = %q, want final product transcript", observation.FinalSummary)
 	}
 }
-
 func loadFamilyAScenario(t *testing.T) probe.CustomerScenario {
 	t.Helper()
 	path := filepath.Join(agentCLIRoot(t), "testdata", "customer-simulation", "family-a.scenario.json")
@@ -211,7 +202,6 @@ type familyAFunctionCall struct {
 	Name     string
 	Args     string
 }
-
 type familyAProviderObservation struct {
 	ConnectionCount    int
 	SessionUpdates     int
@@ -222,26 +212,27 @@ type familyAProviderObservation struct {
 	FinalSummary       string
 	ProtocolError      string
 }
-
 type familyAProviderFixture struct {
-	server   *httptest.Server
-	upgrader websocket.Upgrader
-	scenario probe.CustomerScenario
-
-	mu                 sync.Mutex
-	startedAt          time.Time
-	connectionCount    int
-	sessionUpdates     int
-	functionCalls      []familyAFunctionCall
-	toolObservations   []probe.ToolObservation
-	customerTranscript []probe.TranscriptEvent
-	productTranscript  []probe.TranscriptEvent
-	finalSummary       string
-	protocolError      string
-	actionIndex        int
-	pendingCall        *familyAFunctionCall
-	pendingCallStarted time.Duration
-	pendingResult      bool
+	server                *httptest.Server
+	upgrader              websocket.Upgrader
+	scenario              probe.CustomerScenario
+	mu                    sync.Mutex
+	startedAt             time.Time
+	connectionCount       int
+	sessionUpdates        int
+	inputAppends          int
+	closedAfterFinalInput bool
+	functionCalls         []familyAFunctionCall
+	toolObservations      []probe.ToolObservation
+	customerTranscript    []probe.TranscriptEvent
+	productTranscript     []probe.TranscriptEvent
+	finalSummary          string
+	protocolError         string
+	actionIndex           int
+	pendingCall           *familyAFunctionCall
+	pendingCallStarted    time.Duration
+	pendingResult         bool
+	awaitingFinalSilence  bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -252,26 +243,20 @@ func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProvider
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture
 }
-
-func (f *familyAProviderFixture) SetStartedAt(startedAt time.Time) {
-	f.mu.Lock()
-	f.startedAt = startedAt
-	f.mu.Unlock()
-}
-
 func (f *familyAProviderFixture) WebSocketURL() string {
 	return strings.Replace(f.server.URL, "http://", "ws://", 1)
 }
-
 func (f *familyAProviderFixture) Close() {
 	if f.server != nil {
 		f.server.Close()
 	}
 }
-
 func (f *familyAProviderFixture) Snapshot() familyAProviderObservation {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.protocolError == "" && (f.inputAppends != 8 || !f.closedAfterFinalInput) {
+		f.protocolError = fmt.Sprintf("final input ordering: appends=%d closed_after_final_input=%t", f.inputAppends, f.closedAfterFinalInput)
+	}
 	return familyAProviderObservation{
 		ConnectionCount:    f.connectionCount,
 		SessionUpdates:     f.sessionUpdates,
@@ -283,7 +268,6 @@ func (f *familyAProviderFixture) Snapshot() familyAProviderObservation {
 		ProtocolError:      f.protocolError,
 	}
 }
-
 func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
@@ -299,7 +283,6 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
-
 	for {
 		_, payload, readErr := connection.ReadMessage()
 		if readErr != nil {
@@ -318,56 +301,86 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 			f.failProtocol("decode client event: " + err.Error())
 			return
 		}
-		switch event.Type {
-		case "session.update":
-			f.mu.Lock()
-			f.sessionUpdates++
-			f.mu.Unlock()
-			if err := f.sendSessionReady(connection); err != nil {
-				return
-			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
-				return
-			}
-			if customerSimulationSilent(audio) {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
+		f.mu.Lock()
+		closed := f.closedAfterFinalInput
+		f.mu.Unlock()
+		if closed {
+			continue
+		}
+		if event.Type != "" {
+			if familyAEventTypeHandled(event.Type) {
+				switch event.Type {
+				case "session.update":
+					f.mu.Lock()
+					f.sessionUpdates++
+					f.mu.Unlock()
+					if err := f.sendSessionReady(connection); err != nil {
+						f.failProtocol(err.Error())
+						return
+					}
+				case "input_audio_buffer.append":
+					if err := f.handleAudioAppend(connection, event.Audio); err != nil {
+						f.failProtocol(err.Error())
+						return
+					}
+				case "conversation.item.create":
+					if err := f.handleToolResultEvent(event.Item.Type, event.Item.CallID, event.Item.Output); err != nil {
+						f.failProtocol(err.Error())
+						return
+					}
+				case "input_audio_buffer.commit":
+					// Wait for the child-owned commit before publishing terminal
+					// close; this preserves final input ordering at the provider
+					// boundary without timing-based coordination.
+					f.handleAudioCommit(connection)
+				case "response.create":
+					if err := f.handleContinuation(connection); err != nil {
+						f.failProtocol(err.Error())
+						return
+					}
 				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				continue
 			}
-			if err := f.handleCustomerUtterance(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "conversation.item.create":
-			if event.Item.Type != "function_call_output" {
-				continue
-			}
-			if err := f.handleToolResult(event.Item.CallID, event.Item.Output); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "response.create":
-			if err := f.handleContinuation(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "input_audio_buffer.commit", "response.cancel":
-			// The fixture accepts the product's normal end-of-input and
-			// cancellation controls. Family A has no intended interruption.
-		default:
-			// Provider metadata and other optional client controls are not
-			// relevant to the filesystem assertions.
 		}
 	}
 }
-
+func (f *familyAProviderFixture) handleAudioAppend(connection *websocket.Conn, encoded string) error {
+	f.mu.Lock()
+	f.inputAppends++
+	f.mu.Unlock()
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("decode input audio: %w", err)
+	}
+	if customerSimulationSilent(audio) {
+		return f.handleAudioSilence(connection)
+	}
+	return f.handleCustomerUtterance(connection)
+}
+func (f *familyAProviderFixture) handleAudioSilence(connection *websocket.Conn) error {
+	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
+		return err
+	}
+	return f.send(connection, map[string]string{"type": "input_audio_buffer.committed"})
+}
+func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) {
+	f.mu.Lock()
+	closeAfterFinalInput := f.awaitingFinalSilence
+	f.awaitingFinalSilence = false
+	f.closedAfterFinalInput = closeAfterFinalInput
+	f.mu.Unlock()
+	if !closeAfterFinalInput {
+		return
+	}
+	if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
+		f.failProtocol(err.Error())
+	}
+}
+func (f *familyAProviderFixture) handleToolResultEvent(itemType, callID, output string) error {
+	if itemType != "function_call_output" {
+		return nil
+	}
+	return f.handleToolResult(callID, output)
+}
 func (f *familyAProviderFixture) handleCustomerUtterance(connection *websocket.Conn) error {
 	f.mu.Lock()
 	index := f.actionIndex
@@ -422,10 +435,8 @@ func (f *familyAProviderFixture) handleCustomerUtterance(connection *websocket.C
 			"response": map[string]string{"id": "response-" + turnID + "-tool", "status": "completed"},
 		})
 	}
-
 	return f.sendConfirmation(connection, turnID, "The final project contains project/README.md with status ready for review; no other files were created.", 4)
 }
-
 func (f *familyAProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Lock()
 	pending := f.pendingCall
@@ -450,7 +461,6 @@ func (f *familyAProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Unlock()
 	return nil
 }
-
 func (f *familyAProviderFixture) handleContinuation(connection *websocket.Conn) error {
 	f.mu.Lock()
 	pending := f.pendingCall
@@ -475,7 +485,6 @@ func (f *familyAProviderFixture) handleContinuation(connection *websocket.Conn) 
 	f.mu.Unlock()
 	return nil
 }
-
 func (f *familyAProviderFixture) sendSessionReady(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
 		"type":    "session.created",
@@ -488,7 +497,6 @@ func (f *familyAProviderFixture) sendSessionReady(connection *websocket.Conn) er
 		"session": map[string]string{"id": "family-a"},
 	})
 }
-
 func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, turnID, text string, marker byte) error {
 	f.recordProductTranscript(probe.TranscriptEvent{
 		ID: "product-" + turnID, TurnID: turnID, Speaker: probe.TranscriptProduct,
@@ -533,43 +541,36 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		return err
 	}
 	if marker == 4 {
-		// Give the final input pump enough time to deliver its last silence
-		// frame and close stdin before the provider closes the session.
-		time.Sleep(25 * time.Millisecond)
-		return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"})
+		f.mu.Lock()
+		f.awaitingFinalSilence = true
+		f.mu.Unlock()
 	}
 	return nil
 }
-
 func (f *familyAProviderFixture) send(connection *websocket.Conn, event any) error {
 	return connection.WriteJSON(event)
 }
-
 func (f *familyAProviderFixture) recordCustomerTranscript(event probe.TranscriptEvent) {
 	f.mu.Lock()
 	f.customerTranscript = append(f.customerTranscript, event)
 	f.mu.Unlock()
 }
-
 func (f *familyAProviderFixture) recordProductTranscript(event probe.TranscriptEvent) {
 	f.mu.Lock()
 	f.productTranscript = append(f.productTranscript, event)
 	f.mu.Unlock()
 }
-
 func (f *familyAProviderFixture) elapsed() time.Duration {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.elapsedLocked()
 }
-
 func (f *familyAProviderFixture) elapsedLocked() time.Duration {
 	if f.startedAt.IsZero() {
 		return 0
 	}
 	return time.Since(f.startedAt)
 }
-
 func (f *familyAProviderFixture) failProtocol(message string) {
 	f.mu.Lock()
 	if f.protocolError == "" {
@@ -577,7 +578,6 @@ func (f *familyAProviderFixture) failProtocol(message string) {
 	}
 	f.mu.Unlock()
 }
-
 func familyAFrame(seed byte) []byte {
 	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)
 	for index := range frame {
@@ -585,11 +585,9 @@ func familyAFrame(seed byte) []byte {
 	}
 	return frame
 }
-
 func familyAToolName(index int) string {
 	return []string{"exec", "write_file", "edit_file"}[index]
 }
-
 func familyAToolArguments(index int) string {
 	arguments := []map[string]string{
 		{"command": "mkdir -p project"},
@@ -602,7 +600,9 @@ func familyAToolArguments(index int) string {
 	}
 	return string(data)
 }
-
 func familyAToolOutput(index int) string {
 	return []string{"(no output)", "File written: project/README.md", "File edited: project/README.md"}[index]
+}
+func familyAEventTypeHandled(eventType string) bool {
+	return eventType == "session.update" || eventType == "input_audio_buffer.append" || eventType == "conversation.item.create" || eventType == "response.create" || eventType == "input_audio_buffer.commit" || eventType == familyBResponseCancelEvent
 }

@@ -1,0 +1,26 @@
+{
+  "paginationContext": {
+    "maxResults": 500
+  },
+  "results": [
+    {
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c24-ci-conflict-return\", \"branch\": \"codex/audio-runtime-c24-ci-conflict-return\", \"baseRevision\": \"5d5afcb14d7b269378020809f5a2418c499ac94d\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "name": "audio-runtime-c24-ci-conflict-return",
+      "requestId": "audio-runtime-c24-c25-capacity-20260909",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c24-ci-conflict-return\", \"branch\": \"codex/audio-runtime-c24-ci-conflict-return\", \"baseRevision\": \"5d5afcb14d7b269378020809f5a2418c499ac94d\", \"reused\": false}"
+      },
+      "workId": "work-task-69",
+      "workTypeName": "task"
+    }
+  ]
+}

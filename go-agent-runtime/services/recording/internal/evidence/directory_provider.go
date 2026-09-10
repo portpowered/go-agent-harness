@@ -56,3 +56,53 @@ func (r *directoryRecorder) providerArtifact() (transcript.RecordingArtifact, bo
 }
 
 var _ recording.ProviderCapture = (*directoryRecorder)(nil)
+
+func (r *directoryRecorder) captureUsage(processed bool) {
+	if r == nil {
+		return
+	}
+	r.usageMu.Lock()
+	defer r.usageMu.Unlock()
+	r.usage.TranscriptBytes = r.budget.transcriptBytes
+	r.usage.TranscriptItems = r.budget.transcriptItems
+	r.usage.AudioBytes = r.budget.audioBytes
+	r.usage.AudioItems = r.budget.audioItems
+	r.usage.SidecarBytes = r.budget.sidecarBytes
+	r.usage.SidecarItems = r.budget.sidecarItems
+	r.usage.MetadataBytes = r.budget.metadataBytes
+	r.usage.MetadataItems = r.budget.metadataItems
+	r.usage.TerminalBytes = r.budget.terminalBytes
+	r.usage.TerminalItems = r.budget.terminalItems
+	if r.conversation.budget != nil {
+		r.usage.SummaryBytes = r.conversation.budget.bytes
+		r.usage.SummaryItems = int64(r.conversation.budget.items)
+		if r.usage.SummaryBytes > r.usage.PeakSummaryBytes {
+			r.usage.PeakSummaryBytes = r.usage.SummaryBytes
+		}
+		if r.usage.SummaryItems > r.usage.PeakSummaryItems {
+			r.usage.PeakSummaryItems = r.usage.SummaryItems
+		}
+	}
+	if processed {
+		r.usage.ProcessedItems++
+	}
+}
+
+// ResourceUsage reports the last worker snapshot plus the current queue
+// backlog. It never exposes the recorder's private spool path or caller data.
+func (r *directoryRecorder) ResourceUsage() recording.ResourceUsage {
+	if r == nil {
+		return recording.ResourceUsage{}
+	}
+	r.mu.Lock()
+	queuedBytes, queuedItems := r.queuedBytes, r.queuedItems
+	r.mu.Unlock()
+	r.usageMu.Lock()
+	usage := r.usage
+	usage.QueueBytes = queuedBytes
+	usage.QueueItems = queuedItems
+	r.usageMu.Unlock()
+	return usage
+}
+
+var _ recording.ResourceUsageReporter = (*directoryRecorder)(nil)

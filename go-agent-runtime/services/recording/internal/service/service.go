@@ -27,7 +27,7 @@ func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (sessi
 }
 
 func (*Service) OpenProviderCapture(options recording.ProviderCaptureOptions) (recording.ProviderCaptureSink, error) {
-	return evidence.NewProviderCapture(options.Destination)
+	return evidence.NewProviderCaptureWithLimits(options.Destination, options.Limits)
 }
 
 func (*Service) OpenLiveSemanticEvidence(providerCapturePath string) (session.LiveRecorder, error) {
