@@ -366,7 +366,8 @@ func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan sessio
 
 func capabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
 	kind := strings.ToLower(strings.TrimSpace(event.Type))
-	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation")
+	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") ||
+		kind == "tools_added" || kind == "tools_removed" || kind == "page_navigated" || kind == "frame_navigated"
 }
 
 func waitForOpeningContent(value any, ctx context.Context) error {

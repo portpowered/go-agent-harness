@@ -29,7 +29,11 @@ func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 	defer stopDevice()
 
 	sink := newRemoteToolAudioEdgeSink(t, endpoint)
-	defer sink.Close()
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close remote device edge sink: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
