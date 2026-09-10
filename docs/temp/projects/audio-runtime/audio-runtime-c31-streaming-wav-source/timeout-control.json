@@ -1,7 +1,7 @@
 {
   "schema": "audio-runtime-c31-timeout-control.v1",
-  "source": "036b4a7b20efe31779b1387003abf3b067568f4a",
-  "tested_source_revision": "036b4a7b20efe31779b1387003abf3b067568f4a",
+  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+  "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
   "timeout_seconds": 0.1,
   "cleanup_timeout_seconds": 0.25,
   "result": {
@@ -13,7 +13,7 @@
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
     "exit_code": -9,
-    "elapsed_ms": 103,
+    "elapsed_ms": 105,
     "stdout": "",
     "stderr": "",
     "timed_out": true,

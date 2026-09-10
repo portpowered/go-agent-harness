@@ -1,24 +1,83 @@
 {
   "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
   "case": "verify",
-  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
-  "source_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0",
+  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+  "source_inputs_sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf",
   "goos": "darwin",
   "goarch": "arm64",
-  "started_at": "2026-09-10T05:16:57.749492Z",
-  "duration_ms": 2,
+  "started_at": "2026-09-10T06:05:39.459996Z",
+  "duration_ms": 3,
   "clean_shutdown": true,
   "io": {
     "open_read_bytes": 44,
     "open_payload_read_bytes": 0,
+    "open_read_ranges": [
+      {
+        "start": 0,
+        "end": 12
+      },
+      {
+        "start": 12,
+        "end": 20
+      },
+      {
+        "start": 20,
+        "end": 36
+      },
+      {
+        "start": 36,
+        "end": 44
+      }
+    ],
+    "open_seek_count": 6,
     "sample_read_bytes": 14,
     "sample_payload_read_bytes": 14,
+    "sample_read_ranges": [
+      {
+        "start": 44,
+        "end": 58
+      }
+    ],
+    "sample_seek_count": 0,
     "frame_read_bytes": 20,
     "frame_payload_read_bytes": 20,
+    "frame_read_ranges": [
+      {
+        "start": 44,
+        "end": 64
+      }
+    ],
+    "frame_seek_count": 0,
+    "frame_source_open_read_ranges": [
+      {
+        "start": 0,
+        "end": 12
+      },
+      {
+        "start": 12,
+        "end": 20
+      },
+      {
+        "start": 20,
+        "end": 36
+      },
+      {
+        "start": 36,
+        "end": 44
+      }
+    ],
+    "frame_source_open_seek_count": 6,
     "close_count": 2,
+    "close_counts": [
+      1,
+      1
+    ],
     "open_bound_pass": true,
     "sample_bound_pass": true,
     "frame_bound_pass": true,
+    "open_trace_pass": true,
+    "sample_trace_pass": true,
+    "frame_trace_pass": true,
     "pass": true
   },
   "checks": [

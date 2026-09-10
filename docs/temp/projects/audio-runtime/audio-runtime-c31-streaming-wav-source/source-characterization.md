@@ -20,6 +20,7 @@ The predecessor and baseline checkpoints were preserved:
 | cleanup-error repair revision | `9efd435177b58db8a9508b92b8b96202021b6e89` |
 | final candidate revision | `e0ee33f0c161f8031fd074397a46ad0316c4b4fb` |
 | current review-repair implementation | `ee971c0f8a8a62ac17d85181f013a88dfc16502` |
+| review-150 repair checkpoint | `f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c` |
 
 `git merge-base --is-ancestor` passed for the startup integration revision,
 the required baseline, and fetched `origin/main`. The current-main integration
@@ -42,11 +43,10 @@ were repaired in `9efd435` with checked cleanup/error joins; the resulting
 403-line source-file budget regression was repaired in `e0ee33f` by moving the
 WAV-specific rate-error constructor into the owned streaming WAV source.
 
-The current candidate evidence below is generated from clean merged source
-revision `ce9a795192bc5433811de4f37824cc579fa0daa8`, which contains the review
-repairs from `ee971c0f8a8a62ac17d85181f013a88dfc16502`. Broad CI has not been
-rerun or claimed green, and the script gate retains ownership of the
-current-head check.
+The current candidate evidence below is generated from clean source revision
+`f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c`, which contains the reviewed source
+repairs and the C31 review-150 evidence repairs. Broad CI has not been rerun or
+claimed green, and the script gate retains ownership of the current-head check.
 
 ## Review-140 repair accounting
 
@@ -62,6 +62,20 @@ response. All reports now include the clean tested revision and scoped
 consumer/yui build-input hashes, distinguishing them from a later docs-only
 evidence descendant.
 
+## Review-150 repair accounting
+
+The concluded review-150 feedback identified three remaining evidence defects.
+The public consumer's IO report now serializes exact header/data read ranges,
+metadata and per-operation seek counts for both counted opens, plus individual
+close counts, and its pass oracle asserts those values instead of only aggregate
+bytes. The bounded runner never calls `communicate()` after timeout termination;
+it kills the process group, performs a bounded parent reap, closes inherited
+pipe readers, and records timeout/cleanup state. `--timeout-control` provides a
+deterministic detached-pipe-holder regression: a 2-second holder completed the
+bounded cleanup in 105 ms against the 850 ms cap, with SIGKILL, reaped parent and
+closed pipes recorded in `timeout-control.json`. The trailing whitespace in this
+ledger was removed, so `git diff --check` is clean.
+
 ## Frozen characterization
 
 The evidence-local public consumer creates standard 44-byte-header, 16 kHz
@@ -75,10 +89,9 @@ growth.
 fixture values were 74136 bytes and the large fixture median was 26624552 bytes
 (maximum 26629840). `characterize-after.json` records the same consumer and
 oracle after WAV reads delegate to the canonical streaming source; the current
-merged-source run measured small-fixture allocations of
-`[488,504,488,488,504]` bytes and large-fixture allocations of
-`[488,488,488,488,488]` bytes. Maxima are 504 and 488 bytes, medians are both
-488 bytes, and median growth is zero.
+the final source run measured small- and large-fixture allocations of
+`[488,488,488,488,488]` bytes. Both maxima and medians are 488 bytes, and
+median growth is zero.
 
 The public `NewWAVSource` counter records metadata-only open reads (44 bytes,
 zero payload), exactly 14 payload bytes for `ReadSamples(7)`, and no more than
@@ -154,12 +167,12 @@ replay checks, not acoustic or physical-device proof.
 ## Exact-source provenance
 
 `artifact-manifest.json` records tested source revision
-`ce9a795192bc5433811de4f37824cc579fa0daa8`, consumer build-input SHA256
-`07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0`, and yui
+`f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c`, consumer build-input SHA256
+`5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf`, and yui
 build-input SHA256
 `5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78`. The
 current consumer and yui artifact hashes are respectively
-`bdc0da3c7fd81255c6c073c18e85bc9e9647cc454c7151c926505496f52d87f6` and
+`468edf567377db9c57b88bd416d51e241dba466af93457f62dce31140ce23e59` and
 `b9da73df35aecfbef051fe2f2ab7c696b4b54e91e8d4c07ae28088bffc688a18`.
 Any later evidence-only descendant must preserve these input hashes and change
 only the owned evidence directory; no executable is relabeled as current

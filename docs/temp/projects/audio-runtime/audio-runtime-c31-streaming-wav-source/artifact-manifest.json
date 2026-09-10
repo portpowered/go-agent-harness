@@ -1,7 +1,7 @@
 {
   "schema": "audio-runtime-c31-artifact-manifest.v2",
-  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
-  "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+  "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
   "build_inputs": {
     "consumer": {
       "path_prefixes": [
@@ -9,7 +9,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer"
       ],
       "file_count": 123,
-      "sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0"
+      "sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf"
     },
     "yui": {
       "path_prefixes": [
@@ -30,14 +30,14 @@
   "artifacts": {
     "consumer": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
-      "sha256": "bdc0da3c7fd81255c6c073c18e85bc9e9647cc454c7151c926505496f52d87f6",
-      "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
-      "build_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0"
+      "sha256": "468edf567377db9c57b88bd416d51e241dba466af93457f62dce31140ce23e59",
+      "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+      "build_inputs_sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf"
     },
     "yui": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
       "sha256": "b9da73df35aecfbef051fe2f2ab7c696b4b54e91e8d4c07ae28088bffc688a18",
-      "tested_source_revision": "ce9a795192bc5433811de4f37824cc579fa0daa8",
+      "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
       "build_inputs_sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78"
     }
   }

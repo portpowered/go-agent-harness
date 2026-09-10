@@ -10,7 +10,19 @@
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source",
   "exit_code": 0,
-  "elapsed_ms": 253,
+  "elapsed_ms": 245,
   "stdout": "",
-  "stderr": ""
+  "stderr": "",
+  "timed_out": false,
+  "timeout_seconds": 60,
+  "cleanup_timeout_seconds": 0.25,
+  "cleanup": {
+    "attempted": false,
+    "signal": null,
+    "signal_sent": false,
+    "reaped": true,
+    "reap_timed_out": false,
+    "pipes_closed": true,
+    "elapsed_ms": 0
+  }
 }

@@ -1,12 +1,12 @@
 {
   "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
   "case": "characterize",
-  "source": "ce9a795192bc5433811de4f37824cc579fa0daa8",
-  "source_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0",
+  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+  "source_inputs_sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf",
   "goos": "darwin",
   "goarch": "arm64",
-  "started_at": "2026-09-10T05:16:21.182914Z",
-  "duration_ms": 19,
+  "started_at": "2026-09-10T06:05:30.12345Z",
+  "duration_ms": 5,
   "clean_shutdown": true,
   "allocations": {
     "payload_bytes": [
@@ -21,10 +21,10 @@
         ],
         "bytes": [
           488,
-          504,
           488,
           488,
-          504
+          488,
+          488
         ]
       },
       {
@@ -40,7 +40,7 @@
         ]
       }
     ],
-    "small_max_bytes": 504,
+    "small_max_bytes": 488,
     "large_max_bytes": 488,
     "small_median_bytes": 488,
     "large_median_bytes": 488,

@@ -7,7 +7,19 @@
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
   "exit_code": 1,
-  "elapsed_ms": 4,
-  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"ce9a795192bc5433811de4f37824cc579fa0daa8\",\n  \"source_inputs_sha256\": \"07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T05:16:53.282041Z\",\n  \"duration_ms\": 0,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
-  "stderr": "sample[1] = 12345, want mutated expectation 12346\n"
+  "elapsed_ms": 5,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c\",\n  \"source_inputs_sha256\": \"5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T06:05:39.460011Z\",\n  \"duration_ms\": 1,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
+  "stderr": "sample[1] = 12345, want mutated expectation 12346\n",
+  "timed_out": false,
+  "timeout_seconds": 60,
+  "cleanup_timeout_seconds": 0.25,
+  "cleanup": {
+    "attempted": false,
+    "signal": null,
+    "signal_sent": false,
+    "reaped": true,
+    "reap_timed_out": false,
+    "pipes_closed": true,
+    "elapsed_ms": 0
+  }
 }
