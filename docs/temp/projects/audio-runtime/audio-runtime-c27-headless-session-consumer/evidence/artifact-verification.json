@@ -1,8 +1,8 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "045aede351d4a8b8f71d3f3f40d774d9dd68ffb0080d6361d5dc0a966e7a7d4c",
-    "size": 11777
+    "sha256": "7f143fe4eca8a2e904877f307d0a2ccfc511bbdd6c75cc18f0abcddfab8a7c19",
+    "size": 11776
   },
   "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
   "tamper_control": "tampered artifact digest/size rejected",
@@ -11,7 +11,7 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "68cdb50cfa27974fd2790cd5740294bd8c1af2f5f4cdd3e2d18caf1ea16bbb55",
+        "sha256": "3941204dc5aebb3b3f3af03430e4c74a00323c5f7ff24c6410045dd12a7e791b",
         "size": 7556310
       },
       {
@@ -47,9 +47,9 @@
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "d112f1eda491e56ea691338e4b58ca4d3ba2a519",
+      "current_head": "89ee6b8221acc7ab00c64ad03e79c17a771fa754",
       "source_changes_since_source_revision": [],
-      "source_revision": "d112f1eda491e56ea691338e4b58ca4d3ba2a519",
+      "source_revision": "89ee6b8221acc7ab00c64ad03e79c17a771fa754",
       "source_revision_matches_current_head": true
     }
   }

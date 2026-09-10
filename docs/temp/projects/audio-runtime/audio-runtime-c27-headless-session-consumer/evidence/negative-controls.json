@@ -4,8 +4,8 @@
     "argv": [
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session"
     ],
-    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-negative-mz6q8wmy/child/cwd",
-    "duration_seconds": 0.01045,
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-negative-wd3r93wm/child/cwd",
+    "duration_seconds": 0.092671,
     "exit_code": 1,
     "process_group_alive": false,
     "reaped": true,
