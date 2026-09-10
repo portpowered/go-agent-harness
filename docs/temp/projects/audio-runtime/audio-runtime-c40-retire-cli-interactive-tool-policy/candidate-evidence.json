@@ -1,0 +1,87 @@
+{
+  "schema": "audio-runtime-c40-interactive-policy-ledger/v1",
+  "candidate_revision": "e96481e8f0e0bc90342660d4a228ff3f995c4d9e",
+  "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "origin_main": "11b9035bfbca9ad5f5f5356c1ef0154795230698",
+  "ancestry": {
+    "baseline_is_ancestor": true,
+    "startup_is_ancestor": true,
+    "origin_main_is_ancestor": true
+  },
+  "run_ids": {
+    "inventory": "runs/run-inventory-20260910T172655Z-94125",
+    "consumer": "runs/run-consumer-20260910T172655Z-94126",
+    "wrong_oracle": "runs/run-wrong-oracle-20260910T172655Z-94127",
+    "public_policy": "runs/run-public-policy-20260910T172655Z-94128",
+    "replay_regression": "runs/run-replay-regression-20260910T172655Z-94129"
+  },
+  "decisions": {
+    "inventory": "ACCEPTED",
+    "consumer": "ACCEPTED",
+    "wrong_oracle": "ACCEPTED_EXPECTED_NONZERO_ASSERTION",
+    "public_policy": "ACCEPTED",
+    "replay_regression": "ACCEPTED"
+  },
+  "standalone_consumer": {
+    "module": "consumer",
+    "gowork": "off",
+    "binary_sha256": "431e3fb02c67742081cd19d632f6c2b1b6315d490e4cf0d006225d30229048be",
+    "defaults": {
+      "fast_read_timeout": "5s",
+      "long_running_timeout": "20s",
+      "acknowledgement_threshold": "2s"
+    },
+    "overrides": {
+      "fast_read_timeout": "7s",
+      "long_running_timeout": "15s",
+      "acknowledgement_threshold": "1.2s"
+    },
+    "invalid_rejected_before_provider_setup": true,
+    "wrong_oracle_exit_code": 1,
+    "wrong_oracle_failure": "literal exec class assertion"
+  },
+  "yui": {
+    "build_binary_sha256": "fb3961e108d91daf984f9d542aa18e32b7b5aab4f8648f162bce6a6b1485abbf",
+    "controlled_tool": "exec -> completed -> strict replay continuation",
+    "marker": "PROBE_TOOL_MARKER_9182",
+    "clean_shutdown": true
+  },
+  "fixtures": {
+    "audio_tool": {
+      "path": "../audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+    },
+    "interruption": {
+      "path": "../audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+      "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+      "pcm_bytes": 3840,
+      "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+      "healthy_tail_offset": 1440,
+      "healthy_tail_bytes": 2400,
+      "healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+    }
+  },
+  "focused_commands": [
+    "rtk go test ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
+    "rtk go test -race ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
+    "rtk go test ./agent-cli/internal/services/internal/agentruntime -run 'Interactive|SessionToolTimeoutNamesExpiredBudget' -count=1 -timeout 60s",
+    "rtk go test -race ./agent-cli/internal/services/internal/agentruntime -run 'Interactive|SessionToolTimeoutNamesExpiredBudget' -count=1 -timeout 60s",
+    "rtk go test ./agent-cli/internal/services/internal/agentruntime -run 'TestLoadRoomReplayAudioBundle|TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime' -count=1 -timeout 60s",
+    "rtk go test ./agent-cli/test/integration -run 'TestSessionCommand_(DefaultRegistryExecRoundTripInStrictOpenAIReplay|StrictOpenAIReplayRejectsRecordedExecCallWithoutCurrentAllowlist)' -count=1 -timeout 60s",
+    "rtk make architecture-check size-check",
+    "rtk proxy python3 scripts/check-wire.py --go go agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway go-agent-runtime",
+    "rtk git diff --check"
+  ],
+  "later_gates_not_claimed": [
+    "SCRIPT_CI",
+    "independent_review",
+    "guarded_merge",
+    "primary_vertical_probe",
+    "project_acceptance",
+    "live_realtime",
+    "physical_device_or_acoustic_pass"
+  ]
+}
