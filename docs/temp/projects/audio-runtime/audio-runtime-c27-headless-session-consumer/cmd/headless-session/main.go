@@ -1010,6 +1010,13 @@ func readConfig() (config, error) {
 	return readConfigFrom(os.Stdin)
 }
 
+func validateArguments(args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	return fmt.Errorf("headless-session accepts no flags or positional arguments (received %d argument(s))", len(args))
+}
+
 func readConfigFrom(input io.Reader) (config, error) {
 	decoder := json.NewDecoder(input)
 	decoder.DisallowUnknownFields()
@@ -1053,6 +1060,11 @@ func writeReport(result report) error {
 }
 
 func main() {
+	if err := validateArguments(os.Args[1:]); err != nil {
+		_ = writeReport(report{Schema: reportSchema, Scenario: "unknown", Status: "failed", Error: err.Error()})
+		fmt.Fprintln(os.Stderr, "headless-session:", err)
+		os.Exit(1)
+	}
 	cfg, err := readConfig()
 	if err != nil {
 		_ = writeReport(report{Schema: reportSchema, Scenario: "unknown", Status: "failed", Error: err.Error()})

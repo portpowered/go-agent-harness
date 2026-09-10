@@ -34,6 +34,18 @@ func TestConfigRejectsRelativePathsAndTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestArgumentsRejectFlagsAndPositionalArguments(t *testing.T) {
+	if err := validateArguments(nil); err != nil {
+		t.Fatalf("empty argv was rejected: %v", err)
+	}
+	for _, args := range [][]string{{"--unexpected-flag"}, {"unexpected-positional"}} {
+		err := validateArguments(args)
+		if err == nil || !strings.Contains(err.Error(), "accepts no flags or positional arguments") {
+			t.Fatalf("argv %v was not rejected with the exact contract diagnostic: %v", args, err)
+		}
+	}
+}
+
 type closeErrorStream struct {
 	calls int
 	err   error

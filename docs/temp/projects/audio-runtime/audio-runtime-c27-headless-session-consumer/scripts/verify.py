@@ -267,7 +267,13 @@ def fresh_child_root(parent: Path, name: str) -> Path:
     return root
 
 
-def run_child(config: dict[str, Any], root: Path, *, expected_exit: int = 0) -> tuple[CommandResult, dict[str, Any]]:
+def run_child(
+    config: dict[str, Any],
+    root: Path,
+    *,
+    expected_exit: int = 0,
+    extra_args: list[str] | None = None,
+) -> tuple[CommandResult, dict[str, Any]]:
     binary = BINARY.resolve()
     require(binary.is_file(), f"consumer executable is missing: {binary}")
     for key, value in config.items():
@@ -275,7 +281,7 @@ def run_child(config: dict[str, Any], root: Path, *, expected_exit: int = 0) -> 
             if isinstance(value, str):
                 Path(value).mkdir(parents=True, exist_ok=True)
     result = run_command(
-        [str(binary)],
+        [str(binary), *(extra_args or [])],
         root / "cwd",
         input_data=(json.dumps(config, sort_keys=True) + "\n").encode("utf-8"),
         environment=base_environment(root),
@@ -523,7 +529,22 @@ def run_boundary() -> dict[str, Any]:
         validate_turn(child["turn"], [], config["input"])
         require(child.get("status") == "ok", f"boundary child status={child}")
         child_evidence = {"process": process.as_dict(), "report": child}
-    evidence = {"admission": admission, "graph": graph, "build": build, "child": child_evidence}
+        argv_controls: dict[str, Any] = {}
+        for label, extra_args in (("flag", ["--unexpected-flag"]), ("positional", ["unexpected-positional"])):
+            invalid_process, invalid_child = run_child(
+                config,
+                fresh_child_root(root, "argv-" + label),
+                expected_exit=1,
+                extra_args=extra_args,
+            )
+            require(invalid_child.get("status") == "failed", f"argv {label} control did not fail: {invalid_child}")
+            require(invalid_child.get("scenario") == "unknown", f"argv {label} control parsed stdin before rejecting argv: {invalid_child}")
+            require(
+                invalid_child.get("error") == "headless-session accepts no flags or positional arguments (received 1 argument(s))",
+                f"argv {label} control omitted exact rejection diagnostic: {invalid_child}",
+            )
+            argv_controls[label] = {"args": extra_args, "process": invalid_process.as_dict(), "report": invalid_child}
+    evidence = {"admission": admission, "graph": graph, "build": build, "child": child_evidence, "argv_controls": argv_controls}
     write_json(EVIDENCE_DIR / "boundary.json", evidence)
     return evidence
 
