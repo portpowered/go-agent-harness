@@ -449,16 +449,13 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 	if parent == nil {
 		parent = context.Background()
 	}
-	child := &deadlineContext{parent: parent, deadline: deadline, done: make(chan struct{})}
+	child := &deadlineContext{parent: parent, deadline: deadline, source: source, done: make(chan struct{})}
 	if err := parent.Err(); err != nil {
 		child.finish(contextCause(parent))
 		return child, func() { child.finish(context.Canceled) }
 	}
 	timer := source.NewTimer(deadline.Sub(source.Now()))
-	stop := make(chan struct{})
-	var stopOnce sync.Once
 	cancel := func() {
-		stopOnce.Do(func() { close(stop) })
 		child.finish(context.Canceled)
 	}
 	go func() {
@@ -468,7 +465,7 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 			child.finish(contextCause(parent))
 		case <-timer.C():
 			child.finish(context.DeadlineExceeded)
-		case <-stop:
+		case <-child.done:
 		}
 	}()
 	return child, cancel
@@ -477,6 +474,7 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 type deadlineContext struct {
 	parent   context.Context
 	deadline time.Time
+	source   TimerSource
 	done     chan struct{}
 	mu       sync.Mutex
 	err      error
@@ -493,6 +491,8 @@ func (c *deadlineContext) Deadline() (time.Time, bool) {
 func (c *deadlineContext) Done() <-chan struct{} {
 	if err := c.parent.Err(); err != nil {
 		c.finish(contextCause(c.parent))
+	} else if c.source != nil && !c.source.Now().Before(c.deadline) {
+		c.finish(context.DeadlineExceeded)
 	}
 	return c.done
 }

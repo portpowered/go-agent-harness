@@ -32,9 +32,14 @@ type LiveTurnDetection struct {
 // each provider session admission and may be used by a host that publishes
 // updates between turns. Close releases participant-scoped resources.
 type LiveCapabilities struct {
-	Executor        messages.ToolExecutor
-	Definitions     []messages.ToolDefinition
-	InheritDefaults bool
+	Executor    messages.ToolExecutor
+	Definitions []messages.ToolDefinition
+	// BrowserCapabilityState is the host's normalized browser lifecycle
+	// snapshot used while composing the initial provider instructions. It is
+	// independent from whether the current definition snapshot contains page
+	// tools, so a connected-but-unselected browser remains explicit.
+	BrowserCapabilityState BrowserCapabilityState
+	InheritDefaults        bool
 	// Handle is the preferred lifecycle owner for a request-scoped capability
 	// surface. When present, the live owner calls its Initialize,
 	// RefreshDefinitions, and Close methods and does not independently invoke

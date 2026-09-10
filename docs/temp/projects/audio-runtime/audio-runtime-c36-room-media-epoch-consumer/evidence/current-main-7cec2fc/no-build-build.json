@@ -1,0 +1,268 @@
+{
+  "binaries": {
+    "room_media": {
+      "build_command": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media",
+        "./cmd/room-media"
+      ],
+      "build_run": "build-room-media",
+      "flags": [
+        "-trimpath"
+      ],
+      "package": "./cmd/room-media",
+      "path": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media",
+      "sha256": "f0f42fe666f2d91e43f120a1901c9b8c34e3cfe7f6cd90aa54c0a0d7a41ef3fd",
+      "source": "built",
+      "toolchain": {
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer",
+        "env_run": "toolchain-room_media-env",
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "go_env": {
+          "CGO_ENABLED": "1",
+          "GOARCH": "arm64",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOMOD": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.mod",
+          "GOMODCACHE": "/Users/abdifamily/go/pkg/mod",
+          "GOOS": "darwin",
+          "GOROOT": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64",
+          "GOTOOLCHAIN": "go1.26.7",
+          "GOTOOLDIR": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64/pkg/tool/darwin_arm64",
+          "GOVERSION": "go1.26.7",
+          "GOWORK": "off"
+        },
+        "go_version": "go version go1.26.7 darwin/arm64",
+        "version_run": "toolchain-room_media-version"
+      }
+    },
+    "yui": {
+      "build_command": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-tags=nomicrophone",
+        "-trimpath",
+        "-o",
+        "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "build_run": "build-yui",
+      "flags": [
+        "-tags=nomicrophone",
+        "-trimpath"
+      ],
+      "package": "./agent-cli/cmd/yui",
+      "path": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/yui",
+      "sha256": "79dca64f4413b3e926071b18769660f57d7d04a06359955f02bd25cf08abec33",
+      "source": "built",
+      "toolchain": {
+        "cwd": ".",
+        "env_run": "toolchain-yui-env",
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "go_env": {
+          "CGO_ENABLED": "1",
+          "GOARCH": "arm64",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOMOD": "/dev/null",
+          "GOMODCACHE": "/Users/abdifamily/go/pkg/mod",
+          "GOOS": "darwin",
+          "GOROOT": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64",
+          "GOTOOLCHAIN": "go1.26.7",
+          "GOTOOLDIR": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64/pkg/tool/darwin_arm64",
+          "GOVERSION": "go1.26.7",
+          "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/go.work"
+        },
+        "go_version": "go version go1.26.7 darwin/arm64",
+        "version_run": "toolchain-yui-version"
+      }
+    }
+  },
+  "build_inputs": {
+    "room_media": {
+      "module": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer",
+      "package": "./cmd/room-media",
+      "workspace_modules": [
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway"
+      ]
+    },
+    "yui": {
+      "module": "agent-cli",
+      "package": "./agent-cli/cmd/yui",
+      "workspace_modules": [
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway"
+      ]
+    }
+  },
+  "flags": {
+    "room_media": [
+      "-trimpath"
+    ],
+    "yui": [
+      "-tags=nomicrophone",
+      "-trimpath"
+    ]
+  },
+  "input_manifest_sha256": "56aa8708644b6fe1628a4045067e7c934fefe83f4f501411640cd181bc88350e",
+  "mode": "external-verified",
+  "packages": {
+    "room_media": "./cmd/room-media",
+    "yui": "./agent-cli/cmd/yui"
+  },
+  "replacement_modules": [
+    {
+      "go_mod": "go-agent-loop/go.mod",
+      "go_mod_sha256": "a1b13c5848187066d2aedfa0bc6a2d8bfc26e501c687160de6669691eac274f6",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "relative_path": "go-agent-loop",
+      "version": ""
+    },
+    {
+      "go_mod": "go-agent-runtime/go.mod",
+      "go_mod_sha256": "b58a34441c4d35a0bccc2f46b1e1e84d20afb8bde8da147e9415601d94623150",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-runtime",
+      "relative_path": "go-agent-runtime",
+      "version": ""
+    },
+    {
+      "go_mod": "go-audio/go.mod",
+      "go_mod_sha256": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "relative_path": "go-audio",
+      "version": ""
+    },
+    {
+      "go_mod": "go-device-gateway/go.mod",
+      "go_mod_sha256": "662a1b74be04ebe5a98cb5a67c39e2b7cb9bf15e3b903c77bb16caebdee69b84",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "relative_path": "go-device-gateway",
+      "version": ""
+    },
+    {
+      "go_mod": "go-llm-gateway/go.mod",
+      "go_mod_sha256": "0f4f45cf37aa17a8db3648c289874c806e52da32aa1fcdb3baf80122235af802",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "relative_path": "go-llm-gateway",
+      "version": ""
+    }
+  ],
+  "schema": "c36-build-binding-v2",
+  "source_archive": {
+    "path": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/build-inputs.tar",
+    "revision": "7cec2fce25e0003952ca080ffcd299269940ee16",
+    "sha256": "f40301638ff5ea3e7d015f5109edbbf008234062a6e83476fd01a289dae8c6f4"
+  },
+  "source_archive_sha256": "f40301638ff5ea3e7d015f5109edbbf008234062a6e83476fd01a289dae8c6f4",
+  "source_revision": "7cec2fce25e0003952ca080ffcd299269940ee16",
+  "toolchains": {
+    "room_media": {
+      "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer",
+      "env_run": "toolchain-room_media-env",
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOEXPERIMENT": "",
+        "GOFLAGS": "",
+        "GOTOOLCHAIN": "",
+        "GOWORK": "off",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+      },
+      "go_env": {
+        "CGO_ENABLED": "1",
+        "GOARCH": "arm64",
+        "GOEXPERIMENT": "",
+        "GOFLAGS": "",
+        "GOMOD": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.mod",
+        "GOMODCACHE": "/Users/abdifamily/go/pkg/mod",
+        "GOOS": "darwin",
+        "GOROOT": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64",
+        "GOTOOLCHAIN": "go1.26.7",
+        "GOTOOLDIR": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64/pkg/tool/darwin_arm64",
+        "GOVERSION": "go1.26.7",
+        "GOWORK": "off"
+      },
+      "go_version": "go version go1.26.7 darwin/arm64",
+      "version_run": "toolchain-room_media-version"
+    },
+    "yui": {
+      "cwd": ".",
+      "env_run": "toolchain-yui-env",
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOEXPERIMENT": "",
+        "GOFLAGS": "",
+        "GOTOOLCHAIN": "",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+      },
+      "go_env": {
+        "CGO_ENABLED": "1",
+        "GOARCH": "arm64",
+        "GOEXPERIMENT": "",
+        "GOFLAGS": "",
+        "GOMOD": "/dev/null",
+        "GOMODCACHE": "/Users/abdifamily/go/pkg/mod",
+        "GOOS": "darwin",
+        "GOROOT": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64",
+        "GOTOOLCHAIN": "go1.26.7",
+        "GOTOOLDIR": "/Users/abdifamily/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.7.darwin-arm64/pkg/tool/darwin_arm64",
+        "GOVERSION": "go1.26.7",
+        "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/go.work"
+      },
+      "go_version": "go version go1.26.7 darwin/arm64",
+      "version_run": "toolchain-yui-version"
+    }
+  },
+  "verification": {
+    "input_manifest_sha256": "56aa8708644b6fe1628a4045067e7c934fefe83f4f501411640cd181bc88350e",
+    "source_archive_sha256": "f40301638ff5ea3e7d015f5109edbbf008234062a6e83476fd01a289dae8c6f4",
+    "source_revision": "7cec2fce25e0003952ca080ffcd299269940ee16"
+  },
+  "verified_from_build_record_sha256": "ec655ddd9fe63afeb5c58590204677a4582775508f1d08c3ee6aaf819d4bc3e9",
+  "workspace_modules": [
+    "agent-cli",
+    "go-agent-loop",
+    "go-agent-runtime",
+    "go-audio",
+    "go-device-gateway",
+    "go-llm-gateway"
+  ]
+}

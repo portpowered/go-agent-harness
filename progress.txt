@@ -2353,6 +2353,30 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - This checkpoint is delivery bookkeeping only. The clean tested source remains `166fb1879a4edb4e231b6192d6ca77bda9599b63`; the pushed head is its progress/report descendant, with unchanged executable inputs and hashes recorded in `provenance.json`. No source, consumer, yui, fixture, acceptance, timeout, baseline, host checkout or unrelated owner path changed after the clean-source verifier.
 - Executor next action is the script-owned current-head CI gate. CI success, independent review, guarded merge, post-merge vertical acceptance, physical/acoustic proof and project completion remain open; retain C37 ownership through `CONTINUE` for any exact CI rejection or actionable review repair.
 
+# C36 current-main repair and script-CI handoff checkpoint 2026-09-10
+
+- Re-read the required Factory operating policy and implementation handoff, the admitted C36 manifest, progress history and full canonical `~default` board. `project-control.py verify-work --type task --name audio-runtime-c36-room-media-epoch-consumer` returned `{"status": "admitted", "project": "audio-runtime", "name": "audio-runtime-c36-room-media-epoch-consumer"}`; `prd.json.branchName` matches `codex/audio-runtime-c36-room-media-epoch-consumer`. No second project, waiver, host checkout, predecessor checkpoint or unrelated owner path was changed.
+- The previous CI rejection was read in full from run `34476954104`, job `102869941085`, at head `08e36342eddc4b21e1528beee8da8bf86ca41ed1`: `CI (hermetic)=FAILURE`. Its named failures are the C36-external `TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence` and C20/C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`; no C36-owned source path is implicated. The prior independent C36 finding was repaired: output closes at EndOfResponse, raw observations retain exact frame/terminal metadata and reject post-terminal events, cancellation records actual public-service Wait/Close joins, provenance mutations execute rejecting child verifiers, and hang control proves descendant PID disappearance.
+- Fetched and integrated current `origin/main=926ded7bfa8f3c3e42115192d03aa1240c4806db` into the same branch as merge head `dfde5c9330a91db16795ca8910c2793c55fd162f`; required baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, observed main `d5012004c15c4df613fd5fc7d8c220f2c7252822`, and current main are ancestors. The C36 repair checkpoint is `be35114459c9f4ab9b53da66e16c384e5190e209`; the merge preserved upstream C35 changes outside the C36 lease.
+- Final focused checks at `dfde5c93` pass: C36 standalone normal and race tests, vet, room lifecycle causal tests, mixer/audio causal tests, `make architecture-size-check` (`181` packages, `1867` files, `27583` functions), Wire check, and `git diff --check`.
+- Fresh full bounded verifier evidence at `/tmp/audio-runtime-c36-final-dfde5c` returned `{"status":"accepted","action":"all"}` in `20.227196s`, source archive SHA-256 `20360eb25bfe38ae69d8f5a865eb98a25173ca26d70f11d974a6ea41c4fa1394`, input manifest `7059b1fc19d12b49621634b0a7396e828911063bbc14c05c697a2492b760ba40`, room binary `9116c1ceecffb6e690b3df943f242c40d90ec26a2a4e407e035835188cf2fe60`, and yui binary `85f084aa019bf09020a791b85df46a8475aa39d86393245315c92f2d70d8499e`. The raw ledger has 9 ordered events, peer outputs `alice=[211,212,213,214]` and `bob=[111,112,113,114]`, stale pending samples `4`, and both output ends before terminal. All five mutations exit `1` with serialized mutated reports; six input/archive/binary provenance bindings reject in subprocesses; cancellation proves active `opened/started/waited/closed=2/2/2/2`, `close_calls=6`, `joined=true`, public service ownership and idempotent close; hang control records same process group and `pid_gone=true`.
+- Same-source yui parity capture and strict replay pass: audio-tool PCM is `4800` bytes with SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, `18` wire events and `1` tool call; interruption PCM is `3840` bytes with SHA-256 `6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`, healthy tail `2400` bytes at offset `1440` with SHA-256 `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`, and `15` wire events/`0` tool calls. Independent `--no-build --action parity` reusing the recorded artifacts also returned accepted in `1.042509s`. Tracked summaries are under `docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-dfde5c93/`; executable/archive paths retain the generating-host binding and are not relabeled as source.
+- No current-head script-CI success, independent review, guarded merge, post-merge vertical acceptance, physical/acoustic proof or project completion is claimed. Next action: commit the evidence/checkpoint descendant, push the same C36 branch, update PR `#429` with this exact repair/evidence map, and return `ACCEPTED` to the script-owned current-head gate without polling; retain C36 ownership through `CONTINUE` for any exact CI/review rejection.
+
+# C36 race repair and exact-head handoff checkpoint 2026-09-10
+
+- Admission was reverified for the sole `audio-runtime` project with `project-control.py verify-work --type task --name audio-runtime-c36-room-media-epoch-consumer`; `prd.json.branchName` matches `codex/audio-runtime-c36-room-media-epoch-consumer`. The isolated branch is clean before the repair at `907e732b97e7abf1d2abe0bb90cd04dd547ce17c`, and fetched `origin/main=926ded7bfa8f3c3e42115192d03aa1240c4806db` plus baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, and observed main `d5012004c15c4df613fd5fc7d8c220f2c7252822` remain ancestors. No host checkout, second project, waiver, predecessor path or unrelated owner path was changed.
+- A repeated race run reproduced a C36-owned flake in `TestMutationOracleRejectsThroughRoomSubprocessContract`: asynchronous deterministic clock advancement could emit empty cadence frames before the public room fan-out completed, so the mutation child failed setup with `participant bob output frame count = 546` instead of reaching its literal negative oracle. The repair in `scenario.go` waits until both scripted inbound streams have completed their public fan-out (the EOF call occurs after the preceding frame submission) before advancing the canonical deterministic clock, and active cancellation readiness now requires a nonempty output/end frame. This keeps the public `rooms.Service.Run` lifecycle and does not edit production code.
+- Causal regressions pass after the repair: C36 normal `go test ./... -count=20`, C36 race `go test -race ./... -count=5`, vet, mutation oracle race `-count=20`, routing race `-count=20`, lifecycle race `-count=10`, room lifecycle normal/race `-count=3`, mixer/audio normal/race `-count=3`, `make architecture-size-check` (`181` packages, `1867` files, `27583` functions), Wire, and `git diff --check`.
+- Fresh exact-head `verify.py --action all` returned `{"status":"accepted","action":"all"}` in `8.997228s`. The current tracked evidence records source revision `907e732b`, source archive SHA-256 `b5ff9103be9e22878d7a9a268f232fcfe54d1cb0d5ca0409cfb638e6ca3159bf`, input manifest SHA-256 `596a1fbc2d1141e15a52be6ea8d17f8184a180f1437a11c3cf9eaabf0f05c9a1`, room binary SHA-256 `6c49d7fba55deff469c501427f2ac12b6d92f035f9353b864747be3ffde942de`, and yui SHA-256 `85f084aa019bf09020a791b85df46a8475aa39d86393245315c92f2d70d8499e`. Boundary, provenance, routing, mutation, partial-recording, consumption, lifecycle, hang, and same-source parity controls all accepted; the fixed C16 PCM/tool/terminal oracles remain unchanged.
+- The latest canonical script-CI rejection is run `34488777819`, job `102909761115`, at submitted head `907e732b`: only external C20 integration `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device` failed because remote playback did not reach its final PCM marker before the scenario deadline (`rendered_pcm=319200`, `expected_pcm=174391`, `final_marker=false`, child still running). Full log was read; no C36-owned path is implicated and no out-of-lease repair was made. CI has not been called green; independent review, guarded merge and post-merge vertical acceptance remain external.
+- Next action: commit the owned `scenario.go`, refreshed checked-in C36 JSON evidence/README and this progress checkpoint, push the same PR #429, update the PR with the exact race repair/evidence and external CI finding, then return `ACCEPTED` to the script-owned current-head CI gate without polling. Retain C36 ownership through `CONTINUE` for any exact rejection or required candidate repair.
+
+# C36 clean-source provenance and final handoff checkpoint 2026-09-10
+
+- The race repair and initial evidence were committed and pushed as `f6e6ec221a8050889b5a5ec3487e75d6dcb3bc95` on the same admitted branch. The clean committed-source verifier was rerun after clearing only the disposable Go build cache needed by the host disk; `verify.py --action all` returned `{"status":"accepted","action":"all"}` in `27.234229s`, and the durable evidence refresh returned accepted in `8.813212s`.
+- The durable reports now bind source revision `f6e6ec221a8050889b5a5ec3487e75d6dcb3bc95`, source archive SHA-256 `b5ff9103be9e22878d7a9a268f232fcfe54d1cb0d5ca0409cfb638e6ca3159bf`, input manifest SHA-256 `596a1fbc2d1141e15a52be6ea8d17f8184a180f1437a11c3cf9eaabf0f05c9a1`, room binary SHA-256 `6c49d7fba55deff469c501427f2ac12b6d92f035f9353b864747be3ffde942de`, and yui SHA-256 `85f084aa019bf09020a791b85df46a8475aa39d86393245315c92f2d70d8499e`. Boundary, provenance, routing, mutation, partial-recording, consumption, lifecycle, hang, and same-source parity controls remain accepted.
+- The only remaining working-tree changes are the newly generated tracked evidence summaries/README and this checkpoint; generated verifier runs and binaries remain ignored. Next action: commit those refreshed reports, push the same C36 branch, update PR #429 with the exact committed-source evidence and prior external C20 CI rejection, then return `ACCEPTED` to the script-owned current-head CI gate without polling. Retain C36 ownership through `CONTINUE` for any exact rejection or actionable repair.
 # C18 current-main coverage registration and exact-source handoff 2026-09-10
 
 - Reverified the admitted sole `audio-runtime` project and `work-task-24`; `project-control.py verify-work --type task --name audio-runtime-c18-public-strict-replay` remains admitted, and `prd.json.branchName` matches `codex/audio-runtime-c18-public-strict-replay`. Fetched `origin/main=4e6cfab5d8d53b7db93c723e0a4e955bdc1c6f1d` was integrated cleanly as merge `2c2f364d1d37548cff46999e3427ed8cf1ee6f89`; the prior C18 ancestry through `84f0a9d308729e38da8479f87c3518f1634bad82` and predecessor checkpoints are preserved. The running host checkout and unrelated C34 paths were not edited by this task.
@@ -2531,3 +2555,135 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   proof, or project-wide acceptance is claimed. Next action is push/update
   PR `#434` and submit this same task to the script-owned CI gate without
   polling; repair the same task on any exact rejection.
+# C36 deterministic deadline repair and current-head handoff checkpoint 2026-09-10
+
+- Re-read the Factory operating policy and implementation handoff, the admitted
+  C36 manifest, progress history, and the full canonical `~default` task/review
+  inbox. Admission verification returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c36-room-media-epoch-consumer"}`;
+  `prd.json.branchName` matches `codex/audio-runtime-c36-room-media-epoch-consumer`.
+  The isolated worktree was clean before work; no second project, waiver,
+  running host checkout, predecessor checkpoint, or unrelated owner path was
+  changed.
+- Fetched and integrated current `origin/main=d6efc88d` as merge checkpoint
+  `cddfda4b`, preserving required baseline `3194edd9`, startup
+  `8bdafc7f`, observed main `d5012004`, and the accepted C18/C35 ancestry. The
+  only merge conflict was `progress.txt`; both C36 and incoming C18 ledger
+  entries were retained.
+- The latest canonical CI rejection was read in full from run
+  `34493455519`, job `102925791295`, submitted C36 head `52c3c55d`: only
+  `CI (coverage)` failed, at `go-audio/pkg/clock/clock_test.go:316`, because
+  `TestDeterministicContextDeadlineAndParentCancellation` did not observe
+  virtual deadline completion within its bounded poll. This is within the
+  amended C36 three-file clock lease; no unrelated C20/C21 failure was repaired.
+- The causal repair is committed at `dc04dc4a`: `deadlineContext` retains its
+  injected `TimerSource`, `Done()` completes synchronously when that source's
+  virtual deadline has elapsed, and the deadline worker exits on the context's
+  closed channel. The follow-up regression commit is `7cec2fce`, making the
+  deadline test assert immediate completion while preserving the retained
+  complexity exception and exact 547-line clock baseline. No limit, assertion,
+  timeout, baseline, or acceptance rule was weakened.
+- Focused causal evidence passes on the final source: clock deadline/parent
+  cancellation coverage `200x`, clock race `100x`, C36 module normal
+  `count=20` (`15.400s`), C36 race `count=5` (`7.330s`), C36 vet, room
+  lifecycle normal/race `count=3`, mixer/audio normal/race `count=3`,
+  `make architecture-size-check` (`181` packages, `1,877` files, `27,690`
+  functions), `make wire-check`, and `git diff --check`. Go build-cache cleanup
+  reclaimed only derived cache data after the first verifier hit `no space left
+  on device`; tracked evidence and worktrees were preserved.
+- Clean committed-source `verify.py --action all --source <isolated-worktree>`
+  returned `{"status":"accepted","action":"all"}` in `13.110226s`.
+  Source revision is `7cec2fce25e0003952ca080ffcd299269940ee16`; source archive
+  SHA-256 is
+  `f40301638ff5ea3e7d015f5109edbbf008234062a6e83476fd01a289dae8c6f4`, input
+  manifest SHA-256 is
+  `56aa8708644b6fe1628a4045067e7c934fefe83f4f501411640cd181bc88350e`, room
+  binary SHA-256 is
+  `f0f42fe666f2d91e43f120a1901c9b8c34e3cfe7f6cd90aa54c0a0d7a41ef3fd`, and
+  yui binary SHA-256 is
+  `79dca64f4413b3e926071b18769660f57d7d04a06359955f02bd25cf08abec33`.
+  All nine bounded actions accepted: boundary, provenance, routing/epochs,
+  five subprocess mutation oracles, partial recording, software consumption,
+  lifecycle/join, TERM/KILL descendant cleanup, and C21 audio-tool/interruption
+  parity. The report retains peer outputs `alice=[211,212,213,214]` and
+  `bob=[111,112,113,114]`, stale pending samples `4`, and end-of-response
+  before terminal; physical playback remains explicitly unavailable.
+- Fresh `--no-build --action parity` in a separate scratch directory reused
+  those exact binary bindings and returned accepted in `0.768263s`. Tracked
+  summaries are under
+  `docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-7cec2fc/`;
+  private source archive, binaries, and process logs retain generating-host
+  paths and are not relabeled as portable artifacts. The prior review202 and
+  review224 findings remain represented by the repaired lifecycle, observation,
+  input-boundary, provenance, mutation, and strict-bundle controls; no known
+  actionable C36 review defect remains.
+- No current-head script-CI success, independent review, guarded merge,
+  post-merge vertical acceptance, physical/acoustic proof, or project
+  completion is claimed. Next action: force-add the tracked C36 evidence
+  summaries and this checkpoint, run final focused checks on the committed
+  tree, commit and push the same PR `#429`, update it with the exact current
+  head/base and evidence plus the prior coverage rejection, then return
+  `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
+  this same task through `CONTINUE` for any exact CI rejection or actionable
+  repair.
+
+# C36 frame-metadata oracle repair checkpoint 2026-09-10
+
+- Re-read the Factory operating policy, implementation handoff, admitted C36
+  `prd.json`, progress history, and the canonical `~default` task/review
+  inbox. Admission remains `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c36-room-media-epoch-consumer"}`;
+  `work-task-187` and `prd.json.branchName` match the isolated branch. The
+  latest review256 rejection for PR #429 head `b4e422c1` is the sole actionable
+  finding: C36 discarded PCMFrame format, stream ID, start-sample cursor and
+  playback-response identity, and the verifier checked only sample/epoch
+  fields. Prior review202/review224 lifecycle, boundary, provenance,
+  mutation, and strict-bundle findings remain resolved and preserved.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d`; it is already
+  an ancestor of the candidate, along with baseline `3194edd9`, startup
+  `8bdafc7f`, and observed main `d5012004`. No host checkout, second project,
+  waiver, predecessor checkpoint, or unrelated owner path was changed.
+- Repair commit `621e2909857904fe4d098aee975a47c61ad7ed0d` adds serialized
+  FrameFormat and PlaybackResponseObservation fields to source, peer-output,
+  playback and raw observations; the Go validator and Python verifier now
+  compare exact metadata oracles. Added format, stream-ID, start-sample and
+  playback-response subprocess mutation controls, preserving the original
+  five controls and all assertions/deadlines.
+- Focused final-source checks pass: C36 normal and race tests, vet, room
+  lifecycle causal normal/race `count=3`, mixer/audio causal normal/race
+  `count=3`, `make architecture-size-check` (`181` packages, `1,877` files,
+  `27,690` functions), Wire, and diff-check. Fresh committed-source
+  `verify.py --action all` returns `{"status":"accepted","action":"all"}`
+  in `15.443803s`; source revision is `621e290`, source archive SHA-256 is
+  `1fbd35c8da0d3162e9c03c63308432a0207265e0131f1312158fa0767b2025e`, input
+  manifest SHA-256 is
+  `8605ca75749526d2582f6dd2f87d0349751bce30bde740250f8c502c8faa7244`, room
+  binary SHA-256 is
+  `9305fff3ffe4f308666429901b33c4921a7b69d04cef713481731e7d71dbbad6`, and
+  same-source yui SHA-256 is
+  `79dca64f4413b3e926071b18769660f57d7d04a06359955f02bd25cf08abec33`.
+  All nine mutation cases reject, including the four metadata cases; exact
+  peer PCM, stale pending count, lifecycle, hang cleanup, partial recording,
+  and C21 parity remain accepted. Physical playback remains unavailable.
+- This is an implementation checkpoint only: the changed head is not yet
+  pushed or through current-head SCRIPT CI, independent review, guarded merge,
+  or post-merge vertical acceptance. Exact next action: force-add the owned
+  root README, new evidence summaries under
+  `evidence/current-head-621e290/`, and this progress checkpoint; commit the
+  evidence, push/update PR #429 with the review256 repair map, then return
+  `ACCEPTED` to the script-owned CI gate without polling. Retain C36 ownership
+  through `CONTINUE` for any exact rejection or actionable repair.
+
+# C36 script-CI handoff checkpoint 2026-09-10
+
+- The owned evidence README and verifier summaries, together with this
+  progress record, are committed in `d505be66` on top of implementation
+  `621e2909857904fe4d098aee975a47c61ad7ed0d`. The executable source inputs
+  remain exactly those covered by the fresh accepted verifier run; the
+  evidence records the nine mutation controls and all focused causal gates
+  listed above.
+- Final pre-push state is clean and preserves `origin/main=d6efc88d` ancestry,
+  the predecessor C36 checkpoints, and unrelated paths. Exact next action:
+  commit this handoff-only progress checkpoint, push the same task branch,
+  update PR #429 with the current head/base and review256 repair evidence,
+  and hand the candidate to SCRIPT CI. Do not claim CI, review, merge, or
+  vertical acceptance; retain ownership with `CONTINUE` for any exact
+  rejection or actionable repair.
