@@ -98,7 +98,8 @@
     {
       "module": "example.com/agent-runtime-consumer",
       "allowed_top_level": [
-        "."
+        ".",
+        "cmd"
       ]
     }
   ],

@@ -1,0 +1,52 @@
+{
+  "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay",
+  "binary_sha256": "055baac6e0da3111ab5b318c81b1551f0ce2dce6c92d3cd9108f3a3639e7fe8b",
+  "case": "external",
+  "evidence": {
+    "fixture_hashes": {
+      "timeline.jsonl": "8ef3adc1fc59a8b686cb7c6f8d0a224e5d65b2eb65eb3e6b446ca05be665da88"
+    },
+    "fixture_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/tests/embedding/testdata/replay"
+  },
+  "results": [
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay",
+        "tests/embedding/testdata/replay"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": false,
+      "cleanup_timeout_seconds": null,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay",
+      "duration_seconds": 0.310896,
+      "exit_code": 0,
+      "label": "external/relative-fixture",
+      "passed": true,
+      "stderr": "Replay verified: 16 wire events, 1 tool calls. Device execution: false.\n",
+      "stdout": "strict embedding continuation",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/tests/embedding/testdata/replay"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": false,
+      "cleanup_timeout_seconds": null,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay",
+      "duration_seconds": 0.006578,
+      "exit_code": 0,
+      "label": "external/absolute-fixture",
+      "passed": true,
+      "stderr": "Replay verified: 16 wire events, 1 tool calls. Device execution: false.\n",
+      "stdout": "strict embedding continuation",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    }
+  ],
+  "source_revision": "2c2f364d1d37548cff46999e3427ed8cf1ee6f89",
+  "status": "passed",
+  "timeout_seconds": 50.0
+}

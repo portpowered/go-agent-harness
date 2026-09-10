@@ -1,0 +1,53 @@
+{
+  "raw_job_response": {
+    "id": 102552434392,
+    "run_id": 34377065588,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34377065588",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX4Jn22A",
+    "head_sha": "ee754fc00baff93d7949b770602cf00c0e95f95d",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102552434392",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34377065588/job/102552434392",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T16:29:38Z",
+    "started_at": "2026-09-09T16:34:20Z",
+    "completed_at": "2026-09-09T16:42:51Z",
+    "name": "CI (hermetic)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T16:34:21Z", "completed_at": "2026-09-09T16:34:22Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T16:34:22Z", "completed_at": "2026-09-09T16:34:24Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T16:34:24Z", "completed_at": "2026-09-09T16:34:27Z"},
+      {"name": "Run hermetic test pipeline", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T16:34:27Z", "completed_at": "2026-09-09T16:42:49Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T16:42:49Z", "completed_at": "2026-09-09T16:42:49Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T16:42:49Z", "completed_at": "2026-09-09T16:42:49Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T16:42:49Z", "completed_at": "2026-09-09T16:42:49Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102552434392",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208851,
+    "runner_name": "GitHub Actions 1000208851",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head ee754fc00baff93d7949b770602cf00c0e95f95d: required checks failed on current head ee754fc00baff93d7949b770602cf00c0e95f95d: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34377065588/job/102552434392). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102552434392/logs",
+  "full_log_observation": {
+    "available": true,
+    "line_count": 372,
+    "sha256": "58890efda3339b8f5f254de1aa60e5d4194ef83f90084876f94a9fa763931ad2",
+    "bytes": 32941,
+    "failed_step": "Run hermetic test pipeline / make test-hermetic",
+    "failure": "go-audio/pkg/clock TestDeterministicContextDeadlineAndParentCancellation failed at clock_test.go:326 because parent cancellation did not propagate; go-audio/pkg/clock exited 1 and make test-hermetic exited 2.",
+    "other_observed_results": "agent-cli, go-agent-loop, go-llm-gateway and the rest of go-audio completed; no C18 replay, Wire or embedding failure was reported."
+  },
+  "causal_reproduction": {
+    "command": "go test ./go-audio/pkg/clock -run '^TestDeterministicContextDeadlineAndParentCancellation$' -count=20 -timeout=90s",
+    "exit_code": 0,
+    "result": "20/20 passed in 1 package",
+    "scope": "The failing clock test and implementation are outside the C18 owned paths and absent from git diff origin/main...HEAD. No C18 production defect reproduced; no unrelated clock repair is authorized."
+  },
+  "current_candidate": "ee754fc00baff93d7949b770602cf00c0e95f95d"
+}
