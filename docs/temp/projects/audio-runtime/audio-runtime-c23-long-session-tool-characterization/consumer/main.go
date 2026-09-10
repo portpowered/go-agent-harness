@@ -454,13 +454,16 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 		s.mu.Lock()
 		ready := s.pendingTurn >= 0 && s.pendingTools > 0 && s.receivedTools >= s.pendingTools
 		turn := s.pendingTurn
+		controlFailure := false
 		if !ready && s.pendingTurn >= 0 && s.pendingTools > 0 && s.queueError == nil {
 			callID := fmt.Sprintf("call-%03d-beta", s.pendingTurn)
 			switch s.toolControl {
 			case "missing-result":
 				s.queueError = fmt.Errorf("fixture control missing tool result for %s", callID)
+				controlFailure = true
 			case "duplicate-result":
 				s.queueError = fmt.Errorf("fixture control duplicate tool result for %s", callID)
+				controlFailure = true
 			}
 		}
 		s.pendingTools = 0
@@ -468,6 +471,9 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 		s.mu.Unlock()
 		if ready {
 			s.emitContinuation(turn)
+		}
+		if controlFailure {
+			return false
 		}
 	}
 	return true
