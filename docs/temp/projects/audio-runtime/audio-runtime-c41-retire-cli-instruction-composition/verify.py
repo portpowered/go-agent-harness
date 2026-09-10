@@ -806,7 +806,9 @@ def git_status() -> str:
         text=True,
         env=command_environment(),
     )
-    return result.stdout
+    report_prefix = str(REPORTS.relative_to(REPO_ROOT)) + "/"
+    lines = [line for line in result.stdout.splitlines() if not line[3:].startswith(report_prefix)]
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def tracked_tree_descriptor(prefix: str) -> dict[str, str | int]:
