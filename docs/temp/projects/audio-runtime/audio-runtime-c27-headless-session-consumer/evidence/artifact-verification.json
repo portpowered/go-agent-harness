@@ -1,0 +1,91 @@
+{
+  "descriptor": {
+    "path": "evidence/package.json",
+    "sha256": "ceb47a0654c2e650d55559149b29fece7fe660fac1bdd2ee2db719fd4489619a",
+    "size": 12724
+  },
+  "missing_artifact_control": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
+  "missing_descriptor_control": "artifact descriptor is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json",
+  "tamper_control": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
+  "tamper_controls": {
+    "consumer_artifact_sha256": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
+    "dependency_graph_packages_sha256": "dependency graph digest mismatch for packages_sha256: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 43917fc69ac711edfdcd8dbc127e69f268336e6ef723570fc40de4344dada836",
+    "missing_declared_artifact": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
+    "module_source_tree_sha256": "module source tree digest mismatch: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 5cf914e25c8e93f5e41f68fcb95acb280b3e20fa36f1664beb00cc4f2bb787c3",
+    "replacement_source_tree_sha256": "replacement source tree digest mismatch for go-audio: declared 0000000000000000000000000000000000000000000000000000000000000000, observed cd5cf5393e15c34462cbca43bc2f9c2a180c449d5f6c1960be9b7ef519f54c65"
+  },
+  "verified": {
+    "all_digests_match": true,
+    "checked": [
+      {
+        "path": "evidence/artifacts/source.tar.gz",
+        "sha256": "12dbcd0dbee413cef635c6eb1a294850aa239fe32610fbaea5a464d066ef341b",
+        "size": 7588845
+      },
+      {
+        "path": "evidence/artifacts/headless-session.archive",
+        "sha256": "b4849e409afda08749388b767598582edc745b84c415146066fbbbf43aa6b54b",
+        "size": 9224354
+      },
+      {
+        "path": "evidence/artifacts/yui.archive",
+        "sha256": "e36f010f65b8877265fe0b11a2216d6a24ef8ee21bfc5301ccaaa96dd61afddd",
+        "size": 52674370
+      },
+      {
+        "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
+        "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+        "size": 14060
+      },
+      {
+        "path": "fixtures/yui-config/config.yaml",
+        "sha256": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+        "size": 2337
+      },
+      {
+        "path": "fixtures/yui-config/models.yaml",
+        "sha256": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
+        "size": 10779
+      },
+      {
+        "path": "go.mod",
+        "sha256": "2fb77900f9904a3383f779995808ed82a7ca023d68f2cf02c154f4c77b0740b7",
+        "size": 1173
+      },
+      {
+        "path": "go.sum",
+        "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a",
+        "size": 5445
+      },
+      {
+        "path": "scripts/verify.py",
+        "sha256": "7f2ca20e93df45fa3a61dac9b5e650e857ceb8c9c2c579afdb9e4e258d3b2438",
+        "size": 73499
+      }
+    ],
+    "provenance": {
+      "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
+      "current_head": "fa8da9f993e0daf702f044f31b4c2dbc5f35990e",
+      "git_metadata_present": true,
+      "source_changes_since_source_revision": [],
+      "source_revision": "fa8da9f993e0daf702f044f31b4c2dbc5f35990e",
+      "source_revision_matches_current_head": true,
+      "verification_mode": "checkout"
+    },
+    "verified_digests": {
+      "dependency_graph": {
+        "modules_sha256": "3bc2ef24c5202e0bf022a03f8987cbab927d45723e338c1e430515ce85bb2f36",
+        "packages_sha256": "43917fc69ac711edfdcd8dbc127e69f268336e6ef723570fc40de4344dada836"
+      },
+      "module_source_tree_sha256": "5cf914e25c8e93f5e41f68fcb95acb280b3e20fa36f1664beb00cc4f2bb787c3",
+      "replacement_source_tree_sha256": {
+        "agent-cli": "3b9ed39a43bc09783fa45e2976564d3309c838f7e7ddcc371cb813525f9c1a09",
+        "go-agent-loop": "303fa4db63b4a1cee6a5424ce27f07645de132e853544ca87adbfbda9db17d60",
+        "go-agent-runtime": "789a9e972d487a67929f6448d65dda9441456f408dcfa1ddb91a2bcccdb57a86",
+        "go-audio": "cd5cf5393e15c34462cbca43bc2f9c2a180c449d5f6c1960be9b7ef519f54c65",
+        "go-device-gateway": "567207a765af04efd98d9086af92eed9896da823ee72853d113c8e482f69e83a",
+        "go-llm-gateway": "1f13bfecbe6d9dfe1e1244bd27bf01c3c3bba3914864a71e8460c474ecf2d319"
+      }
+    }
+  }
+}
