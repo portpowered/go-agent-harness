@@ -21,6 +21,63 @@
       "replay_regression": "not rerun: frozen interruption oracle remains blocked on C38/task198"
     }
   },
+  "current_executor_validation": {
+    "candidate_revision": "903445c215e8fae7947da1feafe6a0cf7e4bdf4f",
+    "origin_main": "7b6ce8cecee80d3f78b7aad02760067387853ade",
+    "admission": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "task": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "work_id": "work-task-232",
+      "branch": "codex/audio-runtime-c40-retire-cli-interactive-tool-policy"
+    },
+    "ancestry": {
+      "baseline_926ded7b_is_ancestor": true,
+      "startup_8bdafc7_is_ancestor": true,
+      "origin_main_7b6ce8ce_is_ancestor": true
+    },
+    "runs": {
+      "inventory": "runs/run-inventory-20260910T211534Z-75927",
+      "consumer": "runs/run-consumer-20260910T211640Z-78571",
+      "wrong_oracle": "runs/run-wrong-oracle-20260910T211640Z-78572",
+      "public_policy": "runs/run-public-policy-20260910T211650Z-78766"
+    },
+    "focused_validation": {
+      "tools_normal": "passed: 334 tests in 16 packages",
+      "tools_race": "passed: 334 tests in 16 packages",
+      "cli_policy_normal": "passed: 13 tests",
+      "cli_policy_race": "passed: 13 tests",
+      "policy_coverage": "passed: 98.3% of statements",
+      "coverage_registration": "passed: 173 workspace packages checked across 6 modules",
+      "architecture_and_size": "passed: 183 packages, 1883 files, 27757 functions",
+      "wire": "passed: full check-wire; generated files unchanged",
+      "format_and_vet": "passed: make fmt vet",
+      "diff_check": "passed: git diff --check"
+    },
+    "consumer": {
+      "binary_sha256": "7fa671bf2a58a88c9cc8660f1814719727cc8981ed3da599b0aab2e8bb75552a",
+      "defaults": "5s fast/read, 20s long-running, 2s acknowledgement",
+      "overrides": "7s fast/read, 15s long-running, 1.2s acknowledgement",
+      "invalid_rejected_before_effects": true,
+      "wrong_oracle_exit_code": 1,
+      "wrong_oracle_proof": "literal class decision mismatch rejected"
+    },
+    "public_policy": {
+      "decision": "ACCEPTED",
+      "yui_binary_sha256": "bfc52928bfcc2ae2722c163cac0ca405e0932b315c4163544b80ecd1c9e83d30",
+      "tool_marker": "PROBE_TOOL_MARKER_9182",
+      "continuation": "strict replay continuation",
+      "tool_pcm_bytes": 4800,
+      "tool_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "clean_child_shutdown": true
+    },
+    "replay_regression": {
+      "decision": "BLOCKED_PENDING_C38_REVIEWED_REPAIR_AND_PRIMARY_VERTICAL_ACCEPTANCE",
+      "not_rerun": true,
+      "reason": "C38 exclusively owns the frozen interruption retention failure; no oracle change or retry-until-green"
+    },
+    "ci_review_merge_status": "not claimed; current evidence is an executor checkpoint only"
+  },
   "ancestry": {
     "baseline_is_ancestor": true,
     "startup_is_ancestor": true,
