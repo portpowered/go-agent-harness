@@ -1,0 +1,44 @@
+{
+  "schema": "audio-runtime-c31-artifact-manifest.v2",
+  "source": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "build_inputs": {
+    "consumer": {
+      "path_prefixes": [
+        "go-audio",
+        "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer"
+      ],
+      "file_count": 125,
+      "sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b"
+    },
+    "yui": {
+      "path_prefixes": [
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway",
+        "go.work",
+        "go.work.sum"
+      ],
+      "file_count": 2159,
+      "sha256": "9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c"
+    }
+  },
+  "go_version": "go version go1.26.7 darwin/arm64",
+  "artifacts": {
+    "consumer": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
+      "sha256": "a8fd583252450bfbebef79e3ffd7745a4a4032a9148e79ab74c0c3eb06b4aa85",
+      "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+      "build_inputs_sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b"
+    },
+    "yui": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
+      "sha256": "dfa157096bd1110e71eda70d1c19055899c8f7da452a4c375fc5d254a84e5252",
+      "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+      "build_inputs_sha256": "9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c"
+    }
+  }
+}
