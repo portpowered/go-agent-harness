@@ -30,11 +30,25 @@ The old whole-buffer candidate is expected to fail the resource budget:
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/run.py --source-root <isolated-before-source> --build --mode verify --expect-resource-failure
 ```
 
-The runner records exact source/binary revisions and hashes, Go version,
-commands, stdout/stderr, exit codes, allocation exclusions, measurements and
-clean child shutdown under this owned directory. Runtime replay is an optional
-separate command against a same-source public yui executable:
+Every report records the exact tested source commit/tree and a hash of its
+tracked build-input manifest. Public-consumer reports also record the consumer
+source, runner, source-module, generated-module, and binary hashes; a reused
+binary is rejected unless its input sidecar matches those hashes. This keeps an
+evidence-only descendant distinguishable from the source that was actually
+tested. The runner also executes a deterministic escaped-descendant timeout
+control: TERM, KILL, bounded parent reap, pipe closure, and descendant exit
+must all be observed before a report can pass.
+
+Runtime replay is an optional separate command against a public yui executable
+built from the same source revision. Pass both the executable and the source
+root used to build it:
 
 ```text
-rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/run.py --source-root <candidate-source> --runtime-regression --yui <exact-yui>
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/run.py --source-root <candidate-source> --runtime-regression --yui <exact-yui> --yui-source-root <candidate-source>
 ```
+
+When a report is committed after capture, compare its recorded
+`tested_source.revision` with the final head and inspect the descendant diff;
+the executable inputs must remain unchanged. The reports retain commands,
+stdout/stderr, exit codes, allocation exclusions, measurements, and clean
+shutdown evidence under this owned directory.
