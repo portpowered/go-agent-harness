@@ -20,6 +20,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -38,6 +39,8 @@ import project_scope_amendment as amendments
 MAX_CHILD_SECONDS = 60
 MAX_PROBE_SECONDS = 600
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
+MAX_OUTPUT_BYTES = 32 * 1024
+OUTPUT_READ_CHUNK = 8 * 1024
 CREDENTIAL_ENVIRONMENT_NAMES = {
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
@@ -60,6 +63,14 @@ REPLAY_CASES = {
         "replayPhrase": "Replay verified: 15 wire events, 0 tool calls",
     },
 }
+PROTECTED_RELATIVES = (
+    amendments.MANIFEST_RELATIVE,
+    amendments.AUTHORIZATION_RELATIVE,
+    amendments.HISTORICAL_REPORT_RELATIVE,
+    "factory/projects/audio-runtime/source-plan.md",
+    "factory/projects/audio-runtime/request.md",
+    "factory/projects/audio-runtime/acceptance.md",
+)
 
 
 class ProbeError(RuntimeError):
@@ -99,7 +110,30 @@ def _bounded_bytes(path: Path, label: str) -> bytes:
     _regular_file(path, label)
     if path.stat().st_size > MAX_CAPTURE_BYTES:
         raise ProbeError(f"{label} exceeds the bounded capture size")
-    return path.read_bytes()
+    with path.open("rb") as stream:
+        data = stream.read(MAX_CAPTURE_BYTES + 1)
+    if len(data) > MAX_CAPTURE_BYTES:
+        raise ProbeError(f"{label} exceeds the bounded capture size")
+    return data
+
+
+def _protected_hashes(root: Path) -> dict[str, str]:
+    return {relative: _sha256(root / relative) for relative in PROTECTED_RELATIVES}
+
+
+def _assert_protected_hashes(
+    before: dict[str, str], after: dict[str, str]
+) -> None:
+    if before != after:
+        changed = sorted(
+            key
+            for key in set(before) | set(after)
+            if before.get(key) != after.get(key)
+        )
+        raise ProbeError(
+            "protected input hashes changed during controller probe: "
+            + ", ".join(changed)
+        )
 
 
 def _copy_config(source: Path, destination: Path) -> dict[str, str]:
@@ -114,6 +148,17 @@ def _copy_config(source: Path, destination: Path) -> dict[str, str]:
     if not copied:
         raise ProbeError("replay config directory is empty")
     return copied
+
+
+def _config_hashes(source: Path) -> dict[str, str]:
+    _regular_directory(source, "replay config")
+    hashes = {}
+    for entry in sorted(source.iterdir(), key=lambda item: item.name):
+        _regular_file(entry, "replay config entry")
+        hashes[entry.name] = _sha256(entry)
+    if not hashes:
+        raise ProbeError("replay config directory is empty")
+    return hashes
 
 
 def _copy_fixture(source: Path, destination: Path, expected_sha256: str) -> str:
@@ -195,6 +240,7 @@ def _directory_replay(
     (workdir / "evidence/runs").mkdir(parents=True)
     (workdir / "home").mkdir()
     config = workdir / "config"
+    config_source_hashes = _config_hashes(config_source)
     config_hashes = _copy_config(config_source, config)
     result = run_bounded(
         [str(yui), "-C", str(config), "session", "replay", str(bundle)],
@@ -208,7 +254,13 @@ def _directory_replay(
             f"{label} directory replay failed: exit={result['exitCode']} "
             f"stdout={result['stdout']} stderr={result['stderr']}"
         )
-    return {"result": result, "phrase": phrase, "configHashes": config_hashes}
+    return {
+        "result": result,
+        "phrase": phrase,
+        "configPath": str(config_source),
+        "configHashes": config_hashes,
+        "configSourceHashes": config_source_hashes,
+    }
 
 
 def _missing_timeline_replay(
@@ -227,6 +279,7 @@ def _missing_timeline_replay(
     (workdir / "evidence/runs").mkdir(parents=True)
     (workdir / "home").mkdir()
     config = workdir / "config"
+    config_source_hashes = _config_hashes(config_source)
     config_hashes = _copy_config(config_source, config)
     result = run_bounded(
         [str(yui), "-C", str(config), "session", "replay", str(missing_bundle)],
@@ -240,7 +293,13 @@ def _missing_timeline_replay(
             f"{label} missing-timeline control failed: exit={result['exitCode']} "
             f"stdout={result['stdout']} stderr={result['stderr']}"
         )
-    return {"result": result, "expected": "nonzero missing timeline", "configHashes": config_hashes}
+    return {
+        "result": result,
+        "expected": "nonzero missing timeline",
+        "configPath": str(config_source),
+        "configHashes": config_hashes,
+        "configSourceHashes": config_source_hashes,
+    }
 
 
 def _terminate_group(process: subprocess.Popen[str], sig: int) -> None:
@@ -262,7 +321,7 @@ def run_bounded(
     env: dict[str, str] | None = None,
     timeout: float = MAX_CHILD_SECONDS,
 ) -> dict[str, Any]:
-    """Run one child with bounded output and TERM/KILL/reap cleanup."""
+    """Run one child with bounded pipe draining and TERM/KILL/reap cleanup."""
 
     started = time.monotonic()
     process = subprocess.Popen(
@@ -271,38 +330,95 @@ def run_bounded(
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
         start_new_session=os.name == "posix",
     )
+    captured: dict[str, bytes] = {"stdout": b"", "stderr": b""}
+    truncated: dict[str, bool] = {"stdout": False, "stderr": False}
+    read_errors: dict[str, BaseException] = {}
+
+    def drain(name: str, stream) -> None:
+        retained = bytearray()
+        try:
+            while True:
+                chunk = stream.read(OUTPUT_READ_CHUNK)
+                if not chunk:
+                    break
+                if len(retained) + len(chunk) > MAX_OUTPUT_BYTES:
+                    truncated[name] = True
+                retained.extend(chunk)
+                if len(retained) > MAX_OUTPUT_BYTES:
+                    del retained[:-MAX_OUTPUT_BYTES]
+        except (OSError, ValueError) as error:
+            read_errors[name] = error
+        captured[name] = bytes(retained)
+
+    readers = [
+        threading.Thread(
+            target=drain,
+            args=(name, stream),
+            name=f"c39-probe-{name}-reader",
+            daemon=True,
+        )
+        for name, stream in (("stdout", process.stdout), ("stderr", process.stderr))
+    ]
+    for reader in readers:
+        reader.start()
     timed_out = False
     cleanup = "none"
+    wait_error: BaseException | None = None
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as error:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
         timed_out = True
         cleanup = "term"
         _terminate_group(process, signal.SIGTERM)
         try:
-            stdout, stderr = process.communicate(timeout=2)
+            process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             cleanup = "kill"
             _terminate_group(process, signal.SIGKILL)
             try:
-                stdout, stderr = process.communicate(timeout=2)
+                process.wait(timeout=2)
             except subprocess.TimeoutExpired as reap_error:
-                raise ProbeError("child did not terminate after bounded KILL/reap") from reap_error
-        if not stdout and error.stdout:
-            stdout = error.stdout
-        if not stderr and error.stderr:
-            stderr = error.stderr
+                wait_error = ProbeError("child did not terminate after bounded KILL/reap")
+                wait_error.__cause__ = reap_error
+    finally:
+        if process.poll() is None:
+            cleanup = "kill"
+            _terminate_group(process, signal.SIGKILL)
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired as reap_error:
+                wait_error = ProbeError("child did not terminate after bounded KILL/reap")
+                wait_error.__cause__ = reap_error
+        for reader in readers:
+            reader.join(timeout=2)
+            if reader.is_alive() and wait_error is None:
+                wait_error = ProbeError(
+                    f"{reader.name} did not finish bounded pipe draining"
+                )
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
     duration = time.monotonic() - started
     if process.poll() is None:
-        raise ProbeError("child remained alive after communicate")
+        raise ProbeError("child remained alive after bounded wait")
+    if wait_error is not None:
+        raise wait_error
+    if read_errors:
+        name, error = next(iter(read_errors.items()))
+        raise ProbeError(f"cannot drain child {name}: {error}")
+    stdout = captured["stdout"].decode("utf-8", errors="replace")
+    stderr = captured["stderr"].decode("utf-8", errors="replace")
     return {
         "command": command,
         "exitCode": process.returncode,
-        "stdout": stdout[-32768:],
-        "stderr": stderr[-32768:],
+        "stdout": stdout,
+        "stderr": stderr,
+        "stdoutBytesRetained": len(captured["stdout"]),
+        "stderrBytesRetained": len(captured["stderr"]),
+        "stdoutTruncated": truncated["stdout"],
+        "stderrTruncated": truncated["stderr"],
         "durationSeconds": round(duration, 6),
         "timedOut": timed_out,
         "cleanup": cleanup,
@@ -331,6 +447,62 @@ def _source_for(relative: str) -> Path:
         if candidate.is_file() and not candidate.is_symlink():
             return candidate
     raise ProbeError(f"reviewed input is unavailable: {relative}")
+
+
+def _input_provenance(
+    source_revision: str,
+    yui: Path,
+    replay_pairs: list[tuple[Path, Path]],
+) -> dict[str, Any]:
+    """Record every controller/probe executable input before it is launched."""
+
+    script_inputs = {}
+    for relative in (
+        "factory/scripts/project-control.py",
+        "factory/scripts/prepare-validation.py",
+        "factory/scripts/project_scope_amendment.py",
+    ):
+        path = _regular_file(REPO_ROOT / relative, relative)
+        script_inputs[relative] = {"path": str(path), "sha256": _sha256(path)}
+    reviewed_inputs = {}
+    for relative in (
+        amendments.MANIFEST_RELATIVE,
+        amendments.AUTHORIZATION_RELATIVE,
+        amendments.HISTORICAL_REPORT_RELATIVE,
+    ):
+        path = _source_for(relative)
+        reviewed_inputs[relative] = {"path": str(path), "sha256": _sha256(path)}
+    replay_inputs = []
+    for label, (fixture, config) in zip(
+        ("audio-tool", "interruption"), replay_pairs, strict=True
+    ):
+        fixture_path = _regular_file(fixture, f"{label} replay fixture")
+        replay_inputs.append(
+            {
+                "label": label,
+                "fixture": {
+                    "path": str(fixture_path),
+                    "sha256": _sha256(fixture_path),
+                },
+                "config": {
+                    "path": str(_regular_directory(config, f"{label} replay config")),
+                    "files": _config_hashes(config),
+                },
+            }
+        )
+    yui_path = _regular_file(yui, "yui")
+    return {
+        "sourceRevision": source_revision,
+        "sourceRepository": str(REPO_ROOT),
+        "probeScript": {
+            "path": str(Path(__file__).resolve()),
+            "sha256": _sha256(Path(__file__).resolve()),
+        },
+        "controllerScripts": script_inputs,
+        "reviewedInputs": reviewed_inputs,
+        "yui": {"path": str(yui_path), "sha256Before": _sha256(yui_path)},
+        "replayInputs": replay_inputs,
+    }
 
 
 def _copy_reviewed_inputs(root: Path) -> None:
@@ -389,6 +561,7 @@ def _controller(
 
 
 def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
+    protected_before = _protected_hashes(fixture)
     record_input = fixture / "candidate-record.json"
     record_input.write_bytes(
         amendments.canonical_bytes(amendments.create_record(fixture))
@@ -540,11 +713,43 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
     )
     fake_bin = fixture / "fake-bin"
     fake_bin.mkdir()
+    work_responses = {}
+    for role, report_path in reports.items():
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        mission_path = Path(report["missionPath"])
+        mission = json.loads(mission_path.read_text(encoding="utf-8"))
+        work_id = report["validationWorkId"]
+        work_responses[work_id] = {
+            "workId": work_id,
+            "name": report["validationWorkName"],
+            "project": amendments.PROJECT,
+            "workTypeName": "validation",
+            "state": {"name": "complete"},
+            "tags": {
+                "_work_name": report["validationWorkName"],
+                "_last_output": json.dumps(
+                    {
+                        "status": "ready",
+                        "directory": str(mission_path.parent),
+                        "project": mission["project"],
+                        "build": mission["build"],
+                        "validationWorkName": mission["validationWorkName"],
+                        "missionSha256": report["missionSha256"],
+                    }
+                ),
+            },
+        }
+    work_map = fake_bin / "works.json"
+    work_map.write_text(_json(work_responses), encoding="utf-8")
     fake_you = fake_bin / "you"
     fake_you.write_text(
         "#!/usr/bin/env python3\n"
         "import json\n"
-        "print(json.dumps({'workTypeName': 'validation', 'state': {'name': 'complete'}}))\n",
+        "import pathlib\n"
+        "import sys\n"
+        "work_id = sys.argv[sys.argv.index('show') + 1]\n"
+        "works = json.loads((pathlib.Path(__file__).with_name('works.json')).read_text())\n"
+        "print(json.dumps(works[work_id]))\n",
         encoding="utf-8",
     )
     fake_you.chmod(0o700)
@@ -599,16 +804,8 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
     if rejection["exitCode"] == 0:
         raise ProbeError("expanded exclusion was accepted")
 
-    protected = {}
-    for relative in (
-        amendments.MANIFEST_RELATIVE,
-        amendments.AUTHORIZATION_RELATIVE,
-        amendments.HISTORICAL_REPORT_RELATIVE,
-        "factory/projects/audio-runtime/source-plan.md",
-        "factory/projects/audio-runtime/request.md",
-        "factory/projects/audio-runtime/acceptance.md",
-    ):
-        protected[relative] = _sha256(fixture / relative)
+    protected_after = _protected_hashes(fixture)
+    _assert_protected_hashes(protected_before, protected_after)
     return {
         "append": json.loads(append["stdout"]),
         "appendRepeat": repeat_value,
@@ -616,7 +813,10 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "prepared": prepared,
         "completion": completion,
         "negativeExpandedExclusion": rejection,
-        "protectedHashes": protected,
+        "protectedHashes": protected_after,
+        "protectedHashesBefore": protected_before,
+        "protectedHashesAfter": protected_after,
+        "protectedHashesUnchanged": True,
         "admission": project_admission.status(fixture),
     }
 
@@ -633,6 +833,7 @@ def _public_replay_case(
     (run_dir / "evidence/runs").mkdir(parents=True)
     (run_dir / "home").mkdir()
     config = run_dir / "config"
+    config_source_hashes = _config_hashes(config_source)
     config_hashes = _copy_config(config_source, config)
     staged_fixture = run_dir / f"{label}.fixture.json"
     fixture_hash = _copy_fixture(
@@ -736,6 +937,7 @@ def _public_replay_case(
         "fixtureSha256": fixture_hash,
         "config": str(config_source),
         "configHashes": config_hashes,
+        "configSourceHashes": config_source_hashes,
         "capture": replay,
         "rendered": rendered,
         "provider": provider,
@@ -784,6 +986,44 @@ def _yui_probe(
     return result
 
 
+def _write_failure_report(
+    output: Path,
+    source_revision: str,
+    error: BaseException,
+    elapsed: float,
+) -> Path | None:
+    """Publish bounded failure evidence for a fresh output directory."""
+
+    if output.is_symlink():
+        return None
+    if not output.exists():
+        output.mkdir(mode=0o700, parents=True)
+    if not output.is_dir():
+        return None
+    report_path = output / "probe-report.json"
+    if report_path.exists():
+        report_path = output / "probe-failure.json"
+    report = {
+        "schema": "audio-runtime-c39-controller-probe.v1",
+        "status": "FAILED",
+        "sourceRevision": source_revision,
+        "error": str(error)[:4096],
+        "limits": {
+            "childSeconds": MAX_CHILD_SECONDS,
+            "totalSeconds": MAX_PROBE_SECONDS,
+            "realtimeSessions": 0,
+            "realtimeSeconds": 0,
+        },
+        "durationSeconds": round(elapsed, 6),
+    }
+    try:
+        with report_path.open("x", encoding="utf-8") as stream:
+            stream.write(_json(report))
+    except FileExistsError:
+        return None
+    return report_path
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     source_revision = args.source_revision.strip()
@@ -816,7 +1056,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if len(replay_fixtures) != len(replay_configs):
         raise ProbeError("each replay fixture requires one replay config directory")
     yui = Path(args.yui).expanduser()
-    yui_result = _yui_probe(yui, output, list(zip(replay_fixtures, replay_configs, strict=True)))
+    replay_pairs = list(zip(replay_fixtures, replay_configs, strict=True))
+    input_provenance = _input_provenance(source_revision, yui, replay_pairs)
+    yui_result = _yui_probe(yui, output, replay_pairs)
+    input_provenance["yui"]["sha256After"] = yui_result["sha256After"]
     elapsed = time.monotonic() - started
     if elapsed > MAX_PROBE_SECONDS:
         raise ProbeError("probe exceeded the 600 second total deadline")
@@ -828,6 +1071,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "controller": controller,
         "timeoutControl": timeout_control,
         "yui": yui_result,
+        "inputProvenance": input_provenance,
         "limits": {
             "childSeconds": MAX_CHILD_SECONDS,
             "totalSeconds": MAX_PROBE_SECONDS,
@@ -853,23 +1097,19 @@ def main() -> int:
     parser.add_argument("--replay-fixture", action="append")
     parser.add_argument("--replay-config", action="append")
     args = parser.parse_args()
+    output = Path(args.output).expanduser().resolve()
+    output_preexisted = output.exists()
+    started = time.monotonic()
     try:
         report = run(args)
     except (OSError, ProbeError, subprocess.SubprocessError, ValueError) as error:
-        output = Path(args.output).expanduser().resolve()
         try:
-            if not output.exists():
-                output.mkdir(mode=0o700, parents=True)
-                (output / "probe-report.json").write_text(
-                    _json(
-                        {
-                            "schema": "audio-runtime-c39-controller-probe.v1",
-                            "status": "FAILED",
-                            "sourceRevision": args.source_revision,
-                            "error": str(error),
-                        }
-                    ),
-                    encoding="utf-8",
+            if not output_preexisted:
+                _write_failure_report(
+                    output,
+                    args.source_revision,
+                    error,
+                    time.monotonic() - started,
                 )
         except OSError:
             pass

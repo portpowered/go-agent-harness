@@ -134,6 +134,11 @@ MAX_STRING_BYTES = 16 * 1024
 MAX_JSON_DEPTH = 16
 MAX_OBJECT_ITEMS = 128
 MAX_ARRAY_ITEMS = 128
+REALTIME_BUDGET_LIMITS = {
+    "sessionsPerMission": 3,
+    "totalSecondsPerMission": 120,
+}
+_MISSING = object()
 
 
 class ScopeAmendmentError(ValueError):
@@ -463,7 +468,7 @@ def _validate_record_object(
     if not isinstance(criteria, list) or criteria != contract["criteria"]:
         raise ScopeAmendmentError("amendment changed immutable criterion IDs or rubrics")
     budget = record["realtimeBudget"]
-    if budget != {"sessionsPerMission": 3, "totalSecondsPerMission": 120}:
+    if budget != REALTIME_BUDGET_LIMITS:
         raise ScopeAmendmentError("amendment changes the Realtime budget")
     return copy.deepcopy(dict(record))
 
@@ -532,7 +537,7 @@ def create_record(root: Path) -> dict[str, Any]:
         "excludedSubproof": copy.deepcopy(EXPECTED_EXCLUDED_SUBPROOF),
         "retainedProof": copy.deepcopy(EXPECTED_RETAINED_PROOF),
         "criteria": copy.deepcopy(contract["criteria"]),
-        "realtimeBudget": {"sessionsPerMission": 3, "totalSecondsPerMission": 120},
+        "realtimeBudget": copy.deepcopy(REALTIME_BUDGET_LIMITS),
     }
     return _validate_record_object(root, record)
 
@@ -639,10 +644,13 @@ def _reference_for_record(
     }
 
 
-def amendment_reference(root: Path, value: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def amendment_reference(
+    root: Path,
+    value: Mapping[str, Any] | object = _MISSING,
+) -> dict[str, Any]:
     """Load and verify a stored amendment reference or the canonical record."""
 
-    if value is None:
+    if value is _MISSING:
         path = _record_path(root)
         relative = _relative_to_root(root, path)
     else:
@@ -659,7 +667,7 @@ def amendment_reference(root: Path, value: Mapping[str, Any] | None = None) -> d
         validated["record"],
         validated["contentSha256"],
     )
-    if value is not None and dict(value) != expected:
+    if value is not _MISSING and dict(value) != expected:
         raise ScopeAmendmentError("amendment reference content or provenance mismatch")
     return expected
 
@@ -798,10 +806,15 @@ def validate_amended_report(
         or isinstance(time_seconds, bool)
         or not isinstance(time_seconds, int)
         or not 1 <= time_seconds <= 1800
-        or budget.get("realtimeSessions") != 0
-        or budget.get("realtimeSeconds") != 0
     ):
         raise ScopeAmendmentError("amended mission has an invalid Realtime budget")
+    for key, maximum in (
+        ("realtimeSessions", REALTIME_BUDGET_LIMITS["sessionsPerMission"]),
+        ("realtimeSeconds", REALTIME_BUDGET_LIMITS["totalSecondsPerMission"]),
+    ):
+        value = budget.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= maximum:
+            raise ScopeAmendmentError("amended mission has an invalid Realtime budget")
 
     criteria = report.get("criteria")
     if not isinstance(criteria, dict) or set(criteria) != expected_criteria:

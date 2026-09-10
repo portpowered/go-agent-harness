@@ -49,7 +49,40 @@ def verify_work(root, kind, name, payload):
     return {"status": "admitted", "project": contract["project"], "name": name}
 
 
-def completed_validation(work_id, session_id, server):
+def _staged_work_output(work):
+    """Decode the bounded prepare-validation result retained by canonical Work."""
+    candidates = []
+    tags = work.get("tags")
+    if isinstance(tags, dict) and isinstance(tags.get("_last_output"), str):
+        candidates.append(tags["_last_output"])
+    content = work.get("content")
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                candidates.append(item["text"])
+    for candidate in candidates:
+        if len(candidate.encode("utf-8")) > 2 * 1024 * 1024:
+            raise ContractError("validation Work output exceeds the bounded response limit")
+        try:
+            value = json.loads(candidate)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(value, dict) and "missionSha256" in value:
+            return value
+    return None
+
+
+def completed_validation(
+    work_id,
+    session_id,
+    server,
+    *,
+    project=None,
+    work_name=None,
+    mission_path=None,
+    mission_sha256=None,
+    artifact_sha256=None,
+):
     result = subprocess.run(["you", "--server", server, "--json", "work", "show",
                              work_id, "--session", session_id], capture_output=True,
                             text=True, timeout=60, check=True)
@@ -63,6 +96,36 @@ def completed_validation(work_id, session_id, server):
     kind = work.get("workTypeName") or work.get("workType")
     if kind != "validation" or state != "complete":
         raise ContractError("validation Work has not completed in canonical runtime state")
+    if work_name is None:
+        return
+    if work.get("workId") != work_id:
+        raise ContractError("canonical validation Work identity mismatch")
+    if work.get("name") != work_name:
+        raise ContractError("canonical validation Work name mismatch")
+    if not isinstance(project, str) or not work_name.startswith(project + "-c"):
+        raise ContractError("canonical validation Work project mismatch")
+    tags = work.get("tags")
+    if isinstance(tags, dict) and tags.get("_work_name") not in {None, work_name}:
+        raise ContractError("canonical validation Work tag name mismatch")
+    staged = _staged_work_output(work)
+    if staged is None:
+        raise ContractError("canonical validation Work lacks staged mission identity")
+    if staged.get("validationWorkName") != work_name:
+        raise ContractError("canonical validation Work mission name mismatch")
+    if staged.get("project") not in {None, project}:
+        raise ContractError("canonical validation Work mission project mismatch")
+    if staged.get("missionSha256") != mission_sha256:
+        raise ContractError("canonical validation Work mission digest mismatch")
+    if not isinstance(mission_path, str) or not isinstance(staged.get("directory"), str):
+        raise ContractError("canonical validation Work mission path is missing")
+    if Path(staged["directory"]).resolve() != Path(mission_path).resolve().parent:
+        raise ContractError("canonical validation Work staged directory mismatch")
+    staged_build = staged.get("build")
+    if (
+        not isinstance(staged_build, dict)
+        or staged_build.get("sha256") != artifact_sha256
+    ):
+        raise ContractError("canonical validation Work artifact mismatch")
 
 
 def validate_report(report, contract, role, build, expected, *, root=None, amendment=None, report_path=None):
@@ -145,7 +208,19 @@ def verify_completion(root, name):
         work_id = report.get("validationWorkId")
         if not isinstance(work_id, str) or not work_id or work_id in seen:
             raise ContractError("validation must use distinct canonical Work identities")
-        completed_validation(work_id, runtime["sessionId"], runtime["server"])
+        if amendment is None:
+            completed_validation(work_id, runtime["sessionId"], runtime["server"])
+        else:
+            completed_validation(
+                work_id,
+                runtime["sessionId"],
+                runtime["server"],
+                project=name,
+                work_name=report["validationWorkName"],
+                mission_path=report["missionPath"],
+                mission_sha256=report["missionSha256"],
+                artifact_sha256=build["sha256"],
+            )
         seen.add(work_id)
     return {"status": "verified", "project": name, "build": build}
 

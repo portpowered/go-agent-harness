@@ -35,6 +35,11 @@ PREPARE_VALIDATION = _load_script(
     "prepare-validation.py",
     "scope_prepare_validation_tests",
 )
+PROBE = _load_script(
+    REPO_ROOT
+    / "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py",
+    "scope_c39_probe_tests",
+)
 
 
 class AmendmentFixture:
@@ -230,12 +235,14 @@ class AmendmentFixture:
             "amendment": amendments.amendment_reference(self.root),
         }
 
-    def prepare_reports(self):
+    def prepare_reports(self, realtime_sessions=0, realtime_seconds=0):
         reports = {}
         build = self.artifact("shared-build.bin")
         for role in ("customer", "engineering"):
             packet = self.prepare_packet(role, role)
             packet["build"] = build
+            packet["budget"]["realtimeSessions"] = realtime_sessions
+            packet["budget"]["realtimeSeconds"] = realtime_seconds
             result = PREPARE_VALIDATION.prepare(
                 self.root,
                 f"audio-runtime-c39-{role}-mission",
@@ -468,10 +475,154 @@ class ScopeAmendmentTests(unittest.TestCase):
         with mock.patch.object(
             PROJECT_CONTROL,
             "completed_validation",
-            side_effect=lambda *args: None,
+                side_effect=lambda *args, **kwargs: None,
+            ):
+            result = PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
+        self.assertEqual(result["status"], "verified")
+
+    def test_amended_completion_preserves_original_realtime_maxima(self):
+        self.fixture.append()
+        build, reports = self.fixture.prepare_reports(
+            realtime_sessions=3,
+            realtime_seconds=120,
+        )
+        self.fixture.bind_runtime()
+        self.fixture.completion(build, reports)
+        with mock.patch.object(
+            PROJECT_CONTROL,
+            "completed_validation",
+            side_effect=lambda *args, **kwargs: None,
         ):
             result = PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
         self.assertEqual(result["status"], "verified")
+
+    def test_present_null_amendment_is_rejected(self):
+        self.fixture.append()
+        packet = self.fixture.prepare_packet("engineering", "null-amendment")
+        packet["amendment"] = None
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "amendment reference must be an object",
+        ):
+            PREPARE_VALIDATION.prepare(
+                self.root,
+                "audio-runtime-c39-null-amendment",
+                json.dumps(packet),
+            )
+
+    def test_completed_validation_rejects_unrelated_work_name_and_mission(self):
+        def response(work):
+            return subprocess.CompletedProcess(
+                args=["you"],
+                returncode=0,
+                stdout=json.dumps(work),
+                stderr="",
+            )
+
+        expected = {
+            "workId": "validation-customer",
+            "name": "audio-runtime-c39-customer-mission",
+            "project": "audio-runtime",
+            "workTypeName": "validation",
+            "state": {"name": "complete"},
+            "tags": {
+                "_last_output": json.dumps(
+                    {
+                        "project": "audio-runtime",
+                        "directory": "/tmp/c39-mission",
+                        "validationWorkName": "audio-runtime-c39-customer-mission",
+                        "missionSha256": "mission-sha",
+                        "build": {"sha256": "artifact-sha"},
+                    }
+                )
+            },
+        }
+        with mock.patch.object(
+            PROJECT_CONTROL.subprocess,
+            "run",
+            return_value=response({**expected, "name": "audio-runtime-c39-other-mission"}),
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "canonical validation Work name mismatch",
+            ):
+                PROJECT_CONTROL.completed_validation(
+                    "validation-customer",
+                    "session",
+                    "http://fixture.invalid",
+                    project="audio-runtime",
+                    work_name="audio-runtime-c39-customer-mission",
+                    mission_path="/tmp/c39-mission/mission.json",
+                    mission_sha256="mission-sha",
+                    artifact_sha256="artifact-sha",
+                )
+
+        wrong_mission = copy.deepcopy(expected)
+        wrong_mission["tags"]["_last_output"] = json.dumps(
+            {
+                "project": "audio-runtime",
+                "directory": "/tmp/c39-mission",
+                "validationWorkName": "audio-runtime-c39-customer-mission",
+                "missionSha256": "wrong-mission-sha",
+                "build": {"sha256": "artifact-sha"},
+            }
+        )
+        with mock.patch.object(
+            PROJECT_CONTROL.subprocess,
+            "run",
+            return_value=response(wrong_mission),
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "canonical validation Work mission digest mismatch",
+            ):
+                PROJECT_CONTROL.completed_validation(
+                    "validation-customer",
+                    "session",
+                    "http://fixture.invalid",
+                    project="audio-runtime",
+                    work_name="audio-runtime-c39-customer-mission",
+                    mission_path="/tmp/c39-mission/mission.json",
+                    mission_sha256="mission-sha",
+                    artifact_sha256="artifact-sha",
+                )
+
+    def test_probe_bounded_output_and_failure_evidence(self):
+        result = PROBE.run_bounded(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdout.write('o' * 100000); sys.stderr.write('e' * 100000)",
+            ],
+            timeout=10,
+        )
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["stdoutBytesRetained"], PROBE.MAX_OUTPUT_BYTES)
+        self.assertEqual(result["stderrBytesRetained"], PROBE.MAX_OUTPUT_BYTES)
+        self.assertTrue(result["stdoutTruncated"])
+        self.assertTrue(result["stderrTruncated"])
+
+        output = Path(self.temp_dir.name) / "failed-probe"
+        failed = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py"),
+                "--source-revision",
+                "not-the-current-revision",
+                "--yui",
+                str(REPO_ROOT / "missing-yui"),
+                "--output",
+                str(output),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        self.assertNotEqual(failed.returncode, 0)
+        report = json.loads((output / "probe-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["status"], "FAILED")
+        self.assertIn("source revision mismatch", report["error"])
 
     def test_amended_completion_rejects_stale_or_incomplete_identity(self):
         self.fixture.append()
