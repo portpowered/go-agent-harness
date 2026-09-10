@@ -18,6 +18,95 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
+type pairedPrefixFailureCase struct {
+	name    string
+	audio   bool
+	failAt  int
+	failure func(*os.File, []byte) error
+}
+
+func TestDirectoryRecorderRollsBackPairedEvidenceOnAgentWriteFailure(t *testing.T) {
+	cases := []pairedPrefixFailureCase{
+		{name: "partial transcript", failAt: 4, failure: partialSpoolFailure},
+		{name: "zero-byte transcript", failAt: 4, failure: zeroByteSpoolFailure},
+		{name: "offset transcript", failAt: 4, failure: noOffsetSpoolFailure},
+		{name: "zero-byte audio", audio: true, failAt: 5, failure: zeroByteSpoolFailure},
+		{name: "offset audio", audio: true, failAt: 5, failure: noOffsetSpoolFailure},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) { runPairedPrefixFailure(t, tc) })
+	}
+}
+
+func runPairedPrefixFailure(t *testing.T, tc pairedPrefixFailureCase) {
+	t.Helper()
+	r := newEvidenceRecorder(t)
+	r.writeSpool = failingSpoolWriter(tc)
+	recordEvidenceText(t, r, "first complete")
+	if tc.audio {
+		recordFailedAudio(t, r)
+	} else {
+		recordEvidenceText(t, r, "second failed")
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err == nil {
+		t.Fatal("agent write failure reported complete")
+	}
+	assertPairedTranscriptPrefix(t, r)
+	if tc.audio {
+		if _, err := os.Stat(filepath.Join(r.destination, "audio", "out-000.pcm")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("failed audio retained bytes: %v", err)
+		}
+	}
+}
+
+func failingSpoolWriter(tc pairedPrefixFailureCase) func(*os.File, []byte) error {
+	writes := 0
+	return func(file *os.File, data []byte) error {
+		writes++
+		if writes == tc.failAt {
+			return tc.failure(file, data)
+		}
+		return writeAll(file, data)
+	}
+}
+
+func partialSpoolFailure(file *os.File, data []byte) error {
+	n := len(data) / 2
+	if n == 0 {
+		n = 1
+	}
+	if _, err := file.Write(data[:n]); err != nil {
+		return err
+	}
+	return io.ErrShortWrite
+}
+
+func zeroByteSpoolFailure(*os.File, []byte) error { return errors.New("fixture zero-byte agent write") }
+
+func noOffsetSpoolFailure(*os.File, []byte) error { return nil }
+
+func recordFailedAudio(t *testing.T, r *directoryRecorder) {
+	t.Helper()
+	frame := audio.PCMFrame{Samples: []int16{11, -12}, Format: audio.PCM16DeviceFormat(24000)}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertPairedTranscriptPrefix(t *testing.T, r *directoryRecorder) {
+	t.Helper()
+	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+		lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, name)), []byte{'\n'})
+		if len(lines) != 1 {
+			t.Fatalf("%s lines = %d, want one paired prefix", name, len(lines))
+		}
+		if _, err := transcript.Decode(lines[0]); err != nil {
+			t.Fatalf("%s retained invalid JSONL prefix: %v", name, err)
+		}
+	}
+}
+
 // Both streams preserve their own order, but either may run ahead. Enumerate
 // every interleaving of two media frames with four normalized response events.
 func TestRecordedResponseAudioIsIndependentOfQueueScheduling(t *testing.T) {
