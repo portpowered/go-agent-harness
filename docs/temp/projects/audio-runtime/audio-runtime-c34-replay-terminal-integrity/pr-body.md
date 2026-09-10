@@ -11,8 +11,8 @@
 
 This is the admitted `audio-runtime-c34-replay-terminal-integrity` task. The
 implementation source tested by the evidence reports is
-`056345864405d96e86a4aa0100b72fcbb4ba3775`. The candidate merged fresh
-`origin/main` at `b0acab1238d1aa6bf6bce5ca074451310c7eb039`; ancestry probes also
+`1278b1a4eaaaf9784c072b47e8cdcf62b5e3f028`. The candidate merged fresh
+`origin/main` at `431fc96c14f0e0045629d9c36f98ee61ff06e840`; ancestry probes also
 pass for startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and architecture
 baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 
@@ -47,11 +47,15 @@ bounded output capture.
 - Missing timeline and corrupt audio controls — PASS: both fail with causal
   diagnostics and no descendant leak.
 
-The evidence reports record exact source/base revisions, consumer source hash
+The latest stale-head review rejection was reconciled by merging current
+`origin/main` in `1278b1a4eaaaf9784c072b47e8cdcf62b5e3f028`. The clean-source
+reports record that exact source/base pair and the evidence-only docs/report
+descendant does not change executable inputs. The evidence reports record exact
+source/base revisions, consumer source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`, consumer
-binary hash `32531bfb5d8282b390c9ea4f6302ea58123df7330381b395f43bee31db9674d`,
-the mutated fixture hashes, the source-bundle file hashes, and YUI hash
-`a7bd3bb815a9fe87b0ef406e37fcaed22b0b2e9b2c397a728759716e6dac7447`.
+binary hash `9fc86f9e6e150a73ae78d80a0249f7d12c79d2048c420dd711deaa0a58a8b0e9`,
+the mutated fixture hashes, the source-bundle file hashes, and rebuilt same-source
+YUI hash `4aa43e242cea79f06c12c0bef2f9d1e061262835eb8e9ee567584f83fa99cba5`.
 
 This is software replay evidence only; it does not claim physical-device or
 acoustic proof.

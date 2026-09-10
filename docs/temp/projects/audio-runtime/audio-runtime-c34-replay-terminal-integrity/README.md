@@ -9,12 +9,15 @@ and process cleanup state.
 ## Revisions and admission
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
-- implementation source revision: `056345864405d96e86a4aa0100b72fcbb4ba3775`
-- fresh `origin/main` merged into the candidate: `b0acab1238d1aa6bf6bce5ca074451310c7eb039`
+- implementation source revision: `1278b1a4eaaaf9784c072b47e8cdcf62b5e3f028`
+- fresh `origin/main` merged into the candidate: `431fc96c14f0e0045629d9c36f98ee61ff06e840`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 
-The reports record successful ancestry probes for all three required revisions.
+The reports record successful ancestry probes for the fresh main and both required
+startup/baseline revisions. They were generated from a clean detached checkout of
+the implementation source above; the submitted evidence/docs descendant changes do
+not alter executable inputs.
 The operator's untracked `meta-operator-throughput-feedback.md` remains
 untouched and is outside the admitted owned paths.
 
@@ -78,8 +81,8 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-final` with SHA-256
-`a7bd3bb815a9fe87b0ef406e37fcaed22b0b2e9b2c397a728759716e6dac7447`. Both
+The tested YUI is `/private/tmp/audio-runtime-c34-yui-431fc96c` with SHA-256
+`4aa43e242cea79f06c12c0bef2f9d1e061262835eb8e9ee567584f83fa99cba5`. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`
 and the terminal replay completed with `output_state=complete`. Rendered PCM is
 3,360 bytes with SHA-256
