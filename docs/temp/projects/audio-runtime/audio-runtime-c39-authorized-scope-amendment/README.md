@@ -102,3 +102,19 @@ The current-main merge checkpoint is archived at
 `/tmp/audio-runtime-c39-yui-b98e5e7` (SHA-256
 `c99078de28b992b60f1c238376f8dd0ed1207288f7ece732119fd966c5319683`), and
 `resource-usage.json` records the bounded storage measurements and provenance.
+
+The latest current-main integration is archived at
+`evidence-current-main-ace0fdb-run2/probe-report.json` for tested source
+`ace0fdbe7e91685f02a89c0879a7d426b554c311` (report SHA-256
+`170f282653f35c4a54718794526ff94b8c74c163fd0112d1a3a6829929119626`). It
+uses the freshly built nomicrophone yui
+`/tmp/audio-runtime-c39-yui-ace0fdb` (51,154,738 bytes, SHA-256
+`3541db580e476effd2d0c18cbba6943a5d8363763a091719e293e74a4f57932c`) and
+passes the controller, protected-hash, exact identity, bounded cleanup and
+both public replay cases. Audio/tool replay is 3,200 rendered bytes and 4,800
+provider bytes; interruption replay is 3,360 rendered bytes and 3,840
+provider bytes with the 2,400-byte healthy follow-on tail. Directory replay and
+missing-timeline rejection controls pass for both cases. Storage provenance is
+in `evidence-current-main-ace0fdb-run2/resource-usage.json`; the probe used
+zero Realtime sessions/seconds and the excluded native Windows/physical
+acoustic subproofs remain OUT_OF_SCOPE rather than PASS.

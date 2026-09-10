@@ -2872,3 +2872,54 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   return `ACCEPTED` to SCRIPT CI without polling it. CI/review/guarded merge
   and the primary's fresh post-merge vertical probe remain open; no project
   completion is claimed.
+
+# C39 current-main integration and exact-source handoff checkpoint 2026-09-10
+
+- Admission was reverified for the sole `audio-runtime` project with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c39-authorized-scope-amendment`, returning admitted. The
+  isolated branch remains `codex/audio-runtime-c39-authorized-scope-amendment`,
+  matching `prd.json.branchName`. Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` and merged it as
+  `ace0fdbe7e91685f02a89c0879a7d426b554c311`; the only content conflict was
+  `progress.txt`, resolved by preserving the complete C39 checkpoint history
+  and the complete incoming C44/main ledger. Startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, reviewed main
+  `926ded7bfa8f3c3e42115192d03aa1240c4806db`, and current main are ancestors.
+  No host checkout, second project, waiver, manifest, authority bytes, active
+  mission, predecessor checkpoint or unrelated owner path was changed.
+- Focused post-merge checks pass: C39 amendment suite `15` tests,
+  project-control suite `12` tests, Python compilation, probe help and
+  `git diff --check`. The fresh exact-source nomicrophone yui is
+  `/tmp/audio-runtime-c39-yui-ace0fdb`, `51,154,738` bytes, SHA-256
+  `3541db580e476effd2d0c18cbba6943a5d8363763a091719e293e74a4f57932c`.
+- Fresh probe report
+  `docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-current-main-ace0fdb-run2/probe-report.json`
+  has SHA-256
+  `170f282653f35c4a54718794526ff94b8c74c163fd0112d1a3a6829929119626`,
+  status `ACCEPTED`, source `ace0fdbe`, duration `3.202412s`, and zero
+  Realtime sessions/seconds. Controller append/idempotent status, exact
+  amendment identity, widened-exclusion rejection, protected hashes and
+  deterministic TERM/reap all pass. Audio/tool replay passes rendered PCM
+  `3200`/`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`
+  and provider PCM `4800`/
+  `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, with
+  marker side effect, `18` wire events/`1` tool call and missing-timeline
+  rejection. Interruption replay passes rendered PCM
+  `3360`/`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`,
+  provider PCM `3840`/
+  `6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11be66bece28c539e22`,
+  sequence `[1440, 2400]`, healthy tail `2400`/
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`,
+  and missing-timeline rejection. All children were reaped.
+- The owned `resource-usage.json` records free space before build `2,556,272`
+  KiB, after build `2,420,424` KiB and after probe `2,169,648` KiB, the fresh
+  `51,154,738`-byte binary, `724` KiB retained evidence and no source
+  duplication, peer deletion or cache cleanup. The final reserve remains
+  above 2 GiB. This is executor handoff evidence only: no current-head
+  script-CI success, independent review, guarded merge, post-merge vertical
+  acceptance, physical/acoustic proof or project completion is claimed. Exact
+  next action: force-add the fresh evidence, README/resource record and this
+  checkpoint, commit and push the same PR `#432`, update its merge/provenance
+  and prior-finding map, then return `ACCEPTED` to the script-owned current-head
+  CI gate without polling; retain C39 ownership through `CONTINUE` for any
+  exact rejection or actionable repair.
