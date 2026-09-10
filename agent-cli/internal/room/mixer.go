@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	audiomixer "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -717,6 +716,9 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	if m.closed {
 		return nil, nil, ErrMixerClosed
 	}
+	if m.frameBytes%2 != 0 {
+		return nil, nil, fmt.Errorf("%w: output frame has odd byte length %d", ErrMixerInvalidFormat, m.frameBytes)
+	}
 	ids := make([]string, 0, len(m.inputs))
 	for id := range m.inputs {
 		ids = append(ids, id)
@@ -725,12 +727,17 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	if err := audiomixer.ValidatePCM16MixBounds(len(ids), m.frameBytes/2); err != nil {
 		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
 	}
-	frame := make([]byte, m.frameBytes)
-	sourceSamples := make([][]int16, 0, len(ids))
+	// Keep queue prefixes borrowed until the canonical operation succeeds.
+	// Sorted IDs and byte prefixes preserve attribution and cadence semantics.
+	// Queue mutation remains below the complete decode, mix, and encode boundary.
+	sourceBytes := make([][]byte, len(ids))
 	taken := make([]int, len(ids))
 	sources := make([]string, 0, len(ids))
 	for index, id := range ids {
 		input := m.inputs[id]
+		if input == nil {
+			return nil, nil, fmt.Errorf("%w: input %q is nil", ErrMixerInvalidFormat, id)
+		}
 		take := len(input.data)
 		if take > m.frameBytes {
 			take = m.frameBytes
@@ -739,21 +746,14 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 			return nil, nil, fmt.Errorf("%w: input %q has odd byte length %d", ErrMixerInvalidFormat, id, take)
 		}
 		taken[index] = take
-		inputSamples := make([]int16, take/2)
-		if err := codec.DecodePCM16Into(inputSamples, input.data[:take]); err != nil {
-			return nil, nil, fmt.Errorf("decode mixer PCM16 input %q: %w", id, err)
-		}
+		sourceBytes[index] = input.data[:take]
 		if take > 0 {
-			sourceSamples = append(sourceSamples, inputSamples)
 			sources = append(sources, id)
 		}
 	}
-	outputSamples, err := audiomixer.MixPCM16Samples(sourceSamples, m.frameBytes/2)
+	frame, err := audiomixer.MixPCM16Bytes(sourceBytes, m.frameBytes/2)
 	if err != nil {
 		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
-	}
-	if err := codec.EncodePCM16Into(frame, outputSamples); err != nil {
-		return nil, nil, fmt.Errorf("encode mixer PCM16 output: %w", err)
 	}
 	for index, id := range ids {
 		input := m.inputs[id]

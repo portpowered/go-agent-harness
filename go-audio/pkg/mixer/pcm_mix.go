@@ -1,6 +1,10 @@
 package mixer
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
 
 const (
 	pcm16MaxSample = 32767
@@ -84,4 +88,59 @@ func MixPCM16Samples(sources [][]int16, outputLength int) ([]int16, error) {
 		result[index] = int16(sample)
 	}
 	return result, nil
+}
+
+// MixPCM16Bytes decodes, mixes, and encodes signed little-endian PCM16
+// sources. outputLength is the requested number of interleaved samples, not
+// a byte count. A source shorter than outputLength contributes silence for its
+// missing tail; a source longer than outputLength is rejected instead of being
+// silently truncated. The byte and sample buffers are temporary and are never
+// retained or aliased with the caller's input.
+//
+// All source and output bounds, including PCM16 alignment, are checked before
+// any source is decoded or any output-sized buffer is allocated. The largest
+// temporary allocation is proportional to the actual source sample lengths,
+// plus the bounded output accumulator/result and encoded frame.
+func MixPCM16Bytes(sources [][]byte, outputLength int) ([]byte, error) {
+	if err := ValidatePCM16MixBounds(len(sources), outputLength); err != nil {
+		return nil, err
+	}
+	maxInt := int(^uint(0) >> 1)
+	if outputLength > maxInt/2 {
+		return nil, fmt.Errorf("%w: %d samples cannot be represented as bytes", ErrPCM16MixInvalidLength, outputLength)
+	}
+
+	sourceLengths := make([]int, len(sources))
+	for index, source := range sources {
+		if len(source)%2 != 0 {
+			return nil, fmt.Errorf("%w: source %d has %d bytes", codec.ErrPCM16OddLength, index, len(source))
+		}
+		sampleLength := len(source) / 2
+		if sampleLength > outputLength {
+			return nil, fmt.Errorf("%w: source %d has %d samples, want at most %d", ErrPCM16MixSourceTooLong, index, sampleLength, outputLength)
+		}
+		sourceLengths[index] = sampleLength
+	}
+
+	decoded := make([][]int16, len(sources))
+	for index, source := range sources {
+		if sourceLengths[index] == 0 {
+			continue
+		}
+		samples := make([]int16, sourceLengths[index])
+		if err := codec.DecodePCM16Into(samples, source); err != nil {
+			return nil, fmt.Errorf("decode PCM16 source %d: %w", index, err)
+		}
+		decoded[index] = samples
+	}
+
+	mixed, err := MixPCM16Samples(decoded, outputLength)
+	if err != nil {
+		return nil, fmt.Errorf("mix PCM16 bytes: %w", err)
+	}
+	encoded := make([]byte, outputLength*2)
+	if err := codec.EncodePCM16Into(encoded, mixed); err != nil {
+		return nil, fmt.Errorf("encode PCM16 mix: %w", err)
+	}
+	return encoded, nil
 }
