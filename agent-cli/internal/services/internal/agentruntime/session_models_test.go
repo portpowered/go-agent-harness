@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -79,6 +80,86 @@ func TestLookupOpenAIRealtimeModel_MiniReportsCapabilities(t *testing.T) {
 	}
 	if _, ok := LookupOpenAIRealtimeModel("not-a-model"); ok {
 		t.Fatal("unknown realtime model should not be accepted")
+	}
+}
+
+type sessionModelCatalog struct {
+	models []OpenAIRealtimeModel
+}
+
+func (c sessionModelCatalog) RealtimeModels(provider string) []OpenAIRealtimeModel {
+	if !strings.EqualFold(strings.TrimSpace(provider), sessionProviderOpenAI) {
+		return nil
+	}
+	return append([]OpenAIRealtimeModel(nil), c.models...)
+}
+
+func (c sessionModelCatalog) LookupRealtimeModel(provider, model string) (OpenAIRealtimeModel, bool) {
+	for _, candidate := range c.RealtimeModels(provider) {
+		if candidate.ID == model {
+			return candidate, true
+		}
+	}
+	return OpenAIRealtimeModel{}, false
+}
+
+func (c sessionModelCatalog) SupportedRealtimeModelIDs(provider string) []string {
+	models := c.RealtimeModels(provider)
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.ID)
+	}
+	return ids
+}
+
+func TestModelAdmissionAdaptersPreserveSessionAndSelfPlayBoundaries(t *testing.T) {
+	const customModelID = "custom-only"
+
+	custom := sessionModelCatalog{models: []OpenAIRealtimeModel{{ID: customModelID, SupportsAudio: true}}}
+	options := SessionRunOptions{ModelCatalog: custom}
+
+	model, ok := lookupOpenAIRealtimeModel(options, " custom-only ")
+	if !ok || model.ID != customModelID {
+		t.Fatalf("trimmed session lookup = %+v, %v", model, ok)
+	}
+
+	err := unsupportedOpenAIRealtimeModelErrorFor(options, " missing ")
+	if err == nil || !errors.Is(err, ErrUnsupportedRealtimeModel) {
+		t.Fatalf("session rejection = %v, want unsupported model", err)
+	}
+	var unsupported *UnsupportedRealtimeModelError
+	if !errors.As(err, &unsupported) || unsupported.Model != " missing " || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != customModelID {
+		t.Fatalf("session rejection = %v, want raw model and custom snapshot", err)
+	}
+	unsupported.SupportedModels[0] = "mutated"
+	retry := unsupportedOpenAIRealtimeModelErrorFor(options, " missing ")
+	var retryUnsupported *UnsupportedRealtimeModelError
+	if !errors.As(retry, &retryUnsupported) || retryUnsupported.SupportedModels[0] != customModelID {
+		t.Fatalf("session retry rejection = %v, want independent snapshot", retry)
+	}
+
+	if err := validateBareSessionModel(options, "custom", "missing"); err != nil {
+		t.Fatalf("non-OpenAI bare session = %v, want unrestricted", err)
+	}
+	if err := validateBareSessionModel(options, "OpenAI", "missing"); err != nil {
+		t.Fatalf("case-sensitive bare session boundary = %v, want legacy bypass", err)
+	}
+
+	if err := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: customModelID}); err != nil {
+		t.Fatalf("self-play custom model = %v", err)
+	}
+	selfPlayErr := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: " custom-only "})
+	if selfPlayErr == nil || !strings.Contains(selfPlayErr.Error(), `self-play model " custom-only " is not an OpenAI Realtime model`) {
+		t.Fatalf("self-play raw-model rejection = %v, want legacy presentation", selfPlayErr)
+	}
+}
+
+func TestModelAdmissionAdaptersPreserveNilCatalogContexts(t *testing.T) {
+	if err := unsupportedOpenAIRealtimeModelErrorFor(SessionRunOptions{}, "gpt-realtime"); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "OpenAI realtime model admission") {
+		t.Fatalf("session nil-catalog error = %v", err)
+	}
+	if err := validateSelfPlayModel(SelfPlayRunOptions{Model: "gpt-realtime"}); !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || !strings.Contains(err.Error(), "self-play model admission") {
+		t.Fatalf("self-play nil-catalog error = %v", err)
 	}
 }
 
