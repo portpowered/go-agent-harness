@@ -146,7 +146,11 @@ func TestPCM16MixerStatsKeepsLargeRepresentableCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("large representable mixer construction = %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("large representable mixer close: %v", err)
+		}
+	})
 	stats := mixer.Stats()
 	if stats.Output.CapacityBytes != maximumInt-1 || stats.Output.CapacityFrames != 1 {
 		t.Fatalf("large output capacity stats = %+v; want bytes=%d frames=1", stats.Output, maximumInt-1)
@@ -161,7 +165,11 @@ func TestPCM16MixerZeroConfigUsesDefaultButDirectZeroFormatRejects(t *testing.T)
 	if err != nil {
 		t.Fatalf("zero config construction = %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("zero config mixer close: %v", err)
+		}
+	})
 	if mixer.Format() != DefaultPCM16Format() {
 		t.Fatalf("zero config format = %+v, want %+v", mixer.Format(), DefaultPCM16Format())
 	}
