@@ -25,47 +25,91 @@ type Replay struct {
 	Clock   *clock.Deterministic
 }
 
+const (
+	replayEventAudio   = "audio"
+	replayEventRuntime = "runtime"
+	replayEventStarted = "recording_started"
+	replayEventClosed  = "recording_closed"
+)
+
+type replayLifecycle struct {
+	started bool
+	closed  bool
+}
+
+func (lifecycle *replayLifecycle) admit(event Event, eventCount int) error {
+	if lifecycle.closed {
+		return fmt.Errorf("%w: event %q follows recording_closed", ErrIncomplete, event.Kind)
+	}
+	switch event.Kind {
+	case replayEventStarted:
+		if lifecycle.started || eventCount != 0 {
+			return fmt.Errorf("%w: duplicate or nonleading recording_started", ErrIncomplete)
+		}
+		lifecycle.started = true
+	case replayEventClosed:
+		if !lifecycle.started || !event.Clean {
+			return fmt.Errorf("%w: recording_closed must be one final clean close", ErrIncomplete)
+		}
+		lifecycle.closed = true
+	case replayEventAudio, replayEventRuntime:
+		if !lifecycle.started {
+			return fmt.Errorf("%w: recording must begin with recording_started", ErrIncomplete)
+		}
+	case "trace_overflow":
+		return ErrIncomplete
+	}
+	return nil
+}
+
+func readReplayWave(wave io.ReadCloser) (int, []int16, error) {
+	rate, samples, readErr := wavio.Read(wave)
+	closeErr := wave.Close()
+	return rate, samples, errors.Join(readErr, closeErr)
+}
+
 func OpenReplay(directory string) (*Replay, error) {
 	file, err := os.Open(filepath.Join(directory, "timeline.jsonl"))
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	result := &Replay{streams: make(map[string][]int16)}
-	scan := bufio.NewScanner(file)
+	result, scan := &Replay{streams: make(map[string][]int16)}, bufio.NewScanner(file)
 	scan.Buffer(make([]byte, 4096), 2*MaxRuntimePayloadBytes)
-	positions := make(map[string]uint64)
-	rates := make(map[string]int)
-	var base time.Time
+	positions, rates := make(map[string]uint64), make(map[string]int)
+	base, lifecycle := time.Time{}, replayLifecycle{}
 	for scan.Scan() {
 		var event Event
+		eventCount := len(result.events)
 		if err := json.Unmarshal(scan.Bytes(), &event); err != nil {
 			return nil, fmt.Errorf("%w: invalid timeline: %v", ErrIncomplete, err)
 		}
 		if event.Version != SchemaVersion {
 			return nil, fmt.Errorf("unsupported audio trace schema %d", event.Version)
-		}
-		if event.Sequence != uint64(len(result.events)+1) || event.ElapsedNS < 0 {
+		} else if event.Sequence != uint64(eventCount+1) ||
+			event.ElapsedNS < 0 {
 			return nil, fmt.Errorf("%w: invalid timeline sequence/time", ErrIncomplete)
 		}
-		if event.Timestamp == "" && event.Kind != "recording_closed" {
+		if event.Timestamp == "" && event.Kind != replayEventClosed {
 			return nil, fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
-		}
-		if event.Timestamp != "" {
+		} else if event.Timestamp != "" {
 			timestamp, timestampErr := time.Parse(time.RFC3339Nano, event.Timestamp)
 			if timestampErr != nil {
 				return nil, fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
 			}
-			if len(result.events) == 0 {
+			if eventCount == 0 {
 				base = timestamp
 			} else if timestamp.Sub(base) != time.Duration(event.ElapsedNS) {
 				return nil, fmt.Errorf("%w: timeline timestamp does not match elapsed time", ErrIncomplete)
 			}
-		} else if len(result.events) == 0 {
+		} else if eventCount == 0 {
 			return nil, fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
 		}
+		if err := lifecycle.admit(event, eventCount); err != nil {
+			return nil, err
+		}
 		switch event.Kind {
-		case "audio":
+		case replayEventAudio:
 			if event.SampleCount <= 0 || event.SampleCount > MaxBlockSamples || event.StartSample != positions[event.Tap] {
 				return nil, fmt.Errorf("%w: audio gap or invalid block for %s", ErrIncomplete, event.Tap)
 			}
@@ -84,9 +128,8 @@ func OpenReplay(directory string) (*Replay, error) {
 				if err != nil {
 					return nil, err
 				}
-				rate, samples, readErr := wavio.Read(wave)
-				closeErr := wave.Close()
-				if err := errors.Join(readErr, closeErr); err != nil {
+				rate, samples, err := readReplayWave(wave)
+				if err != nil {
 					return nil, err
 				}
 				result.streams[event.Tap], rates[event.Tap] = samples, rate
@@ -99,7 +142,7 @@ func OpenReplay(directory string) (*Replay, error) {
 			positions[event.Tap] = end
 		case "trace_overflow":
 			return nil, ErrIncomplete
-		case "recording_started", "runtime", "recording_closed":
+		case replayEventStarted, replayEventRuntime, replayEventClosed:
 		default:
 			return nil, fmt.Errorf("unsupported trace event %q", event.Kind)
 		}
@@ -108,7 +151,7 @@ func OpenReplay(directory string) (*Replay, error) {
 	if err := scan.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrIncomplete, err)
 	}
-	if len(result.events) < 2 || result.events[0].Kind != "recording_started" || result.events[len(result.events)-1].Kind != "recording_closed" || !result.events[len(result.events)-1].Clean {
+	if len(result.events) < 2 || !lifecycle.started || !lifecycle.closed {
 		return nil, ErrIncomplete
 	}
 	for tap, samples := range result.streams {
@@ -131,7 +174,7 @@ func (r *Replay) Next() (Event, *audio.PCMFrame, error) {
 	event := r.events[r.cursor]
 	r.cursor++
 	r.Clock.AdvanceToElapsed(time.Duration(event.ElapsedNS))
-	if event.Kind != "audio" {
+	if event.Kind != replayEventAudio {
 		return event, nil, nil
 	}
 	samples := r.streams[event.Tap][event.StartSample : event.StartSample+uint64(event.SampleCount)]
