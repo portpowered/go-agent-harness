@@ -3,6 +3,9 @@
     "sample_rate": 16000,
     "samples_per_turn": 64
   },
+  "interruption": {
+    "healthy_tail": [21, 34, 55, 89, 144, 233, 13, 8]
+  },
   "seed": "c23-overlap",
   "tool_identities": [
     {

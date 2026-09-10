@@ -33,35 +33,50 @@ import (
 
 // fixtureJSON is kept canonical and byte-stable. fixtures.json is the
 // human-readable copy used by the driver; both are hashed into every report.
-const fixtureJSON = `{"audio":{"sample_rate":16000,"samples_per_turn":64},"seed":"c23-overlap","tool_identities":[{"name":"lookup_alpha","result_prefix":"alpha"},{"name":"lookup_beta","result_prefix":"beta"}]}`
+const fixtureJSON = `{"audio":{"sample_rate":16000,"samples_per_turn":64},"interruption":{"healthy_tail":[21,34,55,89,144,233,13,8]},"seed":"c23-overlap","tool_identities":[{"name":"lookup_alpha","result_prefix":"alpha"},{"name":"lookup_beta","result_prefix":"beta"}]}`
 
 const (
-	maxTraceEvents = 8192
-	fixtureRate    = 16000
-	fixtureSamples = 64
+	maxTraceEvents              = 8192
+	fixtureRate                 = 16000
+	fixtureSamples              = 64
+	maxRecordingTranscriptBytes = 4 << 20
+	maxRecordingTranscriptItems = 8192
+	maxRecordingAudioBytes      = 4 << 20
+	maxRecordingAudioItems      = 8192
+	maxRecordingSidecarBytes    = 256 << 10
+	maxRecordingSidecarItems    = 64
+	maxRecordingMetadataBytes   = 256 << 10
+	maxRecordingMetadataItems   = 1024
+	maxRecordingTerminalBytes   = 128 << 10
+	maxRecordingTerminalItems   = 16
+	maxRecordingProviderBytes   = 4 << 20
+	maxRecordingProviderItems   = 8192
 )
 
 type report struct {
-	Schema          string           `json:"schema"`
-	Scenario        string           `json:"scenario"`
-	Turns           int              `json:"turns,omitempty"`
-	Recording       bool             `json:"recording,omitempty"`
-	SourceRevision  string           `json:"source_revision"`
-	FixtureSHA256   string           `json:"fixture_sha256"`
-	ConsumerSurface string           `json:"consumer_surface"`
-	Responses       []responseRecord `json:"responses,omitempty"`
-	ToolCalls       []toolRecord     `json:"tool_calls,omitempty"`
-	ToolResults     []toolRecord     `json:"tool_results,omitempty"`
-	PCM             pcmRecord        `json:"pcm"`
-	Events          eventRecord      `json:"events"`
-	Latency         []latencyRecord  `json:"latency,omitempty"`
-	Runtime         runtimeRecord    `json:"runtime"`
-	Terminal        terminalRecord   `json:"terminal"`
-	CleanShutdown   bool             `json:"clean_shutdown"`
-	TraceComplete   bool             `json:"trace_complete"`
-	Interruption    *interruptRecord `json:"interruption,omitempty"`
-	Artifacts       artifactRecord   `json:"artifacts"`
-	Error           string           `json:"error,omitempty"`
+	Schema          string               `json:"schema"`
+	Scenario        string               `json:"scenario"`
+	Turns           int                  `json:"turns,omitempty"`
+	Recording       bool                 `json:"recording,omitempty"`
+	SourceRevision  string               `json:"source_revision"`
+	FixtureSHA256   string               `json:"fixture_sha256"`
+	ConsumerSurface string               `json:"consumer_surface"`
+	Responses       []responseRecord     `json:"responses,omitempty"`
+	ToolCalls       []toolRecord         `json:"tool_calls,omitempty"`
+	ToolResults     []toolRecord         `json:"tool_results,omitempty"`
+	Trace           []traceRecord        `json:"trace,omitempty"`
+	PCM             pcmRecord            `json:"pcm"`
+	Events          eventRecord          `json:"events"`
+	Latency         []latencyRecord      `json:"latency,omitempty"`
+	Runtime         runtimeRecord        `json:"runtime"`
+	Terminal        terminalRecord       `json:"terminal"`
+	CleanShutdown   bool                 `json:"clean_shutdown"`
+	TraceComplete   bool                 `json:"trace_complete"`
+	Interruption    *interruptRecord     `json:"interruption,omitempty"`
+	Artifacts       artifactRecord       `json:"artifacts"`
+	RecordingUsage  recordingUsageRecord `json:"recording_usage"`
+	ToolControl     string               `json:"tool_control,omitempty"`
+	Error           string               `json:"error,omitempty"`
 }
 
 type responseRecord struct {
@@ -143,6 +158,24 @@ type artifactRecord struct {
 	SemanticRoot    string `json:"semantic_root,omitempty"`
 }
 
+type traceRecord struct {
+	Sequence   int    `json:"sequence"`
+	Kind       string `json:"kind"`
+	ResponseID string `json:"response_id,omitempty"`
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	Turn       int    `json:"turn"`
+	Role       string `json:"role,omitempty"`
+	PCMBytes   int    `json:"pcm_bytes,omitempty"`
+}
+
+type recordingUsageRecord struct {
+	Enabled   bool              `json:"enabled"`
+	Available bool              `json:"available"`
+	Limits    map[string]int64  `json:"limits"`
+	Usage     map[string]int64  `json:"usage,omitempty"`
+	Drops     map[string]uint64 `json:"drops"`
+}
+
 type traceEvent struct {
 	Kind       string
 	ResponseID string
@@ -151,35 +184,38 @@ type traceEvent struct {
 	Role       string
 	Timestamp  time.Time
 	PCM        []byte
+	PCMBytes   int
 }
 
 type eventCollector struct {
-	mu            sync.Mutex
-	trace         []traceEvent
-	byKind        map[string]int
-	overflowDrops uint64
-	pcm           []byte
-	responses     map[string]*responseRecord
-	toolCalls     []toolRecord
-	toolResults   []toolRecord
-	requestAt     map[int]time.Time
-	firstPCMAt    map[int]time.Time
-	terminalAt    map[int]time.Time
-	responsePCM   map[int][]byte
-	terminal      terminalRecord
-	terminalSeen  bool
-	traceComplete bool
+	mu                sync.Mutex
+	trace             []traceEvent
+	byKind            map[string]int
+	overflowDrops     uint64
+	pcm               []byte
+	responses         map[string]*responseRecord
+	toolCalls         []toolRecord
+	toolResults       []toolRecord
+	requestAt         map[int]time.Time
+	firstPCMAt        map[int]time.Time
+	terminalAt        map[int]time.Time
+	responsePCM       map[int][]byte
+	responseAudioByID map[string][]byte
+	terminal          terminalRecord
+	terminalSeen      bool
+	traceComplete     bool
 }
 
 func newEventCollector() *eventCollector {
 	return &eventCollector{
-		byKind:        make(map[string]int),
-		responses:     make(map[string]*responseRecord),
-		requestAt:     make(map[int]time.Time),
-		firstPCMAt:    make(map[int]time.Time),
-		terminalAt:    make(map[int]time.Time),
-		responsePCM:   make(map[int][]byte),
-		traceComplete: true,
+		byKind:            make(map[string]int),
+		responses:         make(map[string]*responseRecord),
+		requestAt:         make(map[int]time.Time),
+		firstPCMAt:        make(map[int]time.Time),
+		terminalAt:        make(map[int]time.Time),
+		responsePCM:       make(map[int][]byte),
+		responseAudioByID: make(map[string][]byte),
+		traceComplete:     true,
 	}
 }
 
@@ -195,6 +231,7 @@ func (c *eventCollector) publish(_ context.Context, event session.LiveEvent) err
 		if event.Terminal != nil {
 			c.setTerminal(event.Kind, event.Terminal)
 		}
+		c.appendTrace(traceEvent{Kind: event.Kind, Timestamp: event.Timestamp, Turn: -1})
 		return nil
 	}
 	turn := responseTurn(msg.ResponseID)
@@ -202,7 +239,9 @@ func (c *eventCollector) publish(_ context.Context, event session.LiveEvent) err
 	switch value := msg.Value.(type) {
 	case *messages.AudioDeltaValue:
 		item.PCM = append([]byte(nil), value.Content...)
+		item.PCMBytes = len(value.Content)
 		c.pcm = append(c.pcm, value.Content...)
+		c.responseAudioByID[msg.ResponseID] = append(c.responseAudioByID[msg.ResponseID], value.Content...)
 		if strings.HasPrefix(msg.ResponseID, "final-resp-") {
 			c.responsePCM[turn] = append(c.responsePCM[turn], value.Content...)
 			if _, ok := c.firstPCMAt[turn]; !ok {
@@ -248,15 +287,19 @@ func (c *eventCollector) publish(_ context.Context, event session.LiveEvent) err
 			}
 		}
 	}
+	c.appendTrace(item)
+	if event.Terminal != nil {
+		c.setTerminal(event.Kind, event.Terminal)
+	}
+	return nil
+}
+
+func (c *eventCollector) appendTrace(item traceEvent) {
 	if len(c.trace) < maxTraceEvents {
 		c.trace = append(c.trace, item)
 	} else {
 		c.traceComplete = false
 	}
-	if event.Terminal != nil {
-		c.setTerminal(event.Kind, event.Terminal)
-	}
-	return nil
 }
 
 func (c *eventCollector) setTerminal(kind string, value *messages.SessionCloseValue) {
@@ -264,7 +307,7 @@ func (c *eventCollector) setTerminal(kind string, value *messages.SessionCloseVa
 	c.terminalSeen = true
 }
 
-func (c *eventCollector) snapshot() (eventRecord, []responseRecord, []toolRecord, []toolRecord, pcmRecord, []latencyRecord, terminalRecord, bool, bool) {
+func (c *eventCollector) snapshot() (eventRecord, []responseRecord, []toolRecord, []toolRecord, []traceRecord, pcmRecord, []latencyRecord, terminalRecord, bool, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	responses := make([]responseRecord, 0, len(c.responses))
@@ -303,7 +346,17 @@ func (c *eventCollector) snapshot() (eventRecord, []responseRecord, []toolRecord
 		}
 		latency = append(latency, item)
 	}
-	return eventRecord{Count: len(c.trace), ByKind: cloneCounts(c.byKind), OverflowDrops: c.overflowDrops, TraceBytes: len(c.trace) * 96}, responses, tools, results, pcmRecord{Format: "pcm16-le", SampleRate: fixtureRate, Channels: 1, BitDepth: 16, Bytes: len(c.pcm), SHA256: sha256Hex(c.pcm), FrameSamples: fixtureSamples}, latency, c.terminal, c.terminalSeen, c.traceComplete
+	trace := make([]traceRecord, 0, len(c.trace))
+	for sequence, item := range c.trace {
+		trace = append(trace, traceRecord{Sequence: sequence, Kind: item.Kind, ResponseID: item.ResponseID, ToolCallID: item.ToolCallID, Turn: item.Turn, Role: item.Role, PCMBytes: item.PCMBytes})
+	}
+	return eventRecord{Count: len(c.trace), ByKind: cloneCounts(c.byKind), OverflowDrops: c.overflowDrops, TraceBytes: len(c.trace) * 96}, responses, tools, results, trace, pcmRecord{Format: "pcm16-le", SampleRate: fixtureRate, Channels: 1, BitDepth: 16, Bytes: len(c.pcm), SHA256: sha256Hex(c.pcm), FrameSamples: fixtureSamples}, latency, c.terminal, c.terminalSeen, c.traceComplete
+}
+
+func (c *eventCollector) responseAudio(responseID string) []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]byte(nil), c.responseAudioByID[responseID]...)
 }
 
 func cloneCounts(in map[string]int) map[string]int {
@@ -321,6 +374,7 @@ type fixtureSession struct {
 	mu            sync.Mutex
 	sent          []messages.StreamMessage
 	mode          string
+	toolControl   string
 	turns         int
 	nextTurn      int
 	pendingTurn   int
@@ -332,10 +386,12 @@ type fixtureSession struct {
 	advance       func()
 	pace          func()
 	queueError    error
+	toolResults   []toolRecord
+	resultIDs     map[string]bool
 }
 
-func newFixtureSession(mode string, turns int, advance func(), pace func()) *fixtureSession {
-	return &fixtureSession{receive: messages.NewTypedBuffer[messages.StreamMessage](16384), done: make(chan struct{}), mode: mode, turns: turns, pendingTurn: -1, advance: advance, pace: pace}
+func newFixtureSession(mode string, turns int, advance func(), pace func(), toolControl string) *fixtureSession {
+	return &fixtureSession{receive: messages.NewTypedBuffer[messages.StreamMessage](16384), done: make(chan struct{}), mode: mode, toolControl: toolControl, turns: turns, pendingTurn: -1, advance: advance, pace: pace, resultIDs: make(map[string]bool)}
 }
 
 func (s *fixtureSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -371,7 +427,24 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 			s.emitInitial(0)
 		}
 	case messages.StreamTypeToolCallEnd:
+		result := toolResultFromMessage(msg)
 		s.mu.Lock()
+		if result.ID == "" {
+			if s.queueError == nil {
+				s.queueError = errors.New("fixture control missing tool result identity")
+			}
+			s.mu.Unlock()
+			return false
+		}
+		if s.resultIDs[result.ID] {
+			if s.queueError == nil {
+				s.queueError = fmt.Errorf("fixture control duplicate tool result %s", result.ID)
+			}
+			s.mu.Unlock()
+			return false
+		}
+		s.resultIDs[result.ID] = true
+		s.toolResults = append(s.toolResults, result)
 		s.receivedTools++
 		s.mu.Unlock()
 	case messages.StreamTypeResponseCreate:
@@ -386,6 +459,31 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 		}
 	}
 	return true
+}
+
+func toolResultFromMessage(msg messages.StreamMessage) toolRecord {
+	result := toolRecord{ID: msg.ToolCallId, Turn: responseTurnFromToolID(msg.ToolCallId)}
+	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+		if value.ToolCallID != "" {
+			result.ID = value.ToolCallID
+		}
+		result.Name = value.Name
+		result.Content = value.Arguments
+		result.Turn = responseTurnFromToolID(result.ID)
+	}
+	return result
+}
+
+func (s *fixtureSession) snapshotToolResults() []toolRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]toolRecord(nil), s.toolResults...)
+}
+
+func (s *fixtureSession) queueErrorValue() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.queueError
 }
 
 func (s *fixtureSession) sendInterruption(ctx context.Context, msg messages.StreamMessage) bool {
@@ -504,7 +602,7 @@ func (s *fixtureSession) emitInterruptionCancelled() {
 
 func (s *fixtureSession) emitHealthyResponse() {
 	responseID := "healthy-resp-2"
-	tail := []byte{21, 34, 55, 89, 144, 233, 13, 8}
+	tail := fixtureHealthyTail()
 	s.queue(context.Background(),
 		messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewAudioStartValue()},
@@ -514,6 +612,25 @@ func (s *fixtureSession) emitHealthyResponse() {
 		messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageEndValueWithTerminal(messages.TokenUsage{}, messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)},
 		messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: responseID, Value: messages.NewSessionCloseValueWithTerminal("c23-interruption", "fixture_complete", "fixture", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)},
 	)
+}
+
+func fixtureHealthyTail() []byte {
+	var fixture struct {
+		Interruption struct {
+			HealthyTail []int `json:"healthy_tail"`
+		} `json:"interruption"`
+	}
+	if err := json.Unmarshal([]byte(fixtureJSON), &fixture); err != nil {
+		return nil
+	}
+	tail := make([]byte, len(fixture.Interruption.HealthyTail))
+	for index, value := range fixture.Interruption.HealthyTail {
+		if value < 0 || value > 255 {
+			return nil
+		}
+		tail[index] = byte(value)
+	}
+	return tail
 }
 
 type fixtureInferencer struct {
@@ -533,8 +650,10 @@ func (i fixtureInferencer) FlushCapture() error {
 }
 
 type fixtureToolExecutor struct {
-	mu    sync.Mutex
-	calls []toolRecord
+	mu      sync.Mutex
+	calls   []toolRecord
+	control string
+	failure error
 }
 
 func (e *fixtureToolExecutor) snapshot() []toolRecord {
@@ -557,12 +676,33 @@ func (e *fixtureToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	if args.Key != "alpha" && args.Key != "beta" {
 		return messages.ToolCallResponse{}, fmt.Errorf("fixture tool identity missing for %s", call.ID)
 	}
+	if e.control == "missing-result" && args.Key == "beta" {
+		err := fmt.Errorf("fixture control missing tool result for %s", call.ID)
+		e.mu.Lock()
+		e.failure = err
+		e.mu.Unlock()
+		return messages.ToolCallResponse{}, err
+	}
 	name := call.Name
 	content := fmt.Sprintf("result:%s:%03d", name, args.Turn)
 	e.mu.Lock()
 	e.calls = append(e.calls, toolRecord{ID: call.ID, Name: name, Turn: args.Turn, Arguments: call.Arguments, Content: content})
 	e.mu.Unlock()
-	return messages.ToolCallResponse{ToolCallID: call.ID, Name: name, Content: content}, nil
+	resultID := call.ID
+	if e.control == "duplicate-result" && args.Key == "beta" {
+		resultID = fmt.Sprintf("call-%03d-alpha", args.Turn)
+		err := fmt.Errorf("fixture control duplicate tool result for %s", call.ID)
+		e.mu.Lock()
+		e.failure = err
+		e.mu.Unlock()
+	}
+	return messages.ToolCallResponse{ToolCallID: resultID, Name: name, Content: content}, nil
+}
+
+func (e *fixtureToolExecutor) failureValue() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.failure
 }
 
 type memStats struct {
@@ -578,9 +718,57 @@ func readMemStats() memStats {
 	return memStats{heapLive: stats.HeapAlloc, total: stats.TotalAlloc, objects: stats.HeapObjects, goroutine: runtime.NumGoroutine()}
 }
 
-func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string) (*report, error) {
+func c23RecordingLimits() recording.ResourceLimits {
+	return recording.ResourceLimits{
+		TranscriptBytes: maxRecordingTranscriptBytes, TranscriptItems: maxRecordingTranscriptItems,
+		AudioBytes: maxRecordingAudioBytes, AudioItems: maxRecordingAudioItems,
+		SidecarBytes: maxRecordingSidecarBytes, SidecarItems: maxRecordingSidecarItems,
+		MetadataBytes: maxRecordingMetadataBytes, MetadataItems: maxRecordingMetadataItems,
+		TerminalBytes: maxRecordingTerminalBytes, TerminalItems: maxRecordingTerminalItems,
+		ProviderBytes: maxRecordingProviderBytes, ProviderItems: maxRecordingProviderItems,
+	}
+}
+
+func recordingLimitsMap(limits recording.ResourceLimits) map[string]int64 {
+	return map[string]int64{
+		"transcript_bytes": limits.TranscriptBytes, "transcript_items": limits.TranscriptItems,
+		"audio_bytes": limits.AudioBytes, "audio_items": limits.AudioItems,
+		"sidecar_bytes": limits.SidecarBytes, "sidecar_items": limits.SidecarItems,
+		"metadata_bytes": limits.MetadataBytes, "metadata_items": limits.MetadataItems,
+		"terminal_bytes": limits.TerminalBytes, "terminal_items": limits.TerminalItems,
+		"provider_bytes": limits.ProviderBytes, "provider_items": limits.ProviderItems,
+	}
+}
+
+func recordingUsageMap(usage recording.ResourceUsage) map[string]int64 {
+	return map[string]int64{
+		"queue_bytes": usage.QueueBytes, "queue_items": usage.QueueItems, "peak_queue_bytes": usage.PeakQueueBytes, "peak_queue_items": usage.PeakQueueItems,
+		"accepted_items": usage.AcceptedItems, "processed_items": usage.ProcessedItems, "accepted_messages": usage.AcceptedMessages, "accepted_audio": usage.AcceptedAudio, "accepted_events": usage.AcceptedEvents,
+		"transcript_bytes": usage.TranscriptBytes, "transcript_items": usage.TranscriptItems, "audio_bytes": usage.AudioBytes, "audio_items": usage.AudioItems,
+		"sidecar_bytes": usage.SidecarBytes, "sidecar_items": usage.SidecarItems, "metadata_bytes": usage.MetadataBytes, "metadata_items": usage.MetadataItems,
+		"terminal_bytes": usage.TerminalBytes, "terminal_items": usage.TerminalItems, "summary_bytes": usage.SummaryBytes, "summary_items": usage.SummaryItems, "peak_summary_bytes": usage.PeakSummaryBytes, "peak_summary_items": usage.PeakSummaryItems,
+		"provider_queue_bytes": usage.ProviderQueueBytes, "provider_queue_items": usage.ProviderQueueItems, "peak_provider_queue_bytes": usage.PeakProviderQueueBytes, "peak_provider_queue_items": usage.PeakProviderQueueItems,
+		"provider_accepted_items": usage.ProviderAcceptedItems, "provider_bytes": usage.ProviderBytes, "provider_items": usage.ProviderItems, "peak_provider_bytes": usage.PeakProviderBytes, "peak_provider_items": usage.PeakProviderItems,
+	}
+}
+
+func recordingUsageFor(recorder session.LiveRecorder, enabled bool, limits recording.ResourceLimits, drops uint64) recordingUsageRecord {
+	result := recordingUsageRecord{Enabled: enabled, Available: false, Limits: recordingLimitsMap(limits), Drops: map[string]uint64{"live_event_overflow": drops}}
+	if !enabled {
+		return result
+	}
+	reporter, ok := recorder.(recording.ResourceUsageReporter)
+	if !ok {
+		return result
+	}
+	result.Available = true
+	result.Usage = recordingUsageMap(reporter.ResourceUsage())
+	return result
+}
+
+func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string, toolControl string) (*report, error) {
 	if turns <= 0 || turns > 256 {
-		return &report{Schema: "c23.v1", Scenario: "tool-matrix", Turns: turns, Recording: recordingEnabled, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service+public-recording-wire"}, fmt.Errorf("turn count %d outside 1..256", turns)
+		return &report{Schema: "c23.v1", Scenario: "tool-matrix", Turns: turns, Recording: recordingEnabled, ToolControl: toolControl, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service+public-recording-wire"}, fmt.Errorf("turn count %d outside 1..256", turns)
 	}
 	if artifactRoot == "" {
 		var err error
@@ -592,15 +780,16 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string) (*repo
 	if err := os.MkdirAll(artifactRoot, 0o755); err != nil {
 		return nil, err
 	}
-	reportValue := &report{Schema: "c23.v1", Scenario: "tool-matrix", Turns: turns, Recording: recordingEnabled, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service+public-recording-wire", TraceComplete: true}
+	limits := c23RecordingLimits()
+	reportValue := &report{Schema: "c23.v1", Scenario: "tool-matrix", Turns: turns, Recording: recordingEnabled, ToolControl: toolControl, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service+public-recording-wire", TraceComplete: true, RecordingUsage: recordingUsageFor(nil, recordingEnabled, limits, 0)}
 	base := clock.NewDeterministic(time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC), time.Millisecond)
 	advance := func() { base.Advance() }
 	var pace func()
 	if recordingEnabled {
 		pace = func() { time.Sleep(500 * time.Microsecond) }
 	}
-	provider := newFixtureSession("matrix", turns, advance, pace)
-	toolExecutor := &fixtureToolExecutor{}
+	provider := newFixtureSession("matrix", turns, advance, pace, toolControl)
+	toolExecutor := &fixtureToolExecutor{control: toolControl}
 	collector := newEventCollector()
 	providerPath := filepath.Join(artifactRoot, "provider.session.json")
 	var providerRecorder *gatewaytesting.SessionRecorder
@@ -625,15 +814,19 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string) (*repo
 	semanticRoot := filepath.Join(artifactRoot, "semantic")
 	if recordingEnabled {
 		var err error
-		recorder, err = recordingwire.NewService(base).OpenLiveEvidence(recording.LiveEvidenceOptions{Destination: semanticRoot, SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", ClockBase: base.Now(), WallClockStart: time.Now(), ProviderCapturePath: providerPath, DisableProviderCaptureSidecar: true})
+		recorder, err = recordingwire.NewService(base).OpenLiveEvidence(recording.LiveEvidenceOptions{Destination: semanticRoot, SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", ClockBase: base.Now(), WallClockStart: time.Now(), ProviderCapturePath: providerPath, DisableProviderCaptureSidecar: true, Limits: limits})
 		if err != nil {
 			return reportValue, err
 		}
 	}
-	request := session.LiveRequest{SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", OpeningPrompt: "c23 deterministic opening", OpeningPromptPresent: true, OutputAudioSampleRate: fixtureRate, OutputAudioContinuous: true, ToolNames: []string{"lookup_alpha", "lookup_beta"}, FinishAfterResponse: true, ExpectedResponses: turns, MaxDuration: 55 * time.Second}
+	runTimeout := 55 * time.Second
+	if toolControl != "" {
+		runTimeout = 2 * time.Second
+	}
+	request := session.LiveRequest{SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", OpeningPrompt: "c23 deterministic opening", OpeningPromptPresent: true, OutputAudioSampleRate: fixtureRate, OutputAudioContinuous: true, ToolNames: []string{"lookup_alpha", "lookup_beta"}, FinishAfterResponse: true, ExpectedResponses: turns, MaxDuration: runTimeout}
 	start := time.Now()
 	before := readMemStats()
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	runErr := runner.RunLive(ctx, session.LiveRunOptions{Request: request, Events: session.LiveEventSinkFunc(collector.publish), Recorder: recorder})
 	cancel()
 	elapsed := time.Since(start)
@@ -645,9 +838,16 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string) (*repo
 		}
 		reportValue.Artifacts.ProviderCapture = providerPath
 	}
-	events, responses, calls, results, pcm, latency, terminal, terminalSeen, traceComplete := collector.snapshot()
-	results = toolExecutor.snapshot()
-	reportValue.Events, reportValue.Responses, reportValue.ToolCalls, reportValue.ToolResults, reportValue.PCM, reportValue.Latency, reportValue.Terminal, reportValue.TraceComplete = events, responses, calls, results, pcm, latency, terminal, traceComplete
+	if failure := toolExecutor.failureValue(); failure != nil {
+		runErr = errors.Join(runErr, failure)
+	}
+	if failure := provider.queueErrorValue(); failure != nil {
+		runErr = errors.Join(runErr, failure)
+	}
+	events, responses, calls, _, trace, pcm, latency, terminal, terminalSeen, traceComplete := collector.snapshot()
+	results := provider.snapshotToolResults()
+	reportValue.Events, reportValue.Responses, reportValue.ToolCalls, reportValue.ToolResults, reportValue.Trace, reportValue.PCM, reportValue.Latency, reportValue.Terminal, reportValue.TraceComplete = events, responses, calls, results, trace, pcm, latency, terminal, traceComplete
+	reportValue.RecordingUsage = recordingUsageFor(recorder, recordingEnabled, limits, events.OverflowDrops)
 	reportValue.Artifacts.SemanticRoot = semanticRoot
 	reportValue.CleanShutdown = runErr == nil && providerClosed(provider)
 	if runErr != nil {
@@ -669,21 +869,19 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 	if len(result.ToolCalls) != turns*2 || len(result.ToolResults) != turns*2 {
 		return fmt.Errorf("tool call/result count mismatch: calls=%d results=%d want=%d", len(result.ToolCalls), len(result.ToolResults), turns*2)
 	}
-	seenCalls := make(map[string]bool)
-	seenResults := make(map[string]bool)
-	for _, call := range result.ToolCalls {
-		if seenCalls[call.ID] {
-			return fmt.Errorf("duplicate provider tool call %s", call.ID)
-		}
-		seenCalls[call.ID] = true
-	}
-	for _, item := range result.ToolResults {
-		if seenResults[item.ID] {
-			return fmt.Errorf("duplicate tool result %s", item.ID)
-		}
-		seenResults[item.ID] = true
-		if !seenCalls[item.ID] {
-			return fmt.Errorf("tool result %s has no provider call", item.ID)
+	for turn := 0; turn < turns; turn++ {
+		for offset, suffix := range []string{"alpha", "beta"} {
+			index := turn*2 + offset
+			callID := fmt.Sprintf("call-%03d-%s", turn, suffix)
+			name := "lookup_" + suffix
+			call := result.ToolCalls[index]
+			if call.ID != callID || call.Name != name || call.Turn != turn {
+				return fmt.Errorf("provider tool call order/correlation mismatch at %d: %+v", index, call)
+			}
+			item := result.ToolResults[index]
+			if item.ID != callID || item.Name != name || item.Turn != turn || item.Content != fmt.Sprintf("result:%s:%03d", name, turn) {
+				return fmt.Errorf("tool result order/correlation mismatch at %d: %+v", index, item)
+			}
 		}
 	}
 	if len(result.Responses) != turns*2 {
@@ -707,7 +905,40 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 			return fmt.Errorf("latency sample for turn %d is incomplete", sample.Turn)
 		}
 	}
+	if len(result.Trace) == 0 || len(result.Trace) > maxTraceEvents {
+		return errors.New("ordered live trace is missing or outside bounds")
+	}
+	for index, item := range result.Trace {
+		if item.Sequence != index {
+			return fmt.Errorf("ordered live trace sequence %d at index %d", item.Sequence, index)
+		}
+	}
+	wantCalls := make([]string, 0, turns*2)
+	for turn := 0; turn < turns; turn++ {
+		wantCalls = append(wantCalls, fmt.Sprintf("call-%03d-alpha", turn), fmt.Sprintf("call-%03d-beta", turn))
+	}
+	gotCalls := make([]string, 0, len(wantCalls))
+	for _, item := range result.Trace {
+		if item.Kind == string(messages.StreamTypeToolCallEnd) && item.ToolCallID != "" {
+			gotCalls = append(gotCalls, item.ToolCallID)
+		}
+	}
+	if !slicesEqual(gotCalls, wantCalls) {
+		return fmt.Errorf("ordered provider tool-call trace mismatch: got=%v want=%v", gotCalls, wantCalls)
+	}
 	return nil
+}
+
+func slicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func runInterruption(artifactRoot string) (*report, error) {
@@ -721,9 +952,9 @@ func runInterruption(artifactRoot string) (*report, error) {
 	if err := os.MkdirAll(artifactRoot, 0o755); err != nil {
 		return nil, err
 	}
-	result := &report{Schema: "c23.v1", Scenario: "interruption", SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service", TraceComplete: true}
+	result := &report{Schema: "c23.v1", Scenario: "interruption", SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service", TraceComplete: true, RecordingUsage: recordingUsageFor(nil, false, c23RecordingLimits(), 0)}
 	base := clock.NewDeterministic(time.Date(2026, time.January, 2, 3, 5, 5, 0, time.UTC), time.Millisecond)
-	provider := newFixtureSession("interruption", 1, func() { base.Advance() }, nil)
+	provider := newFixtureSession("interruption", 1, func() { base.Advance() }, nil, "")
 	collector := newEventCollector()
 	service := sessionwire.NewLiveService(sessionwire.LiveDependencies{InferencerFactory: func(_ context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
 		provider.queue(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(request.SessionID, "audio_inference")})
@@ -780,13 +1011,14 @@ func runInterruption(artifactRoot string) (*report, error) {
 		_ = collector.publish(context.Background(), event)
 	}
 	_ = handle.Close()
-	events, responses, calls, results, pcm, latency, terminal, terminalSeen, traceComplete := collector.snapshot()
-	result.Events, result.Responses, result.ToolCalls, result.ToolResults, result.PCM, result.Latency, result.Terminal, result.TraceComplete = events, responses, calls, results, pcm, latency, terminal, traceComplete
+	events, responses, calls, results, trace, pcm, latency, terminal, terminalSeen, traceComplete := collector.snapshot()
+	result.Events, result.Responses, result.ToolCalls, result.ToolResults, result.Trace, result.PCM, result.Latency, result.Terminal, result.TraceComplete = events, responses, calls, results, trace, pcm, latency, terminal, traceComplete
 	result.CleanShutdown = waitErr == nil && terminalSeen && providerClosed(provider)
 	result.Interruption = interrupt
 	interrupt.CleanTerminal = result.CleanShutdown
-	interrupt.HealthyTailBytes = 8
-	interrupt.HealthyTailSHA256 = sha256Hex([]byte{21, 34, 55, 89, 144, 233, 13, 8})
+	healthyTail := collector.responseAudio(interrupt.HealthyResponseID)
+	interrupt.HealthyTailBytes = len(healthyTail)
+	interrupt.HealthyTailSHA256 = sha256Hex(healthyTail)
 	interrupt.HealthyTailNonEmpty = interrupt.HealthyTailBytes > 0
 	interrupt.ForbiddenPostCancelAudio = forbiddenPostCancelAudio(collector)
 	if waitErr != nil {
@@ -888,6 +1120,7 @@ func main() {
 	scenario := flag.String("scenario", "tool-matrix", "tool-matrix or interruption")
 	turns := flag.Int("turns", 16, "number of deterministic tool turns")
 	recordingEnabled := flag.Bool("recording", false, "enable public semantic recording")
+	toolControl := flag.String("control", "", "negative tool-result control: missing-result or duplicate-result")
 	artifactRoot := flag.String("artifact-root", "", "isolated artifact root")
 	output := flag.String("output", "", "JSON report path")
 	flag.Parse()
@@ -896,7 +1129,14 @@ func main() {
 	var err error
 	switch *scenario {
 	case "tool-matrix":
-		result, err = runToolMatrix(*turns, *recordingEnabled, *artifactRoot)
+		result, err = runToolMatrix(*turns, *recordingEnabled, *artifactRoot, "")
+	case "tool-control":
+		if *toolControl != "missing-result" && *toolControl != "duplicate-result" {
+			result = &report{Schema: "c23.v1", Scenario: *scenario, ToolControl: *toolControl, SourceRevision: sourceRevision(), FixtureSHA256: sha256Hex([]byte(fixtureJSON)), ConsumerSurface: "public-live-service"}
+			err = fmt.Errorf("unsupported tool control %q", *toolControl)
+			break
+		}
+		result, err = runToolMatrix(*turns, false, *artifactRoot, *toolControl)
 	case "interruption":
 		result, err = runInterruption(*artifactRoot)
 	default:
