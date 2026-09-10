@@ -2711,3 +2711,50 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and hand the candidate to SCRIPT CI. Do not claim CI, review, merge, or
   vertical acceptance; retain ownership with `CONTINUE` for any exact
   rejection or actionable repair.
+
+# C38 current-main conflict recovery and bounded validation checkpoint 2026-09-10T20:22Z
+
+- Reverified the admitted sole `audio-runtime` project with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c38-interruption-audio-retention`; the result remains
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c38-interruption-audio-retention"}`.
+  `prd.json.branchName` matches the isolated branch, and the canonical board
+  assigned the current actionable finding to this task: PR `#430` head
+  `f05ba3e5` was explicitly merge-conflicting. No second project, waiver,
+  host checkout, reset, predecessor mutation, or peer-path edit was used.
+- Fetched `origin/main=7b6ce8cecee80d3f78b7aad02760067387853ade` and merged it
+  into the same branch as merge commit `3d38427b6f117bf2e2cd8197ae25ecbe8b6d961f`.
+  The only conflict was `progress.txt`; both C38 and incoming C36/C18
+  checkpoint histories were retained. Startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, planning source
+  `2525da44053e5bfe7e2d8fccc55463a645107e29`, and fresh `origin/main` are
+  ancestors. `git diff --check` and the merged worktree are clean.
+- The accumulated C38 review findings remain represented by the owned repair
+  commits: review-219/229/249's interrupted first-delta lifecycle race is
+  covered by provider-terminal/quiet-drain and queued-before-cancellation
+  retention; review-245's queued delta is retained through a non-cancellable
+  bounded context; review-258's malformed-delta and sink-write paths join and
+  report provider close errors. Exact merged-head causal runner
+  `causal-20260910T202135Z-55068` passes; focused runner
+  `focused-checks-20260910T202210Z-55364` passes normal/race, vet,
+  architecture (`182` packages / `1,880` files / `27,743` functions), size and
+  Wire; normal and race each pass 20 audio-output tests.
+- Exact bounded negative runner `negative-controls-20260910T202151Z-55185`
+  passes the 21-case C30 consumer and exit-1 negative control, same-length
+  PCM/hash mutation rejection, and missing-timeline strict replay rejection.
+  Cleanup runner `cleanup-control-20260910T202156Z-55294` passes capped output,
+  TERM/KILL, reaping and no-survivor checks. These runs use immutable prior
+  artifacts where specified; no new repaired executable is claimed.
+- Host free space fell from `904 MiB` before the bounded refresh to `674 MiB`
+  afterward, below the required `2 GiB` compilation reserve. The prior repaired
+  artifact/build manifest is bound to `f05ba3e5` and cannot be relabeled for
+  merged `3d38427`; a new artifact is therefore an unavailable prerequisite,
+  not a reason to weaken provenance or reuse stale evidence.
+- Exact next action: commit this checkpoint, push the same PR `#430`, update
+  its body with merge `3d38427`, current focused/negative/cleanup evidence and
+  the explicit storage prerequisite, then keep C38 in `CONTINUE` until the
+  operator restores at least the documented compilation reserve and a fresh
+  exact-head repaired artifact/package provenance can be produced. Do not
+  submit `ACCEPTED` to script CI with a stale artifact; after the new artifact
+  and package checks pass, submit the changed same-task head without polling.
