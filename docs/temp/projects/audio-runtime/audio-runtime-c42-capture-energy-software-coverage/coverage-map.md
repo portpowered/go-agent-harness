@@ -114,7 +114,9 @@ share one helper and execute these literal controls:
 - zero-frame trailing NaN returns exact zero, while malformed format/layout
   errors are still typed and non-panicking;
 - `0x1p+511` squares to finite `0x1p+1022`, then true accumulation overflow is
-  tested for four channels in one frame and four mono frames;
+  tested for four channels in one frame and four mono frames. A separately
+  reported scalar control proves the finite single-square result without
+  increasing the exact 13-case C42 oracle set;
 - later-channel NaN and later-frame negative infinity return
   `ErrNonFiniteSample` after an adjacent finite literal has been decoded;
 - a one-byte-short final padded frame, malformed channel/stride, and an
@@ -181,6 +183,8 @@ directory replay text. The negative verifier removes only a generated copy's
 timeline and requires strict replay to fail with `missing timeline.jsonl`.
 
 The checks are software/file-replay evidence only. Native Windows WASAPI
-execution and acoustic/physical endpoint consumption remain an explicit
-Windows-host prerequisite; the preserved C32 failed report records that
-boundary and is not treated as an acceptance waiver.
+endpoint execution and acoustic/physical endpoint consumption are `OUT OF
+SCOPE` under the effective `factory/docs/operating-policy.md` user scope
+amendment, never PASS and not a prerequisite for software delivery. The
+preserved C32 failed report remains byte-for-byte unchanged and is not treated
+as an acceptance waiver.

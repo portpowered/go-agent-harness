@@ -18,16 +18,17 @@ import (
 const schema = "audio-runtime-c42-capture-energy-consumer.v1"
 
 type report struct {
-	Schema        string       `json:"schema"`
-	Source        string       `json:"source"`
-	GOOS          string       `json:"goos"`
-	GOARCH        string       `json:"goarch"`
-	IntBits       int          `json:"int_bits"`
-	StartedAt     string       `json:"started_at"`
-	DurationMS    int64        `json:"duration_ms"`
-	CleanShutdown bool         `json:"clean_shutdown"`
-	Cases         []caseReport `json:"cases"`
-	Error         string       `json:"error,omitempty"`
+	Schema        string          `json:"schema"`
+	Source        string          `json:"source"`
+	GOOS          string          `json:"goos"`
+	GOARCH        string          `json:"goarch"`
+	IntBits       int             `json:"int_bits"`
+	StartedAt     string          `json:"started_at"`
+	DurationMS    int64           `json:"duration_ms"`
+	CleanShutdown bool            `json:"clean_shutdown"`
+	Cases         []caseReport    `json:"cases"`
+	Controls      []controlReport `json:"controls"`
+	Error         string          `json:"error,omitempty"`
 }
 
 type caseReport struct {
@@ -48,6 +49,27 @@ type caseReport struct {
 	InputUnchanged bool      `json:"input_unchanged"`
 	Panicked       bool      `json:"panicked"`
 	Panic          string    `json:"panic,omitempty"`
+}
+
+type controlReport struct {
+	Name            string    `json:"name"`
+	API             string    `json:"api"`
+	InputHex        string    `json:"input_hex"`
+	Encoding        string    `json:"encoding"`
+	BitsPerSample   int       `json:"bits_per_sample"`
+	ValidBits       int       `json:"valid_bits_per_sample"`
+	Frames          int       `json:"frames"`
+	Channels        int       `json:"channels"`
+	FrameStride     int       `json:"frame_stride"`
+	ExpectedSamples []float64 `json:"expected_samples"`
+	ActualSamples   []float64 `json:"actual_samples,omitempty"`
+	ExpectedEnergy  float64   `json:"expected_energy"`
+	ActualEnergy    *float64  `json:"actual_energy,omitempty"`
+	ActualError     string    `json:"actual_error,omitempty"`
+	ErrorKind       string    `json:"error_kind,omitempty"`
+	InputUnchanged  bool      `json:"input_unchanged"`
+	Panicked        bool      `json:"panicked"`
+	Panic           string    `json:"panic,omitempty"`
 }
 
 type decodeCase struct {
@@ -120,6 +142,7 @@ func run() (report, error) {
 	for _, testCase := range energyCases() {
 		result.Cases = append(result.Cases, runEnergyCase(testCase))
 	}
+	result.Controls = []controlReport{runC42FiniteSquareControl()}
 	return result, nil
 }
 
@@ -306,6 +329,46 @@ func runEnergyCase(testCase energyCase) (result caseReport) {
 		for index, sample := range measured.samples {
 			result.NegativeZero[index] = isNegativeZero(sample)
 		}
+	}
+	return result
+}
+
+func runC42FiniteSquareControl() (result controlReport) {
+	const sample float64 = 0x1p+511
+	const expectedEnergy float64 = 0x1p+1022
+
+	testCase := energyCase{
+		name:     "c42-float64-single-square-finite",
+		raw:      float64Packet(sample),
+		frames:   1,
+		channels: 1,
+		stride:   8,
+		format:   floatFormat(64),
+	}
+	input := append([]byte(nil), testCase.raw...)
+	result = controlReport{
+		Name:            testCase.name,
+		API:             "codec.PacketEnergy",
+		InputHex:        hex.EncodeToString(input),
+		Encoding:        encodingName(testCase.format.Encoding),
+		BitsPerSample:   testCase.format.BitsPerSample,
+		ValidBits:       testCase.format.ValidBitsPerSample,
+		Frames:          testCase.frames,
+		Channels:        testCase.channels,
+		FrameStride:     testCase.stride,
+		ExpectedSamples: []float64{sample},
+		ExpectedEnergy:  expectedEnergy,
+		InputUnchanged:  true,
+	}
+	measured := callEnergy(input, testCase)
+	result.ActualError = errorText(measured.err)
+	result.ErrorKind = errorKind(measured.err)
+	result.Panicked = measured.panicked
+	result.Panic = measured.panic
+	result.InputUnchanged = bytes.Equal(input, testCase.raw)
+	if measured.energy != nil && !measured.panicked {
+		result.ActualEnergy = measured.energy
+		result.ActualSamples = measured.samples
 	}
 	return result
 }

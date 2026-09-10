@@ -39,5 +39,35 @@
     "evidence_path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage",
     "excluded": ["workflow files", "module files outside consumer", "baseline/policy files", "peer review files"]
   },
-  "hardware_status": "not claimed; native WASAPI/acoustic evidence requires the Windows host and active endpoints"
+  "ci_evidence": {
+    "workflow_file": ".github/workflows/ci.yml",
+    "workflow_step": "Run Windows audio queue regressions",
+    "run_id": "34487167972",
+    "run_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34487167972",
+    "job_id": "102904301028",
+    "job_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34487167972/job/102904301028",
+    "head_sha": "d301084027c8669f4af5b15c86a77cb847e21d6b",
+    "os": "windows",
+    "arch": "amd64",
+    "command": "go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1",
+    "result": "SUCCESS on the prior candidate head; the repaired head requires a new script-CI run"
+  },
+  "amendment": {
+    "authority": "factory/docs/operating-policy.md",
+    "section": "User scope amendment — 2026-09-10",
+    "effective": true,
+    "software_scope": "Windows software execution/compilation and hermetic CI remain in scope",
+    "native_endpoint_acoustic": "OUT OF SCOPE",
+    "acceptance_rule": "Excluded native endpoint and physical/acoustic proof is neither PASS nor a prerequisite for software delivery"
+  },
+  "remaining_gates": [
+    "AUDIO",
+    "DEVICE software selection and adapter coverage",
+    "QUALITY",
+    "PARITY",
+    "changed-head script CI",
+    "independent review and guarded merge",
+    "fresh post-merge vertical probe and amendment binding"
+  ],
+  "hardware_status": "OUT OF SCOPE under the effective 2026-09-10 amendment; no native WASAPI/acoustic PASS is claimed"
 }

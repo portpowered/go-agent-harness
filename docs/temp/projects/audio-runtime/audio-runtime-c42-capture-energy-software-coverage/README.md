@@ -42,12 +42,16 @@ SIGKILL-reap controls, and writes bounded run details under the ignored
 interruption fixtures, checks the marker and exact rendered/provider PCM
 hashes, checks clean trace termination, and verifies directory replay. The
 YUI fixture provider is replay-only; no live provider, Realtime connection,
-physical device, or acoustic result is claimed.
+physical device, or acoustic result is claimed. Native Windows endpoints and
+physical/acoustic testing are `OUT OF SCOPE` under the effective 2026-09-10
+user amendment, not a prerequisite for software delivery.
 
 The original C32 expected oracle is retained byte-for-byte as
 `c32-original-expected.json` (SHA-256
 `d209639bf6cf51c61fe2931eed9e50586fae1824334daa3239af8cc841a47f34`). The
 original C32 vertical report is retained as
 `c32-original-failed-report.json` (SHA-256
-`0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960`); its
-native WASAPI/acoustic result remains a separate Windows-host prerequisite.
+`0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960`). The
+historical native WASAPI/acoustic result remains unchanged; under the effective
+`factory/docs/operating-policy.md` user scope amendment, native endpoints and
+physical/acoustic proof are `OUT OF SCOPE`, never PASS.

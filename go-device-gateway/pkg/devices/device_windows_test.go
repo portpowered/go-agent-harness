@@ -241,16 +241,24 @@ func runWASAPICapturePacketEnergyC42Coverage(t *testing.T) {
 
 	unsupported := format
 	unsupported.subFormat = syscall.GUID{Data1: 0xfeedface}
+	unsupportedBefore := append([]byte(nil), raw...)
 	if _, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 2, 0, unsupported); err == nil || !strings.Contains(err.Error(), "unsupported WASAPI audio subformat") {
 		t.Fatalf("unsupported subformat error = %v", err)
+	}
+	if !bytes.Equal(raw, unsupportedBefore) {
+		t.Fatal("unsupported-subformat adapter path changed caller bytes or trailing sentinels")
 	}
 
 	badLayout := format
 	badLayout.channels = 3
 	badLayout.blockAlign = 4
-	layoutRaw := make([]byte, 8)
+	layoutRaw := []byte{0x11, 0x22, 0x33, 0x44, 0xfe, 0xed, 0xca, 0xfe}
+	layoutBefore := append([]byte(nil), layoutRaw...)
 	if _, err := wasapiCapturePacketEnergy(unsafe.Pointer(&layoutRaw[0]), 1, 0, badLayout); !errors.Is(err, codec.ErrInvalidPacketDimensions) {
 		t.Fatalf("malformed adapter layout error = %v, want ErrInvalidPacketDimensions", err)
+	}
+	if !bytes.Equal(layoutRaw, layoutBefore) {
+		t.Fatal("malformed-layout adapter path changed caller bytes or trailing sentinels")
 	}
 
 	floatFormat := wasapiAudioFormat{

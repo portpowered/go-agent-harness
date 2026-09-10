@@ -436,7 +436,25 @@ func runC42ZeroFrames(t *testing.T) {
 }
 
 func runC42AccumulationOverflow(t *testing.T) {
-	data := float64Packet(math.Ldexp(1, 511), math.Ldexp(1, 511), math.Ldexp(1, 511), math.Ldexp(1, 511))
+	const sample float64 = 0x1p+511
+	const wantSquare float64 = 0x1p+1022
+
+	t.Run("single square is finite", func(t *testing.T) {
+		data := float64Packet(sample)
+		before := append([]byte(nil), data...)
+		energy, err := codec.PacketEnergy(data, 1, 1, 8, floatFormat(64))
+		if err != nil {
+			t.Fatalf("single-square energy error = %v", err)
+		}
+		if energy != wantSquare {
+			t.Fatalf("single-square energy = %.17g, want literal 0x1p+1022 (%.17g)", energy, wantSquare)
+		}
+		if !bytes.Equal(data, before) {
+			t.Fatal("single-square packet changed after successful measurement")
+		}
+	})
+
+	data := float64Packet(sample, sample, sample, sample)
 	for _, testCase := range []struct {
 		name             string
 		frames, channels int

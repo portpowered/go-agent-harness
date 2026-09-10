@@ -12,4 +12,4 @@ The exact commands and hashes are in `docs/temp/projects/audio-runtime/audio-run
 
 ## Scope and handoff
 
-This PR is limited to the admitted `audio-runtime` task and its owned paths. No production repair was demonstrated as necessary, and no workflow, root module, policy, baseline, or peer-review files were changed. Native Windows WASAPI execution and physical/acoustic evidence are not claimed; they remain a Windows-host prerequisite. This PR is ready for script CI handoff; it does not claim CI green, independent review, merge, or project acceptance.
+This PR is limited to the admitted `audio-runtime` task and its owned paths. No production repair was demonstrated as necessary, and no workflow, root module, policy, baseline, or peer-review files were changed. Native Windows WASAPI endpoint execution and physical/acoustic evidence are not claimed; under the effective 2026-09-10 user scope amendment they are `OUT OF SCOPE`, not a prerequisite for software delivery. This PR is ready for changed-head script CI handoff; it does not claim current-head CI green, independent review, merge, or project acceptance.

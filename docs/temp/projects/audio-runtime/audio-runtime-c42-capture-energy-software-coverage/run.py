@@ -39,6 +39,10 @@ PROVIDER_AUDIO_SHA256 = "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edc
 INTERRUPTION_RENDERED_SHA256 = "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
 INTERRUPTION_PROVIDER_SHA256 = "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
 INTERRUPTION_TAIL_SHA256 = "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+ORIGINAL_FAILED_REPORT_SHA256 = "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+SINGLE_SQUARE_INPUT_HEX = "000000000000e05f"
+SINGLE_SQUARE_SAMPLE = float.fromhex("0x1p+511")
+SINGLE_SQUARE_ENERGY = float.fromhex("0x1p+1022")
 BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 STARTUP_INTEGRATION_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 PLANNING_MAIN_REVISION = "926ded7bfa8f3c3e42115192d03aa1240c4806db"
@@ -351,8 +355,11 @@ def load_oracles() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         raise VerificationFailure("C32 oracle must retain exactly 40 cases")
     c42 = load_json(C42_EXPECTED)
     require_equal(c42.get("schema"), "audio-runtime-c42-capture-energy-expected.v1", "C42 oracle schema")
-    if not isinstance(c42.get("cases"), dict) or len(c42["cases"]) < 10:
-        raise VerificationFailure("C42 oracle has too few new cases")
+    if not isinstance(c42.get("cases"), dict) or len(c42["cases"]) != 13:
+        raise VerificationFailure("C42 oracle must retain exactly 13 disjoint cases")
+    overlap = set(c32["cases"]) & set(c42["cases"])
+    if overlap:
+        raise VerificationFailure(f"C42 oracle cases overlap frozen C32 cases: {sorted(overlap)!r}")
     c32_oracle = c42.get("c32_oracle")
     if not isinstance(c32_oracle, dict):
         raise VerificationFailure("C42 oracle does not bind the C32 oracle")
@@ -362,6 +369,37 @@ def load_oracles() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if len(combined) != 53:
         raise VerificationFailure(f"combined oracle case count is {len(combined)}, want 53")
     return c32, c42, {"schema": "combined", "cases": combined}
+
+
+def validate_finite_square_control(report: dict[str, Any]) -> None:
+    controls = report.get("controls")
+    if not isinstance(controls, list) or len(controls) != 1:
+        raise VerificationFailure("consumer must report exactly one independent C42 square control")
+    control = controls[0]
+    if not isinstance(control, dict):
+        raise VerificationFailure("C42 square control is malformed")
+    for field, expected in (
+        ("name", "c42-float64-single-square-finite"),
+        ("api", "codec.PacketEnergy"),
+        ("input_hex", SINGLE_SQUARE_INPUT_HEX),
+        ("encoding", "ieee-float"),
+        ("bits_per_sample", 64),
+        ("valid_bits_per_sample", 64),
+        ("frames", 1),
+        ("channels", 1),
+        ("frame_stride", 8),
+        ("expected_samples", [SINGLE_SQUARE_SAMPLE]),
+        ("expected_energy", SINGLE_SQUARE_ENERGY),
+    ):
+        require_equal(control.get(field), expected, f"C42 square control {field}")
+    if control.get("panicked") is not False:
+        raise VerificationFailure(f"C42 square control panicked: {control.get('panic')!r}")
+    if control.get("input_unchanged") is not True:
+        raise VerificationFailure("C42 square control mutated its input")
+    require_equal(control.get("actual_error", ""), "", "C42 square control error")
+    require_equal(control.get("error_kind", ""), "", "C42 square control error kind")
+    require_equal(control.get("actual_samples"), [SINGLE_SQUARE_SAMPLE], "C42 square control samples")
+    require_equal(control.get("actual_energy"), SINGLE_SQUARE_ENERGY, "C42 square control energy")
 
 
 def validate_report(report: dict[str, Any], expected: dict[str, Any], source_revision: str) -> None:
@@ -376,6 +414,7 @@ def validate_report(report: dict[str, Any], expected: dict[str, Any], source_rev
         raise VerificationFailure(f"consumer duration is outside the bound: {duration_ms!r}")
     if not isinstance(report.get("goos"), str) or not isinstance(report.get("goarch"), str):
         raise VerificationFailure("consumer did not report its software platform")
+    validate_finite_square_control(report)
 
     actual_cases = report.get("cases")
     if not isinstance(actual_cases, list):
@@ -589,7 +628,10 @@ def verify_source_files(source: Path) -> dict[str, str]:
     if not source_expected.is_file() or original_expected.read_bytes() != source_expected.read_bytes():
         raise VerificationFailure("C32 original oracle was not retained byte-for-byte")
     hashes["evidence/c32-original-expected.json"] = sha256_file(original_expected)
-    hashes["evidence/c32-original-failed-report.json"] = sha256_file(EVIDENCE / "c32-original-failed-report.json")
+    historical_report = EVIDENCE / "c32-original-failed-report.json"
+    historical_report_hash = sha256_file(historical_report)
+    require_equal(historical_report_hash, ORIGINAL_FAILED_REPORT_SHA256, "C32 original failed report hash")
+    hashes["evidence/c32-original-failed-report.json"] = historical_report_hash
     hashes["evidence/c42-expected.json"] = sha256_file(C42_EXPECTED)
     return hashes
 
@@ -936,6 +978,8 @@ def main() -> int:
         },
         "yui": {"path": str(yui), "sha256": sha256_file(yui)},
         "case_count": len(report["cases"]),
+        "control_count": len(report["controls"]),
+        "independent_controls": report["controls"],
         "clean_shutdown": report["clean_shutdown"],
         "credential_env_removed": sorted(set(removed_credentials)),
         "resource_bounds": {
