@@ -62,8 +62,9 @@ binary hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`,
 the mutated fixture hashes, the source-bundle file hashes, and rebuilt same-source
 YUI hash `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`.
 
-The latest CI rejection was run `34448550045`, job `102778686103`, at old head
-`8be379cb061c503a701a3b1c92a228868924fae5`. The only failed test was the
+The latest CI rejection was run `34448550045`, job `102778686103`
+(`https://github.com/portpowered/go-agent-harness/actions/runs/34448550045/job/102778686103`),
+at old head `8be379cb061c503a701a3b1c92a228868924fae5`. The only failed test was the
 unrelated remote `test46/provider_burst` playback timeout; its evidence reported
 the final PCM marker absent and the child still running at the scenario deadline.
 The full raw run JSON and job log are saved under `/tmp` for canonical review.

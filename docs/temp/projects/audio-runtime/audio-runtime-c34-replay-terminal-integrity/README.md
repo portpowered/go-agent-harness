@@ -112,8 +112,9 @@ fresh source-pinned reports. The runner includes the requested real
 mutated-valid-audio control, missing-timeline and corrupt-audio controls, bounded
 output capture, and descendant process-group cleanup assertions; all pass.
 
-The latest CI rejection was run `34448550045`, job `102778686103`, against old
-head `8be379cb061c503a701a3b1c92a228868924fae5`. Its sole failing test was the
+The latest CI rejection was run `34448550045`, job `102778686103`
+(`https://github.com/portpowered/go-agent-harness/actions/runs/34448550045/job/102778686103`),
+against old head `8be379cb061c503a701a3b1c92a228868924fae5`. Its sole failing test was the
 unrelated remote `test46/provider_burst` playback scenario, which timed out before
 the final PCM marker while the child was still running. The full raw run JSON and
 job log were saved as `/tmp/audio-runtime-c34-ci-rejection-34448550045-run.json`
