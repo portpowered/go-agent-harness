@@ -1,10 +1,12 @@
 package agentruntime
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 const (
@@ -26,42 +28,62 @@ type OpenAIRealtimeModel = runtimeproviders.RealtimeModel
 type UnsupportedRealtimeModelError = runtimeproviders.UnsupportedRealtimeModelError
 type UnsupportedOpenAIRealtimeModelError = UnsupportedRealtimeModelError
 
+func providerModelAdmission(catalog runtimeproviders.ModelCatalog) runtimeproviders.ModelAdmissionResolver {
+	modelAdmission := providerswire.NewModelAdmission(catalog)
+	adapter, ok := modelAdmission.(runtimeproviders.ModelAdmissionResolver)
+	if !ok {
+		return nil
+	}
+	return adapter
+}
+
 func lookupOpenAIRealtimeModel(opts SessionRunOptions, model string) (runtimeproviders.RealtimeModel, bool) {
-	if opts.ModelCatalog == nil {
+	modelAdmission := providerModelAdmission(opts.ModelCatalog)
+	if modelAdmission == nil {
 		return runtimeproviders.RealtimeModel{}, false
 	}
-	return opts.ModelCatalog.LookupRealtimeModel(sessionProviderOpenAI, strings.TrimSpace(model))
+	return modelAdmission.ResolveRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{TrimModel: true})
 }
 
 func unsupportedOpenAIRealtimeModelErrorFor(opts SessionRunOptions, model string) error {
-	if opts.ModelCatalog == nil {
+	modelAdmission := providerModelAdmission(opts.ModelCatalog)
+	if modelAdmission == nil {
 		return fmt.Errorf("%w: OpenAI realtime model admission", runtimeproviders.ErrModelCatalogRequired)
 	}
-	return &runtimeproviders.UnsupportedRealtimeModelError{
-		Provider: "OpenAI", Model: model,
-		SupportedModels: opts.ModelCatalog.SupportedRealtimeModelIDs(sessionProviderOpenAI),
+	err := modelAdmission.ValidateRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{
+		TrimModel:            true,
+		PreserveModelInError: true,
+	})
+	if errors.Is(err, runtimeproviders.ErrModelCatalogRequired) {
+		return fmt.Errorf("%w: OpenAI realtime model admission", err)
 	}
+	return err
 }
 
 func validateBareSessionModel(opts SessionRunOptions, provider, model string) error {
 	if provider != sessionProviderOpenAI {
 		return nil
 	}
-	if opts.ModelCatalog == nil {
-		return fmt.Errorf("%w: OpenAI realtime model admission", runtimeproviders.ErrModelCatalogRequired)
-	}
-	if _, ok := lookupOpenAIRealtimeModel(opts, model); ok {
-		return nil
-	}
 	return unsupportedOpenAIRealtimeModelErrorFor(opts, model)
 }
 
 func validateSelfPlayModel(opts SelfPlayRunOptions) error {
-	if opts.modelCatalog == nil {
+	modelAdmission := providerModelAdmission(opts.modelCatalog)
+	if modelAdmission == nil {
 		return fmt.Errorf("%w: self-play model admission", runtimeproviders.ErrModelCatalogRequired)
 	}
-	if _, ok := opts.modelCatalog.LookupRealtimeModel(SelfPlayDefaultProvider, opts.Model); ok {
+	err := modelAdmission.ValidateRealtimeModel(SelfPlayDefaultProvider, opts.Model, runtimeproviders.ModelAdmissionOptions{
+		PreserveModelInError: true,
+	})
+	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("self-play model %q is not an OpenAI Realtime model; supported models: %s", opts.Model, strings.Join(opts.modelCatalog.SupportedRealtimeModelIDs(SelfPlayDefaultProvider), ", "))
+	if errors.Is(err, runtimeproviders.ErrModelCatalogRequired) {
+		return fmt.Errorf("%w: self-play model admission", err)
+	}
+	var unsupported *runtimeproviders.UnsupportedRealtimeModelError
+	if errors.As(err, &unsupported) {
+		return fmt.Errorf("self-play model %q is not an OpenAI Realtime model; supported models: %s", unsupported.Model, strings.Join(unsupported.SupportedModels, ", "))
+	}
+	return err
 }

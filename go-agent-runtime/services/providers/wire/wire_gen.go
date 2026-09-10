@@ -8,6 +8,7 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/admission"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/service"
 )
@@ -31,3 +32,10 @@ func NewService(deps Dependencies) providers.FullService {
 // NewModelCatalog installs the provider-owned immutable model catalog at the
 // application composition boundary.
 func NewModelCatalog() providers.ModelCatalog { return catalog.New() }
+
+// NewModelAdmission constructs the provider-owned admission role around an
+// explicitly supplied catalog. This keeps custom catalogs usable by an
+// independent consumer without exposing providers/internal packages.
+func NewModelAdmission(modelCatalog providers.ModelCatalog) providers.ModelAdmission {
+	return admission.NewService(modelCatalog)
+}

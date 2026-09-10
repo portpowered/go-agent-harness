@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -131,5 +132,72 @@ func TestBuildHonorsCanceledAdmission(t *testing.T) {
 	_, err := service.Build(ctx, runtimeproviders.Config{Provider: "openai", Model: "model"})
 	if err == nil || !strings.Contains(err.Error(), "canceled") {
 		t.Fatalf("Build() error = %v, want canceled admission", err)
+	}
+}
+
+type injectedModelCatalog struct {
+	models []runtimeproviders.RealtimeModel
+}
+
+func (c injectedModelCatalog) RealtimeModels(provider string) []runtimeproviders.RealtimeModel {
+	if !strings.EqualFold(strings.TrimSpace(provider), "openai") {
+		return nil
+	}
+	return append([]runtimeproviders.RealtimeModel(nil), c.models...)
+}
+
+func (c injectedModelCatalog) LookupRealtimeModel(provider, model string) (runtimeproviders.RealtimeModel, bool) {
+	for _, candidate := range c.RealtimeModels(provider) {
+		if candidate.ID == model {
+			return candidate, true
+		}
+	}
+	return runtimeproviders.RealtimeModel{}, false
+}
+
+func (c injectedModelCatalog) SupportedRealtimeModelIDs(provider string) []string {
+	models := c.RealtimeModels(provider)
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.ID)
+	}
+	return ids
+}
+
+func TestProviderServiceSharesInjectedAdmissionDecision(t *testing.T) {
+	injected := injectedModelCatalog{models: []runtimeproviders.RealtimeModel{{ID: "custom-only", SupportsAudio: true}}}
+
+	service := New(nil, nil, clock.Real{}, nil, injected, nil)
+	if err := service.ValidateSessionModel(" OpenAI ", " custom-only "); err != nil {
+		t.Fatalf("provider service custom model = %v", err)
+	}
+
+	if err := service.ValidateSessionModel("openai", "custom-only"); err != nil {
+		t.Fatalf("custom model admission = %v", err)
+	}
+	err := service.ValidateSessionModel("openai", runtimeproviders.OpenAIRealtimeLegacyModel)
+	if err == nil || !errors.Is(err, runtimeproviders.ErrUnsupportedRealtimeModel) {
+		t.Fatalf("built-in model error = %v, want typed rejection", err)
+	}
+	var unsupported *runtimeproviders.UnsupportedRealtimeModelError
+	if !errors.As(err, &unsupported) || unsupported.Provider != "OpenAI" || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != "custom-only" {
+		t.Fatalf("built-in model error = %v, want injected catalog snapshot", err)
+	}
+	unsupported.SupportedModels[0] = "mutated"
+	retryErr := service.ValidateSessionModel("openai", runtimeproviders.OpenAIRealtimeLegacyModel)
+	var retryUnsupported *runtimeproviders.UnsupportedRealtimeModelError
+	if !errors.As(retryErr, &retryUnsupported) || retryUnsupported.SupportedModels[0] != "custom-only" {
+		t.Fatalf("retry error snapshot = %v, want independent catalog values", retryErr)
+	}
+	if err := service.ValidateSessionModel("non-openai", "anything"); err != nil {
+		t.Fatalf("non-OpenAI admission = %v", err)
+	}
+}
+
+func TestProviderAdmissionNilCatalogRemainsTypedDependencyFailure(t *testing.T) {
+	service := New(nil, nil, clock.Real{}, nil, nil, nil)
+	err := service.ValidateSessionModel("openai", runtimeproviders.OpenAIRealtimeLegacyModel)
+	if !errors.Is(err, runtimeproviders.ErrModelCatalogRequired) || errors.Is(err, runtimeproviders.ErrUnsupportedRealtimeModel) {
+		t.Fatalf("nil catalog error = %v, want only catalog-required", err)
 	}
 }
