@@ -175,3 +175,28 @@ Current-head verifier checkpoint
   unchanged source. Next action: C20 reviewed repair reaches `origin/main`,
   then C25 refreshes exact-head evidence and submits the changed same task to
   script CI without polling.
+
+Exact-head verifier refresh at the resumed candidate
+- After fetching `origin/main=a1156f0c0c6271643578cb37894026944df2a633`, the
+  isolated branch was clean at candidate
+  `0a623e78f5d56aa75e5438995da57c1a5c891fe7`. Required startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` ancestry remain preserved; no
+  predecessor, host checkout, or unrelated worktree was changed.
+- `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all`
+  returned `ACCEPTED` in `17.849s` across `25` bounded commands. The source
+  gap, archive/fixture digests, AST dependency controls, complete allowlist,
+  focused normal/race/vet regressions, zero-test and child-hang controls all
+  passed with clean shutdown and no surviving child process.
+- Generated diagnosis/provenance and checkpoint metadata now consistently
+  identify `0a623e78f5d56aa75e5438995da57c1a5c891fe7`. The source-only finding
+  remains the compiled legacy room mixer host-ticker/raw-codec/direct-sink
+  dependency; no production/shared/module/fixture/baseline/device/provider/
+  realtime path was modified.
+- The latest CI rejection remains C20-owned at PR417 head
+  `b061bf852076d4b36526600377ad916751e32b4b`, run `34413969081`, job
+  `102674534021`, `composition_test.go:417`; fetched `origin/main` still has no
+  reviewed C20 repair. Next action is commit/push this evidence checkpoint and
+  update PR417, then retain ownership until the reviewed C20 repair reaches
+  main; only then refresh against the changed source and submit the same task
+  to script CI without polling.

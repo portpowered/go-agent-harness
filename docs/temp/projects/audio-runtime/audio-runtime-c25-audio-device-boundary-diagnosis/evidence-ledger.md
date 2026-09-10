@@ -211,3 +211,21 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   `composition_test.go:417` coverage failure at `b061bf85`. Do not submit an
   unchanged implementation. After the reviewed C20 repair reaches `origin/main`,
   refresh this evidence again and submit the changed same task through script CI.
+
+## Exact-head verifier refresh at resumed candidate
+
+- At measured candidate `0a623e78f5d56aa75e5438995da57c1a5c891fe7`, the bounded
+  `verify.py --mode all` run returned `ACCEPTED` in `17.849s` across `25`
+  commands. Generated diagnosis/provenance, ownership and extraction-plan
+  metadata now identify this candidate consistently.
+- `SOURCE_GAP_CONFIRMED`, the pinned source/archive and fixture checks, AST
+  positive/negative/mutation/comment controls, complete owned-path allowlist,
+  focused normal/race/vet regressions, zero-test discovery, child-hang cleanup
+  and aggregate shutdown all passed; no child survived. Source remains pinned
+  to `a1156f0c0c6271643578cb37894026944df2a633` and archive SHA-256
+  `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- This checkpoint is evidence-only and does not repair the latest C20-owned
+  coverage rejection at `b061bf85` (`composition_test.go:417`). Fetched
+  `origin/main` still lacks a reviewed C20 repair; push/update PR417 now, then
+  retain C25 ownership and refresh the same task after that repair reaches
+  main before script-CI submission.

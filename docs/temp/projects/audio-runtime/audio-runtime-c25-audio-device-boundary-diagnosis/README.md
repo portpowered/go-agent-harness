@@ -165,3 +165,21 @@ This refresh changes only the owned evidence checkpoint. The C20-owned
 on `origin/main`; C25 has no authorized repair path and will not resubmit an
 unchanged implementation. After reviewed C20 repair reaches main, refresh the
 exact source evidence and submit the changed same task through script CI.
+
+## Exact-head verifier refresh at the resumed candidate
+
+At measured candidate `0a623e78f5d56aa75e5438995da57c1a5c891fe7`, the bounded
+`verify.py --mode all` command returned `ACCEPTED` in `17.849s` across `25`
+commands. `diagnosis.json` and `provenance.json` now identify this exact
+candidate; source-gap, archive, fixture, AST positive/negative/mutation,
+complete allowlist, focused normal/race/vet, zero-test, child-hang and clean
+shutdown controls all passed with no surviving child process. The source
+revision remains `a1156f0c0c6271643578cb37894026944df2a633`, with archive
+SHA-256 `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+
+This is an owned evidence-only checkpoint. The latest hosted rejection remains
+the C20-owned `composition_test.go:417` coverage failure at `b061bf85`; no
+reviewed C20 repair is present in fetched `origin/main`, so C25 will not submit
+an unchanged candidate to script CI. The evidence checkpoint must be pushed
+and PR417 updated; after the reviewed C20 repair reaches main, refresh again
+against that changed source and submit the same task through the script gate.
