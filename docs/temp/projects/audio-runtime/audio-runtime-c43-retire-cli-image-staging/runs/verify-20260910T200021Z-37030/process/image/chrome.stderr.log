@@ -1,0 +1,11 @@
+
+DevTools listening on ws://127.0.0.1:53230/devtools/browser/5068a5ba-13ca-4d68-919a-cd002f038f6f
+Trying to load the allocator multiple times. This is *not* supported.
+[38606:127069976:0910/130103.783549:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38606:127069976:0910/130103.786554:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38606:127069976:0910/130103.786858:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38606:127069976:0910/130103.786922:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38606:127069976:0910/130103.787018:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38606:127069976:0910/130104.336205:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[38579:127069669:0910/130105.698598:ERROR:content/browser/network_service_instance_impl.cc:650] Network service crashed or was terminated, restarting service.
+[38579:127069669:0910/130105.701007:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15
