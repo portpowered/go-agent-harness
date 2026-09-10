@@ -6,6 +6,21 @@
   "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "origin_main": "d6efc88d10e046396e777762802f5f731c9c6d9d",
+  "current_integration_checkpoint": {
+    "candidate_revision": "94921e3829a25f069ebf2aeeaae1b953e751c452",
+    "origin_main": "7b6ce8cecee80d3f78b7aad02760067387853ade",
+    "note": "Current origin/main was merged into the preserved C40 branch after the prior evidence checkpoint. Existing artifact hashes remain tied to candidate_revision 20fc8b00 and tested_source_revision e143999d; they are not relabeled as current-head evidence. A changed executable input requires a fresh build after the C38 retention repair and primary vertical acceptance.",
+    "post_integration_validation": {
+      "tools_normal": "passed: 334 tests in 16 packages",
+      "tools_race": "passed: 334 tests in 16 packages",
+      "cli_policy_normal": "passed: 13 tests",
+      "cli_policy_race": "passed: 13 tests",
+      "architecture_and_size": "passed: 183 packages, 1883 files, 27757 functions",
+      "wire": "passed: check-wire.py; generation produced no diff",
+      "diff_check": "passed: git diff --check",
+      "replay_regression": "not rerun: frozen interruption oracle remains blocked on C38/task198"
+    }
+  },
   "ancestry": {
     "baseline_is_ancestor": true,
     "startup_is_ancestor": true,
