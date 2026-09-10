@@ -1,11 +1,11 @@
 {
   "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
   "case": "characterize",
-  "source": "e0ee33f0c161f8031fd074397a46ad0316c4b4fb",
+  "source": "6717dd5add3d613b0adf24516d679dd63293495b",
   "goos": "darwin",
   "goarch": "arm64",
-  "started_at": "2026-09-10T03:28:27.168778Z",
-  "duration_ms": 7,
+  "started_at": "2026-09-10T03:50:34.9788Z",
+  "duration_ms": 21,
   "clean_shutdown": true,
   "allocations": {
     "payload_bytes": [

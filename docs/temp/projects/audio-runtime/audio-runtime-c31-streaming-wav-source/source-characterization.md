@@ -62,6 +62,29 @@ zero payload), exactly 14 payload bytes for `ReadSamples(7)`, and no more than
 `FrameSize*2` payload bytes for `ReadFrame`. The caller-owned stream is closed
 once.
 
+## Latest CI rejection reconciliation
+
+The exact current-head rejection is preserved in
+`ci-rejection-34433566917.json`. The canonical board returned `work-task-123`
+for PR `#423` at source head
+`6717dd5add3d613b0adf24516d679dd63293495` with required `CI (hermetic)`
+failure. The full hermetic job log (`102733925196`) reported
+`TestFamilyAIterativeBuildUpThroughShippedProcess` with three streamed output
+markers/12 bytes instead of four/16. The same run's integration job
+(`102733924992`) separately reported the C20-owned remote
+`test46/slow_device` final-marker deadline at
+`agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183`.
+
+The Family A check is outside this task's owned paths and exercises raw stdin
+`FileSource.ReadFrame`; its raw implementation is byte-for-byte behaviorally
+unchanged by C31 (the helper methods were moved from the deleted duplicate
+`source_samples.go`). The exact hermetic-tagged test passes 20/20 on this head,
+and the C20 remote fixture/runtime path is unchanged and remains separately
+owned. No C31 source repair is justified by either failure; both are retained
+as non-waived external CI evidence. The focused C31 normal/race, consumer,
+workflow, and read-only regression controls remain green after this
+reconciliation.
+
 ## Behavioral controls
 
 The positive consumer checks literal samples, one shared mixed-read cursor,

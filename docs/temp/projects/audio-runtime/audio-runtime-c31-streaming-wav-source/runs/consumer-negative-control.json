@@ -7,7 +7,7 @@
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
   "exit_code": 1,
-  "elapsed_ms": 5,
-  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"e0ee33f0c161f8031fd074397a46ad0316c4b4fb\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T03:28:35.455128Z\",\n  \"duration_ms\": 0,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
+  "elapsed_ms": 33,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"6717dd5add3d613b0adf24516d679dd63293495b\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T03:50:34.978799Z\",\n  \"duration_ms\": 0,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
   "stderr": "sample[1] = 12345, want mutated expectation 12346\n"
 }

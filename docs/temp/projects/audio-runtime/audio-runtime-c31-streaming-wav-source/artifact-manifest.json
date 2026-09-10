@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime-c31-artifact-manifest.v1",
-  "source": "e0ee33f0c161f8031fd074397a46ad0316c4b4fb",
+  "source": "6717dd5add3d613b0adf24516d679dd63293495b",
   "go_version": "go version go1.26.7 darwin/arm64",
   "artifacts": {
     "consumer": {
