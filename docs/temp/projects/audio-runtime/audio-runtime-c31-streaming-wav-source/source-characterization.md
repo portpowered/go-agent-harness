@@ -14,11 +14,33 @@ admission. The predecessor and baseline checkpoints were preserved:
 | required baseline | `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` |
 | freshly fetched `origin/main` | `1f82284abee0bd31a6680310444cea2e4c16ef00` |
 | pre-change isolated HEAD | `1f82284abee0bd31a6680310444cea2e4c16ef00` |
-| candidate implementation revision | `6f82c04` |
+| initial candidate implementation revision | `6f82c046dd19a52ce57a8be895f0df43921db8da` |
+| cleanup-error repair revision | `9efd435177b58db8a9508b92b8b96202021b6e89` |
+| final candidate revision | `e0ee33f0c161f8031fd074397a46ad0316c4b4fb` |
 
 `git merge-base --is-ancestor` passed for the startup integration revision,
 the required baseline, and fetched `origin/main`. No merge or reset was used;
 the running host checkout was not touched.
+
+## CI rejection accounting
+
+The first submitted candidate was PR `#423` at head
+`b30ed0d55df320bf11f901304264c1fb90255727`. Full run
+`34431822827`/static job `102728747026` reported five pinned golangci-lint
+`errcheck` findings: the unsupported-rate `wav.Close` path and four streaming
+test cleanup paths. The same run's hermetic job `102728747047` also reported
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+missing its final PCM marker at the remote device boundary. That integration
+test path is unchanged by C31 and does not call `NewFileSource`; the exact
+`CGO_ENABLED=0 -tags=nomicrophone` case passed locally in 15.750s, so no
+C20/C21-owned fixture or runtime path was changed here. The five C31 findings
+were repaired in `9efd435` with checked cleanup/error joins; the resulting
+403-line source-file budget regression was repaired in `e0ee33f` by moving the
+WAV-specific rate-error constructor into the owned streaming WAV source.
+
+The final candidate evidence below is generated from `e0ee33f`; broad CI has
+not been rerun or claimed green, and the script gate retains ownership of the
+current-head check.
 
 ## Frozen characterization
 

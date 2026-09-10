@@ -1,15 +1,15 @@
 {
   "schema": "audio-runtime-c31-artifact-manifest.v1",
-  "source": "edb18e5a3cadbfa7c95a82f1e7b1fc5911425294",
+  "source": "e0ee33f0c161f8031fd074397a46ad0316c4b4fb",
   "go_version": "go version go1.26.7 darwin/arm64",
   "artifacts": {
     "consumer": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
-      "sha256": "4fc382bd7631110b926d39ff780c5723b191580521c103552e0117dc8671b423"
+      "sha256": "bacc4a8081dbf4b7aeef37e4aeee8d416bbcf5ce1512ca0fcf2538ae0892891f"
     },
     "yui": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
-      "sha256": "3628723e73a5285277a4b154b3ab92e91d69a918d742b75fa706afe4aff80885"
+      "sha256": "2f5b8ecefea2981f50ceb9ede7ae9c113ebee9fa68378d1e36dba57ff1013a5d"
     }
   }
 }
