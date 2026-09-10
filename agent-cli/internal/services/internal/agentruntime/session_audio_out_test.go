@@ -381,7 +381,7 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 		t.Fatalf("interrupted PCM = %d bytes, want both accepted deltas (%d bytes)", len(got), len(want))
 	}
 }
-func TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier(t *testing.T) {
+func TestSessionAudioOutput_RetainsQueuedAndDelayedDeltaAcrossCancellationBarrier(t *testing.T) {
 	for index, cancelBeforeConnect := range []bool{false, true} {
 		t.Run([]string{"delayed-delta", "canceled-connect"}[index], func(t *testing.T) { runSessionAudioCancellationBarrier(t, cancelBeforeConnect) })
 	}
@@ -391,9 +391,10 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseClose: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
 	var output bytes.Buffer
 	sink := mustSessionAudioTestValue(newSessionAudioSinkAtRate("-", &output, audio.SampleRate))
+	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
 	connected := make(chan messages.Session, 1)
 	go func() {
-		connected <- mustSessionAudioTestValue(newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx))
+		connected <- mustSessionAudioTestValue(inferencer.ConnectSession(ctx))
 	}()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
@@ -405,14 +406,13 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	go func() { mustSessionAudioTestValue(struct{}{}, session.Close()) }()
 	waitForClosedTargetSignal(t, context.Background(), provider.closeStarted, "provider close start")
 	time.Sleep(2 * sessionStragglerDrainQuietPeriod)
-	want := pcm16Bytes(sessionAudioFrame(1200))
-	if ok := provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}); !ok {
+	if ok := provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sessionAudioFrame(1200)))}); !ok {
 		t.Fatal("provider did not accept delayed audio delta")
 	}
 	close(provider.releaseClose)
 	mustSessionAudioTestValue(struct{}{}, session.Close())
-	if !bytes.Equal(output.Bytes(), want) {
-		t.Fatalf("retained PCM = %d bytes, want delayed delta %d bytes", output.Len(), len(want))
+	if !inferencer.connected.forwardMessage(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sessionAudioFrame(1200)))}) || !bytes.Equal(output.Bytes(), append(append([]byte(nil), pcm16Bytes(sessionAudioFrame(1200))...), pcm16Bytes(sessionAudioFrame(1200))...)) {
+		t.Fatalf("retained PCM = %d bytes, want two accepted deltas", output.Len())
 	}
 }
 func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {

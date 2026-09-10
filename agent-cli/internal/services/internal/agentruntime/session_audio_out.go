@@ -667,7 +667,6 @@ func (s *sessionAudioOutputSession) forward() {
 		return
 	}
 }
-
 func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
 	select {
 	case msg := <-input.Chan():
@@ -682,7 +681,6 @@ func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[mess
 	}
 	return false
 }
-
 func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.StreamMessage], ctx context.Context, retaining bool) bool {
 	for {
 		msg, ok := input.Read()
@@ -694,7 +692,6 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 		}
 	}
 }
-
 func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
 	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
@@ -718,8 +715,6 @@ func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.Typed
 	}
 }
 
-// Keep the post-barrier quiet tail bounded so a final accepted delta cannot
-// race the public PCM oracle after provider close completes.
 func (s *sessionAudioOutputSession) drainAfterInnerClose(input *messages.TypedBuffer[messages.StreamMessage], ctx context.Context) {
 	select {
 	case <-s.innerCloseDone:
@@ -760,6 +755,11 @@ func (s *sessionAudioOutputSession) Close() error {
 }
 
 func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) bool {
+	if s.ctx.Err() != nil {
+		retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		defer cancel()
+		return s.forwardMessageWithContext(retainCtx, msg, true)
+	}
 	return s.forwardMessageWithContext(s.ctx, msg, false)
 }
 
