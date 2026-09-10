@@ -76,3 +76,13 @@ README under `evidence/probe-report.json`; a run supplied with both replay
 pairs records its result under `evidence-replay/probe-report.json`. Each report
 records source revision, protected hashes, fresh mission/report completion, and
 residual physical/acoustic limits.
+
+The latest repaired-source handoff is archived at
+`evidence-repair-4256aa6-run1/probe-report.json` for source
+`4256aa62292232b26c8c5d22d543ab90affeca58` (report SHA-256
+`f0fa6ce82289494c3733247498ac5069135c49a4f06a08ad7c3b5be5068329cd`). It
+also records the required missing-Work-project and mismatched-staged-build
+identity negative controls, exact prepared project/build identities, and the
+same audio/tool and interruption replay oracles. The rebuilt yui input is
+`/tmp/audio-runtime-c39-yui-4256aa6`, SHA-256
+`2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db`.
