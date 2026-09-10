@@ -92,3 +92,105 @@ This evidence is credential-free, loopback-only, and uses Chrome native
 WebMCP. It does not prove physical microphone/speaker behavior, external
 provider behavior, independent review, guarded merge, post-merge vertical
 acceptance, or the immutable project-wide criteria.
+
+## Current-main merge and architecture-fit checkpoint
+
+The candidate fetched `origin/main` at
+`7b6ce8cecee80d3f78b7aad02760067387853ade` and integrated it with merge
+`5ca154f67ee95be1a61cddab99537912b424afb3`. The only merge conflict was the
+shared `progress.txt`; both the C43 and incoming C36 ledger entries were kept.
+The required baseline `926ded7b`, startup integration `8bdafc7f`, and current
+main are ancestors of the candidate. The running host checkout, peer worktrees,
+and predecessor checkpoints were not reset or edited.
+
+The merged-head architecture gate first found the live package at 409/400
+lines and 16/15 files because the C43 semantic refresh repair had added a
+dedicated test file. The repair commit `169490ea69ff1886fc07ec333ac98dfa142aef05`
+keeps the semantic `tools_added`, `tools_removed`, `page_navigated`, and
+`frame_navigated` refresh predicate, compresses it to 399 lines, and removes
+that newly introduced test file so the unchanged package budget is restored.
+No architecture baseline or generated Wire file was changed. The resulting
+architecture gate passes at 183 packages, 1,884 files, and 27,748 functions;
+coverage registration passes at 173 packages.
+
+Post-merge focused evidence currently available is limited to the tools
+regression: normal and race `go test ./services/tools/...` both pass, including
+the private imagestaging package. The first merged-head CLI image test attempt
+was the exact command
+`rtk proxy sh -c 'cd agent-cli && go test -tags=nomicrophone ./internal/services/internal/agentruntime -run "Image|ReadImage" -count=1 -timeout=120s'`;
+it failed during linking with `no space left on device`, before any test ran.
+The filesystem then reported 270 MiB free, below the recorded 2 GiB build
+reserve. This is an operator storage prerequisite, not a code result; no cache,
+evidence, peer artifact, or unrelated worktree was deleted.
+
+The earlier exact-process run `verify-20260910T200021Z-37030` remains historical
+evidence for source `97b1141b`; it is not relabeled as proof for the merged
+candidate. The next action is to restore measured headroom without deleting
+retained evidence, rerun the focused verifier and merged-head CLI normal/race
+checks, record new source/build/fixture hashes, then push/update PR #434 and
+return `ACCEPTED` to script CI only if those current-head checks complete.
+
+## Fresh merged-head exact-process checkpoint — 2026-09-10T21:11Z
+
+The documented storage prerequisite cleared to 7.3 GiB free. The exact bounded
+command
+`rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+passed as run `verify-20260910T211145Z-67634` at source
+`169490ea69ff1886fc07ec333ac98dfa142aef05`. The complete outcome, commands,
+stdout/stderr, exit codes, observations, build provenance, source delta and
+symbol inventory are retained under that run directory. All 18 steps passed;
+the deliberate wrong-oracle step exited 1 with the expected `70 actual versus
+71 expected` diagnostic, while the other 17 steps exited 0 without timeout.
+
+The fresh causal/regression controls include public tools-Wire positive and
+cleanup checks, the wrong-oracle negative, semantic capability refresh in
+normal and race modes, private imagestaging/Wire normal and race tests, CLI
+adapter normal and race tests, all tools-service regressions, the in-process
+CLI image workflow, and the credential-free strict replay regression.
+`make architecture-size-check` passes at 183 packages, 1,884 files and 27,748
+functions; `make coverage-registration` passes at 173 workspace packages;
+`make wire-check` regenerated the checked-in Wire outputs with no tracked
+changes; and `git diff --check` passes.
+
+The fresh process observations are tied to the rebuilt artifacts. The image
+workflow exits 0; the loopback provider reports `PASS`; real Chrome native
+WebMCP reports page events `initial, refreshed`; the initial catalog contains
+`c43_initial_probe`, the refreshed catalog adds `c43_refreshed_probe`, and the
+provider validates the exact 70-byte PNG and typed `input_image` projection.
+The staging directory has no leftovers and CLI/provider/Chrome process-group
+survivors are all false. The induced `--max-duration 2s` workflow exits 0 with
+provider `PASS`, `expected_timeout_client_close=true`, no staging leftovers and
+no process survivors. Credential-free replay exits 0 with
+`PROBE_TOOL_MARKER_9182`, `strict replay continuation`, and no survivor.
+
+Fresh provenance in `build-provenance.json` records Go `go1.26.7`, Darwin
+arm64, loopback-only networking, CLI SHA-256
+`05e617f416b98e577437bf31eb1999eac147600124a8dea2115499bc16da0ad1`, local
+provider SHA-256
+`7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, provider
+source SHA-256
+`f63381b1b55a10c095692938967a39a62bd77b6f50717c41278405aa97cd614a`, page
+source SHA-256
+`703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`, and
+literal fixture SHA-256
+`4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5` for 70
+bytes. The strict replay capture SHA-256 is
+`b6541a87a39e065151f45553ff5b9e788e2d9d57576a15c285eeac071a1476ea` and its
+config SHA-256 is
+`84a450eec67059fa1d0a81ad80651ff4f04fdcee0f7585b514774c00f16e1d07`.
+
+The source inventory in the same run records the required 142 baseline lines
+to 71 final adapter lines and retires
+`sessionImageToolPathDescription`, `sessionImageStageExtension`, and
+`advertiseSessionImagePaths`, while retaining
+`prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`. The source
+delta SHA-256 is
+`94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`.
+
+This is current implementation evidence only: no terminal CI result,
+independent review, guarded merge, post-merge vertical acceptance, physical or
+acoustic proof, or project acceptance is claimed. The next action is to commit
+this documentation/evidence checkpoint, push the same branch, update PR #434
+with the exact current head and review-254 repair map, and return `ACCEPTED` to
+the script-owned CI gate without polling it. Retain this task through
+`CONTINUE` for any exact CI rejection.

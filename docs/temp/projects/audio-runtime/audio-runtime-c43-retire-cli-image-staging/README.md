@@ -28,3 +28,11 @@ recorded steps. Disposable run artifacts stay ignored under `runs/`; the
 selected textual outcome, provenance, protocol, and per-case records for this
 run are archived there with the handoff. No CI result is claimed by this
 evidence.
+
+That run predates the current-main merge and is retained as historical evidence.
+The fresh merged-head run is
+`runs/verify-20260910T211145Z-67634` at source
+`169490ea69ff1886fc07ec333ac98dfa142aef05`; it passed all 18 steps, including
+the built CLI process workflow and induced timeout. The prior linker
+`no space left on device` observation is retained only as historical
+prerequisite evidence.
