@@ -176,8 +176,8 @@ def run_controls(
 ) -> dict[str, Any]:
     verifier_globals = module["_c45_globals"]
     executable_paths = executable_paths or {}
-    verifier_globals["CONSUMER"] = executable_paths.get("artifact-1", staged_root / "artifact-1")
-    verifier_globals["YUI"] = executable_paths.get("artifact-0", staged_root / "artifact-0")
+    verifier_globals["CONSUMER"] = executable_paths.get("artifact-1-consumer", executable_paths.get("artifact-1", staged_root / "artifact-1"))
+    verifier_globals["YUI"] = executable_paths.get("artifact-0-yui", executable_paths.get("artifact-0", staged_root / "artifact-0"))
     verifier_globals["FIXTURES"] = fixture_root
     verifier_globals["ARTIFACTS"] = run_dir / "unused-artifacts"
     verifier_globals["RUNS"] = run_dir / "unused-runs"
