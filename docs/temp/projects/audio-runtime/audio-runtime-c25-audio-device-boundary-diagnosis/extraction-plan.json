@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
+  "candidate_revision_at_diagnosis": "8c61326167ceb6ed2017b46ff866656d99a711b7",
+  "source_revision_at_diagnosis": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "source_archive_sha256": "5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12",
+  "chosen_dependency": {
+    "name": "legacy room clock/format/device-output boundary",
+    "current_paths": [
+      "agent-cli/internal/room/mixer.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+    ],
+    "current_apis": [
+      "room.NewPCM16MixerWithConfig",
+      "(*room.PCM16Mixer).ReadFrameWithSources",
+      "devicegw.NewDeviceSource",
+      "devicegw.NewDeviceSink",
+      "(*roomHumanOutputBuffer).writeFrame",
+      "(*devicegw.DeviceSink).WriteFrame"
+    ],
+    "current_effect": "Accepted C26 moved PCM16 mix accumulation and final clipping into go-audio/pkg/mixer.MixPCM16Samples; the remaining legacy room path still owns host ticker cadence, PCM16 format adaptation, room-side resampling, and direct DeviceSink.WriteFrame.",
+    "proposed_paths": [
+      "go-audio/pkg/clock/clock.go",
+      "go-audio/pkg/audio/media_contract.go",
+      "go-audio/pkg/audio/buffer.go",
+      "go-audio/pkg/audio/device_playback.go",
+      "go-audio/pkg/mixer/mixer.go",
+      "go-audio/pkg/mixer/input.go",
+      "go-agent-runtime/services/rooms/contract.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/graph.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/media.go",
+      "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+      "go-device-gateway/pkg/runtime/rtc_device.go",
+      "go-device-gateway/pkg/runtime/rtc_device_sink.go"
+    ],
+    "proposed_apis": [
+      "mixer.New(ctx, clock.TimerSource, mixer.Config)",
+      "(*mixer.Mixer).AddInput",
+      "(*mixer.Input).WriteFrame(context.Context, audio.PCMFrame)",
+      "audio.NewFrameBuffer",
+      "rooms.MediaPorts",
+      "rooms.MediaFactory.OpenMedia",
+      "(*lifecycle.mediaBridge).Wait",
+      "(*runtime.RTCDeviceSink).Pump",
+      "(*audio.PlaybackQueue).RenderInto"
+    ],
+    "callers_and_owners": {
+      "legacy_callers": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+      ],
+      "public_wire": [
+        "agent-cli/internal/wire/wire_gen.go:109",
+        "agent-cli/internal/services/wire/wire.go:64",
+        "agent-cli/internal/transport/cli/room.go"
+      ],
+      "c25": "Diagnosis, verifier, fixtures, provenance, and extraction plan only; no production ownership.",
+      "follow_on": "C21 room/gateway/duplex owner, coordinated with C18 for exact lifecycle files and C20 for the separate remote test46/provider_burst repair; C26's accepted merge is the DSP elimination evidence."
+    },
+    "wire_and_sequence": [
+      "Preserve wire_gen.go -> NewRoomServiceWithDevices -> room-wire Dependencies -> rooms.Service.",
+      "Translate legacy room units to audio.PCMFrame at the adapter boundary with injected clock.TimerSource.",
+      "Submit canonical frames to bounded epoch-aware mixer inputs before playback admission.",
+      "Use MediaPorts/mediaBridge for local capture/playback and leave device conversion/callback ownership in device service.",
+      "Retire the legacy ticker/raw-codec/direct-sink dependency only after focused controls and public-consumer regression pass."
+    ],
+    "trigger": "Compiled legacy path owns time.NewTicker, PCM16 format adaptation around the accepted shared mixer, device constructors, and direct sink writes; the former hosted coverage assertion is repaired on current origin/main, while test46/provider_burst remains a separate C20-owned historical failure.",
+    "current_behavior": "Room-owned host cadence and raw bytes with shared canonical mixing; room-side resample/decode; direct DeviceSink.WriteFrame.",
+    "intended_behavior": "Injected scheduler; canonical PCMFrame and bounded FrameBuffer/mixer; device-owned playback queue and callback accounting.",
+    "executable_regression": [
+      "TestMixerPreservesShortResponseTailAndEpochs",
+      "TestPlaybackRenderObserverIncludesCallbackSilenceOutsideQueueLock",
+      "TestRequireTimerSourceDoesNotFallbackToHostTime",
+      "TestRoomGraphRoutesEachSourceToPeersOnly",
+      "TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission",
+      "TestMediaBridgePreservesPCMAndUsesBoundedFrames",
+      "C26 shared-DSP reconciliation tests: TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution, TestPCMMixLegacyKeepsFullCadenceZeroPadding, TestPCMMixLegacyRejectsOutputBoundBeforeDecoding",
+      "TestPCM16MixerMixesEveryActiveInputAndClips",
+      "TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns",
+      "-race on the empty-response seam",
+      "go vet on agentruntime"
+    ],
+    "failure_control": [
+      "SOURCE_GAP_CONFIRMED requires every listed edge.",
+      "Positive canonical and negative forbidden dependency fixtures are mandatory.",
+      "The pinned Git archive must rebuild to the recorded SHA-256, and any materialized source archive must match it.",
+      "The fixture manifest must enumerate exactly the owned fixtures and match each fixture's SHA-256, byte count, and line count.",
+      "The complete source-to-candidate and working-tree changed-path set must remain under the owned evidence prefix.",
+      "Dependency-control failures, empty positive/negative evidence, stale hashes, false-success output, truncated output, zero tests, unexpected exits, child hangs, and surviving process groups fail closed.",
+      "Do not claim runtime, physical-device, provider, or acoustic PASS from source evidence."
+    ]
+  },
+  "dsp_reconciliation": {
+    "status": "ELIMINATED_BY_ACCEPTED_C26",
+    "accepted_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "shared_bounds_call": "agent-cli/internal/room/mixer.go:725",
+    "shared_mix_call": "agent-cli/internal/room/mixer.go:751",
+    "legacy_format_adaptation": [
+      "agent-cli/internal/room/mixer.go:743",
+      "agent-cli/internal/room/mixer.go:755"
+    ],
+    "legacy_accumulation_or_final_clip_loop": false,
+    "interpretation": "C26 moved mix accumulation and final clipping into the exported go-audio mixer; C25 retains the remaining host-clock/format/device-output boundary as the one source gap."
+  },
+  "non_duplication": {
+    "c15": "Use accepted replay evidence as a limitation/input; do not rerun broad replay.",
+    "c16": "Use accepted sink lifecycle evidence as a boundary reference; do not claim a physical-device result.",
+    "c17": "Use accepted deterministic clock/PONG evidence as a timing reference; do not claim provider/live behavior."
+  },
+  "gate_map": {
+    "AUDIO": ["PCMFrame", "FrameBuffer", "mixer.Input", "Epoch", "EndOfResponse"],
+    "DEVICE": ["RTCDeviceSink", "PlaybackQueue", "RenderInto", "PlaybackStats"],
+    "SERVICE": ["MediaPorts", "MediaFactory", "mediaBridge", "public wire"],
+    "QUALITY": ["provenance", "positive/negative controls", "focused tests", "race", "vet", "bounded cleanup"]
+  },
+  "later_gates": [
+    "same-task focused verifier refresh against current origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+    "C20 reviewed repair for test46/provider_burst remains separately owned and unwaived",
+    "review and script CI gate; no CI polling or acceptance claim in this packet"
+  ]
+}
