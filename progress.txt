@@ -2463,3 +2463,74 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   without polling. If that gate rejects a specific check, inspect only its
   exact log, repair the same task, and return `CONTINUE` while actionable work
   remains.
+
+# C36 deterministic deadline repair and current-head handoff checkpoint 2026-09-10
+
+- Re-read the Factory operating policy and implementation handoff, the admitted
+  C36 manifest, progress history, and the full canonical `~default` task/review
+  inbox. Admission verification returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c36-room-media-epoch-consumer"}`;
+  `prd.json.branchName` matches `codex/audio-runtime-c36-room-media-epoch-consumer`.
+  The isolated worktree was clean before work; no second project, waiver,
+  running host checkout, predecessor checkpoint, or unrelated owner path was
+  changed.
+- Fetched and integrated current `origin/main=d6efc88d` as merge checkpoint
+  `cddfda4b`, preserving required baseline `3194edd9`, startup
+  `8bdafc7f`, observed main `d5012004`, and the accepted C18/C35 ancestry. The
+  only merge conflict was `progress.txt`; both C36 and incoming C18 ledger
+  entries were retained.
+- The latest canonical CI rejection was read in full from run
+  `34493455519`, job `102925791295`, submitted C36 head `52c3c55d`: only
+  `CI (coverage)` failed, at `go-audio/pkg/clock/clock_test.go:316`, because
+  `TestDeterministicContextDeadlineAndParentCancellation` did not observe
+  virtual deadline completion within its bounded poll. This is within the
+  amended C36 three-file clock lease; no unrelated C20/C21 failure was repaired.
+- The causal repair is committed at `dc04dc4a`: `deadlineContext` retains its
+  injected `TimerSource`, `Done()` completes synchronously when that source's
+  virtual deadline has elapsed, and the deadline worker exits on the context's
+  closed channel. The follow-up regression commit is `7cec2fce`, making the
+  deadline test assert immediate completion while preserving the retained
+  complexity exception and exact 547-line clock baseline. No limit, assertion,
+  timeout, baseline, or acceptance rule was weakened.
+- Focused causal evidence passes on the final source: clock deadline/parent
+  cancellation coverage `200x`, clock race `100x`, C36 module normal
+  `count=20` (`15.400s`), C36 race `count=5` (`7.330s`), C36 vet, room
+  lifecycle normal/race `count=3`, mixer/audio normal/race `count=3`,
+  `make architecture-size-check` (`181` packages, `1,877` files, `27,690`
+  functions), `make wire-check`, and `git diff --check`. Go build-cache cleanup
+  reclaimed only derived cache data after the first verifier hit `no space left
+  on device`; tracked evidence and worktrees were preserved.
+- Clean committed-source `verify.py --action all --source <isolated-worktree>`
+  returned `{"status":"accepted","action":"all"}` in `13.110226s`.
+  Source revision is `7cec2fce25e0003952ca080ffcd299269940ee16`; source archive
+  SHA-256 is
+  `f40301638ff5ea3e7d015f5109edbbf008234062a6e83476fd01a289dae8c6f4`, input
+  manifest SHA-256 is
+  `56aa8708644b6fe1628a4045067e7c934fefe83f4f501411640cd181bc88350e`, room
+  binary SHA-256 is
+  `f0f42fe666f2d91e43f120a1901c9b8c34e3cfe7f6cd90aa54c0a0d7a41ef3fd`, and
+  yui binary SHA-256 is
+  `79dca64f4413b3e926071b18769660f57d7d04a06359955f02bd25cf08abec33`.
+  All nine bounded actions accepted: boundary, provenance, routing/epochs,
+  five subprocess mutation oracles, partial recording, software consumption,
+  lifecycle/join, TERM/KILL descendant cleanup, and C21 audio-tool/interruption
+  parity. The report retains peer outputs `alice=[211,212,213,214]` and
+  `bob=[111,112,113,114]`, stale pending samples `4`, and end-of-response
+  before terminal; physical playback remains explicitly unavailable.
+- Fresh `--no-build --action parity` in a separate scratch directory reused
+  those exact binary bindings and returned accepted in `0.768263s`. Tracked
+  summaries are under
+  `docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-7cec2fc/`;
+  private source archive, binaries, and process logs retain generating-host
+  paths and are not relabeled as portable artifacts. The prior review202 and
+  review224 findings remain represented by the repaired lifecycle, observation,
+  input-boundary, provenance, mutation, and strict-bundle controls; no known
+  actionable C36 review defect remains.
+- No current-head script-CI success, independent review, guarded merge,
+  post-merge vertical acceptance, physical/acoustic proof, or project
+  completion is claimed. Next action: force-add the tracked C36 evidence
+  summaries and this checkpoint, run final focused checks on the committed
+  tree, commit and push the same PR `#429`, update it with the exact current
+  head/base and evidence plus the prior coverage rejection, then return
+  `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
+  this same task through `CONTINUE` for any exact CI rejection or actionable
+  repair.
