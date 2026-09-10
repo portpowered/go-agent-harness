@@ -38,6 +38,7 @@ MAX_CHILD_TIMEOUT_SECONDS = 60.0
 CLEANUP_TIMEOUT_SECONDS = 5.0
 PROCESS_SCAN_TIMEOUT_SECONDS = 1.0
 PROCESS_POLL_INTERVAL_SECONDS = 0.02
+GRAPH_HASH_SCHEMA = "go-list-graph/canonical-v1"
 
 STARTUP_COMMIT = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE_COMMIT = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
@@ -731,6 +732,7 @@ def graph_boundary(module_dir: Path = MODULE_DIR) -> dict[str, Any]:
         "dependency_summary": dependency_summary,
         "module_command": module_listing.as_dict(),
         "module_summary": module_summary,
+        "graph_hash_schema": GRAPH_HASH_SCHEMA,
         "graph_hashes": {"packages_sha256": package_graph_hash, "modules_sha256": module_graph_hash},
         "synthetic_negative_controls": synthetic_controls,
         "gowork": "off",
@@ -1139,6 +1141,7 @@ def run_package() -> dict[str, Any]:
         },
         "fixtures": {"c07_audio_tool_traced": fixtures["published"]},
         "regression_inputs": {"config": config},
+        "dependency_graph_schema": GRAPH_HASH_SCHEMA,
         "dependency_graph": graph["graph_hashes"],
         "replacement_source_tree_sha256": replacements,
         "go": {"version": go_version(), "platform": {"system": platform.system(), "release": platform.release(), "machine": platform.machine()}, "gowork": "off"},
@@ -1239,9 +1242,23 @@ def verify_fresh_archive_descriptor(archive_path: Path, descriptor: dict[str, An
         command_or_fail(result, "fresh archive descriptor verification")
         output = parse_child_json(result)
         require(output.get("status") == "verified", "fresh archive descriptor verification did not report verified")
+        fresh_evidence = output.get("evidence")
+        require(isinstance(fresh_evidence, dict), "fresh archive descriptor verification omitted evidence")
+        fresh_verified = fresh_evidence.get("verified")
+        require(isinstance(fresh_verified, dict), "fresh archive descriptor verification omitted digest results")
+        fresh_digests = fresh_verified.get("verified_digests")
+        require(isinstance(fresh_digests, dict), "fresh archive descriptor verification omitted verified digests")
+        fresh_graph_hashes = fresh_digests.get("dependency_graph")
+        require(
+            fresh_graph_hashes == descriptor.get("dependency_graph"),
+            f"fresh archive dependency graph hashes changed: {fresh_graph_hashes} != {descriptor.get('dependency_graph')}",
+        )
         return {
             "git_independent": True,
             "git_metadata_present": False,
+            "graph_hash_schema": GRAPH_HASH_SCHEMA,
+            "graph_hashes": fresh_graph_hashes,
+            "provenance": fresh_verified.get("provenance"),
             "source_root": "source/",
             "command": result.argv,
             "result": result.as_dict(),
@@ -1284,6 +1301,7 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
     )
 
     declared_graph_hashes = value.get("dependency_graph")
+    require(value.get("dependency_graph_schema") == GRAPH_HASH_SCHEMA, "artifact descriptor dependency graph hash schema changed")
     require(isinstance(declared_graph_hashes, dict), "artifact descriptor omitted dependency graph hashes")
     graph_hashes = graph_boundary(root)["graph_hashes"]
     require(set(declared_graph_hashes) == set(graph_hashes), "artifact descriptor dependency graph hash set changed")
@@ -1366,7 +1384,7 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
             "current_branch": current_branch,
             "git_metadata_present": git_metadata_present,
             "verification_mode": "checkout" if git_metadata_present else "fresh_archive",
-            "source_revision_matches_current_head": source_revision == current_head,
+            "source_revision_matches_current_head": source_revision == current_head if git_metadata_present else None,
             "source_changes_since_source_revision": source_changes,
         },
     }
