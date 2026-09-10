@@ -23,19 +23,14 @@ func TestRoomMediaRoutesPeersAndDiscardsStaleEpoch(t *testing.T) {
 	if got, want := report.PeerOutputs["bob"], []int16{111, 112, 113, 114}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("bob peer output = %v, want %v", got, want)
 	}
-	wantInputs := []InputObservation{
-		{Participant: "alice", Epoch: 1, Sequence: 1, Samples: []int16{101, 102}},
-		{Participant: "alice", Epoch: 2, Sequence: 2, Samples: []int16{111, 112, 113, 114}, End: true},
-		{Participant: "bob", Epoch: 1, Sequence: 1, Samples: []int16{201, 202}},
-		{Participant: "bob", Epoch: 2, Sequence: 2, Samples: []int16{211, 212, 213, 214}, End: true},
-	}
+	wantInputs := expectedSourceInputs()
 	if !reflect.DeepEqual(report.SourceInputs, wantInputs) {
 		t.Fatalf("source inputs = %+v, want %+v", report.SourceInputs, wantInputs)
 	}
 	if got, want := report.Playback.Admitted, []int16{322, 324, 326, 328}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("listener admission = %v, want %v", got, want)
 	}
-	if got, want := report.Playback.Observed, []FrameObservation{{Epoch: 1, Samples: []int16{322, 324, 326, 328}}}; !reflect.DeepEqual(got, want) {
+	if got, want := report.Playback.Observed, expectedPlaybackFrames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("listener observed frames = %+v, want %+v", got, want)
 	}
 	if len(report.RawEvents) == 0 {
@@ -92,7 +87,7 @@ func TestLifecycleCancellationAndRepeatedClose(t *testing.T) {
 }
 
 func TestMutationOracleRejectsThroughRoomSubprocessContract(t *testing.T) {
-	for _, mutation := range []string{"peer-participant-key", "source-order", "epoch", "pcm", "terminal"} {
+	for _, mutation := range []string{"peer-participant-key", "source-order", "epoch", "pcm", "terminal", "format", "stream-id", "start-sample", "playback-response"} {
 		t.Run(mutation, func(t *testing.T) {
 			outputDir := t.TempDir()
 			_, err := Run(Request{Mode: "mutations", Mutation: mutation, OutputDir: outputDir})

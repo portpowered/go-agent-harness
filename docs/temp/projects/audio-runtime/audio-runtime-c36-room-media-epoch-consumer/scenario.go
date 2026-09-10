@@ -58,11 +58,15 @@ type Report struct {
 }
 
 type InputObservation struct {
-	Participant string  `json:"participant"`
-	Epoch       uint64  `json:"epoch"`
-	Sequence    uint64  `json:"sequence"`
-	Samples     []int16 `json:"samples"`
-	End         bool    `json:"end_of_response"`
+	Participant      string                      `json:"participant"`
+	Format           FrameFormat                 `json:"format"`
+	StreamID         string                      `json:"stream_id"`
+	Epoch            uint64                      `json:"epoch"`
+	Sequence         uint64                      `json:"sequence"`
+	StartSample      uint64                      `json:"start_sample"`
+	PlaybackResponse PlaybackResponseObservation `json:"playback_response"`
+	Samples          []int16                     `json:"samples"`
+	End              bool                        `json:"end_of_response"`
 }
 
 type EpochReport struct {
@@ -74,6 +78,24 @@ type EpochReport struct {
 type AdmissionReport struct {
 	Frames  int `json:"frames"`
 	Samples int `json:"samples"`
+}
+
+// FrameFormat is the serialized form of audio.DeviceFormat retained by the
+// consumer's public media observations. Keeping the format in the evidence
+// prevents a sample-only oracle from accepting a frame in the wrong domain.
+type FrameFormat struct {
+	SampleRate int    `json:"sample_rate"`
+	Channels   int    `json:"channels"`
+	BitDepth   int    `json:"bit_depth"`
+	Encoding   string `json:"encoding"`
+}
+
+// PlaybackResponseObservation retains the provider response identity carried
+// by a PCM frame, including the zero identity used by this fixture provider.
+type PlaybackResponseObservation struct {
+	ResponseID   string `json:"response_id"`
+	ItemID       string `json:"item_id"`
+	ContentIndex int    `json:"content_index"`
 }
 
 type PlaybackReport struct {
@@ -98,29 +120,37 @@ type PlaybackReport struct {
 // FrameObservation is an exact copy of one frame crossing the public media
 // boundary. Summary fields are derived from these observations.
 type FrameObservation struct {
-	Epoch    uint64  `json:"epoch"`
-	Sequence uint64  `json:"sequence"`
-	Samples  []int16 `json:"samples"`
-	End      bool    `json:"end_of_response"`
+	Format           FrameFormat                 `json:"format"`
+	StreamID         string                      `json:"stream_id"`
+	Epoch            uint64                      `json:"epoch"`
+	Sequence         uint64                      `json:"sequence"`
+	StartSample      uint64                      `json:"start_sample"`
+	PlaybackResponse PlaybackResponseObservation `json:"playback_response"`
+	Samples          []int16                     `json:"samples"`
+	End              bool                        `json:"end_of_response"`
 }
 
 // RawEvent preserves the observed order of source audio, peer output,
 // software playback input, and terminal events. A nonmatching frame is never
 // silently discarded from this ledger.
 type RawEvent struct {
-	Kind           string  `json:"kind"`
-	Participant    string  `json:"participant"`
-	Target         string  `json:"target,omitempty"`
-	Epoch          uint64  `json:"epoch"`
-	Sequence       uint64  `json:"sequence"`
-	Samples        []int16 `json:"samples,omitempty"`
-	End            bool    `json:"end_of_response,omitempty"`
-	AfterTerminal  bool    `json:"after_terminal,omitempty"`
-	Reason         string  `json:"reason,omitempty"`
-	Classification string  `json:"classification,omitempty"`
-	TerminalReason string  `json:"terminal_reason,omitempty"`
-	Provenance     string  `json:"provenance,omitempty"`
-	OutputState    string  `json:"output_state,omitempty"`
+	Kind             string                      `json:"kind"`
+	Participant      string                      `json:"participant"`
+	Target           string                      `json:"target,omitempty"`
+	Format           FrameFormat                 `json:"format"`
+	StreamID         string                      `json:"stream_id"`
+	Epoch            uint64                      `json:"epoch"`
+	Sequence         uint64                      `json:"sequence"`
+	StartSample      uint64                      `json:"start_sample"`
+	PlaybackResponse PlaybackResponseObservation `json:"playback_response"`
+	Samples          []int16                     `json:"samples,omitempty"`
+	End              bool                        `json:"end_of_response,omitempty"`
+	AfterTerminal    bool                        `json:"after_terminal,omitempty"`
+	Reason           string                      `json:"reason,omitempty"`
+	Classification   string                      `json:"classification,omitempty"`
+	TerminalReason   string                      `json:"terminal_reason,omitempty"`
+	Provenance       string                      `json:"provenance,omitempty"`
+	OutputState      string                      `json:"output_state,omitempty"`
 }
 
 type TerminalObservation struct {
@@ -207,15 +237,74 @@ type coordinator struct {
 
 func newCoordinator() *coordinator {
 	return &coordinator{
-		outputs:      make(map[string][]int16),
-		terminalSeen: make(map[string]bool),
-		outputFrames: make(map[string]int),
-		outputEnded:  make(map[string]bool),
-		handles:      make(map[string]*fakeHandle),
+		outputs:          make(map[string][]int16),
+		terminalSeen:     make(map[string]bool),
+		outputFrames:     make(map[string]int),
+		outputEnded:      make(map[string]bool),
+		handles:          make(map[string]*fakeHandle),
 		done:             make(chan struct{}),
 		healthyReady:     make(chan struct{}),
 		routedReady:      make(chan struct{}),
 		activeMediaReady: make(chan struct{}),
+	}
+}
+
+func frameFormatObservation(format audio.DeviceFormat) FrameFormat {
+	return FrameFormat{
+		SampleRate: format.SampleRate,
+		Channels:   format.Channels,
+		BitDepth:   format.BitDepth,
+		Encoding:   format.Encoding,
+	}
+}
+
+func playbackResponseObservation(response audio.PlaybackResponse) PlaybackResponseObservation {
+	return PlaybackResponseObservation{
+		ResponseID: response.ResponseID, ItemID: response.ItemID, ContentIndex: response.ContentIndex,
+	}
+}
+
+func inputObservation(participant string, frame audio.PCMFrame) InputObservation {
+	return InputObservation{
+		Participant: participant, Format: frameFormatObservation(frame.Format), StreamID: frame.StreamID,
+		Epoch: frame.Epoch, Sequence: frame.Sequence, StartSample: frame.StartSample,
+		PlaybackResponse: playbackResponseObservation(frame.PlaybackResponse),
+		Samples:          append([]int16(nil), frame.Samples...), End: frame.EndOfResponse,
+	}
+}
+
+func frameObservation(frame audio.PCMFrame) FrameObservation {
+	return FrameObservation{
+		Format: frameFormatObservation(frame.Format), StreamID: frame.StreamID,
+		Epoch: frame.Epoch, Sequence: frame.Sequence, StartSample: frame.StartSample,
+		PlaybackResponse: playbackResponseObservation(frame.PlaybackResponse),
+		Samples:          append([]int16(nil), frame.Samples...), End: frame.EndOfResponse,
+	}
+}
+
+func rawFrameEvent(kind, participant, target string, frame audio.PCMFrame) RawEvent {
+	observed := frameObservation(frame)
+	return RawEvent{
+		Kind: kind, Participant: participant, Target: target,
+		Format: observed.Format, StreamID: observed.StreamID, Epoch: observed.Epoch,
+		Sequence: observed.Sequence, StartSample: observed.StartSample,
+		PlaybackResponse: observed.PlaybackResponse, Samples: observed.Samples, End: observed.End,
+	}
+}
+
+func inputObservationFromRaw(event RawEvent) InputObservation {
+	return InputObservation{
+		Participant: event.Participant, Format: event.Format, StreamID: event.StreamID,
+		Epoch: event.Epoch, Sequence: event.Sequence, StartSample: event.StartSample,
+		PlaybackResponse: event.PlaybackResponse, Samples: append([]int16(nil), event.Samples...), End: event.End,
+	}
+}
+
+func frameObservationFromRaw(event RawEvent) FrameObservation {
+	return FrameObservation{
+		Format: event.Format, StreamID: event.StreamID, Epoch: event.Epoch,
+		Sequence: event.Sequence, StartSample: event.StartSample,
+		PlaybackResponse: event.PlaybackResponse, Samples: append([]int16(nil), event.Samples...), End: event.End,
 	}
 }
 
@@ -264,17 +353,11 @@ func (c *coordinator) inputsRoutedReady() bool {
 
 func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) error {
 	c.mu.Lock()
-	samples := append([]int16(nil), frame.Samples...)
 	afterTerminal := c.terminalSeen[participant]
-	c.inputs = append(c.inputs, InputObservation{
-		Participant: participant, Epoch: frame.Epoch, Sequence: frame.Sequence,
-		Samples: samples, End: frame.EndOfResponse,
-	})
-	c.rawEvents = append(c.rawEvents, RawEvent{
-		Kind: "source_audio", Participant: participant, Epoch: frame.Epoch,
-		Sequence: frame.Sequence, Samples: samples, End: frame.EndOfResponse,
-		AfterTerminal: afterTerminal,
-	})
+	c.inputs = append(c.inputs, inputObservation(participant, frame))
+	event := rawFrameEvent("source_audio", participant, "", frame)
+	event.AfterTerminal = afterTerminal
+	c.rawEvents = append(c.rawEvents, event)
 	c.mu.Unlock()
 	if afterTerminal {
 		return fmt.Errorf("source audio for %s arrived after terminal", participant)
@@ -290,13 +373,10 @@ func (c *coordinator) register(handle *fakeHandle) {
 
 func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	c.mu.Lock()
-	copySamples := append([]int16(nil), frame.Samples...)
 	afterTerminal := c.terminalSeen[target]
-	c.rawEvents = append(c.rawEvents, RawEvent{
-		Kind: "peer_output", Participant: target, Target: target,
-		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
-		End: frame.EndOfResponse, AfterTerminal: afterTerminal,
-	})
+	event := rawFrameEvent("peer_output", target, target, frame)
+	event.AfterTerminal = afterTerminal
+	c.rawEvents = append(c.rawEvents, event)
 	if afterTerminal {
 		c.mu.Unlock()
 		return fmt.Errorf("peer output for %s arrived after terminal", target)
@@ -323,13 +403,10 @@ func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 
 func (c *coordinator) recordPlayback(frame audio.PCMFrame) error {
 	c.mu.Lock()
-	copySamples := append([]int16(nil), frame.Samples...)
 	afterTerminal := c.terminalSeen["listener"]
-	c.rawEvents = append(c.rawEvents, RawEvent{
-		Kind: "playback_input", Participant: "listener", Target: "listener",
-		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
-		End: frame.EndOfResponse, AfterTerminal: afterTerminal,
-	})
+	event := rawFrameEvent("playback_input", "listener", "listener", frame)
+	event.AfterTerminal = afterTerminal
+	c.rawEvents = append(c.rawEvents, event)
 	if afterTerminal {
 		c.mu.Unlock()
 		return errors.New("playback input arrived after terminal")
@@ -677,10 +754,7 @@ func (p *softwarePlayback) Pump(ctx context.Context, inbound audio.InboundMedia)
 			return err
 		}
 		p.mu.Lock()
-		p.report.Observed = append(p.report.Observed, FrameObservation{
-			Epoch: frame.Epoch, Sequence: frame.Sequence,
-			Samples: append([]int16(nil), frame.Samples...), End: frame.EndOfResponse,
-		})
+		p.report.Observed = append(p.report.Observed, frameObservation(frame))
 		p.mu.Unlock()
 		if err := p.coord.recordPlayback(frame); err != nil {
 			return err
@@ -901,6 +975,41 @@ finished:
 	return report, outcome.err
 }
 
+func expectedFrameFormat() FrameFormat {
+	return frameFormatObservation(audio.PCM16DeviceFormat(1000))
+}
+
+func expectedEmptyPlaybackResponse() PlaybackResponseObservation {
+	return playbackResponseObservation(audio.PlaybackResponse{})
+}
+
+func expectedSourceInputs() []InputObservation {
+	format := expectedFrameFormat()
+	response := expectedEmptyPlaybackResponse()
+	return []InputObservation{
+		{Participant: "alice", Format: format, StreamID: "alice-provider", Epoch: 1, Sequence: 1, StartSample: 0, PlaybackResponse: response, Samples: []int16{101, 102}},
+		{Participant: "alice", Format: format, StreamID: "alice-provider", Epoch: 2, Sequence: 2, StartSample: 2, PlaybackResponse: response, Samples: []int16{111, 112, 113, 114}, End: true},
+		{Participant: "bob", Format: format, StreamID: "bob-provider", Epoch: 1, Sequence: 1, StartSample: 0, PlaybackResponse: response, Samples: []int16{201, 202}},
+		{Participant: "bob", Format: format, StreamID: "bob-provider", Epoch: 2, Sequence: 2, StartSample: 2, PlaybackResponse: response, Samples: []int16{211, 212, 213, 214}, End: true},
+	}
+}
+
+func expectedPeerFrameObservations() map[string][]FrameObservation {
+	format := expectedFrameFormat()
+	response := expectedEmptyPlaybackResponse()
+	return map[string][]FrameObservation{
+		"alice": {{Format: format, StreamID: "room:alice", Epoch: 1, Sequence: 0, StartSample: 0, PlaybackResponse: response, Samples: []int16{211, 212, 213, 214}, End: true}},
+		"bob":   {{Format: format, StreamID: "room:bob", Epoch: 1, Sequence: 0, StartSample: 0, PlaybackResponse: response, Samples: []int16{111, 112, 113, 114}, End: true}},
+	}
+}
+
+func expectedPlaybackFrames() []FrameObservation {
+	return []FrameObservation{{
+		Format: expectedFrameFormat(), StreamID: "room:listener", Epoch: 1, Sequence: 0, StartSample: 0,
+		PlaybackResponse: expectedEmptyPlaybackResponse(), Samples: []int16{322, 324, 326, 328},
+	}}
+}
+
 func validateObservedReport(report Report) error {
 	if report.Status != "complete" {
 		return fmt.Errorf("room report status is %q", report.Status)
@@ -918,10 +1027,7 @@ func validateObservedReport(report Report) error {
 		}
 		switch event.Kind {
 		case "source_audio":
-			sources[event.Participant] = append(sources[event.Participant], InputObservation{
-				Participant: event.Participant, Epoch: event.Epoch, Sequence: event.Sequence,
-				Samples: append([]int16(nil), event.Samples...), End: event.End,
-			})
+			sources[event.Participant] = append(sources[event.Participant], inputObservationFromRaw(event))
 		case "peer_output":
 			if event.Target == "" || event.Target != event.Participant {
 				return fmt.Errorf("peer output has inconsistent participant/target: %+v", event)
@@ -989,13 +1095,26 @@ func validateObservedReport(report Report) error {
 	}
 	observedPlayback := make([]FrameObservation, 0, len(playback))
 	for _, event := range playback {
-		observedPlayback = append(observedPlayback, FrameObservation{
-			Epoch: event.Epoch, Sequence: event.Sequence,
-			Samples: append([]int16(nil), event.Samples...), End: event.End,
-		})
+		observedPlayback = append(observedPlayback, frameObservationFromRaw(event))
 	}
 	if !reflect.DeepEqual(report.Playback.Observed, observedPlayback) {
 		return fmt.Errorf("playback summary does not match raw observations: summary=%v raw=%v", report.Playback.Observed, observedPlayback)
+	}
+	if !reflect.DeepEqual(report.SourceInputs, expectedSourceInputs()) {
+		return fmt.Errorf("source input metadata oracle differs: got=%+v", report.SourceInputs)
+	}
+	expectedOutputs := expectedPeerFrameObservations()
+	for _, participant := range []string{"alice", "bob"} {
+		observed := make([]FrameObservation, 0, len(outputs[participant]))
+		for _, event := range outputs[participant] {
+			observed = append(observed, frameObservationFromRaw(event))
+		}
+		if !reflect.DeepEqual(observed, expectedOutputs[participant]) {
+			return fmt.Errorf("peer %s frame metadata oracle differs: got=%+v", participant, observed)
+		}
+	}
+	if !reflect.DeepEqual(observedPlayback, expectedPlaybackFrames()) {
+		return fmt.Errorf("playback frame metadata oracle differs: got=%+v", observedPlayback)
 	}
 	if !report.Epochs.EndBeforeTerminal {
 		return errors.New("room report did not prove end-of-response before terminal")
@@ -1297,14 +1416,10 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 
 func frozenReportOracle() Report {
 	return Report{
-		SourceInputs: []InputObservation{
-			{Participant: "alice", Epoch: 1, Sequence: 1, Samples: []int16{101, 102}},
-			{Participant: "alice", Epoch: 2, Sequence: 2, Samples: []int16{111, 112, 113, 114}, End: true},
-			{Participant: "bob", Epoch: 1, Sequence: 1, Samples: []int16{201, 202}},
-			{Participant: "bob", Epoch: 2, Sequence: 2, Samples: []int16{211, 212, 213, 214}, End: true},
-		},
-		PeerOutputs: map[string][]int16{"alice": {211, 212, 213, 214}, "bob": {111, 112, 113, 114}},
-		Epochs:      EpochReport{StalePendingSamples: 4, HealthyTail: []int16{111, 112, 113, 114}, EndBeforeTerminal: true},
+		SourceInputs: expectedSourceInputs(),
+		PeerOutputs:  map[string][]int16{"alice": {211, 212, 213, 214}, "bob": {111, 112, 113, 114}},
+		Playback:     PlaybackReport{Observed: expectedPlaybackFrames()},
+		Epochs:       EpochReport{StalePendingSamples: 4, HealthyTail: []int16{111, 112, 113, 114}, EndBeforeTerminal: true},
 		Terminal: map[string]TerminalObservation{
 			"alice": {Kind: "terminal", Sequence: 99, Reason: "fixture_complete", Classification: "fixture_complete", TerminalReason: "provider_close", Provenance: "provider", OutputState: "complete"},
 			"bob":   {Kind: "terminal", Sequence: 99, Reason: "fixture_complete", Classification: "fixture_complete", TerminalReason: "provider_close", Provenance: "provider", OutputState: "complete"},
@@ -1388,6 +1503,35 @@ func mutatedReport(report Report, mutation string) (Report, error) {
 				break
 			}
 		}
+	case "format":
+		candidate.SourceInputs[0].Format.SampleRate = 8000
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "source_audio" && candidate.RawEvents[index].Participant == "alice" {
+				candidate.RawEvents[index].Format.SampleRate = 8000
+				break
+			}
+		}
+	case "stream-id":
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "peer_output" && candidate.RawEvents[index].Participant == "alice" {
+				candidate.RawEvents[index].StreamID = "wrong-stream"
+				break
+			}
+		}
+	case "start-sample":
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "playback_input" {
+				candidate.RawEvents[index].StartSample = 99
+				break
+			}
+		}
+	case "playback-response":
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "peer_output" && candidate.RawEvents[index].Participant == "alice" {
+				candidate.RawEvents[index].PlaybackResponse.ResponseID = "response-mutated"
+				break
+			}
+		}
 	default:
 		return Report{}, fmt.Errorf("unknown mutation %q", mutation)
 	}
@@ -1396,6 +1540,9 @@ func mutatedReport(report Report, mutation string) (Report, error) {
 
 func compareMutationOracle(report Report) error {
 	want := frozenReportOracle()
+	if err := validateObservedReport(report); err != nil {
+		return err
+	}
 	if !reflect.DeepEqual(report.SourceInputs, want.SourceInputs) {
 		return errors.New("source input order or samples differ")
 	}
@@ -1404,6 +1551,9 @@ func compareMutationOracle(report Report) error {
 	}
 	if !reflect.DeepEqual(report.Epochs, want.Epochs) {
 		return errors.New("epoch oracle differs")
+	}
+	if !reflect.DeepEqual(report.Playback.Observed, want.Playback.Observed) {
+		return errors.New("playback frame metadata oracle differs")
 	}
 	if !reflect.DeepEqual(report.Terminal, want.Terminal) {
 		return errors.New("terminal provenance oracle differs")

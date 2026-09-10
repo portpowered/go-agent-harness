@@ -46,6 +46,10 @@ INTERRUPTION_FIXTURE_SHA256 = "154477d4086c47f707441e19489dfa1a21d493475b4163e64
 TOOL_PCM_SHA256 = "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
 INTERRUPTION_PCM_SHA256 = "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
 HEALTHY_TAIL_SHA256 = "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+FRAME_FORMAT = {
+    "sample_rate": 1000, "channels": 1, "bit_depth": 16, "encoding": "pcm16",
+}
+EMPTY_PLAYBACK_RESPONSE = {"response_id": "", "item_id": "", "content_index": 0}
 
 
 class EvidenceFailure(RuntimeError):
@@ -591,8 +595,12 @@ def expect_equal(label: str, actual: Any, expected: Any) -> None:
 
 def normalized_frame(value: dict[str, Any]) -> dict[str, Any]:
     return {
+        "format": value.get("format"),
+        "stream_id": value.get("stream_id"),
         "epoch": value.get("epoch", 0),
         "sequence": value.get("sequence", 0),
+        "start_sample": value.get("start_sample"),
+        "playback_response": value.get("playback_response"),
         "samples": value.get("samples", []),
         "end_of_response": value.get("end_of_response", False),
     }
@@ -607,12 +615,12 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
 
     expected_inputs = {
         "alice": [
-            {"epoch": 1, "sequence": 1, "samples": [101, 102], "end_of_response": False},
-            {"epoch": 2, "sequence": 2, "samples": [111, 112, 113, 114], "end_of_response": True},
+            {"format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [101, 102], "end_of_response": False},
+            {"format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [111, 112, 113, 114], "end_of_response": True},
         ],
         "bob": [
-            {"epoch": 1, "sequence": 1, "samples": [201, 202], "end_of_response": False},
-            {"epoch": 2, "sequence": 2, "samples": [211, 212, 213, 214], "end_of_response": True},
+            {"format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [201, 202], "end_of_response": False},
+            {"format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [211, 212, 213, 214], "end_of_response": True},
         ],
     }
     for participant, expected in expected_inputs.items():
@@ -625,8 +633,8 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
         expect_equal(f"raw {participant} source frames", source_events, expected)
 
     expected_outputs = {
-        "alice": [{"epoch": 1, "sequence": 0, "samples": [211, 212, 213, 214], "end_of_response": True}],
-        "bob": [{"epoch": 1, "sequence": 0, "samples": [111, 112, 113, 114], "end_of_response": True}],
+        "alice": [{"format": FRAME_FORMAT, "stream_id": "room:alice", "epoch": 1, "sequence": 0, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [211, 212, 213, 214], "end_of_response": True}],
+        "bob": [{"format": FRAME_FORMAT, "stream_id": "room:bob", "epoch": 1, "sequence": 0, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [111, 112, 113, 114], "end_of_response": True}],
     }
     terminal_indexes: dict[str, int] = {}
     source_end_indexes: dict[str, int] = {}
@@ -692,14 +700,18 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
     if not isinstance(observed, list) or not observed:
         raise EvidenceFailure("software playback did not retain observed public frames")
     expect_equal("software playback observed frames", [normalized_frame(frame) for frame in observed], [{
-        "epoch": 1, "sequence": 0, "samples": [322, 324, 326, 328], "end_of_response": False,
+        "format": FRAME_FORMAT, "stream_id": "room:listener", "epoch": 1, "sequence": 0,
+        "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE,
+        "samples": [322, 324, 326, 328], "end_of_response": False,
     }])
     playback_events = [
         normalized_frame(event) for event in raw_events
         if isinstance(event, dict) and event.get("kind") == "playback_input"
     ]
     expect_equal("raw playback frames", playback_events, [{
-        "epoch": 1, "sequence": 0, "samples": [322, 324, 326, 328], "end_of_response": False,
+        "format": FRAME_FORMAT, "stream_id": "room:listener", "epoch": 1, "sequence": 0,
+        "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE,
+        "samples": [322, 324, 326, 328], "end_of_response": False,
     }])
 
 
@@ -733,10 +745,10 @@ def validate_report(report: dict[str, Any], require_boundary: bool = True) -> No
     expect_equal("schema version", report.get("schema_version"), 1)
     expect_equal("status", report.get("status"), "complete")
     expected_inputs = [
-        {"participant": "alice", "epoch": 1, "sequence": 1, "samples": [101, 102], "end_of_response": False},
-        {"participant": "alice", "epoch": 2, "sequence": 2, "samples": [111, 112, 113, 114], "end_of_response": True},
-        {"participant": "bob", "epoch": 1, "sequence": 1, "samples": [201, 202], "end_of_response": False},
-        {"participant": "bob", "epoch": 2, "sequence": 2, "samples": [211, 212, 213, 214], "end_of_response": True},
+        {"participant": "alice", "format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [101, 102], "end_of_response": False},
+        {"participant": "alice", "format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [111, 112, 113, 114], "end_of_response": True},
+        {"participant": "bob", "format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [201, 202], "end_of_response": False},
+        {"participant": "bob", "format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [211, 212, 213, 214], "end_of_response": True},
     ]
     expect_equal("source input order", report.get("source_inputs"), expected_inputs)
     expect_equal("peer-only outputs", report.get("peer_outputs"), {"alice": [211, 212, 213, 214], "bob": [111, 112, 113, 114]})
@@ -1361,7 +1373,7 @@ def run_routing_epochs(room: pathlib.Path, evidence: pathlib.Path, deadline: flo
 
 
 def run_mutations(room: pathlib.Path, evidence: pathlib.Path, deadline: float, child_timeout: float) -> dict[str, Any]:
-    cases = ["peer-participant-key", "source-order", "epoch", "pcm", "terminal"]
+    cases = ["peer-participant-key", "source-order", "epoch", "pcm", "terminal", "format", "stream-id", "start-sample", "playback-response"]
     rejected: dict[str, Any] = {}
     for label in cases:
         output_dir = evidence / "runs" / f"room-mutation-{label}"
@@ -1386,10 +1398,10 @@ def run_mutations(room: pathlib.Path, evidence: pathlib.Path, deadline: float, c
                 raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
         elif label == "source-order":
             if mutated.get("source_inputs") == [
-                {"participant": "alice", "epoch": 1, "sequence": 1, "samples": [101, 102], "end_of_response": False},
-                {"participant": "alice", "epoch": 2, "sequence": 2, "samples": [111, 112, 113, 114], "end_of_response": True},
-                {"participant": "bob", "epoch": 1, "sequence": 1, "samples": [201, 202], "end_of_response": False},
-                {"participant": "bob", "epoch": 2, "sequence": 2, "samples": [211, 212, 213, 214], "end_of_response": True},
+                {"participant": "alice", "format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [101, 102], "end_of_response": False},
+                {"participant": "alice", "format": FRAME_FORMAT, "stream_id": "alice-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [111, 112, 113, 114], "end_of_response": True},
+                {"participant": "bob", "format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 1, "sequence": 1, "start_sample": 0, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [201, 202], "end_of_response": False},
+                {"participant": "bob", "format": FRAME_FORMAT, "stream_id": "bob-provider", "epoch": 2, "sequence": 2, "start_sample": 2, "playback_response": EMPTY_PLAYBACK_RESPONSE, "samples": [211, 212, 213, 214], "end_of_response": True},
             ]:
                 raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
         elif label == "epoch":
@@ -1400,6 +1412,18 @@ def run_mutations(room: pathlib.Path, evidence: pathlib.Path, deadline: float, c
                 raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
         elif label == "terminal":
             if mutated.get("terminal", {}).get("alice", {}).get("provenance") != "replay" or not any(event.get("kind") == "terminal" and event.get("participant") == "alice" and event.get("provenance") == "replay" for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "format":
+            if not any(event.get("kind") == "source_audio" and event.get("participant") == "alice" and event.get("format", {}).get("sample_rate") == 8000 for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "stream-id":
+            if not any(event.get("kind") == "peer_output" and event.get("participant") == "alice" and event.get("stream_id") == "wrong-stream" for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "start-sample":
+            if not any(event.get("kind") == "playback_input" and event.get("start_sample") == 99 for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "playback-response":
+            if not any(event.get("kind") == "peer_output" and event.get("participant") == "alice" and event.get("playback_response", {}).get("response_id") == "response-mutated" for event in raw_events):
                 raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
         rejected[label] = {
             "rejected": True,
