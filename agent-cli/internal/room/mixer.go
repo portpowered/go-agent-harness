@@ -712,7 +712,6 @@ func (m *PCM16Mixer) run() {
 	}
 }
 func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
-	frame := make([]byte, m.frameBytes)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -726,6 +725,7 @@ func (m *PCM16Mixer) mixFrameWithSources() ([]byte, []string, error) {
 	if err := audiomixer.ValidatePCM16MixBounds(len(ids), m.frameBytes/2); err != nil {
 		return nil, nil, fmt.Errorf("mix PCM16 inputs: %w", err)
 	}
+	frame := make([]byte, m.frameBytes)
 	sourceSamples := make([][]int16, 0, len(ids))
 	taken := make([]int, len(ids))
 	sources := make([]string, 0, len(ids))
