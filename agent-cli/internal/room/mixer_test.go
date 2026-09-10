@@ -22,7 +22,6 @@ func TestPCM16MixerMixesEveryActiveInputAndClips(t *testing.T) {
 		t.Fatalf("new mixer: %v", err)
 	}
 	defer mixer.Close()
-
 	for _, id := range []string{"alpha", "beta", "gamma"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add %s: %v", id, err)
@@ -37,7 +36,6 @@ func TestPCM16MixerMixesEveryActiveInputAndClips(t *testing.T) {
 	if err := mixer.Write("gamma", pcm16(30000, -30000)); err != nil {
 		t.Fatalf("write gamma: %v", err)
 	}
-
 	want := pcm16(32767, -32768, 0, 0, 0, 0, 0, 0, 0, 0)
 	got := readMixerFrame(t, mixer, want)
 	if !bytes.Equal(got, want) {
@@ -65,7 +63,6 @@ func TestPCM16MixerPreservesPartialInputAcrossCadenceFrames(t *testing.T) {
 	if err := mixer.Write("speaker", pcm16(2, 3, 4)); err != nil {
 		t.Fatalf("write second partial chunk: %v", err)
 	}
-
 	readMixerFrame(t, mixer, pcm16(1, 2))
 	readMixerFrame(t, mixer, pcm16(3, 4))
 }
@@ -100,7 +97,6 @@ func TestPCM16MixerRemovalDiscardsOnlyRemovedInput(t *testing.T) {
 		t.Fatalf("active inputs = %v, want [keep]", got)
 	}
 }
-
 func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
 		Format:            PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: time.Second},
@@ -111,7 +107,6 @@ func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 		t.Fatalf("new mixer: %v", err)
 	}
 	defer mixer.Close()
-
 	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
 	defer readCancel()
 	readCancel()
@@ -120,7 +115,6 @@ func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 		t.Fatalf("read after cancellation error = %v, want cancellation", err)
 	}
 }
-
 func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
 	cadence := newDeterministicPCM16Cadence()
@@ -138,7 +132,6 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 		t.Fatalf("new mixer: %v", err)
 	}
 	t.Cleanup(func() { _ = mixer.Close() })
-
 	for _, id := range []string{"alpha", "beta"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add %s: %v", id, err)
@@ -150,7 +143,6 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	if err := mixer.Write("beta", pcm16(10, 20, 30)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
-
 	cadence.Advance()
 	got := readMixerFrameWithContext(t, mixer)
 	want := pcm16(110, 220)
@@ -172,7 +164,6 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("second deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
 	}
-
 	cadence.Advance()
 	got = readMixerFrameWithContext(t, mixer)
 	want = pcm16(0, 0)
@@ -235,7 +226,7 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 }
 
 func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
-	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
+	format := PCM16Format{SampleRate: 1000, Channels: 1, FrameDuration: 4 * time.Millisecond}
 	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
 		Format:            format,
 		InputQueueFrames:  4,
@@ -254,17 +245,27 @@ func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
 	if err := mixer.Write("alpha", pcm16(100, 200)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(0, 0)); err != nil {
+	if err := mixer.Write("beta", pcm16(0, 0, 0)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
+	mixer.inputs["beta"].data = append(mixer.inputs["beta"].data, 0x7f)
+	alphaBefore := append([]byte(nil), mixer.inputs["alpha"].data...)
+	betaBefore := append([]byte(nil), mixer.inputs["beta"].data...)
+	if err := mixer.Advance(context.Background()); !errors.Is(err, ErrMixerInvalidFormat) {
+		t.Fatalf("malformed advance = %v, want ErrMixerInvalidFormat", err)
+	}
+	if !bytes.Equal(mixer.inputs["alpha"].data, alphaBefore) || !bytes.Equal(mixer.inputs["beta"].data, betaBefore) {
+		t.Fatalf("failed mix changed queued inputs: alpha=%v beta=%v", mixer.inputs["alpha"].data, mixer.inputs["beta"].data)
+	}
+	mixer.inputs["beta"].data = pcm16(0, 0)
 	if err := mixer.Advance(context.Background()); err != nil {
-		t.Fatalf("advance: %v", err)
+		t.Fatalf("corrected advance: %v", err)
 	}
 	frame, err := mixer.ReadFrameWithSources(context.Background())
 	if err != nil {
 		t.Fatalf("read frame with sources: %v", err)
 	}
-	if want := pcm16(100, 200); !bytes.Equal(frame.PCM, want) {
+	if want := pcm16(100, 200, 0, 0); !bytes.Equal(frame.PCM, want) {
 		t.Fatalf("mixed frame = %v, want %v", decodePCM16(frame.PCM), decodePCM16(want))
 	}
 	if want := []string{"alpha", "beta"}; !reflect.DeepEqual(frame.Sources, want) {
@@ -575,7 +576,6 @@ func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 			t.Fatalf("delivered PCM changed: got %d bytes, want %d", len(got), len(want))
 		}
 	})
-
 	t.Run("downstream-stall", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -708,8 +708,8 @@ func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 			t.Fatalf("mixer recorded input overflow after bounded backpressure: %v", mixer.Err())
 		}
 	})
+	// Keep the provider-shaped pressure regression alongside the byte retry.
 }
-
 func newFullInputMixer(t *testing.T) (*PCM16Mixer, int) {
 	t.Helper()
 	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
