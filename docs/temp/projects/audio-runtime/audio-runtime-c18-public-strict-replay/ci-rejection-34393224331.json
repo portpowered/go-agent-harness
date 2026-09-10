@@ -1,0 +1,142 @@
+{
+  "raw_run_response": {
+    "id": 34393224331,
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "head_sha": "fd53b41bea2868619ef86b93670f012cc3e6fbf9",
+    "status": "completed",
+    "conclusion": "failure",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34393224331",
+    "run_attempt": 1,
+    "event": "pull_request",
+    "created_at": "2026-09-09T19:08:00Z",
+    "updated_at": "2026-09-09T19:17:34Z",
+    "workflowName": "CI",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34393224331"
+  },
+  "raw_job_response": {
+    "id": 102606458365,
+    "run_id": 34393224331,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "head_sha": "fd53b41bea2868619ef86b93670f012cc3e6fbf9",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102606458365",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34393224331/job/102606458365",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T19:08:00Z",
+    "started_at": "2026-09-09T19:08:02Z",
+    "completed_at": "2026-09-09T19:13:51Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-09-09T19:08:03Z",
+        "completed_at": "2026-09-09T19:08:04Z"
+      },
+      {
+        "name": "Check out repository",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-09-09T19:08:04Z",
+        "completed_at": "2026-09-09T19:08:07Z"
+      },
+      {
+        "name": "Set up Go",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-09-09T19:08:07Z",
+        "completed_at": "2026-09-09T19:08:11Z"
+      },
+      {
+        "name": "Run coverage profiles and coverage gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "number": 4,
+        "started_at": "2026-09-09T19:08:11Z",
+        "completed_at": "2026-09-09T19:13:49Z"
+      },
+      {
+        "name": "Post Set up Go",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 7,
+        "started_at": "2026-09-09T19:13:49Z",
+        "completed_at": "2026-09-09T19:13:49Z"
+      },
+      {
+        "name": "Post Check out repository",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-09-09T19:13:49Z",
+        "completed_at": "2026-09-09T19:13:49Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 9,
+        "started_at": "2026-09-09T19:13:49Z",
+        "completed_at": "2026-09-09T19:13:49Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102606458365",
+    "labels": [
+      "ubuntu-latest"
+    ]
+  },
+  "board_feedback": "CI checks failed for PR #410 at head fd53b41bea2868619ef86b93670f012cc3e6fbf9: required checks failed on current head fd53b41bea2868619ef86b93670f012cc3e6fbf9: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34393224331/job/102606458365). Return this task to the executor with the listed failures.",
+  "full_log_observations": [
+    {
+      "job_id": 102606458365,
+      "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102606458365/logs",
+      "available": true,
+      "line_count": 365,
+      "sha256": "45a25b8d8e1c1d87305aa14c54293c9d6beef4f60159eb8aa08a293bba111869",
+      "failed_step": "Run coverage profiles and coverage gate / make coverage",
+      "failures": [
+        "C20-owned TestFamilyAIterativeBuildUpThroughShippedProcess reported output evidence reads=3 bytes=12 instead of four streamed confirmation audio markers; the log's preceding replay mismatch was at sequence 3.",
+        "C21-owned TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/cross-attributed_commit failed its positive baseline because harness B completed cleanly but reported InputEOF:false (three turns, final tick 10)."
+      ],
+      "other_observed_results": "Hermetic, static, unit, race, integration, WebMCP, macOS audio, and Windows audio jobs passed. The provider broken-pipe/replay diagnostics are outside the C18 strict replay/clock diff and were reproduced by their owning paths; no C18-specific defect reproduced."
+    }
+  ],
+  "causal_reproduction": [
+    {
+      "command": "rtk proxy env CGO_ENABLED=0 go test ./agent-cli/internal/services/internal/agentruntime -tags=nomicrophone -run '^(TestRoomConnectTrackingInferencer_ConnectionFailureSurvivesRoomStop|TestRunRoomLifecycleDiagnosis_ForcedOrderings|TestRunRoomLifecycleTerminalCausePrecedence|TestRunRoomLifecycleDiagnosis_NegativeControls)$' -race -count=20 -timeout=60s",
+      "exit_code": 0,
+      "result": "20/20 repetitions passed; raw non-cancellation connection error and failed terminal disposition were preserved."
+    },
+    {
+      "command": "rtk proxy go test ./go-agent-runtime/services/replay/... -count=1 -timeout=60s && rtk proxy go test -race ./go-agent-runtime/services/replay/... -count=1 -timeout=60s",
+      "exit_code": 0,
+      "result": "84 tests passed across four packages in normal and race modes."
+    },
+    {
+      "command": "rtk proxy env GOWORK=off CGO_ENABLED=0 go test ./... -count=1 -timeout=60s && rtk proxy env GOWORK=off CGO_ENABLED=0 go test -race ./... -count=1 -timeout=60s",
+      "exit_code": 0,
+      "result": "Separate embedding consumer passed normal and race."
+    },
+    {
+      "command": "rtk proxy go test ./agent-cli/internal/transport/cli -count=1 -timeout=60s && rtk proxy go test -race ./agent-cli/internal/transport/cli -count=1 -timeout=60s",
+      "exit_code": 0,
+      "result": "CLI replay package passed normal and race; 146 tests in each mode."
+    },
+    {
+      "command": "rtk proxy go test ./go-audio/pkg/clock -run '^(TestDeterministicContextDeadlineAndParentCancellation|Test.*Parent|Test.*Cause|Test.*Timer)' -count=20 -timeout=60s",
+      "exit_code": 0,
+      "result": "Deterministic parent/cause/timer controls passed."
+    },
+    {
+      "command": "rtk proxy make fmt && rtk proxy make wire-check && rtk proxy make architecture-size-check && rtk proxy go vet ./agent-cli/internal/services/internal/agentruntime ./go-agent-runtime/services/replay/... ./go-audio/pkg/clock && rtk proxy git diff --check",
+      "exit_code": 0,
+      "result": "All source-quality checks passed; architecture gate reported 182 packages, 1871 files, 27225 functions; wire regeneration was clean."
+    }
+  ],
+  "current_candidate": "fd53b41bea2868619ef86b93670f012cc3e6fbf9"
+}

@@ -1,0 +1,67 @@
+{
+  "project": "audio-runtime",
+  "work": "audio-runtime-c18-public-strict-replay",
+  "testedSourceRevision": "bfa9b9705bdc730e1e04ec4feadacbdd0da11e51",
+  "originMain": "2525da44053e5bfe7e2d8fccc55463a645107e29",
+  "ancestry": {
+    "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "c16": "3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84",
+    "originMainIsAncestor": true
+  },
+  "artifacts": {
+    "yui": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+      "sha256": "f27e124fec537eca4a4c053241a11e166d86f458e71ce2b06e9bd6e38cbadc9d"
+    },
+    "strictConsumer": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay",
+      "sha256": "eaa28473fe49cec284d84eb0de2d54d27bcf4d24f78cba3c95a0f380fed4fb9d"
+    },
+    "timelineFixtureSha256": "8ef3adc1fc59a8b686cb7c6f8d0a224e5d65b2eb65eb3e6b446ca05be665da88",
+    "consumerGoModSha256": "2a79bc120e88defed4f7471828b787e41df7b03f19ca3cfcefc86e8fd513a9da",
+    "consumerGoSumSha256": "b9df060e0243716d25dddf722cd3e37dddb60eed33b9ad10905583d66af97918",
+    "verifierSha256": "8dbdb8c3c3865d89172e7b22ea83c53c6ac28364334f5a2d74ef94dd334dd6dc"
+  },
+  "focusedEvidence": {
+    "replayNormal": "PASS: 84 tests across 4 packages",
+    "replayRace": "PASS: 84 tests across 4 packages",
+    "clockNormal": "PASS: 23 tests",
+    "clockRace": "PASS: 23 tests",
+    "roomNormal": "PASS: 245 tests",
+    "roomRace": "PASS: 245 tests",
+    "embeddingStrictNormal": "PASS: corrected selector Test.*StrictReplay",
+    "embeddingStrictRace": "PASS: corrected selector Test.*StrictReplay",
+    "cliFocusedNormal": "PASS: 38 tests across 2 packages",
+    "cliFocusedRace": "PASS after isolated rerun; first matrix had one host-sensitive TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback deadline miss",
+    "accumulatedSessionRegressions": "PASS: normal, coverage and race at COUNT=1",
+    "recordingAndReplayIntegration": "PASS: 5 tests",
+    "liveReplayInterruptContinuation": "PASS: 14 tests",
+    "publicExternal": "PASS: 2/2",
+    "publicStrict": "PASS: 5/5",
+    "publicProvider": "PASS: 7/7",
+    "publicInterruption": "PASS: 4/4",
+    "publicAsk": "PASS: 2/2",
+    "architectureWire": "PASS: 182 packages, 1877 files, 27628 functions; Wire clean",
+    "focusedVet": "PASS"
+  },
+  "scopeRepair": {
+    "commit": "f78682d1",
+    "coverageManifestDiffAgainstOriginMain": "none",
+    "restored": [
+      "coverage-manifest/agent-cli/internal/services/internal/replay/package.json",
+      "coverage-manifest/agent-cli/internal/services/replay/package.json"
+    ],
+    "removed": "coverage-manifest/go-agent-runtime/services/replay/internal/strict/package.json"
+  },
+  "unresolvedOwnershipPrerequisite": {
+    "command": "make coverage-registration",
+    "status": "FAIL",
+    "observed": [
+      "workspace package missing from coverage-manifest: github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/strict",
+      "manifest package outside current workspace: github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay"
+    ],
+    "reason": "The required coverage-manifest repair is outside prd.json ownedPaths and is forbidden by the latest C18 review unless the meta-planner grants explicit ownership/planning. No waiver or second project is used."
+  },
+  "ciStatus": "not polled; candidate is not submitted while the explicit coverage ownership conflict remains"
+}

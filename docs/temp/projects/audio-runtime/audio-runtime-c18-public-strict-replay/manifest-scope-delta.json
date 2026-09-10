@@ -1,0 +1,42 @@
+{
+  "decision": "meta-scope-decision.md",
+  "sourceRevisionBeforeDelta": "213835ee1214aca7b0eece18c179e85e78606d36",
+  "baseline": {
+    "path": "docs/architecture/architecture-size-baseline.json",
+    "beforeFileSha256": "a83cffb63edd8129b7573594ef12e275f66f4d54683db728347a1c45f581c6c5",
+    "afterFileSha256": "21f42089ac7811b8b97918c2850f73b4bb4e51f48bde3c1254e1cb7d3d5395e2",
+    "beforeEntryCount": 3584,
+    "afterEntryCount": 3570,
+    "removedEntryCount": 14,
+    "addedEntryCount": 0,
+    "retainedEntriesSha256": "e7bc3148b56e32aa1262282ba64ca175fbf2423a40d25f5c684043ee9eb8ecab",
+    "removedEntries": [
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/runtime.go", "symbol": "*coreRuntime.Run", "value": 70},
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/runtime.go", "symbol": "deriveInputActions", "value": 46},
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/service.go", "symbol": "deriveEvidence", "value": 85},
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/service_test.go", "symbol": "TestServiceRunInvokesHeadlessRuntimeAndStrictCompletion", "value": 22},
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/service_test.go", "symbol": "TestServiceRunMakesRecordedPCMAvailableToHeadlessRuntime", "value": 35},
+      {"rule": "cognitive-complexity", "file": "internal/services/internal/replay/service_test.go", "symbol": "func-literal@257:31", "value": 23},
+      {"rule": "cyclomatic-complexity", "file": "internal/services/internal/replay/runtime.go", "symbol": "*coreRuntime.Run", "value": 31},
+      {"rule": "cyclomatic-complexity", "file": "internal/services/internal/replay/runtime.go", "symbol": "deriveInputActions", "value": 23},
+      {"rule": "cyclomatic-complexity", "file": "internal/services/internal/replay/service.go", "symbol": "deriveEvidence", "value": 46},
+      {"rule": "file-lines", "file": "internal/services/internal/replay/service.go", "value": 715},
+      {"rule": "function-lines", "file": "internal/services/internal/replay/runtime.go", "symbol": "*coreRuntime.Run", "value": 115},
+      {"rule": "function-lines", "file": "internal/services/internal/replay/service.go", "symbol": "deriveEvidence", "value": 131},
+      {"rule": "function-statements", "file": "internal/services/internal/replay/runtime.go", "symbol": "*coreRuntime.Run", "value": 69},
+      {"rule": "function-statements", "file": "internal/services/internal/replay/service.go", "symbol": "deriveEvidence", "value": 83}
+    ]
+  },
+  "policy": {
+    "path": "docs/architecture/architecture-policy.json",
+    "module": "example.com/agent-runtime-consumer",
+    "beforeFileSha256": "d4e58a782f3daa11d7dedca420aaa78890a38305a1f7898a40fc3e08558494f3",
+    "afterFileSha256": "da6a5d12c69d2a0556cc9ec232897448439b5a789108f67d23fe893fa016be73",
+    "allowedTopLevelBefore": ["."],
+    "allowedTopLevelAfter": [".", "cmd"],
+    "otherFieldsSha256": "1f9007a96f329dc6da1643ab472d129dcd7b5b2bf0c228b4d757a1eddfdb5898",
+    "otherFieldsUnchanged": true
+  },
+  "productionLimitsChanged": false,
+  "mutableGlobalExceptionsChanged": false
+}

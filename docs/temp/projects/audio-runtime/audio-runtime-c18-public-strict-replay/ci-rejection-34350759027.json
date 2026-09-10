@@ -1,0 +1,52 @@
+{
+  "raw_job_response": {
+    "id": 102463170993,
+    "run_id": 34350759027,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34350759027",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX20fpsQ",
+    "head_sha": "02f4304222dc1244522cdd91c543167f42cf9a0e",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102463170993",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34350759027/job/102463170993",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T12:23:45Z",
+    "started_at": "2026-09-09T12:23:47Z",
+    "completed_at": "2026-09-09T12:29:25Z",
+    "name": "CI (hermetic)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T12:23:48Z", "completed_at": "2026-09-09T12:23:48Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T12:23:48Z", "completed_at": "2026-09-09T12:23:51Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T12:23:51Z", "completed_at": "2026-09-09T12:24:02Z"},
+      {"name": "Run hermetic test pipeline", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T12:24:02Z", "completed_at": "2026-09-09T12:29:24Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T12:29:24Z", "completed_at": "2026-09-09T12:29:24Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T12:29:24Z", "completed_at": "2026-09-09T12:29:24Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T12:29:24Z", "completed_at": "2026-09-09T12:29:24Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102463170993",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208661,
+    "runner_name": "GitHub Actions 1000208661",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 02f4304222dc1244522cdd91c543167f42cf9a0e: required checks failed on current head 02f4304222dc1244522cdd91c543167f42cf9a0e: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34350759027/job/102463170993). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102463170993/logs",
+  "full_log_observation": {
+    "line_count": 373,
+    "sha256": "7b9f4cbc9d7734efa20db26d1f8edb23d1d738997925884c7a5daa478a318b0d",
+    "failed_step": "Run hermetic test pipeline / make test-hermetic",
+    "failure": "agent-cli/test/integration TestS2SV4DSuppressedTimeoutOutcomeFailsNonVacuously failed at s2s_v4d_tool_timeout_test.go:516 because the suppressed-outcome control run returned audio session ended before the final assistant response.",
+    "expected_negative_controls_before_failure": "The same log also contains expected replay mismatch, invalid fixture, missing file, missing credential and provider-rejection diagnostics from negative controls; those controls are reported as passing by the package.",
+    "cleanup_note": "The checkout post-job submodule warning is not a test failure."
+  },
+  "causal_reproduction": {
+    "command": "go test ./agent-cli/test/integration -tags=nomicrophone -run '^TestS2SV4DSuppressedTimeoutOutcomeFailsNonVacuously$' -count=20 -timeout=90s -v",
+    "exit_code": 0,
+    "result": "20/20 passed in 10.269s",
+    "scope": "The failing integration test is outside the C18 owned paths and does not traverse the extracted strict replay implementation; no C18 source defect reproduced and no unrelated test was modified."
+  },
+  "current_candidate": "02f4304222dc1244522cdd91c543167f42cf9a0e"
+}

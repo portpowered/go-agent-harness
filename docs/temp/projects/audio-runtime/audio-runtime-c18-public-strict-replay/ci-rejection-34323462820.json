@@ -1,0 +1,61 @@
+{
+  "raw_job_response": {
+    "id": 102375192961,
+    "run_id": 34323462820,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34323462820",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX1gl5gQ",
+    "head_sha": "62f37731d78aad7a6cef7118fcd06ce3c03ee66b",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102375192961",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34323462820/job/102375192961",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T07:21:55Z",
+    "started_at": "2026-09-09T07:21:57Z",
+    "completed_at": "2026-09-09T07:27:52Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T07:21:58Z", "completed_at": "2026-09-09T07:21:59Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T07:21:59Z", "completed_at": "2026-09-09T07:22:02Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T07:22:02Z", "completed_at": "2026-09-09T07:22:07Z"},
+      {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T07:22:07Z", "completed_at": "2026-09-09T07:27:49Z"},
+      {"name": "Post Set up Go", "status": "skipped", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T07:27:49Z", "completed_at": "2026-09-09T07:27:49Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T07:27:49Z", "completed_at": "2026-09-09T07:27:49Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T07:27:49Z", "completed_at": "2026-09-09T07:27:50Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102375192961",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208481,
+    "runner_name": "GitHub Actions 1000208481",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 62f37731d78aad7a6cef7118fcd06ce3c03ee66b: required checks failed on current head 62f37731d78aad7a6cef7118fcd06ce3c03ee66b: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34323462820/job/102375192961). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh run view 34323462820 --job 102375192961 --log-failed",
+  "full_log_api": "gh api repos/portpowered/go-agent-harness/actions/jobs/102375192961/logs",
+  "extracted_failure": [
+    "--- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (0.00s)",
+    "--- FAIL: TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device (30.03s)",
+    "session_tool_audio_remote_e2e_test.go:182: remote playback did not reach final PCM marker before the scenario deadline",
+    "agent-cli/test/integration exited 1 under make coverage; make: *** [Makefile:303: coverage] Error 1"
+  ],
+  "negative_controls_seen_in_same_log": "The replay mismatch, malformed-fixture, missing-credential, invalid-voice, rejected-control, and missing-tool diagnostics are expected negative-control output; no other subtest was reported failed.",
+  "bounded_reproduction": {
+    "candidate_sha": "62f37731d78aad7a6cef7118fcd06ce3c03ee66b",
+    "candidate_isolated_normal": "PASS, test46/slow_device 18.12s, package 28.538s",
+    "candidate_isolated_race": "PASS, test46/slow_device 21.32s, package 32.522s",
+    "candidate_parallel_coverage_function": "PASS, all 12 non-skipped test45/test46/test47/test48 cases; test46/slow_device 17.45s; package 35.310s",
+    "origin_main_sha": "3bbd052b66d2bf67adfc5b9348fb4b4ad8da3c84",
+    "origin_main_isolated_normal": "PASS, test46/slow_device 18.18s, package 27.821s",
+    "interpretation": "The hosted failure was not reproduced on the candidate or exact origin/main in bounded normal, race, or coverage-instrumented parallel runs. C18 does not modify the failing integration test or its live/device implementation path; retain the hosted result as a contention-sensitive residual, not a C18 causal defect or acceptance waiver."
+  },
+  "focused_validation_after_rejection": {
+    "runtime_replay": "PASS normal and race for go-agent-runtime/services/replay/...; all public service, plan, strict, media, manifest, tool, completion, cancellation, and integrity controls passed.",
+    "embedding_consumer": "PASS normal and race with GOWORK=off; all public Wire/strict replay, recorded dialer/tool, input packet, missing-tool, incomplete-bundle, no-device, and no-marker controls passed.",
+    "cli_and_integration": "PASS focused CLI replay/agentruntime and integration replay/PCM/audio-interrupt controls; expected replay-negative diagnostics remained asserted.",
+    "accumulated_regressions": "PASS COUNT=1 scripts/test-session-ci-regressions.sh all in normal, coverage, and race; session, device, provider, 20-trial test46 high-rate, live continuation, replay, duplex, and cleanup controls passed.",
+    "review_inbox": "No C18 review row or C18-specific review finding exists in the filtered canonical board; the only current task feedback is this CI failure."
+  }
+}

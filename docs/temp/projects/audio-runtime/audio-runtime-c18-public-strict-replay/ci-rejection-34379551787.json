@@ -1,0 +1,48 @@
+{
+  "raw_job_response": {
+    "id": 102560724979,
+    "run_id": 34379551787,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34379551787",
+    "run_attempt": 1,
+    "head_sha": "1ff6cfb09d3317597be8c83ac5d27ad197b69358",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T16:53:35Z",
+    "started_at": "2026-09-09T16:53:37Z",
+    "completed_at": "2026-09-09T16:59:02Z",
+    "name": "CI (hermetic)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T16:53:38Z", "completed_at": "2026-09-09T16:53:40Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T16:53:40Z", "completed_at": "2026-09-09T16:53:43Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T16:53:43Z", "completed_at": "2026-09-09T16:53:55Z"},
+      {"name": "Run hermetic test pipeline", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T16:53:55Z", "completed_at": "2026-09-09T16:58:59Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T16:58:59Z", "completed_at": "2026-09-09T16:58:59Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T16:58:59Z", "completed_at": "2026-09-09T16:58:59Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T16:58:59Z", "completed_at": "2026-09-09T16:58:59Z"}
+    ],
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102560724979",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34379551787/job/102560724979",
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102560724979",
+    "labels": ["ubuntu-latest"]
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 1ff6cfb09d3317597be8c83ac5d27ad197b69358: required checks failed on current head 1ff6cfb09d3317597be8c83ac5d27ad197b69358: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34379551787/job/102560724979). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102560724979/logs",
+  "full_log_observation": {
+    "available": true,
+    "line_count": 365,
+    "sha256": "ad2475daafb65f6bfd0fa0a29197bd427b52ac7bb34ec3aaa8d353cfa9830f2e",
+    "bytes": 34299,
+    "failed_step": "Run hermetic test pipeline / make test-hermetic",
+    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnSchedule failed at session_duplex_overlap_test.go:56 after 2.002700715s because harness A's replay session was cancelled while awaiting the model response after end-of-turn; audio write also observed context canceled. The agent-cli integration package exited 1 and make test-hermetic exited 2.",
+    "other_observed_results": "The agent-cli packages before integration completed successfully, including internal transport/cli, internal wire, and replay package compilation; the remaining Go modules were not reached after the agent-cli failure. The log contained expected negative-control diagnostics before the sole failing positive multi-turn duplex control."
+  },
+  "causal_reproduction": {
+    "command": "CGO_ENABLED=0 go test ./agent-cli/test/integration -tags=nomicrophone -run '^TestSessionCLI_DuplexPCMMultiTurnSchedule$' -count=20 -timeout=90s -v",
+    "exit_code": 0,
+    "result": "20/20 passed in one package; each trial completed in 0.26-0.28s; final_tick=10, crossings=6, A_runtime=16, B_runtime=16",
+    "scope": "The failing integration test is outside the C18 owned replay/Wire/embedding paths and no C18 source file participates in its multi-turn duplex harness. The exact hosted hermetic tags and bounded test were used. No C18 production defect reproduced, so no unrelated duplex repair is authorized; retain the hosted failure as non-waived CI evidence."
+  },
+  "current_candidate": "1ff6cfb09d3317597be8c83ac5d27ad197b69358"
+}
