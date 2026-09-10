@@ -1,0 +1,54 @@
+[
+  {
+    "label": "consumer-mutate-timestamp",
+    "argv": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/artifacts/transcript-clocks",
+      "--action",
+      "mutate-timestamp"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks",
+    "environment": {
+      "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0t4K5sf:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+      "GOWORK": "",
+      "GOFLAGS": "",
+      "GOTOOLCHAIN": "",
+      "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
+    },
+    "deadline_seconds": 5.0,
+    "elapsed_seconds": 0.035029,
+    "exit_code": 1,
+    "timed_out": false,
+    "term_sent": false,
+    "kill_sent": false,
+    "parent_reaped": true,
+    "surviving_process_group_pids": [],
+    "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/consumer-mutate-timestamp.stdout",
+    "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/consumer-mutate-timestamp.stderr"
+  },
+  {
+    "label": "consumer-mutate-tick",
+    "argv": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/artifacts/transcript-clocks",
+      "--action",
+      "mutate-tick"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks",
+    "environment": {
+      "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0t4K5sf:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+      "GOWORK": "",
+      "GOFLAGS": "",
+      "GOTOOLCHAIN": "",
+      "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
+    },
+    "deadline_seconds": 5.0,
+    "elapsed_seconds": 0.028126,
+    "exit_code": 1,
+    "timed_out": false,
+    "term_sent": false,
+    "kill_sent": false,
+    "parent_reaped": true,
+    "surviving_process_group_pids": [],
+    "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/consumer-mutate-tick.stdout",
+    "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/consumer-mutate-tick.stderr"
+  }
+]
