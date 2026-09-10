@@ -24,11 +24,12 @@ from typing import Any
 
 
 TASK = "audio-runtime-c25-audio-device-boundary-diagnosis"
-SOURCE_REVISION = "a1156f0c0c6271643578cb37894026944df2a633"
+SOURCE_REVISION = "431fc96c14f0e0045629d9c36f98ee61ff06e840"
 ORIGIN_MAIN = SOURCE_REVISION
 BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 INTEGRATION_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
-SOURCE_ARCHIVE_SHA256 = "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f"
+C26_ACCEPTED_MERGE = "1f82284abee0bd31a6680310444cea2e4c16ef00"
+SOURCE_ARCHIVE_SHA256 = "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31"
 MAX_CHILD_SECONDS = 55
 MAX_TOTAL_SECONDS = 600
 
@@ -386,6 +387,10 @@ def source_gap() -> dict[str, Any]:
     service_test_run_room_exports = line_hits(
         service_test, r"^\s*(?:func|var)\s+RunRoom(?:WithResult)?\b"
     )
+    shared_mixer_call = line_hits(legacy_mixer, r"audiomixer\.MixPCM16Samples")
+    shared_mixer_bounds_call = line_hits(legacy_mixer, r"audiomixer\.ValidatePCM16MixBounds")
+    legacy_accumulation = line_hits(legacy_mixer, r"\baccumulated\b")
+    legacy_clip_logic = line_hits(legacy_mixer, r"sample\s*(?:>|<)\s*-?(?:32767|32768)")
 
     findings = [
         {
@@ -399,14 +404,14 @@ def source_gap() -> dict[str, Any]:
             "meaning": "The legacy room mixer owns cadence with time.Ticker instead of an injected audio/pkg/clock scheduler.",
         },
         {
-            "id": "legacy-local-pcm-codec",
+            "id": "legacy-local-pcm-adaptation",
             "path": LEGACY_PATHS[0],
             "evidence": {
                 "codec_import": line_hits(legacy_mixer, r"go-audio/pkg/codec"),
                 "decode": line_hits(legacy_mixer, r"codec\.DecodePCM16Into"),
                 "encode": line_hits(legacy_mixer, r"codec\.EncodePCM16Into"),
             },
-            "meaning": "The legacy mixer decodes and encodes raw PCM16 inside room orchestration rather than passing canonical PCMFrame values through the audio subsystem.",
+            "meaning": "The legacy room adapter still decodes and encodes raw PCM16 around the shared mix operation rather than carrying canonical PCMFrame values through the audio boundary; this is format adaptation, not the former local DSP accumulator.",
         },
         {
             "id": "legacy-direct-device-construction",
@@ -442,9 +447,22 @@ def source_gap() -> dict[str, Any]:
         lifecycle_mixer_field,
         findings[3]["evidence"]["input_read"],
         findings[3]["evidence"]["sink_write"],
+        shared_mixer_call,
+        shared_mixer_bounds_call,
     )
     if not all(required_evidence):
         raise RuntimeError("gap oracle missing one or more required production edges")
+    dsp_reconciliation = {
+        "status": "ELIMINATED_BY_ACCEPTED_C26",
+        "accepted_merge": C26_ACCEPTED_MERGE,
+        "shared_mixer_call": shared_mixer_call,
+        "shared_mixer_bounds_call": shared_mixer_bounds_call,
+        "legacy_accumulation": legacy_accumulation,
+        "legacy_clip_logic": legacy_clip_logic,
+        "interpretation": "C26 moved the legacy mix accumulation and final clipping to the exported go-audio/pkg/mixer operation. C25 does not report that historical DSP finding as current; the remaining source gap is the legacy clock/format/device-output boundary.",
+    }
+    if not shared_mixer_call or not shared_mixer_bounds_call or legacy_accumulation or legacy_clip_logic:
+        raise RuntimeError("C26 shared DSP reconciliation did not match the inspected legacy mixer")
 
     return {
         "status": "SOURCE_GAP_CONFIRMED",
@@ -456,6 +474,7 @@ def source_gap() -> dict[str, Any]:
             "lifecycle_mixer_field": lifecycle_mixer_field,
         },
         "findings": findings,
+        "dsp_reconciliation": dsp_reconciliation,
         "public_route": {
             "cli_room_service_type": line_hits(public_cli, r"runtimeRooms\.Service"),
             "wire_room_provider": line_hits(wire, r"NewRoomServiceWithDevices"),
@@ -470,7 +489,7 @@ def source_gap() -> dict[str, Any]:
             "legacy_entrypoint_exposed_by_service_test": bool(service_test_run_room_exports),
             "interpretation": "The current yui room run command is wired to go-agent-runtime/services/rooms. servicetest imports the legacy package for other session seams, but runtime.go does not export RunRoom; the old RunRoom path is compiled and exercised by its own internal package tests, not exposed by the service-test API. It is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.",
         },
-            "smallest_bypass": "agent-cli/internal/room/mixer.go plus its legacy agentruntime callers: host ticker + local PCM codec + direct device sink write in one room path.",
+        "smallest_bypass": "legacy agent-runtime direct device-output boundary: session_room_run.go calls DeviceSink.WriteFrame after room-side decode/resample, coordinated with the legacy host cadence at mixer.go:168; C26 shared the mixing arithmetic but did not extract this clock/device edge.",
     }
 
 
@@ -908,7 +927,7 @@ def write_markdown(diagnosis: dict[str, Any]) -> None:
         "",
         f"`{gap['status']}`: the smallest remaining bypass is the compiled legacy CLI room path in `agent-cli/internal/room/mixer.go` and its `agent-cli/internal/services/internal/agentruntime` callers.",
         "",
-        "That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended audio/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.",
+        "Accepted C26 now owns the legacy mix accumulation and final clipping through `go-audio/pkg/mixer.MixPCM16Samples`; C25 records that historical DSP finding as eliminated. The remaining gap is the legacy host-ticker/format-adaptation/direct-device-output edge: the current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended clock/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.",
         "",
         "## Focused causal evidence",
         "",
@@ -920,6 +939,15 @@ def write_markdown(diagnosis: dict[str, Any]) -> None:
         lines.append(f"- `{finding['id']}` — `{finding['path']}`: {finding['meaning']}")
         for key, hits in finding["evidence"].items():
             lines.append(f"  - `{key}` lines: {', '.join(str(item) for item in hits) or 'none'}")
+    dsp = gap["dsp_reconciliation"]
+    lines += [
+        "",
+        "## C26 DSP reconciliation",
+        "",
+        f"- `{dsp['status']}` at accepted merge `{dsp['accepted_merge']}`: the legacy path calls `audiomixer.MixPCM16Samples` at lines {', '.join(str(item) for item in dsp['shared_mixer_call'])} and validates bounds at lines {', '.join(str(item) for item in dsp['shared_mixer_bounds_call'])}.",
+        f"- Local accumulation markers: `{dsp['legacy_accumulation'] or 'none'}`; local clip markers: `{dsp['legacy_clip_logic'] or 'none'}`.",
+        "- The proposed extraction therefore targets the still-observed clock/format/device-output boundary, not a duplicate C26 sample-mixing repair.",
+    ]
     lines += [
         "",
         "## Dependency controls",
@@ -984,6 +1012,11 @@ def run(mode: str) -> int:
         )
         diagnosis["source_path_diff"] = source_paths
         diagnosis["source_gap"] = source_gap()
+        diagnosis["c26_merge_ancestry"] = runner.run(
+            "c26-accepted-merge-ancestry",
+            ["git", "merge-base", "--is-ancestor", C26_ACCEPTED_MERGE, SOURCE_REVISION],
+            REPO,
+        )
         diagnosis["production_path_status"] = runner.run(
             "production-path-status",
             ["git", "status", "--porcelain", "--untracked-files=all", "--"] + ALL_SOURCE_PATHS,
@@ -1006,6 +1039,12 @@ def run(mode: str) -> int:
                 "label": "source-archive",
                 "returncode": 1,
                 "stderr": "pinned source archive could not be reproduced and verified",
+            }
+        if diagnosis["c26_merge_ancestry"]["returncode"] != 0:
+            runner.failure = runner.failure or {
+                "label": "c26-accepted-merge-ancestry",
+                "returncode": diagnosis["c26_merge_ancestry"]["returncode"],
+                "stderr": f"accepted C26 merge {C26_ACCEPTED_MERGE} is not an ancestor of pinned source {SOURCE_REVISION}",
             }
         if diagnosis["changed_path_allowlist"]["verdict"] != "ACCEPTED":
             runner.failure = runner.failure or {
@@ -1046,6 +1085,7 @@ def run(mode: str) -> int:
             ("canonical-clock-boundary-tests", "go-audio", ["go", "test", "-json", "./pkg/clock", "-run", "^Test(DeterministicTimerFiresAtLogicalDeadline|RequireTimerSourceDoesNotFallbackToHostTime)$", "-count=1", "-timeout=45s"], True),
             ("canonical-room-lifecycle-boundary-tests", "go-agent-runtime", ["go", "test", "-json", "./services/rooms/internal/lifecycle", "-run", "^(TestRoomGraphRoutesEachSourceToPeersOnly|TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission|TestMediaBridgePreservesPCMAndUsesBoundedFrames)$", "-count=1", "-timeout=45s"], True),
             ("loop-ownership-guard", "go-agent-loop", ["go", "test", "-json", "./pkg/agentloop", "-run", "^TestProductionAudioAndDeviceOwnership$", "-count=1", "-timeout=45s"], True),
+            ("c26-shared-dsp-reconciliation", "agent-cli", ["go", "test", "-json", "./internal/room", "-run", "^TestPCMMixLegacy(UsesSharedFinalClipAndSortedAttribution|KeepsFullCadenceZeroPadding|RejectsOutputBoundBeforeDecoding)$", "-count=1", "-timeout=45s"], True),
             ("legacy-mixer-focused-test", "agent-cli", ["go", "test", "-json", "./internal/room", "-run", "^TestPCM16MixerMixesEveryActiveInputAndClips$", "-count=1", "-timeout=45s"], True),
             ("legacy-agent-runtime-focused-test", "agent-cli", ["go", "test", "-json", "./internal/services/internal/agentruntime", "-run", "^TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns$", "-count=1", "-timeout=45s"], True),
             ("legacy-agent-runtime-focused-test-race", "agent-cli", ["go", "test", "-json", "-race", "./internal/services/internal/agentruntime", "-run", "^TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns$", "-count=1", "-timeout=45s"], True),
@@ -1076,7 +1116,10 @@ def run(mode: str) -> int:
         "baseline_revision": BASELINE_REVISION,
         "integration_revision": INTEGRATION_REVISION,
         "source_archive_sha256": SOURCE_ARCHIVE_SHA256,
+        "c26_accepted_merge": C26_ACCEPTED_MERGE,
         "source_archive": diagnosis.get("source_archive"),
+        "c26_merge_ancestry": diagnosis.get("c26_merge_ancestry"),
+        "dsp_reconciliation": diagnosis.get("source_gap", {}).get("dsp_reconciliation"),
         "source_ancestry": diagnosis.get("source_ancestry"),
         "source_path_diff": diagnosis.get("source_path_diff"),
         "changed_path_allowlist": diagnosis.get("changed_path_allowlist"),

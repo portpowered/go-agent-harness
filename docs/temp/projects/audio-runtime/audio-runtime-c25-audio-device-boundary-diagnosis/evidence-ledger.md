@@ -236,3 +236,43 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 - At pushed `HEAD` `50cab0a75732f7d669d8d0ec232a1f854db30368`, `verify.py --mode all` returned `ACCEPTED` in `11.975s` across 25 bounded commands. `SOURCE_GAP_CONFIRMED`, source/archive/fixture/AST/allowlist, focused normal/race/vet, zero-test, child-hang cleanup and aggregate-shutdown controls all passed with no surviving child process.
 - Generated diagnosis/provenance, ownership, extraction-plan and CI metadata now identify the exact head. The C25 diff remains confined to the admitted evidence prefix; no production/shared/fixture/baseline/device/provider/realtime path changed.
 - The latest hosted rejection remains PR417 head `b061bf852076d4b36526600377ad916751e32b4b`, run `34413969081`, job `102674534021`, C20-owned `agent-cli/internal/wire/composition_test.go:417` (`nil` instead of `ErrLiveMediaUnavailable`). C25 will not resubmit unchanged evidence; after the reviewed C20 repair reaches main, refresh against that changed source and submit the same task to script CI without polling.
+
+## Resumed current-main and C26 reconciliation checkpoint
+
+- Admission remains the single admitted audio-runtime task. Fetched
+  `origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840` was merged only in
+  the isolated worktree at candidate
+  `2574dc27bef53828ac4503047b3d6036ec68cc50`. Required baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` ancestry passed; the running host
+  checkout was not merged or reset.
+- Current main contains reviewed C20 merge
+  `b0acab1238d1aa6bf6bce5ca074451310c7eb039`; the former local
+  `composition_test.go:417` assertion passes in the focused current-main
+  control. The hosted coverage rejection (`34413969081` / `102674534021`) is
+  retained as historical evidence, not claimed green. C20's separate
+  `test46/provider_burst` timeout remains unwaived and separately owned.
+- Current main also contains accepted C26 merge
+  `1f82284abee0bd31a6680310444cea2e4c16ef00`. The C25 source oracle records
+  shared mixing/bounds calls at `agent-cli/internal/room/mixer.go:751` and
+  `:725`, no legacy accumulation/final-clipping loop, and status
+  `ELIMINATED_BY_ACCEPTED_C26`. The selected remaining gap is the legacy
+  host-ticker/format-adaptation/direct-device-output boundary, ending at
+  `session_room_run.go:1186`; C25 made no production edit.
+- At measured candidate `2574dc27bef53828ac4503047b3d6036ec68cc50`, the exact
+  command `verify.py --mode all` returned `ACCEPTED` in `15.518s` across `27`
+  bounded commands. All `10` focused normal/race/vet entries accepted,
+  including the three-test C26 shared-DSP reconciliation. Source gap,
+  ancestry, archive, fixture manifest, AST positive/negative/mutation,
+  complete owned-path allowlist, zero-test, child-hang cleanup, and aggregate
+  shutdown controls passed with no surviving child process.
+- The reproducible/materialized source archive is `56,913,920` bytes with
+  SHA-256
+  `e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31`.
+  Candidate changes remain under the admitted C25 evidence prefix; no
+  production, shared-module, baseline, existing fixture, device, provider,
+  realtime, or acoustic path changed.
+- Next action: commit/push this changed evidence checkpoint, update PR417 with
+  exact-head evidence, and hand the same task to the script CI gate without
+  polling. Retain ownership for any exact rejection and repair only within
+  the admitted C25 evidence scope; do not self-review or claim acceptance.

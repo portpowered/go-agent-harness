@@ -1,9 +1,9 @@
 # C25 audio/device boundary diagnosis
 
 - Task: `audio-runtime-c25-audio-device-boundary-diagnosis`
-- Candidate revision: `50cab0a75732f7d669d8d0ec232a1f854db30368`
-- Source revision: `a1156f0c0c6271643578cb37894026944df2a633`
-- Source archive SHA-256: `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`
+- Candidate revision: `2574dc27bef53828ac4503047b3d6036ec68cc50`
+- Source revision: `431fc96c14f0e0045629d9c36f98ee61ff06e840`
+- Source archive SHA-256: `e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31`
 - Decision basis: source-only diagnosis; no realtime, provider, physical-device, or acoustic claim.
 - The pinned source is required to be an ancestor of the candidate and every audited production path is required to be unchanged from that source.
 
@@ -11,7 +11,7 @@
 
 `SOURCE_GAP_CONFIRMED`: the smallest remaining bypass is the compiled legacy CLI room path in `agent-cli/internal/room/mixer.go` and its `agent-cli/internal/services/internal/agentruntime` callers.
 
-That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device construction, and direct sink writes. The current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended audio/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.
+Accepted C26 now owns the legacy mix accumulation and final clipping through `go-audio/pkg/mixer.MixPCM16Samples`; C25 records that historical DSP finding as eliminated. The remaining gap is the legacy host-ticker/format-adaptation/direct-device-output edge: the current public `yui room run` command is wired to `go-agent-runtime/services/rooms`, so this packet does not claim that the legacy path is the active public workflow. It does establish a concrete production-source ownership gap and migration hazard: the old alternate implementation remains compiled and exercised by its own internal package tests while duplicating the intended clock/device boundaries; `servicetest/runtime.go` imports that package for session helpers but exports no `RunRoom` API.
 
 ## Focused causal evidence
 
@@ -20,12 +20,12 @@ That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device co
 
 - `legacy-host-cadence` — `agent-cli/internal/room/mixer.go`: The legacy room mixer owns cadence with time.Ticker instead of an injected audio/pkg/clock scheduler.
   - `time_import` lines: 11
-  - `new_ticker` lines: 167
-  - `pcm_mixer_type` lines: 224
-- `legacy-local-pcm-codec` — `agent-cli/internal/room/mixer.go`: The legacy mixer decodes and encodes raw PCM16 inside room orchestration rather than passing canonical PCMFrame values through the audio subsystem.
+  - `new_ticker` lines: 168
+  - `pcm_mixer_type` lines: 225
+- `legacy-local-pcm-adaptation` — `agent-cli/internal/room/mixer.go`: The legacy room adapter still decodes and encodes raw PCM16 around the shared mix operation rather than carrying canonical PCMFrame values through the audio boundary; this is format adaptation, not the former local DSP accumulator.
   - `codec_import` lines: 13
-  - `decode` lines: 736
-  - `encode` lines: 760
+  - `decode` lines: 743
+  - `encode` lines: 755
 - `legacy-direct-device-construction` — `agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go`: The legacy room orchestration creates both the local PCM mixer and physical device endpoints in the same implementation.
   - `device_import` lines: 3
   - `mixer_constructor` lines: 161
@@ -37,12 +37,18 @@ That path owns a host `time.Ticker`, local PCM16 encode/decode, direct device co
   - `decode` lines: 1176
   - `sink_write` lines: 1186
 
+## C26 DSP reconciliation
+
+- `ELIMINATED_BY_ACCEPTED_C26` at accepted merge `1f82284abee0bd31a6680310444cea2e4c16ef00`: the legacy path calls `audiomixer.MixPCM16Samples` at lines 751 and validates bounds at lines 725.
+- Local accumulation markers: `none`; local clip markers: `none`.
+- The proposed extraction therefore targets the still-observed clock/format/device-output boundary, not a duplicate C26 sample-mixing repair.
+
 ## Dependency controls
 
 - Positive canonical graph: `ACCEPTED`.
 - Negative bypass graph: `REJECTED_AS_FORBIDDEN`.
 - Fixture manifest: `ACCEPTED` with exact SHA-256/byte/line checks for both owned fixtures.
-- Pinned source archive: `ACCEPTED`; rebuilt Git archive SHA-256 is `0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f`.
+- Pinned source archive: `ACCEPTED`; rebuilt Git archive SHA-256 is `e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31`.
 - Changed-path allowlist: `ACCEPTED` for the complete source-to-candidate and working-tree path set.
 - The canonical `go-audio/pkg/mixer` consumes an injected `clock.TimerSource`, submits `audio.PCMFrame` values into bounded frame buffers, and exposes media ports; device runtime owns the playback queue and callback boundary.
 

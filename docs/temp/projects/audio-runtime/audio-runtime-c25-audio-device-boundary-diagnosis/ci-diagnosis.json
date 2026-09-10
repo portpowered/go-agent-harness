@@ -1,8 +1,23 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "current_candidate_revision": "50cab0a75732f7d669d8d0ec232a1f854db30368",
-  "current_origin_main": "a1156f0c0c6271643578cb37894026944df2a633",
+  "current_candidate_revision": "2574dc27bef53828ac4503047b3d6036ec68cc50",
+  "current_origin_main": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+  "current_main_integration": {
+    "isolated_merge_candidate": "2574dc27bef53828ac4503047b3d6036ec68cc50",
+    "c20_composition_repair_merge": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
+    "c26_accepted_dsp_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "composition_focus": {
+      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s",
+      "verdict": "PASS",
+      "interpretation": "The former coverage assertion passes on current main; this is local focused evidence, not a hosted CI result."
+    },
+    "c26_shared_dsp_focus": {
+      "command": "go test ./agent-cli/internal/room -run '^TestPCMMixLegacy(UsesSharedFinalClipAndSortedAttribution|KeepsFullCadenceZeroPadding|RejectsOutputBoundBeforeDecoding)$' -count=1 -timeout=45s",
+      "verdict": "PASS",
+      "tests": 3
+    }
+  },
   "candidate_at_ci_submission": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
   "ci": {
     "run": "34397773527",
@@ -40,6 +55,7 @@
       "make_exit": 2,
       "first_failed_control": "coverage package test failed before coverage aggregation; the assertion was the only reported test failure in the job log"
     },
+    "resolution_on_current_main": "The C20 composition repair is now included in origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840 and the focused assertion passes locally. The historical hosted rejection remains preserved; no hosted CI-green claim is made.",
     "completed_adjacent_checks": [
       "CI (static)=SUCCESS",
       "CI (unit)=SUCCESS",
@@ -58,7 +74,7 @@
       "c25": "evidence-only; no leased production or composition-test path",
       "c20": "existing PR412 lease owns agent-cli/internal/wire/composition_test.go and the recording/live repair path",
       "c21": "remote integration fixture and gateway/duplex lease; not implicated by this coverage assertion",
-      "next_action": "Primary resumes the existing C20 task for the exact composition assertion; after a reviewed repair is integrated into main, C25 refreshes exact-source evidence and submits the changed same task through script CI. Do not submit this unchanged implementation."
+      "next_action": "C25 submits this changed evidence-only head to the script CI gate; C20 retains the separate test46/provider_burst repair."
     },
     "interpretation": "The hosted coverage rejection is an external composition-path failure after the C25 verifier passed. The focused local reproduction, including coverage instrumentation, passed; this does not establish a C25 verifier or selected legacy-boundary failure."
   },
@@ -134,15 +150,20 @@
     "next_action": "C20 captures bounded server/snapshot phase timing on its same task; primary resumes C25 after any reviewed main change to refresh exact-source evidence and submit a changed head through script CI."
   },
   "owned_exact_head_refresh": {
-    "candidate": "50cab0a75732f7d669d8d0ec232a1f854db30368",
+    "candidate": "2574dc27bef53828ac4503047b3d6036ec68cc50",
     "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all",
     "verdict": "ACCEPTED",
-    "bounded_commands": 25,
-    "aggregate_seconds": 11.975,
-    "source_revision": "a1156f0c0c6271643578cb37894026944df2a633",
-    "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
+    "bounded_commands": 27,
+    "focused_regressions": 10,
+    "aggregate_seconds": 15.518,
+    "source_revision": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+    "source_archive_bytes": 56913920,
+    "source_archive_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
+    "source_gap": "SOURCE_GAP_CONFIRMED",
+    "c26_dsp_reconciliation": "ELIMINATED_BY_ACCEPTED_C26; shared bounds at mixer.go:725 and shared mix at mixer.go:751; no legacy accumulation or final-clip loop",
     "clean_shutdown": true,
-    "outside_allowed_paths": []
+    "outside_allowed_paths": [],
+    "production_paths_modified": false
   },
   "current_main_focused_composition_control": {
     "candidate": "74ef3dae92bbc82dfa0ca4a27facec52e04e9625",

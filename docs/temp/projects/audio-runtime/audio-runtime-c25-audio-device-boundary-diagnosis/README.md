@@ -4,11 +4,16 @@ This is the admitted `audio-runtime-c25-audio-device-boundary-diagnosis` evidenc
 
 ## Finding
 
-The smallest concrete remaining bypass is the compiled legacy CLI room implementation:
+After re-evaluating the legacy mixer against accepted C26, the smallest
+concrete remaining bypass is the compiled legacy CLI room clock/format/device
+output boundary:
 
-- `agent-cli/internal/room/mixer.go` owns a host `time.Ticker` and local PCM16 encoding/decoding.
+- `agent-cli/internal/room/mixer.go` owns a host `time.Ticker` and PCM16
+  format adaptation around the canonical mixer. C26 moved the old accumulation
+  and final clipping operation into `go-audio/pkg/mixer.MixPCM16Samples`; no
+  legacy local accumulation or clipping loop remains to diagnose here.
 - `agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go` constructs that mixer and opens `go-device-gateway` source/sink handles.
-- `agent-cli/internal/services/internal/agentruntime/session_room_run.go` resamples/decodes pending PCM and calls `sink.WriteFrame` directly.
+- `agent-cli/internal/services/internal/agentruntime/session_room_run.go` resamples/decodes pending PCM and calls `sink.WriteFrame` directly at `:1186`.
 
 The current public `yui room run` command is wired through `go-agent-runtime/services/rooms` (`agent-cli/internal/wire/wire_gen.go:109-110` and `agent-cli/internal/transport/cli/room.go:52`), so this packet does not claim that the legacy path is the active public workflow. The old `RunRoom` path is compiled and exercised by its own internal `agentruntime` package tests, but `agent-cli/internal/services/servicetest/runtime.go:109-112` exports only session helpers and does not expose `RunRoom`. That is a concrete source/ownership gap and migration hazard, not runtime/acoustic proof.
 
@@ -20,13 +25,14 @@ Run from the repository root:
 python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all
 ```
 
-The verifier pins freshly fetched main revision `a1156f0c0c6271643578cb37894026944df2a633` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
+The verifier pins freshly fetched main revision `431fc96c14f0e0045629d9c36f98ee61ff06e840` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, confirms accepted C26 merge ancestry, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
 
 - canonical `go-audio/pkg/mixer` mixer/accumulator tests;
 - canonical playback queue/callback-boundary tests;
 - canonical deterministic-clock boundary tests;
 - canonical room lifecycle graph/media-bridge tests;
 - the go-agent-loop production ownership guard;
+- the accepted C26 shared-DSP reconciliation tests;
 - one legacy mixer behavior test;
 - one legacy agent-runtime behavior test, its race run, and focused vet.
 
@@ -165,6 +171,38 @@ This refresh changes only the owned evidence checkpoint. The C20-owned
 on `origin/main`; C25 has no authorized repair path and will not resubmit an
 unchanged implementation. After reviewed C20 repair reaches main, refresh the
 exact source evidence and submit the changed same task through script CI.
+
+## Current resumed handoff
+
+Fetched `origin/main` is `431fc96c14f0e0045629d9c36f98ee61ff06e840`; the
+isolated branch integrates it at `2574dc27bef53828ac4503047b3d6036ec68cc50`.
+The required baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` and startup
+integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors. The
+C20 composition repair merge `b0acab1238d1aa6bf6bce5ca074451310c7eb039` is
+now on main, and its former focused assertion passes locally. The separate
+C20 `test46/provider_burst` hosted timeout remains historical, unwaived, and
+separately owned.
+
+The accepted C26 merge `1f82284abee0bd31a6680310444cea2e4c16ef00` is also an
+ancestor. Its shared-DSP causal regression passed three tests; source
+inspection finds the shared bounds/mix calls at `mixer.go:725` and `:751` and
+no legacy accumulation or final-clipping loop. The remaining
+`SOURCE_GAP_CONFIRMED` is the legacy host ticker plus format adaptation and
+direct `DeviceSink.WriteFrame` boundary at `session_room_run.go:1186`.
+
+At measured candidate `2574dc27bef53828ac4503047b3d6036ec68cc50`, the bounded
+verifier returned `ACCEPTED` in `15.518s` across `27` commands, including `10`
+focused normal/race/vet regressions. Archive, fixture, AST dependency,
+changed-path allowlist, zero-test, timeout-cleanup, and aggregate-shutdown
+controls passed; no child survived. The current archive is `56,913,920` bytes
+with SHA-256
+`e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31`.
+
+The exact next action is to commit and push this evidence-only checkpoint on
+the existing task branch, update PR417 with the same-head evidence, and return
+the changed task to the script CI gate without polling CI. Any exact CI
+rejection remains actionable on this same task; C25 retains no production,
+shared-module, baseline, device, provider, realtime, or acoustic ownership.
 
 ## Exact-head verifier refresh at the resumed candidate
 

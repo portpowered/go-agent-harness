@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "candidate_revision_at_diagnosis": "50cab0a75732f7d669d8d0ec232a1f854db30368",
-  "source_revision_at_diagnosis": "a1156f0c0c6271643578cb37894026944df2a633",
-  "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
+  "candidate_revision_at_diagnosis": "2574dc27bef53828ac4503047b3d6036ec68cc50",
+  "source_revision_at_diagnosis": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+  "source_archive_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
   "chosen_dependency": {
-    "name": "legacy room-owned PCM16 cadence/mixer dependency",
+    "name": "legacy room clock/format/device-output boundary",
     "current_paths": [
       "agent-cli/internal/room/mixer.go",
       "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
@@ -20,7 +20,7 @@
       "(*roomHumanOutputBuffer).writeFrame",
       "(*devicegw.DeviceSink).WriteFrame"
     ],
-    "current_effect": "Host ticker cadence, raw PCM16 codec ownership, room-side resampling, and direct device writes share one legacy room implementation.",
+    "current_effect": "Accepted C26 moved PCM16 mix accumulation and final clipping into go-audio/pkg/mixer.MixPCM16Samples; the remaining legacy room path still owns host ticker cadence, PCM16 format adaptation, room-side resampling, and direct DeviceSink.WriteFrame.",
     "proposed_paths": [
       "go-audio/pkg/clock/clock.go",
       "go-audio/pkg/audio/media_contract.go",
@@ -57,7 +57,7 @@
         "agent-cli/internal/transport/cli/room.go"
       ],
       "c25": "Diagnosis, verifier, fixtures, provenance, and extraction plan only; no production ownership.",
-      "follow_on": "C21 room/gateway/duplex owner, coordinated with C18 for exact lifecycle files and C20 for the active composition assertion plus remote test46/provider_burst repair."
+      "follow_on": "C21 room/gateway/duplex owner, coordinated with C18 for exact lifecycle files and C20 for the separate remote test46/provider_burst repair; C26's accepted merge is the DSP elimination evidence."
     },
     "wire_and_sequence": [
       "Preserve wire_gen.go -> NewRoomServiceWithDevices -> room-wire Dependencies -> rooms.Service.",
@@ -66,8 +66,8 @@
       "Use MediaPorts/mediaBridge for local capture/playback and leave device conversion/callback ownership in device service.",
       "Retire the legacy ticker/raw-codec/direct-sink dependency only after focused controls and public-consumer regression pass."
     ],
-    "trigger": "Compiled legacy path owns time.NewTicker, PCM16 Decode/Encode, device constructors, and direct sink writes; the separate current hosted coverage failure is the C20-owned composition assertion at agent-cli/internal/wire/composition_test.go:417.",
-    "current_behavior": "Room-owned host cadence and raw bytes; room-side resample/decode; direct DeviceSink.WriteFrame.",
+    "trigger": "Compiled legacy path owns time.NewTicker, PCM16 format adaptation around the accepted shared mixer, device constructors, and direct sink writes; the former hosted coverage assertion is repaired on current origin/main, while test46/provider_burst remains a separate C20-owned historical failure.",
+    "current_behavior": "Room-owned host cadence and raw bytes with shared canonical mixing; room-side resample/decode; direct DeviceSink.WriteFrame.",
     "intended_behavior": "Injected scheduler; canonical PCMFrame and bounded FrameBuffer/mixer; device-owned playback queue and callback accounting.",
     "executable_regression": [
       "TestMixerPreservesShortResponseTailAndEpochs",
@@ -76,6 +76,7 @@
       "TestRoomGraphRoutesEachSourceToPeersOnly",
       "TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission",
       "TestMediaBridgePreservesPCMAndUsesBoundedFrames",
+      "C26 shared-DSP reconciliation tests: TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution, TestPCMMixLegacyKeepsFullCadenceZeroPadding, TestPCMMixLegacyRejectsOutputBoundBeforeDecoding",
       "TestPCM16MixerMixesEveryActiveInputAndClips",
       "TestRunRoom_EmptyResponseDoesNotAdvanceTurnsOrMaxTurns",
       "-race on the empty-response seam",
@@ -91,6 +92,18 @@
       "Do not claim runtime, physical-device, provider, or acoustic PASS from source evidence."
     ]
   },
+  "dsp_reconciliation": {
+    "status": "ELIMINATED_BY_ACCEPTED_C26",
+    "accepted_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "shared_bounds_call": "agent-cli/internal/room/mixer.go:725",
+    "shared_mix_call": "agent-cli/internal/room/mixer.go:751",
+    "legacy_format_adaptation": [
+      "agent-cli/internal/room/mixer.go:743",
+      "agent-cli/internal/room/mixer.go:755"
+    ],
+    "legacy_accumulation_or_final_clip_loop": false,
+    "interpretation": "C26 moved mix accumulation and final clipping into the exported go-audio mixer; C25 retains the remaining host-clock/format/device-output boundary as the one source gap."
+  },
   "non_duplication": {
     "c15": "Use accepted replay evidence as a limitation/input; do not rerun broad replay.",
     "c16": "Use accepted sink lifecycle evidence as a boundary reference; do not claim a physical-device result.",
@@ -103,9 +116,8 @@
     "QUALITY": ["provenance", "positive/negative controls", "focused tests", "race", "vet", "bounded cleanup"]
   },
   "later_gates": [
-    "C20 reviewed composition assertion repair for CI coverage rejection",
-    "C20 reviewed repair for test46/provider_burst",
-    "same-task focused verifier refresh",
+    "same-task focused verifier refresh against current origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840",
+    "C20 reviewed repair for test46/provider_burst remains separately owned and unwaived",
     "review and script CI gate; no CI polling or acceptance claim in this packet"
   ]
 }

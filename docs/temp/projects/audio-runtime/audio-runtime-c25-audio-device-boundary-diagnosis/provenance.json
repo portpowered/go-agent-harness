@@ -1,6 +1,29 @@
 {
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-  "candidate_revision": "50cab0a75732f7d669d8d0ec232a1f854db30368",
+  "c26_accepted_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "c26_merge_ancestry": {
+    "argv": [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      "1f82284abee0bd31a6680310444cea2e4c16ef00",
+      "431fc96c14f0e0045629d9c36f98ee61ff06e840"
+    ],
+    "children_alive": false,
+    "command": "git merge-base --is-ancestor 1f82284abee0bd31a6680310444cea2e4c16ef00 431fc96c14f0e0045629d9c36f98ee61ff06e840",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
+    "duration_seconds": 0.018,
+    "finished_at": "2026-09-10T06:30:50.006192Z",
+    "harness_verdict": "ACCEPTED",
+    "label": "c26-accepted-merge-ancestry",
+    "native_returncode": 0,
+    "returncode": 0,
+    "started_at": "2026-09-10T06:30:49.988629Z",
+    "stderr": "",
+    "stdout": "",
+    "timed_out": false
+  },
+  "candidate_revision": "2574dc27bef53828ac4503047b3d6036ec68cc50",
   "changed_path_allowlist": {
     "allowed_prefixes": [
       "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/"
@@ -10,19 +33,19 @@
         "git",
         "diff",
         "--name-only",
-        "a1156f0c0c6271643578cb37894026944df2a633",
+        "431fc96c14f0e0045629d9c36f98ee61ff06e840",
         "HEAD"
       ],
       "children_alive": false,
-      "command": "git diff --name-only a1156f0c0c6271643578cb37894026944df2a633 HEAD",
+      "command": "git diff --name-only 431fc96c14f0e0045629d9c36f98ee61ff06e840 HEAD",
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
-      "duration_seconds": 0.018,
-      "finished_at": "2026-09-10T00:10:13.032163Z",
+      "duration_seconds": 0.025,
+      "finished_at": "2026-09-10T06:30:49.901471Z",
       "harness_verdict": "ACCEPTED",
       "label": "changed-paths",
       "native_returncode": 0,
       "returncode": 0,
-      "started_at": "2026-09-10T00:10:13.014343Z",
+      "started_at": "2026-09-10T06:30:49.876744Z",
       "stderr": "",
       "stdout": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/README.md\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-diagnosis.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-rejection-34413969081-job-102674534021.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.md\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/evidence-ledger.md\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.md\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/allowed_room_graph.go\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/forbidden_room_graph.go\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/manifest.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ownership.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/progress.txt\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/provenance.json\ndocs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py\n",
       "timed_out": false
@@ -75,18 +98,42 @@
       "children_alive": false,
       "command": "git status --porcelain=v1 --untracked-files=all",
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
-      "duration_seconds": 0.04,
-      "finished_at": "2026-09-10T00:10:13.071870Z",
+      "duration_seconds": 0.044,
+      "finished_at": "2026-09-10T06:30:49.945890Z",
       "harness_verdict": "ACCEPTED",
       "label": "working-tree-paths",
       "native_returncode": 0,
       "returncode": 0,
-      "started_at": "2026-09-10T00:10:13.032210Z",
+      "started_at": "2026-09-10T06:30:49.901529Z",
       "stderr": "",
-      "stdout": "",
+      "stdout": " M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/README.md\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-diagnosis.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.md\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.md\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/manifest.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ownership.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/provenance.json\n M docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py\n",
       "timed_out": false
     },
-    "working_tree_paths": []
+    "working_tree_paths": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/README.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-diagnosis.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/diagnosis.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/manifest.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ownership.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/provenance.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py"
+    ]
+  },
+  "dsp_reconciliation": {
+    "accepted_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "interpretation": "C26 moved the legacy mix accumulation and final clipping to the exported go-audio/pkg/mixer operation. C25 does not report that historical DSP finding as current; the remaining source gap is the legacy clock/format/device-output boundary.",
+    "legacy_accumulation": [],
+    "legacy_clip_logic": [],
+    "shared_mixer_bounds_call": [
+      725
+    ],
+    "shared_mixer_call": [
+      751
+    ],
+    "status": "ELIMINATED_BY_ACCEPTED_C26"
   },
   "fixture_manifest": {
     "errors": [],
@@ -115,31 +162,31 @@
       }
     ],
     "manifest_bytes": 534,
-    "manifest_sha256": "f58d9a1e969ea558b3641e74da0f0b1fdc62518eccf376370c49e06d60b18ae0",
+    "manifest_sha256": "76c9ca8345575fba3b55edddc2984d40497d1e8aacbcf4a7d47d8bc9a05ad75e",
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/fixtures/manifest.json",
     "verdict": "ACCEPTED"
   },
   "generated_by": "verify.py",
   "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main": "a1156f0c0c6271643578cb37894026944df2a633",
+  "origin_main": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
   "source_ancestry": {
     "argv": [
       "git",
       "merge-base",
       "--is-ancestor",
-      "a1156f0c0c6271643578cb37894026944df2a633",
+      "431fc96c14f0e0045629d9c36f98ee61ff06e840",
       "HEAD"
     ],
     "children_alive": false,
-    "command": "git merge-base --is-ancestor a1156f0c0c6271643578cb37894026944df2a633 HEAD",
+    "command": "git merge-base --is-ancestor 431fc96c14f0e0045629d9c36f98ee61ff06e840 HEAD",
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
     "duration_seconds": 0.017,
-    "finished_at": "2026-09-10T00:10:13.089277Z",
+    "finished_at": "2026-09-10T06:30:49.963385Z",
     "harness_verdict": "ACCEPTED",
     "label": "source-ancestry",
     "native_returncode": 0,
     "returncode": 0,
-    "started_at": "2026-09-10T00:10:13.071953Z",
+    "started_at": "2026-09-10T06:30:49.945989Z",
     "stderr": "",
     "stdout": "",
     "timed_out": false
@@ -151,38 +198,38 @@
         "archive",
         "--format=tar",
         "--output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/tmp/source-from-pin.tar",
-        "a1156f0c0c6271643578cb37894026944df2a633"
+        "431fc96c14f0e0045629d9c36f98ee61ff06e840"
       ],
       "children_alive": false,
-      "command": "git archive --format=tar --output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/tmp/source-from-pin.tar a1156f0c0c6271643578cb37894026944df2a633",
+      "command": "git archive --format=tar --output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/tmp/source-from-pin.tar 431fc96c14f0e0045629d9c36f98ee61ff06e840",
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
-      "duration_seconds": 0.138,
-      "finished_at": "2026-09-10T00:10:12.958683Z",
+      "duration_seconds": 0.142,
+      "finished_at": "2026-09-10T06:30:49.818000Z",
       "harness_verdict": "ACCEPTED",
       "label": "source-archive-rebuild",
       "native_returncode": 0,
       "returncode": 0,
-      "started_at": "2026-09-10T00:10:12.820239Z",
+      "started_at": "2026-09-10T06:30:49.675986Z",
       "stderr": "",
       "stdout": "",
       "timed_out": false
     },
-    "expected_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
-    "generated_bytes": 55592960,
+    "expected_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
+    "generated_bytes": 56913920,
     "generated_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis/docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/tmp/source-from-pin.tar",
-    "generated_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
+    "generated_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
     "materialized": true,
-    "materialized_bytes": 55592960,
-    "materialized_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
+    "materialized_bytes": 56913920,
+    "materialized_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/source.tar",
     "verdict": "ACCEPTED"
   },
-  "source_archive_sha256": "0e8f182d3c58853213cf575e2d7b6e0a125b92fab96ac3c67969b8ab409c841f",
+  "source_archive_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
   "source_files": {
     "agent-cli/internal/room/mixer.go": {
-      "bytes": 26846,
+      "bytes": 27173,
       "lines": 891,
-      "sha256": "21a1ade23f4f2ef9b2121be902ad73b1ae78f7e078a8769043c6c23ee6b515ce"
+      "sha256": "a487448df703d46ab0a55be283d6a9dd57f8e96801c786ecf45123542ea3e080"
     },
     "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go": {
       "bytes": 42108,
@@ -285,9 +332,9 @@
       "sha256": "c85017d7d1b5e503a66458f8511dc0708af2a6d3f4b66e320087f14064294164"
     },
     "go-audio/pkg/mixer/mixer.go": {
-      "bytes": 8078,
-      "lines": 307,
-      "sha256": "2d2d55babf90aeaf830f0df450cb90a3885b8a49cc61c3e041f86df62eb24f0d"
+      "bytes": 7818,
+      "lines": 296,
+      "sha256": "3b0d1f3c11ea60dd1ac1a874dcb472e1c82783f2fe816603e8b46a47aea47822"
     },
     "go-device-gateway/pkg/runtime/rtc_device.go": {
       "bytes": 12986,
@@ -305,7 +352,7 @@
       "git",
       "diff",
       "--quiet",
-      "a1156f0c0c6271643578cb37894026944df2a633",
+      "431fc96c14f0e0045629d9c36f98ee61ff06e840",
       "--",
       "agent-cli/internal/room/mixer.go",
       "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
@@ -333,19 +380,19 @@
       "agent-cli/internal/services/servicetest/runtime.go"
     ],
     "children_alive": false,
-    "command": "git diff --quiet a1156f0c0c6271643578cb37894026944df2a633 -- agent-cli/internal/room/mixer.go agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go agent-cli/internal/services/internal/agentruntime/session_room_run.go agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go go-audio/pkg/audio/media_contract.go go-audio/pkg/audio/buffer.go go-audio/pkg/audio/session_media.go go-audio/pkg/audio/device_playback.go go-audio/pkg/audio/device_playback_test.go go-audio/pkg/clock/clock.go go-audio/pkg/clock/clock_test.go go-audio/pkg/mixer/mixer.go go-audio/pkg/mixer/input.go go-agent-runtime/services/rooms/contract.go go-agent-runtime/services/rooms/internal/lifecycle/graph.go go-agent-runtime/services/rooms/internal/lifecycle/media.go go-agent-runtime/services/rooms/internal/lifecycle/participant.go go-device-gateway/pkg/runtime/rtc_device.go go-device-gateway/pkg/runtime/rtc_device_sink.go go-agent-loop/pkg/agentloop/architecture_import_test.go agent-cli/internal/transport/cli/room.go agent-cli/internal/services/wire/wire.go agent-cli/internal/wire/wire_gen.go agent-cli/internal/services/servicetest/runtime.go",
+    "command": "git diff --quiet 431fc96c14f0e0045629d9c36f98ee61ff06e840 -- agent-cli/internal/room/mixer.go agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go agent-cli/internal/services/internal/agentruntime/session_room_run.go agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go go-audio/pkg/audio/media_contract.go go-audio/pkg/audio/buffer.go go-audio/pkg/audio/session_media.go go-audio/pkg/audio/device_playback.go go-audio/pkg/audio/device_playback_test.go go-audio/pkg/clock/clock.go go-audio/pkg/clock/clock_test.go go-audio/pkg/mixer/mixer.go go-audio/pkg/mixer/input.go go-agent-runtime/services/rooms/contract.go go-agent-runtime/services/rooms/internal/lifecycle/graph.go go-agent-runtime/services/rooms/internal/lifecycle/media.go go-agent-runtime/services/rooms/internal/lifecycle/participant.go go-device-gateway/pkg/runtime/rtc_device.go go-device-gateway/pkg/runtime/rtc_device_sink.go go-agent-loop/pkg/agentloop/architecture_import_test.go agent-cli/internal/transport/cli/room.go agent-cli/internal/services/wire/wire.go agent-cli/internal/wire/wire_gen.go agent-cli/internal/services/servicetest/runtime.go",
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c25-audio-device-boundary-diagnosis",
-    "duration_seconds": 0.019,
-    "finished_at": "2026-09-10T00:10:13.108357Z",
+    "duration_seconds": 0.02,
+    "finished_at": "2026-09-10T06:30:49.983184Z",
     "harness_verdict": "ACCEPTED",
     "label": "source-path-diff",
     "native_returncode": 0,
     "returncode": 0,
-    "started_at": "2026-09-10T00:10:13.089331Z",
+    "started_at": "2026-09-10T06:30:49.963442Z",
     "stderr": "",
     "stdout": "",
     "timed_out": false
   },
-  "source_revision": "a1156f0c0c6271643578cb37894026944df2a633",
+  "source_revision": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis"
 }

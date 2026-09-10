@@ -6,10 +6,12 @@ change.
 
 ## Chosen dependency
 
-The one dependency selected for extraction is the **legacy room-owned PCM16
-cadence/mixer dependency**: `agent-cli/internal/room.PCM16Mixer` owns frame
-cadence, PCM16 representation, input buffering, and source attribution for a
-human participant's room path.
+The one dependency selected for extraction is the **legacy room clock/format/
+device-output boundary**: `agent-cli/internal/room.PCM16Mixer` still owns frame
+cadence and PCM16 adaptation, while the legacy room runner owns resampling and
+direct device output. Accepted C26 moved PCM16 accumulation and final clipping
+to `go-audio/pkg/mixer.MixPCM16Samples`; C25 treats that historical DSP seam as
+eliminated and does not report it as a current gap.
 
 The source gap is concrete even though the public `yui room run` route is now
 wired to `go-agent-runtime/services/rooms`: the legacy `RunRoom` implementation
@@ -29,17 +31,20 @@ that the legacy path caused it.
 2. `session_room_run.go:947` reads `ReadFrameWithSources` to send human input
    to the provider; `:1049-1074` reads/resamples device input and fans out raw
    PCM bytes; `:1116-1125` reads the mixer for human speaker output.
-3. `session_room_run.go:1163` decodes the mixer-produced PCM16 bytes, resamples
-   them to the device rate, accumulates native frames, and calls
+3. `session_room_run.go:1176-1186` decodes the mixer-produced PCM16 bytes,
+   resamples them to the device rate, accumulates native frames, and calls
    `devicegw.DeviceSink.WriteFrame` at `:1186`.
 4. `agent-cli/internal/room/mixer.go:167` constructs `time.NewTicker`;
-   `:270` constructs the legacy mixer; `:736` and `:760` decode and encode
-   PCM16 inside the mixer.
+   `:270` constructs the legacy mixer; `:743` and `:755` perform PCM16 format
+   adaptation around the shared `audiomixer.MixPCM16Samples` operation at
+   `:751`, with bounds validation at `:725` and no local accumulation/final
+   clipping loop.
 
 The current implementation owner is the legacy agent-runtime/room path's
 follow-on maintainer. C25 is not authorized to edit it. C21 retains the
-room/gateway/duplex boundary, C18 retains exact lifecycle work, and C20 owns
-the current `test46/provider_burst` production/fixture repair. Any future
+room/gateway/duplex boundary, C18 retains exact lifecycle work, C20 retains
+the separate `test46/provider_burst` production/fixture repair, and C26's
+accepted shared-DSP merge is the historical elimination evidence. Any future
 patch touching those boundaries must be coordinated with the relevant primary
 task.
 
@@ -91,17 +96,19 @@ The extraction sequence is:
 
 ## Trigger, behavior, and failure control
 
-Trigger: source inspection finds `time.NewTicker`, local PCM16 codec calls,
-direct device constructors, and direct `DeviceSink.WriteFrame` in one legacy
-room implementation. The current hosted failure is separately recorded as
+Trigger: source inspection finds `time.NewTicker`, PCM16 format-adaptation
+calls around the accepted shared mixer, direct device constructors, and direct
+`DeviceSink.WriteFrame` in one legacy room implementation. The current hosted
+failure is separately recorded as
 `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
 at `session_tool_audio_remote_e2e_test.go:182`: the evidence snapshot request
 exceeded its 30-second context deadline. C20 owns that repair; C25's local
 single and 12-subtest controls did not reproduce it.
 
-Current behavior is host-ticker cadence over raw bytes, with room orchestration
-performing resampling/decoding and writing device frames directly. Intended
-behavior is injected-clock cadence over `audio.PCMFrame`, bounded epoch-aware
+Current behavior is host-ticker cadence over raw bytes, with format adaptation
+around the shared mixer and room orchestration performing resampling/decoding
+before writing device frames directly. Intended behavior is injected-clock
+cadence over `audio.PCMFrame`, bounded epoch-aware
 buffers, and a device-owned callback queue that distinguishes admitted,
 consumed, discarded, and zero-filled samples.
 
@@ -118,7 +125,8 @@ Executable regression and controls:
   `TestRequireTimerSourceDoesNotFallbackToHostTime`,
   `TestRoomGraphRoutesEachSourceToPeersOnly`,
   `TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission`,
-  `TestMediaBridgePreservesPCMAndUsesBoundedFrames`, the legacy mixer seam,
+  `TestMediaBridgePreservesPCMAndUsesBoundedFrames`, the C26 shared-DSP
+  reconciliation seam, the legacy mixer seam,
   the empty-response agent-runtime seam, its race run, and focused vet.
 
 The verifier records native return codes separately from harness verdicts,
@@ -146,8 +154,10 @@ runner integrity.
 - `QUALITY`: source/path provenance, positive/negative controls, focused
   regressions, race/vet, first-failure and cleanup evidence.
 
-After a reviewed C20 repair, the exact failing hosted scenario must be
-rechecked by the script CI gate. C25 should then refresh this packet against
-the same task/head, run the bounded focused verifier, and submit the same PR
-for review/CI. No C25 document claims green CI or acceptance before those
-later gates.
+The reviewed C20 composition repair is now present on the fetched
+`origin/main`; the old coverage assertion passes in the focused current-main
+control. The separate C20 `test46/provider_burst` remote scenario remains
+historical and unwaived. C25 should refresh this packet against the same
+task/head, run the bounded focused verifier, commit/push the evidence-only
+change, and submit the same PR to the script CI gate. No C25 document claims
+green CI or acceptance before those later gates.

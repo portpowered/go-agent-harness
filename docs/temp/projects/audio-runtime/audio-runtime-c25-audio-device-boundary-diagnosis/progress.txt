@@ -205,3 +205,33 @@ Exact pushed-head evidence refresh
 - Fresh `origin/main` remains `a1156f0c0c6271643578cb37894026944df2a633`; no reviewed C20 composition repair is available to integrate. At pushed `HEAD` `50cab0a75732f7d669d8d0ec232a1f854db30368`, `verify.py --mode all` returned `ACCEPTED` in `11.975s` across 25 bounded commands. `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist, focused normal/race/vet, zero-test, child-hang cleanup and aggregate shutdown controls passed; no child survived.
 - Regenerated `diagnosis.json`, `diagnosis.md` and `provenance.json` now identify the exact pushed head. Updated `ownership.json`, `extraction-plan.json` and `ci-diagnosis.json` to the same candidate. No production/shared/fixture/baseline/device/provider/realtime path changed.
 - The latest hosted rejection remains PR417 head `b061bf852076d4b36526600377ad916751e32b4b`, run `34413969081`, job `102674534021`, C20-owned `agent-cli/internal/wire/composition_test.go:417` with nil instead of `ErrLiveMediaUnavailable`. Do not submit unchanged C25 evidence; next action is to commit/push this exact-head refresh, update PR417, and retain the same task until the reviewed C20 repair reaches `origin/main`, then refresh against that changed source and submit to script CI without polling.
+
+Resumed current-main checkpoint and C26 DSP re-evaluation
+- Admission was reverified for the sole admitted project/task. Fetched
+  `origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840` was merged only into
+  the isolated worktree at candidate
+  `2574dc27bef53828ac4503047b3d6036ec68cc50`; baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` and startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21` ancestry remain intact.
+- Reviewed C20 merge `b0acab1238d1aa6bf6bce5ca074451310c7eb039` is on current
+  main. Its former `composition_test.go:417` coverage assertion passes in the
+  focused local control; this does not claim hosted CI green. C20 retains the
+  separate `test46/provider_burst` timeout as historical, unwaived ownership.
+- Accepted C26 merge `1f82284abee0bd31a6680310444cea2e4c16ef00` is on current
+  main. The C25 verifier now requires the shared bounds/mix calls and records
+  `ELIMINATED_BY_ACCEPTED_C26`; no legacy accumulation/final-clipping loop is
+  present. The remaining selected gap is the legacy host ticker, PCM format
+  adaptation, and direct `DeviceSink.WriteFrame` at
+  `session_room_run.go:1186`.
+- The bounded command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all --source . --source-revision 431fc96c14f0e0045629d9c36f98ee61ff06e840 --child-timeout-seconds 55 --aggregate-timeout-seconds 600`
+  returned `ACCEPTED` at candidate `2574dc27bef53828ac4503047b3d6036ec68cc50`
+  in `15.518s` across `27` commands, with `10` focused entries accepted and
+  no surviving child process. Source gap, archive, fixture, AST dependency,
+  allowlist, zero-test, timeout-cleanup, and aggregate-shutdown controls all
+  passed. Archive: `56,913,920` bytes,
+  `e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31`.
+- C25 remains evidence-only and changed paths remain under the owned folder.
+  Next action is commit/push, update PR417 with this exact evidence, and submit
+  the changed same task to the script CI gate without polling; retain ownership
+  for any exact rejection.
