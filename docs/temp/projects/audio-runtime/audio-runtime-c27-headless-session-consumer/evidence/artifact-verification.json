@@ -57,10 +57,10 @@
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "b618c5fd172b51be48ce0471e591851742d365b9",
+      "current_head": "e2e483af903d90e44dca5081e4558986b0436f50",
       "source_changes_since_source_revision": [],
       "source_revision": "b618c5fd172b51be48ce0471e591851742d365b9",
-      "source_revision_matches_current_head": true
+      "source_revision_matches_current_head": false
     }
   }
 }
