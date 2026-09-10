@@ -86,3 +86,12 @@ identity negative controls, exact prepared project/build identities, and the
 same audio/tool and interruption replay oracles. The rebuilt yui input is
 `/tmp/audio-runtime-c39-yui-4256aa6`, SHA-256
 `2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db`.
+
+The merged-main follow-up is archived at
+`evidence-merge-5671366/probe-report.json` for source
+`56713660d2927994bd6757fe22a01e08110563ed` (report SHA-256
+`9616a7c4d1d0d04f6c78a4b663bb62a5144981868134ff296a4ca81b78749a11`). It
+uses yui `/tmp/audio-runtime-c39-yui-5671366` with SHA-256
+`71bb89baf3ebaf10557ca4224165ad70d26cdeb0b5882f4d7a10e65a92d0067b` and
+passes the controller, audio/tool replay, interruption replay, negative
+controls, protected-hash and bounded child-cleanup checks.
