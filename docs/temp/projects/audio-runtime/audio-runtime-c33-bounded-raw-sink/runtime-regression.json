@@ -5,75 +5,75 @@
     ".",
     "--runtime-regression",
     "--yui",
-    "/private/tmp/audio-runtime-c33-yui-d1370fe1",
+    "/private/tmp/audio-runtime-c33-yui-59495ffa",
     "--yui-source-root",
     ".",
     "--report",
     "docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runtime-regression.json"
   ],
   "passed": true,
-  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651",
+  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335",
   "runner_sha256": "80d2bd00b69ca9e4a2333fd6bea86fac0b130fc1ddc909ad1472dd1aeb98d786",
   "runtime_regression": {
     "capture": {
       "argv": [
-        "/private/tmp/audio-runtime-c33-yui-d1370fe1",
+        "/private/tmp/audio-runtime-c33-yui-59495ffa",
         "-C",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/config",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
         "--audio-out",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/rendered.pcm",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/rendered.pcm",
         "--record-dir",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/bundle",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/bundle",
         "--trace-audio",
         "--max-duration",
         "60s",
         "--workdir",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1",
         "--allow-path",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3"
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3",
-      "duration_seconds": 0.584364,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1",
+      "duration_seconds": 0.647246,
       "exit_code": 0,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
     },
     "clean_shutdown": true,
     "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
     "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
     "provider": {
       "bytes": 4800,
-      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/bundle/audio/out-000.pcm",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/bundle/audio/out-000.pcm",
       "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
     },
     "rendered": {
       "bytes": 3200,
-      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/rendered.pcm",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/rendered.pcm",
       "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
     },
     "replay": {
       "argv": [
-        "/private/tmp/audio-runtime-c33-yui-d1370fe1",
+        "/private/tmp/audio-runtime-c33-yui-59495ffa",
         "-C",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/replay-config",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/replay-config",
         "session",
         "replay",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3/bundle"
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1/bundle"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/c33-runtime-rbtof7j3",
-      "duration_seconds": 0.021038,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/c33-runtime-g5s7yng1",
+      "duration_seconds": 0.020773,
       "exit_code": 0,
       "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
       "stdout": "strict replay continuation"
     },
-    "yui": "/private/tmp/audio-runtime-c33-yui-d1370fe1",
-    "yui_sha256": "04844c8758bc8a3513b2e582c1247996a3492564a5c60b488c3cc331637b6900",
+    "yui": "/private/tmp/audio-runtime-c33-yui-59495ffa",
+    "yui_sha256": "6bb744b75811ba104d06e9677e5b583f9713b108c3d7f3d54f2776b6b7d52139",
     "yui_source": {
       "clean": true,
-      "revision": "d1370fe1697b61ef334b13c50bc6274f5c74694d",
+      "revision": "59495ffab1f6ada0ff452f04c84b3375ceefa276",
       "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
       "tracked": {
         "file_count": 2159,
@@ -90,14 +90,14 @@
         "sha256": "7456ef9a768fd738a33c4978b7802629e826fd5a00afac911494a896349a2ba4"
       },
       "tracked_status": "",
-      "tree": "212d8b2964c71a3243924920b5ccc1e4701fe7d2"
+      "tree": "f6340255c6d9be58b68042139bb42e053ea17625"
     }
   },
-  "source_revision": "d1370fe1697b61ef334b13c50bc6274f5c74694d",
+  "source_revision": "59495ffab1f6ada0ff452f04c84b3375ceefa276",
   "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
   "tested_source": {
     "clean": true,
-    "revision": "d1370fe1697b61ef334b13c50bc6274f5c74694d",
+    "revision": "59495ffab1f6ada0ff452f04c84b3375ceefa276",
     "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
     "tracked": {
       "file_count": 123,
@@ -107,16 +107,16 @@
       "sha256": "afe3c600eb613a9e03762445ba72360a6a7bec312eabba7bae6cdee52553aeb7"
     },
     "tracked_status": "",
-    "tree": "212d8b2964c71a3243924920b5ccc1e4701fe7d2"
+    "tree": "f6340255c6d9be58b68042139bb42e053ea17625"
   },
   "timeout_cleanup": {
     "argv": [
       "/opt/homebrew/opt/python@3.14/bin/python3.14",
       "-c",
-      "import signal, subprocess, time\ndescendant = subprocess.Popen(['/opt/homebrew/opt/python@3.14/bin/python3.14', '-c', \"import time\\nstop = '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/timeout-control-stop'\\nwhile not __import__('os').path.exists(stop):\\n    time.sleep(0.01)\\n\"], start_new_session=True)\nopen('/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T084007Z-72651/timeout-control-descendant.pid', 'w', encoding='utf-8').write(str(descendant.pid))\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nwhile True:\n    time.sleep(0.01)\n"
+      "import signal, subprocess, time\ndescendant = subprocess.Popen(['/opt/homebrew/opt/python@3.14/bin/python3.14', '-c', \"import time\\nstop = '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/timeout-control-stop'\\nwhile not __import__('os').path.exists(stop):\\n    time.sleep(0.01)\\n\"], start_new_session=True)\nopen('/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T090227Z-91335/timeout-control-descendant.pid', 'w', encoding='utf-8').write(str(descendant.pid))\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nwhile True:\n    time.sleep(0.01)\n"
     ],
     "cleanup": {
-      "bounded_cleanup_seconds": 4.004295,
+      "bounded_cleanup_seconds": 4.004353,
       "kill_communicate_completed": false,
       "kill_sent": true,
       "parent_reaped": true,
@@ -126,7 +126,7 @@
       "term_communicate_completed": false,
       "term_sent": true
     },
-    "descendant_pid": 72656,
+    "descendant_pid": 91337,
     "descendant_started": true,
     "descendant_stopped": true,
     "expected_timeout": true,
