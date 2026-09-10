@@ -118,3 +118,20 @@ missing-timeline rejection controls pass for both cases. Storage provenance is
 in `evidence-current-main-ace0fdb-run2/resource-usage.json`; the probe used
 zero Realtime sessions/seconds and the excluded native Windows/physical
 acoustic subproofs remain OUT_OF_SCOPE rather than PASS.
+
+The aggregate-deadline repair is archived at
+`evidence-repair-6558703-run1/probe-report.json` for committed source
+`655870389fea3c86e55da02a68255e213d97fc94` (report SHA-256
+`8233bda6135ed50abf12d9fade798a096f1b21d2701f7bc68ebdde75b0f03e3c`). It
+uses freshly built nomicrophone yui `/tmp/audio-runtime-c39-yui-6558703`
+(51,154,738 bytes, SHA-256
+`3541db580e476effd2d0c18cbba6943a5d8363763a091719e293e74a4f57932c`). The
+probe passed in 3.060729 seconds with one aggregate monotonic deadline,
+controller append/idempotent status, protected hashes, deterministic
+TERM/reap, audio/tool replay (3,200 rendered / 4,800 provider bytes), and
+interruption replay (3,360 rendered / 3,840 provider bytes, sequence
+`[1440, 2400]`, healthy tail 2,400 bytes), plus directory replay and
+missing-timeline negatives. All children were reaped and the probe used zero
+Realtime sessions/seconds. Resource measurements and the below-reserve
+operator condition are recorded in the adjacent `resource-usage.json`;
+no cache cleanup or peer artifact deletion was used.

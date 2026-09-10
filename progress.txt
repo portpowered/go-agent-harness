@@ -2950,3 +2950,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   guarded merge and the primary-owned post-merge vertical probe remain open.
   C18 room cancellation and C21 test46/provider_burst failures remain their
   owners' unwaived findings; they are not C39 acceptance claims.
+
+# C39 aggregate-deadline exact-source evidence checkpoint 2026-09-10
+
+- Committed implementation source `655870389fea3c86e55da02a68255e213d97fc94`
+  includes the shared monotonic aggregate deadline and the two-child
+  regression. The fresh exact-source nomicrophone yui is
+  `/tmp/audio-runtime-c39-yui-6558703`, `51,154,738` bytes, SHA-256
+  `3541db580e476effd2d0c18cbba6943a5d8363763a091719e293e74a4f57932c`.
+- Fresh probe
+  `docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-6558703-run1/probe-report.json`
+  has SHA-256
+  `8233bda6135ed50abf12d9fade798a096f1b21d2701f7bc68ebdde75b0f03e3c`,
+  status `ACCEPTED`, source `6558703`, duration `3.060729s`, and zero
+  Realtime sessions/seconds. Controller append/idempotent status, protected
+  hashes, exact amendment identity, widened-exclusion rejection and
+  deterministic TERM/reap pass. Audio/tool replay passes rendered PCM
+  `3200`/`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`
+  and provider PCM `4800`/
+  `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`.
+  Interruption replay passes rendered PCM `3360`/
+  `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff` and
+  provider PCM `3840`/
+  `6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`,
+  sequence `[1440, 2400]`, and healthy tail `2400`/
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`.
+  Directory replay and missing-timeline controls pass for both cases; all
+  children were reaped.
+- `evidence-repair-6558703-run1/resource-usage.json` records 724 KiB owned
+  evidence, zero source staging, no retained scratch, no cache cleanup and no
+  peer deletion. Free space was `1,928,532` KiB before build,
+  `1,641,852` KiB after build and `1,683,908` KiB after probe, below the
+  recorded 2 GiB operator reserve; no further build or cache mutation is
+  authorized here without operator recovery. This condition is retained
+  honestly and is not relabeled as a source failure.
+- Focused and accumulated checks remain green: C39 `16` tests,
+  project-control `12` tests, all factory script tests `119`, Python
+  compilation and `git diff --check`. No current-head CI success, independent
+  review, guarded merge, post-merge vertical acceptance or project completion
+  is claimed. Next action: force-add the fresh evidence, README/resource record
+  and this checkpoint, commit/push the same PR `#432`, update its exact
+  finding/provenance map, then return `ACCEPTED` to script CI without polling;
+  retain C39 ownership through `CONTINUE` for any exact rejection.
