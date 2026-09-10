@@ -1,0 +1,43 @@
+{
+  "raw_job_response": {
+    "id": 102433202487,
+    "run_id": 34341531856,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "head_sha": "0fcc7ae8efdad69e67906dffa15360e762edc2cb",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T10:41:05Z",
+    "started_at": "2026-09-09T10:41:08Z",
+    "completed_at": "2026-09-09T10:50:31Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3},
+      {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure", "number": 4},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102433202487",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34341531856/job/102433202487"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 0fcc7ae8efdad69e67906dffa15360e762edc2cb: required checks failed on current head 0fcc7ae8efdad69e67906dffa15360e762edc2cb: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34341531856/job/102433202487). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102433202487/logs",
+  "full_log_observation": {
+    "line_count": 440,
+    "failed_step": "Run coverage profiles and coverage gate",
+    "failed_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+    "failure": "room run error = silent_provider_empty_response: provider response produced no observable output",
+    "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+    "exit": "make: *** [Makefile:303: coverage] Error 1",
+    "c18_replay_observation": "go-agent-runtime/services/replay completed successfully; no C18 replay test failure was reported",
+    "post_failure_observation": "The remaining package output completed; checkout cleanup also emitted an unrelated missing submodule URL warning"
+  },
+  "causal_validation": {
+    "command": "go test ./go-agent-runtime/services/rooms/internal/lifecycle -run TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response -count=20 -timeout=60s",
+    "result": "40 passed in 1 package",
+    "interpretation": "The hosted failure did not reproduce locally and is outside the C18 owned replay/Wire/embedding paths; it remains non-waived evidence for the script gate."
+  }
+}

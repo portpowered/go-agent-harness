@@ -1,0 +1,35 @@
+{
+  "case": "watchdog",
+  "evidence": {
+    "cleanup_timeout_seconds": 1.0,
+    "escaped_descendant_signal_sent": true,
+    "timeout_seconds": 2.0
+  },
+  "results": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public.py",
+        "--watchdog-child",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-watchdog-9yhhgulz/escaped-grandchild.pid"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": true,
+      "cleanup_timeout_seconds": 1.0,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay",
+      "duration_seconds": 3.007628,
+      "escaped_descendant_pid": 72916,
+      "escaped_descendant_signal_sent": true,
+      "exit_code": -9,
+      "label": "watchdog/escaped-descendant-pipe",
+      "passed": true,
+      "stderr": "",
+      "stdout": "watchdog child started\n",
+      "timed_out": true,
+      "timeout_seconds": 2.0
+    }
+  ],
+  "source_revision": "0059633bc0f9d613f082544a6d5daed897ff2e83",
+  "status": "passed",
+  "timeout_seconds": 50.0
+}

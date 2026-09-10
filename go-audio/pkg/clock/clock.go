@@ -429,7 +429,6 @@ func WithTimeout(parent context.Context, source Source, timeout time.Duration) (
 	ctx, cancel := withDeadline(parent, timerSource, timerSource.Now().Add(timeout))
 	return ctx, cancel, nil
 }
-
 func wait(ctx context.Context, source TimerSource, duration time.Duration) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -446,12 +445,11 @@ func wait(ctx context.Context, source TimerSource, duration time.Duration) error
 		return nil
 	}
 }
-
 func withDeadline(parent context.Context, source TimerSource, deadline time.Time) (context.Context, context.CancelFunc) {
 	if parent == nil {
 		parent = context.Background()
 	}
-	child := newDeadlineContext(parent, deadline)
+	child := &deadlineContext{parent: parent, deadline: deadline, done: make(chan struct{})}
 	if err := parent.Err(); err != nil {
 		child.finish(contextCause(parent))
 		return child, func() { child.finish(context.Canceled) }
@@ -485,9 +483,6 @@ type deadlineContext struct {
 	once     sync.Once
 }
 
-func newDeadlineContext(parent context.Context, deadline time.Time) *deadlineContext {
-	return &deadlineContext{parent: parent, deadline: deadline, done: make(chan struct{})}
-}
 func (c *deadlineContext) Deadline() (time.Time, bool) {
 	parentDeadline, ok := c.parent.Deadline()
 	if ok && parentDeadline.Before(c.deadline) {
@@ -495,10 +490,15 @@ func (c *deadlineContext) Deadline() (time.Time, bool) {
 	}
 	return c.deadline, true
 }
-func (c *deadlineContext) Done() <-chan struct{} { return c.done }
-func (c *deadlineContext) Err() error            { c.mu.Lock(); err := c.err; c.mu.Unlock(); return err }
-func (c *deadlineContext) Value(key any) any     { return c.parent.Value(key) }
-func (c *deadlineContext) Cause() error          { return c.Err() }
+func (c *deadlineContext) Done() <-chan struct{} {
+	if err := c.parent.Err(); err != nil {
+		c.finish(contextCause(c.parent))
+	}
+	return c.done
+}
+func (c *deadlineContext) Err() error        { c.Done(); c.mu.Lock(); err := c.err; c.mu.Unlock(); return err }
+func (c *deadlineContext) Value(key any) any { return c.parent.Value(key) }
+func (c *deadlineContext) Cause() error      { return c.Err() }
 func (c *deadlineContext) finish(err error) {
 	c.once.Do(func() { c.mu.Lock(); c.err = err; c.mu.Unlock(); close(c.done) })
 }

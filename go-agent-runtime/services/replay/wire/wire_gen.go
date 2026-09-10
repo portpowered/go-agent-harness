@@ -9,6 +9,9 @@ package wire
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/strict"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"time"
 )
 
 // Injectors from wire.go:
@@ -17,4 +20,30 @@ import (
 func NewService() replay.Service {
 	service := plan.New()
 	return service
+}
+
+// NewStrictService assembles the complete public strict workflow. The private
+// implementation receives the canonical plan service through the narrow
+// CaptureAdmission contract; it never imports this Wire package.
+func NewStrictService() replay.StrictService {
+	clockFactory := newReplayClockFactory()
+	v := strict.NewOpenAIRuntimeFactory()
+	service := plan.New()
+	dependencies := strict.Dependencies{
+		ClockFactory: clockFactory,
+		Runtime:      v,
+		Admission:    service,
+	}
+	strictService := strict.New(dependencies)
+	return strictService
+}
+
+// wire.go:
+
+// newReplayClockFactory creates one deterministic scheduler per strict
+// preparation, rooted at the trace origin rather than wall time.
+func newReplayClockFactory() strict.ClockFactory {
+	return func(origin time.Time) *clock.Deterministic {
+		return clock.NewDeterministic(origin, time.Millisecond)
+	}
 }

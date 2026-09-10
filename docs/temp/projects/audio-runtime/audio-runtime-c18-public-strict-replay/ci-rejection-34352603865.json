@@ -1,0 +1,53 @@
+{
+  "raw_job_response": {
+    "id": 102469298198,
+    "run_id": 34352603865,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34352603865",
+    "run_attempt": 1,
+    "head_sha": "cd662d7b820d35f247cf8d6337cc8cd1fabab218",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102469298198",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34352603865/job/102469298198",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T12:42:37Z",
+    "started_at": "2026-09-09T12:42:40Z",
+    "completed_at": "2026-09-09T12:49:52Z",
+    "name": "CI (integration)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T12:42:41Z", "completed_at": "2026-09-09T12:42:42Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T12:42:42Z", "completed_at": "2026-09-09T12:42:45Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T12:42:45Z", "completed_at": "2026-09-09T12:42:49Z"},
+      {"name": "Run deterministic integration tests", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T12:42:49Z", "completed_at": "2026-09-09T12:47:57Z"},
+      {"name": "Run production-binary audio-device replay integration", "status": "completed", "conclusion": "success", "number": 5, "started_at": "2026-09-09T12:47:57Z", "completed_at": "2026-09-09T12:49:21Z"},
+      {"name": "Run committed replay and fixture regression tests", "status": "completed", "conclusion": "success", "number": 6, "started_at": "2026-09-09T12:49:21Z", "completed_at": "2026-09-09T12:49:50Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 11, "started_at": "2026-09-09T12:49:50Z", "completed_at": "2026-09-09T12:49:50Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 12, "started_at": "2026-09-09T12:49:50Z", "completed_at": "2026-09-09T12:49:50Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 13, "started_at": "2026-09-09T12:49:50Z", "completed_at": "2026-09-09T12:49:50Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102469298198",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208674,
+    "runner_name": "GitHub Actions 1000208674",
+    "runner_group_id": 0,
+    "runner_group_name": "Hosted Agents"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head cd662d7b820d35f247cf8d6337cc8cd1fabab218: required checks failed on current head cd662d7b820d35f247cf8d6337cc8cd1fabab218: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34352603865/job/102469298198). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102469298198/logs",
+  "full_log_observation": {
+    "line_count": 338,
+    "sha256": "fe6a34d004682bf973c5c3ee99e9fe5cd01dfe8f38ab9e981274878fa9040df5",
+    "failed_step": "Run deterministic integration tests / make test-integration",
+    "failure": "agent-cli/test/integration TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl failed at session_duplex_overlap_test.go:88 because harness A's baseline multi-turn replay ended after 2.001392443s while awaiting the third assistant response; harness B completed three turns and the production-binary audio-device replay plus committed replay regression steps passed.",
+    "expected_negative_controls_before_failure": "The same log contains expected invalid-fixture, replay-mismatch, missing-file, missing-credential, provider-rejection and scope diagnostics from negative controls; those controls are reported by the package as expected failures.",
+    "cleanup_note": "The checkout post-job submodule warning is not a test failure."
+  },
+  "causal_reproduction": {
+    "command": "go test ./agent-cli/test/integration -tags=nomicrophone -run '^TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl$' -count=20 -timeout=90s -v",
+    "exit_code": 0,
+    "result": "20/20 passed in 1 package",
+    "scope": "The failing integration control is outside the C18 owned replay/Wire/embedding paths and does not traverse the extracted strict replay implementation; no C18 source defect reproduced and no unrelated test was modified."
+  },
+  "current_candidate": "cd662d7b820d35f247cf8d6337cc8cd1fabab218"
+}

@@ -3,14 +3,14 @@ package cli
 import (
 	"fmt"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
 
 // SessionReplayCommand presents the offline bundle replay service.
-type SessionReplayCommand struct{ service replay.Service }
+type SessionReplayCommand struct{ service runtimeReplay.StrictService }
 
-func NewSessionReplayCommand(service replay.Service) *SessionReplayCommand {
+func NewSessionReplayCommand(service runtimeReplay.StrictService) *SessionReplayCommand {
 	return &SessionReplayCommand{service: service}
 }
 
@@ -25,7 +25,7 @@ func (c *SessionReplayCommand) Generate() *cobra.Command {
 			if c == nil || c.service == nil {
 				return fmt.Errorf("session replay service is required")
 			}
-			result, err := c.service.Run(cmd.Context(), cmd.OutOrStdout(), replay.Request{BundlePath: args[0]})
+			result, err := c.service.Run(cmd.Context(), cmd.OutOrStdout(), runtimeReplay.Request{BundlePath: args[0]})
 			if err != nil {
 				return err
 			}

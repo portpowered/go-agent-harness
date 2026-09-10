@@ -1,0 +1,90 @@
+{
+  "project": "audio-runtime",
+  "work": "audio-runtime-c18-public-strict-replay",
+  "branch": "codex/audio-runtime-c18-public-strict-replay",
+  "tested_source_revision": "3bd2f4b4ecf0210689a038ef40b16313bb5c0e33",
+  "evidence_commit_is_descendant_of_tested_source": true,
+  "origin_main_integrated": "84f0a9d308729e38da8479f87c3518f1634bad82",
+  "merge_commit": "80bdd6560e78eb12ee18f65b84cfcf791b163a84",
+  "coverage_repair_commit": "3bd2f4b4ecf0210689a038ef40b16313bb5c0e33",
+  "coverage": {
+    "registration": "PASS: 172 workspace packages checked across 6 modules",
+    "registered_strict_package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/strict",
+    "strict_measured_percent": 74.9,
+    "strict_minimum_percent": 50.0,
+    "stale_private_cli_package_removed": true,
+    "public_cli_replay_minimum_percent": 80.0,
+    "public_cli_replay_minimum_unchanged": true
+  },
+  "focused_checks": {
+    "architecture_size": "PASS: 182 packages, 1877 files, 27638 functions",
+    "wire": "PASS: regeneration clean",
+    "runtime_replay": "PASS: go-agent-runtime/services/replay/...",
+    "embedding_consumer": "PASS: GOWORK=off normal",
+    "clock": "PASS: 20 normal, 5 race",
+    "room_terminal": "PASS: normal 20, race 5",
+    "session_regressions": "PASS: normal, coverage, race with COUNT=1"
+  },
+  "artifacts": {
+    "strict_consumer": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay",
+      "sha256": "4d692dc16eb465920de1a4b3ca1ee780ed54e7d1c8582429b56dd214ed009145",
+      "build": "GOWORK=off CGO_ENABLED=0"
+    },
+    "yui": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+      "sha256": "44e5d0896f8b534d94c0aefade427be20ebc35345eb4278b9ae508a38de03da8",
+      "build": "CGO_ENABLED=1"
+    },
+    "public_verifier": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public.py",
+      "sha256": "8dbdb8c3c3865d89172e7b22ea83c53c6ac28364334f5a2d74ef94dd334dd6dc"
+    }
+  },
+  "public_cases": {
+    "external": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-external-3bd2f4b-final.json",
+      "sha256": "c38ba2f192784a843e12bb9a3419468dd5f8c1750688a8ccd2681aa870d09d0a",
+      "status": "passed",
+      "results": 2
+    },
+    "strict": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-strict-3bd2f4b-final.json",
+      "sha256": "f6d4bc8302a397a8745eca7bde3e62c6034dd774cc523fff11b11cfa5a1528f3",
+      "status": "passed",
+      "results": 5
+    },
+    "provider": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-provider-3bd2f4b-final.json",
+      "sha256": "c44919d8a3c7395da24dad06998018bc775de91b20d54913e8e34e75c7846710",
+      "status": "passed",
+      "results": 7
+    },
+    "interruption": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-interruption-3bd2f4b-final.json",
+      "sha256": "355fdcabf0fd725ba59bed269b9e0cb0c87b4eff067a3fee5c915228b42c0100",
+      "status": "passed",
+      "results": 4
+    },
+    "ask": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-ask-3bd2f4b-final.json",
+      "sha256": "405166f7a4421925843d6713ea75dc8e1998f9e9094651b5cb4fec8a5866e202",
+      "status": "passed",
+      "results": 2
+    },
+    "watchdog": {
+      "report": "docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public-watchdog-3bd2f4b-final.json",
+      "sha256": "2367929556f87b2610ea3dad3a80db21825492b9224d001bf7812270dd097f0d",
+      "status": "passed",
+      "results": 1
+    }
+  },
+  "claims": {
+    "script_ci": "handoff pending; not run or polled here",
+    "independent_review": "not claimed",
+    "guarded_merge": "not claimed",
+    "post_merge_vertical_probe": "not claimed",
+    "project_acceptance": "not claimed",
+    "physical_acoustic_realtime": "not claimed"
+  }
+}

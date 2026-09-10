@@ -1,0 +1,75 @@
+{
+  "binary": "/private/tmp/audio-runtime-c18-yui-b8f1139",
+  "binary_sha256": "00b9f057698b4fdec31250cea11f3626b619eafae1067ebcf294667eedd3ba44",
+  "case": "ask",
+  "evidence": {
+    "capture_sha256": "7717d7af0a38d2dae237cdaa60682d8336b071378be95367a1e6e94652a79324",
+    "record_stdout": "c18 local answer",
+    "replay_stdout": "c18 local answer"
+  },
+  "results": [
+    {
+      "argv": [
+        "/private/tmp/audio-runtime-c18-yui-b8f1139",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c18-capture-model",
+        "--base-url",
+        "http://127.0.0.1:57242/v1",
+        "--record",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c/capture.json",
+        "c18 deterministic ask"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c",
+      "duration_seconds": 0.71989,
+      "exit_code": 0,
+      "label": "ask/record-local-sse",
+      "passed": true,
+      "stderr": "",
+      "stdout": "c18 local answer",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    },
+    {
+      "argv": [
+        "/private/tmp/audio-runtime-c18-yui-b8f1139",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c18-capture-model",
+        "--base-url",
+        "http://127.0.0.1:57242/v1",
+        "--replay",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c/capture.json",
+        "c18 deterministic ask"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-lznav62c",
+      "duration_seconds": 0.020708,
+      "exit_code": 0,
+      "label": "ask/replay-after-helper-stop",
+      "passed": true,
+      "stderr": "",
+      "stdout": "c18 local answer",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    }
+  ],
+  "source_revision": "b8f1139aa7f8ef2807293634f80f125bdab22f9c",
+  "status": "passed",
+  "timeout_seconds": 50.0
+}
