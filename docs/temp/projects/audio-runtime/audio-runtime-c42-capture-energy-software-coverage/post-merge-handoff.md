@@ -34,6 +34,19 @@ energy oracle and rejecting a bundle with `audio-trace/timeline.jsonl` removed.
 The reproducible commands and frozen input hashes are in `README.md`,
 `coverage-map.md`, and the generated `verification-report.json`.
 
+The exact committed software evidence uses source revision
+`52a951a878fb0602f492af0206fbb6d72001420b`, positive run
+`runs/verify-20260910T152336Z-1789053816078763000`, negative run
+`runs/verify-20260910T152336Z-1789053816079240000`, consumer SHA-256
+`9aadbc5a767584e2f77c3c3b0fcfd8128c0f277d620d17d609374ca85cd908ac`, and
+YUI SHA-256
+`9d3c0d812e7027f3d3ace0cd7148efad3d83c09d17f3f7ec281fe2e922824c50`. The
+YUI rebuild was attempted but could not complete because `dsymutil` reported
+`No space left on device`; the pinned prior YUI is reused because this
+candidate changes no production package imported by `agent-cli/cmd/agent`.
+The full per-file source/build-input hashes are recorded in
+`verification-report.json` and `implementation-provenance.json`.
+
 Focused Go evidence already collected:
 
 ```text

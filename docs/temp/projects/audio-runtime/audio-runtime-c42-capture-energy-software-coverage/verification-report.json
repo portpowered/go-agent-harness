@@ -12,7 +12,7 @@
       },
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage",
       "deadline_seconds": 10.0,
-      "elapsed_seconds": 0.020573,
+      "elapsed_seconds": 0.022246,
       "exit_code": -15,
       "output_exceeded": true,
       "reap_bounded": true,
@@ -35,7 +35,7 @@
       },
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage",
       "deadline_seconds": 0.25,
-      "elapsed_seconds": 0.304986,
+      "elapsed_seconds": 0.304928,
       "exit_code": -9,
       "output_exceeded": false,
       "reap_bounded": true,
@@ -50,18 +50,18 @@
   "case_count": 53,
   "clean_shutdown": true,
   "consumer": {
-    "path": "/private/tmp/audio-runtime-c42-consumer-27aeb410",
+    "path": "/private/tmp/audio-runtime-c42-consumer-2e04ad68",
     "process": {
       "argv": [
-        "/private/tmp/audio-runtime-c42-consumer-27aeb410"
+        "/private/tmp/audio-runtime-c42-consumer-2e04ad68"
       ],
       "captured_output_bytes": {
         "stderr": 0,
-        "stdout": 25297
+        "stdout": 25898
       },
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer",
       "deadline_seconds": 10.0,
-      "elapsed_seconds": 0.039637,
+      "elapsed_seconds": 0.004365,
       "exit_code": 0,
       "output_exceeded": false,
       "reap_bounded": true,
@@ -69,11 +69,35 @@
       "termination_signals": [],
       "timed_out": false
     },
-    "sha256": "bf9fc14dc8fcf793a5552854fdb7f1f70c31574d277c27a930a43232f7465bf7"
+    "sha256": "9aadbc5a767584e2f77c3c3b0fcfd8128c0f277d620d17d609374ca85cd908ac"
   },
+  "control_count": 1,
   "credential_env_removed": [],
-  "elapsed_seconds": 0.727927,
-  "hardware_acoustic_evidence": "not claimed; this is credential-free software replay and Windows cross-build coverage",
+  "elapsed_seconds": 0.684103,
+  "hardware_acoustic_evidence": "OUT OF SCOPE under the effective 2026-09-10 amendment; this is credential-free software replay and Windows software/cross-build coverage",
+  "independent_controls": [
+    {
+      "actual_energy": 4.49423283715579e+307,
+      "actual_samples": [
+        6.703903964971299e+153
+      ],
+      "api": "codec.PacketEnergy",
+      "bits_per_sample": 64,
+      "channels": 1,
+      "encoding": "ieee-float",
+      "expected_energy": 4.49423283715579e+307,
+      "expected_samples": [
+        6.703903964971299e+153
+      ],
+      "frame_stride": 8,
+      "frames": 1,
+      "input_hex": "000000000000e05f",
+      "input_unchanged": true,
+      "name": "c42-float64-single-square-finite",
+      "panicked": false,
+      "valid_bits_per_sample": 64
+    }
+  ],
   "mode": "software",
   "provenance": {
     "base_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
@@ -96,7 +120,7 @@
         "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
       }
     },
-    "source_revision": "d7bdacdd39a5493baa8575ab1a2c7a95722b1b57"
+    "source_revision": "52a951a878fb0602f492af0206fbb6d72001420b"
   },
   "public_replay": {
     "audio_tool": {
@@ -104,18 +128,18 @@
         "argv": [
           "/private/tmp/audio-runtime-c42-yui-27aeb410",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/work",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/work",
           "--allow-path",
           "evidence",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/config",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/fixtures/c16-audio-tool.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/rendered.pcm",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/rendered.pcm",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/bundle",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/bundle",
           "--trace-audio",
           "--max-duration",
           "60s"
@@ -124,9 +148,9 @@
           "stderr": 0,
           "stdout": 1139
         },
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/work",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/work",
         "deadline_seconds": 60.0,
-        "elapsed_seconds": 0.095781,
+        "elapsed_seconds": 0.078374,
         "exit_code": 0,
         "output_exceeded": false,
         "reap_bounded": true,
@@ -138,20 +162,20 @@
         "argv": [
           "/private/tmp/audio-runtime-c42-yui-27aeb410",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/replay",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/config",
           "session",
           "replay",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/bundle"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/bundle"
         ],
         "captured_output_bytes": {
           "stderr": 108,
           "stdout": 26
         },
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/audio-tool/replay",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/audio-tool/replay",
         "deadline_seconds": 60.0,
-        "elapsed_seconds": 0.021812,
+        "elapsed_seconds": 0.02251,
         "exit_code": 0,
         "expected_text": "Replay verified: 18 wire events, 1 tool calls.",
         "output_exceeded": false,
@@ -198,18 +222,18 @@
         "argv": [
           "/private/tmp/audio-runtime-c42-yui-27aeb410",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/work",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/work",
           "--allow-path",
           "evidence",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/config",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/fixtures/c16-interruption.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/rendered.pcm",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/rendered.pcm",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/bundle",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/bundle",
           "--trace-audio",
           "--max-duration",
           "60s"
@@ -218,9 +242,9 @@
           "stderr": 0,
           "stdout": 1053
         },
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/work",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/work",
         "deadline_seconds": 60.0,
-        "elapsed_seconds": 0.049885,
+        "elapsed_seconds": 0.047687,
         "exit_code": 0,
         "output_exceeded": false,
         "reap_bounded": true,
@@ -232,20 +256,20 @@
         "argv": [
           "/private/tmp/audio-runtime-c42-yui-27aeb410",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/replay",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/config",
           "session",
           "replay",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/bundle"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/bundle"
         ],
         "captured_output_bytes": {
           "stderr": 108,
           "stdout": 0
         },
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T140824Z-1789049304617143000/interruption/replay",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c42-capture-energy-software-coverage/docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/runs/verify-20260910T152336Z-1789053816078763000/interruption/replay",
         "deadline_seconds": 60.0,
-        "elapsed_seconds": 0.020833,
+        "elapsed_seconds": 0.020251,
         "exit_code": 0,
         "expected_text": "Replay verified: 15 wire events, 0 tool calls.",
         "output_exceeded": false,
@@ -296,14 +320,14 @@
     "total_deadline_seconds": 600.0,
     "yui_deadline_seconds": 60.0
   },
-  "run_dir": "runs/verify-20260910T140824Z-1789049304617143000",
+  "run_dir": "runs/verify-20260910T152336Z-1789053816078763000",
   "schema": "audio-runtime-c42-capture-energy-verification.v1",
-  "source_revision": "d7bdacdd39a5493baa8575ab1a2c7a95722b1b57",
+  "source_revision": "52a951a878fb0602f492af0206fbb6d72001420b",
   "source_sha256": {
     "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.mod": "88e449a23418fbcff4871745b81324a6c68066ba3930dd21e5195b71a4d3fa6c",
     "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.sum": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857",
-    "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/main.go": "a4cfe0a4669e303f3e187d864946f0198b070404ad0eb9dd2bee7e7d9d8139a3",
-    "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/run.py": "bb305238ec45d821608c055a7319b5b43955feff2bddd87b5a6a4babe5e5bec7",
+    "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/main.go": "b26a07883f7f7bee7337e8215474528fe744fc7784d695f54790e2c75a54614a",
+    "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/run.py": "76688daf43f2f375e7ff0c067475852dab14848532a731c81d54a303cc6b067b",
     "evidence/c32-original-expected.json": "d209639bf6cf51c61fe2931eed9e50586fae1824334daa3239af8cc841a47f34",
     "evidence/c32-original-failed-report.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
     "evidence/c42-expected.json": "3f342a14a40ccce4d0e9856246fc182b48f649a4d22ceae5cbd88dc9e3b6e925",
@@ -312,9 +336,9 @@
     "evidence/fixtures/yui-config/config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
     "evidence/fixtures/yui-config/models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
     "go-audio/pkg/codec/sample_value.go": "4fc9b6b85bb1162b42fbacb60cc24326f4bbe312c5ec7109185320172aaac49a",
-    "go-audio/pkg/codec/sample_value_test.go": "1c5596d9886fba3aabb4352a823af7147012a18226a36c825cd23530e038b3ff",
+    "go-audio/pkg/codec/sample_value_test.go": "f41c5b4b64c3a83525d0bfdfacc7bd8c23fcd4069c74caa6dad90f4a6370aeb0",
     "go-device-gateway/pkg/devices/device_windows.go": "de5baf79e3f3ccfbab29143fc28af29d227e6f1227f5ea28026924c0ef885371",
-    "go-device-gateway/pkg/devices/device_windows_test.go": "f1991f158871bc982c8655444f138c1bfb887cfc9131f0e7435bf488e4e8b46f"
+    "go-device-gateway/pkg/devices/device_windows_test.go": "34b044a08475f6a40ffc5df8eb14a2a17c87217b2c2af35276d996682b149af6"
   },
   "yui": {
     "path": "/private/tmp/audio-runtime-c42-yui-27aeb410",

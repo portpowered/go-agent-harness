@@ -52,6 +52,28 @@
     "command": "go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1",
     "result": "SUCCESS on the prior candidate head; the repaired head requires a new script-CI run"
   },
+  "candidate_evidence": {
+    "tested_source_revision": "52a951a878fb0602f492af0206fbb6d72001420b",
+    "positive_run": "runs/verify-20260910T152336Z-1789053816078763000",
+    "negative_run": "runs/verify-20260910T152336Z-1789053816079240000",
+    "verification_report": "verification-report.json",
+    "consumer": {
+      "path": "/private/tmp/audio-runtime-c42-consumer-2e04ad68",
+      "sha256": "9aadbc5a767584e2f77c3c3b0fcfd8128c0f277d620d17d609374ca85cd908ac"
+    },
+    "yui": {
+      "path": "/private/tmp/audio-runtime-c42-yui-27aeb410",
+      "sha256": "9d3c0d812e7027f3d3ace0cd7148efad3d83c09d17f3f7ec281fe2e922824c50",
+      "input_status": "Rebuild was attempted and dsymutil failed with No space left on device; this candidate changes no production package imported by agent-cli/cmd/agent, so the prior executable inputs remain identical and the pinned artifact is reused"
+    },
+    "oracle_counts": {
+      "frozen_c32_cases": 40,
+      "disjoint_c42_cases": 13,
+      "independent_square_controls": 1,
+      "reported_cases": 53
+    },
+    "source_hashes": "verification-report.json.source_sha256"
+  },
   "amendment": {
     "authority": "factory/docs/operating-policy.md",
     "section": "User scope amendment — 2026-09-10",
