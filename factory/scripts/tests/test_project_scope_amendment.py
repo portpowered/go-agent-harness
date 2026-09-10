@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -814,6 +815,39 @@ class ScopeAmendmentTests(unittest.TestCase):
         report = json.loads((output / "probe-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "FAILED")
         self.assertIn("source revision mismatch", report["error"])
+
+    def test_probe_aggregate_deadline_covers_multiple_children(self):
+        """A shared deadline must bound a sequence, not only each child."""
+
+        with mock.patch.multiple(
+            PROBE,
+            TERM_GRACE_SECONDS=0.05,
+            KILL_GRACE_SECONDS=0.05,
+            READER_JOIN_SECONDS=0.05,
+            CLEANUP_RESERVE_SECONDS=0.2,
+        ):
+            deadline = time.monotonic() + 1.5
+            first = PROBE.run_bounded(
+                [sys.executable, "-c", "import time; time.sleep(0.3)"],
+                timeout=5,
+                deadline=deadline,
+            )
+            self.assertEqual(first["exitCode"], 0)
+
+            second = PROBE.run_bounded(
+                [sys.executable, "-c", "import time; time.sleep(2)"],
+                timeout=5,
+                deadline=deadline,
+            )
+            self.assertTrue(second["timedOut"])
+            self.assertTrue(second["reaped"])
+
+            with self.assertRaisesRegex(PROBE.ProbeError, "total deadline"):
+                PROBE.run_bounded(
+                    [sys.executable, "-c", "import time; time.sleep(0.1)"],
+                    timeout=5,
+                    deadline=deadline,
+                )
 
     def test_amended_completion_rejects_stale_or_incomplete_identity(self):
         self.fixture.append()

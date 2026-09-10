@@ -41,6 +41,15 @@ MAX_PROBE_SECONDS = 600
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
 MAX_OUTPUT_BYTES = 32 * 1024
 OUTPUT_READ_CHUNK = 8 * 1024
+TERM_GRACE_SECONDS = 2
+KILL_GRACE_SECONDS = 2
+READER_JOIN_SECONDS = 2
+# A child timeout must leave enough time for bounded cleanup before the
+# aggregate probe deadline.  The two reader joins are sequential, so both are
+# included in this reserve.
+CLEANUP_RESERVE_SECONDS = (
+    TERM_GRACE_SECONDS + KILL_GRACE_SECONDS + (2 * READER_JOIN_SECONDS)
+)
 CREDENTIAL_ENVIRONMENT_NAMES = {
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
@@ -75,6 +84,39 @@ PROTECTED_RELATIVES = (
 
 class ProbeError(RuntimeError):
     pass
+
+
+def _deadline_remaining(deadline: float | None) -> float | None:
+    if deadline is None:
+        return None
+    return deadline - time.monotonic()
+
+
+def _require_deadline(
+    deadline: float | None,
+    label: str,
+    *,
+    reserve: float = 0,
+) -> None:
+    remaining = _deadline_remaining(deadline)
+    if remaining is not None and remaining <= reserve:
+        raise ProbeError(
+            f"probe exceeded the {MAX_PROBE_SECONDS} second total deadline before {label}"
+        )
+
+
+def _bounded_timeout(
+    requested: float,
+    deadline: float | None,
+    *,
+    reserve: float = 0,
+) -> float:
+    if requested < 0:
+        raise ValueError("timeout must be nonnegative")
+    remaining = _deadline_remaining(deadline)
+    if remaining is None:
+        return requested
+    return min(requested, max(0.0, remaining - reserve))
 
 
 def _sha256(path: Path) -> str:
@@ -235,7 +277,10 @@ def _directory_replay(
     parent: Path,
     phrase: str,
     label: str,
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
+    _require_deadline(deadline, f"{label} directory replay")
     workdir = parent / f"{label}-directory-replay"
     (workdir / "evidence/runs").mkdir(parents=True)
     (workdir / "home").mkdir()
@@ -247,6 +292,7 @@ def _directory_replay(
         cwd=workdir,
         env=_credential_free_environment(workdir / "home"),
         timeout=MAX_CHILD_SECONDS,
+        deadline=deadline,
     )
     combined = f"{result['stdout']}\n{result['stderr']}"
     if result["exitCode"] != 0 or phrase not in combined:
@@ -269,7 +315,10 @@ def _missing_timeline_replay(
     config_source: Path,
     parent: Path,
     label: str,
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
+    _require_deadline(deadline, f"{label} missing-timeline replay")
     missing_bundle = parent / f"{label}-missing-timeline-bundle"
     shutil.copytree(bundle, missing_bundle)
     timeline = missing_bundle / "audio-trace" / "timeline.jsonl"
@@ -286,6 +335,7 @@ def _missing_timeline_replay(
         cwd=workdir,
         env=_credential_free_environment(workdir / "home"),
         timeout=MAX_CHILD_SECONDS,
+        deadline=deadline,
     )
     combined = f"{result['stdout']}\n{result['stderr']}".lower()
     if result["exitCode"] == 0 or "timeline" not in combined:
@@ -320,9 +370,20 @@ def run_bounded(
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
     timeout: float = MAX_CHILD_SECONDS,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
-    """Run one child with bounded pipe draining and TERM/KILL/reap cleanup."""
+    """Run one child with per-child and shared aggregate deadlines."""
 
+    _require_deadline(
+        deadline,
+        "child launch",
+        reserve=CLEANUP_RESERVE_SECONDS,
+    )
+    wait_timeout = _bounded_timeout(
+        timeout,
+        deadline,
+        reserve=CLEANUP_RESERVE_SECONDS,
+    )
     started = time.monotonic()
     process = subprocess.Popen(
         command,
@@ -366,19 +427,23 @@ def run_bounded(
     timed_out = False
     cleanup = "none"
     wait_error: BaseException | None = None
+
+    def wait_for(process_timeout: float, *, reserve: float = 0) -> None:
+        process.wait(timeout=_bounded_timeout(process_timeout, deadline, reserve=reserve))
+
     try:
-        process.wait(timeout=timeout)
+        wait_for(wait_timeout, reserve=CLEANUP_RESERVE_SECONDS)
     except subprocess.TimeoutExpired:
         timed_out = True
         cleanup = "term"
         _terminate_group(process, signal.SIGTERM)
         try:
-            process.wait(timeout=2)
+            wait_for(TERM_GRACE_SECONDS)
         except subprocess.TimeoutExpired:
             cleanup = "kill"
             _terminate_group(process, signal.SIGKILL)
             try:
-                process.wait(timeout=2)
+                wait_for(KILL_GRACE_SECONDS)
             except subprocess.TimeoutExpired as reap_error:
                 wait_error = ProbeError("child did not terminate after bounded KILL/reap")
                 wait_error.__cause__ = reap_error
@@ -387,12 +452,12 @@ def run_bounded(
             cleanup = "kill"
             _terminate_group(process, signal.SIGKILL)
             try:
-                process.wait(timeout=2)
+                wait_for(KILL_GRACE_SECONDS)
             except subprocess.TimeoutExpired as reap_error:
                 wait_error = ProbeError("child did not terminate after bounded KILL/reap")
                 wait_error.__cause__ = reap_error
         for reader in readers:
-            reader.join(timeout=2)
+            reader.join(timeout=_bounded_timeout(READER_JOIN_SECONDS, deadline))
             if reader.is_alive() and wait_error is None:
                 wait_error = ProbeError(
                     f"{reader.name} did not finish bounded pipe draining"
@@ -426,16 +491,18 @@ def run_bounded(
     }
 
 
-def _run_git(root: Path, *arguments: str) -> None:
-    result = subprocess.run(
+def _run_git(
+    root: Path,
+    *arguments: str,
+    deadline: float | None = None,
+) -> None:
+    result = run_bounded(
         ["git", "-C", str(root), *arguments],
-        capture_output=True,
-        text=True,
-        check=False,
         timeout=MAX_CHILD_SECONDS,
+        deadline=deadline,
     )
-    if result.returncode:
-        raise ProbeError(f"git {' '.join(arguments)} failed: {result.stderr.strip()}")
+    if result["exitCode"]:
+        raise ProbeError(f"git {' '.join(arguments)} failed: {result['stderr'].strip()}")
 
 
 def _source_for(relative: str) -> Path:
@@ -453,9 +520,12 @@ def _input_provenance(
     source_revision: str,
     yui: Path,
     replay_pairs: list[tuple[Path, Path]],
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
     """Record every controller/probe executable input before it is launched."""
 
+    _require_deadline(deadline, "input provenance")
     source_inputs = {}
     for relative in (
         amendments.MANIFEST_RELATIVE,
@@ -516,7 +586,8 @@ def _input_provenance(
     }
 
 
-def _copy_reviewed_inputs(root: Path) -> None:
+def _copy_reviewed_inputs(root: Path, *, deadline: float | None = None) -> None:
+    _require_deadline(deadline, "reviewed-input staging")
     for relative in (
         amendments.AUTHORIZATION_RELATIVE,
         amendments.HISTORICAL_REPORT_RELATIVE,
@@ -524,14 +595,16 @@ def _copy_reviewed_inputs(root: Path) -> None:
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_source_for(relative), destination)
+    _require_deadline(deadline, "reviewed-input staging")
 
 
-def _make_fixture(parent: Path) -> Path:
+def _make_fixture(parent: Path, *, deadline: float | None = None) -> Path:
+    _require_deadline(deadline, "controller fixture setup")
     root = (parent / "controller-fixture").resolve()
     root.mkdir()
-    _run_git(root.parent, "init", "-q", "-b", "main", str(root))
-    _run_git(root, "config", "user.name", "C39 isolated probe")
-    _run_git(root, "config", "user.email", "c39-probe@example.invalid")
+    _run_git(root.parent, "init", "-q", "-b", "main", str(root), deadline=deadline)
+    _run_git(root, "config", "user.name", "C39 isolated probe", deadline=deadline)
+    _run_git(root, "config", "user.email", "c39-probe@example.invalid", deadline=deadline)
     source = REPO_ROOT / "factory" / "projects" / amendments.PROJECT
     destination = root / "factory" / "projects" / amendments.PROJECT
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -541,11 +614,13 @@ def _make_fixture(parent: Path) -> Path:
     shutil.rmtree(destination / "amendments", ignore_errors=True)
     (root / "docs" / "temp" / "projects" / amendments.PROJECT).mkdir(parents=True)
     (root / "docs" / "temp" / "probes").mkdir(parents=True)
-    _copy_reviewed_inputs(root)
+    _copy_reviewed_inputs(root, deadline=deadline)
+    _require_deadline(deadline, "controller fixture admission")
     project_admission.ProjectAdmission(root).Admit(
         amendments.PROJECT,
         amendments.CONTRACT_REVISION,
     )
+    _require_deadline(deadline, "controller fixture setup")
     return root
 
 
@@ -563,15 +638,23 @@ def _controller(
     root: Path,
     *arguments: str,
     fake_you: Path | None = None,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
     return run_bounded(
         [sys.executable, str(SCRIPTS_DIR / script), "--root", str(root), *arguments],
         cwd=root,
         env=_controller_env(fake_you),
+        deadline=deadline,
     )
 
 
-def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
+def _record_controller_effects(
+    fixture: Path,
+    output: Path,
+    *,
+    deadline: float | None = None,
+) -> dict[str, Any]:
+    _require_deadline(deadline, "controller effects")
     protected_before = _protected_hashes(fixture)
     record_input = fixture / "candidate-record.json"
     record_input.write_bytes(
@@ -583,6 +666,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "amendment-append",
         "--record",
         str(record_input),
+        deadline=deadline,
     )
     if append["exitCode"] != 0:
         raise ProbeError(f"authorized append failed: {append['stderr']}")
@@ -592,6 +676,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "amendment-append",
         "--record",
         str(record_input),
+        deadline=deadline,
     )
     if append_repeat["exitCode"] != 0:
         raise ProbeError(f"idempotent append failed: {append_repeat['stderr']}")
@@ -604,6 +689,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "amendment-status",
         "--amendment-id",
         amendments.AMENDMENT_ID,
+        deadline=deadline,
     )
     if status["exitCode"] != 0:
         raise ProbeError(f"amendment status failed: {status['stderr']}")
@@ -654,6 +740,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
             fixture,
             work_name,
             json.dumps(packet),
+            deadline=deadline,
         )
         if prepared_result["exitCode"] != 0:
             raise ProbeError(f"amended preparation failed: {prepared_result['stderr']}")
@@ -798,6 +885,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "--name",
         amendments.PROJECT,
         fake_you=fake_you,
+        deadline=deadline,
     )
     if completion["exitCode"] != 0:
         raise ProbeError(f"amended completion failed: {completion['stderr']}")
@@ -817,6 +905,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
                 "--name",
                 amendments.PROJECT,
                 fake_you=fake_you,
+                deadline=deadline,
             )
         finally:
             work_map.write_text(_json(original_work_responses), encoding="utf-8")
@@ -857,6 +946,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "amendment-append",
         "--record",
         str(forged_path),
+        deadline=deadline,
     )
     if rejection["exitCode"] == 0:
         raise ProbeError("expanded exclusion was accepted")
@@ -885,7 +975,10 @@ def _public_replay_case(
     fixture: Path,
     config_source: Path,
     label: str,
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
+    _require_deadline(deadline, f"{label} public replay")
     expectations = REPLAY_CASES[label]
     run_dir = output / f"public-replay-{label}"
     (run_dir / "evidence/runs").mkdir(parents=True)
@@ -912,6 +1005,7 @@ def _public_replay_case(
         cwd=run_dir,
         env=_credential_free_environment(run_dir / "home"),
         timeout=MAX_CHILD_SECONDS,
+        deadline=deadline,
     )
     if replay["exitCode"] != 0:
         raise ProbeError(
@@ -979,6 +1073,7 @@ def _public_replay_case(
         run_dir,
         expectations["replayPhrase"],
         label,
+        deadline=deadline,
     )
     missing_timeline = _missing_timeline_replay(
         yui,
@@ -986,6 +1081,7 @@ def _public_replay_case(
         config_source,
         run_dir,
         label,
+        deadline=deadline,
     )
     if _sha256(fixture) != fixture_hash:
         raise ProbeError(f"{label} replay fixture changed during the probe")
@@ -1010,7 +1106,10 @@ def _yui_probe(
     yui: Path,
     output: Path,
     replay_pairs: list[tuple[Path, Path]],
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
+    _require_deadline(deadline, "yui probe")
     _regular_file(yui, "yui")
     before = _sha256(yui)
     smoke_dir = output / "public-help"
@@ -1024,6 +1123,7 @@ def _yui_probe(
             cwd=smoke_dir,
             env=_credential_free_environment(smoke_dir / "home"),
             timeout=MAX_CHILD_SECONDS,
+            deadline=deadline,
         ),
     }
     if result["help"]["exitCode"] != 0:
@@ -1033,7 +1133,14 @@ def _yui_probe(
         )
     if replay_pairs:
         result["replays"] = {
-            label: _public_replay_case(yui, output, fixture, config, label)
+            label: _public_replay_case(
+                yui,
+                output,
+                fixture,
+                config,
+                label,
+                deadline=deadline,
+            )
             for label, (fixture, config) in zip(
                 ("audio-tool", "interruption"), replay_pairs, strict=True
             )
@@ -1084,14 +1191,18 @@ def _write_failure_report(
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
+    deadline = started + MAX_PROBE_SECONDS
     source_revision = args.source_revision.strip()
     if not source_revision:
         raise ProbeError("source revision is required")
-    actual_revision = subprocess.check_output(
+    revision_result = run_bounded(
         ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
-        text=True,
         timeout=MAX_CHILD_SECONDS,
-    ).strip()
+        deadline=deadline,
+    )
+    if revision_result["exitCode"] != 0:
+        raise ProbeError(f"cannot determine source revision: {revision_result['stderr']}")
+    actual_revision = revision_result["stdout"].strip()
     if actual_revision != source_revision:
         raise ProbeError(
             f"source revision mismatch: expected {source_revision}, observed {actual_revision}"
@@ -1101,11 +1212,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ProbeError("output must be a fresh directory")
     output.mkdir(mode=0o700, parents=True)
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c39-probe-") as temporary:
-        fixture = _make_fixture(Path(temporary))
-        controller = _record_controller_effects(fixture, output)
+        fixture = _make_fixture(Path(temporary), deadline=deadline)
+        controller = _record_controller_effects(fixture, output, deadline=deadline)
     timeout_control = run_bounded(
         [sys.executable, "-c", "import time; time.sleep(120)"],
         timeout=0.5,
+        deadline=deadline,
     )
     if not timeout_control["timedOut"] or not timeout_control["reaped"]:
         raise ProbeError("deterministic timeout cleanup control did not time out and reap")
@@ -1115,12 +1227,21 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ProbeError("each replay fixture requires one replay config directory")
     yui = Path(args.yui).expanduser()
     replay_pairs = list(zip(replay_fixtures, replay_configs, strict=True))
-    input_provenance = _input_provenance(source_revision, yui, replay_pairs)
-    yui_result = _yui_probe(yui, output, replay_pairs)
+    input_provenance = _input_provenance(
+        source_revision,
+        yui,
+        replay_pairs,
+        deadline=deadline,
+    )
+    yui_result = _yui_probe(
+        yui,
+        output,
+        replay_pairs,
+        deadline=deadline,
+    )
     input_provenance["yui"]["sha256After"] = yui_result["sha256After"]
     elapsed = time.monotonic() - started
-    if elapsed > MAX_PROBE_SECONDS:
-        raise ProbeError("probe exceeded the 600 second total deadline")
+    _require_deadline(deadline, "probe report publication")
     report = {
         "schema": "audio-runtime-c39-controller-probe.v1",
         "status": "ACCEPTED",
