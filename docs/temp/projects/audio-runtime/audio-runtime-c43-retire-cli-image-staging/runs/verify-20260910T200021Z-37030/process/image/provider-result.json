@@ -1,0 +1,36 @@
+{
+  "initial_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T200021Z-37030/process/image/config/.session-images-1311998978/image-000.png",
+  "initial_tools": [
+    "c43_initial_probe",
+    "read_image",
+    "show_page",
+    "webmcp_cancel",
+    "webmcp_get_context",
+    "webmcp_invoke",
+    "webmcp_list_tabs",
+    "webmcp_list_tools",
+    "webmcp_navigate_tab",
+    "webmcp_open_tab",
+    "webmcp_select_tab"
+  ],
+  "mode": "image",
+  "output_sha256": "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+  "refreshed_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T200021Z-37030/process/image/config/.session-images-1311998978/image-000.png",
+  "refreshed_tools": [
+    "c43_initial_probe",
+    "c43_refreshed_probe",
+    "read_image",
+    "show_page",
+    "webmcp_cancel",
+    "webmcp_get_context",
+    "webmcp_invoke",
+    "webmcp_list_tabs",
+    "webmcp_list_tools",
+    "webmcp_navigate_tab",
+    "webmcp_open_tab",
+    "webmcp_select_tab"
+  ],
+  "session_created": true,
+  "status": "PASS",
+  "typed_projection_exact": true
+}

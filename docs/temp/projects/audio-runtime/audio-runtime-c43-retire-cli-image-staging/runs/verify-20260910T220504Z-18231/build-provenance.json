@@ -1,0 +1,381 @@
+{
+  "source_revision": "ba6fffadc76e392b6086c86128cb4ae889c2aedf",
+  "source_info": {
+    "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+    "current_revision": "ba6fffadc76e392b6086c86128cb4ae889c2aedf",
+    "source_path": "agent-cli/internal/services/internal/agentruntime/session_image_staging.go",
+    "baseline_source_lines": 142,
+    "final_adapter_lines": 71,
+    "retired_symbols": [
+      {
+        "symbol": "sessionImageToolPathDescription",
+        "baseline_present": true,
+        "final_present": false
+      },
+      {
+        "symbol": "sessionImageStageExtension",
+        "baseline_present": true,
+        "final_present": false
+      },
+      {
+        "symbol": "advertiseSessionImagePaths",
+        "baseline_present": true,
+        "final_present": false
+      }
+    ],
+    "retained_adapter_symbols": [
+      {
+        "symbol": "prepareSessionImageToolAccess",
+        "baseline_present": true,
+        "final_present": true
+      },
+      {
+        "symbol": "sessionImageStagingConfigDir",
+        "baseline_present": true,
+        "final_present": true
+      }
+    ],
+    "source_delta_sha256": "94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4",
+    "source_delta_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/source-delta.diff",
+    "inventory_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/symbol-inventory.json"
+  },
+  "cli_binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/yui",
+  "cli_binary_sha256": "330545ccf3727e1531640079b0971c30efa98199f620448e8fa39b014b350e37",
+  "provider_binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/c43-local-provider",
+  "provider_binary_sha256": "7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26",
+  "provider_source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/provider/main.go",
+  "provider_source_sha256": "f63381b1b55a10c095692938967a39a62bd77b6f50717c41278405aa97cd614a",
+  "provider_go_mod_sha256": "74818e32b3ebd9f099968c48889abc7a39e40edc0fe53fafc6fc43c5514288a3",
+  "provider_go_sum_sha256": "5d7ccfed4060443eba555645f2e3f494bc8b3f1c7991d1d8d4204b7c82c1f94a",
+  "page_source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/browser/page.html",
+  "page_source_sha256": "703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698",
+  "go_environment": "go1.26.7\ndarwin\narm64",
+  "build_commands": [
+    [
+      "rtk",
+      "proxy",
+      "go",
+      "build",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/yui",
+      "./agent-cli/cmd/yui"
+    ],
+    [
+      "rtk",
+      "proxy",
+      "go",
+      "build",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/c43-local-provider",
+      "./provider"
+    ]
+  ],
+  "network": "loopback-only deterministic provider and WebMCP page",
+  "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/build-provenance.json",
+  "process_observations": [
+    {
+      "case": "image",
+      "mode": "image",
+      "cli_argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/yui",
+        "--config-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/config",
+        "--workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging",
+        "session",
+        "--provider",
+        "openai",
+        "--model",
+        "gpt-realtime",
+        "--api-key",
+        "c43-hermetic-key",
+        "--base-url",
+        "ws://127.0.0.1:57736/realtime",
+        "--system-prompt",
+        "none",
+        "--image",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/literal.png",
+        "--browser-tools",
+        "webmcp",
+        "--browser-cdp-url",
+        "http://127.0.0.1:57737",
+        "--browser-auto-select",
+        "single",
+        "--browser-allowed-origin",
+        "http://127.0.0.1:57735",
+        "--browser-approval",
+        "never",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/recording",
+        "--max-duration",
+        "20s",
+        "--wait-for-close"
+      ],
+      "duration_seconds": 3.472296,
+      "cli_exit_code": 0,
+      "cli_timed_out": false,
+      "cli_stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/cli.stdout.log",
+      "cli_stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/cli.stderr.log",
+      "cli_stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image, show_page, webmcp_cancel, webmcp_get_context, webmcp_invoke, webmcp_list_tabs, webmcp_list_tools, webmcp_navigate_tab, webmcp_open_tab, webmcp_select_tab\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":70,\"sha256\":\"4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5\",\"typed_projection\":\"input_image\"}\nAssistant: c43 shipped image workflow verified\n[session terminal: classification=provider_authored_completion terminal_reason=provider_authored_completion terminal_provenance=provider output_state=complete]\n",
+      "cli_stderr": "",
+      "provider": {
+        "ready": true,
+        "url": "ws://127.0.0.1:57736/realtime",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/c43-local-provider",
+          "--mode",
+          "image",
+          "--result",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/provider-result.json",
+          "--log",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/provider-events.jsonl",
+          "--fixture-sha256",
+          "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+          "--fixture-bytes",
+          "70",
+          "--fixture-base64",
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        ],
+        "result_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/provider-result.json",
+        "event_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/provider-events.jsonl",
+        "ready_line": "{\"ready\":true,\"url\":\"ws://127.0.0.1:57736/realtime\"}"
+      },
+      "provider_result": {
+        "initial_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/config/.session-images-4076800263/image-000.png",
+        "initial_tools": [
+          "c43_initial_probe",
+          "read_image",
+          "show_page",
+          "webmcp_cancel",
+          "webmcp_get_context",
+          "webmcp_invoke",
+          "webmcp_list_tabs",
+          "webmcp_list_tools",
+          "webmcp_navigate_tab",
+          "webmcp_open_tab",
+          "webmcp_select_tab"
+        ],
+        "mode": "image",
+        "output_sha256": "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+        "refreshed_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/config/.session-images-4076800263/image-000.png",
+        "refreshed_tools": [
+          "c43_initial_probe",
+          "c43_refreshed_probe",
+          "read_image",
+          "show_page",
+          "webmcp_cancel",
+          "webmcp_get_context",
+          "webmcp_invoke",
+          "webmcp_list_tabs",
+          "webmcp_list_tools",
+          "webmcp_navigate_tab",
+          "webmcp_open_tab",
+          "webmcp_select_tab"
+        ],
+        "session_created": true,
+        "status": "PASS",
+        "typed_projection_exact": true
+      },
+      "chrome": {
+        "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "cdp_url": "http://127.0.0.1:57737",
+        "port": 57737,
+        "profile": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/chrome-profile",
+        "argv": [
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+          "--headless=new",
+          "--disable-gpu",
+          "--disable-component-update",
+          "--disable-extensions",
+          "--disable-features=DelayMediaSinkDiscovery",
+          "--disable-sync",
+          "--no-default-browser-check",
+          "--no-first-run",
+          "--remote-debugging-address=127.0.0.1",
+          "--remote-debugging-port=57737",
+          "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+          "--enable-blink-features=DeclarativeWebmcp",
+          "--user-data-dir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/chrome-profile",
+          "http://127.0.0.1:57735/c43.html"
+        ]
+      },
+      "fixture": {
+        "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/main.go",
+        "source_sha256": "5f35d7f858c6f44dbcd04234efb233ad5ac8ac4cc83717821033eea6f14cf7e8",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/image/literal.png",
+        "sha256": "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+        "bytes": 70
+      },
+      "page": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/browser/page.html",
+        "sha256": "703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698",
+        "url": "http://127.0.0.1:57735/c43.html"
+      },
+      "page_events": [
+        "initial",
+        "refreshed"
+      ],
+      "staging_leftovers": [],
+      "process_group_survivors": {
+        "cli": false,
+        "provider": false,
+        "chrome": false
+      },
+      "network_scope": [
+        "127.0.0.1 page HTTP",
+        "127.0.0.1 CDP",
+        "127.0.0.1 provider WebSocket"
+      ]
+    },
+    {
+      "case": "induced-timeout",
+      "mode": "timeout",
+      "cli_argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/yui",
+        "--config-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/config",
+        "--workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging",
+        "session",
+        "--provider",
+        "openai",
+        "--model",
+        "gpt-realtime",
+        "--api-key",
+        "c43-hermetic-key",
+        "--base-url",
+        "ws://127.0.0.1:57788/realtime",
+        "--system-prompt",
+        "none",
+        "--image",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/literal.png",
+        "--browser-tools",
+        "webmcp",
+        "--browser-cdp-url",
+        "http://127.0.0.1:57789",
+        "--browser-auto-select",
+        "single",
+        "--browser-allowed-origin",
+        "http://127.0.0.1:57787",
+        "--browser-approval",
+        "never",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/recording",
+        "--max-duration",
+        "2s",
+        "--wait-for-close"
+      ],
+      "duration_seconds": 3.628954,
+      "cli_exit_code": 0,
+      "cli_timed_out": false,
+      "cli_stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/cli.stdout.log",
+      "cli_stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/cli.stderr.log",
+      "cli_stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image, show_page, webmcp_cancel, webmcp_get_context, webmcp_invoke, webmcp_list_tabs, webmcp_list_tools, webmcp_navigate_tab, webmcp_open_tab, webmcp_select_tab\n[session terminal: classification=max_duration terminal_reason=max_duration terminal_provenance=loop output_state=partial]\nlive session terminated: live session exceeded maximum duration\n",
+      "cli_stderr": "",
+      "provider": {
+        "ready": true,
+        "url": "ws://127.0.0.1:57788/realtime",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/c43-local-provider",
+          "--mode",
+          "timeout",
+          "--result",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/provider-result.json",
+          "--log",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/provider-events.jsonl",
+          "--fixture-sha256",
+          "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+          "--fixture-bytes",
+          "70",
+          "--fixture-base64",
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        ],
+        "result_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/provider-result.json",
+        "event_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/provider-events.jsonl",
+        "ready_line": "{\"ready\":true,\"url\":\"ws://127.0.0.1:57788/realtime\"}"
+      },
+      "provider_result": {
+        "expected_timeout_client_close": true,
+        "mode": "timeout",
+        "session_created": true,
+        "status": "PASS"
+      },
+      "chrome": {
+        "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "cdp_url": "http://127.0.0.1:57789",
+        "port": 57789,
+        "profile": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/chrome-profile",
+        "argv": [
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+          "--headless=new",
+          "--disable-gpu",
+          "--disable-component-update",
+          "--disable-extensions",
+          "--disable-features=DelayMediaSinkDiscovery",
+          "--disable-sync",
+          "--no-default-browser-check",
+          "--no-first-run",
+          "--remote-debugging-address=127.0.0.1",
+          "--remote-debugging-port=57789",
+          "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+          "--enable-blink-features=DeclarativeWebmcp",
+          "--user-data-dir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/chrome-profile",
+          "http://127.0.0.1:57787/c43.html"
+        ]
+      },
+      "fixture": {
+        "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/main.go",
+        "source_sha256": "5f35d7f858c6f44dbcd04234efb233ad5ac8ac4cc83717821033eea6f14cf7e8",
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/induced-timeout/literal.png",
+        "sha256": "4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5",
+        "bytes": 70
+      },
+      "page": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/browser/page.html",
+        "sha256": "703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698",
+        "url": "http://127.0.0.1:57787/c43.html"
+      },
+      "page_events": [
+        "initial",
+        "refreshed"
+      ],
+      "staging_leftovers": [],
+      "process_group_survivors": {
+        "cli": false,
+        "provider": false,
+        "chrome": false
+      },
+      "network_scope": [
+        "127.0.0.1 page HTTP",
+        "127.0.0.1 CDP",
+        "127.0.0.1 provider WebSocket"
+      ]
+    }
+  ],
+  "credential_free_tool_replay_process": {
+    "argv": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/artifacts/yui",
+      "--config-dir",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/config",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/strict-exec.session.json",
+      "probe",
+      "PROBE_TOOL_MARKER_9182"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging",
+    "capture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/strict-exec.session.json",
+    "capture_sha256": "b6541a87a39e065151f45553ff5b9e788e2d9d57576a15c285eeac071a1476ea",
+    "config": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/config/config.yaml",
+    "config_sha256": "84a450eec67059fa1d0a81ad80651ff4f04fdcee0f7585b514774c00f16e1d07",
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_seconds": 0.045425,
+    "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/cli.stdout.log",
+    "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T220504Z-18231/process/credential-free-tool-replay/cli.stderr.log",
+    "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+    "stderr": "",
+    "process_group_survivor": false,
+    "credential_free": true
+  }
+}
