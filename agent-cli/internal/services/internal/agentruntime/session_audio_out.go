@@ -759,6 +759,12 @@ func (s *sessionAudioOutputSession) Close() error {
 	return s.closeErr
 }
 
+func (s *sessionAudioOutputSession) closeInnerSession() {
+	if err := s.Session.Close(); err != nil {
+		s.record(err)
+	}
+}
+
 func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) bool {
 	return s.forwardMessageWithContext(s.ctx, msg, false)
 }
@@ -768,12 +774,12 @@ func (s *sessionAudioOutputSession) forwardMessageWithContext(ctx context.Contex
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok {
 			s.record(fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value))
-			_ = s.Session.Close()
+			s.closeInnerSession()
 			return false
 		}
 		if err := s.output.writeDelta(ctx, value.Content, msg); err != nil {
 			s.record(err)
-			_ = s.Session.Close()
+			s.closeInnerSession()
 			return false
 		}
 	}
