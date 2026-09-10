@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -23,6 +27,8 @@ type RequestDependencies struct {
 	ReplayService       runtimeReplay.Service
 	ModelAdmission      runtimeProviders.ModelAdmission
 	CredentialReference func(string) string
+	InstructionService  runtimeSession.InstructionService
+	PageSightToolID     string
 	Capabilities        func(*config.Config) (*runtimeSession.LiveCapabilities, error)
 	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
 	OpenImages          func([]string) ([]messages.ContentPart, error)
@@ -80,11 +86,11 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 			return requestInputs{}, err
 		}
 	}
-	instructions, err := ResolvePrompt(request.SystemPrompt, request.WorkDir)
+	capabilities, err := buildCapabilities(loaded, request, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
+	instructions, err := resolveAndComposeInstructions(ctx, request, capabilities, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -106,6 +112,69 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 		inputRate: inputRate, outputRate: outputRate,
 		replayFinish: inspection != nil && (replayPlan == nil || replayPlan.StopAfterResponse),
 	}, nil
+}
+
+func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {
+	instructionService := deps.InstructionService
+	if instructionService == nil {
+		instructionService = runtimeSessionWire.NewInstructionService()
+	}
+	workspaceDir := request.WorkDir
+	if workspaceDir == "" && request.LoadedConfig != nil {
+		workspaceDir = request.LoadedConfig.FilesystemWorkDir
+	}
+	var scopeDescription string
+	var scopeSet bool
+	if workspaceDir != "" {
+		policy, err := cliTools.ResolveFilesystemPolicy(workspaceDir, request.AllowPaths...)
+		if err != nil {
+			return "", fmt.Errorf("resolve live filesystem scope: %w", err)
+		}
+		workspaceDir = policy.PrimaryRoot()
+		scopeDescription = policy.ScopeDescription()
+		scopeSet = true
+	}
+	loader := liveInstructionLoader{workspaceDir: workspaceDir, configDir: request.ConfigDir}
+	var instructionLoader runtimeSession.InstructionLoader = loader
+	if request.SystemPrompt == "" && workspaceDir == "" {
+		// An unconfigured embedded caller has no workspace source to select.
+		// Leave the loader nil so the runtime preserves the exact empty prompt
+		// identity instead of reading a process-relative AGENTS.md.
+		instructionLoader = nil
+	}
+	resolved, err := instructionService.Resolve(ctx, runtimeSession.InstructionRequest{
+		Prompt:                     request.SystemPrompt,
+		WorkspaceDir:               workspaceDir,
+		FilesystemScopeDescription: scopeDescription,
+		FilesystemScopeSet:         scopeSet,
+		Loader:                     instructionLoader,
+	})
+	if err != nil {
+		return "", err
+	}
+	composition := runtimeSession.InstructionComposition{
+		Instructions:        resolved.Instructions,
+		BrowserToolsEnabled: request.BrowserToolsEnabled,
+		PageSightToolID:     deps.PageSightToolID,
+	}
+	if capabilities != nil {
+		composition.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+		composition.BrowserCapabilityState = capabilities.BrowserCapabilityState
+	}
+	return instructionService.Compose(composition), nil
+}
+
+type liveInstructionLoader struct {
+	workspaceDir string
+	configDir    string
+}
+
+func (l liveInstructionLoader) Stat(path string) error { _, err := os.Stat(path); return err }
+
+func (l liveInstructionLoader) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
+
+func (l liveInstructionLoader) SkillsSummary() (string, error) {
+	return skills.NewLoader(l.workspaceDir, l.configDir).BuildSummary()
 }
 
 func requireLiveConfig(request serviceSession.Request) (*config.Config, error) {

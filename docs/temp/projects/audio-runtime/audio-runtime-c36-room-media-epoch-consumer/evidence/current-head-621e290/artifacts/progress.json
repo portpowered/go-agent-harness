@@ -1,0 +1,14 @@
+{
+  "action": "all",
+  "completed": [
+    "boundary",
+    "provenance",
+    "routing-epochs",
+    "mutations",
+    "partial-recording",
+    "consumption",
+    "lifecycle",
+    "hang-control",
+    "parity"
+  ]
+}
