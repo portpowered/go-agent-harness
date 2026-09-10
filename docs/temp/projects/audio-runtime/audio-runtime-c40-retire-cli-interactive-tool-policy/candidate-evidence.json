@@ -152,7 +152,7 @@
   "current_merged_head_validation": {
     "candidate_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
     "tested_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
-    "evidence_commit": "0831db2",
+    "evidence_commit": "documentation-only descendants of tested_source_revision",
     "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
     "note": "The tested source is the local merge checkpoint; evidence_commit is a documentation-only descendant. Current-head artifacts below supersede earlier executor hashes; the frozen interruption replay is intentionally not rerun while C38/task198 lacks reviewed repair and primary independent vertical acceptance.",
     "ancestry": {
