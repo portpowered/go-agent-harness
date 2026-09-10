@@ -1,0 +1,72 @@
+{
+  "mode": "verify",
+  "project": "audio-runtime",
+  "run_directory": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly",
+  "runtime_regression": {
+    "commands": [
+      {
+        "command": [
+          "/private/tmp/audio-runtime-c34-yui-nomicrophone",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-bundle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly",
+        "duration_seconds": 0.020494,
+        "exit_code": 0,
+        "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-regression-1.stderr.txt",
+        "stdout": "",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-regression-1.stdout.txt",
+        "timed_out": false
+      },
+      {
+        "command": [
+          "/private/tmp/audio-runtime-c34-yui-nomicrophone",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-bundle",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/rendered-output.pcm",
+          "--max-duration",
+          "60s"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly",
+        "duration_seconds": 0.035459,
+        "exit_code": 0,
+        "stderr": "",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-regression-2.stderr.txt",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-regression-2.stdout.txt",
+        "timed_out": false
+      }
+    ],
+    "private_bundle": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity/docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runs/replay-lifecycle-t5vqo8ly/runtime-bundle",
+    "rendered_pcm": {
+      "bytes": 3360,
+      "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+    },
+    "source_bundle": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/evidence/runs/interruption/bundle",
+    "source_bundle_hashes": {
+      "agent.transcript.jsonl": "6414036088693e8a57670542f1dd353b25c550b69a49c4dcd7c860e327e81223",
+      "audio-trace/speaker-enqueued.wav": "001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca",
+      "audio-trace/timeline.jsonl": "2b0e9d64ce4eff168be13c2ee650f973b969a9d7dcc6152dac416e1fdaba9fea",
+      "audio/out-000.pcm": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+      "client.transcript.jsonl": "6362cc60ab1ffedaab8861f2966307627f6a2398b7e1192f6edec29e7ee66f6d",
+      "manifest.json": "0b874fb3f6c996814c49f8d15c411db32d7810ed44105871ba3aca5b8b61e39e",
+      "provider.json": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+      "session-log.jsonl": "6c7e1faec79a3c932f2149725fd1f7018529f8c87dfd047019abfa17f5510e31"
+    },
+    "yui": "/private/tmp/audio-runtime-c34-yui-nomicrophone",
+    "yui_sha256": "46078225bd81f3e5b1dc08921b20d1fbdd19d04a581ef7132cad77c5c0e3ea2c"
+  },
+  "source_dirty": "?? meta-operator-throughput-feedback.md",
+  "source_revision": "20ff2f867eff3c158575825828aeb1cd970884d3",
+  "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c34-replay-terminal-integrity",
+  "status": "passed",
+  "work": "audio-runtime-c34-replay-terminal-integrity"
+}
