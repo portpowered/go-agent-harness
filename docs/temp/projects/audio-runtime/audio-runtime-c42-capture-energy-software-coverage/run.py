@@ -992,7 +992,7 @@ def main() -> int:
         },
         "bounded_controls": bounded_controls,
         "run_dir": str(run_dir.relative_to(EVIDENCE)),
-        "hardware_acoustic_evidence": "not claimed; this is credential-free software replay and Windows cross-build coverage",
+        "hardware_acoustic_evidence": "OUT OF SCOPE under the effective 2026-09-10 amendment; this is credential-free software replay and Windows software/cross-build coverage",
     }
     if args.mode == "software":
         summary["public_replay"] = run_public_software(yui, run_dir, total_deadline)
