@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -41,14 +43,12 @@ func TestFileSinkRawOutputAndOwnership(t *testing.T) {
 		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
 	}
 }
-
 func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 	samples := make([]int16, FrameSize*2)
 	for index := range samples {
 		samples[index] = int16(index*5 - 2000)
 	}
 	samples[0], samples[1], samples[2] = -32768, 32767, -1
-
 	tempDir := t.TempDir()
 	inputPath := filepath.Join(tempDir, "input.raw")
 	outputPath := filepath.Join(tempDir, "output.pcm")
@@ -56,7 +56,6 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 	if err := os.WriteFile(inputPath, want, 0o600); err != nil {
 		t.Fatal(err)
 	}
-
 	source, err := NewFileSource(inputPath, nil)
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
@@ -66,7 +65,6 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 		_ = source.Close()
 		t.Fatalf("NewFileSink() error = %v", err)
 	}
-
 	for {
 		frame := make([]int16, FrameSize)
 		err := source.ReadFrame(context.Background(), frame)
@@ -90,7 +88,6 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 	if err := sink.Close(); err != nil {
 		t.Fatalf("sink Close() error = %v", err)
 	}
-
 	got, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +96,6 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 		t.Fatalf("raw source-to-sink bytes = %v, want exact input bytes", got)
 	}
 }
-
 func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "owned.raw")
 	before := processOpenHandleCount(t)
@@ -112,7 +108,6 @@ func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	if opened <= before {
 		t.Fatalf("open-handle count after sink open = %d, before = %d; owned handle was not observed", opened, before)
 	}
-
 	if err := sink.Close(); err != nil {
 		t.Fatalf("first Close() error = %v", err)
 	}
@@ -129,19 +124,16 @@ func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	if afterSecond != afterFirst {
 		t.Fatalf("open-handle count after sink second close = %d, first close = %d; idempotent close changed the count", afterSecond, afterFirst)
 	}
-
 	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
 	}
 }
-
 func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	samples := make([]int16, FrameSize*2)
 	for index := range samples {
 		samples[index] = int16(index*3 - 1000)
 	}
 	samples[0], samples[1], samples[2] = -32768, 32767, -1
-
 	var input bytes.Buffer
 	if err := wavio.Write(&input, SampleRate, samples); err != nil {
 		t.Fatal(err)
@@ -151,7 +143,6 @@ func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	if err := os.WriteFile(inputPath, input.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
-
 	source, err := NewFileSource(inputPath, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -194,33 +185,32 @@ func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 
 func TestFileSinkWAVUsesRequestedSampleRate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "output.wav")
-	want := []int16{-32768, 0, 32767}
+	first, last := []int16{-32768, 0}, []int16{32767}
 	sink, err := NewFileSinkAtSampleRate(path, nil, 24000)
 	if err != nil {
 		t.Fatalf("NewFileSinkAtSampleRate() error = %v", err)
 	}
-	if err := sink.WriteSamples(context.Background(), want); err != nil {
+	if err := sink.WriteSamples(context.Background(), first); err != nil {
 		if closeErr := sink.Close(); closeErr != nil {
 			t.Fatalf("WriteSamples() error = %v; Close() error = %v", err, closeErr)
 		}
 		t.Fatalf("WriteSamples() error = %v", err)
 	}
+	if gotRate, got := readSinkWAV(t, path); gotRate != 24000 || !reflect.DeepEqual(got, first) {
+		t.Fatalf("checkpoint rate/samples = %d/%v, want 24000/%v", gotRate, got, first)
+	}
+	if err := sink.WriteSamples(context.Background(), last); err != nil {
+		t.Fatalf("second WriteSamples() error = %v", err)
+	}
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("os.ReadFile() error = %v", err)
+	if err := sink.Close(); err != nil {
+		t.Fatalf("repeated Close() error = %v", err)
 	}
-	gotRate, got, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("wavio.Read() error = %v", err)
-	}
-	if gotRate != 24000 {
-		t.Fatalf("WAV sample rate = %d, want 24000", gotRate)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("WAV samples = %v, want %v", got, want)
+	want := append(append([]int16{}, first...), last...)
+	if gotRate, got := readSinkWAV(t, path); gotRate != 24000 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("WAV rate/samples = %d/%v, want 24000/%v", gotRate, got, want)
 	}
 }
 
@@ -363,14 +353,29 @@ func (w *trackingWriter) Close() error {
 
 type shortWriter struct {
 	bytes.Buffer
-	max int
+	max       int
+	err       error
+	calls     int
+	failAfter bool
+	cancel    context.CancelFunc
 }
 
 func (w *shortWriter) Write(data []byte) (int, error) {
+	w.calls++
+	if w.failAfter && w.calls > 1 {
+		return 0, w.err
+	}
 	if len(data) > w.max {
 		data = data[:w.max]
 	}
-	return w.Buffer.Write(data)
+	written, err := w.Buffer.Write(data)
+	if w.cancel != nil {
+		w.cancel()
+	}
+	if w.err != nil && !w.failAfter {
+		return written, w.err
+	}
+	return written, err
 }
 
 type errorWriter struct{ err error }
@@ -381,10 +386,208 @@ type zeroWriter struct{}
 
 func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
 
-type invalidCountWriter struct{}
+type invalidCountWriter struct {
+	delta int
+	err   error
+}
 
-func (invalidCountWriter) Write(data []byte) (int, error) { return len(data) + 1, nil }
+func (w invalidCountWriter) Write(data []byte) (int, error) {
+	delta := w.delta
+	if delta == 0 {
+		delta = 1
+	}
+	return len(data) + delta, w.err
+}
 
 type closeError struct{ err error }
 
 func (c closeError) Close() error { return c.err }
+
+const boundedSinkChunkSamples = rawSinkScratchBytes / 2
+
+func TestFileSinkBoundedRawFailureControls(t *testing.T) {
+	partialErr, chunkErr := errors.New("partial writer failed"), errors.New("second chunk failed")
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	shortSamples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
+	largeSamples := repeatSinkSamples(boundedSinkChunkSamples+1, 7)
+	for _, test := range []struct {
+		name          string
+		samples       []int16
+		writer        io.Writer
+		want, reject  error
+		prefix, calls int
+		stream        bool
+	}{
+		{"partial error", shortSamples, &shortWriter{max: 5, err: partialErr}, partialErr, nil, 5, 1, true},
+		{"later chunk", largeSamples, &shortWriter{max: rawSinkScratchBytes, err: chunkErr, failAfter: true}, chunkErr, nil, rawSinkScratchBytes, 2, false},
+		{"zero count", shortSamples, zeroWriter{}, io.ErrShortWrite, nil, 0, 0, false},
+		{"negative count", shortSamples, invalidCountWriter{delta: -1}, io.ErrShortWrite, nil, 0, 0, false},
+		{"too-large count", shortSamples, invalidCountWriter{delta: 1}, io.ErrShortWrite, nil, 0, 0, false},
+		{"invalid count precedes error", shortSamples, invalidCountWriter{delta: 1, err: partialErr}, io.ErrShortWrite, partialErr, 0, 0, false},
+		{"cancellation", largeSamples, &shortWriter{max: rawSinkScratchBytes, cancel: cancel}, context.Canceled, nil, rawSinkScratchBytes, 1, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := newRawSink(test.writer).WriteSamples(cancelCtx, test.samples)
+			if !errors.Is(err, test.want) || (test.reject != nil && errors.Is(err, test.reject)) {
+				t.Fatalf("WriteSamples() = %v, want %v without %v", err, test.want, test.reject)
+			}
+			if test.stream {
+				var streamErr *StreamError
+				if !errors.As(err, &streamErr) || streamErr.Operation != "write" {
+					t.Fatalf("error = %v, want write StreamError", err)
+				}
+			}
+			if test.prefix > 0 {
+				assertWriterPrefix(t, test.writer.(interface{ Bytes() []byte }), test.samples, test.prefix)
+			}
+			if test.calls > 0 {
+				assertWriterCalls(t, test.writer, test.calls)
+			}
+		})
+	}
+}
+func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
+	tail := repeatSinkSamples(boundedSinkChunkSamples+8, 0)
+	for index, sample := range []int16{-32768, -1, 0, 1, 32767} {
+		for offset := index; offset < len(tail); offset += 5 {
+			tail[offset] = sample
+		}
+	}
+	for _, test := range []struct {
+		name string
+		want []int16
+	}{
+		{"empty", nil}, {"one sample", []int16{-32768}},
+		{"exact chunk", repeatSinkSamples(boundedSinkChunkSamples, 7)}, {"short tail", tail},
+	} {
+		t.Run(test.name, func(t *testing.T) { assertBoundedRawBytes(t, test.want) })
+	}
+}
+func assertBoundedRawBytes(t *testing.T, samples []int16) {
+	t.Helper()
+	writer := &bytes.Buffer{}
+	sink, err := NewFileSink("-", writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.WriteSamples(context.Background(), samples); err != nil {
+		t.Fatalf("WriteSamples() error = %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertWriterBytes(t, writer, samples)
+}
+func TestFileSinkBoundedRawDeadlineIdentity(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	writer := &bytes.Buffer{}
+	if err := newRawSink(writer).WriteSamples(ctx, []int16{1}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WriteSamples() = %v, want context.DeadlineExceeded", err)
+	}
+	if writer.Len() != 0 {
+		t.Fatal("deadline-canceled write emitted output")
+	}
+}
+func TestFileSinkBoundedRawSerializationAndClose(t *testing.T) {
+	writer, sink := newGateSinkWriter(), (*FileSink)(nil)
+	first, second := repeatSinkSamples(boundedSinkChunkSamples+1, 1), repeatSinkSamples(FrameSize, 2)
+	sink = newRawSink(writer)
+	firstDone, secondDone := make(chan error, 1), make(chan error, 1)
+	go func() { firstDone <- sink.WriteSamples(context.Background(), first) }()
+	<-writer.entered
+	go func() { secondDone <- sink.WriteFrame(context.Background(), second) }()
+	close(writer.release)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatal(err)
+	}
+	if got, want := writer.Bytes(), append(pcmBytes(first), pcmBytes(second)...); !bytes.Equal(got, want) {
+		t.Fatal("concurrent WriteSamples/WriteFrame calls interleaved")
+	}
+
+	writer, sink = newGateSinkWriter(), nil
+	sink = newRawSink(writer)
+	writeDone, closeDone, closeStarted := make(chan error, 1), make(chan error, 1), make(chan struct{})
+	go func() { writeDone <- sink.WriteSamples(context.Background(), []int16{3}) }()
+	<-writer.entered
+	go func() { close(closeStarted); closeDone <- sink.Close() }()
+	<-closeStarted
+	select {
+	case <-closeDone:
+		t.Fatal("Close completed while WriteSamples was blocked")
+	default:
+	}
+	close(writer.release)
+	if err := <-writeDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-closeDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.WriteSamples(context.Background(), []int16{4}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("write after Close() = %v, want ErrClosed", err)
+	}
+}
+func readSinkWAV(t *testing.T, path string) (int, []int16) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rate, samples
+}
+func newRawSink(writer io.Writer) *FileSink {
+	return &FileSink{path: "-", format: formatRaw, writer: writer}
+}
+func repeatSinkSamples(count int, value int16) []int16 {
+	samples := make([]int16, count)
+	for index := range samples {
+		samples[index] = value
+	}
+	return samples
+}
+func assertWriterBytes(t *testing.T, writer interface{ Bytes() []byte }, samples []int16) {
+	t.Helper()
+	if got, want := writer.Bytes(), pcmBytes(samples); !bytes.Equal(got, want) {
+		t.Fatalf("writer bytes = %x, want %x", got, want)
+	}
+}
+func assertWriterPrefix(t *testing.T, writer interface{ Bytes() []byte }, samples []int16, byteCount int) {
+	t.Helper()
+	want := pcmBytes(samples)
+	if got := writer.Bytes(); !bytes.Equal(got, want[:byteCount]) {
+		t.Fatalf("writer bytes = %x, want prefix %x", got, want[:byteCount])
+	}
+}
+
+func assertWriterCalls(t *testing.T, writer io.Writer, want int) {
+	t.Helper()
+	got := writer.(*shortWriter).calls
+	if got != want {
+		t.Fatalf("writer calls = %d, want %d", got, want)
+	}
+}
+
+type gateSinkWriter struct {
+	bytes.Buffer
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newGateSinkWriter() *gateSinkWriter {
+	return &gateSinkWriter{entered: make(chan struct{}), release: make(chan struct{})}
+}
+func (w *gateSinkWriter) Write(payload []byte) (int, error) {
+	w.once.Do(func() { close(w.entered) })
+	<-w.release
+	return w.Buffer.Write(payload)
+}
