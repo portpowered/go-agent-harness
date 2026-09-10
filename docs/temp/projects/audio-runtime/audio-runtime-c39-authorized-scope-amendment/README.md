@@ -45,6 +45,16 @@ python3 docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amen
   --source-revision <tested-sha> \
   --yui <same-source-immutable-yui> \
   --output <fresh-owned-evidence-directory>
+
+# Optional existing audio/tool and interruption replay regressions:
+python3 docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py \
+  --source-revision <tested-sha> \
+  --yui <same-source-immutable-yui> \
+  --output <fresh-owned-evidence-directory> \
+  --replay-fixture <audio-tool-fixture> \
+  --replay-config <audio-tool-config-directory> \
+  --replay-fixture <interruption-fixture> \
+  --replay-config <interruption-config-directory>
 ```
 
 The probe creates an isolated Git/admission repository, uses a local fake
@@ -62,5 +72,7 @@ exclusion negative control exited `1`. The timeout control exited `-15` after
 bounded TERM/reap, and the supplied C32 yui `--help` exited `0` with the
 immutable `db1f7de4881d9868859e546a2f66b0cd35e60ac5682c323b445254f3c2aaf628`
 SHA-256 unchanged. The full machine-readable result is kept beside this
-README under `evidence/probe-report.json`; it records source revision, protected hashes,
-fresh mission/report completion, and residual physical/acoustic limits.
+README under `evidence/probe-report.json`; a run supplied with both replay
+pairs records its result under `evidence-replay/probe-report.json`. Each report
+records source revision, protected hashes, fresh mission/report completion, and
+residual physical/acoustic limits.

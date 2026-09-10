@@ -121,6 +121,14 @@ is changed by this plumbing.  The bounded controller/evidence probe is run as:
 python3 docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py --source-revision <tested-sha> --yui <same-source-immutable-yui> --output <fresh-owned-evidence-directory>
 ```
 
+When the reviewed C32 inputs are staged, repeat `--replay-fixture` and
+`--replay-config` in pairs, first for the audio/tool fixture and then for the
+interruption fixture.  Each config argument is the regular config directory
+used by the shipped yui, not a single YAML file; the probe copies it into a
+fresh private workdir, runs with credential environment variables removed,
+checks literal PCM/tool/healthy-follow-on oracles, replays the resulting
+bundle, and checks missing-timeline rejection.
+
 The probe uses only an isolated Git/admission fixture and a credential-free
 `yui --help` process smoke unless an existing replay fixture is available.  It
 records append/status/preparation/completion effects, negative exit codes,
