@@ -5,15 +5,17 @@ from __future__ import annotations
 
 import argparse
 import copy
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
+import selectors
 import signal
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, Sequence
 
 
 EVIDENCE = Path(__file__).resolve().parent
@@ -21,6 +23,11 @@ EXPECTED = EVIDENCE / "expected.json"
 RUNS = EVIDENCE / "runs"
 DEADLINE_SECONDS = 10
 MAX_OUTPUT_BYTES = 1 << 20
+READ_CHUNK_BYTES = 64 * 1024
+TERMINATE_GRACE_SECONDS = 2
+REAP_TIMEOUT_SECONDS = 2
+CONTROL_TIMEOUT_SECONDS = 0.25
+CONTROL_TERMINATE_GRACE_SECONDS = 0.05
 SOURCE_FILES = (
     "go-audio/pkg/codec/sample_value.go",
     "go-device-gateway/pkg/devices/device_windows.go",
@@ -71,61 +78,245 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def as_text(value: str | bytes | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode(errors="replace")
-    return value
+class BoundedCapture:
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.data = bytearray()
+        self.exceeded = False
+
+    def append(self, data: bytes) -> None:
+        remaining = self.limit - len(self.data)
+        if remaining <= 0:
+            self.exceeded = bool(data)
+            return
+        if len(data) > remaining:
+            self.data.extend(data[:remaining])
+            self.exceeded = True
+            return
+        self.data.extend(data)
+
+    def text(self) -> str:
+        return bytes(self.data).decode(errors="replace")
 
 
-def run_bounded(consumer: Path, source_revision: str, run_dir: Path) -> dict[str, Any]:
+def close_stream(selector: selectors.BaseSelector, stream: Any) -> None:
+    try:
+        selector.unregister(stream)
+    except (KeyError, ValueError):
+        pass
+    try:
+        stream.close()
+    except OSError:
+        pass
+
+
+def read_ready(
+    selector: selectors.BaseSelector,
+    stream: Any,
+    capture: BoundedCapture,
+) -> None:
+    remaining = capture.limit - len(capture.data)
+    read_size = min(READ_CHUNK_BYTES, max(1, remaining + 1))
+    try:
+        data = os.read(stream.fileno(), read_size)
+    except BlockingIOError:
+        return
+    except OSError as exc:
+        if exc.errno not in (errno.EBADF, errno.EIO):
+            raise
+        data = b""
+    if not data:
+        close_stream(selector, stream)
+        return
+    capture.append(data)
+    if capture.exceeded:
+        # Stop reading this stream as soon as the cap is proven. The bounded
+        # cleanup path still drains or closes the other stream and kills the
+        # process group, so a noisy child cannot fill a pipe indefinitely.
+        close_stream(selector, stream)
+
+
+def pump_output(
+    process: subprocess.Popen[bytes],
+    selector: selectors.BaseSelector,
+    captures: dict[str, BoundedCapture],
+    deadline: float,
+    *,
+    fail_on_output: bool = True,
+) -> str:
+    while True:
+        if fail_on_output and any(capture.exceeded for capture in captures.values()):
+            return "output_exceeded"
+        now = time.monotonic()
+        if now >= deadline:
+            return "deadline"
+        streams = selector.get_map()
+        if not streams:
+            if process.poll() is not None:
+                return "complete"
+            try:
+                process.wait(timeout=min(deadline - now, 0.1))
+            except subprocess.TimeoutExpired:
+                continue
+            return "complete"
+        try:
+            events = selector.select(min(deadline - now, 0.1))
+        except InterruptedError:
+            continue
+        for key, _ in events:
+            read_ready(selector, key.fileobj, captures[key.data])
+        if fail_on_output and any(capture.exceeded for capture in captures.values()):
+            return "output_exceeded"
+        if process.poll() is not None and not selector.get_map():
+            return "complete"
+
+
+def signal_process_group(process: subprocess.Popen[bytes], sig: signal.Signals) -> None:
+    if os.name == "nt":
+        if sig == signal.SIGKILL:
+            process.kill()
+        else:
+            process.terminate()
+        return
+    try:
+        os.killpg(process.pid, sig)
+    except ProcessLookupError:
+        pass
+
+
+def stop_and_reap(
+    process: subprocess.Popen[bytes],
+    selector: selectors.BaseSelector,
+    captures: dict[str, BoundedCapture],
+    terminate_grace_seconds: float,
+) -> tuple[list[str], bool]:
+    signals_sent: list[str] = []
+    signal_process_group(process, signal.SIGTERM)
+    signals_sent.append(signal.Signals(signal.SIGTERM).name)
+    pump_output(
+        process,
+        selector,
+        captures,
+        time.monotonic() + terminate_grace_seconds,
+        fail_on_output=False,
+    )
+    if process.poll() is None or selector.get_map():
+        signal_process_group(process, signal.SIGKILL)
+        signals_sent.append(signal.Signals(signal.SIGKILL).name)
+        pump_output(
+            process,
+            selector,
+            captures,
+            time.monotonic() + REAP_TIMEOUT_SECONDS,
+            fail_on_output=False,
+        )
+    # poll() is the bounded wait/reap check. Never call communicate() or wait()
+    # without a timeout after SIGKILL: an inherited pipe held by a descendant
+    # must not turn verifier cleanup into an unbounded operation.
+    return signals_sent, process.poll() is not None
+
+
+def run_bounded(
+    argv: Sequence[str],
+    source_revision: str,
+    run_dir: Path,
+    *,
+    cwd: Path = EVIDENCE,
+    timeout_seconds: float = DEADLINE_SECONDS,
+    terminate_grace_seconds: float = TERMINATE_GRACE_SECONDS,
+) -> dict[str, Any]:
     started = time.monotonic()
     environment = os.environ.copy()
     environment["C32_SOURCE_REVISION"] = source_revision
+    popen_kwargs: dict[str, Any] = {}
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
     process = subprocess.Popen(
-        [str(consumer)],
-        cwd=EVIDENCE,
+        [str(argument) for argument in argv],
+        cwd=cwd,
         env=environment,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
+        bufsize=0,
+        **popen_kwargs,
     )
+    captures = {
+        "stdout": BoundedCapture(MAX_OUTPUT_BYTES),
+        "stderr": BoundedCapture(MAX_OUTPUT_BYTES),
+    }
+    selector = selectors.DefaultSelector()
+    for name, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
+        if stream is None:
+            raise VerificationFailure(f"child {name} pipe was not created")
+        os.set_blocking(stream.fileno(), False)
+        selector.register(stream, selectors.EVENT_READ, name)
+
     timed_out = False
-    stdout = ""
-    stderr = ""
+    output_exceeded = False
+    signals_sent: list[str] = []
+    reap_bounded = False
     try:
-        stdout, stderr = process.communicate(timeout=DEADLINE_SECONDS)
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        stdout = as_text(exc.stdout)
-        stderr = as_text(exc.stderr)
+        outcome = pump_output(
+            process,
+            selector,
+            captures,
+            time.monotonic() + timeout_seconds,
+        )
+        if outcome == "output_exceeded":
+            output_exceeded = True
+            signals_sent, reap_bounded = stop_and_reap(
+                process,
+                selector,
+                captures,
+                terminate_grace_seconds,
+            )
+        elif outcome == "deadline":
+            timed_out = True
+            signals_sent, reap_bounded = stop_and_reap(
+                process,
+                selector,
+                captures,
+                terminate_grace_seconds,
+            )
+        else:
+            reap_bounded = process.poll() is not None
+    except BaseException:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
+            signals_sent, reap_bounded = stop_and_reap(
+                process,
+                selector,
+                captures,
+                terminate_grace_seconds,
+            )
+        except BaseException:
             pass
-        try:
-            tail_stdout, tail_stderr = process.communicate(timeout=2)
-            stdout += as_text(tail_stdout)
-            stderr += as_text(tail_stderr)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            tail_stdout, tail_stderr = process.communicate()
-            stdout += as_text(tail_stdout)
-            stderr += as_text(tail_stderr)
+        raise
+    finally:
+        for stream in list(selector.get_map().values()):
+            close_stream(selector, stream.fileobj)
+        selector.close()
+
     elapsed = time.monotonic() - started
+    stdout = captures["stdout"].text()
+    stderr = captures["stderr"].text()
     result = {
-        "argv": [str(consumer)],
-        "cwd": str(EVIDENCE),
-        "deadline_seconds": DEADLINE_SECONDS,
+        "argv": [str(argument) for argument in argv],
+        "cwd": str(cwd),
+        "deadline_seconds": timeout_seconds,
         "elapsed_seconds": round(elapsed, 6),
         "exit_code": process.returncode,
         "timed_out": timed_out,
+        "output_exceeded": output_exceeded,
+        "termination_signals": signals_sent,
+        "reaped": process.poll() is not None,
+        "reap_bounded": reap_bounded,
+        "captured_output_bytes": {
+            "stdout": len(captures["stdout"].data),
+            "stderr": len(captures["stderr"].data),
+        },
         "stdout": stdout,
         "stderr": stderr,
     }
@@ -211,28 +402,119 @@ def demonstrate_negative_control(report: dict[str, Any], expected: dict[str, Any
     raise VerificationFailure("negative control was accepted after changing expected energy to 1.25")
 
 
+def bounded_control_summary(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "argv": result["argv"],
+        "cwd": result["cwd"],
+        "deadline_seconds": result["deadline_seconds"],
+        "elapsed_seconds": result["elapsed_seconds"],
+        "exit_code": result["exit_code"],
+        "timed_out": result["timed_out"],
+        "output_exceeded": result["output_exceeded"],
+        "termination_signals": result["termination_signals"],
+        "reaped": result["reaped"],
+        "reap_bounded": result["reap_bounded"],
+        "captured_output_bytes": result["captured_output_bytes"],
+    }
+
+
+def run_bounded_controls(run_dir: Path) -> dict[str, Any]:
+    overflow_code = (
+        f"import sys; payload = b'x' * ({MAX_OUTPUT_BYTES} + 4096); "
+        "sys.stdout.buffer.write(payload); sys.stdout.buffer.flush(); "
+        "sys.stderr.buffer.write(payload); sys.stderr.buffer.flush()"
+    )
+    overflow = run_bounded(
+        [sys.executable, "-c", overflow_code],
+        "bounded-output-control",
+        run_dir / "bounded-output-control",
+        timeout_seconds=DEADLINE_SECONDS,
+        terminate_grace_seconds=CONTROL_TERMINATE_GRACE_SECONDS,
+    )
+    if not overflow["output_exceeded"]:
+        raise VerificationFailure("bounded output control did not trip the per-stream cap")
+    if not overflow["reaped"] or not overflow["reap_bounded"]:
+        raise VerificationFailure("bounded output control was not reaped within its cleanup bound")
+    if any(size > MAX_OUTPUT_BYTES for size in overflow["captured_output_bytes"].values()):
+        raise VerificationFailure("bounded output control captured more than the configured limit")
+
+    stubborn_code = (
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "time.sleep(60)"
+    )
+    stubborn = run_bounded(
+        [sys.executable, "-c", stubborn_code],
+        "bounded-sigkill-control",
+        run_dir / "bounded-sigkill-control",
+        timeout_seconds=CONTROL_TIMEOUT_SECONDS,
+        terminate_grace_seconds=CONTROL_TERMINATE_GRACE_SECONDS,
+    )
+    if not stubborn["timed_out"]:
+        raise VerificationFailure("SIGKILL reap control did not reach its deterministic deadline")
+    if "SIGKILL" not in stubborn["termination_signals"]:
+        raise VerificationFailure("SIGKILL reap control did not require SIGKILL")
+    if not stubborn["reaped"] or not stubborn["reap_bounded"]:
+        raise VerificationFailure("SIGKILL reap control was not reaped within its cleanup bound")
+
+    return {
+        "per_stream_output_limit_bytes": MAX_OUTPUT_BYTES,
+        "output_overflow": bounded_control_summary(overflow),
+        "sigkill_reap": bounded_control_summary(stubborn),
+    }
+
+
+def process_failure(process: dict[str, Any]) -> str:
+    details = [
+        f"exit={process['exit_code']}",
+        f"timeout={process['timed_out']}",
+        f"output_exceeded={process['output_exceeded']}",
+        f"reaped={process['reaped']}",
+        f"reap_bounded={process['reap_bounded']}",
+    ]
+    stderr = process.get("stderr", "").strip()
+    if stderr:
+        details.append(f"stderr={stderr[-4096:]}")
+    return "consumer failed: " + " ".join(details)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--consumer", required=True, type=Path)
+    parser.add_argument("--consumer", type=Path)
     parser.add_argument("--negative-control", action="store_true")
+    parser.add_argument(
+        "--bounds-only",
+        action="store_true",
+        help="run deterministic output-cap and SIGKILL-reap controls without a consumer",
+    )
     parser.add_argument("--source-revision", default="")
     args = parser.parse_args()
 
-    consumer = args.consumer.resolve()
-    if not consumer.is_file():
-        raise VerificationFailure(f"consumer executable is unavailable: {consumer}")
-    expected = load_expected()
     source_revision = args.source_revision or os.environ.get("C32_SOURCE_REVISION") or git_output("rev-parse", "HEAD")
     run_name = f"{time.strftime('verify-%Y%m%dT%H%M%SZ', time.gmtime())}-{time.time_ns()}"
     run_dir = RUNS / run_name
     run_dir.mkdir(parents=True, exist_ok=False)
-    process = run_bounded(consumer, source_revision, run_dir)
-    if process["timed_out"] or process["exit_code"] != 0:
-        raise VerificationFailure(
-            f"consumer failed: exit={process['exit_code']} timeout={process['timed_out']} stderr={process['stderr'].strip()}"
-        )
-    if len(process["stdout"].encode()) > MAX_OUTPUT_BYTES or len(process["stderr"].encode()) > MAX_OUTPUT_BYTES:
+    if args.bounds_only:
+        if args.consumer is not None or args.negative_control:
+            raise VerificationFailure("--bounds-only cannot be combined with a consumer or negative control")
+        controls = run_bounded_controls(run_dir)
+        print(json.dumps({"bounded_controls": controls}, indent=2, sort_keys=True))
+        return 0
+
+    if args.consumer is None:
+        parser.error("--consumer is required unless --bounds-only is used")
+    consumer = args.consumer.resolve()
+    if not consumer.is_file():
+        raise VerificationFailure(f"consumer executable is unavailable: {consumer}")
+    expected = load_expected()
+    process = run_bounded([str(consumer)], source_revision, run_dir)
+    if not process["reaped"] or not process["reap_bounded"]:
+        raise VerificationFailure(process_failure(process))
+    if process["output_exceeded"]:
         raise VerificationFailure("consumer output exceeded the bounded verifier output limit")
+    if process["timed_out"] or process["exit_code"] != 0:
+        raise VerificationFailure(process_failure(process))
+    if any(size > MAX_OUTPUT_BYTES for size in process["captured_output_bytes"].values()):
+        raise VerificationFailure("consumer output capture exceeded its configured limit")
     try:
         report = json.loads(process["stdout"])
     except json.JSONDecodeError as exc:
@@ -240,6 +522,7 @@ def main() -> int:
     if not isinstance(report, dict):
         raise VerificationFailure("consumer JSON is not an object")
     validate_report(report, expected, source_revision)
+    bounded_controls = run_bounded_controls(run_dir)
 
     negative_control = None
     if args.negative_control:
@@ -293,8 +576,11 @@ def main() -> int:
         "resource_bounds": {
             "child_deadline_seconds": DEADLINE_SECONDS,
             "max_output_bytes": MAX_OUTPUT_BYTES,
+            "terminate_grace_seconds": TERMINATE_GRACE_SECONDS,
+            "reap_timeout_seconds": REAP_TIMEOUT_SECONDS,
             "packet_scratch_allocation": "none in canonical helpers",
         },
+        "bounded_controls": bounded_controls,
     }
     if negative_control is not None:
         evidence["negative_control"] = negative_control
