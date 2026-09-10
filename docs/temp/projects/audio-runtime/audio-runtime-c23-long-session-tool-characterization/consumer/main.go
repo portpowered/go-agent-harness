@@ -453,6 +453,15 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 		s.mu.Lock()
 		ready := s.pendingTurn >= 0 && s.pendingTools > 0 && s.receivedTools >= s.pendingTools
 		turn := s.pendingTurn
+		if !ready && s.pendingTurn >= 0 && s.pendingTools > 0 && s.queueError == nil {
+			callID := fmt.Sprintf("call-%03d-beta", s.pendingTurn)
+			switch s.toolControl {
+			case "missing-result":
+				s.queueError = fmt.Errorf("fixture control missing tool result for %s", callID)
+			case "duplicate-result":
+				s.queueError = fmt.Errorf("fixture control duplicate tool result for %s", callID)
+			}
+		}
 		s.pendingTools = 0
 		s.receivedTools = 0
 		s.mu.Unlock()
@@ -655,7 +664,6 @@ type fixtureToolExecutor struct {
 	mu      sync.Mutex
 	calls   []toolRecord
 	control string
-	failure error
 }
 
 func (e *fixtureToolExecutor) snapshot() []toolRecord {
@@ -678,33 +686,24 @@ func (e *fixtureToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	if args.Key != "alpha" && args.Key != "beta" {
 		return messages.ToolCallResponse{}, fmt.Errorf("fixture tool identity missing for %s", call.ID)
 	}
-	if e.control == "missing-result" && args.Key == "beta" {
-		err := fmt.Errorf("fixture control missing tool result for %s", call.ID)
-		e.mu.Lock()
-		e.failure = err
-		e.mu.Unlock()
-		return messages.ToolCallResponse{}, err
-	}
 	name := call.Name
 	content := fmt.Sprintf("result:%s:%03d", name, args.Turn)
+	if e.control == "missing-result" && args.Key == "beta" {
+		// Return a malformed result through the public tool-executor contract.
+		// The fixture provider below, not this executor, must observe and reject
+		// the missing identity for the negative control to be meaningful.
+		return messages.ToolCallResponse{Name: name, Content: content}, nil
+	}
 	e.mu.Lock()
 	e.calls = append(e.calls, toolRecord{ID: call.ID, Name: name, Turn: args.Turn, Arguments: call.Arguments, Content: content})
 	e.mu.Unlock()
 	resultID := call.ID
 	if e.control == "duplicate-result" && args.Key == "beta" {
+		// The provider fixture validates the message that the runtime sends and
+		// rejects this duplicate identity. Do not predeclare a failure here.
 		resultID = fmt.Sprintf("call-%03d-alpha", args.Turn)
-		err := fmt.Errorf("fixture control duplicate tool result for %s", call.ID)
-		e.mu.Lock()
-		e.failure = err
-		e.mu.Unlock()
 	}
 	return messages.ToolCallResponse{ToolCallID: resultID, Name: name, Content: content}, nil
-}
-
-func (e *fixtureToolExecutor) failureValue() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.failure
 }
 
 type memStats struct {
@@ -840,9 +839,6 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string, toolCo
 		}
 		reportValue.Artifacts.ProviderCapture = providerPath
 	}
-	if failure := toolExecutor.failureValue(); failure != nil {
-		runErr = errors.Join(runErr, failure)
-	}
 	if failure := provider.queueErrorValue(); failure != nil {
 		runErr = errors.Join(runErr, failure)
 	}
@@ -865,8 +861,8 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 	if !result.TraceComplete || result.Events.OverflowDrops != 0 {
 		return errors.New("bounded live event trace was incomplete or overflowed")
 	}
-	if !terminalSeen || result.Terminal.Kind == "" {
-		return errors.New("live terminal evidence is missing")
+	if !terminalSeen || !completionTerminal(result.Terminal) {
+		return fmt.Errorf("live terminal evidence is not an exact provider completion: %+v", result.Terminal)
 	}
 	if len(result.ToolCalls) != turns*2 || len(result.ToolResults) != turns*2 {
 		return fmt.Errorf("tool call/result count mismatch: calls=%d results=%d want=%d", len(result.ToolCalls), len(result.ToolResults), turns*2)
@@ -929,6 +925,14 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 		return fmt.Errorf("ordered provider tool-call trace mismatch: got=%v want=%v", gotCalls, wantCalls)
 	}
 	return nil
+}
+
+func completionTerminal(value terminalRecord) bool {
+	return value.Kind == string(session.LiveEventTerminal) &&
+		value.Reason == string(messages.TerminalReasonProviderAuthoredCompletion) &&
+		value.Classification == string(messages.TerminalReasonProviderAuthoredCompletion) &&
+		value.Provenance == string(messages.TerminalProvenanceProvider) &&
+		value.OutputState == string(messages.TerminalOutputComplete)
 }
 
 func slicesEqual(left, right []string) bool {
@@ -1026,7 +1030,7 @@ func runInterruption(artifactRoot string) (*report, error) {
 	if waitErr != nil {
 		return result, waitErr
 	}
-	if !interrupt.CancelSent || !interrupt.CancellationTerminalObserved || interrupt.HealthyResponseID == "" || interrupt.ForbiddenPostCancelAudio || !interrupt.HealthyTailNonEmpty {
+	if !interrupt.CancelSent || !interrupt.CancellationTerminalObserved || interrupt.HealthyResponseID == "" || interrupt.ForbiddenPostCancelAudio || !interrupt.HealthyTailNonEmpty || !terminalSeen || !completionTerminal(result.Terminal) {
 		return result, errors.New("interruption recovery proof is incomplete")
 	}
 	return result, nil

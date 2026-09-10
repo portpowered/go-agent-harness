@@ -45,6 +45,20 @@ EXPECTED_RECORDING_MODES = ("off", "on")
 SESSION_CAPTURE_INTEGRITY_COVERAGE = "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)"
 TASK_NAME = "audio-runtime-c23-long-session-tool-characterization"
 EXPECTED_BRANCH = "codex/audio-runtime-c23-long-session-tool-characterization"
+EXPECTED_COMPLETION_TERMINAL = {
+    "kind": "terminal",
+    "reason": "provider_authored_completion",
+    "classification": "provider_authored_completion",
+    "provenance": "provider",
+    "output_state": "complete",
+}
+EXPECTED_NEGATIVE_TERMINAL = {
+    "kind": "terminal",
+    "reason": "terminal_failure",
+    "classification": "terminal_failure",
+    "provenance": "session",
+    "output_state": "none",
+}
 BUDGET_PATH = OWNED_ROOT / "budget.json"
 FIRST_FAILURE_ROOT = OWNED_ROOT / "artifacts" / "first-failures"
 
@@ -183,9 +197,42 @@ def source_files() -> list[dict[str, Any]]:
     return result
 
 
+def module_manifest_paths(timeout: float) -> set[str]:
+    """Return local module manifests that govern either executable build."""
+    paths = {"go.work", "go.work.sum"}
+    output = run_capture(["go", "list", "-m", "-json", "all"], timeout=timeout).stdout
+    decoder = json.JSONDecoder()
+    cursor = 0
+    while cursor < len(output):
+        while cursor < len(output) and output[cursor].isspace():
+            cursor += 1
+        if cursor >= len(output):
+            break
+        module, cursor = decoder.raw_decode(output, cursor)
+        if not isinstance(module, dict):
+            continue
+        module_dir = Path(module.get("Dir", ""))
+        go_mod = Path(module.get("GoMod", ""))
+        candidates = [go_mod]
+        if module_dir:
+            candidates.extend((module_dir / "go.mod", module_dir / "go.sum"))
+        if go_mod:
+            candidates.append(go_mod.with_name("go.sum"))
+        for candidate in candidates:
+            try:
+                relative = relative_repo(candidate)
+            except VerificationError:
+                continue
+            if relative.endswith(("go.mod", "go.sum")) and (REPO_ROOT / relative).is_file():
+                paths.add(relative)
+    for relative in list(paths):
+        require((REPO_ROOT / relative).is_file(), f"go build manifest is missing: {relative}")
+    return paths
+
+
 def build_inputs(timeout: float) -> list[dict[str, Any]]:
     """Hash repository Go inputs resolved by both executable builds."""
-    paths: set[str] = {"go.work", "go.work.sum"}
+    paths = module_manifest_paths(timeout)
     decoder = json.JSONDecoder()
     for pattern in (str(OWNED_ROOT / "consumer" / "main.go"), "./agent-cli/cmd/yui"):
         output = run_capture(["go", "list", "-deps", "-json", pattern], timeout=timeout).stdout
@@ -487,6 +534,11 @@ def validate_recording_usage(report: dict[str, Any]) -> None:
         require(observed["provider_bytes"] <= limits["provider_bytes"], "recording provider usage exceeded its configured limit")
 
 
+def validate_terminal(report: dict[str, Any], expected: dict[str, str], label: str) -> None:
+    terminal = report.get("terminal")
+    require(terminal == expected, f"{label} terminal state changed: {terminal!r} != {expected!r}")
+
+
 def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -> None:
     require(not report.get("error"), f"consumer reported an error: {report.get('error')}")
     require(report.get("scenario") == "tool-matrix", f"unexpected consumer scenario: {report.get('scenario')}")
@@ -494,6 +546,7 @@ def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -
     require(report.get("fixture_sha256") == fixture_sha, "consumer fixture digest does not match provenance")
     require(report.get("clean_shutdown") is True, "consumer did not prove clean shutdown")
     require(report.get("trace_complete") is True, "consumer trace was truncated")
+    validate_terminal(report, EXPECTED_COMPLETION_TERMINAL, "successful tool matrix")
     validate_recording_usage(report)
     events = report.get("events", {})
     require(events.get("overflow_drops") == 0, "consumer live-event overflow was not zero")
@@ -538,6 +591,7 @@ def validate_interruption_report(report: dict[str, Any], fixture_sha: str) -> No
     require(report.get("scenario") == "interruption", "interruption scenario identity changed")
     require(report.get("fixture_sha256") == fixture_sha, "interruption fixture digest does not match provenance")
     require(report.get("clean_shutdown") is True and report.get("trace_complete") is True, "interruption did not shut down with complete trace")
+    validate_terminal(report, EXPECTED_COMPLETION_TERMINAL, "interruption recovery")
     validate_recording_usage(report)
     interruption = report.get("interruption", {})
     require(interruption.get("cancel_sent") is True, "response.cancel was not admitted")
@@ -781,10 +835,10 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             else:
                 results.append({"control": name, "mode": "report-oracle", "passed": False, "rejected": "negative mutation was accepted"})
         runtime_controls = {
-            "missing-result": "missing tool result",
-            "duplicate-result": "duplicate tool result",
+            "missing-result": {"diagnostic": "fixture control missing tool result", "tool_results": 0},
+            "duplicate-result": {"diagnostic": "fixture control duplicate tool result", "tool_results": 1},
         }
-        for name, diagnostic in runtime_controls.items():
+        for name, expectation in runtime_controls.items():
             root = new_run_root(f"self-check-{name}")
             report_path = root / "consumer-report.json"
             command = [str(CONSUMER_PATH), "--scenario", "tool-control", "--control", name, "--turns", "2", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
@@ -793,8 +847,14 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             runtime_report = load_json(report_path)
             actual_error = str(runtime_report.get("error", ""))
             require(runtime_report.get("tool_control") == name, f"runtime negative control {name} did not identify its control")
-            require(diagnostic in actual_error.lower(), f"runtime negative control {name} omitted its causal diagnostic: {actual_error}")
-            results.append({"control": name, "mode": "runtime", "passed": True, "rejected": actual_error, "execution": execution, "report_path": relative_owned(report_path)})
+            require(expectation["diagnostic"] in actual_error.lower(), f"runtime negative control {name} omitted its provider-observed diagnostic: {actual_error}")
+            require(runtime_report.get("clean_shutdown") is False, f"runtime negative control {name} unexpectedly shut down cleanly")
+            require(runtime_report.get("trace_complete") is True, f"runtime negative control {name} truncated its diagnostic trace")
+            require(runtime_report.get("events", {}).get("overflow_drops") == 0, f"runtime negative control {name} overflowed its diagnostic trace")
+            validate_terminal(runtime_report, EXPECTED_NEGATIVE_TERMINAL, f"runtime negative control {name}")
+            require(len(runtime_report.get("tool_calls", [])) == 2, f"runtime negative control {name} did not observe both provider tool calls")
+            require(len(runtime_report.get("tool_results", [])) == expectation["tool_results"], f"runtime negative control {name} observed an unexpected tool-result count")
+            results.append({"control": name, "mode": "runtime", "passed": True, "rejected": actual_error, "terminal": runtime_report["terminal"], "tool_results": len(runtime_report.get("tool_results", [])), "execution": execution, "report_path": relative_owned(report_path)})
         require(all(item["passed"] for item in results), "at least one C23 negative control was accepted")
         result = {"schema": "audio-runtime.c23.self-check.v1", "passed": True, "negative_controls": results, "source_report": base_run["report_path"]}
         write_json(OWNED_ROOT / "self-check.json", result)
