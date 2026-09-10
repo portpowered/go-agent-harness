@@ -30,10 +30,11 @@ the complete process group within the child bound.
 
 ## Implementation ledger
 
-The candidate was based on reviewed main `926ded7b` and then merged with the
-freshly fetched `origin/main` `11b9035b` in the isolated worktree. Required
+The candidate was based on reviewed main `926ded7b`, first integrated with
+fetched `origin/main` `11b9035b`, and then conflict-repaired against current
+`origin/main` `d6efc88d` in the isolated worktree as merge `d6e4f9c`. Required
 baseline `3194edd9` and startup integration `8bdafc7f` remain ancestors. The
-merge is recorded in the task branch history; the verifier records the exact
+merges are recorded in the task branch history; the verifier records the exact
 source revision used by each public or negative run.
 
 The baseline `session_models.go` had 67 lines. The final adapter is 68 lines:
@@ -53,3 +54,12 @@ handoff evidence must be regenerated from the clean committed source. Native
 Windows hardware and physical acoustic proof are out of scope under the
 current project amendment; Windows software and hermetic checks remain later
 project gates.
+
+The merged-head public run `verify-20260910T175919Z-21784` and
+negative-controls run `verify-20260910T175942Z-21950` both returned `ACCEPTED`
+from clean source `d6e4f9c`. They preserve the external consumer normal/race
+passes, invalid CLI admission controls, exact replay fixture/PCM controls,
+wrong-oracle rejection, and bounded timeout TERM/reap with no survivors. The
+merged-tree structural gates report `182` packages, `1,881` files, and `27,721`
+functions; coverage registration reports `172` workspace packages across six
+modules, including the leased private-admission manifest.
