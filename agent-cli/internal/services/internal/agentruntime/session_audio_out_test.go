@@ -390,26 +390,42 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	ctx, cancel := context.WithCancel(context.Background())
 	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseClose: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
 	var output bytes.Buffer
-	sink, _ := newSessionAudioSinkAtRate("-", &output, audio.SampleRate)
-	connected := make(chan messages.Session, 1)
+	sink, err := newSessionAudioSinkAtRate("-", &output, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("newSessionAudioSinkAtRate: %v", err)
+	}
+	type connectResult struct {
+		session messages.Session
+		err     error
+	}
+	connected := make(chan connectResult, 1)
 	go func() {
-		connectedSession, _ := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx)
-		connected <- connectedSession
+		connectedSession, connectErr := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx)
+		connected <- connectResult{session: connectedSession, err: connectErr}
 	}()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
 		cancel()
 	}
 	close(provider.releaseConnect)
-	session := <-connected
+	result := <-connected
+	if result.err != nil {
+		t.Fatalf("ConnectSession: %v", result.err)
+	}
+	session := result.session
 	cancel()
-	go func() { _ = session.Close() }()
+	closeErr := make(chan error, 1)
+	go func() { closeErr <- session.Close() }()
 	waitForClosedTargetSignal(t, context.Background(), provider.closeStarted, "provider close start")
 	time.Sleep(2 * sessionStragglerDrainQuietPeriod)
 	want := pcm16Bytes(sessionAudioFrame(1200))
-	_ = provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)})
+	if ok := provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}); !ok {
+		t.Fatal("provider did not accept delayed audio delta")
+	}
 	close(provider.releaseClose)
-	_ = session.Close()
+	if err := <-closeErr; err != nil {
+		t.Fatalf("session.Close: %v", err)
+	}
 	if !bytes.Equal(output.Bytes(), want) {
 		t.Fatalf("retained PCM = %d bytes, want delayed delta %d bytes", output.Len(), len(want))
 	}
