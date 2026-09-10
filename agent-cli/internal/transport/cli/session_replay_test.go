@@ -8,22 +8,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay"
+	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 type replayCommandService struct {
-	request replay.Request
+	request runtimeReplay.Request
 	err     error
 }
 
-func (*replayCommandService) Prepare(context.Context, replay.Request) (replay.Prepared, error) {
+func (*replayCommandService) Prepare(context.Context, runtimeReplay.Request) (runtimeReplay.Prepared, error) {
 	panic("CLI must execute the replay service, not construct its runtime")
 }
 
-func (s *replayCommandService) Run(_ context.Context, out io.Writer, request replay.Request) (replay.Result, error) {
+func (s *replayCommandService) Run(_ context.Context, out io.Writer, request runtimeReplay.Request) (runtimeReplay.Result, error) {
 	s.request = request
 	_, _ = io.WriteString(out, "recorded answer")
-	return replay.Result{WireEvents: 7, ToolCalls: 1, Scope: replay.EvidenceScope{Protocol: true, Tools: true, RenderTapUnavailable: true}}, s.err
+	return runtimeReplay.Result{WireEvents: 7, ToolCalls: 1, Scope: runtimeReplay.EvidenceScope{Protocol: true, Tools: true, RenderTapUnavailable: true}}, s.err
 }
 
 func TestSessionReplayCommandReportsVerifiedScopeOnlyOnSuccess(t *testing.T) {
@@ -31,7 +31,7 @@ func TestSessionReplayCommandReportsVerifiedScopeOnlyOnSuccess(t *testing.T) {
 		t.Run(map[bool]string{false: "complete", true: "incomplete"}[failure], func(t *testing.T) {
 			service := &replayCommandService{}
 			if failure {
-				service.err = replay.ErrBundleIncomplete
+				service.err = runtimeReplay.ErrBundleIncomplete
 			}
 			cmd := NewSessionReplayCommand(service).Generate()
 			var output, diagnostics bytes.Buffer

@@ -2360,3 +2360,36 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Exact-head focused validation passes: replay normal (`84` tests / four packages), go-audio clock (`23` tests), terminal-room controls (`22` tests), CLI replay (`146` tests / two packages), embedding normal and race with `GOWORK=off`, accumulated session regressions normal/coverage/race at `COUNT=1`, wire-check, architecture-size-check (`182` packages / `1,878` files / `27,653` functions), focused vet and diff-check.
 - Fresh reports from source `2c2f364d1d37548cff46999e3427ed8cf1ee6f89` pass external (`2`), strict (`5`), provider (`7`), interruption (`4`), ask (`2`) and watchdog (`1`) cases. The reports record strict relative/absolute replay, missing/corrupt/path-escape failures, provider side-effect and PCM-mutation controls, interruption healthy-tail preservation, post-helper-stop ask replay, and bounded descendant cleanup. The source-built strict consumer, yui and verifier hashes are recorded in `current-head-validation-2c2f364.json`.
 - This is an executor handoff, not a CI or review claim: the old rejection at head `61c37fbd` named the stale private replay manifest, and the authorized registration repair is now validated on the merged head. No current-head script CI success, independent review, guarded merge, post-merge acceptance or project completion is claimed. Next action: force-add the six refreshed public reports, the exact-head validation JSON and this checkpoint, commit and push the same PR `#410`, update the PR with the evidence, and return `ACCEPTED` to the script-owned current-head gate without polling; retain C18 ownership through `CONTINUE` for any exact rejection.
+
+# C18 coverage-floor repair authorization blocker 2026-09-10
+
+- Re-read the latest C34 coverage decision and resumed the same admitted
+  `work-task-24` after CI run `34475090599`, job `102863832477`, rejected head
+  `9f36cdc0` because `agent-cli/internal/services/replay` had no measured
+  coverage. The redundant CLI compatibility package was removed, its two
+  import sites now use the public runtime strict contracts, its coverage
+  registration was deleted only after `go list` reported no Go files, and the
+  moved strict floor was raised from `50.00` to the authorized `80.00`.
+- Meaningful strict error/control tests raise the moved package to `579/700`
+  statements (`82.7%`). Focused replay normal/race, CLI replay, clock
+  parent-cause controls (`20x` normal/`5x` race), full CLI transport race,
+  focused vet, `make coverage-registration`, and the accumulated
+  `COUNT=1` normal/coverage/race session regression matrix pass. The complete
+  local `make coverage` gate also passes: `171` registered packages across
+  `7` profiles. Wire regeneration identifies only the owned generated replay
+  constructor variable rename.
+- The required unmodified `make architecture-size-check` now fails exactly six
+  `baseline-stale` entries for the deliberately removed
+  `agent-cli/internal/services/replay/interface.go` aliases. The admitted PRD
+  authorizes deletion of only the earlier fourteen
+  `agent-cli/internal/services/internal/replay` entries; the latest coverage
+  decision authorizes the source/package and two coverage-manifest edits but
+  does not authorize these six additional baseline deletions. Deleting them
+  would widen the admitted scope; retaining the alias would violate the exact
+  C34 repair direction. No PR was pushed and no CI success is claimed.
+- Required decision before continuation: meta must either authorize the exact
+  six stale-entry deletions as a bounded consequence of the C34 package
+  removal, or provide an in-scope alternative that both removes the redundant
+  package and leaves the unmodified architecture gate green. After that
+  decision, rerun architecture/Wire checks, commit and push the same PR `#410`,
+  update its handoff, and return `ACCEPTED` to script CI without polling.
