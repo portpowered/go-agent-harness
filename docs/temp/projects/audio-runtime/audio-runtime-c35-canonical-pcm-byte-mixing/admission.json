@@ -10,6 +10,7 @@
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "planning_revision": "c61ee2774986c896560ee40a92441c914976000d",
+  "prerequisite_verification_at": "2026-09-10T10:30:48Z",
   "manifest_branch_matches": true,
   "admission": {
     "status": "admitted",
@@ -19,20 +20,31 @@
   "required_source_evidence": {
     "operator_decision": {
       "path": "docs/temp/projects/audio-runtime/operator-eight-hour-20260910-0848/decision.md",
-      "status": "unavailable_in_factory_root_at_execution"
+      "authoritative_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/operator-eight-hour-20260910-0848/decision.md",
+      "staged_path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/meta-prerequisite-0-decision.md",
+      "status": "present_and_byte_identical",
+      "sha256": "867576b50afa1c292197239f00cc14e9eccaeaf9ff59e7978b60d41d6f437b6c"
     },
     "accepted_c25_probe": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c25-boundary-diagnosis-vertical-probe.json",
-      "status": "unavailable_in_factory_root_at_execution"
+      "authoritative_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c25-boundary-diagnosis-vertical-probe.json",
+      "staged_path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/meta-prerequisite-1-audio-runtime-c25-boundary-diagnosis-vertical-probe.json",
+      "status": "present_and_byte_identical",
+      "decision": "ACCEPTED",
+      "sha256": "0091cc2415d5e90a881fda8d45bfe21d7d30e2d4d044d8c09b196532fb38e4f9"
     },
     "c25_canonical_outcome": {
       "path": "docs/temp/projects/audio-runtime/operator-eight-hour-20260910-0848/canonical-c25.json",
-      "status": "unavailable_in_factory_root_at_execution"
+      "authoritative_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/operator-eight-hour-20260910-0848/canonical-c25.json",
+      "staged_path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/meta-prerequisite-2-canonical-c25.json",
+      "status": "present_and_byte_identical",
+      "state": "complete",
+      "sha256": "f24cea37e8fc491187a3e8a2c3ff47be621383d4f121805aa886a8963cff4734"
     },
     "available_plan": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/extraction-plan.md",
       "revision": "c61ee2774986c896560ee40a92441c914976000d"
     }
   },
-  "scope_note": "Missing source-evidence files are recorded and are not replaced by an acceptance waiver or regenerated peer evidence."
+  "scope_note": "The original unavailable-in-factory-root observation is retained as history. The authoritative files are now present and byte-identical to the staged copies; no acceptance waiver, second project, or regenerated peer evidence was used."
 }
