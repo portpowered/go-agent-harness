@@ -2393,3 +2393,49 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   package and leaves the unmodified architecture gate green. After that
   decision, rerun architecture/Wire checks, commit and push the same PR `#410`,
   update its handoff, and return `ACCEPTED` to script CI without polling.
+
+# C18 exact-source script handoff checkpoint 2026-09-10
+
+- Reverified the admitted sole `audio-runtime` project: `project-control.py
+  verify-work --type task --name audio-runtime-c18-public-strict-replay`
+  returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c18-public-strict-replay"}`.
+  `prd.json.branchName` is exactly `codex/audio-runtime-c18-public-strict-replay`,
+  matching the isolated worktree. The predecessor C18 checkpoints and unrelated
+  changes were preserved; no running host checkout, second project, waiver,
+  reset or unrelated owner path was changed.
+- Fetched `origin/main=11b9035bfbca9ad5f5f5356c1ef0154795230698` and integrated it
+  with merge `6522cb61`; `origin/main` is an ancestor of the candidate. The
+  earlier strict coverage repair is checkpointed at `158b4cfa`; the current
+  head is `fb504ea587ef46c402ea111596357633a6f984d0`.
+- Applied the authorized C18/C34 coverage consequence. The strict package is
+  at `82.7%` (`579/700`) against the authorized `80.00` floor, the public CLI
+  replay floor remains `80.00`, and `make coverage-registration` passes with
+  `171` workspace packages across `6` modules. The exact six stale aliases for
+  deleted `agent-cli/internal/services/replay/interface.go` symbols were
+  removed from `docs/architecture/architecture-size-baseline.json` and no
+  other baseline entry was touched. `make architecture-size-check` passes at
+  `181` packages / `1,877` files / `27,690` functions.
+- Exact-head checks pass: wire-check; focused normal tests (`1,075` tests in
+  `go-audio/pkg/clock` and `agent-cli/internal/services/internal/agentruntime`);
+  owned room/clock race controls (`346` tests in those two packages); strict
+  replay coverage (`82.7%`); the CLI verified-scope replay control; the
+  `GOWORK=off` independent public consumer normal/race controls; focused vet;
+  and the accumulated `COUNT=1` normal/coverage/race session regression
+  matrix. Two broader race runs retain known host-sensitive failures outside
+  this lease: the browser-validator timeout and C34-owned Test7 audio-adapter
+  close; no C18-owned assertion failed in those runs.
+- Current-source public checks passed external (`2`), strict (`5`), provider
+  (`7`), ask (`2`) and watchdog (`1`) cases. The first interruption invocation
+  reported the expected healthy-tail bytes but only `2,400` bytes instead of
+  the `3,360`-byte full replay; the immediate fresh repeat passed all `4`
+  interruption results, and an isolated current-yui replay of the same copied
+  fixture produced the full `3,360` bytes. The diagnostic is retained as
+  host-sensitive evidence; C18 does not edit the C34-owned recording replay
+  implementation without a reproducible in-scope cause.
+- This is an executor handoff, not a CI, review, merge, post-merge vertical,
+  physical/acoustic or project-acceptance claim. Next action: commit this
+  checkpoint, push the same PR `#410`, update the PR with the exact gate
+  evidence, and return `ACCEPTED` to the script-owned current-head CI gate
+  without polling. If that gate rejects a specific check, inspect only its
+  exact log, repair the same task, and return `CONTINUE` while actionable work
+  remains.
