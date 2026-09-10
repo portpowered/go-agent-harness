@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "current_candidate_revision": "2574dc27bef53828ac4503047b3d6036ec68cc50",
-  "current_origin_main": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+  "current_candidate_revision": "eeaecc1204da731c7e31469c68100dabc4b3560f",
+  "current_origin_main": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
   "current_main_integration": {
-    "isolated_merge_candidate": "2574dc27bef53828ac4503047b3d6036ec68cc50",
+    "isolated_merge_candidate": "eeaecc1204da731c7e31469c68100dabc4b3560f",
     "c20_composition_repair_merge": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
     "c26_accepted_dsp_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
     "composition_focus": {
       "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s",
       "verdict": "PASS",
-      "interpretation": "The former coverage assertion passes on current main; this is local focused evidence, not a hosted CI result."
+      "interpretation": "The former coverage assertion passes on current origin/main=c95a2cb4; this is local focused evidence, not a hosted CI result."
     },
     "c26_shared_dsp_focus": {
       "command": "go test ./agent-cli/internal/room -run '^TestPCMMixLegacy(UsesSharedFinalClipAndSortedAttribution|KeepsFullCadenceZeroPadding|RejectsOutputBoundBeforeDecoding)$' -count=1 -timeout=45s",
@@ -55,7 +55,7 @@
       "make_exit": 2,
       "first_failed_control": "coverage package test failed before coverage aggregation; the assertion was the only reported test failure in the job log"
     },
-    "resolution_on_current_main": "The C20 composition repair is now included in origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840 and the focused assertion passes locally. The historical hosted rejection remains preserved; no hosted CI-green claim is made.",
+    "resolution_on_current_main": "The C20 composition repair is included in origin/main=c95a2cb4; the focused assertion passes locally. The historical hosted rejection remains preserved; no hosted CI-green claim is made.",
     "completed_adjacent_checks": [
       "CI (static)=SUCCESS",
       "CI (unit)=SUCCESS",
@@ -65,10 +65,10 @@
       "CI (Windows audio portable)=SUCCESS"
     ],
     "local_focused_control": {
-      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/c25-wire-coverage.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
+      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/factory-c25-wire-coverage-c95.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
       "verdict": "PASS",
-      "duration_seconds": 0.563,
-      "coverage": "4.7% of statements"
+      "duration_seconds": 0.555,
+      "coverage": "4.5% of statements"
     },
     "ownership": {
       "c25": "evidence-only; no leased production or composition-test path",
@@ -150,15 +150,15 @@
     "next_action": "C20 captures bounded server/snapshot phase timing on its same task; primary resumes C25 after any reviewed main change to refresh exact-source evidence and submit a changed head through script CI."
   },
   "owned_exact_head_refresh": {
-    "candidate": "2574dc27bef53828ac4503047b3d6036ec68cc50",
+    "candidate": "eeaecc1204da731c7e31469c68100dabc4b3560f",
     "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all",
     "verdict": "ACCEPTED",
     "bounded_commands": 27,
     "focused_regressions": 10,
-    "aggregate_seconds": 15.518,
-    "source_revision": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+    "aggregate_seconds": 14.508,
+    "source_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
     "source_archive_bytes": 56913920,
-    "source_archive_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
+    "source_archive_sha256": "5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12",
     "source_gap": "SOURCE_GAP_CONFIRMED",
     "c26_dsp_reconciliation": "ELIMINATED_BY_ACCEPTED_C26; shared bounds at mixer.go:725 and shared mix at mixer.go:751; no legacy accumulation or final-clip loop",
     "clean_shutdown": true,

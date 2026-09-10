@@ -8,9 +8,9 @@
   "sharedModulePathsModified": [],
   "baselinePathsModified": [],
   "realtimeOrDeviceAccess": false,
-  "candidateHeadAtCheckpoint": "2574dc27bef53828ac4503047b3d6036ec68cc50",
-  "sourceRevisionAtCheckpoint": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
-  "originMainAtCheckpoint": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
+  "candidateHeadAtCheckpoint": "eeaecc1204da731c7e31469c68100dabc4b3560f",
+  "sourceRevisionAtCheckpoint": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "originMainAtCheckpoint": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
   "pullRequest": 417,
   "latestCIRejection": {
     "run": "34413969081",
@@ -19,8 +19,8 @@
     "head": "b061bf852076d4b36526600377ad916751e32b4b",
     "failure": "agent-cli/internal/wire/composition_test.go:417 expected the RTC media-capability error after preflight, observed nil",
     "localFocusedControl": "same test with coverage instrumentation passed in 0.563s",
-    "resolved_on_current_main": "The focused composition assertion passes on current origin/main; no hosted CI-green claim is made.",
-    "nextAction": "Commit and push this changed C25 evidence checkpoint, update PR417, and submit the same task to script CI; retain C20 ownership of the separate test46/provider_burst repair."
+    "resolved_on_current_main": "The focused composition assertion passes on current origin/main=c95a2cb4; the hosted rejection remains historical and no hosted CI-green claim is made.",
+    "nextAction": "Commit and push this exact-head C25 evidence checkpoint, update PR417, and submit the same task to script CI; retain C20 ownership of the separate test46/provider_burst repair."
   },
   "chosenDependency": "legacy room clock/format/device-output boundary",
   "chosenDependencyPlan": "extraction-plan.md",

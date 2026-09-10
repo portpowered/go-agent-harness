@@ -276,3 +276,28 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   exact-head evidence, and hand the same task to the script CI gate without
   polling. Retain ownership for any exact rejection and repair only within
   the admitted C25 evidence scope; do not self-review or claim acceptance.
+
+## Current exact-head refresh after c31 main integration
+
+All earlier candidate and main references in this ledger are historical
+checkpoints. The freshly fetched reviewed `origin/main` is
+`c95a2cb4f96fa8c14bd4655f5197a822c86a980c`, integrated in the isolated branch
+at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`. The exact C25 evidence candidate
+is `eeaecc1204da731c7e31469c68100dabc4b3560f`; baseline, startup integration,
+and accepted C26 ancestry remain preserved.
+
+The committed `verify.py --mode all` run returned `ACCEPTED` in `14.508s` across
+`27` bounded commands, with `10` focused normal/race/vet regressions. Source
+gap, archive/fixture, AST positive/negative/mutation/comment controls,
+complete owned-path allowlist, zero-test, child-hang cleanup, and aggregate
+shutdown all passed with no surviving child. The source archive is
+`57,067,520` bytes with SHA-256
+`5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12`.
+
+The focused current-main composition regression with coverage passed in
+`0.555s` (`4.5%` statements). The hosted PR417 coverage rejection remains
+historical and C20-owned; C20's separate `test46/provider_burst` failure is
+unwaived. This task makes no CI-green, runtime, physical-device, acoustic, or
+project-completion claim. Next action is to synchronize, commit, and push the
+remaining metadata, then submit the same task to the script CI gate without
+polling.

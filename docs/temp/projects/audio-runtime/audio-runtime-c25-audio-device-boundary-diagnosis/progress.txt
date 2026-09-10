@@ -235,3 +235,24 @@ Resumed current-main checkpoint and C26 DSP re-evaluation
   Next action is commit/push, update PR417 with this exact evidence, and submit
   the changed same task to the script CI gate without polling; retain ownership
   for any exact rejection.
+
+Current exact-head refresh after current-main integration
+- Historical checkpoint references above remain preserved and are not current.
+  Fresh `origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c` was merged into
+  the isolated C25 branch at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`.
+  The verifier/manifest repair was committed at exact candidate
+  `eeaecc1204da731c7e31469c68100dabc4b3560f`.
+- `verify.py --mode all` at that exact committed head returned `ACCEPTED` in
+  `14.508s` across `27` bounded commands, including `10` focused normal/race/
+  vet regressions. `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist,
+  zero-test and child-hang cleanup controls passed; no child survived. The
+  rebuilt/materialized source archive is `57,067,520` bytes with SHA-256
+  `5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12`.
+- The focused current-main composition regression with coverage passed in
+  `0.555s` at `4.5%` statements. The hosted PR417 coverage rejection remains
+  historical and C20-owned; its separate `test46/provider_burst` failure is
+  unwaived. No CI-green, runtime, physical-device, acoustic, or project
+  completion claim is made.
+- Next action: synchronize remaining metadata, commit/push, update PR417, and
+  submit the changed same task to the script CI gate without polling; retain
+  ownership for any exact rejection.

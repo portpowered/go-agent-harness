@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
-  "candidate_revision_at_diagnosis": "2574dc27bef53828ac4503047b3d6036ec68cc50",
-  "source_revision_at_diagnosis": "431fc96c14f0e0045629d9c36f98ee61ff06e840",
-  "source_archive_sha256": "e6f17306b3baf55d44511108871c9ec0546d0c5e3a4639deafc05dd85abf4c31",
+  "candidate_revision_at_diagnosis": "eeaecc1204da731c7e31469c68100dabc4b3560f",
+  "source_revision_at_diagnosis": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "source_archive_sha256": "5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12",
   "chosen_dependency": {
     "name": "legacy room clock/format/device-output boundary",
     "current_paths": [
@@ -116,7 +116,7 @@
     "QUALITY": ["provenance", "positive/negative controls", "focused tests", "race", "vet", "bounded cleanup"]
   },
   "later_gates": [
-    "same-task focused verifier refresh against current origin/main=431fc96c14f0e0045629d9c36f98ee61ff06e840",
+    "same-task focused verifier refresh against current origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
     "C20 reviewed repair for test46/provider_burst remains separately owned and unwaived",
     "review and script CI gate; no CI polling or acceptance claim in this packet"
   ]

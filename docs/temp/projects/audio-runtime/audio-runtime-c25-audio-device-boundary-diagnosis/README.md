@@ -25,7 +25,7 @@ Run from the repository root:
 python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all
 ```
 
-The verifier pins freshly fetched main revision `431fc96c14f0e0045629d9c36f98ee61ff06e840` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, confirms accepted C26 merge ancestry, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
+The verifier pins freshly fetched main revision `c95a2cb4f96fa8c14bd4655f5197a822c86a980c` separately from the docs candidate, reproducibly hashes a `git archive` of that pin, verifies the fixture manifest and every audited production path, confirms accepted C26 merge ancestry, enforces a complete source-to-candidate changed-path allowlist, enforces a 55-second child cap and 600-second aggregate cap, terminates timed-out process groups, records source SHA-256 values, checks the public/canonical package graph, rejects a negative bypass fixture, and runs only these focused checks:
 
 - canonical `go-audio/pkg/mixer` mixer/accumulator tests;
 - canonical playback queue/callback-boundary tests;
@@ -221,6 +221,34 @@ reviewed C20 repair is present in fetched `origin/main`, so C25 will not submit
 an unchanged candidate to script CI. The evidence checkpoint must be pushed
 and PR417 updated; after the reviewed C20 repair reaches main, refresh again
 against that changed source and submit the same task through the script gate.
+
+## Current exact-head refresh after current-main integration
+
+All checkpoints below this section are historical and remain preserved for review.
+The fetched reviewed `origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c` was
+merged into the isolated C25 branch at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`;
+the verifier/manifest refresh was committed at exact candidate
+`eeaecc1204da731c7e31469c68100dabc4b3560f`. Required baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21`, and accepted C26 merge
+`1f82284abee0bd31a6680310444cea2e4c16ef00` remain ancestors.
+
+At `eeaecc1204da731c7e31469c68100dabc4b3560f`, `verify.py --mode all` returned
+`ACCEPTED` in `14.508` seconds across `27` bounded commands, including `10`
+focused normal/race/vet regressions. `SOURCE_GAP_CONFIRMED`, the AST positive,
+negative, mutation and comment controls, fixture manifest, rebuilt/materialized
+archive, complete path allowlist, zero-test and child-hang cleanup controls all
+passed; no child survived. The pinned archive is `57,067,520` bytes with SHA-256
+`5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12`.
+
+The focused current-main composition regression also passed with coverage in
+`0.555` seconds (`4.5%` statements). The historical PR417 coverage rejection
+(`34413969081`/`102674534021`, `composition_test.go:417`) remains preserved and
+C20-owned; C20's separate `test46/provider_burst` timeout remains unwaived.
+No hosted CI result, merge, runtime, physical-device, acoustic, or project
+acceptance is claimed. Next action: synchronize the remaining metadata, push
+PR417, and submit this changed same task to the script CI gate without polling;
+retain ownership for any exact rejection.
 
 ## Exact current-head refresh
 

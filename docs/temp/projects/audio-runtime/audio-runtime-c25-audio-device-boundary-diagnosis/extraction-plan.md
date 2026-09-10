@@ -143,6 +143,28 @@ claim. It targets the remaining compiled legacy dependency and verifies only
 source edges, canonical dependency shape, selected software boundaries, and
 runner integrity.
 
+## Current exact-head handoff checkpoint
+
+Historical candidate references above remain preserved as predecessor evidence.
+The freshly fetched `origin/main` is `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`;
+the isolated C25 merge candidate was `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`,
+and the exact evidence candidate is
+`eeaecc1204da731c7e31469c68100dabc4b3560f`. The required baseline, startup
+integration, and accepted C26 merge ancestry remain intact.
+
+The exact committed verifier run returned `ACCEPTED` in `14.508s` across `27`
+bounded commands with `10` focused normal/race/vet regressions. The source gap,
+AST positive/negative/mutation/comment controls, fixture manifest, rebuilt and
+materialized archive, changed-path allowlist, zero-test handling, intentional
+child-hang cleanup, and aggregate shutdown all passed with no surviving child.
+The current source archive is `57,067,520` bytes with SHA-256
+`5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12`.
+
+The prior hosted PR417 rejection remains historical and separately owned by
+C20; no CI-green, runtime, physical-device, acoustic, or project-completion
+claim is made here. Submit this changed same task to the script CI gate after
+the remaining evidence metadata is synchronized, without polling CI.
+
 ## Gate map and later handoff
 
 - `AUDIO`: `PCMFrame`, `FrameBuffer`, canonical mixer input, epoch and
