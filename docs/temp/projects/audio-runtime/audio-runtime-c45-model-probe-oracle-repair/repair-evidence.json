@@ -5,16 +5,16 @@
   "work": "audio-runtime-c45-model-probe-oracle-repair",
   "branch": "codex/audio-runtime-c45-model-probe-oracle-repair",
   "original_candidate": "9aaa3e732988c6d5b97ffcf5a8855b24243529b7",
-  "fetched_origin_main": "fdf3b2d98914f50577865e825c733e73520b9ef3",
-  "main_integration_commit": "87d4c44c6b61a2f6c7667d256b144752a3931b69",
+  "fetched_origin_main": "aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b",
+  "main_integration_commit": "75204b45a6428ece53a18798415292d2ba0710f2",
   "repair_commits": [
     "e288408ed7a6662db89ab22f39443b6b2c2461f0",
     "3f8de151695cbb43715081b903d56cd988ac6984",
     "d04ecbb163f9011f16a58ac0d36fd5d206096f94"
   ],
-  "candidate_revision": "d04ecbb163f9011f16a58ac0d36fd5d206096f94",
-  "tested_delivery_revision": "71e57375b9f8662ea2ca61e748618a31cc6b30fb",
-  "delivery_revision_change": "Documentation-only evidence commit over the tested code; verifier and executable build inputs are unchanged.",
+  "candidate_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
+  "tested_delivery_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
+  "delivery_revision_change": "Current main was integrated before validation; the evidence ledger checkpoint is documentation-only over the tested source, verifier, and immutable executable inputs.",
   "review_findings_repaired": {
     "process_inspection": "Empty or malformed ps output raises EvidenceFailure; valid nonmatching rows still prove no survivors.",
     "aggregate_deadline": "run_controls receives the main start time and checks the same total budget after every control; synthetic overrun fails.",
@@ -40,11 +40,24 @@
       "Success and deadline-failure paths record nonzero scratch and zero bytes after cleanup."
     ]
   },
+  "latest_ci_rejection": {
+    "run": "34543119901",
+    "job": "103089888288",
+    "head": "1687f45316b0eb3420940c8be69bc17b36cd1c6f",
+    "check": "CI (hermetic)",
+    "result": "FAILURE",
+    "failures": [
+      "TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence: explicit max-turn boundary timed out",
+      "TestRoomUsesLiveLivenessForPeerFilteredEventsAndEvidence: SSE payload read timed out"
+    ],
+    "scope": "Both failures are outside the C45-owned Python verifier/evidence paths; the full log shows the integration package passed and no C45 defect was demonstrated.",
+    "next_action": "Submit this changed, current-main-integrated candidate to the script-owned CI gate without polling it; retain the same task for any exact current-head rejection."
+  },
   "staged_probe": {
     "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py --staged-root $FACTORY_ROOT/docs/temp/probes/audio-runtime-c44-model-admission-vertical-probe --child-timeout 60 --total-timeout 1500 --max-output-bytes 67108864 --min-free-bytes 2147483648",
     "result": "PASS",
-    "run_id": "staged-probe-20260910T233721Z-90419",
-    "tested_source_revision": "71e57375b9f8662ea2ca61e748618a31cc6b30fb",
+    "run_id": "staged-probe-20260910T235032Z-98596",
+    "tested_source_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
     "verifier_sha256": "93879a7647fd3003ad9036e9be7b25c4ad712d4c3b5454cc860f9949949d1bf2",
     "artifact_hashes_before_after_equal": true,
     "artifact_hashes": {
@@ -54,9 +67,9 @@
       "build_descriptor": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11"
     },
     "free_space_samples_bytes": {
-      "before": 3314520064,
-      "during": 3256078336,
-      "after": 3313569792,
+      "before": 2973097984,
+      "during": 2861854720,
+      "after": 2919346176,
       "minimum_required": 2147483648
     },
     "output_bytes": 4716,
