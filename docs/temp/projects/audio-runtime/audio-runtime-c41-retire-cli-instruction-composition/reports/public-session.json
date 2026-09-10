@@ -12,7 +12,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer",
-      "duration_seconds": 0.138534,
+      "duration_seconds": 10.383103,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -92,7 +92,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
-      "duration_seconds": 0.238426,
+      "duration_seconds": 7.514549,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -113,7 +113,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.074499,
+      "duration_seconds": 0.081079,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -205,7 +205,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.007917,
+      "duration_seconds": 0.008668,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -228,7 +228,7 @@
   "public_session": {
     "capture": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/session.capture.json",
-      "sha256": "786b66bacd53ba63cf4e89e4b7ccda16afcf7f9d8641ea67ce74e8750c587a8e",
+      "sha256": "b543b00ba356e2ccb6e206e0a7424d6799095e7a0487e5f9f7c07a7c3c1075ad",
       "size": 6552
     },
     "clean_shutdown": {
@@ -255,7 +255,7 @@
         "--api-key",
         "hermetic-key",
         "--base-url",
-        "ws://127.0.0.1:63172/v1/realtime",
+        "ws://127.0.0.1:63762/v1/realtime",
         "--system-prompt",
         "literal prompt",
         "--prompt",
@@ -267,19 +267,12 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.446694,
+      "duration_seconds": 0.467517,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
       "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file\nTool result: C41_PUBLIC_TOOL_EFFECT_9182\n\nAssistant: C41_TOOL_EFFECT:C41_PUBLIC_TOOL_EFFECT_9182\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "timed_out": false
-    },
-    "expected": {
-      "composed_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
-      "policy_block_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
-      "prompt": "C41 public workflow: inspect the marker file",
-      "resolved_instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
-      "tool_name": "read_file"
     },
     "provider": {
       "bootstrap_session_update": {
@@ -798,13 +791,20 @@
           "type": "session.closed"
         }
       ],
-      "expected_policy_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
-      "expected_resolved": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
       "handshake": {
-        "address": "127.0.0.1:63173",
+        "address": "127.0.0.1:63765",
         "authorization_valid": true,
         "request_target": "/v1/realtime?model=gpt-realtime-2.1",
         "upgrade": "websocket"
+      },
+      "instruction_observation": {
+        "initial_instructions": "literal prompt",
+        "initial_instructions_sha256": "6a538633f3808731f36c4ab23b70dd754b212a78f655ff9eda08ee2458e31e84",
+        "initial_session_update_before_user_turn": true,
+        "mode": "unchanged-output",
+        "route": "shipped-yui-live-host-bootstrap",
+        "standalone_c41_policy_oracle_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
+        "standalone_c41_policy_oracle_used_for_live_request": false
       },
       "response_create_count": 2,
       "scenario_complete": true,
@@ -981,6 +981,7 @@
         },
         "type": "session.update"
       },
+      "standalone_expected_resolved": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
       "tool_result": {
         "item": {
           "call_id": "call-c41-read-file",
@@ -989,7 +990,7 @@
         },
         "type": "conversation.item.create"
       },
-      "url": "ws://127.0.0.1:63172/v1/realtime",
+      "url": "ws://127.0.0.1:63762/v1/realtime",
       "user_turn": {
         "item": {
           "content": [
@@ -1004,6 +1005,19 @@
         "type": "conversation.item.create"
       }
     },
+    "shipped_bootstrap": {
+      "instructions": "literal prompt",
+      "instructions_sha256": "6a538633f3808731f36c4ab23b70dd754b212a78f655ff9eda08ee2458e31e84",
+      "observed_before_user_turn": true,
+      "prompt": "C41 public workflow: inspect the marker file",
+      "tool_name": "read_file"
+    },
+    "standalone_policy_oracle": {
+      "composed_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+      "policy_block_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
+      "resolved_instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
+      "used_for_shipped_live_request": false
+    },
     "tool_effect": {
       "cli_output_marker": true,
       "marker": "C41_PUBLIC_TOOL_EFFECT_9182",
@@ -1012,7 +1026,7 @@
     }
   },
   "schema": "audio-runtime-c41-instruction-evidence/v1",
-  "source_revision": "66d381a6962277fba925dfd628244a256081c575",
+  "source_revision": "529a82cfd80e93c00c46f78edd041cf276c71bb8",
   "status": "accepted",
-  "worktree_status_at_start": " M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/public-session.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/verify.py\n"
+  "worktree_status_at_start": " M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/cleanup-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/consumer-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/public-session.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/regression.json\n"
 }

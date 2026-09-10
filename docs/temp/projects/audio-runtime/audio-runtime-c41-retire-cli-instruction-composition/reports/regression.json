@@ -12,7 +12,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer",
-      "duration_seconds": 0.131466,
+      "duration_seconds": 0.131184,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -92,7 +92,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
-      "duration_seconds": 0.239287,
+      "duration_seconds": 0.255632,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -179,7 +179,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.644019,
+      "duration_seconds": 0.61566,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -202,7 +202,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.076555,
+      "duration_seconds": 0.072457,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -234,7 +234,7 @@
     }
   },
   "schema": "audio-runtime-c41-instruction-evidence/v1",
-  "source_revision": "66d381a6962277fba925dfd628244a256081c575",
+  "source_revision": "529a82cfd80e93c00c46f78edd041cf276c71bb8",
   "status": "accepted",
-  "worktree_status_at_start": " M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/public-session.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/verify.py\n"
+  "worktree_status_at_start": " M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/cleanup-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/consumer-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/public-session.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/regression.json\n"
 }
