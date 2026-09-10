@@ -150,7 +150,8 @@ CLI image workflow, and the credential-free strict replay regression.
 `make architecture-size-check` passes at 183 packages, 1,884 files and 27,748
 functions; `make coverage-registration` passes at 173 workspace packages;
 `make wire-check` regenerated the checked-in Wire outputs with no tracked
-changes; and `git diff --check` passes.
+changes; `make lint` exits 0 with pinned golangci-lint 2.9.0; `make staticcheck`
+exits 0 with pinned staticcheck 2026.1; and `git diff --check` passes.
 
 The fresh process observations are tied to the rebuilt artifacts. The image
 workflow exits 0; the loopback provider reports `PASS`; real Chrome native
@@ -186,6 +187,14 @@ to 71 final adapter lines and retires
 `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`. The source
 delta SHA-256 is
 `94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`.
+
+The final documentation checkpoint is a docs-only descendant of the tested
+source `169490ea69ff1886fc07ec333ac98dfa142aef05`. Its only changed paths
+relative to the tested source are this task's README,
+implementation handoff, PR body and root `progress.txt`; no executable build,
+fixture, provider or browser-page input changed. The run artifact is therefore
+retained as an evidence-only descendant with explicit source/input equivalence,
+not relabeled as a build from a different implementation.
 
 This is current implementation evidence only: no terminal CI result,
 independent review, guarded merge, post-merge vertical acceptance, physical or

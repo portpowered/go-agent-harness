@@ -2760,6 +2760,13 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   retiring `sessionImageToolPathDescription`, `sessionImageStageExtension`,
   and `advertiseSessionImagePaths` while retaining
   `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`.
+- Current-head pinned analyzer repair checks also pass: `make lint` exits 0
+  with golangci-lint `2.9.0`, and `make staticcheck` exits 0 with staticcheck
+  `2026.1`; this resolves the saved CI rejection's old-head errcheck finding.
+- This documentation checkpoint is a docs-only descendant of tested source
+  `169490ea`; relative to that tested source only the C43 README, implementation
+  handoff, PR body and root `progress.txt` changed, so executable/build/fixture
+  inputs are identical.
 - This remains an implementation checkpoint only: terminal CI, independent
   review, guarded merge, post-merge vertical acceptance, physical/acoustic
   proof and project acceptance are not claimed. Exact next action: commit this

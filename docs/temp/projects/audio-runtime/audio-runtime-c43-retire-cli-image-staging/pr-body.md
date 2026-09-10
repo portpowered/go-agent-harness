@@ -76,7 +76,8 @@ retired symbols `sessionImageToolPathDescription`,
 The merged candidate passes `make architecture-size-check` at 183 packages,
 1,884 files, 27,748 functions and `make coverage-registration` at 173
 packages. Wire regeneration produced no tracked changes and `git diff --check`
-is clean. Fresh merged-head verifier run
+is clean. Pinned `make lint` and `make staticcheck` both exit 0 using
+golangci-lint 2.9.0 and staticcheck 2026.1. Fresh merged-head verifier run
 `verify-20260910T211145Z-67634` at source
 `169490ea69ff1886fc07ec333ac98dfa142aef05` passed all 18 bounded steps,
 including normal/race tools and adapter regressions, the in-process image
@@ -101,6 +102,12 @@ a current-head result. The exact source inventory remains 142 baseline lines
 to 71 adapter lines, retiring `sessionImageToolPathDescription`,
 `sessionImageStageExtension`, and `advertiseSessionImagePaths` while retaining
 `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`.
+
+The PR documentation is a docs-only descendant of the tested executable source
+`169490ea69ff1886fc07ec333ac98dfa142aef05`: only the C43 README, handoff, PR
+body and root progress ledger changed, so all executable build inputs are
+identical and the recorded binary/protocol evidence remains valid without
+relabeling it.
 
 ## Handoff
 
