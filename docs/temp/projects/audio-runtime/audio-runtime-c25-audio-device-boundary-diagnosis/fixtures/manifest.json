@@ -1,0 +1,19 @@
+{
+  "fixtures": [
+    {
+      "bytes": 769,
+      "lines": 25,
+      "path": "fixtures/allowed_room_graph.go",
+      "sha256": "6833a559ed5371d14396cecf99f7c7585c080b0b07f814e5288578ec555ecb7b"
+    },
+    {
+      "bytes": 660,
+      "lines": 18,
+      "path": "fixtures/forbidden_room_graph.go",
+      "sha256": "46c2512e864941be2d0e5a922752bca2a01d3b1bd6c256efa09558cade36760a"
+    }
+  ],
+  "schema": 1,
+  "source_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis"
+}
