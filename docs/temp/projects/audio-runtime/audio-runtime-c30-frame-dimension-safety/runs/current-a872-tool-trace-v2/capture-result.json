@@ -1,0 +1,34 @@
+{
+  "schema": "audio-runtime-c30-yui-capture.v1",
+  "tested_source_revision": "a87247bf77abaf6746820c3eb2073d33166c3ac1",
+  "base_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "fixture": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+  },
+  "argv": [
+    "go", "run", "./agent-cli/cmd/testtimeout", "--timeout", "90s",
+    "--dir", "runs/current-a872-tool-trace-v2", "--label", "c30-current-a872-tool-trace-v2",
+    "--", "artifacts/yui", "-C", "runs/current-a872-tool-trace-v2/config", "session",
+    "--replay", "../audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "--audio-out", "runs/current-a872-tool-trace-v2/rendered.pcm",
+    "--record-dir", "runs/current-a872-tool-trace-v2/bundle", "--max-duration", "60s", "--trace-audio"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "terminal": {
+    "reason": "fixture_complete",
+    "classification": "provider_close",
+    "terminal_reason": "provider_close",
+    "terminal_provenance": "provider",
+    "output_state": "not_applicable"
+  },
+  "markers": ["PROBE_TOOL_MARKER_9182", "strict replay continuation", "fixture_complete"],
+  "wire_events": 18,
+  "tool_calls": 1,
+  "provider_pcm": {"bytes": 4800, "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"},
+  "rendered_pcm": {"bytes": 3200, "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"},
+  "bundle_manifest_sha256": "77e6e244fb8a4584f6909106d8075c4a18975db9e9188717690b643a95ede1f9",
+  "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6"
+}

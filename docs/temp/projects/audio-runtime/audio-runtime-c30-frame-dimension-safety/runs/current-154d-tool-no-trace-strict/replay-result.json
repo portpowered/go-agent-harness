@@ -1,0 +1,10 @@
+{
+  "schema": "audio-runtime-c30-yui-negative-replay.v1",
+  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
+  "bundle": "runs/current-154d-tool-no-trace/bundle",
+  "exit_code": 1,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "expected_failure": "replay bundle is incomplete: missing timeline.jsonl",
+  "negative_control_passed": true
+}

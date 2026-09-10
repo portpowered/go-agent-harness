@@ -1,0 +1,16 @@
+{
+  "actions": [
+    "boundary",
+    "cancellation",
+    "cleanup",
+    "isolation",
+    "lifecycle",
+    "negative-controls",
+    "package",
+    "quality",
+    "regression",
+    "verify-artifacts"
+  ],
+  "schema": "audio-runtime-c27-verification-summary/v1",
+  "status": "verified"
+}
