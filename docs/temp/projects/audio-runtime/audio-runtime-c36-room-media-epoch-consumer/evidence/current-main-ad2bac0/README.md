@@ -23,6 +23,11 @@ input manifest SHA-256 is
 the source archive SHA-256 is
 `5bd2bb08b38dfc376de9394919ce2fa7e8ca5396e14f05a2654ea4edc2d1e382`.
 
+Commit `4c7c640a4457f6f79fa9ec301162373d95bcee3e` is an evidence-only
+descendant of the tested source revision. Its diff from `ad2bac047eeeff068e9b2d33e3f72eeace1847a1`
+is confined to this evidence directory, so the recorded executable-input
+manifest and both binary hashes remain valid for the submitted head.
+
 The boundary evidence includes a 1 MiB first JSON object followed by a second
 object; the subprocess exits nonzero with `request exceeds maximum size of
 1048576 bytes`. The active cancellation report records real media-pump
