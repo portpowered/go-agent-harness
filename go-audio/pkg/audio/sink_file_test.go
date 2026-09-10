@@ -404,6 +404,7 @@ type closeError struct{ err error }
 func (c closeError) Close() error { return c.err }
 
 const boundedSinkChunkSamples = rawSinkScratchBytes / 2
+
 type boundedRawFailureCase struct {
 	name          string
 	samples       []int16
@@ -412,6 +413,7 @@ type boundedRawFailureCase struct {
 	prefix, calls int
 	stream        bool
 }
+
 func TestFileSinkBoundedRawFailureControls(t *testing.T) {
 	partialErr, chunkErr := errors.New("partial writer failed"), errors.New("second chunk failed")
 	cancelCtx, cancel := context.WithCancel(context.Background())
@@ -471,7 +473,6 @@ func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
 	}
 }
 func assertBoundedRawBytes(t *testing.T, samples []int16) {
-	t.Helper()
 	writer := &bytes.Buffer{}
 	sink, err := NewFileSink("-", writer)
 	if err != nil {
@@ -578,16 +579,15 @@ func assertWriterCalls(t *testing.T, writer io.Writer, want int) {
 	if !ok {
 		t.Fatalf("writer type %T is not *shortWriter", writer)
 	}
-	got := short.calls
-	if got != want {
-		 t.Fatalf("writer calls = %d, want %d", got, want)
+	if got := short.calls; got != want {
+		t.Fatalf("writer calls = %d, want %d", got, want)
 	}
 }
+
 type gateSinkWriter struct {
 	bytes.Buffer
-	entered chan struct{}
-	release chan struct{}
-	once    sync.Once
+	entered, release chan struct{}
+	once             sync.Once
 }
 
 func newGateSinkWriter() *gateSinkWriter {
