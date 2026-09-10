@@ -491,23 +491,14 @@ func (c *deadlineContext) Deadline() (time.Time, bool) {
 	return c.deadline, true
 }
 func (c *deadlineContext) Done() <-chan struct{} {
-	c.propagateParent()
-	return c.done
-}
-func (c *deadlineContext) Err() error {
-	c.propagateParent()
-	c.mu.Lock()
-	err := c.err
-	c.mu.Unlock()
-	return err
-}
-func (c *deadlineContext) Value(key any) any { return c.parent.Value(key) }
-func (c *deadlineContext) Cause() error      { return c.Err() }
-func (c *deadlineContext) propagateParent() {
 	if err := c.parent.Err(); err != nil {
 		c.finish(contextCause(c.parent))
 	}
+	return c.done
 }
+func (c *deadlineContext) Err() error        { c.Done(); c.mu.Lock(); err := c.err; c.mu.Unlock(); return err }
+func (c *deadlineContext) Value(key any) any { return c.parent.Value(key) }
+func (c *deadlineContext) Cause() error      { return c.Err() }
 func (c *deadlineContext) finish(err error) {
 	c.once.Do(func() { c.mu.Lock(); c.err = err; c.mu.Unlock(); close(c.done) })
 }
