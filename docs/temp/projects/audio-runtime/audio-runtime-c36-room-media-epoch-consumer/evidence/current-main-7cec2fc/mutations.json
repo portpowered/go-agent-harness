@@ -1,0 +1,1768 @@
+{
+  "control": "independent room subprocesses",
+  "rejected_mutations": [
+    "peer-participant-key",
+    "source-order",
+    "epoch",
+    "pcm",
+    "terminal"
+  ],
+  "runs": {
+    "epoch": {
+      "error": "literal oracle mismatch: epoch oracle differs",
+      "rejected": true,
+      "report": {
+        "epochs": {
+          "end_of_response_before_terminal": true,
+          "healthy_tail": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "stale_pending_samples": 0
+        },
+        "lifecycle": {
+          "closed": 2,
+          "natural_exit": true,
+          "opened": 2,
+          "repeated_close_ok": true,
+          "started": 2,
+          "waited": 2,
+          "workers_joined": true
+        },
+        "mode": "mutations",
+        "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-epoch",
+        "peer_outputs": {
+          "alice": [
+            211,
+            212,
+            213,
+            214
+          ],
+          "bob": [
+            111,
+            112,
+            113,
+            114
+          ]
+        },
+        "playback": {
+          "admitted": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "admitted_samples": 4,
+          "callback_count": 2,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "consumed_samples": 4,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback",
+          "observed": [
+            {
+              "end_of_response": false,
+              "epoch": 1,
+              "samples": [
+                322,
+                324,
+                326,
+                328
+              ],
+              "sequence": 0
+            }
+          ],
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 6,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "playback_boundary": {
+          "admitted": [
+            41,
+            42
+          ],
+          "admitted_samples": 2,
+          "callback_count": 1,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            41,
+            42,
+            0,
+            0
+          ],
+          "consumed_samples": 2,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback-boundary",
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 4,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "provider_admission": {
+          "frames": 4,
+          "samples": 12
+        },
+        "raw_events": [
+          {
+            "epoch": 0,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "bob",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 0,
+            "target": "bob"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "alice",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "bob",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        ],
+        "recording": {
+          "pcm_bytes": 24,
+          "provider_trace": "unavailable",
+          "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+          "replayable": false,
+          "state": "partial"
+        },
+        "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-epoch/run-manifest.json: no such file or directory",
+        "replay_rejected": true,
+        "room": {
+          "participants": {
+            "alice": "ended",
+            "bob": "ended",
+            "listener": "ended"
+          },
+          "termination_reason": "stopped"
+        },
+        "schema_version": 1,
+        "source_inputs": [
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          }
+        ],
+        "status": "complete",
+        "terminal": {
+          "alice": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          "bob": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        }
+      },
+      "report_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-epoch/report.json",
+      "run": {
+        "argv": [
+          "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media"
+        ],
+        "child_timeout_seconds": 60.0,
+        "cwd": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts",
+        "elapsed_seconds": 0.073295,
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "exit_code": 1,
+        "kill_sent": false,
+        "label": "room-mutation-epoch",
+        "output_drained": true,
+        "process_group_gone": true,
+        "process_group_id": 50962,
+        "reaped": true,
+        "stderr_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-epoch.stderr",
+        "stdout_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-epoch.stdout",
+        "term_sent": false,
+        "timed_out": false
+      }
+    },
+    "pcm": {
+      "error": "literal oracle mismatch: peer participant/PCM oracle differs",
+      "rejected": true,
+      "report": {
+        "epochs": {
+          "end_of_response_before_terminal": true,
+          "healthy_tail": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "stale_pending_samples": 4
+        },
+        "lifecycle": {
+          "closed": 2,
+          "natural_exit": true,
+          "opened": 2,
+          "repeated_close_ok": true,
+          "started": 2,
+          "waited": 2,
+          "workers_joined": true
+        },
+        "mode": "mutations",
+        "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-pcm",
+        "peer_outputs": {
+          "alice": [
+            999,
+            212,
+            213,
+            214
+          ],
+          "bob": [
+            111,
+            112,
+            113,
+            114
+          ]
+        },
+        "playback": {
+          "admitted": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "admitted_samples": 4,
+          "callback_count": 2,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "consumed_samples": 4,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback",
+          "observed": [
+            {
+              "end_of_response": false,
+              "epoch": 1,
+              "samples": [
+                322,
+                324,
+                326,
+                328
+              ],
+              "sequence": 0
+            }
+          ],
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 6,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "playback_boundary": {
+          "admitted": [
+            41,
+            42
+          ],
+          "admitted_samples": 2,
+          "callback_count": 1,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            41,
+            42,
+            0,
+            0
+          ],
+          "consumed_samples": 2,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback-boundary",
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 4,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "provider_admission": {
+          "frames": 4,
+          "samples": 12
+        },
+        "raw_events": [
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "bob",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 0,
+            "target": "bob"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              999,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "alice",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "bob",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        ],
+        "recording": {
+          "pcm_bytes": 24,
+          "provider_trace": "unavailable",
+          "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+          "replayable": false,
+          "state": "partial"
+        },
+        "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-pcm/run-manifest.json: no such file or directory",
+        "replay_rejected": true,
+        "room": {
+          "participants": {
+            "alice": "ended",
+            "bob": "ended",
+            "listener": "ended"
+          },
+          "termination_reason": "stopped"
+        },
+        "schema_version": 1,
+        "source_inputs": [
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          }
+        ],
+        "status": "complete",
+        "terminal": {
+          "alice": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          "bob": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        }
+      },
+      "report_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-pcm/report.json",
+      "run": {
+        "argv": [
+          "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media"
+        ],
+        "child_timeout_seconds": 60.0,
+        "cwd": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts",
+        "elapsed_seconds": 0.07519,
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "exit_code": 1,
+        "kill_sent": false,
+        "label": "room-mutation-pcm",
+        "output_drained": true,
+        "process_group_gone": true,
+        "process_group_id": 50963,
+        "reaped": true,
+        "stderr_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-pcm.stderr",
+        "stdout_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-pcm.stdout",
+        "term_sent": false,
+        "timed_out": false
+      }
+    },
+    "peer-participant-key": {
+      "error": "literal oracle mismatch: peer participant/PCM oracle differs",
+      "rejected": true,
+      "report": {
+        "epochs": {
+          "end_of_response_before_terminal": true,
+          "healthy_tail": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "stale_pending_samples": 4
+        },
+        "lifecycle": {
+          "closed": 2,
+          "natural_exit": true,
+          "opened": 2,
+          "repeated_close_ok": true,
+          "started": 2,
+          "waited": 2,
+          "workers_joined": true
+        },
+        "mode": "mutations",
+        "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-peer-participant-key",
+        "peer_outputs": {
+          "alice": [
+            211,
+            212,
+            213,
+            214
+          ],
+          "bob": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "mallory": [
+            111,
+            112,
+            113,
+            114
+          ]
+        },
+        "playback": {
+          "admitted": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "admitted_samples": 4,
+          "callback_count": 2,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "consumed_samples": 4,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback",
+          "observed": [
+            {
+              "end_of_response": false,
+              "epoch": 1,
+              "samples": [
+                322,
+                324,
+                326,
+                328
+              ],
+              "sequence": 0
+            }
+          ],
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 6,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "playback_boundary": {
+          "admitted": [
+            41,
+            42
+          ],
+          "admitted_samples": 2,
+          "callback_count": 1,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            41,
+            42,
+            0,
+            0
+          ],
+          "consumed_samples": 2,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback-boundary",
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 4,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "provider_admission": {
+          "frames": 4,
+          "samples": 12
+        },
+        "raw_events": [
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "mallory",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "mallory"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "bob",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 0,
+            "target": "bob"
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "alice",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "bob",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        ],
+        "recording": {
+          "pcm_bytes": 24,
+          "provider_trace": "unavailable",
+          "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+          "replayable": false,
+          "state": "partial"
+        },
+        "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-peer-participant-key/run-manifest.json: no such file or directory",
+        "replay_rejected": true,
+        "room": {
+          "participants": {
+            "alice": "ended",
+            "bob": "ended",
+            "listener": "ended"
+          },
+          "termination_reason": "stopped"
+        },
+        "schema_version": 1,
+        "source_inputs": [
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          }
+        ],
+        "status": "complete",
+        "terminal": {
+          "alice": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          "bob": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        }
+      },
+      "report_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-peer-participant-key/report.json",
+      "run": {
+        "argv": [
+          "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media"
+        ],
+        "child_timeout_seconds": 60.0,
+        "cwd": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts",
+        "elapsed_seconds": 0.08182,
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "exit_code": 1,
+        "kill_sent": false,
+        "label": "room-mutation-peer-participant-key",
+        "output_drained": true,
+        "process_group_gone": true,
+        "process_group_id": 50960,
+        "reaped": true,
+        "stderr_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-peer-participant-key.stderr",
+        "stdout_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-peer-participant-key.stdout",
+        "term_sent": false,
+        "timed_out": false
+      }
+    },
+    "source-order": {
+      "error": "literal oracle mismatch: source input order or samples differ",
+      "rejected": true,
+      "report": {
+        "epochs": {
+          "end_of_response_before_terminal": true,
+          "healthy_tail": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "stale_pending_samples": 4
+        },
+        "lifecycle": {
+          "closed": 2,
+          "natural_exit": true,
+          "opened": 2,
+          "repeated_close_ok": true,
+          "started": 2,
+          "waited": 2,
+          "workers_joined": true
+        },
+        "mode": "mutations",
+        "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-source-order",
+        "peer_outputs": {
+          "alice": [
+            211,
+            212,
+            213,
+            214
+          ],
+          "bob": [
+            111,
+            112,
+            113,
+            114
+          ]
+        },
+        "playback": {
+          "admitted": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "admitted_samples": 4,
+          "callback_count": 2,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "consumed_samples": 4,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback",
+          "observed": [
+            {
+              "end_of_response": false,
+              "epoch": 1,
+              "samples": [
+                322,
+                324,
+                326,
+                328
+              ],
+              "sequence": 0
+            }
+          ],
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 6,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "playback_boundary": {
+          "admitted": [
+            41,
+            42
+          ],
+          "admitted_samples": 2,
+          "callback_count": 1,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            41,
+            42,
+            0,
+            0
+          ],
+          "consumed_samples": 2,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback-boundary",
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 4,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "provider_admission": {
+          "frames": 4,
+          "samples": 12
+        },
+        "raw_events": [
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "bob",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 0,
+            "target": "bob"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "alice",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "bob",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        ],
+        "recording": {
+          "pcm_bytes": 24,
+          "provider_trace": "unavailable",
+          "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+          "replayable": false,
+          "state": "partial"
+        },
+        "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-source-order/run-manifest.json: no such file or directory",
+        "replay_rejected": true,
+        "room": {
+          "participants": {
+            "alice": "ended",
+            "bob": "ended",
+            "listener": "ended"
+          },
+          "termination_reason": "stopped"
+        },
+        "schema_version": 1,
+        "source_inputs": [
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          }
+        ],
+        "status": "complete",
+        "terminal": {
+          "alice": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          "bob": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        }
+      },
+      "report_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-source-order/report.json",
+      "run": {
+        "argv": [
+          "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media"
+        ],
+        "child_timeout_seconds": 60.0,
+        "cwd": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts",
+        "elapsed_seconds": 0.072308,
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "exit_code": 1,
+        "kill_sent": false,
+        "label": "room-mutation-source-order",
+        "output_drained": true,
+        "process_group_gone": true,
+        "process_group_id": 50961,
+        "reaped": true,
+        "stderr_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-source-order.stderr",
+        "stdout_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-source-order.stdout",
+        "term_sent": false,
+        "timed_out": false
+      }
+    },
+    "terminal": {
+      "error": "literal oracle mismatch: terminal provenance oracle differs",
+      "rejected": true,
+      "report": {
+        "epochs": {
+          "end_of_response_before_terminal": true,
+          "healthy_tail": [
+            111,
+            112,
+            113,
+            114
+          ],
+          "stale_pending_samples": 4
+        },
+        "lifecycle": {
+          "closed": 2,
+          "natural_exit": true,
+          "opened": 2,
+          "repeated_close_ok": true,
+          "started": 2,
+          "waited": 2,
+          "workers_joined": true
+        },
+        "mode": "mutations",
+        "output_dir": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-terminal",
+        "peer_outputs": {
+          "alice": [
+            211,
+            212,
+            213,
+            214
+          ],
+          "bob": [
+            111,
+            112,
+            113,
+            114
+          ]
+        },
+        "playback": {
+          "admitted": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "admitted_samples": 4,
+          "callback_count": 2,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            322,
+            324,
+            326,
+            328
+          ],
+          "consumed_samples": 4,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback",
+          "observed": [
+            {
+              "end_of_response": false,
+              "epoch": 1,
+              "samples": [
+                322,
+                324,
+                326,
+                328
+              ],
+              "sequence": 0
+            }
+          ],
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 6,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "playback_boundary": {
+          "admitted": [
+            41,
+            42
+          ],
+          "admitted_samples": 2,
+          "callback_count": 1,
+          "capability_gap": "software queue proof only; no physical playback device was opened",
+          "consumed": [
+            41,
+            42,
+            0,
+            0
+          ],
+          "consumed_samples": 2,
+          "discarded_samples": 3,
+          "discarded_stale": [
+            7,
+            8,
+            9
+          ],
+          "domain": "software-playback-boundary",
+          "physical_device": false,
+          "rendered_before_callback": 0,
+          "rendered_samples": 4,
+          "underflow": [
+            0,
+            0
+          ],
+          "underflow_samples": 2,
+          "zero_filled_samples": 2
+        },
+        "provider_admission": {
+          "frames": 4,
+          "samples": 12
+        },
+        "raw_events": [
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "bob",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 0,
+            "target": "bob"
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "alice",
+            "provenance": "replay",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          {
+            "classification": "fixture_complete",
+            "epoch": 0,
+            "kind": "terminal",
+            "output_state": "complete",
+            "participant": "bob",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        ],
+        "recording": {
+          "pcm_bytes": 24,
+          "provider_trace": "unavailable",
+          "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+          "replayable": false,
+          "state": "partial"
+        },
+        "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-terminal/run-manifest.json: no such file or directory",
+        "replay_rejected": true,
+        "room": {
+          "participants": {
+            "alice": "ended",
+            "bob": "ended",
+            "listener": "ended"
+          },
+          "termination_reason": "stopped"
+        },
+        "schema_version": 1,
+        "source_inputs": [
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "alice",
+            "samples": [
+              101,
+              102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "end_of_response": false,
+            "epoch": 1,
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          }
+        ],
+        "status": "complete",
+        "terminal": {
+          "alice": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "replay",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          },
+          "bob": {
+            "classification": "fixture_complete",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "fixture_complete",
+            "sequence": 99,
+            "terminal_reason": "provider_close"
+          }
+        }
+      },
+      "report_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-terminal/report.json",
+      "run": {
+        "argv": [
+          "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts/room-media"
+        ],
+        "child_timeout_seconds": 60.0,
+        "cwd": "/private/tmp/audio-runtime-c36-current-7cec2fc/artifacts",
+        "elapsed_seconds": 0.118048,
+        "environment": {
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+          "GOEXPERIMENT": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "GOWORK": "off",
+          "HOME": "/Users/abdifamily",
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg06cgqhM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        },
+        "exit_code": 1,
+        "kill_sent": false,
+        "label": "room-mutation-terminal",
+        "output_drained": true,
+        "process_group_gone": true,
+        "process_group_id": 50964,
+        "reaped": true,
+        "stderr_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-terminal.stderr",
+        "stdout_path": "/private/tmp/audio-runtime-c36-current-7cec2fc/runs/room-mutation-terminal.stdout",
+        "term_sent": false,
+        "timed_out": false
+      }
+    }
+  }
+}

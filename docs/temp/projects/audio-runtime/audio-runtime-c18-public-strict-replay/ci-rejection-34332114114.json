@@ -1,0 +1,58 @@
+{
+  "raw_job_response": {
+    "id": 102402885146,
+    "run_id": 34332114114,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34332114114",
+    "run_attempt": 1,
+    "head_sha": "a4adb05b00be073e8da283187e089afafd19f650",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102402885146",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34332114114/job/102402885146",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T08:58:58Z",
+    "started_at": "2026-09-09T08:59:00Z",
+    "completed_at": "2026-09-09T09:03:26Z",
+    "name": "CI (static)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T08:59:01Z", "completed_at": "2026-09-09T08:59:02Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T08:59:02Z", "completed_at": "2026-09-09T08:59:04Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T08:59:04Z", "completed_at": "2026-09-09T08:59:14Z"},
+      {"name": "Cache pinned analyzer binaries", "status": "completed", "conclusion": "success", "number": 4, "started_at": "2026-09-09T08:59:14Z", "completed_at": "2026-09-09T08:59:15Z"},
+      {"name": "Install golangci-lint", "status": "completed", "conclusion": "success", "number": 5, "started_at": "2026-09-09T08:59:15Z", "completed_at": "2026-09-09T08:59:15Z"},
+      {"name": "Install staticcheck", "status": "completed", "conclusion": "success", "number": 6, "started_at": "2026-09-09T08:59:15Z", "completed_at": "2026-09-09T08:59:15Z"},
+      {"name": "Run gofmt check", "status": "completed", "conclusion": "success", "number": 7, "started_at": "2026-09-09T08:59:15Z", "completed_at": "2026-09-09T08:59:16Z"},
+      {"name": "Verify generated service composition", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T08:59:16Z", "completed_at": "2026-09-09T08:59:47Z"},
+      {"name": "Verify service architecture and size budgets", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T08:59:47Z", "completed_at": "2026-09-09T09:00:28Z"},
+      {"name": "Run go vet", "status": "completed", "conclusion": "success", "number": 10, "started_at": "2026-09-09T09:00:28Z", "completed_at": "2026-09-09T09:01:41Z"},
+      {"name": "Run golangci-lint", "status": "completed", "conclusion": "success", "number": 11, "started_at": "2026-09-09T09:01:41Z", "completed_at": "2026-09-09T09:02:52Z"},
+      {"name": "Run staticcheck", "status": "completed", "conclusion": "failure", "number": 12, "started_at": "2026-09-09T09:02:52Z", "completed_at": "2026-09-09T09:03:24Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102402885146",
+    "labels": ["ubuntu-latest"]
+  },
+  "board_feedback": "CI checks failed for PR #410 at head a4adb05b00be073e8da283187e089afafd19f650: required checks failed on current head a4adb05b00be073e8da283187e089afafd19f650: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34332114114/job/102402885146). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102402885146/logs",
+  "extracted_failure": [
+    "2026-09-09T09:03:24.1155853Z services/replay/internal/strict/service_test.go:115:70: do not pass a nil Context, even if a function permits it; pass context.TODO if you are unsure about which Context to use (SA1012)",
+    "2026-09-09T09:03:24.1164066Z make: *** [Makefile:126: staticcheck] Error 1",
+    "All preceding static steps passed: gofmt, generated Wire, architecture-size, vet and golangci-lint."
+  ],
+  "repair": {
+    "files": [
+      "go-agent-runtime/services/replay/internal/strict/service_test.go",
+      "tests/embedding/tools_test.go"
+    ],
+    "change": "Add localized SA1012 suppressions immediately above the intentional nil-context boundary regressions; preserve the nil argument and production rejection behavior.",
+    "validation": [
+      "make staticcheck",
+      "go test ./go-agent-runtime/services/replay/... -count=1 -timeout=60s",
+      "go test -race ./go-agent-runtime/services/replay/... -count=1 -timeout=60s",
+      "GOWORK=off go test ./... -count=1 -timeout=60s (tests/embedding)",
+      "make architecture-size-check",
+      "make wire-check",
+      "COUNT=1 bash scripts/test-session-ci-regressions.sh all"
+    ]
+  }
+}

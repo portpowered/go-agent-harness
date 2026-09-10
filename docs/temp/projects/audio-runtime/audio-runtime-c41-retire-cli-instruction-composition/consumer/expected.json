@@ -1,0 +1,12 @@
+{
+  "resolved": "literal prompt\n\n---\n\nskill summary\n\nFilesystem scope: /workspace. Relative filesystem-tool paths resolve from this workdir.",
+  "no_tools": "customer instructions",
+  "required_headings": [
+    "WebMCP browser selection:",
+    "Tool-grounding requirements:",
+    "WebMCP tab selection calibration:",
+    "WebMCP ambiguity recovery:",
+    "Sight routing requirements:"
+  ],
+  "composed_sha256": "27840d9612461688ecb274ae223923d83ebe70ac05378c2313659a3562116277"
+}

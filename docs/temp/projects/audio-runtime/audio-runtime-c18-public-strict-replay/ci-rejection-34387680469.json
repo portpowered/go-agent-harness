@@ -1,0 +1,118 @@
+{
+  "raw_run_response": {
+    "databaseId": 34387680469,
+    "headSha": "6bbb06c4ade72440cd345aa77a42ec1ea80be541",
+    "status": "completed",
+    "conclusion": "failure",
+    "workflowName": "CI",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34387680469"
+  },
+  "raw_job_responses": [
+    {
+      "id": 102587969328,
+      "run_id": 34387680469,
+      "workflow_name": "CI",
+      "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+      "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34387680469",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOSy_FQs8AAAAX4rgvMA",
+      "head_sha": "6bbb06c4ade72440cd345aa77a42ec1ea80be541",
+      "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102587969328",
+      "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34387680469/job/102587969328",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-09-09T18:13:19Z",
+      "started_at": "2026-09-09T18:13:22Z",
+      "completed_at": "2026-09-09T18:19:08Z",
+      "name": "CI (coverage)",
+      "steps": [
+        {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T18:13:23Z", "completed_at": "2026-09-09T18:13:25Z"},
+        {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T18:13:25Z", "completed_at": "2026-09-09T18:13:28Z"},
+        {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T18:13:28Z", "completed_at": "2026-09-09T18:13:40Z"},
+        {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T18:13:40Z", "completed_at": "2026-09-09T18:19:06Z"},
+        {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T18:19:06Z", "completed_at": "2026-09-09T18:19:06Z"},
+        {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T18:19:06Z", "completed_at": "2026-09-09T18:19:06Z"},
+        {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T18:19:06Z", "completed_at": "2026-09-09T18:19:06Z"}
+      ],
+      "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34387680469/check-runs/102587969328",
+      "labels": ["ubuntu-latest"],
+      "runner_id": 1000208975,
+      "runner_name": "GitHub Actions 1000208975",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 102587969256,
+      "run_id": 34387680469,
+      "workflow_name": "CI",
+      "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+      "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34387680469",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOSy_FQs8AAAAX4rgu6A",
+      "head_sha": "6bbb06c4ade72440cd345aa77a42ec1ea80be541",
+      "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102587969256",
+      "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34387680469/job/102587969256",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-09-09T18:13:19Z",
+      "started_at": "2026-09-09T18:13:21Z",
+      "completed_at": "2026-09-09T18:20:24Z",
+      "name": "CI (integration)",
+      "steps": [
+        {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T18:13:22Z", "completed_at": "2026-09-09T18:13:23Z"},
+        {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T18:13:23Z", "completed_at": "2026-09-09T18:13:26Z"},
+        {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T18:13:26Z", "completed_at": "2026-09-09T18:13:30Z"},
+        {"name": "Run deterministic integration tests", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T18:13:30Z", "completed_at": "2026-09-09T18:18:32Z"},
+        {"name": "Run production-binary audio-device replay integration", "status": "completed", "conclusion": "success", "number": 5, "started_at": "2026-09-09T18:18:32Z", "completed_at": "2026-09-09T18:19:53Z"},
+        {"name": "Run committed replay and fixture regression tests", "status": "completed", "conclusion": "success", "number": 6, "started_at": "2026-09-09T18:19:53Z", "completed_at": "2026-09-09T18:20:22Z"},
+        {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 11, "started_at": "2026-09-09T18:20:22Z", "completed_at": "2026-09-09T18:20:22Z"},
+        {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 12, "started_at": "2026-09-09T18:20:22Z", "completed_at": "2026-09-09T18:20:23Z"},
+        {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 13, "started_at": "2026-09-09T18:20:23Z", "completed_at": "2026-09-09T18:20:23Z"}
+      ],
+      "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34387680469/check-runs/102587969256",
+      "labels": ["ubuntu-latest"],
+      "runner_id": 1000208972,
+      "runner_name": "GitHub Actions 1000208972",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ],
+  "board_feedback": "CI checks failed for PR #410 at head 6bbb06c4ade72440cd345aa77a42ec1ea80be541: required checks failed on current head 6bbb06c4ade72440cd345aa77a42ec1ea80be541: CI (coverage)=FAILURE, CI (integration)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34387680469/job/102587969328); CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34387680469/job/102587969256). Return this task to the executor with the listed failures.",
+  "full_log_observations": [
+    {
+      "job_id": 102587969328,
+      "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102587969328/logs",
+      "available": true,
+      "line_count": 310,
+      "sha256": "dec8be2a21daf40ac7a10fd27c0b0b733646b8526f1fea16888dd63175737e24",
+      "failed_step": "Run coverage profiles and coverage gate / make coverage",
+      "failure": "agent-cli/internal/wire TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession failed at composition_test.go:417 because composed session error was <nil>, but the test requires the RTC media capability error after preflight; agent-cli coverage exited with status 1 and make coverage exited with status 2.",
+      "other_observed_results": "The C18 replay packages and agent-cli integration package completed successfully; expected negative-control diagnostics preceded the one failure; the post-job submodule warning was unrelated."
+    },
+    {
+      "job_id": 102587969256,
+      "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102587969256/logs",
+      "available": true,
+      "line_count": 339,
+      "sha256": "37a025289f0a668c48c8533069f48e4615818296f243a65a74005ef5049dfedd",
+      "failed_step": "Run deterministic integration tests / make test-integration",
+      "failure": "agent-cli/test/integration TestFamilyAIterativeBuildUpThroughShippedProcess failed at s2s_conversational_customer_sim_family_a_test.go:103 with ProtocolError: write tcp 127.0.0.1:35153->127.0.0.1:59738: write: broken pipe; the shipped process itself reported ExitCode=0 and ExitClassification=normal, but the provider simulator returned run=<nil> and the integration package exited 1.",
+      "other_observed_results": "The production-binary audio-device replay integration and committed replay/fixture regression steps completed successfully; the post-job submodule warning was unrelated."
+    }
+  ],
+  "causal_reproduction": [
+    {
+      "command": "rtk env CGO_ENABLED=0 go test ./agent-cli/internal/wire -tags=nomicrophone -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=20 -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/c18-wire-coverage-current.out -timeout=180s",
+      "exit_code": 0,
+      "result": "20/20 passed in agent-cli/internal/wire with the hosted coverage instrumentation shape.",
+      "scope": "The failing shared-registry composition test is not owned by C18; C20's coordination partition owns composition/live/recording paths. No strict replay or clock defect reproduced."
+    },
+    {
+      "command": "rtk proxy go run ./cmd/testtimeout --timeout 480s -- go test ./test/integration -run '^TestFamilyAIterativeBuildUpThroughShippedProcess$' -count=1 -timeout 480s -v",
+      "exit_code": 0,
+      "result": "TestFamilyAIterativeBuildUpThroughShippedProcess passed in 0.61s; package command completed in 10.280s.",
+      "scope": "The failing integration test is outside the C18 extraction/clock paths and absent from git diff origin/main...HEAD. No C18-specific defect reproduced."
+    }
+  ],
+  "current_candidate": "6bbb06c4ade72440cd345aa77a42ec1ea80be541"
+}

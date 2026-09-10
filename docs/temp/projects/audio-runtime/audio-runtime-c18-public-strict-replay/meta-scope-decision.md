@@ -1,0 +1,20 @@
+# C18 architecture scope decision
+
+Project audio-runtime; contractRevision audio-runtime-v1. Primary meta-planner decision, 2026-09-09. This amends the C18 slice plan, not the immutable manifest.
+
+Resume existing work-task-24, branch codex/audio-runtime-c18-public-strict-replay, PR410 and checkpoint 213835ee1214aca7b0eece18c179e85e78606d36. Preserve repairs 087d30c5 and 0df3e912, merge checkpoint 87f33e51 and all prior public controls. No replacement task or unchanged CI submission.
+
+The primary independently reproduced exactly 15 architecture issues at that checkpoint: fourteen baseline-stale entries for the removed CLI private replay implementation and one external-consumer module-root-shape issue. The failed worker correctly escalated a contradictory slice prohibition. Its transcript projection is unavailable; canonical review30 feedback, failed task/worker state, committed progress and fresh reproduction provide the diagnosis.
+
+## Authorized correction, same owner
+
+1. docs/architecture/architecture-size-baseline.json: delete only the 14 stale entries whose package is github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/replay. Confirm each has no current violation. Preserve every other entry, value, source_commit, version and rename record. No rebaseline, new entry, rename-debt transfer, larger ceiling or regenerated baseline. The gate explicitly requires deleting stale debt; migrated code remains subject to current default limits.
+2. docs/architecture/architecture-policy.json: in module_rules for example.com/agent-runtime-consumer only, change allowed_top_level from ["."] to [".", "cmd"]. This explicitly composes the planned external executable tests/embedding/cmd/strict-replay in its existing independently built module. This is an application composition/layout decision, not a reusable-service exception. Keep the consumer a thin public-Wire executable; no runtime business logic in cmd. All production module roots, service internals, import rules, complexity/size/global limits, composition registries and other policy fields stay byte/semantically unchanged. In particular do NOT restore the six mutable replay-sentinel exemptions from rejected cdb0525; typed constant repairs remain required.
+
+These two bounded owned-path additions supersede C18's blanket policy/baseline-edit prohibition only for the changes above. Review30 was correct about unauthorized earlier changes; this decision neither reverses its other findings nor establishes acceptance. Do not change architecturegate, Makefile, workflows, factory configuration, immutable contract, assertions or deadlines. C20 owns recording/ and remains independent; no recording source edits are authorized here.
+
+## Required proof and continuation
+
+Record a machine-readable before/after inventory showing exactly 14 entry removals, zero additions/value changes, unchanged metadata, and the single external-module layout addition. Run the unmodified default architecture-size-check with real Git history, architecture gate focused tests and relevant external GOWORK=off consumer build/run plus nil-context and unforgeable-completion regressions. Keep all existing public strict/provider/relative/absolute/tool/interruption/ask controls and historical slow_device failure 34323462820. Required newly exposed actionable defects remain same executor CONTINUE responsibility; only demonstrated ambiguity/ownership/prerequisite conflict warrants escalation.
+
+Commit/push repairs on PR410 and submit to script-owned current-head CI; no agent CI polling or repeated full local CI. Independent Luna review must verify this exact scope delta and all canonical findings, then use guarded merge. On integrated delivery, meta stages the exact merged yui and external consumer and issues a fresh independent Luna scope=vertical probe with full changed public workflow, effects, clean shutdown and existing regression. Read report and canonical outcome before accepting. All nine project criteria stay OPEN; no physical/acoustic/live proof or project completion inferred.

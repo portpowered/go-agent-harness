@@ -1,0 +1,162 @@
+{
+  "schema": "audio-runtime-c42-capture-energy-expected.v1",
+  "deadline_seconds": 10,
+  "c32_oracle": {
+    "path": "c32-original-expected.json",
+    "sha256": "d209639bf6cf51c61fe2931eed9e50586fae1824334daa3239af8cc841a47f34",
+    "case_count": 40
+  },
+  "cases": {
+    "c42-pcm16-three-channel-padded-valid12": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "014000c00020aabb0000008000e0ccdd1337",
+      "encoding": "pcm",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 12,
+      "frames": 2,
+      "channels": 3,
+      "frame_stride": 8,
+      "expected_samples": [0.500030517578125, -0.5, 0.25, 0, -1, -0.25],
+      "expected_negative_zero": [false, false, false, false, false, false],
+      "expected_energy": 1.6250305185094476
+    },
+    "c42-pcm24-two-channel-padded-valid20": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "0000400000c0deadffff7f000000beef5a",
+      "encoding": "pcm",
+      "bits_per_sample": 24,
+      "valid_bits_per_sample": 20,
+      "frames": 2,
+      "channels": 2,
+      "frame_stride": 8,
+      "expected_samples": [0.5, -0.5, 0.9999998807907104, 0],
+      "expected_negative_zero": [false, false, false, false],
+      "expected_energy": 1.499999761581435
+    },
+    "c42-pcm32-two-channel-padded-valid24": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "00000040000000e0aabbccdd0000008000000060112233445566",
+      "encoding": "pcm",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 24,
+      "frames": 2,
+      "channels": 2,
+      "frame_stride": 12,
+      "expected_samples": [0.5, -0.25, -1, 0.75],
+      "expected_negative_zero": [false, false, false, false],
+      "expected_energy": 1.875
+    },
+    "c42-float64-two-channel-padded": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "000000000000e03f000000000000d0bfd3d3d3d3d3d3d3d3000000000000f0bf000000000000e83fd3d3d3d3d3d3d3d3d3d3",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 2,
+      "channels": 2,
+      "frame_stride": 24,
+      "expected_samples": [0.5, -0.25, -1, 0.75],
+      "expected_negative_zero": [false, false, false, false],
+      "expected_energy": 1.875
+    },
+    "c42-zero-frames-trailing-nonfinite": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "010000000000f87f",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 0,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_energy": 0
+    },
+    "c42-zero-frames-malformed-format": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 0,
+      "frames": 0,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrInvalidSampleFormat"
+    },
+    "c42-float64-four-channel-sum-overflow": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "000000000000e05f000000000000e05f000000000000e05f000000000000e05f",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 1,
+      "channels": 4,
+      "frame_stride": 32,
+      "expected_error_kind": "ErrPacketEnergyOverflow"
+    },
+    "c42-float64-four-frame-sum-overflow": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "000000000000e05f000000000000e05f000000000000e05f000000000000e05f",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 4,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrPacketEnergyOverflow"
+    },
+    "c42-float64-later-channel-nan": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "000000000000e03f000000000000d0bf010000000000f87f",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 1,
+      "channels": 3,
+      "frame_stride": 24,
+      "expected_error_kind": "ErrNonFiniteSample"
+    },
+    "c42-float64-later-frame-negative-infinity": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "000000000000e03f000000000000f0ff",
+      "encoding": "ieee-float",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 2,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrNonFiniteSample"
+    },
+    "c42-pcm16-truncated-padded-final-frame": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "encoding": "pcm",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 12,
+      "frames": 2,
+      "channels": 3,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrPacketInputTooShort"
+    },
+    "c42-pcm16-malformed-channel-stride": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "00",
+      "encoding": "pcm",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": 1,
+      "channels": 3,
+      "frame_stride": 5,
+      "expected_error_kind": "ErrInvalidPacketDimensions"
+    },
+    "c42-pcm16-unrepresentable-frame-extent": {
+      "api": "codec.PacketEnergy",
+      "input_hex": "00",
+      "encoding": "pcm",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": "max_int",
+      "channels": 1,
+      "frame_stride": 2,
+      "expected_error_kind": "ErrInvalidPacketDimensions"
+    }
+  }
+}

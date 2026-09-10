@@ -1,0 +1,64 @@
+{
+  "raw_job_response": {
+    "id": 102536806564,
+    "run_id": 34372456081,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34372456081",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX36uApA",
+    "head_sha": "983098cd5201ff170df1a2e0b2799c311457b146",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102536806564",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34372456081/job/102536806564",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T15:46:34Z",
+    "started_at": "2026-09-09T15:46:37Z",
+    "completed_at": "2026-09-09T15:50:43Z",
+    "name": "CI (static)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T15:46:37Z", "completed_at": "2026-09-09T15:46:39Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T15:46:39Z", "completed_at": "2026-09-09T15:46:41Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T15:46:41Z", "completed_at": "2026-09-09T15:46:46Z"},
+      {"name": "Cache pinned analyzer binaries", "status": "completed", "conclusion": "success", "number": 4, "started_at": "2026-09-09T15:46:46Z", "completed_at": "2026-09-09T15:46:47Z"},
+      {"name": "Install golangci-lint", "status": "completed", "conclusion": "success", "number": 5, "started_at": "2026-09-09T15:46:47Z", "completed_at": "2026-09-09T15:46:47Z"},
+      {"name": "Install staticcheck", "status": "completed", "conclusion": "success", "number": 6, "started_at": "2026-09-09T15:46:47Z", "completed_at": "2026-09-09T15:46:47Z"},
+      {"name": "Run gofmt check", "status": "completed", "conclusion": "success", "number": 7, "started_at": "2026-09-09T15:46:47Z", "completed_at": "2026-09-09T15:46:49Z"},
+      {"name": "Verify generated service composition", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T15:46:49Z", "completed_at": "2026-09-09T15:47:25Z"},
+      {"name": "Verify service architecture and size budgets", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T15:47:25Z", "completed_at": "2026-09-09T15:48:07Z"},
+      {"name": "Run go vet", "status": "completed", "conclusion": "success", "number": 10, "started_at": "2026-09-09T15:48:07Z", "completed_at": "2026-09-09T15:49:25Z"},
+      {"name": "Run golangci-lint", "status": "completed", "conclusion": "failure", "number": 11, "started_at": "2026-09-09T15:49:25Z", "completed_at": "2026-09-09T15:49:53Z"},
+      {"name": "Run staticcheck", "status": "completed", "conclusion": "success", "number": 12, "started_at": "2026-09-09T15:49:53Z", "completed_at": "2026-09-09T15:50:41Z"},
+      {"name": "Post Cache pinned analyzer binaries", "status": "completed", "conclusion": "skipped", "number": 22, "started_at": "2026-09-09T15:50:41Z", "completed_at": "2026-09-09T15:50:41Z"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped", "number": 23, "started_at": "2026-09-09T15:50:41Z", "completed_at": "2026-09-09T15:50:41Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 24, "started_at": "2026-09-09T15:50:41Z", "completed_at": "2026-09-09T15:50:42Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 25, "started_at": "2026-09-09T15:50:42Z", "completed_at": "2026-09-09T15:50:42Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102536806564",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208760,
+    "runner_name": "GitHub Actions 1000208760",
+    "runner_group_id": 0,
+    "runner_group_name": "Hosted Agents"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 983098cd5201ff170df1a2e0b2799c311457b146: required checks failed on current head 983098cd5201ff170df1a2e0b2799c311457b146: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34372456081/job/102536806564). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102536806564/logs",
+  "full_log_observation": {
+    "available": false,
+    "reason": "GitHub reported the overall run was still in progress; the completed failed job metadata was available but the job-log endpoint returned no bytes. The failed step was identified exactly as Run golangci-lint.",
+    "local_reproduction": "make lint with pinned golangci-lint 2.9.0 reproduced the failure at agent-cli/internal/services/internal/agentruntime/replay_integration_test.go:84: repeated string session.update despite existing sessionUpdateEventType (goconst)."
+  },
+  "causal_repair": {
+    "change": "Use sessionUpdateEventType for the existing replay observation assertion; no behavior or assertion was removed.",
+    "validation": [
+      "make lint: pinned golangci-lint 2.9.0, 0 issues across all modules",
+      "go test ./agent-cli/internal/services/internal/agentruntime -run '^TestReplayService(ConsumesActualWireObservationEnvelope|RunsRealCoreLoopAgainstRecordedWire)$' -count=1 -timeout=90s: 2 passed",
+      "go test ./go-agent-runtime/services/replay/... -count=1: 84 passed in 4 packages",
+      "go test -race ./go-agent-runtime/services/replay/... -count=1: 84 passed in 4 packages",
+      "make embed-check and GOWORK=off CGO_ENABLED=0 go test -race ./... in tests/embedding: passed",
+      "make wire-check, make vet, make staticcheck, make architecture-size-check: passed",
+      "git diff --check: passed"
+    ]
+  },
+  "current_candidate": "983098cd5201ff170df1a2e0b2799c311457b146"
+}
