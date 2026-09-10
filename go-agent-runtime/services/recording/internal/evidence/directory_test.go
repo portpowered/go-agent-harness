@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -425,12 +426,13 @@ func TestDirectoryRecorderDiskFailurePreservesCauseAndPartialManifest(t *testing
 	writes := 0
 	r.writeSpool = func(file *os.File, data []byte) error {
 		writes++
-		if writes > 1 {
+		if writes > 2 {
 			return failure
 		}
 		return writeAll(file, data)
 	}
 	recordEvidenceText(t, r, "first")
+	recordEvidenceText(t, r, "second fails after paired prefix")
 	recordEvidenceTerminal(t, r)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -533,5 +535,51 @@ func assertEvidencePCM(t *testing.T, r *directoryRecorder, path string, samples 
 	t.Helper()
 	if got := readEvidenceFile(t, r, path); !bytes.Equal(got, codec.EncodePCM16(samples)) {
 		t.Fatalf("%s PCM lost tail: %v", path, got)
+	}
+}
+
+func TestDirectoryRecorderCumulativeTranscriptBudgetKeepsTerminalEvidence(t *testing.T) {
+	root := t.TempDir()
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination: filepath.Join(root, "capture"),
+		ClockBase:   evidenceTime(), WallClockStart: evidenceTime(),
+		Limits: recording.ResourceLimits{TranscriptItems: 1},
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := r.Finalize(t.Context(), nil); err != nil {
+			t.Logf("recording cleanup: %v", err)
+		}
+	})
+
+	recordEvidenceText(t, r, "accepted")
+	recordEvidenceText(t, r, "rejected-after-drain")
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); !errors.Is(err, io.ErrShortBuffer) {
+		t.Fatalf("cumulative transcript overflow = %v, want short buffer", err)
+	}
+	manifest := evidenceManifest(t, r)
+	if manifest.RecordingStatus == nil || manifest.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("overflow status = %+v, want partial", manifest.RecordingStatus)
+	}
+	if manifest.Terminal == nil {
+		t.Fatal("terminal summary was lost after data overflow")
+	}
+	for _, side := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+		lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, side)), []byte{'\n'})
+		if len(lines) != 2 {
+			t.Fatalf("%s records = %d, want accepted data plus terminal", side, len(lines))
+		}
+		for _, line := range lines {
+			var record transcript.Record
+			if err := json.Unmarshal(line, &record); err != nil {
+				t.Fatalf("%s contains invalid JSONL: %v", side, err)
+			}
+		}
 	}
 }

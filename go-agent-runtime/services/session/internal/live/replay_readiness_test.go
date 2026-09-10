@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/stretchr/testify/require"
 )
 
 type recordingAudioInputSender struct {
@@ -178,7 +179,6 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("replay did not admit PCM after session.updated")
 	}
-
 	cause := errors.New("stop readiness fixture")
 	handle.Cancel(cause)
 	if err := handle.Wait(); !errors.Is(err, cause) {
@@ -271,7 +271,6 @@ func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 	h.configureScheduledAudio(3, 0)
 	result := make(chan error, 1)
 	go func() { result <- h.waitForResponseBoundary(context.Background(), 2) }()
-
 	h.observeResponseTerminal(messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
 		Role:       messages.RoleAssistant,
@@ -358,7 +357,6 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	if !h.observeFiniteResponse(messageEnd, complete) {
 		t.Fatal("successful tool continuation was not observed at the finite response boundary")
 	}
-
 	h.mu.Lock()
 	pending := h.pendingToolCalls
 	graceful := h.gracefulStop
@@ -445,9 +443,8 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	}
 }
 
-// An explicit control may register its media barrier before an automatic
-// provider send reaches the wrapper. The automatic send must be allowed to
-// finish so the model runner can dispatch the control; waiting on the control
+// An explicit control may register its media barrier before an automatic provider send reaches the wrapper.
+// The automatic send must finish so the model runner can dispatch the control; waiting on the control
 // barrier from the runner itself would deadlock both operations.
 func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
 	gate := mediagate.New(nil)
@@ -464,7 +461,6 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 		controlSent:      controlSent,
 	}
 	ordered := &orderedSession{inner: provider, media: gate}
-
 	automaticDone := make(chan messages.SessionSendOutcome, 1)
 	go func() {
 		automaticDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
@@ -566,7 +562,6 @@ func TestRejectedContinuationAdmissionPreservesEarlierRequest(t *testing.T) {
 		"accepted": {callID: "accepted", resultAccepted: true, continuationRequested: true},
 		"pending":  {callID: "pending", resultAccepted: true},
 	}}
-
 	rollback := h.beginContinuationAdmission()
 	if !h.toolContinuations["accepted"].continuationRequested || !h.toolContinuations["pending"].continuationRequested {
 		t.Fatal("admission did not mark every accepted result")
@@ -584,17 +579,22 @@ func TestRejectedToolResultAdmissionRestoresPriorState(t *testing.T) {
 	h := &handle{toolContinuations: map[string]*liveToolContinuation{
 		callID: {callID: callID, name: "original", outputObserved: true},
 	}}
-
 	rollback := h.beginToolResultAdmission(callID, "read_image", true)
 	rollback()
 	state := h.toolContinuations[callID]
 	if state.resultAccepted || state.continuationRequested || state.name != "original" || !state.outputObserved {
 		t.Fatalf("rollback state = %+v, want original provider state", state)
 	}
-
 	rollbackNew := h.beginToolResultAdmission("call-rejected", "lookup", false)
 	rollbackNew()
 	if _, ok := h.toolContinuations["call-rejected"]; ok {
 		t.Fatal("rollback retained state created only for a rejected result")
+	}
+}
+func TestMediaRequirementsRespectCapturePlaybackDirections(t *testing.T) {
+	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
+	t.Cleanup(func() { require.NoError(t, media.Close()) })
+	if !(mediaRequirements{outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) || !(mediaRequirements{inbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) {
+		t.Fatal("direction-aware media admission mismatch")
 	}
 }

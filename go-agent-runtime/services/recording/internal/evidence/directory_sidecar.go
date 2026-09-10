@@ -61,7 +61,11 @@ func (r *directoryRecorder) writeDurationSidecarTerminal(timestamp time.Time, va
 	if err != nil {
 		return recordingWriteError("encode duration sidecar record", err)
 	}
-	if err := r.writeSpool(r.sidecar, record); err != nil {
+	if err := r.budget.reserveSidecar(int64(len(record)), 1); err != nil {
+		r.latch(recordingWriteError("admit duration sidecar", err))
+		return err
+	}
+	if err := r.writeCompleteSpool(r.sidecar, record); err != nil {
 		return recordingWriteError("write duration sidecar", err)
 	}
 	r.sidecarWritten = true
@@ -72,7 +76,8 @@ func (r *directoryRecorder) writeDurationSidecarTerminal(timestamp time.Time, va
 // directory. It has the same lifecycle contract as the directory recorder,
 // while keeping the provider capture entirely outside this semantic artifact.
 type sidecarRecorder struct {
-	path string
+	path   string
+	budget evidenceResourceBudget
 
 	mu              sync.Mutex
 	queue           chan sidecarEvent
@@ -97,7 +102,11 @@ func NewSemanticSidecar(providerCapturePath string) (session.LiveRecorder, error
 	if path == "" {
 		return nil, errors.New("semantic evidence requires a provider capture path")
 	}
-	recorder := &sidecarRecorder{path: path, queue: make(chan sidecarEvent, semanticSidecarQueueCapacity), done: make(chan struct{}), writeSpool: writeAll}
+	budget, err := newEvidenceResourceBudget(recording.ResourceLimits{})
+	if err != nil {
+		return nil, err
+	}
+	recorder := &sidecarRecorder{path: path, budget: budget, queue: make(chan sidecarEvent, semanticSidecarQueueCapacity), done: make(chan struct{}), writeSpool: writeAll}
 	go recorder.run()
 	return recorder, nil
 }
@@ -137,9 +146,9 @@ func (r *sidecarRecorder) RecordEvent(ctx context.Context, event session.LiveEve
 	if event.Terminal == nil {
 		return nil
 	}
-	terminal := *event.Terminal
+	terminal := boundedTerminalValue(event.Terminal)
 	select {
-	case r.queue <- sidecarEvent{timestamp: event.Timestamp, terminal: &terminal}:
+	case r.queue <- sidecarEvent{timestamp: event.Timestamp, terminal: terminal}:
 	default:
 		r.latchLocked(recordingWriteError("enqueue duration sidecar", errors.New("semantic evidence queue is full")))
 	}
@@ -162,15 +171,8 @@ func (r *sidecarRecorder) process(event sidecarEvent) {
 	if r.workerErr != nil || r.terminalWritten || event.terminal == nil {
 		return
 	}
-	if r.file == nil {
-		file, err := os.OpenFile(r.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
-		if err != nil {
-			r.workerErr = recordingWriteError("create duration sidecar", err)
-			return
-		}
-		r.file = file
-	}
-	payload, err := json.Marshal(durationSidecarMessage{Type: messages.StreamTypeSessionClose, Value: event.terminal})
+	terminal := boundedTerminalValue(event.terminal)
+	payload, err := json.Marshal(durationSidecarMessage{Type: messages.StreamTypeSessionClose, Value: terminal})
 	if err != nil {
 		r.workerErr = recordingWriteError("encode duration sidecar terminal", err)
 		return
@@ -183,7 +185,19 @@ func (r *sidecarRecorder) process(event sidecarEvent) {
 		r.workerErr = recordingWriteError("encode duration sidecar record", err)
 		return
 	}
-	if err := r.writeSpool(r.file, record); err != nil {
+	if err := r.budget.reserveSidecar(int64(len(record)), 1); err != nil {
+		r.workerErr = recordingWriteError("admit duration sidecar", err)
+		return
+	}
+	if r.file == nil {
+		file, err := os.OpenFile(r.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, evidenceFileMode)
+		if err != nil {
+			r.workerErr = recordingWriteError("create duration sidecar", err)
+			return
+		}
+		r.file = file
+	}
+	if err := writeCompleteSpoolWithWriter(r.file, r.writeSpool, record); err != nil {
 		r.workerErr = recordingWriteError("write duration sidecar", err)
 		return
 	}
