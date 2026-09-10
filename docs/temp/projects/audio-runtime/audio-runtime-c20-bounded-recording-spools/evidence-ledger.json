@@ -1,13 +1,13 @@
 {
   "task": "audio-runtime-c20-bounded-recording-spools",
   "project": "audio-runtime",
-  "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009",
+  "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89",
   "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
   "requiredAncestry": {
     "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "planningMain": "e4137eba6a6499142f50701609c1149afc71db84",
-    "fetchedMain": "98ce636dd67349ba64f22cd7916dd370cf4ba484"
+    "fetchedMain": "a1156f0c0c6271643578cb37894026944df2a633"
   },
   "fixtureAndHarnessSHA256": {
     "consumer.go": "9aa6ac129d961dbe74b7f51cbeb21d93fbedb6309dd6c5b2321542b980a8bc13",
@@ -35,22 +35,22 @@
       "case": "many-small",
       "pacedEvents": 512,
       "status": "complete",
-      "totalBytes": 277987,
+      "totalBytes": 278009,
       "transcriptLines": 513,
       "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
     },
     "candidateBaselinePair": {
       "case": "many-small",
       "status": "partial",
-      "totalBytes": 38297,
+      "totalBytes": 38293,
       "transcriptLines": 66,
       "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
       "candidateProviderBytes": 433,
       "terminalSidecarBytes": 448,
-      "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009"
+      "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89"
     },
     "normal": {
-      "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009",
+      "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89",
       "status": "complete",
       "totalBytes": 5240,
       "pcmBytes": 8,
@@ -59,7 +59,7 @@
       "transcriptLinesPerSide": 3
     },
     "largeRecord": {
-      "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009",
+      "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89",
       "status": "partial",
       "totalBytes": 3276,
       "transcriptLinesPerSide": 1,
@@ -67,13 +67,13 @@
       "terminalPreserved": true
     },
     "providerOverflow": {
-      "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009",
+      "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89",
       "providerError": "provider capture cumulative budget exceeded",
       "publishedProviderBytes": 0,
       "normalEnvelopePublished": false
     },
     "defaultOverflow": {
-      "sourceRevision": "254a18b00505c00ec80038b760b3906c45400009",
+      "sourceRevision": "d8882d32eee4b2f8df7475234caede6d4579fc89",
       "case": "default-overflow",
       "requestedLimits": {
         "transcriptBytes": 0,
@@ -89,12 +89,12 @@
       "transcriptBytesPerSide": 26743252,
       "transcriptLinesPerSide": 19,
       "providerBytes": 439,
-      "sidecarBytes": 448,
+      "sidecarBytes": 447,
       "finalizationErrorClass": "recording conversation summary budget exceeded / io.ErrShortBuffer",
       "terminalPreserved": true,
       "recordedOutput": {
         "path": "default-overflow.json",
-        "sha256": "d2b6f6d747961f55ce853dc1e746c9c0b85d006e3f443766ccb86139f22bc829"
+        "sha256": "c24d56ed85391902681eb57065038ac20f5c1478789a03cc0b3eb42c58f0b648"
       }
     }
   },
@@ -103,7 +103,7 @@
     "goTestRecordingRace": "82 passed in 4 packages",
     "goVetRecording": "no issues",
     "coverageRecordingEvidence": "73 passed; 80.3% focused package coverage",
-    "architectureSize": "passed: 181 packages, 1860 files, 27247 functions",
+    "architectureSize": "passed: 181 packages, 1860 files, 27380 functions",
     "diffCheck": "passed",
     "ci": "not polled; script-owned gate remains external",
     "review": "not performed by executor"
