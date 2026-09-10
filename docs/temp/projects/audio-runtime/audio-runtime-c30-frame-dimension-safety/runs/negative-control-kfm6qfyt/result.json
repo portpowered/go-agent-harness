@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
+    "--mode",
+    "negative-control"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/negative-control-kfm6qfyt",
+  "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
+  "source_module": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/go-audio",
+  "source_revision": "20af5a5f9147da7d40cfe61f068bc70c76ef510b",
+  "duration_seconds": 0.005543,
+  "exit_code": 1,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c30-frame-dimension-consumer.v1\",\n  \"mode\": \"negative-control\",\n  \"source\": \"20af5a5f9147da7d40cfe61f068bc70c76ef510b\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"int_bits\": 64,\n  \"started_at\": \"2026-09-10T04:53:55.719409Z\",\n  \"duration_ms\": 0,\n  \"negative_control\": {\n    \"name\": \"mutated-24000-mono-20ms\",\n    \"actual_samples\": 480,\n    \"mutated_expected\": 481,\n    \"passed\": true\n  },\n  \"clean_shutdown\": true,\n  \"passed\": true,\n  \"error\": \"negative-control causal mismatch: actual_samples=480 mutated_expected=481; child rejects mutated answer\"\n}\n",
+  "stderr": "negative-control causal mismatch: actual_samples=480 mutated_expected=481; child rejects mutated answer\n",
+  "clean_shutdown": true,
+  "executable": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
+  "executable_sha256": "cedca24d3a60e2873cf66178c6cfa281736b791062a1382251954f5126ec6a34",
+  "fixture_sha256": {
+    "consumer/go.mod": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060",
+    "consumer/go.sum": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d",
+    "consumer/main.go": "347c3110dd1ccdc838fca16fbb986059cda21cd2c890bf0c6a41c092e12ddd38"
+  }
+}

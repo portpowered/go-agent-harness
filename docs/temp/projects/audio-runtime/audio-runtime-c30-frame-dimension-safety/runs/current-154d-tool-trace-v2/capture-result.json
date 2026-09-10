@@ -1,0 +1,31 @@
+{
+  "schema": "audio-runtime-c30-yui-capture.v1",
+  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
+  "base_revision": "c61ee2774986c896560ee40a92441c914976000d",
+  "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6",
+  "wire_events": 18,
+  "tool_calls": 1,
+  "provider_pcm": {
+    "bytes": 4800,
+    "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+  },
+  "rendered_pcm": {
+    "bytes": 3200,
+    "sha256": "7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+  },
+  "terminal": {
+    "reason": "fixture_complete",
+    "classification": "provider_close",
+    "terminal_reason": "provider_close",
+    "terminal_provenance": "provider",
+    "output_state": "not_applicable"
+  },
+  "markers": [
+    "PROBE_TOOL_MARKER_9182",
+    "strict replay continuation",
+    "fixture_complete"
+  ],
+  "clean_shutdown": true,
+  "timed_out": false,
+  "bundle_manifest_sha256": "1c115e9de1dfe5843c3e05f819dc49d85216bf6d1353a96c01ea560de13d40fc"
+}

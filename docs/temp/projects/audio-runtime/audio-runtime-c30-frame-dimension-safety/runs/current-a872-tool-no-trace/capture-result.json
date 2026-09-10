@@ -1,0 +1,18 @@
+{
+  "schema": "audio-runtime-c30-yui-capture.v1",
+  "tested_source_revision": "a87247bf77abaf6746820c3eb2073d33166c3ac1",
+  "base_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "fixture": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+  },
+  "exit_code": 0,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "audio_trace_present": false,
+  "wire_events": 18,
+  "tool_calls": 1,
+  "provider_pcm": {"bytes": 4800, "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"},
+  "bundle_manifest_sha256": "d2ede44f4aa62f0ef204605bf4194d6f3c3d10a8ff3f82ec4795f9c0ae31d8ec",
+  "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6"
+}
