@@ -3045,3 +3045,35 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   update PR #434 with the exact run and Review-254 repair map, then return
   `ACCEPTED` to the script-owned CI gate without polling. Retain C43 ownership
   through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C43 CI rejection diagnosis and bounded resubmission checkpoint 2026-09-10
+
+- Re-read the full current C43 task/review inbox and reverified admission with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`; the sole admitted project is
+  still `audio-runtime`, and the isolated branch still exactly matches
+  `prd.json.branchName`. The running host checkout, predecessor checkpoints,
+  peer paths, generated Wire and architecture baselines remain untouched.
+- The complete failed log for current PR head `e4bb352c` was inspected:
+  run `34536368154`, job `103068810231`, `CI (macOS audio release)`. The
+  package-adjacent macOS tests, physical-device compile and native EAC
+  cross-build/inspection all passed. The only failure was GoReleaser
+  validation: `go run github.com/goreleaser/goreleaser/v2@v2.17.0 check
+  --config .goreleaser.yaml` timed out downloading from `proxy.golang.org`
+  (`dial tcp 142.251.214.49:443:443: i/o timeout`). This is a bounded CI
+  network failure with no C43 source defect or acceptance waiver indicated.
+- After that rejection, current-head focused checks passed: tools normal/race,
+  CLI image/read-image normal/race, live semantic-refresh normal/race,
+  `make architecture-size-check` (`184` packages/`1,888` files/`27,779`
+  functions), `make coverage-registration` (`174` workspace packages), Wire
+  regeneration with no tracked changes, and `git diff --check`. The exact
+  shipped-process evidence remains the force-archived
+  `verify-20260910T220504Z-18231` run at tested source `ba6fffad`; current
+  changes are documentation/ledger only relative to those executable inputs.
+- Local free space after the bounded checks is `2,016,056 KiB`, below the
+  recorded 2 GiB build reserve. No new executable build is attempted, and no
+  cache, retained evidence, peer artifact or unrelated worktree is deleted.
+- Next action: commit/push this diagnosis checkpoint, update PR #434, and
+  return `ACCEPTED` to the script-owned CI gate without polling. Retain the
+  same task through `CONTINUE` for any new exact CI rejection or actionable
+  repair; do not claim CI green, review, merge or vertical/project acceptance.

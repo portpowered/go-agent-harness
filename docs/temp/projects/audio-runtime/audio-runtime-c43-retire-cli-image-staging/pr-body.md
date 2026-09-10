@@ -173,3 +173,15 @@ gate. This PR does not claim
 green CI, independent review, merge, post-merge vertical acceptance, physical
 or acoustic proof, or project-wide acceptance. On an exact CI rejection, inspect
 the failed check/log, repair this same task, and resubmit.
+
+## Latest CI rejection diagnosis
+
+The prior current-head CI run `34536368154` rejected only
+`CI (macOS audio release)`, job `103068810231`. Its complete log shows that
+the macOS package tests, physical-device compile, and native EAC artifact
+checks passed; GoReleaser validation failed because the runner timed out
+downloading `github.com/goreleaser/goreleaser/v2@v2.17.0` from
+`proxy.golang.org`. This is an infrastructure/network failure, not a C43
+source failure. The current executor checkpoint has rerun the bounded C43
+causal and architecture/coverage/Wire checks successfully and is submitting
+the same task to script CI again without polling its result.

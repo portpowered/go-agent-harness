@@ -293,3 +293,33 @@ review-254 repair map, and return `ACCEPTED` to the script-owned CI gate
 without polling it. On an exact CI rejection, inspect the failed check/log and
 repair this same task; retain ownership through `CONTINUE` while actionable
 repairs remain.
+
+## CI rejection diagnosis and resubmission checkpoint — 2026-09-10
+
+The current PR head `e4bb352c6a312aa2ca5fe046a529c2674ceb1022` was rejected by
+run `34536368154`, job `103068810231`, only in `CI (macOS audio release)`. The
+complete failed-job log was inspected. Package-adjacent macOS tests, the
+physical-device compile step, and native EAC cross-build/inspection all exited
+successfully; `Validate GoReleaser configuration` failed because the runner's
+`go run github.com/goreleaser/goreleaser/v2@v2.17.0 check --config .goreleaser.yaml`
+could not download the module from `https://proxy.golang.org` before the
+one-minute network deadline (`dial tcp 142.251.214.49:443:443: i/o timeout`).
+This is a bounded CI network failure, not a C43 source or acceptance failure;
+no source repair or test weakening is authorized by that log.
+
+After that rejection, current-head focused checks passed: tools normal/race,
+CLI image/read-image normal/race, live semantic-refresh normal/race,
+`make architecture-size-check` (`184` packages, `1,888` files, `27,779`
+functions), `make coverage-registration` (`174` workspace packages), and
+Wire regeneration with no tracked changes. `git diff --check` is clean. The
+retained exact executable/process evidence remains the force-archived
+`verify-20260910T220504Z-18231` run at source `ba6fffadc76e392b6086c86128cb4ae889c2aedf`;
+the current checkpoint changes only documentation/ledger inputs after that
+tested source and does not relabel the executable.
+
+The same task should now be pushed with this diagnosis checkpoint, PR #434
+updated, and submitted to the script-owned CI gate. Do not poll the new CI
+run here or claim green CI; if a new exact check fails, inspect that log and
+repair this same task. Current local free space is `2,016,056 KiB`, below the
+recorded 2 GiB build reserve, so no new local executable build is attempted
+until operator storage recovery.
