@@ -19,7 +19,7 @@ and process cleanup state.
 
 The reports record successful ancestry probes for the fresh main and both required
 startup/baseline revisions. Candidate verification and the runtime regression were
-generated at source `f3e58cb7dc3b1b578385fdee00d7021833927eab`; both report only
+generated at source `dbed967241f4c02f4355c316ac62c7328ca04789`; both report only
 the preserved untracked operator note as dirty. The final evidence head does not
 alter executable inputs. The rebuilt public consumer has source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and binary
@@ -87,7 +87,7 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-k7Wd0P/yui` with SHA-256
+The tested YUI is `/private/tmp/audio-runtime-c34-yui-aAQFx6/yui` with SHA-256
 `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`. It was
 rebuilt from the exact source used by the runtime report. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`

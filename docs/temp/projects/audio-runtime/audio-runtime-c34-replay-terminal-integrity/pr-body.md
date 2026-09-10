@@ -31,7 +31,7 @@ The evidence runner also repairs the previously non-causal controls: it runs a
 real valid-audio trace mutated after its first close, tests missing-timeline and
 corrupt-audio bundle failures, and asserts bounded process-group cleanup and
 bounded output capture. Candidate verification and runtime reports were generated
-at `f3e58cb7dc3b1b578385fdee00d7021833927eab`. These are source-pinned to the
+at `dbed967241f4c02f4355c316ac62c7328ca04789`. These are source-pinned to the
 current-main integration checkpoint. The rebuilt consumer source hash is
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and its
 binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
@@ -57,7 +57,7 @@ binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d
 
 The stale-head review rejection was reconciled by merging current `origin/main`
 at `c61ee2774986c896560ee40a92441c914976000d`. Candidate reports record source
-`f3e58cb7dc3b1b578385fdee00d7021833927eab`, origin-main/base revisions,
+`dbed967241f4c02f4355c316ac62c7328ca04789`, origin-main/base revisions,
 consumer source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`, consumer
 binary hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`,
