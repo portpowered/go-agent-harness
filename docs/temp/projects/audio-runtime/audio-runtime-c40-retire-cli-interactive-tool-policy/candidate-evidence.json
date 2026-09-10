@@ -1,8 +1,8 @@
 {
   "schema": "audio-runtime-c40-interactive-policy-ledger/v1",
-  "candidate_revision": "3fdbf5bb910ab064b1a10c076ab137c415a447a3",
+  "candidate_revision": "cbb5559345da5c81ac7c698ba790c820af825e93c",
   "tested_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
-  "candidate_revision_note": "3fdbf5bb is the exact candidate. Runtime/build inputs remain those of the tested merged source ecad8fb9; 3fdbf5bb adds only bounded evidence-runner validation and does not relabel the historical executable artifacts.",
+  "candidate_revision_note": "cbb55593 is a documentation-only descendant of tested runner repair 3fdbf5bb. Runtime/build inputs remain those of the tested merged source ecad8fb9; no historical executable artifact is relabeled.",
   "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
@@ -292,7 +292,8 @@
     "storage": "observed free space below the required 2 GiB compilation reserve; no new large build/cache expansion was performed"
   },
   "latest_exact_head_validation": {
-    "candidate_revision": "3fdbf5bb910ab064b1a10c076ab137c415a447a3",
+    "tested_candidate_revision": "3fdbf5bb910ab064b1a10c076ab137c415a447a3",
+    "evidence_only_descendant": "cbb5559345da5c81ac7c698ba790c820af825e93c",
     "tested_runtime_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
     "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
     "source_tree_dirty": false,

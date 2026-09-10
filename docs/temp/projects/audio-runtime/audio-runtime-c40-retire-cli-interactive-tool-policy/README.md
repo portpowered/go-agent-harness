@@ -51,8 +51,9 @@ local and unsubmitted until that known failing replay can be rerun honestly.
 
 ## Exact candidate checkpoint
 
-Candidate `3fdbf5bb910ab064b1a10c076ab137c415a447a3` preserves the same runtime
-inputs and adds the bounded evidence-runner repair. Exact-head runs are recorded
+Candidate `cbb5559345da5c81ac7c698ba790c820af825e93c` is a documentation-only
+descendant of tested runner repair `3fdbf5bb910ab064b1a10c076ab137c415a447a3`
+and preserves the same runtime inputs. Exact-head runs are recorded
 under `runs/run-*-20260910T221539Z-*`: inventory, standalone consumer,
 wrong-oracle, public policy, and cleanup control all return accepted. Inventory
 reports 246 tools dependency packages with no forbidden CLI/config/WebMCP import;
