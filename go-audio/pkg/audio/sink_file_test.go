@@ -404,21 +404,21 @@ type closeError struct{ err error }
 func (c closeError) Close() error { return c.err }
 
 const boundedSinkChunkSamples = rawSinkScratchBytes / 2
-
+type boundedRawFailureCase struct {
+	name          string
+	samples       []int16
+	writer        io.Writer
+	want, reject  error
+	prefix, calls int
+	stream        bool
+}
 func TestFileSinkBoundedRawFailureControls(t *testing.T) {
 	partialErr, chunkErr := errors.New("partial writer failed"), errors.New("second chunk failed")
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	shortSamples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
 	largeSamples := repeatSinkSamples(boundedSinkChunkSamples+1, 7)
-	for _, test := range []struct {
-		name          string
-		samples       []int16
-		writer        io.Writer
-		want, reject  error
-		prefix, calls int
-		stream        bool
-	}{
+	for _, test := range []boundedRawFailureCase{
 		{"partial error", shortSamples, &shortWriter{max: 5, err: partialErr}, partialErr, nil, 5, 1, true},
 		{"later chunk", largeSamples, &shortWriter{max: rawSinkScratchBytes, err: chunkErr, failAfter: true}, chunkErr, nil, rawSinkScratchBytes, 2, false},
 		{"zero count", shortSamples, zeroWriter{}, io.ErrShortWrite, nil, 0, 0, false},
@@ -427,24 +427,30 @@ func TestFileSinkBoundedRawFailureControls(t *testing.T) {
 		{"invalid count precedes error", shortSamples, invalidCountWriter{delta: 1, err: partialErr}, io.ErrShortWrite, partialErr, 0, 0, false},
 		{"cancellation", largeSamples, &shortWriter{max: rawSinkScratchBytes, cancel: cancel}, context.Canceled, nil, rawSinkScratchBytes, 1, false},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			err := newRawSink(test.writer).WriteSamples(cancelCtx, test.samples)
-			if !errors.Is(err, test.want) || (test.reject != nil && errors.Is(err, test.reject)) {
-				t.Fatalf("WriteSamples() = %v, want %v without %v", err, test.want, test.reject)
-			}
-			if test.stream {
-				var streamErr *StreamError
-				if !errors.As(err, &streamErr) || streamErr.Operation != "write" {
-					t.Fatalf("error = %v, want write StreamError", err)
-				}
-			}
-			if test.prefix > 0 {
-				assertWriterPrefix(t, test.writer.(interface{ Bytes() []byte }), test.samples, test.prefix)
-			}
-			if test.calls > 0 {
-				assertWriterCalls(t, test.writer, test.calls)
-			}
-		})
+		t.Run(test.name, func(t *testing.T) { assertBoundedRawFailure(t, cancelCtx, test) })
+	}
+}
+func assertBoundedRawFailure(t *testing.T, ctx context.Context, test boundedRawFailureCase) {
+	t.Helper()
+	err := newRawSink(test.writer).WriteSamples(ctx, test.samples)
+	if !errors.Is(err, test.want) || (test.reject != nil && errors.Is(err, test.reject)) {
+		t.Fatalf("WriteSamples() = %v, want %v without %v", err, test.want, test.reject)
+	}
+	if test.stream {
+		var streamErr *StreamError
+		if !errors.As(err, &streamErr) || streamErr.Operation != "write" {
+			t.Fatalf("error = %v, want write StreamError", err)
+		}
+	}
+	if test.prefix > 0 {
+		writer, ok := test.writer.(interface{ Bytes() []byte })
+		if !ok {
+			t.Fatalf("writer type %T does not expose Bytes", test.writer)
+		}
+		assertWriterPrefix(t, writer, test.samples, test.prefix)
+	}
+	if test.calls > 0 {
+		assertWriterCalls(t, test.writer, test.calls)
 	}
 }
 func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
@@ -508,7 +514,6 @@ func TestFileSinkBoundedRawSerializationAndClose(t *testing.T) {
 	if got, want := writer.Bytes(), append(pcmBytes(first), pcmBytes(second)...); !bytes.Equal(got, want) {
 		t.Fatal("concurrent WriteSamples/WriteFrame calls interleaved")
 	}
-
 	writer, sink = newGateSinkWriter(), nil
 	sink = newRawSink(writer)
 	writeDone, closeDone, closeStarted := make(chan error, 1), make(chan error, 1), make(chan struct{})
@@ -567,15 +572,17 @@ func assertWriterPrefix(t *testing.T, writer interface{ Bytes() []byte }, sample
 		t.Fatalf("writer bytes = %x, want prefix %x", got, want[:byteCount])
 	}
 }
-
 func assertWriterCalls(t *testing.T, writer io.Writer, want int) {
 	t.Helper()
-	got := writer.(*shortWriter).calls
+	short, ok := writer.(*shortWriter)
+	if !ok {
+		t.Fatalf("writer type %T is not *shortWriter", writer)
+	}
+	got := short.calls
 	if got != want {
-		t.Fatalf("writer calls = %d, want %d", got, want)
+		 t.Fatalf("writer calls = %d, want %d", got, want)
 	}
 }
-
 type gateSinkWriter struct {
 	bytes.Buffer
 	entered chan struct{}
