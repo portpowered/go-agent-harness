@@ -1,30 +1,77 @@
 ## Summary
 
-- Retire CLI image staging, extension selection, read_image path advertisement, and refresh decoration behind the public tools contract.
-- Keep CLI host ConfigDir/home resolution and option mapping only; add the dedicated tools Wire constructor without changing generated Wire graphs.
-- Keep filesystem ownership, permissions, cleanup, no-read_image no-op behavior, refresh behavior, public consumer proof, and CLI image/audio behavior covered.
+Retire CLI-owned image staging while preserving the public `read_image` tool
+contract. The public tools Wire/executor now owns staging, permission policy,
+path advertisement, refresh decoration, typed image projection, and cleanup;
+the CLI retains host configuration resolution and composition.
 
-## Admitted revision
+## Admitted candidate
 
-- Sole admitted project: `audio-runtime`; task: `audio-runtime-c43-retire-cli-image-staging`.
-- Branch: `codex/audio-runtime-c43-retire-cli-image-staging`, matching `prd.json` and the isolated worktree.
-- Current candidate source is `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2` (`fix(c43): retain image staging cleanup errors`).
-- Current-main integration is preserved as merge `3dfd88d3`, with fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d`; the required startup and reviewed-base ancestors remain present.
-- No architecture baseline, generated Wire file, peer task path, host checkout, waiver, or CI result was changed or claimed.
+- Sole admitted project/task: `audio-runtime` /
+  `audio-runtime-c43-retire-cli-image-staging`.
+- Branch and isolated worktree match the admitted `prd.branchName`:
+  `codex/audio-runtime-c43-retire-cli-image-staging`.
+- Tested source commit:
+  `97b1141b10b13c19ef73750694fa4acda4cc1bb2`.
+- Current-main integration merge: `3dfd88d3`; fetched `origin/main`:
+  `d6efc88d10e046396e777762802f5f731c9c6d9d`; required ancestry is preserved.
+- No architecture baseline, generated Wire file, peer task path, host
+  checkout, acceptance waiver, or unrelated change was modified.
 
-## Repairs
+## Implementation and review repairs
 
-- Consolidated the two leased host adapter staging checks into the existing `session_image_test.go`, removed the extra leased test file, and kept the file at exactly 600 lines; the agentruntime package-file count is back at its unchanged baseline.
-- Added the exact coverage registration for `go-agent-runtime/services/tools/internal/imagestaging` with the unchanged 80% floor.
-- Repaired the current-head static rejection: the CLI adapter now handles and logs cleanup failures, private partial-write cleanup joins the write and cleanup causes, permission modes are named constants, and a regression proves both causes are retained.
+- The prior Review-254 gap is closed with a bounded exact-head process
+  harness: built `yui`, a deterministic loopback WebSocket provider, real
+  Chrome native WebMCP, dynamic refresh, induced timeout, child/staging
+  cleanup, and complete source/build/fixture provenance.
+- The process probe found and repaired the live semantic event gap: the
+  runtime now refreshes on `tools_added`, `tools_removed`, and page/frame
+  navigation events in addition to legacy catalog/generation events. The
+  normal/race regression is
+  `TestCapabilityEventRequiresRefreshForSemanticCatalogMutations`.
+- The local provider uses a normal close frame after `session.closed`, accepts
+  the induced timeout's expected abnormal client close, and rejects ambient
+  authorization by requiring only the synthetic hermetic key.
+- The static-rejection repairs from the predecessor checkpoint remain in
+  place: cleanup failures are logged/joined and the existing 142-to-71-line
+  CLI adapter retirement is preserved.
 
-## Gate evidence
+## Validation
 
-- `make fmt`, `make wire-check`, `make architecture-size-check`, `make coverage-registration`, affected-package vet, pinned `make lint` v2.9.0 and pinned `make staticcheck` 2026.1: PASS; architecture/size inventory passed at 182 packages, 1,881 files, and 27,712 functions; 172 workspace packages are registered.
-- Focused normal and race image/read_image CLI tests: PASS (22 tests in the affected agentruntime package); private imagestaging normal/race and all `go-agent-runtime/services/tools/...` regression suites: PASS; the new cleanup-cause regression is included.
-- Refreshed `verify.py --mode focused` run `runs/verify-20260910T182006Z-42109`: PASS. The public consumer read 70 literal PNG bytes with matching SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`, preserved the exact refreshed path, and removed it idempotently; the wrong-oracle negative rejected 71 expected vs 70 actual bytes, and the post-cleanup negative rejected reads.
-- The shipped CLI image/audio workflow and credential-free strict OpenAI tool replay both pass.
+`rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+passed as run `verify-20260910T200021Z-37030` with 18 steps at the tested
+source revision. Consumer positive, wrong-oracle negative, cleanup-negative,
+live refresh normal/race, private staging normal/race, CLI adapter normal/race,
+all tools regressions, in-process CLI image, shipped process image, induced
+timeout, and credential-free strict replay all passed their expected outcomes.
+
+The built-process evidence proves:
+
+- image case: CLI exit `0`, provider `PASS`, page events `initial, refreshed`,
+  second provider `session.update` contains `c43_refreshed_probe`, exact
+  70-byte PNG SHA-256
+  `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`, no
+  staging leftovers, and no CLI/provider/Chrome process survivors;
+- induced-timeout case: CLI exit `0`, provider `PASS` with
+  `expected_timeout_client_close=true`, `--max-duration 2s`, no staging
+  leftovers, and no process survivors;
+- strict replay: shipped CLI exit `0`, no timeout or survivor, and stdout
+  contains `PROBE_TOOL_MARKER_9182` and `strict replay continuation`.
+
+Provenance is archived in `implementation-handoff.md` and the run records:
+CLI SHA-256 `6fa63456dac361c7bf9bdcf40030e54157e9f8e6cfda53ff4a1b83bf68526a6`,
+provider SHA-256
+`7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, and
+Chrome fixture SHA-256
+`703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`.
+The source inventory records 142 baseline lines, 71 final adapter lines, and
+retired symbols `sessionImageToolPathDescription`,
+`sessionImageStageExtension`, and `advertiseSessionImagePaths`.
 
 ## Handoff
 
-The candidate is implementation-complete and ready for the script-owned CI gate. This PR does not claim green CI, independent review, merge, or project acceptance. Submit exact head `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2` to script CI; if CI rejects it, inspect the exact failed check/log, repair this same task, and resubmit.
+This is an executor handoff only. Push/update existing PR `#434` at the same
+task, then submit it to the script-owned CI gate. This PR does not claim green
+CI, independent review, merge, post-merge vertical acceptance, physical or
+acoustic proof, or project-wide acceptance. On an exact CI rejection, inspect
+the failed check/log, repair this same task, and resubmit.

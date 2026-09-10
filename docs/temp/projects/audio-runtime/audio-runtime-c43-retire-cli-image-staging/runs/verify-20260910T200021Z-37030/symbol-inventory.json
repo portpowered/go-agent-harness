@@ -1,0 +1,38 @@
+{
+  "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+  "current_revision": "97b1141b10b13c19ef73750694fa4acda4cc1bb2",
+  "source_path": "agent-cli/internal/services/internal/agentruntime/session_image_staging.go",
+  "baseline_source_lines": 142,
+  "final_adapter_lines": 71,
+  "retired_symbols": [
+    {
+      "symbol": "sessionImageToolPathDescription",
+      "baseline_present": true,
+      "final_present": false
+    },
+    {
+      "symbol": "sessionImageStageExtension",
+      "baseline_present": true,
+      "final_present": false
+    },
+    {
+      "symbol": "advertiseSessionImagePaths",
+      "baseline_present": true,
+      "final_present": false
+    }
+  ],
+  "retained_adapter_symbols": [
+    {
+      "symbol": "prepareSessionImageToolAccess",
+      "baseline_present": true,
+      "final_present": true
+    },
+    {
+      "symbol": "sessionImageStagingConfigDir",
+      "baseline_present": true,
+      "final_present": true
+    }
+  ],
+  "source_delta_sha256": "94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4",
+  "source_delta_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging/docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/runs/verify-20260910T200021Z-37030/source-delta.diff"
+}

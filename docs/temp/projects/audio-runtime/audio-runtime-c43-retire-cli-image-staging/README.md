@@ -2,24 +2,29 @@
 
 This admitted slice moves session image staging out of the CLI adapter and
 behind the public `go-agent-runtime/services/tools` contract. The private
-`services/tools/internal/imagestaging` package owns filesystem permissions,
-extension selection, path advertisement, refresh decoration, and idempotent
-cleanup. The CLI only resolves its host-owned configuration directory and
-delegates to `services/tools/wire.NewImageStaging`.
+`services/tools/internal/imagestaging` package owns permissions, extension
+selection, path advertisement, refresh decoration, and idempotent cleanup;
+the CLI retains only host configuration resolution and composition.
 
-The `consumer/` module is an evidence-only public consumer. It imports the
-public tools contract and Wire constructors, resolves the actual public
-`read_image` tool, stages a literal PNG, executes the tool through the public
-executor, checks the typed image result, checks refreshed tool definitions,
-and verifies cleanup plus a post-cleanup negative control. Its `negative` mode
-uses a deliberately wrong PNG oracle and must fail; it is not a waived
-acceptance path.
+The evidence consumer exercises the public Wire/executor contract with a
+literal PNG, exact `read_image` bytes and typed projection, refreshed
+definitions, cleanup, and independent negative controls. The shipped-process
+probe builds `yui`, a deterministic loopback WebSocket provider, and a real
+Chrome native WebMCP page. It proves image staging, a second native page-tool
+registration, provider `session.update` refresh, induced timeout cleanup, and
+credential-free strict replay.
 
-Run the bounded evidence verifier from the repository root:
+Run the bounded focused verifier from the repository root:
 
 ```text
-python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused
 ```
 
-The verifier uses no credentials, does not contact a live provider, and does
-not poll CI. Generated run logs remain below the ignored `runs/` directory.
+Exact-head implementation evidence is recorded in
+`implementation-handoff.md`. The authoritative focused run is
+`runs/verify-20260910T200021Z-37030` at source commit
+`97b1141b10b13c19ef73750694fa4acda4cc1bb2`, with status `PASS` and 18
+recorded steps. Disposable run artifacts stay ignored under `runs/`; the
+selected textual outcome, provenance, protocol, and per-case records for this
+run are archived there with the handoff. No CI result is claimed by this
+evidence.

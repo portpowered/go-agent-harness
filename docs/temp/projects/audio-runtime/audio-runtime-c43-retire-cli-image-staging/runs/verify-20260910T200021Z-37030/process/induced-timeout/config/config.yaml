@@ -1,0 +1,34 @@
+model:
+  provider: openai
+  openai:
+    model: gpt-realtime
+tools:
+  exec:
+    enable_deny_patterns: true
+  list:
+    - id: exec
+      enabled: false
+    - id: read_file
+      enabled: false
+    - id: read_image
+      enabled: true
+    - id: write_file
+      enabled: false
+    - id: edit_file
+      enabled: false
+    - id: append_file
+      enabled: false
+    - id: list_dir
+      enabled: false
+    - id: web_fetch
+      enabled: false
+    - id: web_search
+      enabled: false
+    - id: show
+      enabled: false
+    - id: mouse
+      enabled: false
+    - id: load_skill
+      enabled: false
+    - id: sleep
+      enabled: false

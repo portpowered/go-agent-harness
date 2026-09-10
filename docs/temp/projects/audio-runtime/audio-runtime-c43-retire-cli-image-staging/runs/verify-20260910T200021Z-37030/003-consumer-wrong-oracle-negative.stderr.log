@@ -1,0 +1,2 @@
+wrong PNG oracle: public read_image returned 70 bytes, oracle expected 71
+exit status 1

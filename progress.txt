@@ -2489,3 +2489,45 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   ownership through `CONTINUE` for any exact current-head rejection or other
   actionable repair; the primary must perform independent review, guarded merge
   and the fresh exact-artifact vertical probe.
+
+# C43 shipped-process evidence and refresh repair checkpoint 2026-09-10
+
+- Reverified admission for the sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`, which returned `admitted`.
+  The isolated branch/worktree still match the admitted task packet:
+  `codex/audio-runtime-c43-retire-cli-image-staging` at the task worktree
+  path. The host checkout and predecessor checkpoints were not edited.
+- The prior Review-254 evidence gap is repaired in checkpoint `97b1141b`:
+  the verifier builds the shipped `yui`, a credential-free loopback WebSocket
+  provider, and drives a real Chrome native WebMCP page. It records exact
+  commands, outputs, exit codes, source/build/fixture hashes, dynamic refresh,
+  induced timeout, staging cleanup, and process-group cleanup.
+- The shipped-process probe found a causal migration bug: the preferred
+  semantic browser stream emitted `tools_added`/navigation events while the
+  runtime refresh predicate only recognized legacy catalog/generation names.
+  The runtime now refreshes for semantic catalog mutations and navigation; the
+  focused normal/race regression is
+  `TestCapabilityEventRequiresRefreshForSemanticCatalogMutations`.
+- Exact-head verifier run `verify-20260910T200021Z-37030` returned `PASS` with
+  18 steps at source `97b1141b10b13c19ef73750694fa4acda4cc1bb2`. Consumer,
+  staging, CLI adapter, live-refresh, tools, shipped process, timeout, and
+  strict replay checks all passed their expected outcomes. The negative image
+  oracle exited `1` as required (`70` actual versus `71` expected).
+- The image process exited `0`; the local provider saw `PASS`, exact 70-byte
+  PNG SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`,
+  page events `initial, refreshed`, and `c43_refreshed_probe` in the second
+  provider `session.update`. Staging leftovers and CLI/provider/Chrome
+  process survivors were all absent. The induced `--max-duration 2s` process
+  also exited `0` with expected client-close cleanup and no survivors.
+- Source inventory records baseline `926ded7bfa8f3c3e42115192d03aa1240c4806db`,
+  142 baseline adapter lines, 71 final lines, source-delta SHA-256
+  `94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`, and
+  retired symbols `sessionImageToolPathDescription`,
+  `sessionImageStageExtension`, and `advertiseSessionImagePaths`.
+- `implementation-handoff.md` and `pr-body.md` contain the exact process
+  provenance and limitations. This remains an executor handoff only: no CI
+  result, independent review, merge, vertical acceptance, physical/acoustic
+  proof, or project-wide acceptance is claimed. Next action is push/update
+  PR `#434` and submit this same task to the script-owned CI gate without
+  polling; repair the same task on any exact rejection.
