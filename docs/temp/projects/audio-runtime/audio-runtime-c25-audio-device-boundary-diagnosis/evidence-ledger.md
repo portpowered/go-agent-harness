@@ -282,11 +282,12 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
 All earlier candidate and main references in this ledger are historical
 checkpoints. The freshly fetched reviewed `origin/main` is
 `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`, integrated in the isolated branch
-at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`. The exact C25 evidence candidate
-is `eeaecc1204da731c7e31469c68100dabc4b3560f`; baseline, startup integration,
-and accepted C26 ancestry remain preserved.
+at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`. The tested C25 evidence source
+candidate is `8c61326167ceb6ed2017b46ff866656d99a711b7`; the final metadata
+carrier is an evidence-only descendant with identical executable inputs.
+Baseline, startup integration, and accepted C26 ancestry remain preserved.
 
-The committed `verify.py --mode all` run returned `ACCEPTED` in `14.508s` across
+The tested-source `verify.py --mode all` run returned `ACCEPTED` in `16.424s` across
 `27` bounded commands, with `10` focused normal/race/vet regressions. Source
 gap, archive/fixture, AST positive/negative/mutation/comment controls,
 complete owned-path allowlist, zero-test, child-hang cleanup, and aggregate

@@ -240,10 +240,11 @@ Current exact-head refresh after current-main integration
 - Historical checkpoint references above remain preserved and are not current.
   Fresh `origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c` was merged into
   the isolated C25 branch at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`.
-  The verifier/manifest repair was committed at exact candidate
-  `eeaecc1204da731c7e31469c68100dabc4b3560f`.
-- `verify.py --mode all` at that exact committed head returned `ACCEPTED` in
-  `14.508s` across `27` bounded commands, including `10` focused normal/race/
+  The verifier was rerun at tested source candidate
+  `8c61326167ceb6ed2017b46ff866656d99a711b7`; the remaining metadata carrier
+  is an evidence-only descendant with identical executable inputs.
+- `verify.py --mode all` at that tested source returned `ACCEPTED` in
+  `16.424s` across `27` bounded commands, including `10` focused normal/race/
   vet regressions. `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist,
   zero-test and child-hang cleanup controls passed; no child survived. The
   rebuilt/materialized source archive is `57,067,520` bytes with SHA-256

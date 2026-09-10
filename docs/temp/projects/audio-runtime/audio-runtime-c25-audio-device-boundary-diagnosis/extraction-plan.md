@@ -148,11 +148,12 @@ runner integrity.
 Historical candidate references above remain preserved as predecessor evidence.
 The freshly fetched `origin/main` is `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`;
 the isolated C25 merge candidate was `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`,
-and the exact evidence candidate is
-`eeaecc1204da731c7e31469c68100dabc4b3560f`. The required baseline, startup
+and the tested evidence source candidate is
+`8c61326167ceb6ed2017b46ff866656d99a711b7`. The final metadata carrier is an
+evidence-only descendant with identical executable inputs. The required baseline, startup
 integration, and accepted C26 merge ancestry remain intact.
 
-The exact committed verifier run returned `ACCEPTED` in `14.508s` across `27`
+The exact tested-source verifier run returned `ACCEPTED` in `16.424s` across `27`
 bounded commands with `10` focused normal/race/vet regressions. The source gap,
 AST positive/negative/mutation/comment controls, fixture manifest, rebuilt and
 materialized archive, changed-path allowlist, zero-test handling, intentional

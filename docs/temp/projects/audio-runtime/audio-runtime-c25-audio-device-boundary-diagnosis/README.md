@@ -227,14 +227,16 @@ against that changed source and submit the same task through the script gate.
 All checkpoints below this section are historical and remain preserved for review.
 The fetched reviewed `origin/main=c95a2cb4f96fa8c14bd4655f5197a822c86a980c` was
 merged into the isolated C25 branch at `b957dd96224f76a4919960413d4a6dcbc1dc6bb1`;
-the verifier/manifest refresh was committed at exact candidate
-`eeaecc1204da731c7e31469c68100dabc4b3560f`. Required baseline
+the verifier was rerun at tested source candidate
+`8c61326167ceb6ed2017b46ff866656d99a711b7`. The remaining metadata commit is
+an evidence-only descendant of that tested source; no executable inputs differ.
+Required baseline
 `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup integration
 `8bdafc7f947a3a2c9856220abdc539437035bd21`, and accepted C26 merge
 `1f82284abee0bd31a6680310444cea2e4c16ef00` remain ancestors.
 
-At `eeaecc1204da731c7e31469c68100dabc4b3560f`, `verify.py --mode all` returned
-`ACCEPTED` in `14.508` seconds across `27` bounded commands, including `10`
+At tested source `8c61326167ceb6ed2017b46ff866656d99a711b7`, `verify.py --mode all`
+returned `ACCEPTED` in `16.424` seconds across `27` bounded commands, including `10`
 focused normal/race/vet regressions. `SOURCE_GAP_CONFIRMED`, the AST positive,
 negative, mutation and comment controls, fixture manifest, rebuilt/materialized
 archive, complete path allowlist, zero-test and child-hang cleanup controls all
@@ -246,9 +248,9 @@ The focused current-main composition regression also passed with coverage in
 (`34413969081`/`102674534021`, `composition_test.go:417`) remains preserved and
 C20-owned; C20's separate `test46/provider_burst` timeout remains unwaived.
 No hosted CI result, merge, runtime, physical-device, acoustic, or project
-acceptance is claimed. Next action: synchronize the remaining metadata, push
-PR417, and submit this changed same task to the script CI gate without polling;
-retain ownership for any exact rejection.
+acceptance is claimed. Next action: commit/push the synchronized evidence-only
+descendant, update PR417, and submit this changed same task to the script CI
+gate without polling; retain ownership for any exact rejection.
 
 ## Exact current-head refresh
 
