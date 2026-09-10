@@ -113,11 +113,13 @@ func (c sessionModelCatalog) SupportedRealtimeModelIDs(provider string) []string
 }
 
 func TestModelAdmissionAdaptersPreserveSessionAndSelfPlayBoundaries(t *testing.T) {
-	custom := sessionModelCatalog{models: []OpenAIRealtimeModel{{ID: "custom-only", SupportsAudio: true}}}
+	const customModelID = "custom-only"
+
+	custom := sessionModelCatalog{models: []OpenAIRealtimeModel{{ID: customModelID, SupportsAudio: true}}}
 	options := SessionRunOptions{ModelCatalog: custom}
 
 	model, ok := lookupOpenAIRealtimeModel(options, " custom-only ")
-	if !ok || model.ID != "custom-only" {
+	if !ok || model.ID != customModelID {
 		t.Fatalf("trimmed session lookup = %+v, %v", model, ok)
 	}
 
@@ -126,13 +128,13 @@ func TestModelAdmissionAdaptersPreserveSessionAndSelfPlayBoundaries(t *testing.T
 		t.Fatalf("session rejection = %v, want unsupported model", err)
 	}
 	var unsupported *UnsupportedRealtimeModelError
-	if !errors.As(err, &unsupported) || unsupported.Model != " missing " || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != "custom-only" {
+	if !errors.As(err, &unsupported) || unsupported.Model != " missing " || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != customModelID {
 		t.Fatalf("session rejection = %v, want raw model and custom snapshot", err)
 	}
 	unsupported.SupportedModels[0] = "mutated"
 	retry := unsupportedOpenAIRealtimeModelErrorFor(options, " missing ")
 	var retryUnsupported *UnsupportedRealtimeModelError
-	if !errors.As(retry, &retryUnsupported) || retryUnsupported.SupportedModels[0] != "custom-only" {
+	if !errors.As(retry, &retryUnsupported) || retryUnsupported.SupportedModels[0] != customModelID {
 		t.Fatalf("session retry rejection = %v, want independent snapshot", retry)
 	}
 
@@ -143,7 +145,7 @@ func TestModelAdmissionAdaptersPreserveSessionAndSelfPlayBoundaries(t *testing.T
 		t.Fatalf("case-sensitive bare session boundary = %v, want legacy bypass", err)
 	}
 
-	if err := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: "custom-only"}); err != nil {
+	if err := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: customModelID}); err != nil {
 		t.Fatalf("self-play custom model = %v", err)
 	}
 	selfPlayErr := validateSelfPlayModel(SelfPlayRunOptions{modelCatalog: custom, Model: " custom-only "})

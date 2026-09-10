@@ -12,6 +12,8 @@ type testCatalog struct {
 	models []Model
 }
 
+const customModelID = "custom-only"
+
 func (c testCatalog) LookupRealtimeModel(provider, model string) (Model, bool) {
 	if !strings.EqualFold(provider, openAIProvider) {
 		return Model{}, false
@@ -36,11 +38,11 @@ func (c testCatalog) SupportedRealtimeModelIDs(provider string) []string {
 }
 
 func TestDecidePreservesProviderPolicyAndBoundaryNormalization(t *testing.T) {
-	catalog := testCatalog{models: []Model{{ID: "custom-only", SupportsAudio: true}}}
+	catalog := testCatalog{models: []Model{{ID: customModelID, SupportsAudio: true}}}
 	service := New(catalog)
 
 	known := service.Decide(" OpenAI ", " custom-only ", Options{TrimProvider: true, TrimModel: true})
-	if !known.Allowed || !known.Matched || known.Model.ID != "custom-only" {
+	if !known.Allowed || !known.Matched || known.Model.ID != customModelID {
 		t.Fatalf("known decision = %+v, want admitted custom model", known)
 	}
 
@@ -48,7 +50,7 @@ func TestDecidePreservesProviderPolicyAndBoundaryNormalization(t *testing.T) {
 	if unknown.Allowed || unknown.Matched || unknown.NormalizedModel != "missing" {
 		t.Fatalf("unknown decision = %+v, want rejection", unknown)
 	}
-	if len(unknown.SupportedModels) != 1 || unknown.SupportedModels[0] != "custom-only" {
+	if len(unknown.SupportedModels) != 1 || unknown.SupportedModels[0] != customModelID {
 		t.Fatalf("unknown supported models = %v", unknown.SupportedModels)
 	}
 
@@ -114,7 +116,7 @@ func (c providerCatalog) SupportedRealtimeModelIDs(provider string) []string {
 
 func TestPublicServiceMapsCatalogAndAdmissionDecisions(t *testing.T) {
 	catalog := providerCatalog{models: []providers.RealtimeModel{{
-		ID:                      "custom-only",
+		ID:                      customModelID,
 		SupportsAudio:           true,
 		SupportsImageInput:      true,
 		SupportsFunctionCalling: true,
@@ -128,14 +130,14 @@ func TestPublicServiceMapsCatalogAndAdmissionDecisions(t *testing.T) {
 
 	preserved := service.ValidateRealtimeModel("openai", " missing ", providers.ModelAdmissionOptions{TrimModel: true, PreserveModelInError: true})
 	var preservedUnsupported *providers.UnsupportedRealtimeModelError
-	if !errors.As(preserved, &preservedUnsupported) || preservedUnsupported.Model != " missing " || preservedUnsupported.SupportedModels[0] != "custom-only" {
+	if !errors.As(preserved, &preservedUnsupported) || preservedUnsupported.Model != " missing " || preservedUnsupported.SupportedModels[0] != customModelID {
 		t.Fatalf("preserved rejection = %v, want raw model and catalog snapshot", preserved)
 	}
 	preservedUnsupported.SupportedModels[0] = "mutated"
 
 	normalized := service.ValidateRealtimeModel("openai", " missing ", providers.ModelAdmissionOptions{TrimModel: true})
 	var normalizedUnsupported *providers.UnsupportedRealtimeModelError
-	if !errors.As(normalized, &normalizedUnsupported) || normalizedUnsupported.Model != "missing" || normalizedUnsupported.SupportedModels[0] != "custom-only" {
+	if !errors.As(normalized, &normalizedUnsupported) || normalizedUnsupported.Model != "missing" || normalizedUnsupported.SupportedModels[0] != customModelID {
 		t.Fatalf("normalized rejection = %v, want normalized model and independent snapshot", normalized)
 	}
 	if err := service.ValidateRealtimeModel("anthropic", "anything", providers.ModelAdmissionOptions{}); err != nil {
@@ -143,7 +145,7 @@ func TestPublicServiceMapsCatalogAndAdmissionDecisions(t *testing.T) {
 	}
 
 	resolved, ok := service.ResolveRealtimeModel(" OPENAI ", " custom-only ", providers.ModelAdmissionOptions{TrimProvider: true, TrimModel: true})
-	if !ok || resolved.ID != "custom-only" || !resolved.SupportsAudio || !resolved.SupportsImageInput || !resolved.SupportsFunctionCalling || !resolved.SupportsReasoning {
+	if !ok || resolved.ID != customModelID || !resolved.SupportsAudio || !resolved.SupportsImageInput || !resolved.SupportsFunctionCalling || !resolved.SupportsReasoning {
 		t.Fatalf("resolved model = %+v, %v, want complete custom metadata", resolved, ok)
 	}
 	if _, ok := service.ResolveRealtimeModel("openai", "missing", providers.ModelAdmissionOptions{}); ok {
