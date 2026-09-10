@@ -1,11 +1,8 @@
 package livehost
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -142,34 +139,6 @@ func expectedResponses(request serviceSession.Request, promptPresent bool, openi
 		total++
 	}
 	return total
-}
-
-func ResolvePrompt(value, workDir string) (string, error) {
-	if value == "none" {
-		return "", nil
-	}
-	if value != "" {
-		if _, err := os.Stat(value); err == nil {
-			data, readErr := os.ReadFile(value)
-			if readErr != nil {
-				return "", fmt.Errorf("read system prompt %s: %w", value, readErr)
-			}
-			return string(data), nil
-		}
-		return value, nil
-	}
-	if workDir == "" {
-		return "", errors.New("resolve live prompt workspace: workdir is required")
-	}
-	path := filepath.Join(workDir, "AGENTS.md")
-	data, err := os.ReadFile(path)
-	if err == nil {
-		return string(data), nil
-	}
-	if os.IsNotExist(err) {
-		return "", nil
-	}
-	return "", fmt.Errorf("read AGENTS.md %s: %w", path, err)
 }
 
 func turnDetectionPolicy(cfg config.Config) *runtimeSession.LiveTurnDetection {

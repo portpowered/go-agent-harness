@@ -1,0 +1,1081 @@
+{
+  "build": {
+    "command": {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/instruction-consumer",
+        "."
+      ],
+      "cleanup_bounded": true,
+      "cleanup_errors": [],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer",
+      "duration_seconds": 0.132483,
+      "exit_code": 0,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "",
+      "timed_out": false
+    },
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/instruction-consumer",
+    "sha256": "55c16ef3ac6106d4ac56a51367cca93e9e9e9419829a4c6753d9e693857a4684",
+    "size": 7931970
+  },
+  "build_inputs": {
+    "module_files": [
+      {
+        "path": "go.work",
+        "sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
+        "size": 120
+      },
+      {
+        "path": "go.work.sum",
+        "sha256": "771f6df0e159ddaf47d81d40b551fe555317fd56aeb3d97f904498dcf92b8307",
+        "size": 13858
+      },
+      {
+        "path": "agent-cli/go.mod",
+        "sha256": "3546c664ee476c1726701292b5aa9db20b532af010ca74b610e81681b9e3b845",
+        "size": 5117
+      },
+      {
+        "path": "agent-cli/go.sum",
+        "sha256": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1",
+        "size": 23034
+      }
+    ],
+    "source_trees": [
+      {
+        "file_count": 1102,
+        "prefix": "agent-cli",
+        "sha256": "f1db054d886b2a762ab61edb79582b5ff13f69795ded41d2ec21c7680e6a8268"
+      },
+      {
+        "file_count": 327,
+        "prefix": "go-agent-runtime",
+        "sha256": "bec3d7d31d120162a40129e75545e5bd929cf76ab6cfca7de1f11136b07c8f2a"
+      },
+      {
+        "file_count": 295,
+        "prefix": "go-agent-loop",
+        "sha256": "352e945486ab75eed336d635257fc9205a596cf360a102e8a06c29214f495c0c"
+      },
+      {
+        "file_count": 125,
+        "prefix": "go-audio",
+        "sha256": "4e0d641c24a6e4889de1cf77bbe71fa8995fe574aaff781cbbec5a9120394ede"
+      },
+      {
+        "file_count": 72,
+        "prefix": "go-device-gateway",
+        "sha256": "c9921e898aa640b46e1093ad6d6dcb93b0f295b22fd71a665e549de69222120c"
+      },
+      {
+        "file_count": 250,
+        "prefix": "go-llm-gateway",
+        "sha256": "a50e28d09746a32a85ee56f6c162259519fbd4058b26192c9bf34f7a01246126"
+      }
+    ]
+  },
+  "cli_build": {
+    "command": {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/yui",
+        "./cmd/yui"
+      ],
+      "cleanup_bounded": true,
+      "cleanup_errors": [],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
+      "duration_seconds": 0.245299,
+      "exit_code": 0,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "",
+      "timed_out": false
+    },
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/yui",
+    "sha256": "e53fcd077c9657d378d05c0ba0780ce7efb9db603b8bdd26f4a13214f359a3a4",
+    "size": 52751762
+  },
+  "consumer_contract": {
+    "command": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/instruction-consumer",
+        "--mode",
+        "public-session"
+      ],
+      "cleanup_bounded": true,
+      "cleanup_errors": [],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
+      "duration_seconds": 0.08105,
+      "exit_code": 0,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "{\n  \"cli_imports\": false,\n  \"composed_sha256\": \"27840d9612461688ecb274ae223923d83ebe70ac05378c2313659a3562116277\",\n  \"credentials\": false,\n  \"hidden_global_io\": false,\n  \"loader_calls\": [\n    \"stat:/workspace/prompt.md\",\n    \"read:/workspace/prompt.md\",\n    \"skills\"\n  ],\n  \"mode\": \"public-session\",\n  \"no_tools\": \"customer instructions\",\n  \"policy_headings\": [\n    \"WebMCP browser selection:\",\n    \"Tool-grounding requirements:\",\n    \"WebMCP tab selection calibration:\",\n    \"WebMCP ambiguity recovery:\",\n    \"Sight routing requirements:\"\n  ],\n  \"private_imports\": false,\n  \"resolved\": \"literal prompt\\n\\n---\\n\\nskill summary\\n\\nFilesystem scope: /workspace. Relative filesystem-tool paths resolve from this workdir.\",\n  \"status\": \"accepted\"\n}\n",
+      "timed_out": false
+    },
+    "report": {
+      "cli_imports": false,
+      "composed_sha256": "27840d9612461688ecb274ae223923d83ebe70ac05378c2313659a3562116277",
+      "credentials": false,
+      "hidden_global_io": false,
+      "loader_calls": [
+        "stat:/workspace/prompt.md",
+        "read:/workspace/prompt.md",
+        "skills"
+      ],
+      "mode": "public-session",
+      "no_tools": "customer instructions",
+      "policy_headings": [
+        "WebMCP browser selection:",
+        "Tool-grounding requirements:",
+        "WebMCP tab selection calibration:",
+        "WebMCP ambiguity recovery:",
+        "Sight routing requirements:"
+      ],
+      "private_imports": false,
+      "resolved": "literal prompt\n\n---\n\nskill summary\n\nFilesystem scope: /workspace. Relative filesystem-tool paths resolve from this workdir.",
+      "status": "accepted"
+    }
+  },
+  "direct_imports": {
+    "forbidden": [],
+    "imports": [
+      "context",
+      "crypto/sha256",
+      "embed",
+      "encoding/hex",
+      "encoding/json",
+      "errors",
+      "fmt",
+      "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+      "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session",
+      "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire",
+      "io/fs",
+      "os",
+      "strings"
+    ]
+  },
+  "focused_instruction_controls": {
+    "commands": [
+      {
+        "argv": [
+          "go",
+          "test",
+          "./internal/transport/cli/internal/livehost",
+          "-run",
+          "TestBuildRequest(UsesWireInstructionCompositionBeforeProviderStartup|PreservesEmptyAndRejectsInvalidWorkspace)$",
+          "-count=1",
+          "-timeout=120s"
+        ],
+        "cleanup_bounded": true,
+        "cleanup_errors": [],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
+        "duration_seconds": 0.733967,
+        "exit_code": 0,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.188s\n",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "go",
+          "test",
+          "./services/session/internal/instructions",
+          "-run",
+          "TestServiceComposeUsesNormalizedToolIdentifierAndBrowserState$",
+          "-count=1",
+          "-timeout=120s"
+        ],
+        "cleanup_bounded": true,
+        "cleanup_errors": [],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime",
+        "duration_seconds": 0.380354,
+        "exit_code": 0,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions\t0.163s\n",
+        "timed_out": false
+      }
+    ],
+    "status": "accepted"
+  },
+  "input_files": [
+    {
+      "path": "consumer/go.mod",
+      "sha256": "7dda45757f7b7cc01dbe334663d51d3dac18a48a8e8209a59aabbb070c0f526a",
+      "size": 1183
+    },
+    {
+      "path": "consumer/expected.json",
+      "sha256": "7b42f4a961895ccc09ba2366919ea9d5e8efccea3f066738b4ac5fa6e14d5590",
+      "size": 486
+    },
+    {
+      "path": "consumer/main.go",
+      "sha256": "445a3bbce63ca31224f7d4dde696abe75ef5b77052c45a61f05aeb75620631b9",
+      "size": 6426
+    },
+    {
+      "path": "consumer/main_test.go",
+      "sha256": "5a1b48ecef90941e54edf3098fa6b3d159cd03f59229f8dde3beee0b3e45fcc0",
+      "size": 1299
+    }
+  ],
+  "mode": "public-session",
+  "module_graph": {
+    "agent_cli": {
+      "sha256": "6f1c674f896e2a3d797253779d3c6f596e75e0ca89a508bd79a6c99592cfab8b",
+      "stdout": "{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/agent-cli\",\n\t\"Main\": true,\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"cloud.google.com/go\",\n\t\"Version\": \"v0.116.0\",\n\t\"Time\": \"2024-10-09T14:40:23Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go@v0.116.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/@v/v0.116.0.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:B3fRrSDkLRt5qSHWe40ERJvhvnQwdZiHu0bJOpldweE=\",\n\t\"GoModSum\": \"h1:cEPSRWPzZEswwdr9BxE6ChEn01dWlTaF05LiC2Xs70U=\"\n}\n{\n\t\"Path\": \"cloud.google.com/go/auth\",\n\t\"Version\": \"v0.9.3\",\n\t\"Time\": \"2024-09-03T17:54:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go/auth@v0.9.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/auth/@v/v0.9.3.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:VOEUIAADkkLtyfr3BLa3R8Ed/j6w1jTBmARx+wb5w5U=\",\n\t\"GoModSum\": \"h1:7z6VY+7h3KUdRov5F1i8NDP5ZzWKYmEPO842BgCsmTk=\"\n}\n{\n\t\"Path\": \"cloud.google.com/go/compute/metadata\",\n\t\"Version\": \"v0.5.0\",\n\t\"Time\": \"2024-07-10T17:10:24Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go/compute/metadata@v0.5.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/compute/metadata/@v/v0.5.0.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:Zr0eK8JbFv6+Wi4ilXAR8FJ3wyNdpxHKJNPos6LTZOY=\",\n\t\"GoModSum\": \"h1:aHnloV2TPI38yx4s9+wAZhHykWvVCfu7hQbF+9CWoiY=\"\n}\n{\n\t\"Path\": \"github.com/MakeNowJust/heredoc\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2019-08-23T03:24:15Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/alecthomas/assert/v2\",\n\t\"Version\": \"v2.7.0\",\n\t\"Time\": \"2024-03-27T02:40:45Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/alecthomas/assert/v2@v2.7.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/alecthomas/assert/v2/@v/v2.7.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:QtqSACNS3tF7oasA8CU6A6sXZSBDqnm7RfpLl9bZqbE=\",\n\t\"GoModSum\": \"h1:Bze95FyfUr7x34QZrjL+XP+0qgp/zg8yS+TtBj1WA3k=\"\n}\n{\n\t\"Path\": \"github.com/alecthomas/chroma/v2\",\n\t\"Version\": \"v2.14.0\",\n\t\"Time\": \"2024-04-28T09:32:07Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/alecthomas/chroma/v2@v2.14.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/alecthomas/chroma/v2/@v/v2.14.0.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:R3+wzpnUArGcQz7fCETQBzO5n9IMNi13iIs46aU4V9E=\",\n\t\"GoModSum\": \"h1:QolEbTfmUHIMVpBqxeDnNBj2uoeI4EbYP4i6n68SG4I=\"\n}\n{\n\t\"Path\": \"github.com/alecthomas/repr\",\n\t\"Version\": \"v0.4.0\",\n\t\"Time\": \"2024-02-19T08:02:57Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/alecthomas/repr@v0.4.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/alecthomas/repr/@v/v0.4.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:GhI2A8MACjfegCPVq9f1FLvIBS+DrQ2KQBFZP1iFzXc=\",\n\t\"GoModSum\": \"h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4=\"\n}\n{\n\t\"Path\": \"github.com/anthropics/anthropic-sdk-go\",\n\t\"Version\": \"v1.26.0\",\n\t\"Time\": \"2026-02-19T22:43:49Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/anthropics/anthropic-sdk-go@v1.26.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/anthropics/anthropic-sdk-go/@v/v1.26.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:oUTzFaUpAevfuELAP1sjL6CQJ9HHAfT7CoSYSac11PY=\",\n\t\"GoModSum\": \"h1:qUKmaW+uuPB64iy1l+4kOSvaLqPXnHTTBKH6RVZ7q5Q=\"\n}\n{\n\t\"Path\": \"github.com/atotto/clipboard\",\n\t\"Version\": \"v0.1.4\",\n\t\"Time\": \"2021-02-24T14:02:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/atotto/clipboard@v0.1.4\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/atotto/clipboard/@v/v0.1.4.mod\",\n\t\"Sum\": \"h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=\",\n\t\"GoModSum\": \"h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=\"\n}\n{\n\t\"Path\": \"github.com/aymanbagabas/go-osc52/v2\",\n\t\"Version\": \"v2.0.1\",\n\t\"Time\": \"2023-03-06T14:54:10Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/aymanbagabas/go-osc52/v2@v2.0.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/aymanbagabas/go-osc52/v2/@v/v2.0.1.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=\",\n\t\"GoModSum\": \"h1:uYgXzlJ7ZpABp8OJ+exZzJJhRNQ2ASbcXHWsFqH8hp8=\"\n}\n{\n\t\"Path\": \"github.com/aymanbagabas/go-udiff\",\n\t\"Version\": \"v0.3.1\",\n\t\"Time\": \"2025-06-05T20:16:44Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/aymanbagabas/go-udiff@v0.3.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/aymanbagabas/go-udiff/@v/v0.3.1.mod\",\n\t\"GoVersion\": \"1.23\",\n\t\"Sum\": \"h1:LV+qyBQ2pqe0u42ZsUEtPiCaUoqgA9gYRDs3vj1nolY=\",\n\t\"GoModSum\": \"h1:G0fsKmG+P6ylD0r6N/KgQD/nWzgfnl8ZBcNLgcbrw8E=\"\n}\n{\n\t\"Path\": \"github.com/aymerick/douceur\",\n\t\"Version\": \"v0.2.0\",\n\t\"Time\": \"2015-08-27T15:03:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/aymerick/douceur@v0.2.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/aymerick/douceur/@v/v0.2.0.mod\",\n\t\"Sum\": \"h1:Mv+mAeH1Q+n9Fr+oyamOlAkUNPWPlA8PPGR0QAaYuPk=\",\n\t\"GoModSum\": \"h1:wlT5vV2O3h55X9m7iVYN0TBM0NH/MmbLnd30/FjWUq4=\"\n}\n{\n\t\"Path\": \"github.com/bits-and-blooms/bitset\",\n\t\"Version\": \"v1.24.4\",\n\t\"Time\": \"2025-11-16T15:54:05Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/bubbles\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2026-02-09T11:18:24Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/bubbles@v1.0.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/bubbles/@v/v1.0.0.mod\",\n\t\"GoVersion\": \"1.24.2\",\n\t\"Sum\": \"h1:12J8/ak/uCZEMQ6KU7pcfwceyjLlWsDLAxB5fXonfvc=\",\n\t\"GoModSum\": \"h1:9d/Zd5GdnauMI5ivUIVisuEm3ave1XwXtD1ckyV6r3E=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/bubbletea\",\n\t\"Version\": \"v1.3.10\",\n\t\"Time\": \"2025-09-17T20:11:15Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/bubbletea@v1.3.10\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/bubbletea/@v/v1.3.10.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:otUDHWMMzQSB0Pkc87rm691KZ3SWa4KUlvF9nRvCICw=\",\n\t\"GoModSum\": \"h1:ORQfo0fk8U+po9VaNvnV95UPWA1BitP1E0N6xJPlHr4=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/colorprofile\",\n\t\"Version\": \"v0.4.1\",\n\t\"Time\": \"2025-12-11T19:41:31Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/colorprofile@v0.4.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/colorprofile/@v/v0.4.1.mod\",\n\t\"GoVersion\": \"1.24.2\",\n\t\"Sum\": \"h1:a1lO03qTrSIRaK8c3JRxJDZOvhvIeSco3ej+ngLk1kk=\",\n\t\"GoModSum\": \"h1:U1d9Dljmdf9DLegaJ0nGZNJvoXAhayhmidOdcBwAvKk=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/glamour\",\n\t\"Version\": \"v0.10.0\",\n\t\"Time\": \"2025-04-16T19:47:49Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/glamour@v0.10.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/glamour/@v/v0.10.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:MtZvfwsYCx8jEPFJm3rIBFIMZUfUJ765oX8V6kXldcY=\",\n\t\"GoModSum\": \"h1:f+uf+I/ChNmqo087elLnVdCiVgjSKWuXa/l6NU2ndYk=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/harmonica\",\n\t\"Version\": \"v0.2.0\",\n\t\"Time\": \"2022-04-15T01:30:28Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/lipgloss\",\n\t\"Version\": \"v1.1.1-0.20250404203927-76690c660834\",\n\t\"Time\": \"2025-04-04T20:39:27Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/lipgloss@v1.1.1-0.20250404203927-76690c660834\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/lipgloss/@v/v1.1.1-0.20250404203927-76690c660834.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:ZR7e0ro+SZZiIZD7msJyA+NjkCNNavuiPBLgerbOziE=\",\n\t\"GoModSum\": \"h1:aKC/t2arECF6rNOnaKaVU6y4t4ZeHQzqfxedE/VkVhA=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/ansi\",\n\t\"Version\": \"v0.11.6\",\n\t\"Time\": \"2026-02-04T11:15:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/x/ansi@v0.11.6\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/x/ansi/@v/v0.11.6.mod\",\n\t\"GoVersion\": \"1.24.2\",\n\t\"Sum\": \"h1:GhV21SiDz/45W9AnV2R61xZMRri5NlLnl6CVF7ihZW8=\",\n\t\"GoModSum\": \"h1:2JNYLgQUsyqaiLovhU2Rv/pb8r6ydXKS3NIttu3VGZQ=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/cellbuf\",\n\t\"Version\": \"v0.0.15\",\n\t\"Time\": \"2026-02-03T06:58:41Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/x/cellbuf@v0.0.15\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/x/cellbuf/@v/v0.0.15.mod\",\n\t\"GoVersion\": \"1.24.2\",\n\t\"Sum\": \"h1:ur3pZy0o6z/R7EylET877CBxaiE1Sp1GMxoFPAIztPI=\",\n\t\"GoModSum\": \"h1:J1YVbR7MUuEGIFPCaaZ96KDl5NoS0DAWkskup+mOY+Q=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/exp/golden\",\n\t\"Version\": \"v0.0.0-20241011142426-46044092ad91\",\n\t\"Time\": \"2024-10-11T14:24:26Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/x/exp/golden@v0.0.0-20241011142426-46044092ad91\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/x/exp/golden/@v/v0.0.0-20241011142426-46044092ad91.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:payRxjMjKgx2PaCWLZ4p3ro9y97+TVLZNaRZgJwSVDQ=\",\n\t\"GoModSum\": \"h1:wDlXFlCrmJ8J+swcL/MnGUuYnqgQdW9rhSD61oNMb6U=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/exp/slice\",\n\t\"Version\": \"v0.0.0-20250327172914-2fdc97757edf\",\n\t\"Time\": \"2025-03-27T17:29:14Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/x/exp/slice@v0.0.0-20250327172914-2fdc97757edf\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/x/exp/slice/@v/v0.0.0-20250327172914-2fdc97757edf.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:rLG0Yb6MQSDKdB52aGX55JT1oi0P0Kuaj7wi1bLUpnI=\",\n\t\"GoModSum\": \"h1:B3UgsnsBZS/eX42BlaNiJkD1pPOUa+oF1IYC6Yd2CEU=\"\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/term\",\n\t\"Version\": \"v0.2.2\",\n\t\"Time\": \"2025-10-31T17:24:06Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/charmbracelet/x/term@v0.2.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/charmbracelet/x/term/@v/v0.2.2.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:xVRT/S2ZcKdhhOuSP4t5cLi5o+JxklsoEObBSgfgZRk=\",\n\t\"GoModSum\": \"h1:kF8CY5RddLWrsgVwpw4kAa6TESp6EB5y3uxGLeCqzAI=\"\n}\n{\n\t\"Path\": \"github.com/chromedp/cdproto\",\n\t\"Version\": \"v0.0.0-20260714215040-dc233986426f\",\n\t\"Time\": \"2026-07-14T21:50:40Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/chromedp/cdproto@v0.0.0-20260714215040-dc233986426f\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/chromedp/cdproto/@v/v0.0.0-20260714215040-dc233986426f.mod\",\n\t\"GoVersion\": \"1.26\",\n\t\"Sum\": \"h1:0Z1zcSLEmnj2c2CmJYBqewtS6pxhB39bNWUSEUAWjgk=\",\n\t\"GoModSum\": \"h1:RwFsSODCtFExll+GhHM6R92SARHR3Z3oipaxLHj46C0=\"\n}\n{\n\t\"Path\": \"github.com/chromedp/chromedp\",\n\t\"Version\": \"v0.16.0\",\n\t\"Time\": \"2026-07-14T21:56:16Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/chromedp/chromedp@v0.16.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/chromedp/chromedp/@v/v0.16.0.mod\",\n\t\"GoVersion\": \"1.26\",\n\t\"Sum\": \"h1:rOO4deOm4CbZgBCa8mD9g2rDyIoNs0BkgvNrlbp5ouk=\",\n\t\"GoModSum\": \"h1:rbuGKFT1vMcFcFqKfPIO1GpX/N+2s8onm2qMxZLbU5U=\"\n}\n{\n\t\"Path\": \"github.com/chromedp/sysutil\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2024-10-18T01:02:09Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/chromedp/sysutil@v1.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/chromedp/sysutil/@v/v1.1.0.mod\",\n\t\"GoVersion\": \"1.23\",\n\t\"Sum\": \"h1:PUFNv5EcprjqXZD9nJb9b/c9ibAbxiYo4exNWZyipwM=\",\n\t\"GoModSum\": \"h1:WiThHUdltqCNKGc4gaU50XgYjwjYIhKWoHGPTUfWTJ8=\"\n}\n{\n\t\"Path\": \"github.com/clipperhouse/displaywidth\",\n\t\"Version\": \"v0.9.0\",\n\t\"Time\": \"2026-02-01T17:18:37Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/clipperhouse/displaywidth@v0.9.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/clipperhouse/displaywidth/@v/v0.9.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:Qb4KOhYwRiN3viMv1v/3cTBlz3AcAZX3+y9OLhMtAtA=\",\n\t\"GoModSum\": \"h1:aCAAqTlh4GIVkhQnJpbL0T/WfcrJXHcj8C0yjYcjOZA=\"\n}\n{\n\t\"Path\": \"github.com/clipperhouse/stringish\",\n\t\"Version\": \"v0.1.1\",\n\t\"Time\": \"2025-10-14T18:27:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/clipperhouse/stringish@v0.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/clipperhouse/stringish/@v/v0.1.1.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:+NSqMOr3GR6k1FdRhhnXrLfztGzuG+VuFDfatpWHKCs=\",\n\t\"GoModSum\": \"h1:v/WhFtE1q0ovMta2+m+UbpZ+2/HEXNWYXQgCt4hdOzA=\"\n}\n{\n\t\"Path\": \"github.com/clipperhouse/uax29/v2\",\n\t\"Version\": \"v2.5.0\",\n\t\"Time\": \"2026-02-01T02:35:46Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/clipperhouse/uax29/v2@v2.5.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/clipperhouse/uax29/v2/@v/v2.5.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:x7T0T4eTHDONxFJsL94uKNKPHrclyFI0lm7+w94cO8U=\",\n\t\"GoModSum\": \"h1:Wn1g7MK6OoeDT0vL+Q0SQLDz/KpfsVRgg6W7ihQeh4g=\"\n}\n{\n\t\"Path\": \"github.com/cpuguy83/go-md2man/v2\",\n\t\"Version\": \"v2.0.6\",\n\t\"Time\": \"2024-12-16T17:50:50Z\",\n\t\"Indirect\": true,\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/cpuguy83/go-md2man/v2/@v/v2.0.6.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"GoModSum\": \"h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=\"\n}\n{\n\t\"Path\": \"github.com/davecgh/go-spew\",\n\t\"Version\": \"v1.1.1\",\n\t\"Time\": \"2018-02-21T23:26:28Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/davecgh/go-spew@v1.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/davecgh/go-spew/@v/v1.1.1.mod\",\n\t\"Sum\": \"h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=\",\n\t\"GoModSum\": \"h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=\"\n}\n{\n\t\"Path\": \"github.com/dlclark/regexp2\",\n\t\"Version\": \"v1.11.0\",\n\t\"Time\": \"2024-02-24T02:28:33Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/dlclark/regexp2@v1.11.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/dlclark/regexp2/@v/v1.11.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=\",\n\t\"GoModSum\": \"h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=\"\n}\n{\n\t\"Path\": \"github.com/dustin/go-humanize\",\n\t\"Version\": \"v1.0.1\",\n\t\"Time\": \"2023-01-10T06:44:38Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/ebitengine/purego\",\n\t\"Version\": \"v0.11.0\",\n\t\"Time\": \"2026-09-01T10:37:17Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/ebitengine/purego@v0.11.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/ebitengine/purego/@v/v0.11.0.mod\",\n\t\"GoVersion\": \"1.25.0\",\n\t\"Sum\": \"h1:jhp/D+Nyv7UUW8HAcmcjt2N2rYrYi9m3SL21k0Ua/NI=\",\n\t\"GoModSum\": \"h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=\"\n}\n{\n\t\"Path\": \"github.com/erikgeiser/coninput\",\n\t\"Version\": \"v0.0.0-20211004153227-1c3628e74d0f\",\n\t\"Time\": \"2021-10-04T15:32:27Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/erikgeiser/coninput@v0.0.0-20211004153227-1c3628e74d0f\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/erikgeiser/coninput/@v/v0.0.0-20211004153227-1c3628e74d0f.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:Y/CXytFA4m6baUTXGLOoWe4PQhGxaX0KpnayAqC48p4=\",\n\t\"GoModSum\": \"h1:vw97MGsxSvLiUE2X8qFplwetxpGLQrlU1Q9AUEIzCaM=\"\n}\n{\n\t\"Path\": \"github.com/fatih/structs\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2018-09-14T09:55:22Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/fatih/structs@v1.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/fatih/structs/@v/v1.1.0.mod\",\n\t\"Sum\": \"h1:Q7juDM0QtcnhCpeyLGQKyg4TOIghuNXrkL32pHAUMxo=\",\n\t\"GoModSum\": \"h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=\"\n}\n{\n\t\"Path\": \"github.com/fsnotify/fsnotify\",\n\t\"Version\": \"v1.9.0\",\n\t\"Time\": \"2025-04-04T15:13:49Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/fsnotify/fsnotify@v1.9.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/fsnotify/fsnotify/@v/v1.9.0.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=\",\n\t\"GoModSum\": \"h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=\"\n}\n{\n\t\"Path\": \"github.com/gen2brain/malgo\",\n\t\"Version\": \"v0.11.24\",\n\t\"Time\": \"2025-09-19T14:19:12Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gen2brain/malgo@v0.11.24\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gen2brain/malgo/@v/v0.11.24.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:hHcIJVfzWcEDHFdPl5Dl/CUSOjzOleY0zzAV8Kx+imE=\",\n\t\"GoModSum\": \"h1:f9TtuN7DVrXMiV/yIceMeWpvanyVzJQMlBecJFVMxww=\"\n}\n{\n\t\"Path\": \"github.com/go-json-experiment/json\",\n\t\"Version\": \"v0.0.0-20260623181947-01eb4420fa68\",\n\t\"Time\": \"2026-06-23T18:19:47Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/go-json-experiment/json@v0.0.0-20260623181947-01eb4420fa68\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/go-json-experiment/json/@v/v0.0.0-20260623181947-01eb4420fa68.mod\",\n\t\"GoVersion\": \"1.26\",\n\t\"Sum\": \"h1:KZaTBSyshWX3MP5jukJcNSuXDQTO+rNpt0J564dX/eg=\",\n\t\"GoModSum\": \"h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=\"\n}\n{\n\t\"Path\": \"github.com/go-viper/mapstructure/v2\",\n\t\"Version\": \"v2.4.0\",\n\t\"Time\": \"2025-07-15T08:59:08Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/go-viper/mapstructure/v2@v2.4.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/go-viper/mapstructure/v2/@v/v2.4.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:EBsztssimR/CONLSZZ04E8qAkxNYq4Qp9LvH92wZUgs=\",\n\t\"GoModSum\": \"h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=\"\n}\n{\n\t\"Path\": \"github.com/gobwas/httphead\",\n\t\"Version\": \"v0.1.0\",\n\t\"Time\": \"2020-12-08T10:25:04Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gobwas/httphead@v0.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gobwas/httphead/@v/v0.1.0.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU=\",\n\t\"GoModSum\": \"h1:O/RXo79gxV8G+RqlR/otEwx4Q36zl9rqC5u12GKvMCM=\"\n}\n{\n\t\"Path\": \"github.com/gobwas/pool\",\n\t\"Version\": \"v0.2.1\",\n\t\"Time\": \"2019-04-10T18:43:06Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gobwas/pool@v0.2.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gobwas/pool/@v/v0.2.1.mod\",\n\t\"Sum\": \"h1:xfeeEhW7pwmX8nuLVlqbzVc7udMDrwetjEv+TZIz1og=\",\n\t\"GoModSum\": \"h1:q8bcK0KcYlCgd9e7WYLm9LpyS+YeLd8JVDW6WezmKEw=\"\n}\n{\n\t\"Path\": \"github.com/gobwas/ws\",\n\t\"Version\": \"v1.4.0\",\n\t\"Time\": \"2024-05-03T09:12:44Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gobwas/ws@v1.4.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gobwas/ws/@v/v1.4.0.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:CTaoG1tojrh4ucGPcoJFiAQUAsEWekEWvLy7GsVNqGs=\",\n\t\"GoModSum\": \"h1:G3gNqMNtPppf5XUz7O4shetPpcZ1VJ7zt18dlUeakrc=\"\n}\n{\n\t\"Path\": \"github.com/golang/groupcache\",\n\t\"Version\": \"v0.0.0-20210331224755-41bb18bfe9da\",\n\t\"Time\": \"2021-03-31T22:47:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/golang/groupcache@v0.0.0-20210331224755-41bb18bfe9da\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/golang/groupcache/@v/v0.0.0-20210331224755-41bb18bfe9da.mod\",\n\t\"Sum\": \"h1:oI5xCqsCo564l8iNU+DwB5epxmsaqB+rhGL0m5jtYqE=\",\n\t\"GoModSum\": \"h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=\"\n}\n{\n\t\"Path\": \"github.com/google/go-cmp\",\n\t\"Version\": \"v0.6.0\",\n\t\"Time\": \"2023-08-31T17:32:40Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/go-cmp@v0.6.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/go-cmp/@v/v0.6.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=\",\n\t\"GoModSum\": \"h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=\"\n}\n{\n\t\"Path\": \"github.com/google/s2a-go\",\n\t\"Version\": \"v0.1.8\",\n\t\"Time\": \"2024-07-21T04:39:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/s2a-go@v0.1.8\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/s2a-go/@v/v0.1.8.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:zZDs9gcbt9ZPLV0ndSyQk6Kacx2g/X+SKYovpnz3SMM=\",\n\t\"GoModSum\": \"h1:6iNWHTpQ+nfNRN5E00MSdfDwVesa8hhS32PhPO8deJA=\"\n}\n{\n\t\"Path\": \"github.com/google/subcommands\",\n\t\"Version\": \"v1.2.0\",\n\t\"Time\": \"2019-09-04T16:18:56Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/subcommands@v1.2.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/subcommands/@v/v1.2.0.mod\",\n\t\"Sum\": \"h1:vWQspBTo2nEqTUFita5/KeEWlUL8kQObDFbub/EN9oE=\",\n\t\"GoModSum\": \"h1:ZjhPrFU+Olkh9WazFPsl27BQ4UPiG37m3yTrtFlrHVk=\"\n}\n{\n\t\"Path\": \"github.com/google/uuid\",\n\t\"Version\": \"v1.6.0\",\n\t\"Time\": \"2024-01-23T18:54:04Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/uuid@v1.6.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/uuid/@v/v1.6.0.mod\",\n\t\"Sum\": \"h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=\",\n\t\"GoModSum\": \"h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=\"\n}\n{\n\t\"Path\": \"github.com/google/wire\",\n\t\"Version\": \"v0.7.0\",\n\t\"Time\": \"2025-08-22T13:52:05Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/wire@v0.7.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/wire/@v/v0.7.0.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:JxUKI6+CVBgCO2WToKy/nQk0sS+amI9z9EjVmdaocj4=\",\n\t\"GoModSum\": \"h1:n6YbUQD9cPKTnHXEBN2DXlOp/mVADhVErcMFb0v3J18=\"\n}\n{\n\t\"Path\": \"github.com/googleapis/enterprise-certificate-proxy\",\n\t\"Version\": \"v0.3.4\",\n\t\"Time\": \"2024-09-09T17:25:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/googleapis/enterprise-certificate-proxy@v0.3.4\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/googleapis/enterprise-certificate-proxy/@v/v0.3.4.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:XYIDZApgAnrN1c855gTgghdIA6Stxb52D5RnLI1SLyw=\",\n\t\"GoModSum\": \"h1:YKe7cfqYXjKGpGvmSg28/fFvhNzinZQm8DGnaburhGA=\"\n}\n{\n\t\"Path\": \"github.com/gorilla/css\",\n\t\"Version\": \"v1.0.1\",\n\t\"Time\": \"2023-10-18T11:45:01Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gorilla/css@v1.0.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gorilla/css/@v/v1.0.1.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:ntNaBIghp6JmvWnxbZKANoLyuXTPZ4cAMlo6RyhlbO8=\",\n\t\"GoModSum\": \"h1:BvnYkspnSzMmwRK+b8/xgNPLiIuNZr6vbZBTPQ2A3b0=\"\n}\n{\n\t\"Path\": \"github.com/gorilla/websocket\",\n\t\"Version\": \"v1.5.3\",\n\t\"Time\": \"2024-06-14T03:18:03Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gorilla/websocket@v1.5.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gorilla/websocket/@v/v1.5.3.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=\",\n\t\"GoModSum\": \"h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=\"\n}\n{\n\t\"Path\": \"github.com/hexops/gotextdiff\",\n\t\"Version\": \"v1.0.3\",\n\t\"Time\": \"2020-12-13T06:12:29Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/hexops/gotextdiff@v1.0.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/hexops/gotextdiff/@v/v1.0.3.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=\",\n\t\"GoModSum\": \"h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=\"\n}\n{\n\t\"Path\": \"github.com/inconshreveable/mousetrap\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2022-11-27T22:01:53Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/inconshreveable/mousetrap@v1.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/inconshreveable/mousetrap/@v/v1.1.0.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=\",\n\t\"GoModSum\": \"h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/maps\",\n\t\"Version\": \"v0.1.2\",\n\t\"Time\": \"2025-03-13T04:38:41Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/maps@v0.1.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/maps/@v/v0.1.2.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:RBfmAW5CnZT+PJ1CVc1QSJKf4Xu9kxfQgYVQSu8hpbo=\",\n\t\"GoModSum\": \"h1:npD/QZY3V6ghQDdcQzl1W4ICNVTkohC8E73eI2xW4yI=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/parsers/yaml\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2025-06-26T18:46:17Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/parsers/yaml@v1.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/parsers/yaml/@v/v1.1.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:3ltfm9ljprAHt4jxgeYLlFPmUaunuCgu1yILuTXRdM4=\",\n\t\"GoModSum\": \"h1:HHmcHXUrp9cOPcuC+2wrr44GTUB0EC+PyfN3HZD9tFg=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/env\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2025-04-15T10:34:21Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/providers/env@v1.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/providers/env/@v/v1.1.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:U2VXPY0f+CsNDkvdsG8GcsnK4ah85WwWyJgef9oQMSc=\",\n\t\"GoModSum\": \"h1:QhHHHZ87h9JxJAn2czdEl6pdkNnDh/JS1Vtsyt65hTY=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/file\",\n\t\"Version\": \"v1.2.1\",\n\t\"Time\": \"2025-12-19T07:44:43Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/providers/file@v1.2.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/providers/file/@v/v1.2.1.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:bEWbtQwYrA+W2DtdBrQWyXqJaJSG3KrP3AESOJYp9wM=\",\n\t\"GoModSum\": \"h1:bp1PM5f83Q+TOUu10J/0ApLBd9uIzg+n9UgthfY+nRA=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/structs\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2025-04-15T10:34:21Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/providers/structs@v1.0.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/providers/structs/@v/v1.0.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:DznjB7NQykhqCar2LvNug3MuxEQsZ5KvfgMbio+23u4=\",\n\t\"GoModSum\": \"h1:kjo5TFtgpaZORlpoJqcbeLowM2cINodv8kX+oFAeQ1w=\"\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/v2\",\n\t\"Version\": \"v2.3.2\",\n\t\"Time\": \"2026-01-25T06:12:39Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/knadh/koanf/v2@v2.3.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/knadh/koanf/v2/@v/v2.3.2.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:Ee6tuzQYFwcZXQpc2MiVeC6qHMandf5SMUJJNoFp/c4=\",\n\t\"GoModSum\": \"h1:gRb40VRAbd4iJMYYD5IxZ6hfuopFcXBpc9bbQpZwo28=\"\n}\n{\n\t\"Path\": \"github.com/kr/pretty\",\n\t\"Version\": \"v0.2.1\",\n\t\"Time\": \"2020-07-29T04:02:43Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/kr/pretty@v0.2.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/kr/pretty/@v/v0.2.1.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:Fmg33tUaq4/8ym9TJN1x7sLJnHVwhP33CNkpYV/7rwI=\",\n\t\"GoModSum\": \"h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=\"\n}\n{\n\t\"Path\": \"github.com/kr/text\",\n\t\"Version\": \"v0.2.0\",\n\t\"Time\": \"2020-02-14T20:31:06Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/kr/text@v0.2.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/kr/text/@v/v0.2.0.mod\",\n\t\"Sum\": \"h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=\",\n\t\"GoModSum\": \"h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=\"\n}\n{\n\t\"Path\": \"github.com/kylelemons/godebug\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2019-05-05T01:16:37Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/ledongthuc/pdf\",\n\t\"Version\": \"v0.0.0-20220302134840-0c2507a12d80\",\n\t\"Time\": \"2022-03-02T13:48:40Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/ledongthuc/pdf@v0.0.0-20220302134840-0c2507a12d80\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/ledongthuc/pdf/@v/v0.0.0-20220302134840-0c2507a12d80.mod\",\n\t\"Sum\": \"h1:6Yzfa6GP0rIo/kULo2bwGEkFvCePZ3qHDDTC3/J9Swo=\",\n\t\"GoModSum\": \"h1:imJHygn/1yfhB7XSJJKlFZKl/J+dCPAknuiaGOshXAs=\"\n}\n{\n\t\"Path\": \"github.com/lucasb-eyer/go-colorful\",\n\t\"Version\": \"v1.3.0\",\n\t\"Time\": \"2025-09-08T14:15:45Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/lucasb-eyer/go-colorful@v1.3.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/lucasb-eyer/go-colorful/@v/v1.3.0.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:2/yBRLdWBZKrf7gB40FoiKfAWYQ0lqNcbuQwVHXptag=\",\n\t\"GoModSum\": \"h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=\"\n}\n{\n\t\"Path\": \"github.com/mattn/go-isatty\",\n\t\"Version\": \"v0.0.20\",\n\t\"Time\": \"2023-10-17T07:28:21Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/mattn/go-isatty@v0.0.20\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/mattn/go-isatty/@v/v0.0.20.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=\",\n\t\"GoModSum\": \"h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=\"\n}\n{\n\t\"Path\": \"github.com/mattn/go-localereader\",\n\t\"Version\": \"v0.0.1\",\n\t\"Time\": \"2022-06-17T18:06:34Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/mattn/go-localereader@v0.0.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/mattn/go-localereader/@v/v0.0.1.mod\",\n\t\"Sum\": \"h1:ygSAOl7ZXTx4RdPYinUpg6W99U8jWvWi9Ye2JC/oIi4=\",\n\t\"GoModSum\": \"h1:8fBrzywKY7BI3czFoHkuzRoWE9C+EiG4R1k4Cjx5p88=\"\n}\n{\n\t\"Path\": \"github.com/mattn/go-runewidth\",\n\t\"Version\": \"v0.0.19\",\n\t\"Time\": \"2025-09-29T13:35:08Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/mattn/go-runewidth@v0.0.19\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/mattn/go-runewidth/@v/v0.0.19.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:v++JhqYnZuu5jSKrk9RbgF5v4CGUjqRfBm05byFGLdw=\",\n\t\"GoModSum\": \"h1:XBkDxAl56ILZc9knddidhrOlY5R/pDhgLpndooCuJAs=\"\n}\n{\n\t\"Path\": \"github.com/microcosm-cc/bluemonday\",\n\t\"Version\": \"v1.0.27\",\n\t\"Time\": \"2024-07-04T13:09:59Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/microcosm-cc/bluemonday@v1.0.27\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/microcosm-cc/bluemonday/@v/v1.0.27.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwXFM08ygZfk=\",\n\t\"GoModSum\": \"h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=\"\n}\n{\n\t\"Path\": \"github.com/mitchellh/copystructure\",\n\t\"Version\": \"v1.2.0\",\n\t\"Time\": \"2021-05-05T17:08:07Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/mitchellh/copystructure@v1.2.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/mitchellh/copystructure/@v/v1.2.0.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=\",\n\t\"GoModSum\": \"h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=\"\n}\n{\n\t\"Path\": \"github.com/mitchellh/reflectwalk\",\n\t\"Version\": \"v1.0.2\",\n\t\"Time\": \"2021-05-03T23:34:11Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/mitchellh/reflectwalk@v1.0.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/mitchellh/reflectwalk/@v/v1.0.2.mod\",\n\t\"Sum\": \"h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zxSIeXaQ=\",\n\t\"GoModSum\": \"h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=\"\n}\n{\n\t\"Path\": \"github.com/muesli/ansi\",\n\t\"Version\": \"v0.0.0-20230316100256-276c6243b2f6\",\n\t\"Time\": \"2023-03-16T10:02:56Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/muesli/ansi@v0.0.0-20230316100256-276c6243b2f6\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/muesli/ansi/@v/v0.0.0-20230316100256-276c6243b2f6.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:ZK8zHtRHOkbHy6Mmr5D264iyp3TiX5OmNcI5cIARiQI=\",\n\t\"GoModSum\": \"h1:CJlz5H+gyd6CUWT45Oy4q24RdLyn7Md9Vj2/ldJBSIo=\"\n}\n{\n\t\"Path\": \"github.com/muesli/cancelreader\",\n\t\"Version\": \"v0.2.2\",\n\t\"Time\": \"2022-06-22T06:35:03Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/muesli/cancelreader@v0.2.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/muesli/cancelreader/@v/v0.2.2.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=\",\n\t\"GoModSum\": \"h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=\"\n}\n{\n\t\"Path\": \"github.com/muesli/reflow\",\n\t\"Version\": \"v0.3.0\",\n\t\"Time\": \"2021-05-17T09:53:52Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/muesli/reflow@v0.3.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/muesli/reflow/@v/v0.3.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:IFsN6K9NfGtjeggFP+68I4chLZV2yIKsXJFNZ+eWh6s=\",\n\t\"GoModSum\": \"h1:pbwTDkVPibjO2kyvBQRBxTWEEGDGq0FlB1BIKtnHY/8=\"\n}\n{\n\t\"Path\": \"github.com/muesli/termenv\",\n\t\"Version\": \"v0.16.0\",\n\t\"Time\": \"2025-02-21T13:58:54Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/muesli/termenv@v0.16.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/muesli/termenv/@v/v0.16.0.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc=\",\n\t\"GoModSum\": \"h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=\"\n}\n{\n\t\"Path\": \"github.com/onsi/ginkgo\",\n\t\"Version\": \"v1.16.5\",\n\t\"Time\": \"2021-10-11T17:27:58Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/onsi/gomega\",\n\t\"Version\": \"v1.17.0\",\n\t\"Time\": \"2021-11-07T19:22:36Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/orisano/pixelmatch\",\n\t\"Version\": \"v0.0.0-20220722002657-fb0b55479cde\",\n\t\"Time\": \"2022-07-22T00:26:57Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/orisano/pixelmatch@v0.0.0-20220722002657-fb0b55479cde\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/orisano/pixelmatch/@v/v0.0.0-20220722002657-fb0b55479cde.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:x0TT0RDC7UhAVbbWWBzr41ElhJx5tXPWkIHA2HWPRuw=\",\n\t\"GoModSum\": \"h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=\"\n}\n{\n\t\"Path\": \"github.com/pion/datachannel\",\n\t\"Version\": \"v1.6.2\",\n\t\"Time\": \"2026-06-19T17:49:00Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/datachannel@v1.6.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/datachannel/@v/v1.6.2.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:7EXQ8TH3vTouBUdRWYbcX2edSx9Yj6k5zl5P+qyxEPc=\",\n\t\"GoModSum\": \"h1:pzbdAZvyGtXbcHM1hBbsFaOTf40lZizU/dNlvVOak6E=\"\n}\n{\n\t\"Path\": \"github.com/pion/dtls/v3\",\n\t\"Version\": \"v3.1.5\",\n\t\"Time\": \"2026-07-06T02:22:52Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/dtls/v3@v3.1.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/dtls/v3/@v/v3.1.5.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:9xJtVsHwMYeSjPp5Hh1FTis4DchnQWtnOa5o+6ygqfc=\",\n\t\"GoModSum\": \"h1:gz1K4jg6c+fq86oQMH4pilpCEOEPwmEr2jY+VcF/mkU=\"\n}\n{\n\t\"Path\": \"github.com/pion/ice/v4\",\n\t\"Version\": \"v4.4.0\",\n\t\"Time\": \"2026-07-26T03:26:31Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/ice/v4@v4.4.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/ice/v4/@v/v4.4.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:wvHDDqimaC38Y7MVpD46Y63p246ChvXd87VKoLYS5b4=\",\n\t\"GoModSum\": \"h1:obAyD+J+Hzs7QA7Y8YXHp5uIn6gb7z87pKedXZkrcFU=\"\n}\n{\n\t\"Path\": \"github.com/pion/interceptor\",\n\t\"Version\": \"v0.1.47\",\n\t\"Time\": \"2026-07-24T20:04:27Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/interceptor@v0.1.47\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/interceptor/@v/v0.1.47.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:yw8t5pJ2f8t78NgU+8EmxhaqYLXS7uFCC/tAGOaSDBo=\",\n\t\"GoModSum\": \"h1:7yoRBzaIDETPC6cIN8Zj9EyGqHv1ImOpcTFPha6MuOM=\"\n}\n{\n\t\"Path\": \"github.com/pion/logging\",\n\t\"Version\": \"v0.2.4\",\n\t\"Time\": \"2025-06-22T20:07:28Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/logging@v0.2.4\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/logging/@v/v0.2.4.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:tTew+7cmQ+Mc1pTBLKH2puKsOvhm32dROumOZ655zB8=\",\n\t\"GoModSum\": \"h1:DffhXTKYdNZU+KtJ5pyQDjvOAh/GsNSyv1lbkFbe3so=\"\n}\n{\n\t\"Path\": \"github.com/pion/mdns/v2\",\n\t\"Version\": \"v2.1.0\",\n\t\"Time\": \"2025-11-16T22:46:20Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/mdns/v2@v2.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/mdns/v2/@v/v2.1.0.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:3IJ9+Xio6tWYjhN6WwuY142P/1jA0D5ERaIqawg/fOY=\",\n\t\"GoModSum\": \"h1:pcez23GdynwcfRU1977qKU0mDxSeucttSHbCSfFOd9A=\"\n}\n{\n\t\"Path\": \"github.com/pion/opus\",\n\t\"Version\": \"v0.1.1-0.20260814200708-161621adf560\",\n\t\"Time\": \"2026-08-14T20:07:08Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/opus@v0.1.1-0.20260814200708-161621adf560\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/opus/@v/v0.1.1-0.20260814200708-161621adf560.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:zpSIBsFsJdQtCyAFdg5XEfafam8t7lE4AEwAhqyB4WA=\",\n\t\"GoModSum\": \"h1:t5Xog2n682JnawoykACE6nKVmupFvmJvkpM7x6bTv6g=\"\n}\n{\n\t\"Path\": \"github.com/pion/randutil\",\n\t\"Version\": \"v0.1.0\",\n\t\"Time\": \"2020-07-13T14:37:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/randutil@v0.1.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/randutil/@v/v0.1.0.mod\",\n\t\"GoVersion\": \"1.14\",\n\t\"Sum\": \"h1:CFG1UdESneORglEsnimhUjf33Rwjubwj6xfiOXBa3mA=\",\n\t\"GoModSum\": \"h1:XcJrSMMbbMRhASFVOlj/5hQial/Y8oH/HVo7TBZq+j8=\"\n}\n{\n\t\"Path\": \"github.com/pion/rtcp\",\n\t\"Version\": \"v1.2.17\",\n\t\"Time\": \"2026-06-30T06:21:17Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/rtcp@v1.2.17\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/rtcp/@v/v1.2.17.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:PxiT6L79yPZKtXIsXdG1eakBl6dtBj4x+4oVEL0DlSw=\",\n\t\"GoModSum\": \"h1:7kBpuBJaWwax4hzc/pgexY8vkOpvh8atgYDbaKZq0iU=\"\n}\n{\n\t\"Path\": \"github.com/pion/rtp\",\n\t\"Version\": \"v1.10.5\",\n\t\"Time\": \"2026-07-22T14:09:45Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/rtp@v1.10.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/rtp/@v/v1.10.5.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:ip0HhO/wYZqQ4bKS+R99KnZh/GRCmIT0jDXikub7vlE=\",\n\t\"GoModSum\": \"h1:Au8fc6cEByy8RLTwKTQTEeQqDB/SJDxwL4mZuxYA5Pk=\"\n}\n{\n\t\"Path\": \"github.com/pion/sctp\",\n\t\"Version\": \"v1.11.1\",\n\t\"Time\": \"2026-07-27T02:49:17Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/sctp@v1.11.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/sctp/@v/v1.11.1.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:O4dIFyURw1KTST7w+gtD4gLeYXkhPa0xXLHMMoe/OSA=\",\n\t\"GoModSum\": \"h1:7KFmTwLcoYgJs/Z+99nJvsWL0qDpuyloSI0RbAqlrz0=\"\n}\n{\n\t\"Path\": \"github.com/pion/sdp/v3\",\n\t\"Version\": \"v3.0.19\",\n\t\"Time\": \"2026-06-19T21:23:04Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/sdp/v3@v3.0.19\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/sdp/v3/@v/v3.0.19.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:1VMKs3gIkTQV5M3hNKfTAPrDXSNrYtOlmOD8+mSZUGQ=\",\n\t\"GoModSum\": \"h1:dE5WOSlzXrtiE/iuZqe9n+AcEbOjtAd3k5m5NtlV/qU=\"\n}\n{\n\t\"Path\": \"github.com/pion/srtp/v3\",\n\t\"Version\": \"v3.0.12\",\n\t\"Time\": \"2026-06-13T12:55:50Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/srtp/v3@v3.0.12\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/srtp/v3/@v/v3.0.12.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:U7V17bckl7sI4mb3sepiojByDuBY0wNCqQE+6IlQBbc=\",\n\t\"GoModSum\": \"h1:EeZOi/sd6glM1EXapg051gdNWO9yWT1YSsgQ4SlJkns=\"\n}\n{\n\t\"Path\": \"github.com/pion/stun/v3\",\n\t\"Version\": \"v3.1.6\",\n\t\"Time\": \"2026-06-18T06:50:56Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/stun/v3@v3.1.6\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/stun/v3/@v/v3.1.6.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:WnhsD0eHCiwCfKNkVx0VJJwr2Y3eV4Ueih3KJ+dfZy8=\",\n\t\"GoModSum\": \"h1:zRUghXSQU32Lx5orJsz3uYMkIihweXb3mu5gIns02fs=\"\n}\n{\n\t\"Path\": \"github.com/pion/transport/v3\",\n\t\"Version\": \"v3.1.1\",\n\t\"Time\": \"2025-11-11T05:12:30Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/transport/v3@v3.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/transport/v3/@v/v3.1.1.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:Tr684+fnnKlhPceU+ICdrw6KKkTms+5qHMgw6bIkYOM=\",\n\t\"GoModSum\": \"h1:+c2eewC5WJQHiAA46fkMMzoYZSuGzA/7E2FPrOYHctQ=\"\n}\n{\n\t\"Path\": \"github.com/pion/transport/v4\",\n\t\"Version\": \"v4.0.2\",\n\t\"Time\": \"2026-05-28T08:30:14Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/transport/v4@v4.0.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/transport/v4/@v/v4.0.2.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:ifYlPqNwsy6aKQ9y8yzxXlHae5431ZrH2avkD/Rn6Tk=\",\n\t\"GoModSum\": \"h1:06hFI+jCFcok2X2MekVufNZ/uzNZXivGBPfviSVcjgM=\"\n}\n{\n\t\"Path\": \"github.com/pion/turn/v5\",\n\t\"Version\": \"v5.0.12\",\n\t\"Time\": \"2026-07-01T21:08:50Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/turn/v5@v5.0.12\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/turn/v5/@v/v5.0.12.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:6+b69ivQQXSlyfkp2AKripqD2k3W32qXK8QzCzpJWPI=\",\n\t\"GoModSum\": \"h1:CQACsRDJtjQ+6RSrGHrS2PCIerLwbW3uqXRqOvtjAFg=\"\n}\n{\n\t\"Path\": \"github.com/pion/webrtc/v4\",\n\t\"Version\": \"v4.2.18\",\n\t\"Time\": \"2026-07-27T09:13:32Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/webrtc/v4@v4.2.18\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/webrtc/v4/@v/v4.2.18.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:smA/3g6Gy4RohM0VIZ5KKY/12TQbxv3XFgpUMyb2EUI=\",\n\t\"GoModSum\": \"h1:vmzi6s+rvhoIuT94DPqivB+0xJXs9rG4QRD+4MgBtlY=\"\n}\n{\n\t\"Path\": \"github.com/pmezard/go-difflib\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2016-01-10T10:55:54Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pmezard/go-difflib@v1.0.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pmezard/go-difflib/@v/v1.0.0.mod\",\n\t\"Sum\": \"h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=\",\n\t\"GoModSum\": \"h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-agent-loop\",\n\t\"Version\": \"v0.0.3\",\n\t\"Replace\": {\n\t\t\"Path\": \"../go-agent-loop\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-agent-runtime\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../go-agent-runtime\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-audio\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../go-audio\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-device-gateway\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../go-device-gateway\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-llm-gateway\",\n\t\"Version\": \"v0.0.5-0.20260904005433-1a695c9c6934\",\n\t\"Replace\": {\n\t\t\"Path\": \"../go-llm-gateway\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/rivo/uniseg\",\n\t\"Version\": \"v0.4.7\",\n\t\"Time\": \"2024-02-08T13:16:15Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/rivo/uniseg@v0.4.7\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/rivo/uniseg/@v/v0.4.7.mod\",\n\t\"GoVersion\": \"1.18\",\n\t\"Sum\": \"h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=\",\n\t\"GoModSum\": \"h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=\"\n}\n{\n\t\"Path\": \"github.com/russross/blackfriday/v2\",\n\t\"Version\": \"v2.1.0\",\n\t\"Time\": \"2020-10-27T03:47:54Z\",\n\t\"Indirect\": true,\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/russross/blackfriday/v2/@v/v2.1.0.mod\",\n\t\"GoModSum\": \"h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=\"\n}\n{\n\t\"Path\": \"github.com/sahilm/fuzzy\",\n\t\"Version\": \"v0.1.1\",\n\t\"Time\": \"2023-05-30T13:39:25Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/sclevine/agouti\",\n\t\"Version\": \"v3.0.0+incompatible\",\n\t\"Time\": \"2018-03-04T02:55:30Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/spf13/cobra\",\n\t\"Version\": \"v1.9.1\",\n\t\"Time\": \"2025-02-16T23:42:04Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/spf13/cobra@v1.9.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/spf13/cobra/@v/v1.9.1.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:CXSaggrXdbHK9CF+8ywj8Amf7PBRmPCOJugH954Nnlo=\",\n\t\"GoModSum\": \"h1:nDyEzZ8ogv936Cinf6g1RU9MRY64Ir93oCnqb9wxYW0=\"\n}\n{\n\t\"Path\": \"github.com/spf13/pflag\",\n\t\"Version\": \"v1.0.6\",\n\t\"Time\": \"2025-01-09T00:37:54Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/spf13/pflag@v1.0.6\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/spf13/pflag/@v/v1.0.6.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:jFzHGLGAlb3ruxLB8MhbI6A8+AQX/2eW4qeyNZXNp2o=\",\n\t\"GoModSum\": \"h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=\"\n}\n{\n\t\"Path\": \"github.com/stretchr/objx\",\n\t\"Version\": \"v0.5.2\",\n\t\"Time\": \"2024-02-29T09:57:51Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/stretchr/testify\",\n\t\"Version\": \"v1.11.1\",\n\t\"Time\": \"2025-08-27T10:46:31Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/stretchr/testify@v1.11.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/stretchr/testify/@v/v1.11.1.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=\",\n\t\"GoModSum\": \"h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/gjson\",\n\t\"Version\": \"v1.18.0\",\n\t\"Time\": \"2024-10-02T03:45:20Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/gjson@v1.18.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/gjson/@v/v1.18.0.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=\",\n\t\"GoModSum\": \"h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/match\",\n\t\"Version\": \"v1.1.1\",\n\t\"Time\": \"2021-10-08T14:36:13Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/match@v1.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/match/@v/v1.1.1.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=\",\n\t\"GoModSum\": \"h1:eRSPERbgtNPcGhD8UCthc6PmLEQXEWd3PRB5JTxsfmM=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/pretty\",\n\t\"Version\": \"v1.2.1\",\n\t\"Time\": \"2022-10-01T20:21:24Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/pretty@v1.2.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/pretty/@v/v1.2.1.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:qjsOFOWWQl+N3RsoF5/ssm1pHmJJwhjlSbZ51I6wMl4=\",\n\t\"GoModSum\": \"h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/sjson\",\n\t\"Version\": \"v1.2.5\",\n\t\"Time\": \"2022-08-05T01:15:59Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/sjson@v1.2.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/sjson/@v/v1.2.5.mod\",\n\t\"GoVersion\": \"1.14\",\n\t\"Sum\": \"h1:kLy8mja+1c9jlljvWTlSazM7cKDRfJuR/bOJhcY5NcY=\",\n\t\"GoModSum\": \"h1:Fvgq9kS/6ociJEDnK0Fk1cpYF4FIW6ZF7LAe+6jwd28=\"\n}\n{\n\t\"Path\": \"github.com/wlynxg/anet\",\n\t\"Version\": \"v0.0.5\",\n\t\"Time\": \"2024-10-04T14:22:25Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/wlynxg/anet@v0.0.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/wlynxg/anet/@v/v0.0.5.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:J3VJGi1gvo0JwZ/P1/Yc/8p63SoW98B5dHkYDmpgvvU=\",\n\t\"GoModSum\": \"h1:eay5PRQr7fIVAMbTbchTnO9gG65Hg/uYGdc7mguHxoA=\"\n}\n{\n\t\"Path\": \"github.com/xo/terminfo\",\n\t\"Version\": \"v0.0.0-20220910002029-abceb7e1c41e\",\n\t\"Time\": \"2022-09-10T00:20:29Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/xo/terminfo/@v/v0.0.0-20220910002029-abceb7e1c41e.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=\",\n\t\"GoModSum\": \"h1:RbqR21r5mrJuqunuUZ/Dhy/avygyECGrLceyNeo4LiM=\"\n}\n{\n\t\"Path\": \"github.com/yuin/goldmark\",\n\t\"Version\": \"v1.7.8\",\n\t\"Time\": \"2024-10-16T11:47:35Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/yuin/goldmark@v1.7.8\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/yuin/goldmark/@v/v1.7.8.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:iERMLn0/QJeHFhxSt3p6PeN9mGnvIKSpG9YYorDMnic=\",\n\t\"GoModSum\": \"h1:uzxRWxtg69N339t3louHJ7+O03ezfj6PlliRlaOzY1E=\"\n}\n{\n\t\"Path\": \"github.com/yuin/goldmark-emoji\",\n\t\"Version\": \"v1.0.5\",\n\t\"Time\": \"2025-02-24T08:59:40Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/yuin/goldmark-emoji@v1.0.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/yuin/goldmark-emoji/@v/v1.0.5.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:EMVWyCGPlXJfUXBXpuMu+ii3TIaxbVBnEX9uaDC4cIk=\",\n\t\"GoModSum\": \"h1:tTkZEbwu5wkPmgTcitqddVxY9osFZiavD+r4AzQrh1U=\"\n}\n{\n\t\"Path\": \"go.opencensus.io\",\n\t\"Version\": \"v0.24.0\",\n\t\"Time\": \"2022-11-03T20:13:50Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.opencensus.io@v0.24.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.opencensus.io/@v/v0.24.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:y73uSU6J157QMP2kn2r30vwW1A2W2WFwSCGnAVxeaD0=\",\n\t\"GoModSum\": \"h1:vNK8G9p7aAivkbmorf4v+7Hgx+Zs0yY+0fOtgBfjQKo=\"\n}\n{\n\t\"Path\": \"go.uber.org/goleak\",\n\t\"Version\": \"v1.3.0\",\n\t\"Time\": \"2023-10-24T16:28:03Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.uber.org/goleak@v1.3.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.uber.org/goleak/@v/v1.3.0.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=\",\n\t\"GoModSum\": \"h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=\"\n}\n{\n\t\"Path\": \"go.uber.org/multierr\",\n\t\"Version\": \"v1.10.0\",\n\t\"Time\": \"2023-03-08T14:40:37Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.uber.org/multierr@v1.10.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.uber.org/multierr/@v/v1.10.0.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:S0h4aNzvfcFsC3dRF1jLoaov7oRaKqRGC/pUEJ2yvPQ=\",\n\t\"GoModSum\": \"h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=\"\n}\n{\n\t\"Path\": \"go.uber.org/zap\",\n\t\"Version\": \"v1.27.1\",\n\t\"Time\": \"2025-11-19T21:20:44Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.uber.org/zap@v1.27.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.uber.org/zap/@v/v1.27.1.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:08RqriUEv8+ArZRYSTXy1LeBScaMpVSTBhCeaZYfMYc=\",\n\t\"GoModSum\": \"h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=\"\n}\n{\n\t\"Path\": \"go.yaml.in/yaml/v3\",\n\t\"Version\": \"v3.0.3\",\n\t\"Time\": \"2025-06-02T16:38:00Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.yaml.in/yaml/v3@v3.0.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.yaml.in/yaml/v3/@v/v3.0.3.mod\",\n\t\"GoVersion\": \"1.22\",\n\t\"Sum\": \"h1:bXOww4E/J3f66rav3pX3m8w6jDE4knZjGOw8b5Y6iNE=\",\n\t\"GoModSum\": \"h1:tBHosrYAkRZjRAOREWbDnBXUf08JOwYq++0QNwQiWzI=\"\n}\n{\n\t\"Path\": \"golang.org/x/crypto\",\n\t\"Version\": \"v0.48.0\",\n\t\"Time\": \"2026-02-09T16:37:10Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/crypto@v0.48.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/crypto/@v/v0.48.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:/VRzVqiRSggnhY7gNRxPauEQ5Drw9haKdM0jqfcCFts=\",\n\t\"GoModSum\": \"h1:r0kV5h3qnFPlQnBSrULhlsRfryS2pmewsg+XfMgkVos=\"\n}\n{\n\t\"Path\": \"golang.org/x/exp\",\n\t\"Version\": \"v0.0.0-20231006140011-7918f672742d\",\n\t\"Time\": \"2023-10-06T14:00:11Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/exp@v0.0.0-20231006140011-7918f672742d\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/exp/@v/v0.0.0-20231006140011-7918f672742d.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:jtJma62tbqLibJ5sFQz8bKtEM8rJBtfilJ2qTU199MI=\",\n\t\"GoModSum\": \"h1:ldy0pHrwJyGW56pPQzzkH36rKxoZW1tw7ZJpeKx+hdo=\"\n}\n{\n\t\"Path\": \"golang.org/x/image\",\n\t\"Version\": \"v0.36.0\",\n\t\"Time\": \"2026-02-09T16:35:41Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/image@v0.36.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/image/@v/v0.36.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:Iknbfm1afbgtwPTmHnS2gTM/6PPZfH+z2EFuOkSbqwc=\",\n\t\"GoModSum\": \"h1:YsWD2TyyGKiIX1kZlu9QfKIsQ4nAAK9bdgdrIsE7xy4=\"\n}\n{\n\t\"Path\": \"golang.org/x/mod\",\n\t\"Version\": \"v0.32.0\",\n\t\"Time\": \"2026-01-09T16:07:51Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/mod@v0.32.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/mod/@v/v0.32.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:9F4d3PHLljb6x//jOyokMv3eX+YDeepZSEo3mFJy93c=\",\n\t\"GoModSum\": \"h1:SgipZ/3h2Ci89DlEtEXWUk/HteuRin+HHhN+WbNhguU=\"\n}\n{\n\t\"Path\": \"golang.org/x/net\",\n\t\"Version\": \"v0.50.0\",\n\t\"Time\": \"2026-02-09T17:11:27Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/net@v0.50.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/net/@v/v0.50.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:ucWh9eiCGyDR3vtzso0WMQinm2Dnt8cFMuQa9K33J60=\",\n\t\"GoModSum\": \"h1:UgoSli3F/pBgdJBHCTc+tp3gmrU4XswgGRgtnwWTfyM=\"\n}\n{\n\t\"Path\": \"golang.org/x/sync\",\n\t\"Version\": \"v0.19.0\",\n\t\"Time\": \"2025-12-04T00:24:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/sync@v0.19.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/sync/@v/v0.19.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:vV+1eWNmZ5geRlYjzm2adRgW2/mcpevXNg50YZtPCE4=\",\n\t\"GoModSum\": \"h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=\"\n}\n{\n\t\"Path\": \"golang.org/x/sys\",\n\t\"Version\": \"v0.47.0\",\n\t\"Time\": \"2026-06-30T17:07:31Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/sys@v0.47.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/sys/@v/v0.47.0.mod\",\n\t\"GoVersion\": \"1.25.0\",\n\t\"Sum\": \"h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=\",\n\t\"GoModSum\": \"h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=\"\n}\n{\n\t\"Path\": \"golang.org/x/term\",\n\t\"Version\": \"v0.40.0\",\n\t\"Time\": \"2026-02-09T16:13:12Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/term@v0.40.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/term/@v/v0.40.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:36e4zGLqU4yhjlmxEaagx2KuYbJq3EwY8K943ZsHcvg=\",\n\t\"GoModSum\": \"h1:w2P8uVp06p2iyKKuvXIm7N/y0UCRt3UfJTfZ7oOpglM=\"\n}\n{\n\t\"Path\": \"golang.org/x/text\",\n\t\"Version\": \"v0.34.0\",\n\t\"Time\": \"2026-02-09T16:14:29Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/text@v0.34.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/text/@v/v0.34.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:oL/Qq0Kdaqxa1KbNeMKwQq0reLCCaFtqu2eNuSeNHbk=\",\n\t\"GoModSum\": \"h1:homfLqTYRFyVYemLBFl5GgL/DWEiH5wcsQ5gSh1yziA=\"\n}\n{\n\t\"Path\": \"golang.org/x/time\",\n\t\"Version\": \"v0.14.0\",\n\t\"Time\": \"2025-09-16T23:29:52Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/time@v0.14.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/time/@v/v0.14.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:MRx4UaLrDotUKUdCIqzPC48t1Y9hANFKIRpNx+Te8PI=\",\n\t\"GoModSum\": \"h1:eL/Oa2bBBK0TkX57Fyni+NgnyQQN4LitPmob2Hjnqw4=\"\n}\n{\n\t\"Path\": \"golang.org/x/tools\",\n\t\"Version\": \"v0.41.0\",\n\t\"Time\": \"2026-01-12T17:22:29Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/tools@v0.41.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/tools/@v/v0.41.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:a9b8iMweWG+S0OBnlU36rzLp20z1Rp10w+IY2czHTQc=\",\n\t\"GoModSum\": \"h1:XSY6eDqxVNiYgezAVqqCeihT4j1U2CCsqvH3WhQpnlg=\"\n}\n{\n\t\"Path\": \"google.golang.org/genai\",\n\t\"Version\": \"v1.48.0\",\n\t\"Time\": \"2026-02-26T00:25:13Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/genai@v1.48.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/genai/@v/v1.48.0.mod\",\n\t\"GoVersion\": \"1.24\",\n\t\"Sum\": \"h1:1vb15G291wAjJJueisMDpUhssljhEdJU2t5qTidrVPs=\",\n\t\"GoModSum\": \"h1:A3kkl0nyBjyFlNjgxIwKq70julKbIxpSxqKO5gw/gmk=\"\n}\n{\n\t\"Path\": \"google.golang.org/genproto/googleapis/rpc\",\n\t\"Version\": \"v0.0.0-20240903143218-8af14fe29dc1\",\n\t\"Time\": \"2024-09-03T14:32:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/genproto/googleapis/rpc@v0.0.0-20240903143218-8af14fe29dc1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/genproto/googleapis/rpc/@v/v0.0.0-20240903143218-8af14fe29dc1.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ=\",\n\t\"GoModSum\": \"h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=\"\n}\n{\n\t\"Path\": \"google.golang.org/grpc\",\n\t\"Version\": \"v1.66.2\",\n\t\"Time\": \"2024-09-11T18:36:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/grpc@v1.66.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/grpc/@v/v1.66.2.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:3QdXkuq3Bkh7w+ywLdLvM56cmGvQHUMZpiCzt6Rqaoo=\",\n\t\"GoModSum\": \"h1:s3/l6xSSCURdVfAnL+TqCNMyTDAGN6+lZeVxnZR128Y=\"\n}\n{\n\t\"Path\": \"google.golang.org/protobuf\",\n\t\"Version\": \"v1.34.2\",\n\t\"Time\": \"2024-06-11T07:18:36Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/protobuf@v1.34.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/protobuf/@v/v1.34.2.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:6xV6lTsCfpGD21XK49h7MhtcApnLqkfYgPcdHftf6hg=\",\n\t\"GoModSum\": \"h1:qYOHts0dSfpeUzUFpOMr/WGzszTmLH+DiWniOlNbLDw=\"\n}\n{\n\t\"Path\": \"gopkg.in/check.v1\",\n\t\"Version\": \"v1.0.0-20190902080502-41f04d3bba15\",\n\t\"Time\": \"2019-09-02T08:05:02Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/gopkg.in/check.v1@v1.0.0-20190902080502-41f04d3bba15\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/gopkg.in/check.v1/@v/v1.0.0-20190902080502-41f04d3bba15.mod\",\n\t\"Sum\": \"h1:YR8cESwS4TdDjEe65xsg0ogRM/Nc3DYOhEAlW+xobZo=\",\n\t\"GoModSum\": \"h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=\"\n}\n{\n\t\"Path\": \"gopkg.in/yaml.v3\",\n\t\"Version\": \"v3.0.1\",\n\t\"Time\": \"2022-05-27T08:35:30Z\",\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/gopkg.in/yaml.v3/@v/v3.0.1.mod\",\n\t\"Sum\": \"h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=\",\n\t\"GoModSum\": \"h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=\"\n}\n"
+    },
+    "consumer": {
+      "sha256": "1e01ef8d383862de5364cc040dfb0982216e12aff7ec3464d45a595f49ac8596",
+      "stdout": "{\n\t\"Path\": \"example.com/audio-runtime-c41-instruction-consumer\",\n\t\"Main\": true,\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"cloud.google.com/go\",\n\t\"Version\": \"v0.116.0\",\n\t\"Time\": \"2024-10-09T14:40:23Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go@v0.116.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/@v/v0.116.0.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:B3fRrSDkLRt5qSHWe40ERJvhvnQwdZiHu0bJOpldweE=\",\n\t\"GoModSum\": \"h1:cEPSRWPzZEswwdr9BxE6ChEn01dWlTaF05LiC2Xs70U=\"\n}\n{\n\t\"Path\": \"cloud.google.com/go/auth\",\n\t\"Version\": \"v0.9.3\",\n\t\"Time\": \"2024-09-03T17:54:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go/auth@v0.9.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/auth/@v/v0.9.3.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:VOEUIAADkkLtyfr3BLa3R8Ed/j6w1jTBmARx+wb5w5U=\",\n\t\"GoModSum\": \"h1:7z6VY+7h3KUdRov5F1i8NDP5ZzWKYmEPO842BgCsmTk=\"\n}\n{\n\t\"Path\": \"cloud.google.com/go/compute/metadata\",\n\t\"Version\": \"v0.5.0\",\n\t\"Time\": \"2024-07-10T17:10:24Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/cloud.google.com/go/compute/metadata@v0.5.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/cloud.google.com/go/compute/metadata/@v/v0.5.0.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:Zr0eK8JbFv6+Wi4ilXAR8FJ3wyNdpxHKJNPos6LTZOY=\",\n\t\"GoModSum\": \"h1:aHnloV2TPI38yx4s9+wAZhHykWvVCfu7hQbF+9CWoiY=\"\n}\n{\n\t\"Path\": \"github.com/alecthomas/chroma/v2\",\n\t\"Version\": \"v2.14.0\",\n\t\"Time\": \"2024-04-28T09:32:07Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/anthropics/anthropic-sdk-go\",\n\t\"Version\": \"v1.26.0\",\n\t\"Time\": \"2026-02-19T22:43:49Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/anthropics/anthropic-sdk-go@v1.26.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/anthropics/anthropic-sdk-go/@v/v1.26.0.mod\",\n\t\"GoVersion\": \"1.23.0\",\n\t\"Sum\": \"h1:oUTzFaUpAevfuELAP1sjL6CQJ9HHAfT7CoSYSac11PY=\",\n\t\"GoModSum\": \"h1:qUKmaW+uuPB64iy1l+4kOSvaLqPXnHTTBKH6RVZ7q5Q=\"\n}\n{\n\t\"Path\": \"github.com/atotto/clipboard\",\n\t\"Version\": \"v0.1.4\",\n\t\"Time\": \"2021-02-24T14:02:39Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/aymanbagabas/go-osc52/v2\",\n\t\"Version\": \"v2.0.1\",\n\t\"Time\": \"2023-03-06T14:54:10Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/aymerick/douceur\",\n\t\"Version\": \"v0.2.0\",\n\t\"Time\": \"2015-08-27T15:03:55Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/bubbles\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2026-02-09T11:18:24Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/bubbletea\",\n\t\"Version\": \"v1.3.10\",\n\t\"Time\": \"2025-09-17T20:11:15Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/colorprofile\",\n\t\"Version\": \"v0.4.1\",\n\t\"Time\": \"2025-12-11T19:41:31Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/glamour\",\n\t\"Version\": \"v0.10.0\",\n\t\"Time\": \"2025-04-16T19:47:49Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/lipgloss\",\n\t\"Version\": \"v1.1.1-0.20250404203927-76690c660834\",\n\t\"Time\": \"2025-04-04T20:39:27Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/ansi\",\n\t\"Version\": \"v0.11.6\",\n\t\"Time\": \"2026-02-04T11:15:55Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/cellbuf\",\n\t\"Version\": \"v0.0.15\",\n\t\"Time\": \"2026-02-03T06:58:41Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/exp/slice\",\n\t\"Version\": \"v0.0.0-20250327172914-2fdc97757edf\",\n\t\"Time\": \"2025-03-27T17:29:14Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/charmbracelet/x/term\",\n\t\"Version\": \"v0.2.2\",\n\t\"Time\": \"2025-10-31T17:24:06Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/chromedp/cdproto\",\n\t\"Version\": \"v0.0.0-20260714215040-dc233986426f\",\n\t\"Time\": \"2026-07-14T21:50:40Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/chromedp/chromedp\",\n\t\"Version\": \"v0.16.0\",\n\t\"Time\": \"2026-07-14T21:56:16Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/chromedp/sysutil\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2024-10-18T01:02:09Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/clipperhouse/displaywidth\",\n\t\"Version\": \"v0.9.0\",\n\t\"Time\": \"2026-02-01T17:18:37Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/clipperhouse/stringish\",\n\t\"Version\": \"v0.1.1\",\n\t\"Time\": \"2025-10-14T18:27:55Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/clipperhouse/uax29/v2\",\n\t\"Version\": \"v2.5.0\",\n\t\"Time\": \"2026-02-01T02:35:46Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/davecgh/go-spew\",\n\t\"Version\": \"v1.1.1\",\n\t\"Time\": \"2018-02-21T23:26:28Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/davecgh/go-spew@v1.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/davecgh/go-spew/@v/v1.1.1.mod\",\n\t\"Sum\": \"h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=\",\n\t\"GoModSum\": \"h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=\"\n}\n{\n\t\"Path\": \"github.com/dlclark/regexp2\",\n\t\"Version\": \"v1.11.0\",\n\t\"Time\": \"2024-02-24T02:28:33Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/ebitengine/purego\",\n\t\"Version\": \"v0.11.0\",\n\t\"Time\": \"2026-09-01T10:37:17Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/ebitengine/purego@v0.11.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/ebitengine/purego/@v/v0.11.0.mod\",\n\t\"GoVersion\": \"1.25.0\",\n\t\"Sum\": \"h1:jhp/D+Nyv7UUW8HAcmcjt2N2rYrYi9m3SL21k0Ua/NI=\",\n\t\"GoModSum\": \"h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=\"\n}\n{\n\t\"Path\": \"github.com/erikgeiser/coninput\",\n\t\"Version\": \"v0.0.0-20211004153227-1c3628e74d0f\",\n\t\"Time\": \"2021-10-04T15:32:27Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/fatih/structs\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2018-09-14T09:55:22Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/fsnotify/fsnotify\",\n\t\"Version\": \"v1.9.0\",\n\t\"Time\": \"2025-04-04T15:13:49Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/gen2brain/malgo\",\n\t\"Version\": \"v0.11.24\",\n\t\"Time\": \"2025-09-19T14:19:12Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gen2brain/malgo@v0.11.24\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gen2brain/malgo/@v/v0.11.24.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:hHcIJVfzWcEDHFdPl5Dl/CUSOjzOleY0zzAV8Kx+imE=\",\n\t\"GoModSum\": \"h1:f9TtuN7DVrXMiV/yIceMeWpvanyVzJQMlBecJFVMxww=\"\n}\n{\n\t\"Path\": \"github.com/go-json-experiment/json\",\n\t\"Version\": \"v0.0.0-20260623181947-01eb4420fa68\",\n\t\"Time\": \"2026-06-23T18:19:47Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/go-viper/mapstructure/v2\",\n\t\"Version\": \"v2.4.0\",\n\t\"Time\": \"2025-07-15T08:59:08Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/gobwas/httphead\",\n\t\"Version\": \"v0.1.0\",\n\t\"Time\": \"2020-12-08T10:25:04Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/gobwas/pool\",\n\t\"Version\": \"v0.2.1\",\n\t\"Time\": \"2019-04-10T18:43:06Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/gobwas/ws\",\n\t\"Version\": \"v1.4.0\",\n\t\"Time\": \"2024-05-03T09:12:44Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/golang/groupcache\",\n\t\"Version\": \"v0.0.0-20210331224755-41bb18bfe9da\",\n\t\"Time\": \"2021-03-31T22:47:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/golang/groupcache@v0.0.0-20210331224755-41bb18bfe9da\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/golang/groupcache/@v/v0.0.0-20210331224755-41bb18bfe9da.mod\",\n\t\"Sum\": \"h1:oI5xCqsCo564l8iNU+DwB5epxmsaqB+rhGL0m5jtYqE=\",\n\t\"GoModSum\": \"h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=\"\n}\n{\n\t\"Path\": \"github.com/google/go-cmp\",\n\t\"Version\": \"v0.6.0\",\n\t\"Time\": \"2023-08-31T17:32:40Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/go-cmp@v0.6.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/go-cmp/@v/v0.6.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=\",\n\t\"GoModSum\": \"h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=\"\n}\n{\n\t\"Path\": \"github.com/google/s2a-go\",\n\t\"Version\": \"v0.1.8\",\n\t\"Time\": \"2024-07-21T04:39:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/s2a-go@v0.1.8\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/s2a-go/@v/v0.1.8.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:zZDs9gcbt9ZPLV0ndSyQk6Kacx2g/X+SKYovpnz3SMM=\",\n\t\"GoModSum\": \"h1:6iNWHTpQ+nfNRN5E00MSdfDwVesa8hhS32PhPO8deJA=\"\n}\n{\n\t\"Path\": \"github.com/google/subcommands\",\n\t\"Version\": \"v1.2.0\",\n\t\"Time\": \"2019-09-04T16:18:56Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/google/uuid\",\n\t\"Version\": \"v1.6.0\",\n\t\"Time\": \"2024-01-23T18:54:04Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/google/wire\",\n\t\"Version\": \"v0.7.0\",\n\t\"Time\": \"2025-08-22T13:52:05Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/google/wire@v0.7.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/google/wire/@v/v0.7.0.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:JxUKI6+CVBgCO2WToKy/nQk0sS+amI9z9EjVmdaocj4=\",\n\t\"GoModSum\": \"h1:n6YbUQD9cPKTnHXEBN2DXlOp/mVADhVErcMFb0v3J18=\"\n}\n{\n\t\"Path\": \"github.com/googleapis/enterprise-certificate-proxy\",\n\t\"Version\": \"v0.3.4\",\n\t\"Time\": \"2024-09-09T17:25:55Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/googleapis/enterprise-certificate-proxy@v0.3.4\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/googleapis/enterprise-certificate-proxy/@v/v0.3.4.mod\",\n\t\"GoVersion\": \"1.19\",\n\t\"Sum\": \"h1:XYIDZApgAnrN1c855gTgghdIA6Stxb52D5RnLI1SLyw=\",\n\t\"GoModSum\": \"h1:YKe7cfqYXjKGpGvmSg28/fFvhNzinZQm8DGnaburhGA=\"\n}\n{\n\t\"Path\": \"github.com/gorilla/css\",\n\t\"Version\": \"v1.0.1\",\n\t\"Time\": \"2023-10-18T11:45:01Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/gorilla/websocket\",\n\t\"Version\": \"v1.5.3\",\n\t\"Time\": \"2024-06-14T03:18:03Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/gorilla/websocket@v1.5.3\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/gorilla/websocket/@v/v1.5.3.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=\",\n\t\"GoModSum\": \"h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=\"\n}\n{\n\t\"Path\": \"github.com/inconshreveable/mousetrap\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2022-11-27T22:01:53Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/maps\",\n\t\"Version\": \"v0.1.2\",\n\t\"Time\": \"2025-03-13T04:38:41Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/parsers/yaml\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2025-06-26T18:46:17Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/env\",\n\t\"Version\": \"v1.1.0\",\n\t\"Time\": \"2025-04-15T10:34:21Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/file\",\n\t\"Version\": \"v1.2.1\",\n\t\"Time\": \"2025-12-19T07:44:43Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/providers/structs\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2025-04-15T10:34:21Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/knadh/koanf/v2\",\n\t\"Version\": \"v2.3.2\",\n\t\"Time\": \"2026-01-25T06:12:39Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/kr/pretty\",\n\t\"Version\": \"v0.2.1\",\n\t\"Time\": \"2020-07-29T04:02:43Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/kr/text\",\n\t\"Version\": \"v0.2.0\",\n\t\"Time\": \"2020-02-14T20:31:06Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/lucasb-eyer/go-colorful\",\n\t\"Version\": \"v1.3.0\",\n\t\"Time\": \"2025-09-08T14:15:45Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/mattn/go-isatty\",\n\t\"Version\": \"v0.0.20\",\n\t\"Time\": \"2023-10-17T07:28:21Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/mattn/go-localereader\",\n\t\"Version\": \"v0.0.1\",\n\t\"Time\": \"2022-06-17T18:06:34Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/mattn/go-runewidth\",\n\t\"Version\": \"v0.0.19\",\n\t\"Time\": \"2025-09-29T13:35:08Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/microcosm-cc/bluemonday\",\n\t\"Version\": \"v1.0.27\",\n\t\"Time\": \"2024-07-04T13:09:59Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/mitchellh/copystructure\",\n\t\"Version\": \"v1.2.0\",\n\t\"Time\": \"2021-05-05T17:08:07Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/mitchellh/reflectwalk\",\n\t\"Version\": \"v1.0.2\",\n\t\"Time\": \"2021-05-03T23:34:11Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/muesli/ansi\",\n\t\"Version\": \"v0.0.0-20230316100256-276c6243b2f6\",\n\t\"Time\": \"2023-03-16T10:02:56Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/muesli/cancelreader\",\n\t\"Version\": \"v0.2.2\",\n\t\"Time\": \"2022-06-22T06:35:03Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/muesli/reflow\",\n\t\"Version\": \"v0.3.0\",\n\t\"Time\": \"2021-05-17T09:53:52Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/muesli/termenv\",\n\t\"Version\": \"v0.16.0\",\n\t\"Time\": \"2025-02-21T13:58:54Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/datachannel\",\n\t\"Version\": \"v1.6.2\",\n\t\"Time\": \"2026-06-19T17:49:00Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/dtls/v3\",\n\t\"Version\": \"v3.1.5\",\n\t\"Time\": \"2026-07-06T02:22:52Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/ice/v4\",\n\t\"Version\": \"v4.4.0\",\n\t\"Time\": \"2026-07-26T03:26:31Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/interceptor\",\n\t\"Version\": \"v0.1.47\",\n\t\"Time\": \"2026-07-24T20:04:27Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/logging\",\n\t\"Version\": \"v0.2.4\",\n\t\"Time\": \"2025-06-22T20:07:28Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/mdns/v2\",\n\t\"Version\": \"v2.1.0\",\n\t\"Time\": \"2025-11-16T22:46:20Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/opus\",\n\t\"Version\": \"v0.1.1-0.20260814200708-161621adf560\",\n\t\"Time\": \"2026-08-14T20:07:08Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pion/opus@v0.1.1-0.20260814200708-161621adf560\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pion/opus/@v/v0.1.1-0.20260814200708-161621adf560.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:zpSIBsFsJdQtCyAFdg5XEfafam8t7lE4AEwAhqyB4WA=\",\n\t\"GoModSum\": \"h1:t5Xog2n682JnawoykACE6nKVmupFvmJvkpM7x6bTv6g=\"\n}\n{\n\t\"Path\": \"github.com/pion/randutil\",\n\t\"Version\": \"v0.1.0\",\n\t\"Time\": \"2020-07-13T14:37:39Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/rtcp\",\n\t\"Version\": \"v1.2.17\",\n\t\"Time\": \"2026-06-30T06:21:17Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/rtp\",\n\t\"Version\": \"v1.10.5\",\n\t\"Time\": \"2026-07-22T14:09:45Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/sctp\",\n\t\"Version\": \"v1.11.1\",\n\t\"Time\": \"2026-07-27T02:49:17Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/sdp/v3\",\n\t\"Version\": \"v3.0.19\",\n\t\"Time\": \"2026-06-19T21:23:04Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/srtp/v3\",\n\t\"Version\": \"v3.0.12\",\n\t\"Time\": \"2026-06-13T12:55:50Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/stun/v3\",\n\t\"Version\": \"v3.1.6\",\n\t\"Time\": \"2026-06-18T06:50:56Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/transport/v4\",\n\t\"Version\": \"v4.0.2\",\n\t\"Time\": \"2026-05-28T08:30:14Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/turn/v5\",\n\t\"Version\": \"v5.0.12\",\n\t\"Time\": \"2026-07-01T21:08:50Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pion/webrtc/v4\",\n\t\"Version\": \"v4.2.18\",\n\t\"Time\": \"2026-07-27T09:13:32Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/pmezard/go-difflib\",\n\t\"Version\": \"v1.0.0\",\n\t\"Time\": \"2016-01-10T10:55:54Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/pmezard/go-difflib@v1.0.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/pmezard/go-difflib/@v/v1.0.0.mod\",\n\t\"Sum\": \"h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=\",\n\t\"GoModSum\": \"h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-agent-loop\",\n\t\"Version\": \"v0.0.3\",\n\t\"Replace\": {\n\t\t\"Path\": \"../../../../../../go-agent-loop\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-loop/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-agent-runtime\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../../../../../../go-agent-runtime\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-audio\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../../../../../../go-audio\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-audio/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-device-gateway\",\n\t\"Version\": \"v0.0.0\",\n\t\"Replace\": {\n\t\t\"Path\": \"../../../../../../go-device-gateway\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-device-gateway/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/portpowered/go-agent-harness/go-llm-gateway\",\n\t\"Version\": \"v0.0.5-0.20260904005433-1a695c9c6934\",\n\t\"Replace\": {\n\t\t\"Path\": \"../../../../../../go-llm-gateway\",\n\t\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway\",\n\t\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway/go.mod\",\n\t\t\"GoVersion\": \"1.26.7\"\n\t},\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway\",\n\t\"GoMod\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-llm-gateway/go.mod\",\n\t\"GoVersion\": \"1.26.7\"\n}\n{\n\t\"Path\": \"github.com/rivo/uniseg\",\n\t\"Version\": \"v0.4.7\",\n\t\"Time\": \"2024-02-08T13:16:15Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/spf13/cobra\",\n\t\"Version\": \"v1.9.1\",\n\t\"Time\": \"2025-02-16T23:42:04Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/spf13/pflag\",\n\t\"Version\": \"v1.0.6\",\n\t\"Time\": \"2025-01-09T00:37:54Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/stretchr/testify\",\n\t\"Version\": \"v1.11.1\",\n\t\"Time\": \"2025-08-27T10:46:31Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/stretchr/testify@v1.11.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/stretchr/testify/@v/v1.11.1.mod\",\n\t\"GoVersion\": \"1.17\",\n\t\"Sum\": \"h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=\",\n\t\"GoModSum\": \"h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/gjson\",\n\t\"Version\": \"v1.18.0\",\n\t\"Time\": \"2024-10-02T03:45:20Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/gjson@v1.18.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/gjson/@v/v1.18.0.mod\",\n\t\"GoVersion\": \"1.12\",\n\t\"Sum\": \"h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=\",\n\t\"GoModSum\": \"h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/match\",\n\t\"Version\": \"v1.1.1\",\n\t\"Time\": \"2021-10-08T14:36:13Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/match@v1.1.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/match/@v/v1.1.1.mod\",\n\t\"GoVersion\": \"1.15\",\n\t\"Sum\": \"h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=\",\n\t\"GoModSum\": \"h1:eRSPERbgtNPcGhD8UCthc6PmLEQXEWd3PRB5JTxsfmM=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/pretty\",\n\t\"Version\": \"v1.2.1\",\n\t\"Time\": \"2022-10-01T20:21:24Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/pretty@v1.2.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/pretty/@v/v1.2.1.mod\",\n\t\"GoVersion\": \"1.16\",\n\t\"Sum\": \"h1:qjsOFOWWQl+N3RsoF5/ssm1pHmJJwhjlSbZ51I6wMl4=\",\n\t\"GoModSum\": \"h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=\"\n}\n{\n\t\"Path\": \"github.com/tidwall/sjson\",\n\t\"Version\": \"v1.2.5\",\n\t\"Time\": \"2022-08-05T01:15:59Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/github.com/tidwall/sjson@v1.2.5\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/github.com/tidwall/sjson/@v/v1.2.5.mod\",\n\t\"GoVersion\": \"1.14\",\n\t\"Sum\": \"h1:kLy8mja+1c9jlljvWTlSazM7cKDRfJuR/bOJhcY5NcY=\",\n\t\"GoModSum\": \"h1:Fvgq9kS/6ociJEDnK0Fk1cpYF4FIW6ZF7LAe+6jwd28=\"\n}\n{\n\t\"Path\": \"github.com/wlynxg/anet\",\n\t\"Version\": \"v0.0.5\",\n\t\"Time\": \"2024-10-04T14:22:25Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/xo/terminfo\",\n\t\"Version\": \"v0.0.0-20220910002029-abceb7e1c41e\",\n\t\"Time\": \"2022-09-10T00:20:29Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/yuin/goldmark\",\n\t\"Version\": \"v1.7.8\",\n\t\"Time\": \"2024-10-16T11:47:35Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"github.com/yuin/goldmark-emoji\",\n\t\"Version\": \"v1.0.5\",\n\t\"Time\": \"2025-02-24T08:59:40Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"go.opencensus.io\",\n\t\"Version\": \"v0.24.0\",\n\t\"Time\": \"2022-11-03T20:13:50Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/go.opencensus.io@v0.24.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/go.opencensus.io/@v/v0.24.0.mod\",\n\t\"GoVersion\": \"1.13\",\n\t\"Sum\": \"h1:y73uSU6J157QMP2kn2r30vwW1A2W2WFwSCGnAVxeaD0=\",\n\t\"GoModSum\": \"h1:vNK8G9p7aAivkbmorf4v+7Hgx+Zs0yY+0fOtgBfjQKo=\"\n}\n{\n\t\"Path\": \"go.uber.org/multierr\",\n\t\"Version\": \"v1.10.0\",\n\t\"Time\": \"2023-03-08T14:40:37Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"go.uber.org/zap\",\n\t\"Version\": \"v1.27.1\",\n\t\"Time\": \"2025-11-19T21:20:44Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"go.yaml.in/yaml/v3\",\n\t\"Version\": \"v3.0.3\",\n\t\"Time\": \"2025-06-02T16:38:00Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"golang.org/x/crypto\",\n\t\"Version\": \"v0.48.0\",\n\t\"Time\": \"2026-02-09T16:37:10Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/crypto@v0.48.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/crypto/@v/v0.48.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:/VRzVqiRSggnhY7gNRxPauEQ5Drw9haKdM0jqfcCFts=\",\n\t\"GoModSum\": \"h1:r0kV5h3qnFPlQnBSrULhlsRfryS2pmewsg+XfMgkVos=\"\n}\n{\n\t\"Path\": \"golang.org/x/image\",\n\t\"Version\": \"v0.36.0\",\n\t\"Time\": \"2026-02-09T16:35:41Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"golang.org/x/mod\",\n\t\"Version\": \"v0.20.0\",\n\t\"Time\": \"2024-07-30T14:22:55Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"golang.org/x/net\",\n\t\"Version\": \"v0.50.0\",\n\t\"Time\": \"2026-02-09T17:11:27Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/net@v0.50.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/net/@v/v0.50.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:ucWh9eiCGyDR3vtzso0WMQinm2Dnt8cFMuQa9K33J60=\",\n\t\"GoModSum\": \"h1:UgoSli3F/pBgdJBHCTc+tp3gmrU4XswgGRgtnwWTfyM=\"\n}\n{\n\t\"Path\": \"golang.org/x/sync\",\n\t\"Version\": \"v0.19.0\",\n\t\"Time\": \"2025-12-04T00:24:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/sync@v0.19.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/sync/@v/v0.19.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:vV+1eWNmZ5geRlYjzm2adRgW2/mcpevXNg50YZtPCE4=\",\n\t\"GoModSum\": \"h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=\"\n}\n{\n\t\"Path\": \"golang.org/x/sys\",\n\t\"Version\": \"v0.47.0\",\n\t\"Time\": \"2026-06-30T17:07:31Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/sys@v0.47.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/sys/@v/v0.47.0.mod\",\n\t\"GoVersion\": \"1.25.0\",\n\t\"Sum\": \"h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=\",\n\t\"GoModSum\": \"h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=\"\n}\n{\n\t\"Path\": \"golang.org/x/term\",\n\t\"Version\": \"v0.40.0\",\n\t\"Time\": \"2026-02-09T16:13:12Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"golang.org/x/text\",\n\t\"Version\": \"v0.34.0\",\n\t\"Time\": \"2026-02-09T16:14:29Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/golang.org/x/text@v0.34.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/golang.org/x/text/@v/v0.34.0.mod\",\n\t\"GoVersion\": \"1.24.0\",\n\t\"Sum\": \"h1:oL/Qq0Kdaqxa1KbNeMKwQq0reLCCaFtqu2eNuSeNHbk=\",\n\t\"GoModSum\": \"h1:homfLqTYRFyVYemLBFl5GgL/DWEiH5wcsQ5gSh1yziA=\"\n}\n{\n\t\"Path\": \"golang.org/x/time\",\n\t\"Version\": \"v0.14.0\",\n\t\"Time\": \"2025-09-16T23:29:52Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"golang.org/x/tools\",\n\t\"Version\": \"v0.24.1\",\n\t\"Time\": \"2025-08-19T16:51:04Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"google.golang.org/genai\",\n\t\"Version\": \"v1.48.0\",\n\t\"Time\": \"2026-02-26T00:25:13Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/genai@v1.48.0\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/genai/@v/v1.48.0.mod\",\n\t\"GoVersion\": \"1.24\",\n\t\"Sum\": \"h1:1vb15G291wAjJJueisMDpUhssljhEdJU2t5qTidrVPs=\",\n\t\"GoModSum\": \"h1:A3kkl0nyBjyFlNjgxIwKq70julKbIxpSxqKO5gw/gmk=\"\n}\n{\n\t\"Path\": \"google.golang.org/genproto/googleapis/rpc\",\n\t\"Version\": \"v0.0.0-20240903143218-8af14fe29dc1\",\n\t\"Time\": \"2024-09-03T14:32:18Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/genproto/googleapis/rpc@v0.0.0-20240903143218-8af14fe29dc1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/genproto/googleapis/rpc/@v/v0.0.0-20240903143218-8af14fe29dc1.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ=\",\n\t\"GoModSum\": \"h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=\"\n}\n{\n\t\"Path\": \"google.golang.org/grpc\",\n\t\"Version\": \"v1.66.2\",\n\t\"Time\": \"2024-09-11T18:36:39Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/grpc@v1.66.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/grpc/@v/v1.66.2.mod\",\n\t\"GoVersion\": \"1.21\",\n\t\"Sum\": \"h1:3QdXkuq3Bkh7w+ywLdLvM56cmGvQHUMZpiCzt6Rqaoo=\",\n\t\"GoModSum\": \"h1:s3/l6xSSCURdVfAnL+TqCNMyTDAGN6+lZeVxnZR128Y=\"\n}\n{\n\t\"Path\": \"google.golang.org/protobuf\",\n\t\"Version\": \"v1.34.2\",\n\t\"Time\": \"2024-06-11T07:18:36Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/google.golang.org/protobuf@v1.34.2\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/google.golang.org/protobuf/@v/v1.34.2.mod\",\n\t\"GoVersion\": \"1.20\",\n\t\"Sum\": \"h1:6xV6lTsCfpGD21XK49h7MhtcApnLqkfYgPcdHftf6hg=\",\n\t\"GoModSum\": \"h1:qYOHts0dSfpeUzUFpOMr/WGzszTmLH+DiWniOlNbLDw=\"\n}\n{\n\t\"Path\": \"gopkg.in/check.v1\",\n\t\"Version\": \"v1.0.0-20190902080502-41f04d3bba15\",\n\t\"Time\": \"2019-09-02T08:05:02Z\",\n\t\"Indirect\": true\n}\n{\n\t\"Path\": \"gopkg.in/yaml.v3\",\n\t\"Version\": \"v3.0.1\",\n\t\"Time\": \"2022-05-27T08:35:30Z\",\n\t\"Indirect\": true,\n\t\"Dir\": \"/Users/abdifamily/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1\",\n\t\"GoMod\": \"/Users/abdifamily/go/pkg/mod/cache/download/gopkg.in/yaml.v3/@v/v3.0.1.mod\",\n\t\"Sum\": \"h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=\",\n\t\"GoModSum\": \"h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=\"\n}\n"
+    }
+  },
+  "policy_oracle": {
+    "command": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/instruction-consumer",
+        "--mode",
+        "print"
+      ],
+      "cleanup_bounded": true,
+      "cleanup_errors": [],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
+      "duration_seconds": 0.00768,
+      "exit_code": 0,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "{\n  \"composed_sha256\": \"27840d9612461688ecb274ae223923d83ebe70ac05378c2313659a3562116277\",\n  \"composition\": \"customer instructions\\n\\nWebMCP browser selection:\\n- A browser endpoint is connected, but no page is selected.\\n- Before any page work, call webmcp_list_tabs.\\n- If multiple eligible tabs are returned, first match them against the current requested page by title, paraphrase, purpose, or category; only ask the customer which page to use when multiple tabs still match that current step. The mere presence of unrelated eligible tabs is not ambiguity.\\n- If the customer explicitly requests work on multiple pages in an order, the first unfinished page is the current requested page. Select and finish it, then list and select the next named page; never ask which page comes first when the customer already supplied the order.\\n- After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.\\n- Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.\\n\\nTool-grounding requirements:\\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.\\n\\nWebMCP tab selection calibration:\\n- Distinguish tab selection from navigation. When the customer asks to switch to or select an already-open tab or page, call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. When the customer asks to open a new tab, call webmcp_open_tab. When the customer asks to change, redirect, or navigate the currently selected tab to an absolute website URL, call webmcp_navigate_tab directly; do not open or select another tab first. This preserves the selected target and any active cast of that target.\\n- A customer request to switch or select an already-open browser tab or page is real page work, even when a page is already selected. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.\\n- Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for \\\"the document editor\\\" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.\\n- For an explicit ordered request spanning multiple pages, resolve only the first unfinished page when deciding the current match. Complete that page, then list and select the next named page in the customer's order; do not treat the ordered set itself as selection ambiguity.\\n- Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example \\\"Okay, you're on \\u003ctitle\\u003e now.\\\"\\n- Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.\\n\\nWebMCP ambiguity recovery:\\n- A failed WebMCP result with error.code \\\"ambiguous_browser\\\" or error.code \\\"ambiguous_tab\\\" and details.recovery.action \\\"ask_customer\\\" is a pending customer choice, not permission to retry the same call.\\n- Ask exactly one concise spoken/text question before any additional browser tool call. For ambiguous_tab, name every candidate in details.candidate_choices with its safe title and origin; if a label is unavailable, name its exact candidate ID. For ambiguous_browser, name every exact ID in details.candidate_browser_ids. Do not claim that a page was selected.\\n- Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.\\n- After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.\\n\\nSight routing requirements:\\n- For questions about the rendered visual appearance of the selected browser page, use show_page. Its result is the authoritative page sight for broad visual requests and literal visual follow-up questions.\\n- When a discovered page tool returns structured state that directly answers the request, use that state as authoritative and do not call show_page merely to restate, verify, or translate it. For example, a board-state tool is authoritative for positions, pieces, alignment, and solved status; show_page is still required if the customer asks how the board visually looks on screen.\\n- Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.\\n- Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.\",\n  \"loader_calls\": [\n    \"stat:/workspace/prompt.md\",\n    \"read:/workspace/prompt.md\",\n    \"skills\"\n  ],\n  \"mode\": \"print\",\n  \"no_tools\": \"customer instructions\",\n  \"resolved\": \"literal prompt\\n\\n---\\n\\nskill summary\\n\\nFilesystem scope: /workspace. Relative filesystem-tool paths resolve from this workdir.\"\n}\n",
+      "timed_out": false
+    },
+    "report": {
+      "composed_sha256": "27840d9612461688ecb274ae223923d83ebe70ac05378c2313659a3562116277",
+      "composition": "customer instructions\n\nWebMCP browser selection:\n- A browser endpoint is connected, but no page is selected.\n- Before any page work, call webmcp_list_tabs.\n- If multiple eligible tabs are returned, first match them against the current requested page by title, paraphrase, purpose, or category; only ask the customer which page to use when multiple tabs still match that current step. The mere presence of unrelated eligible tabs is not ambiguity.\n- If the customer explicitly requests work on multiple pages in an order, the first unfinished page is the current requested page. Select and finish it, then list and select the next named page; never ask which page comes first when the customer already supplied the order.\n- After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.\n- Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.\n\nWebMCP tab selection calibration:\n- Distinguish tab selection from navigation. When the customer asks to switch to or select an already-open tab or page, call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. When the customer asks to open a new tab, call webmcp_open_tab. When the customer asks to change, redirect, or navigate the currently selected tab to an absolute website URL, call webmcp_navigate_tab directly; do not open or select another tab first. This preserves the selected target and any active cast of that target.\n- A customer request to switch or select an already-open browser tab or page is real page work, even when a page is already selected. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.\n- Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for \"the document editor\" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.\n- For an explicit ordered request spanning multiple pages, resolve only the first unfinished page when deciding the current match. Complete that page, then list and select the next named page in the customer's order; do not treat the ordered set itself as selection ambiguity.\n- Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example \"Okay, you're on <title> now.\"\n- Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.\n\nWebMCP ambiguity recovery:\n- A failed WebMCP result with error.code \"ambiguous_browser\" or error.code \"ambiguous_tab\" and details.recovery.action \"ask_customer\" is a pending customer choice, not permission to retry the same call.\n- Ask exactly one concise spoken/text question before any additional browser tool call. For ambiguous_tab, name every candidate in details.candidate_choices with its safe title and origin; if a label is unavailable, name its exact candidate ID. For ambiguous_browser, name every exact ID in details.candidate_browser_ids. Do not claim that a page was selected.\n- Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.\n- After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.\n\nSight routing requirements:\n- For questions about the rendered visual appearance of the selected browser page, use show_page. Its result is the authoritative page sight for broad visual requests and literal visual follow-up questions.\n- When a discovered page tool returns structured state that directly answers the request, use that state as authoritative and do not call show_page merely to restate, verify, or translate it. For example, a board-state tool is authoritative for positions, pieces, alignment, and solved status; show_page is still required if the customer asks how the board visually looks on screen.\n- Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.\n- Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.",
+      "loader_calls": [
+        "stat:/workspace/prompt.md",
+        "read:/workspace/prompt.md",
+        "skills"
+      ],
+      "mode": "print",
+      "no_tools": "customer instructions",
+      "resolved": "literal prompt\n\n---\n\nskill summary\n\nFilesystem scope: /workspace. Relative filesystem-tool paths resolve from this workdir."
+    }
+  },
+  "public_session": {
+    "capture": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/session.capture.json",
+      "sha256": "48aee619daaf5fbaece738d4864da63b6bc4cd55029de6ffb7b0e4ad2d239e8d",
+      "size": 8137
+    },
+    "clean_shutdown": {
+      "cleanup_bounded": true,
+      "process_exit_code": 0,
+      "process_reaped": true,
+      "provider_session_closed_sent": true,
+      "provider_thread_stopped": true
+    },
+    "command": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/yui",
+        "--config-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/config",
+        "--workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace",
+        "session",
+        "--record",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/session.capture.json",
+        "--provider",
+        "openai",
+        "--model",
+        "gpt-realtime-2.1",
+        "--api-key",
+        "hermetic-key",
+        "--base-url",
+        "ws://127.0.0.1:50833/v1/realtime",
+        "--system-prompt",
+        "literal prompt",
+        "--prompt",
+        "C41 public workflow: inspect the marker file",
+        "--wait-for-close",
+        "--max-duration",
+        "30s"
+      ],
+      "cleanup_bounded": true,
+      "cleanup_errors": [],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
+      "duration_seconds": 0.418885,
+      "exit_code": 0,
+      "reaped": true,
+      "stderr": "",
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file\nTool result: C41_PUBLIC_TOOL_EFFECT_9182\n\nAssistant: C41_TOOL_EFFECT:C41_PUBLIC_TOOL_EFFECT_9182\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "timed_out": false
+    },
+    "provider": {
+      "bootstrap_session_update": {
+        "session": {
+          "audio": {
+            "input": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              },
+              "transcription": {
+                "model": "gpt-live-transcribe"
+              }
+            },
+            "output": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              }
+            }
+          },
+          "instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+          "model": "gpt-realtime-2.1",
+          "output_modalities": [
+            "audio"
+          ],
+          "tools": [
+            {
+              "description": "Append content to the end of a file",
+              "name": "append_file",
+              "parameters": {
+                "properties": {
+                  "content": {
+                    "description": "The content to append",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "The file path to append to",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Edit a file by replacing old_text with new_text. The old_text must exist exactly in the file.",
+              "name": "edit_file",
+              "parameters": {
+                "properties": {
+                  "new_text": {
+                    "description": "The text to replace with",
+                    "type": "string"
+                  },
+                  "old_text": {
+                    "description": "The exact text to find and replace",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "The file path to edit",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "new_text",
+                  "old_text",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Execute a shell command on the local machine and return its output. Use with caution. Only for real shell work: never for browser-page actions, which have their own directly callable page tools.",
+              "name": "exec",
+              "parameters": {
+                "properties": {
+                  "command": {
+                    "description": "The shell command to execute",
+                    "type": "string"
+                  },
+                  "working_dir": {
+                    "description": "Optional working directory for the command",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "List files and directories in a path",
+              "name": "list_dir",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to list",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Read the contents of a file, can be an image, audio, text, video, etc. It transforms the context into the relevant latent representation for model parsing when possible.",
+              "name": "read_file",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to the file to read",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Read and attach a validated local image so the model can inspect its pixels",
+              "name": "read_image",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to the local image to attach",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Write content to a file",
+              "name": "write_file",
+              "parameters": {
+                "properties": {
+                  "content": {
+                    "description": "Content to write to the file",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Path to the file to write",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ],
+          "type": "realtime"
+        },
+        "type": "session.update"
+      },
+      "error": "",
+      "events": [
+        {
+          "direction": "client_to_server",
+          "payload": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "model": "gpt-live-transcribe"
+                  }
+                },
+                "output": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  }
+                }
+              },
+              "instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+              "model": "gpt-realtime-2.1",
+              "output_modalities": [
+                "audio"
+              ],
+              "tools": [
+                {
+                  "description": "Append content to the end of a file",
+                  "name": "append_file",
+                  "parameters": {
+                    "properties": {
+                      "content": {
+                        "description": "The content to append",
+                        "type": "string"
+                      },
+                      "path": {
+                        "description": "The file path to append to",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "Edit a file by replacing old_text with new_text. The old_text must exist exactly in the file.",
+                  "name": "edit_file",
+                  "parameters": {
+                    "properties": {
+                      "new_text": {
+                        "description": "The text to replace with",
+                        "type": "string"
+                      },
+                      "old_text": {
+                        "description": "The exact text to find and replace",
+                        "type": "string"
+                      },
+                      "path": {
+                        "description": "The file path to edit",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "new_text",
+                      "old_text",
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "Execute a shell command on the local machine and return its output. Use with caution. Only for real shell work: never for browser-page actions, which have their own directly callable page tools.",
+                  "name": "exec",
+                  "parameters": {
+                    "properties": {
+                      "command": {
+                        "description": "The shell command to execute",
+                        "type": "string"
+                      },
+                      "working_dir": {
+                        "description": "Optional working directory for the command",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "command"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "List files and directories in a path",
+                  "name": "list_dir",
+                  "parameters": {
+                    "properties": {
+                      "path": {
+                        "description": "Path to list",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "Read the contents of a file, can be an image, audio, text, video, etc. It transforms the context into the relevant latent representation for model parsing when possible.",
+                  "name": "read_file",
+                  "parameters": {
+                    "properties": {
+                      "path": {
+                        "description": "Path to the file to read",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "Read and attach a validated local image so the model can inspect its pixels",
+                  "name": "read_image",
+                  "parameters": {
+                    "properties": {
+                      "path": {
+                        "description": "Path to the local image to attach",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                },
+                {
+                  "description": "Write content to a file",
+                  "name": "write_file",
+                  "parameters": {
+                    "properties": {
+                      "content": {
+                        "description": "Content to write to the file",
+                        "type": "string"
+                      },
+                      "path": {
+                        "description": "Path to the file to write",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "function"
+                }
+              ],
+              "type": "realtime"
+            },
+            "type": "session.update"
+          },
+          "sequence": 1,
+          "type": "session.update"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "session": {
+              "id": "c41-public",
+              "model": "gpt-realtime-2.1"
+            },
+            "type": "session.created"
+          },
+          "sequence": 2,
+          "type": "session.created"
+        },
+        {
+          "direction": "client_to_server",
+          "payload": {
+            "item": {
+              "content": [
+                {
+                  "text": "C41 public workflow: inspect the marker file",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            },
+            "type": "conversation.item.create"
+          },
+          "sequence": 3,
+          "type": "conversation.item.create"
+        },
+        {
+          "direction": "client_to_server",
+          "payload": {
+            "type": "response.create"
+          },
+          "sequence": 4,
+          "type": "response.create"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "response": {
+              "id": "response-c41-tool"
+            },
+            "type": "response.created"
+          },
+          "sequence": 5,
+          "type": "response.created"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "item": {
+              "call_id": "call-c41-read-file",
+              "id": "item-c41-tool",
+              "name": "read_file",
+              "type": "function_call"
+            },
+            "output_index": 0,
+            "response_id": "response-c41-tool",
+            "type": "response.output_item.added"
+          },
+          "sequence": 6,
+          "type": "response.output_item.added"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "arguments": "{\"path\":\"c41-tool-marker.txt\"}",
+            "call_id": "call-c41-read-file",
+            "name": "read_file",
+            "response_id": "response-c41-tool",
+            "type": "response.function_call_arguments.done"
+          },
+          "sequence": 7,
+          "type": "response.function_call_arguments.done"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "response": {
+              "id": "response-c41-tool",
+              "status": "completed"
+            },
+            "type": "response.done"
+          },
+          "sequence": 8,
+          "type": "response.done"
+        },
+        {
+          "direction": "client_to_server",
+          "payload": {
+            "item": {
+              "call_id": "call-c41-read-file",
+              "output": "C41_PUBLIC_TOOL_EFFECT_9182\n",
+              "type": "function_call_output"
+            },
+            "type": "conversation.item.create"
+          },
+          "sequence": 9,
+          "type": "conversation.item.create"
+        },
+        {
+          "direction": "client_to_server",
+          "payload": {
+            "type": "response.create"
+          },
+          "sequence": 10,
+          "type": "response.create"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "response": {
+              "id": "response-c41-tool-continuation"
+            },
+            "type": "response.created"
+          },
+          "sequence": 11,
+          "type": "response.created"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "delta": "C41_TOOL_EFFECT:C41_PUBLIC_TOOL_EFFECT_9182",
+            "response_id": "response-c41-tool-continuation",
+            "type": "response.output_text.delta"
+          },
+          "sequence": 12,
+          "type": "response.output_text.delta"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "response_id": "response-c41-tool-continuation",
+            "type": "response.output_text.done"
+          },
+          "sequence": 13,
+          "type": "response.output_text.done"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "response": {
+              "id": "response-c41-tool-continuation",
+              "status": "completed"
+            },
+            "type": "response.done"
+          },
+          "sequence": 14,
+          "type": "response.done"
+        },
+        {
+          "direction": "server_to_client",
+          "payload": {
+            "reason": "fixture_complete",
+            "session_id": "c41-public",
+            "type": "session.closed"
+          },
+          "sequence": 15,
+          "type": "session.closed"
+        }
+      ],
+      "handshake": {
+        "address": "127.0.0.1:50834",
+        "authorization_valid": true,
+        "request_target": "/v1/realtime?model=gpt-realtime-2.1",
+        "upgrade": "websocket"
+      },
+      "instruction_observation": {
+        "composed_instructions_match": true,
+        "expected_composed_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+        "initial_instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+        "initial_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+        "initial_session_update_before_user_turn": true,
+        "mode": "unchanged-output",
+        "route": "shipped-yui-live-host-bootstrap",
+        "standalone_c41_policy_oracle_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
+        "standalone_c41_policy_oracle_used_for_live_request": true
+      },
+      "response_create_count": 2,
+      "scenario_complete": true,
+      "session_update": {
+        "session": {
+          "audio": {
+            "input": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              },
+              "transcription": {
+                "model": "gpt-live-transcribe"
+              }
+            },
+            "output": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              }
+            }
+          },
+          "instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+          "model": "gpt-realtime-2.1",
+          "output_modalities": [
+            "audio"
+          ],
+          "tools": [
+            {
+              "description": "Append content to the end of a file",
+              "name": "append_file",
+              "parameters": {
+                "properties": {
+                  "content": {
+                    "description": "The content to append",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "The file path to append to",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Edit a file by replacing old_text with new_text. The old_text must exist exactly in the file.",
+              "name": "edit_file",
+              "parameters": {
+                "properties": {
+                  "new_text": {
+                    "description": "The text to replace with",
+                    "type": "string"
+                  },
+                  "old_text": {
+                    "description": "The exact text to find and replace",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "The file path to edit",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "new_text",
+                  "old_text",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Execute a shell command on the local machine and return its output. Use with caution. Only for real shell work: never for browser-page actions, which have their own directly callable page tools.",
+              "name": "exec",
+              "parameters": {
+                "properties": {
+                  "command": {
+                    "description": "The shell command to execute",
+                    "type": "string"
+                  },
+                  "working_dir": {
+                    "description": "Optional working directory for the command",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "List files and directories in a path",
+              "name": "list_dir",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to list",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Read the contents of a file, can be an image, audio, text, video, etc. It transforms the context into the relevant latent representation for model parsing when possible.",
+              "name": "read_file",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to the file to read",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Read and attach a validated local image so the model can inspect its pixels",
+              "name": "read_image",
+              "parameters": {
+                "properties": {
+                  "path": {
+                    "description": "Path to the local image to attach",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            },
+            {
+              "description": "Write content to a file",
+              "name": "write_file",
+              "parameters": {
+                "properties": {
+                  "content": {
+                    "description": "Content to write to the file",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Path to the file to write",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ],
+          "type": "realtime"
+        },
+        "type": "session.update"
+      },
+      "standalone_expected_resolved": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
+      "tool_result": {
+        "item": {
+          "call_id": "call-c41-read-file",
+          "output": "C41_PUBLIC_TOOL_EFFECT_9182\n",
+          "type": "function_call_output"
+        },
+        "type": "conversation.item.create"
+      },
+      "url": "ws://127.0.0.1:50833/v1/realtime",
+      "user_turn": {
+        "item": {
+          "content": [
+            {
+              "text": "C41 public workflow: inspect the marker file",
+              "type": "input_text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        "type": "conversation.item.create"
+      }
+    },
+    "shipped_bootstrap": {
+      "composed_instructions_match": true,
+      "expected_composed_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+      "instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+      "instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+      "observed_before_user_turn": true,
+      "prompt": "C41 public workflow: inspect the marker file",
+      "tool_name": "read_file"
+    },
+    "standalone_policy_oracle": {
+      "composed_instructions_sha256": "1c1971a255b36ad90ba70faede74d75fe1bc3d3a78cb2dbeaddd31df95e2fb4a",
+      "policy_block_sha256": "fc217db12da6ea5a86d78772f7aa5918c54eb75552d3a2c0b4e48e8f3479aeec",
+      "resolved_instructions": "literal prompt\n\nFilesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace; additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir.",
+      "used_for_shipped_live_request": true
+    },
+    "tool_effect": {
+      "cli_output_marker": true,
+      "marker": "C41_PUBLIC_TOOL_EFFECT_9182",
+      "marker_file": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/public-session/workspace/c41-tool-marker.txt",
+      "provider_received_marker": true
+    }
+  },
+  "schema": "audio-runtime-c41-instruction-evidence/v1",
+  "source_revision": "07d4d757be3799c29ddaa869c978e1623a9d6be1",
+  "status": "accepted",
+  "worktree_status_at_start": ""
+}
