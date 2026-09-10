@@ -22,6 +22,7 @@ ARTIFACTS = EVIDENCE / "artifacts"
 RUNS = EVIDENCE / "runs"
 CONSUMER = EVIDENCE / "consumer"
 BINARY = ARTIFACTS / "pcm16-frame-consumer"
+GO_AUDIO_MODULE = "github.com/portpowered/go-agent-harness/go-audio"
 
 
 class VerificationError(RuntimeError):
@@ -49,18 +50,69 @@ def git_output(source_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def validate_source_root(source_root: Path) -> Path:
+    source_root = source_root.resolve()
+    if not (source_root / "go.work").is_file() or not (source_root / "go-audio" / "go.mod").is_file():
+        raise VerificationError(f"source root is not the go-agent-harness checkout: {source_root}")
+    try:
+        git_root = Path(git_output(source_root, "rev-parse", "--show-toplevel")).resolve()
+    except subprocess.CalledProcessError as error:
+        raise VerificationError(f"source root is not a Git checkout: {source_root}") from error
+    if git_root != source_root:
+        raise VerificationError(f"source root must be the checkout root: {source_root}")
+    return source_root
+
+
+def create_source_modfile(source_root: Path) -> tempfile.TemporaryDirectory[str]:
+    temporary = tempfile.TemporaryDirectory(prefix="c30-mod-")
+    temporary_root = Path(temporary.name)
+    module_text = (CONSUMER / "go.mod").read_text()
+    replacement_prefix = f"replace {GO_AUDIO_MODULE} =>"
+    replacement_lines = [line for line in module_text.splitlines() if line.startswith(replacement_prefix)]
+    if len(replacement_lines) != 1:
+        temporary.cleanup()
+        raise VerificationError(f"consumer go.mod must contain exactly one {GO_AUDIO_MODULE} replacement")
+    rewritten = []
+    for line in module_text.splitlines(keepends=True):
+        if line.startswith(replacement_prefix):
+            newline = "\n" if line.endswith("\n") else ""
+            rewritten.append(f"replace {GO_AUDIO_MODULE} => {source_root / 'go-audio'}{newline}")
+        else:
+            rewritten.append(line)
+    (temporary_root / "go.mod").write_text("".join(rewritten))
+    (temporary_root / "go.sum").write_bytes((CONSUMER / "go.sum").read_bytes())
+    return temporary
+
+
 def build(source_root: Path) -> dict[str, Any]:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    source_revision = git_output(source_root, "rev-parse", "HEAD")
     started = time.monotonic()
     env = os.environ.copy()
     env["GOWORK"] = "off"
-    command = ["go", "build", "-trimpath", "-o", str(BINARY), "."]
-    result = subprocess.run(command, cwd=CONSUMER, env=env, check=False, capture_output=True, text=True)
+    with create_source_modfile(source_root) as temporary_mod_root, tempfile.TemporaryDirectory(prefix="c30-build-") as temporary_build_root:
+        temporary_binary = Path(temporary_build_root) / BINARY.name
+        modfile = Path(temporary_mod_root) / "go.mod"
+        command = [
+            "go",
+            "build",
+            "-trimpath",
+            f"-ldflags=-X main.compiledSourceRevision={source_revision}",
+            "-modfile",
+            str(modfile),
+            "-o",
+            str(temporary_binary),
+            ".",
+        ]
+        result = subprocess.run(command, cwd=CONSUMER, env=env, check=False, capture_output=True, text=True)
+        if result.returncode == 0:
+            os.replace(temporary_binary, BINARY)
     record = {
         "argv": command,
         "cwd": str(CONSUMER),
         "source_root": str(source_root),
-        "source_revision": git_output(source_root, "rev-parse", "HEAD"),
+        "source_module": str(source_root / "go-audio"),
+        "source_revision": source_revision,
         "duration_seconds": round(time.monotonic() - started, 6),
         "exit_code": result.returncode,
         "stdout": result.stdout,
@@ -89,13 +141,11 @@ def limit_child_resources() -> None:
 
 
 def run_child(source_root: Path, mode: str) -> dict[str, Any]:
-    if not BINARY.is_file():
-        raise VerificationError(f"missing consumer executable: {BINARY}; run --build first")
+    build_record = require_matching_build(source_root)
     RUNS.mkdir(parents=True, exist_ok=True)
     run_dir = Path(tempfile.mkdtemp(prefix=f"{mode}-", dir=RUNS))
     command = [str(BINARY), "--mode", mode]
     env = os.environ.copy()
-    env["C30_SOURCE_REVISION"] = git_output(source_root, "rev-parse", "HEAD")
     started = time.monotonic()
     process = subprocess.Popen(
         command,
@@ -128,7 +178,8 @@ def run_child(source_root: Path, mode: str) -> dict[str, Any]:
         "argv": command,
         "cwd": str(run_dir),
         "source_root": str(source_root),
-        "source_revision": env["C30_SOURCE_REVISION"],
+        "source_module": str(source_root / "go-audio"),
+        "source_revision": build_record["source_revision"],
         "duration_seconds": round(time.monotonic() - started, 6),
         "exit_code": process.returncode,
         "stdout": stdout,
@@ -153,6 +204,33 @@ def load_build_record() -> dict[str, Any] | None:
     return record if isinstance(record, dict) else None
 
 
+def require_matching_build(source_root: Path) -> dict[str, Any]:
+    record = load_build_record()
+    if record is None:
+        raise VerificationError("missing or invalid artifacts/build.json; run --build first")
+    source_revision = git_output(source_root, "rev-parse", "HEAD")
+    expected_root = str(source_root)
+    expected_module = str(source_root / "go-audio")
+    if record.get("source_root") != expected_root or record.get("source_module") != expected_module:
+        raise VerificationError(
+            "build provenance source root mismatch: "
+            f"built_root={record.get('source_root')!r} requested_root={expected_root!r}"
+        )
+    if record.get("source_revision") != source_revision:
+        raise VerificationError(
+            "build provenance revision mismatch: "
+            f"built_revision={record.get('source_revision')!r} requested_revision={source_revision!r}"
+        )
+    if record.get("fixture_sha256") != fixture_hashes():
+        raise VerificationError("build provenance fixture hash mismatch; run --build again")
+    if not BINARY.is_file():
+        raise VerificationError(f"missing consumer executable: {BINARY}; run --build first")
+    executable_sha256 = sha256_file(BINARY)
+    if record.get("executable_sha256") != executable_sha256:
+        raise VerificationError("build provenance executable hash mismatch; run --build again")
+    return record
+
+
 def verify_positive(record: dict[str, Any]) -> None:
     if record["exit_code"] != 0:
         raise VerificationError(f"positive exited {record['exit_code']}: {record['stderr']}")
@@ -160,6 +238,10 @@ def verify_positive(record: dict[str, Any]) -> None:
         payload = json.loads(record["stdout"])
     except json.JSONDecodeError as exc:
         raise VerificationError(f"positive did not produce JSON: {record['stdout']}") from exc
+    if payload.get("source") != record.get("source_revision"):
+        raise VerificationError(
+            f"positive source mismatch: child={payload.get('source')!r} expected={record.get('source_revision')!r}"
+        )
     if not payload.get("passed") or not payload.get("clean_shutdown"):
         raise VerificationError(f"positive report failed: {payload}")
     if not payload.get("cases") or any(not case.get("passed") for case in payload["cases"]):
@@ -177,6 +259,10 @@ def verify_negative(record: dict[str, Any]) -> None:
         payload = json.loads(record["stdout"])
     except json.JSONDecodeError as exc:
         raise VerificationError(f"negative control did not produce JSON: {record['stdout']}") from exc
+    if payload.get("source") != record.get("source_revision"):
+        raise VerificationError(
+            f"negative source mismatch: child={payload.get('source')!r} expected={record.get('source_revision')!r}"
+        )
     if not payload.get("negative_control", {}).get("passed"):
         raise VerificationError(f"negative control report did not prove mismatch: {payload}")
 
@@ -210,9 +296,7 @@ def main() -> int:
     parser.add_argument("--negative-control", action="store_true")
     parser.add_argument("--source-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args()
-    source_root = args.source_root.resolve()
-    if not (source_root / "go.work").is_file() or not (source_root / "go-audio").is_dir():
-        raise VerificationError(f"source root is not the go-agent-harness checkout: {source_root}")
+    source_root = validate_source_root(args.source_root)
     if not (args.build or args.positive or args.negative_control):
         raise VerificationError("choose --build, --positive, or --negative-control")
 

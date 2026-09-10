@@ -64,6 +64,8 @@ type knownFrame struct {
 	bytes    int
 }
 
+var compiledSourceRevision = "working-tree"
+
 func main() {
 	mode := flag.String("mode", "positive", "positive or negative-control")
 	flag.Parse()
@@ -114,10 +116,7 @@ func main() {
 }
 
 func sourceRevision() string {
-	if source := os.Getenv("C30_SOURCE_REVISION"); source != "" {
-		return source
-	}
-	return "working-tree"
+	return compiledSourceRevision
 }
 
 func runPositive(result *report) error {

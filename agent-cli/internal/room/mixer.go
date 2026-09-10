@@ -865,12 +865,12 @@ func queueFrameCount(bytes, frameBytes int) int {
 	return (bytes-1)/frameBytes + 1
 }
 
+// Stats delegates byte-duration arithmetic to the audio format package so
+// wide rate/channel products cannot overflow or become a zero denominator.
+// The helper also preserves fractional input-buffer timing and bounded output.
+// Keeping this conversion at the shared audio boundary avoids a room-local duplicate.
 func pcm16Duration(bytes int, format PCM16Format) time.Duration {
-	if bytes <= 0 || format.SampleRate <= 0 || format.Channels <= 0 {
-		return 0
-	}
-	bytesPerSecond := int64(format.SampleRate) * int64(format.Channels) * 2
-	return time.Duration(int64(bytes) * int64(time.Second) / bytesPerSecond)
+	return sharedaudio.PCM16ByteDuration(bytes, format.SampleRate, format.Channels)
 }
 
 func normalizeMixerInputID(inputID string) (string, error) {

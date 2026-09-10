@@ -110,6 +110,42 @@ func TestPCM16MixerRejectsQueueByteOverflowBeforeSetup(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerRejectsTinyFrameLargeQueueOverflowBeforeSetup(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("the large queue boundary is not useful on 32-bit platforms")
+	}
+	maximumInt := int(^uint(0) >> 1)
+	format := PCM16Format{SampleRate: 1, Channels: 1, FrameDuration: time.Second}
+	largeQueueFrames := maximumInt/2 + 1
+	for _, test := range []struct {
+		name              string
+		inputQueueFrames  int
+		outputQueueFrames int
+	}{
+		{name: "input product", inputQueueFrames: largeQueueFrames, outputQueueFrames: 1},
+		{name: "output product", inputQueueFrames: 1, outputQueueFrames: largeQueueFrames},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			factoryCalls := 0
+			mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+				Format:            format,
+				InputQueueFrames:  test.inputQueueFrames,
+				OutputQueueFrames: test.outputQueueFrames,
+				CadenceFactory: func(time.Duration) PCM16Cadence {
+					factoryCalls++
+					return newDeterministicPCM16Cadence()
+				},
+			})
+			if mixer != nil || !errors.Is(err, ErrMixerInvalidFormat) {
+				t.Fatalf("NewPCM16MixerWithConfig() = mixer %v, error %v; want nil and ErrMixerInvalidFormat", mixer, err)
+			}
+			if factoryCalls != 0 {
+				t.Fatalf("cadence factory calls = %d, want zero before rejected construction", factoryCalls)
+			}
+		})
+	}
+}
+
 func TestPCM16MixerRejectsChannelOverflowBeforeSetup(t *testing.T) {
 	if strconv.IntSize < 64 {
 		t.Skip("the large channel boundary is not useful on 32-bit platforms")
@@ -154,6 +190,39 @@ func TestPCM16MixerStatsKeepsLargeRepresentableCapacity(t *testing.T) {
 	stats := mixer.Stats()
 	if stats.Output.CapacityBytes != maximumInt-1 || stats.Output.CapacityFrames != 1 {
 		t.Fatalf("large output capacity stats = %+v; want bytes=%d frames=1", stats.Output, maximumInt-1)
+	}
+}
+
+func TestPCM16MixerStatsHandlesWideRateChannelProduct(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("the wide rate boundary is not useful on 32-bit platforms")
+	}
+	format := PCM16Format{
+		SampleRate:    int(uint64(1) << 62),
+		Channels:      2,
+		FrameDuration: 1_953_125 * time.Nanosecond,
+	}
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+		Manual:            true,
+	})
+	if err != nil {
+		t.Fatalf("wide rate/channel mixer construction = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := mixer.Close(); err != nil {
+			t.Errorf("wide rate/channel mixer close: %v", err)
+		}
+	})
+	frameBytes, err := format.FrameBytes()
+	if err != nil {
+		t.Fatalf("wide rate/channel frame bytes = %v", err)
+	}
+	stats := mixer.Stats()
+	if stats.Output.CapacityBytes != frameBytes || stats.Output.CapacityDuration != format.FrameDuration {
+		t.Fatalf("wide rate/channel stats = %+v; want capacity bytes=%d duration=%s", stats.Output, frameBytes, format.FrameDuration)
 	}
 }
 

@@ -28,8 +28,9 @@ that error in `ErrMixerInvalidFormat`.
 
 Run from the exact source root. Each child has a ten-second watchdog, a fresh
 process group, and a 256 MiB address-space limit. Build uses the evidence-local
-module with `GOWORK=off` and a relative replace into the explicit source root;
-existing module manifests are not modified.
+module with `GOWORK=off`; the runner rewrites a temporary `go.mod` replacement
+to the explicit source root, so an alternate checkout is never silently
+ignored and existing module manifests are not modified.
 
 ```text
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/run.py --build --source-root .
@@ -44,9 +45,11 @@ checked byte-capacity boundaries. The negative-control run intentionally changes
 the authored `480` answer to `481`; success requires the child to exit nonzero
 with a causal `actual_samples=480 mutated_expected=481` mismatch.
 
-`run.py` writes exact source revision, toolchain/platform, executable SHA256,
-argv, stdout/stderr, exit code, duration and clean-shutdown evidence to the
-owned `artifacts/` and `runs/` directories. Those reports are evidence only:
+`run.py` embeds the built source revision and refuses to run unless the
+requested source root/module, current revision, fixture hashes, executable
+SHA256 and embedded revision match the build record. It writes exact source
+provenance, toolchain/platform, argv, stdout/stderr, exit code, duration and
+clean-shutdown evidence to the owned `artifacts/` and `runs/` directories. Those reports are evidence only:
 script CI, independent review, guarded merge, and the post-merge exact-artifact
 vertical probe remain external gates. This software replay cannot establish
 physical/acoustic device consumption or broad project completion.
