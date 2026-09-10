@@ -1,0 +1,36 @@
+{
+  "source_revision": "166fb1879a4edb4e231b6192d6ca77bda9599b63",
+  "source_archive": {
+    "format": "tar",
+    "sha256": "c3b7a3b63c0a2e6f6be3d1aa806dc9be8a180f74d6cd0af76636bb74757463b4"
+  },
+  "source_tree_dirty": false,
+  "source_descriptor": {
+    "argument": "166fb1879a4edb4e231b6192d6ca77bda9599b63",
+    "revision_or_label": "166fb1879a4edb4e231b6192d6ca77bda9599b63"
+  },
+  "consumer_binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/artifacts/transcript-clocks",
+  "yui_binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/artifacts/yui",
+  "build_inputs": {
+    "consumer_source_files": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/cmd/transcript-clocks/main.go"
+    ],
+    "consumer_source_sha256": "06fefb146393b4e70736fa2572562c8602644976e96c637e855dcafd0e738439",
+    "go_work_sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
+    "module_manifests": {
+      "go-agent-loop/go.mod": "a1b13c5848187066d2aedfa0bc6a2d8bfc26e501c687160de6669691eac274f6",
+      "go-audio/go.mod": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7"
+    },
+    "toolchain": "go version go1.26.7 darwin/arm64",
+    "consumer_binary_sha256": "a3e1419693293b60c3edb00b4b6bc0b75e3e7fd7e42f0195ac653dce08be3b76",
+    "yui_binary_sha256": "7b6d6633ba261d3f8ac7cce190846e8f7241fde208151a29bf3dd6cf0aa27fdd",
+    "consumer_go_list_sha256": "e5e7f4fa22d7b6a21651e59d614fca4d96349b2f38847ae4c372f5a6e6e51126",
+    "yui_go_list_sha256": "a4321c6ada13a78bc3c1015da85b0e8636a756dc4241de9d88a17a82bd6ad175"
+  },
+  "fixture_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures",
+  "fixture_sha256": {
+    "c16-audio-tool.session.json": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "c16-interruption.session.json": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+    "expected.json": "d7df42a198b9efd18be8fe3ce9b5cd329489a5087c589ab22d29ba2194b7a323"
+  }
+}

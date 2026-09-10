@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	clockpkg "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // ErrUnsupportedAgentBoundary identifies a live provider boundary that does
@@ -57,7 +59,7 @@ type AgentCapture struct {
 func NewAgentCapture(sink RecordSink, clock AgentClock, options ...AgentCaptureOption) *AgentCapture {
 	capture := &AgentCapture{sink: sink, clock: clock}
 	if capture.clock == nil {
-		capture.clock = realAgentClock{}
+		capture.clock = clockpkg.Real{}
 	}
 	for _, option := range options {
 		if option != nil {
@@ -187,14 +189,14 @@ func (capture *AgentCapture) newRecord(direction Direction, stream Stream, paylo
 
 func (capture *AgentCapture) snapshot() (uint64, time.Time) {
 	tick := capture.sequence.Add(1)
-	clock := capture.clock
-	if clock == nil {
-		clock = realAgentClock{}
+	source := capture.clock
+	if source == nil {
+		source = clockpkg.Real{}
 	}
-	if source, ok := clock.(AgentTickSource); ok {
-		tick = source.Tick()
+	if tickSource, ok := source.(AgentTickSource); ok {
+		tick = tickSource.Tick()
 	}
-	return tick, clock.Now()
+	return tick, source.Now()
 }
 
 type agentBoundaryConsumer func([]byte) (int, error)
@@ -248,7 +250,3 @@ func callAgentBoundary(consumer agentBoundaryConsumer, payload []byte, acceptedW
 	}
 	return consumer(payload)
 }
-
-type realAgentClock struct{}
-
-func (realAgentClock) Now() time.Time { return time.Now() }
