@@ -1,0 +1,25 @@
+{
+  "name": "consumer-negative-control",
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
+    "--case",
+    "negative-control"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
+  "exit_code": 1,
+  "elapsed_ms": 5,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"a85ebbd374d8264f33a79d551b9cea8aff9b36ab\",\n  \"source_inputs_sha256\": \"a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T06:46:09.381355Z\",\n  \"duration_ms\": 0,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
+  "stderr": "sample[1] = 12345, want mutated expectation 12346\n",
+  "timed_out": false,
+  "timeout_seconds": 60,
+  "cleanup_timeout_seconds": 0.25,
+  "cleanup": {
+    "attempted": false,
+    "signal": null,
+    "signal_sent": false,
+    "reaped": true,
+    "reap_timed_out": false,
+    "pipes_closed": true,
+    "elapsed_ms": 0
+  }
+}
