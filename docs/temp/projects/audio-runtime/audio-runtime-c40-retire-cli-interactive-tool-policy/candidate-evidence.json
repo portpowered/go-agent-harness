@@ -1,32 +1,34 @@
 {
   "schema": "audio-runtime-c40-interactive-policy-ledger/v1",
-  "candidate_revision": "e96481e8f0e0bc90342660d4a228ff3f995c4d9e",
+  "candidate_revision": "20fc8b00b7a2295aa8116bfde8606d7dabe4fd9f",
+  "tested_source_revision": "e143999df93b92a2ad3fe3b7ede5b157d30fd8a4",
+  "candidate_revision_note": "20fc8b00 is an evidence/coverage-registration descendant of the tested source; executable inputs are unchanged.",
   "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main": "11b9035bfbca9ad5f5f5356c1ef0154795230698",
+  "origin_main": "d6efc88d10e046396e777762802f5f731c9c6d9d",
   "ancestry": {
     "baseline_is_ancestor": true,
     "startup_is_ancestor": true,
     "origin_main_is_ancestor": true
   },
   "run_ids": {
-    "inventory": "runs/run-inventory-20260910T172655Z-94125",
-    "consumer": "runs/run-consumer-20260910T172655Z-94126",
-    "wrong_oracle": "runs/run-wrong-oracle-20260910T172655Z-94127",
-    "public_policy": "runs/run-public-policy-20260910T172655Z-94128",
-    "replay_regression": "runs/run-replay-regression-20260910T172655Z-94129"
+    "inventory": "runs/run-inventory-20260910T195011Z-25315",
+    "consumer": "runs/run-consumer-20260910T183745Z-69246",
+    "wrong_oracle": "runs/run-wrong-oracle-20260910T183755Z-69652",
+    "public_policy": "runs/run-public-policy-20260910T183800Z-69678",
+    "replay_regression": "runs/run-replay-regression-20260910T183819Z-70366"
   },
   "decisions": {
     "inventory": "ACCEPTED",
     "consumer": "ACCEPTED",
     "wrong_oracle": "ACCEPTED_EXPECTED_NONZERO_ASSERTION",
     "public_policy": "ACCEPTED",
-    "replay_regression": "ACCEPTED"
+    "replay_regression": "BLOCKED_PENDING_C38_RETENTION_REPAIR"
   },
   "standalone_consumer": {
     "module": "consumer",
     "gowork": "off",
-    "binary_sha256": "431e3fb02c67742081cd19d632f6c2b1b6315d490e4cf0d006225d30229048be",
+    "binary_sha256": "bee5dcc556cf28334d50f4f19735a3793e23c11102bd497a2bef3331a13900f4",
     "defaults": {
       "fast_read_timeout": "5s",
       "long_running_timeout": "20s",
@@ -42,7 +44,7 @@
     "wrong_oracle_failure": "literal exec class assertion"
   },
   "yui": {
-    "build_binary_sha256": "fb3961e108d91daf984f9d542aa18e32b7b5aab4f8648f162bce6a6b1485abbf",
+    "build_binary_sha256": "70477d183062f0d40bfaf3df4f803feb425a316d9a54eebdfdc2d16c3bf379e8",
     "controlled_tool": "exec -> completed -> strict replay continuation",
     "marker": "PROBE_TOOL_MARKER_9182",
     "clean_shutdown": true
@@ -63,6 +65,49 @@
       "healthy_tail_bytes": 2400,
       "healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
     }
+  },
+  "coverage_registration": {
+    "path": "coverage-manifest/go-agent-runtime/services/tools/internal/policy/package.json",
+    "minimum_percent": 80.0,
+    "measured_percent": 98.3,
+    "package_command": "rtk proxy go test ./go-agent-runtime/services/tools/internal/policy -count=1 -timeout 60s -cover",
+    "registration_command": "rtk make coverage-registration",
+    "result": "passed: 172 workspace packages checked across 6 modules"
+  },
+  "retained_dependency_failure": {
+    "owner": "C38/task198",
+    "source": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+    "run": "runs/run-replay-regression-20260910T183819Z-70366",
+    "fixture": "../audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+    "expected": {
+      "pcm_bytes": 3840,
+      "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+    },
+    "observed": {
+      "pcm_bytes": 2400,
+      "pcm_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+      "healthy_tail_offset": 1440,
+      "healthy_tail_bytes": 2400
+    },
+    "accepted": false,
+    "decision": "WAIT_FOR_REVIEWED_C38_REPAIR_AND_PRIMARY_INDEPENDENT_VERTICAL_ACCEPTANCE"
+  },
+  "historical_ci_rejections": {
+    "run": "34508492648",
+    "coverage": "job 102976452099 rejected the old head because the new private policy package was unregistered; repaired by the authorized coverage manifest at 20fc8b00.",
+    "hermetic": "job 102976451968 rejected the old head on unrelated go-agent-loop functional sessions: TestConcurrentSessionsZeroCrossSessionLeakage timed out after 2m0s; no C40 package was implicated."
+  },
+  "local_validation": {
+    "focused_normal": "passed: go-agent-runtime/services/tools/... and CLI interactive-policy tests",
+    "focused_race": "passed: go-agent-runtime/services/tools/... and CLI interactive-policy tests",
+    "wire": "passed: check-wire.py; generation produced no diff",
+    "format": "passed: make fmt",
+    "vet": "passed: make vet",
+    "staticcheck": "passed: make staticcheck with pinned 2026.1",
+    "architecture_and_size": "passed: 182 packages, 1880 files, 27724 functions",
+    "diff_check": "passed: git diff --check",
+    "pinned_lint": "not completed locally: pinned golangci-lint 2.9.0 installation failed at dsymutil with No space left on device; no pinned-lint pass is claimed",
+    "storage": "observed free space below the required 2 GiB compilation reserve; no new large build/cache expansion was performed"
   },
   "focused_commands": [
     "rtk go test ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
