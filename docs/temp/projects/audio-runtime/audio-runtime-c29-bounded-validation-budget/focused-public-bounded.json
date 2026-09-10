@@ -11,7 +11,7 @@
     "--child-timeout-seconds",
     "10"
   ],
-  "elapsedSeconds": 4.520071750041097,
+  "elapsedSeconds": 4.607876333873719,
   "returncode": 0,
   "stderr": "",
   "stdout": "{\"status\": \"passed\", \"report\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c29-bounded-validation-budget/docs/temp/projects/audio-runtime/audio-runtime-c29-bounded-validation-budget/public-controls-report.json\", \"expect\": \"bounded\"}\n",

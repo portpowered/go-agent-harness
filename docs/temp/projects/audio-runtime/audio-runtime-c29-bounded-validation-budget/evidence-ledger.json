@@ -7,6 +7,7 @@
   "integrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "fetchedOriginMain": "9a115a83435933b4e5558ee60613fabc963afcd6",
   "preCommitWorktreeRevision": "9a115a83435933b4e5558ee60613fabc963afcd6",
+  "candidateRevision": "9e6edc15049b9854d848cd18d071776d0bb4d53a",
   "admission": {
     "verification": "admitted",
     "project": "audio-runtime",

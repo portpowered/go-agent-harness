@@ -12,6 +12,7 @@ Work `audio-runtime-c29-bounded-validation-budget` is admitted to the single
 - Baseline: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 - Startup integration: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 - Freshly fetched `origin/main`: `9a115a83435933b4e5558ee60613fabc963afcd6`.
+- Implementation checkpoint: `9e6edc15049b9854d848cd18d071776d0bb4d53a`.
 - All three revisions are ancestors of the candidate worktree. No host checkout
   was merged, reset, or used for admission mutation.
 
@@ -36,7 +37,7 @@ unchanged.
 The byte-identical pre-fix source is
 `prepare-validation-before.py` with SHA256
 `f7d63136f729af91a32dceebd05f9e15c2f9fbf08edaef14602e1f04b989b92c`. The
-repaired source hash before commit was
+repaired source hash at the implementation checkpoint is
 `ef66c785dbf342640ab4a02ec993b0ef5ff3d95848a2685a2da39113c3164101`.
 
 ## Evidence
