@@ -2580,3 +2580,19 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   evidence, push/update PR #429 with the review256 repair map, then return
   `ACCEPTED` to the script-owned CI gate without polling. Retain C36 ownership
   through `CONTINUE` for any exact rejection or actionable repair.
+
+# C36 script-CI handoff checkpoint 2026-09-10
+
+- The owned evidence README and verifier summaries, together with this
+  progress record, are committed in `d505be66` on top of implementation
+  `621e2909857904fe4d098aee975a47c61ad7ed0d`. The executable source inputs
+  remain exactly those covered by the fresh accepted verifier run; the
+  evidence records the nine mutation controls and all focused causal gates
+  listed above.
+- Final pre-push state is clean and preserves `origin/main=d6efc88d` ancestry,
+  the predecessor C36 checkpoints, and unrelated paths. Exact next action:
+  commit this handoff-only progress checkpoint, push the same task branch,
+  update PR #429 with the current head/base and review256 repair evidence,
+  and hand the candidate to SCRIPT CI. Do not claim CI, review, merge, or
+  vertical acceptance; retain ownership with `CONTINUE` for any exact
+  rejection or actionable repair.
