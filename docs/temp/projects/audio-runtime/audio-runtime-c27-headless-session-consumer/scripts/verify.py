@@ -391,8 +391,18 @@ def run_go(args: list[str], cwd: Path, *, timeout: float = MAX_CHILD_TIMEOUT_SEC
     return run_command(["go", *args], cwd, environment=go_environment(build_root), timeout=timeout)
 
 
-def run_git(args: list[str], *, timeout: float = MAX_CHILD_TIMEOUT_SECONDS) -> CommandResult:
-    return run_command(["git", *args], REPO_ROOT, environment=base_environment(Path(tempfile.gettempdir()) / f"audio-runtime-c27-git-{os.getpid()}"), timeout=timeout)
+def run_git(
+    args: list[str],
+    *,
+    repo_root: Path = REPO_ROOT,
+    timeout: float = MAX_CHILD_TIMEOUT_SECONDS,
+) -> CommandResult:
+    return run_command(
+        ["git", *args],
+        repo_root,
+        environment=base_environment(Path(tempfile.gettempdir()) / f"audio-runtime-c27-git-{os.getpid()}"),
+        timeout=timeout,
+    )
 
 
 def command_or_fail(result: CommandResult, label: str) -> CommandResult:
@@ -615,34 +625,72 @@ def validate_module_graph(modules: list[dict[str, Any]]) -> dict[str, Any]:
         "module_count": len(modules),
         "modules": sorted(paths),
         "replacements": {
-            str(item.get("Path")): item.get("Replace")
+            str(item.get("Path")): canonical_graph_value(item.get("Replace"))
             for item in modules
             if item.get("Replace") is not None
         },
     }
 
 
-def graph_boundary() -> dict[str, Any]:
-    dependency_listing = run_go(["list", "-deps", "-json", "./cmd/headless-session"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS)
+def canonical_graph_value(value: Any) -> Any:
+    """Remove go list fields whose values are tied to the extraction root/cache."""
+
+    if isinstance(value, dict):
+        return {
+            key: canonical_graph_value(item)
+            for key, item in value.items()
+            if key not in {"Dir", "GoMod"}
+        }
+    if isinstance(value, list):
+        return [canonical_graph_value(item) for item in value]
+    return value
+
+
+def canonical_package_graph(packages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    records = [
+        {
+            "import_path": item.get("ImportPath"),
+            "imports": sorted(item.get("Imports") or []),
+            "deps": sorted(item.get("Deps") or []),
+        }
+        for item in packages
+    ]
+    return sorted(records, key=lambda item: str(item.get("import_path", "")))
+
+
+def canonical_module_graph(modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    records = [canonical_graph_value(item) for item in modules]
+    return sorted(
+        records,
+        key=lambda item: (
+            str(item.get("Path", "")),
+            str(item.get("Version", "")),
+            json.dumps(item.get("Replace"), sort_keys=True, separators=(",", ":")),
+        ),
+    )
+
+
+def graph_boundary(module_dir: Path = MODULE_DIR) -> dict[str, Any]:
+    dependency_listing = run_go(["list", "-deps", "-json", "./cmd/headless-session"], module_dir, timeout=MAX_CHILD_TIMEOUT_SECONDS)
     command_or_fail(dependency_listing, "go list -deps -json")
     packages = parse_json_objects(dependency_listing.stdout, "go list -deps -json")
     dependency_summary = validate_dependency_graph(packages)
 
-    module_listing = run_go(["list", "-m", "-json", "all"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS)
+    module_listing = run_go(["list", "-m", "-json", "all"], module_dir, timeout=MAX_CHILD_TIMEOUT_SECONDS)
     command_or_fail(module_listing, "go list -m -json all")
     modules = parse_json_objects(module_listing.stdout, "go list -m -json all")
     module_summary = validate_module_graph(modules)
 
     package_graph_hash = sha256_bytes(
         json.dumps(
-            [{"import_path": item.get("ImportPath"), "imports": item.get("Imports", []), "deps": item.get("Deps", [])} for item in packages],
+            canonical_package_graph(packages),
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
     )
     module_graph_hash = sha256_bytes(
         json.dumps(
-            [{"path": item.get("Path"), "version": item.get("Version"), "replace": item.get("Replace")} for item in modules],
+            canonical_module_graph(modules),
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -676,7 +724,7 @@ def graph_boundary() -> dict[str, Any]:
     expect_rejection("failed_command_listing", lambda: command_or_fail(CommandResult(["go", "list"], str(MODULE_DIR), 1, "", "synthetic failure", 0.0, False, True, False), "synthetic go list"))
     expect_rejection(
         "child_timeout_over_limit",
-        lambda: run_command(["true"], MODULE_DIR, timeout=MAX_CHILD_TIMEOUT_SECONDS + 1),
+        lambda: run_command(["true"], module_dir, timeout=MAX_CHILD_TIMEOUT_SECONDS + 1),
     )
     return {
         "dependency_command": dependency_listing.as_dict(),
@@ -1106,7 +1154,12 @@ def run_package() -> dict[str, Any]:
     }
     descriptor_path = EVIDENCE_DIR / "package.json"
     write_json(descriptor_path, descriptor)
-    package_evidence = {"descriptor": file_descriptor(descriptor_path, MODULE_DIR), "descriptor_value": descriptor}
+    fresh_archive_verification = verify_fresh_archive_descriptor(archive_path, descriptor)
+    package_evidence = {
+        "descriptor": file_descriptor(descriptor_path, MODULE_DIR),
+        "descriptor_value": descriptor,
+        "fresh_archive_descriptor_verification": fresh_archive_verification,
+    }
     write_json(EVIDENCE_DIR / "package-build.json", package_evidence)
     return package_evidence
 
@@ -1128,24 +1181,97 @@ def load_descriptor(path: Path) -> dict[str, Any]:
     return value
 
 
+def descriptor_file_entries(value: dict[str, Any]) -> list[dict[str, Any]]:
+    module = value.get("module")
+    executables = value.get("executables")
+    fixtures = value.get("fixtures")
+    regression_inputs = value.get("regression_inputs")
+    require(isinstance(module, dict), "artifact descriptor omitted module metadata")
+    require(isinstance(executables, dict), "artifact descriptor omitted executables")
+    require(isinstance(fixtures, dict), "artifact descriptor omitted fixtures")
+    require(isinstance(regression_inputs, dict), "artifact descriptor omitted regression inputs")
+    config = regression_inputs.get("config")
+    require(isinstance(config, dict), "artifact descriptor omitted replay config")
+    entries: list[Any] = [value.get("source_archive")]
+    entries.extend(executables.values())
+    entries.extend(fixtures.values())
+    entries.extend(config.values())
+    entries.extend([module.get("go_mod"), module.get("go_sum"), value.get("runner")])
+    require(all(isinstance(entry, dict) for entry in entries), "artifact descriptor contains a non-object file descriptor")
+    return entries
+
+
+def copy_descriptor_entries(value: dict[str, Any], destination_root: Path) -> None:
+    for entry in descriptor_file_entries(value):
+        path_value = entry.get("path")
+        require(isinstance(path_value, str), "artifact descriptor file entry omitted path")
+        source = descriptor_path(path_value, MODULE_DIR)
+        destination = descriptor_path(path_value, destination_root)
+        require(source.is_file(), f"published descriptor input is missing: {source}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+
+
+def repository_root_for_module(module_dir: Path) -> Path:
+    return module_dir.resolve().parents[4]
+
+
+def verify_fresh_archive_descriptor(archive_path: Path, descriptor: dict[str, Any]) -> dict[str, Any]:
+    """Run the extracted verifier with the descriptor and artifacts but no Git metadata."""
+
+    with tempfile.TemporaryDirectory(prefix="c27-descriptor-extract-") as temporary:
+        extracted = Path(temporary)
+        safe_extract(archive_path, extracted)
+        archive_module = extracted / "source" / MODULE_REL
+        require(archive_module.is_dir(), f"extracted consumer module is missing: {archive_module}")
+        copy_descriptor_entries(descriptor, archive_module)
+        descriptor_file = archive_module / "evidence" / "package.json"
+        write_json(descriptor_file, descriptor)
+        archive_repo = repository_root_for_module(archive_module)
+        require(not (archive_repo / ".git").exists(), "fresh archive unexpectedly contains Git metadata")
+        runtime_root = extracted / "descriptor-verification-runtime"
+        result = run_command(
+            [sys.executable, str(archive_module / "scripts" / "verify.py"), "verify-artifacts"],
+            archive_module,
+            environment=base_environment(runtime_root),
+            timeout=MAX_CHILD_TIMEOUT_SECONDS,
+        )
+        command_or_fail(result, "fresh archive descriptor verification")
+        output = parse_child_json(result)
+        require(output.get("status") == "verified", "fresh archive descriptor verification did not report verified")
+        return {
+            "git_independent": True,
+            "git_metadata_present": False,
+            "source_root": "source/",
+            "command": result.argv,
+            "result": result.as_dict(),
+            "status": output.get("status"),
+        }
+
+
 def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[str, Any]:
     source_revision = value.get("source_revision")
     require(isinstance(source_revision, str) and source_revision, "artifact descriptor omitted source revision")
-    current_head = command_or_fail(run_git(["rev-parse", "HEAD"]), "descriptor HEAD query").stdout.strip()
-    current_branch = command_or_fail(run_git(["branch", "--show-current"]), "descriptor branch query").stdout.strip()
-    require(value.get("branch") == current_branch, f"artifact branch {value.get('branch')!r} does not match current branch {current_branch!r}")
+    repo_root = repository_root_for_module(root)
+    git_metadata_present = (repo_root / ".git").exists()
+    current_head: str | None = None
+    current_branch: str | None = None
     source_changes: list[str] = []
-    if source_revision != current_head:
-        changed = command_or_fail(
-            run_git(["diff", "--name-only", f"{source_revision}..{current_head}", "--", MODULE_REL.as_posix()]),
-            "descriptor source comparison",
-        )
-        evidence_prefix = MODULE_REL.as_posix() + "/evidence/"
-        source_changes = [path for path in changed.stdout.splitlines() if path and not path.startswith(evidence_prefix)]
-        require(
-            not source_changes,
-            f"artifact source revision {source_revision} is stale; source files changed through {current_head}: {source_changes}",
-        )
+    if git_metadata_present:
+        current_head = command_or_fail(run_git(["rev-parse", "HEAD"], repo_root=repo_root), "descriptor HEAD query").stdout.strip()
+        current_branch = command_or_fail(run_git(["branch", "--show-current"], repo_root=repo_root), "descriptor branch query").stdout.strip()
+        require(value.get("branch") == current_branch, f"artifact branch {value.get('branch')!r} does not match current branch {current_branch!r}")
+        if source_revision != current_head:
+            changed = command_or_fail(
+                run_git(["diff", "--name-only", f"{source_revision}..{current_head}", "--", MODULE_REL.as_posix()], repo_root=repo_root),
+                "descriptor source comparison",
+            )
+            evidence_prefix = MODULE_REL.as_posix() + "/evidence/"
+            source_changes = [path for path in changed.stdout.splitlines() if path and not path.startswith(evidence_prefix)]
+            require(
+                not source_changes,
+                f"artifact source revision {source_revision} is stale; source files changed through {current_head}: {source_changes}",
+            )
 
     module = value.get("module")
     require(isinstance(module, dict), "artifact descriptor omitted module metadata")
@@ -1159,7 +1285,7 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
 
     declared_graph_hashes = value.get("dependency_graph")
     require(isinstance(declared_graph_hashes, dict), "artifact descriptor omitted dependency graph hashes")
-    graph_hashes = graph_boundary()["graph_hashes"]
+    graph_hashes = graph_boundary(root)["graph_hashes"]
     require(set(declared_graph_hashes) == set(graph_hashes), "artifact descriptor dependency graph hash set changed")
     for name, actual_digest in graph_hashes.items():
         declared_digest = declared_graph_hashes.get(name)
@@ -1170,7 +1296,7 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
 
     declared_replacements = value.get("replacement_source_tree_sha256")
     require(isinstance(declared_replacements, dict), "artifact descriptor omitted replacement source tree digests")
-    replacement_digests = {relative: source_tree_digest(REPO_ROOT / relative) for relative in REPLACEMENT_ROOTS}
+    replacement_digests = {relative: source_tree_digest(repo_root / relative) for relative in REPLACEMENT_ROOTS}
     require(set(declared_replacements) == set(replacement_digests), "artifact descriptor replacement digest set changed")
     for relative, actual_digest in replacement_digests.items():
         declared_digest = declared_replacements.get(relative)
@@ -1238,6 +1364,8 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
             "source_revision": source_revision,
             "current_head": current_head,
             "current_branch": current_branch,
+            "git_metadata_present": git_metadata_present,
+            "verification_mode": "checkout" if git_metadata_present else "fresh_archive",
             "source_revision_matches_current_head": source_revision == current_head,
             "source_changes_since_source_revision": source_changes,
         },

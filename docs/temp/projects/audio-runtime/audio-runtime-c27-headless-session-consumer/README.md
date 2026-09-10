@@ -12,6 +12,12 @@ concurrent services, cancellation, idempotent close, and expected-failure
 controls. `scripts/verify.py` is the hermetic runner. It builds the module and
 launches the executable with an allowlisted environment and no terminal.
 
+The `package` action also extracts the published source archive into a fresh
+directory without `.git`, copies the declared descriptor inputs, and runs the
+archived verifier's `verify-artifacts` action there. Dependency graph hashes
+are canonicalized to exclude Go's extraction/cache-specific `Dir` and `GoMod`
+paths; the six replacement source-tree hashes bind the extracted source bytes.
+
 Examples (the verifier supplies the complete JSON configuration):
 
 ```text
