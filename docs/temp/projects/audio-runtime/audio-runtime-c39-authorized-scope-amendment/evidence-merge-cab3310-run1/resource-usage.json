@@ -1,0 +1,39 @@
+{
+  "schema": "audio-runtime-c39-storage-provenance.v1",
+  "sourceRevision": "cab3310c9ec0dc84e64706da87eb4dbf53b963db",
+  "yui": {
+    "path": "/tmp/audio-runtime-c39-yui-cab3310",
+    "bytes": 51171954,
+    "sha256": "a66517529efe174bf550820e16573d3e99c081a13e5a09bc4d7618050fcf9280"
+  },
+  "probeReport": {
+    "path": "evidence-merge-cab3310-run1/probe-report.json",
+    "sha256": "0d80272decc1369a7047b1e5c2ebede88ecf0cee4bf589a6f7f1e33774bceb50"
+  },
+  "measurements": {
+    "freeSpaceBeforeBuildKiB": 512764,
+    "freeSpaceAfterBuildKiB": 372580,
+    "freeSpaceAfterProbeKiB": 367804,
+    "ownedEvidenceDirectoryKiB": 724,
+    "sourceStagingBytes": 0,
+    "reproducibleScratchBytesRetained": 0
+  },
+  "limits": {
+    "aggregateNewGrowthCeilingBytes": 2147483648,
+    "minimumFreeReserveBytes": 2147483648,
+    "c39OwnerUpperBoundBytes": 67108864
+  },
+  "cleanup": {
+    "probeChildrenReaped": true,
+    "probeTemporaryScratchRemoved": true,
+    "cacheCleanup": "none",
+    "peerArtifactsDeleted": false,
+    "staleExecutableRelabeled": false
+  },
+  "notes": [
+    "The yui was freshly built from the exact committed source revision; no prior executable was relabeled.",
+    "The probe reused only checked-in replay fixtures/configuration and created a fresh owned evidence directory.",
+    "Free space was below the recorded 2 GiB operator reserve before the build and remained below it after the bounded run; no cache cleanup or peer artifact deletion was performed.",
+    "No duplicate repository/source staging, hardlinks, historical evidence deletion, or peer artifact deletion was used."
+  ]
+}
